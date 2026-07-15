@@ -1297,6 +1297,12 @@
       "description": "文字起こしのクリーンアップ、コマンド処理、エラー修正を行いながら、あなたの話し方を維持します。",
       "enableTextCleanup": "テキスト補正を有効にする",
       "enableTextCleanupDescription": "AI がフィラーワードを除去し、文法と句読点を整える",
+      "preloadOnStart": "起動時にモデルをプリロード",
+      "preloadOnStartDescription": "OpenWhispr の起動時にクリーンアップモデルを読み込み、最初の音声入力を高速化します。",
+      "idleTimeout": "アイドル時にアンロード",
+      "idleTimeoutDescription": "この時間アイドル状態が続くと GPU メモリを解放します。OpenWhispr を開いている間モデルを保持するには「しない」を選びます。",
+      "idleNever": "しない",
+      "idleMinutes": "{{count}} 分",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "クラウドプロバイダー",

@@ -765,6 +765,8 @@ declare global {
         model?: string;
         cleanupProvider: string;
         cleanupModel?: string;
+        cleanupPreloadOnStart?: boolean;
+        cleanupIdleTimeoutMinutes?: number;
         dictationAgentProvider: string;
         dictationAgentModel?: string;
       }) => Promise<void>;

@@ -467,6 +467,18 @@ function initializeDeferredManagers() {
       "clipboard"
     );
   });
+
+  if (process.env.CLEANUP_PRELOAD_ON_START === "true") {
+    const modelManager = require("./src/helpers/modelManagerBridge").default;
+    modelManager.preloadModel().catch((err) => {
+      require("./src/helpers/debugLogger").warn(
+        "cleanup model preload error",
+        { error: err?.message },
+        "model"
+      );
+    });
+  }
+
   clipboardManager.preWarmAccessibility();
   trayManager = new TrayManager();
   globeKeyManager = new GlobeKeyManager();

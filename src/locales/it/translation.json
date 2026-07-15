@@ -1297,6 +1297,12 @@
       "description": "Correggi le trascrizioni, gestisci i comandi e risolvi gli errori preservando il tuo tono.",
       "enableTextCleanup": "Attiva correzione testo",
       "enableTextCleanupDescription": "L'IA rimuove parole superflue, corregge grammatica e punteggiatura",
+      "preloadOnStart": "Precarica il modello all'avvio",
+      "preloadOnStartDescription": "Carica il modello di pulizia all'apertura di OpenWhispr in modo che la prima dettatura sia veloce.",
+      "idleTimeout": "Scarica quando inattivo",
+      "idleTimeoutDescription": "Libera la memoria della GPU dopo questa inattività. Scegli Mai per mantenere il modello caricato mentre OpenWhispr è aperto.",
+      "idleNever": "Mai",
+      "idleMinutes": "{{count}} minuti",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Provider cloud",

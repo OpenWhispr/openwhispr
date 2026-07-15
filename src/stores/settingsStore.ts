@@ -134,6 +134,7 @@ const BOOLEAN_SETTINGS = new Set([
   "noteFilesEnabled",
   "showTranscriptionPreview",
   "cleanupDisableThinking",
+  "cleanupPreloadOnStart",
   "dictationAgentDisableThinking",
   "noteFormattingDisableThinking",
   "chatAgentDisableThinking",
@@ -153,6 +154,7 @@ const ARRAY_SETTINGS = new Set([
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
+  "cleanupIdleTimeoutMinutes",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -562,6 +564,8 @@ export interface SettingsState
   setUseDictationAgent: (value: boolean) => void;
   setCleanupModel: (value: string) => void;
   setCleanupProvider: (value: string) => void;
+  setCleanupPreloadOnStart: (value: boolean) => void;
+  setCleanupIdleTimeoutMinutes: (minutes: number) => void;
   setUiLanguage: (language: string) => void;
 
   setOpenaiApiKey: (key: string) => void;
@@ -908,6 +912,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   useDictationAgent: readBoolean("useDictationAgent", true),
   cleanupModel: readString("cleanupModel", ""),
   cleanupProvider: readString("cleanupProvider", "openai"),
+  cleanupPreloadOnStart: readBoolean("cleanupPreloadOnStart", false),
+  cleanupIdleTimeoutMinutes: (() => {
+    if (!isBrowser) return 5;
+    const stored = localStorage.getItem("cleanupIdleTimeoutMinutes");
+    if (stored === null) return 5;
+    const parsed = parseInt(stored, 10);
+    return isNaN(parsed) || parsed < 0 ? 5 : parsed;
+  })(),
 
   // Secrets hydrate from main process in initializeSettings, never from localStorage.
   openaiApiKey: "",
@@ -1255,6 +1267,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUseDictationAgent: createBooleanSetter("useDictationAgent"),
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
+  setCleanupPreloadOnStart: createBooleanSetter("cleanupPreloadOnStart"),
+  setCleanupIdleTimeoutMinutes: (minutes: number) => {
+    if (isBrowser) localStorage.setItem("cleanupIdleTimeoutMinutes", String(minutes));
+    set({ cleanupIdleTimeoutMinutes: minutes });
+  },
 
   setCustomDictionary: (words: string[]) => {
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
@@ -1722,6 +1739,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setUseDictationAgent(settings.useDictationAgent);
     if (settings.cleanupModel !== undefined) s.setCleanupModel(settings.cleanupModel);
     if (settings.cleanupProvider !== undefined) s.setCleanupProvider(settings.cleanupProvider);
+    if (settings.cleanupPreloadOnStart !== undefined)
+      s.setCleanupPreloadOnStart(settings.cleanupPreloadOnStart);
+    if (settings.cleanupIdleTimeoutMinutes !== undefined)
+      s.setCleanupIdleTimeoutMinutes(settings.cleanupIdleTimeoutMinutes);
     if (settings.cleanupCloudBaseUrl !== undefined)
       s.setCleanupCloudBaseUrl(settings.cleanupCloudBaseUrl);
     if (settings.cleanupCloudMode !== undefined) s.setCleanupCloudMode(settings.cleanupCloudMode);

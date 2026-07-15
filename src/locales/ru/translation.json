@@ -1297,6 +1297,12 @@
       "description": "Очищайте транскрипции, обрабатывайте команды и исправляйте ошибки, сохраняя вашу манеру речи.",
       "enableTextCleanup": "Включить очистку текста",
       "enableTextCleanupDescription": "ИИ убирает слова-паразиты, исправляет грамматику и пунктуацию",
+      "preloadOnStart": "Предзагружать модель при запуске",
+      "preloadOnStartDescription": "Загружает модель очистки при открытии OpenWhispr, чтобы первая диктовка была быстрой.",
+      "idleTimeout": "Выгружать при простое",
+      "idleTimeoutDescription": "Освобождает память GPU после простоя. Выберите Никогда, чтобы модель оставалась загруженной, пока открыт OpenWhispr.",
+      "idleNever": "Никогда",
+      "idleMinutes": "{{count}} мин.",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Облачные провайдеры",

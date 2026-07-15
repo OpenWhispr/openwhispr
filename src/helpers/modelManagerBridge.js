@@ -318,6 +318,41 @@ class ModelManager {
     }
   }
 
+  // Starts the local cleanup model in the background so the first dictation
+  // does not pay the cold start. No-op unless a local cleanup model is
+  // configured and downloaded. Never throws.
+  async preloadModel() {
+    try {
+      this.ensureInitialized();
+      if (process.env.CLEANUP_PROVIDER !== "local") return false;
+      const modelId = process.env.LOCAL_CLEANUP_MODEL;
+      if (!modelId) return false;
+
+      const modelInfo = this.findModelById(modelId);
+      if (!modelInfo) return false;
+
+      const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
+      if (!(await this.checkModelValid(modelPath))) return false;
+
+      if (this.serverManager.ready && this.currentServerModelId === modelId) return true;
+
+      await this.serverManager.start(modelPath, {
+        contextSize: modelInfo.model.contextLength || 4096,
+        threads: 4,
+        gpuLayers: 99,
+      });
+      this.currentServerModelId = modelId;
+      debugLogger.logReasoning("PRELOAD_SERVER_STARTED", {
+        model: modelId,
+        port: this.serverManager.port,
+      });
+      return true;
+    } catch (error) {
+      debugLogger.error("Cleanup model preload failed", { error: error.message });
+      return false;
+    }
+  }
+
   async runInference(modelId, prompt, options = {}) {
     this.ensureInitialized();
     const startTime = Date.now();
