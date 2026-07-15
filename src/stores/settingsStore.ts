@@ -115,6 +115,7 @@ const BOOLEAN_SETTINGS = new Set([
   "useCleanupModel",
   "useDictationAgent",
   "useDictationTranslation",
+  "translationDisableThinking",
   "preferBuiltInMic",
   "cloudBackupEnabled",
   "telemetryEnabled",

@@ -22,6 +22,10 @@ export default function DictationTranslationSettings() {
 
   return (
     <div className="space-y-4">
+      <SectionHeader
+        title={t("dictationTranslation.title")}
+        description={t("dictationTranslation.description")}
+      />
       <SettingsPanel>
         <SettingsPanelRow>
           <SettingsRow

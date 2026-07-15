@@ -57,6 +57,18 @@ function dictationAgentReachable(settings) {
   });
 }
 
+function translationChainReachable(settings) {
+  const isSelfHostedTranslation =
+    settings.translationMode === "self-hosted" && !!settings.translationRemoteUrl?.trim();
+  return resolveDictationTranslationReachability({
+    useDictationTranslation: settings.useDictationTranslation,
+    translationTargetLanguage: settings.translationTargetLanguage,
+    translationModel: settings.translationModel,
+    isCloudTranslation: isCloudTranslationMode(),
+    isSelfHostedTranslation,
+  });
+}
+
 function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested, translationRequested) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
@@ -1272,7 +1284,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const s = getSettings();
-    const useReasoning = !!s.useCleanupModel || dictationAgentReachable(s);
+    const useReasoning =
+      !!s.useCleanupModel || dictationAgentReachable(s) || translationChainReachable(s);
     const now = Date.now();
     const cacheValid =
       this.reasoningAvailabilityCache &&
@@ -1336,6 +1349,73 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Cleanup-then-translate chain shared by batch, cloud, and streaming paths: Step 1
+  // (optional cleanup) soft-fails to input; Step 2 translates unless source === target.
+  async runTranslationChain({ text, settings, agentName, route, cleanup }) {
+    let out = text;
+    let usedCloudReasoning = false;
+
+    if (route.cleanupReachable) {
+      try {
+        if (cleanup.mode === "cloudReason") {
+          const reasonResult = await withSessionRefresh(async () => {
+            const res = await window.electronAPI.cloudReason(out, {
+              agentName,
+              promptMode: "cleanup",
+              customDictionary: getDictionaryHintWords(settings),
+              customPrompt: this.getCustomPrompt(),
+              language: this.getEffectiveSttLanguage(settings) || "auto",
+              locale: settings.uiLanguage || "en",
+              ...(cleanup.meta || {}),
+            });
+            if (!res.success) {
+              const err = new Error(res.error || "Cloud reasoning failed");
+              err.code = res.code;
+              throw err;
+            }
+            return res;
+          });
+          if (reasonResult.success && reasonResult.text) {
+            out = reasonResult.text;
+          }
+          usedCloudReasoning = true;
+        } else {
+          const cleanupModel = cleanup.model;
+          if (cleanupModel) {
+            const cleaned = await this.processWithReasoningModel(
+              out,
+              cleanupModel,
+              agentName,
+              route.cleanupConfig
+            );
+            if (cleaned) out = cleaned;
+          }
+        }
+      } catch (cleanupError) {
+        const { level = "error", channel, extra } = cleanup.log || {};
+        logger[level](
+          "Cleanup step failed in translation chain, translating raw transcript",
+          { ...(extra || {}), error: cleanupError.message },
+          channel
+        );
+      }
+    }
+
+    const sourceLanguage = settings.translationSourceLanguage || "auto";
+    if (sourceLanguage === "auto" || sourceLanguage !== settings.translationTargetLanguage) {
+      const translated = await this.processWithReasoningModel(
+        out,
+        route.model,
+        agentName,
+        route.config
+      );
+      if (translated) out = translated;
+      if (route.config?.provider === "openwhispr") usedCloudReasoning = true;
+    }
+
+    return { text: out, usedCloudReasoning };
+  }
+
   async processTranscription(text, source) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
@@ -1372,7 +1452,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       typeof window !== "undefined" && window.localStorage
         ? localStorage.getItem("agentName") || null
         : null;
-    if (!cleanupReachable && !agentReachable) {
+    if (
+      !cleanupReachable &&
+      !agentReachable &&
+      !(this.translationRequested && translationChainReachable(settings))
+    ) {
       logger.logReasoning("REASONING_SKIPPED", {
         reason: "No cleanup or dictation-agent model available",
       });
@@ -1400,40 +1484,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (route.kind === "skip") return normalizedText;
 
         if (route.kind === "translation") {
-          let translatedText = normalizedText;
-          // Step 1: the configured cleanup, in the spoken language (soft-fails to raw).
-          if (route.cleanupReachable) {
-            try {
-              const cleaned = await this.processWithReasoningModel(
-                translatedText,
-                cleanupModel,
-                agentName,
-                route.cleanupConfig
-              );
-              if (cleaned) translatedText = cleaned;
-            } catch (cleanupError) {
-              logger.warn(
-                "Cleanup step failed in translation chain, translating raw transcript",
-                { source, error: cleanupError.message },
-                "notes"
-              );
-            }
-          }
-
-          // Step 2: translate, unless an explicit source equals the target.
-          const sourceLanguage = settings.translationSourceLanguage || "auto";
-          if (
-            sourceLanguage === "auto" ||
-            sourceLanguage !== settings.translationTargetLanguage
-          ) {
-            const translated = await this.processWithReasoningModel(
-              translatedText,
-              route.model,
-              agentName,
-              route.config
-            );
-            if (translated) translatedText = translated;
-          }
+          const { text: translatedText } = await this.runTranslationChain({
+            text: normalizedText,
+            settings,
+            agentName,
+            route,
+            cleanup: {
+              mode: "model",
+              model: cleanupModel,
+              log: { level: "warn", channel: "notes", extra: { source } },
+            },
+          });
 
           logger.logReasoning("REASONING_SUCCESS", {
             resultLength: translatedText.length,
@@ -1660,7 +1721,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const opts = {};
     if (language) opts.language = language;
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
-    if (settings.useCleanupModel && !this.skipReasoning && cleanupCloudMode === "openwhispr") {
+    if (
+      (settings.useCleanupModel && !this.skipReasoning && cleanupCloudMode === "openwhispr") ||
+      (this.translationRequested &&
+        !this.skipReasoning &&
+        translationChainReachable(settings) &&
+        isCloudTranslationMode())
+    ) {
       opts.sendLogs = "false";
     }
 
@@ -1747,69 +1814,34 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             if (reasoned) processedText = reasoned;
           }
         } else if (route.kind === "translation") {
-          // Step 1: the configured cleanup, in the spoken language.
-          if (route.cleanupReachable) {
-            try {
-              if (cleanupCloudMode === "openwhispr") {
-                const reasonResult = await withSessionRefresh(async () => {
-                  const res = await window.electronAPI.cloudReason(processedText, {
-                    agentName,
-                    promptMode: "cleanup",
-                    customDictionary: getDictionaryHintWords(settings),
-                    customPrompt: this.getCustomPrompt(),
-                    language: this.getEffectiveSttLanguage(settings) || "auto",
-                    locale: settings.uiLanguage || "en",
-                    sttProvider: result.sttProvider,
-                    sttModel: result.sttModel,
-                    sttProcessingMs: result.sttProcessingMs,
-                    sttWordCount: result.sttWordCount,
-                    sttLanguage: result.sttLanguage,
-                    audioDurationMs: result.audioDurationMs,
-                    audioSizeBytes,
-                    audioFormat,
-                  });
-                  if (!res.success) {
-                    const err = new Error(res.error || "Cloud reasoning failed");
-                    err.code = res.code;
-                    throw err;
+          const chainResult = await this.runTranslationChain({
+            text: processedText,
+            settings,
+            agentName,
+            route,
+            cleanup:
+              cleanupCloudMode === "openwhispr"
+                ? {
+                    mode: "cloudReason",
+                    meta: {
+                      sttProvider: result.sttProvider,
+                      sttModel: result.sttModel,
+                      sttProcessingMs: result.sttProcessingMs,
+                      sttWordCount: result.sttWordCount,
+                      sttLanguage: result.sttLanguage,
+                      audioDurationMs: result.audioDurationMs,
+                      audioSizeBytes,
+                      audioFormat,
+                    },
+                    log: { level: "error", channel: "transcription" },
                   }
-                  return res;
-                });
-                if (reasonResult.success && reasonResult.text) {
-                  processedText = reasonResult.text;
-                }
-              } else {
-                const effectiveModel = getEffectiveCleanupModel();
-                if (effectiveModel) {
-                  const cleaned = await this.processWithReasoningModel(
-                    processedText,
-                    effectiveModel,
-                    agentName,
-                    route.cleanupConfig
-                  );
-                  if (cleaned) processedText = cleaned;
-                }
-              }
-            } catch (cleanupError) {
-              logger.error(
-                "Cleanup step failed in translation chain, translating raw transcript",
-                { error: cleanupError.message },
-                "transcription"
-              );
-            }
-          }
-
-          // Step 2: translate, unless an explicit source equals the target.
-          const sourceLanguage = settings.translationSourceLanguage || "auto";
-          if (sourceLanguage === "auto" || sourceLanguage !== settings.translationTargetLanguage) {
-            const translated = await this.processWithReasoningModel(
-              processedText,
-              route.model,
-              agentName,
-              route.config
-            );
-            if (translated) processedText = translated;
-          }
+                : {
+                    mode: "model",
+                    model: getEffectiveCleanupModel(),
+                    log: { level: "error", channel: "transcription" },
+                  },
+          });
+          processedText = chainResult.text;
         }
       } catch (reasonError) {
         logger.error(
@@ -3308,68 +3340,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             );
           }
         } else if (route.kind === "translation") {
-          if (route.cleanupReachable) {
-            try {
-              if (cleanupCloudMode === "openwhispr") {
-                const reasonResult = await withSessionRefresh(async () => {
-                  const res = await window.electronAPI.cloudReason(finalText, {
-                    agentName,
-                    promptMode: "cleanup",
-                    customDictionary: getDictionaryHintWords(stSettings),
-                    customPrompt: this.getCustomPrompt(),
-                    language: this.getEffectiveSttLanguage(stSettings) || "auto",
-                    locale: stSettings.uiLanguage || "en",
-                    sttProvider: this.getStreamingProviderName(),
-                    sttModel: streamingSttModel,
-                    sttProcessingMs: streamingSttProcessingMs,
-                    sttWordCount: streamingSttWordCount,
-                    sttLanguage: streamingSttLanguage,
-                    audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
-                    audioSizeBytes: streamingAudioBytesSent || undefined,
-                    audioFormat: "linear16",
-                  });
-                  if (!res.success) {
-                    const err = new Error(res.error || "Cloud reasoning failed");
-                    err.code = res.code;
-                    throw err;
+          const chainResult = await this.runTranslationChain({
+            text: finalText,
+            settings: stSettings,
+            agentName,
+            route,
+            cleanup:
+              cleanupCloudMode === "openwhispr"
+                ? {
+                    mode: "cloudReason",
+                    meta: {
+                      sttProvider: this.getStreamingProviderName(),
+                      sttModel: streamingSttModel,
+                      sttProcessingMs: streamingSttProcessingMs,
+                      sttWordCount: streamingSttWordCount,
+                      sttLanguage: streamingSttLanguage,
+                      audioDurationMs: durationSeconds
+                        ? Math.round(durationSeconds * 1000)
+                        : undefined,
+                      audioSizeBytes: streamingAudioBytesSent || undefined,
+                      audioFormat: "linear16",
+                    },
+                    log: { level: "error", channel: "streaming" },
                   }
-                  return res;
-                });
-                if (reasonResult.success && reasonResult.text) {
-                  finalText = reasonResult.text;
-                }
-                usedCloudReasoning = true;
-              } else {
-                const effectiveModel = getEffectiveCleanupModel();
-                if (effectiveModel) {
-                  const cleaned = await this.processWithReasoningModel(
-                    finalText,
-                    effectiveModel,
-                    agentName,
-                    route.cleanupConfig
-                  );
-                  if (cleaned) finalText = cleaned;
-                }
-              }
-            } catch (cleanupError) {
-              logger.error(
-                "Cleanup step failed in translation chain, translating raw transcript",
-                { error: cleanupError.message },
-                "streaming"
-              );
-            }
-          }
-
-          const sourceLanguage = stSettings.translationSourceLanguage || "auto";
-          if (sourceLanguage === "auto" || sourceLanguage !== stSettings.translationTargetLanguage) {
-            const translated = await this.processWithReasoningModel(
-              finalText,
-              route.model,
-              agentName,
-              route.config
-            );
-            if (translated) finalText = translated;
-          }
+                : {
+                    mode: "model",
+                    model: getEffectiveCleanupModel(),
+                    log: { level: "error", channel: "streaming" },
+                  },
+          });
+          finalText = chainResult.text;
+          usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;
         }
       } catch (reasonError) {
         logger.error(
@@ -3494,7 +3495,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   shouldShowPreviewCleanupState() {
     const settings = getSettings();
-    return (!!settings.useCleanupModel || !!settings.useDictationAgent) && !this.skipReasoning;
+    return (
+      (!!settings.useCleanupModel ||
+        !!settings.useDictationAgent ||
+        (this.translationRequested && !!settings.useDictationTranslation)) &&
+      !this.skipReasoning
+    );
   }
 
   cleanupPreview(options = {}) {

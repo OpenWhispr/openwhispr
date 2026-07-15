@@ -12,9 +12,8 @@ export function resolveDictationAgentReachability({
   return (dictationAgentModel?.trim()?.length ?? 0) > 0;
 }
 
-// Whether the translation step can run. Mirrors the agent reachability rules:
-// cloud ("openwhispr") and self-hosted ("lan") accept an empty model, every
-// other mode requires one. A target language is always required.
+// Whether the translation step can run: cloud/self-hosted accept an empty model,
+// every other mode requires one; a target language is always required.
 export function resolveDictationTranslationReachability({
   useDictationTranslation,
   translationTargetLanguage,
