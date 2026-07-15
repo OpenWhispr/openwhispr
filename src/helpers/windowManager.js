@@ -521,11 +521,17 @@ class WindowManager {
   reconcileNativeKeyListeners() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
-    // GNOME/KDE/Hyprland deliver hotkeys via D-Bus native shortcuts; the low-level
-    // listener would be redundant there and could double-fire, so watch nothing.
-    const keys = this.hotkeyManager.isUsingNativeShortcut()
-      ? []
-      : this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+    // D-Bus desktops (GNOME, KDE, Hyprland) skip the low-level listener normally,
+    // but push-to-talk on Linux needs it, since D-Bus never sends key-up.
+    let keys;
+    if (this.hotkeyManager.isUsingNativeShortcut()) {
+      keys =
+        process.platform === "linux" && this.getActivationMode() === "push"
+          ? this.hotkeyManager.getDictationHotkeys()
+          : [];
+    } else {
+      keys = this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+    }
     if (process.platform === "win32" && this.windowsKeyManager) {
       this.windowsKeyManager.setKeys(keys);
     } else if (process.platform === "linux" && this.linuxKeyManager) {

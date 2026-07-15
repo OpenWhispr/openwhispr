@@ -389,6 +389,16 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
+  /**
+   * Dictation hotkeys minus macOS-only globe or mouse keys, used to watch
+   * push-to-talk on GNOME and KDE since D-Bus bindings never report key-up.
+   */
+  getDictationHotkeys() {
+    return (this.slots.get("dictation")?.hotkeys ?? []).filter(
+      (hotkey) => hotkey && !isGlobeLikeHotkey(hotkey) && !isMouseButtonHotkey(hotkey)
+    );
+  }
+
   // Register one hotkey without mutating any slot. `accelerator` is null for
   // hotkeys handled by native listeners.
   _registerSingleHotkey(hotkey, callback) {
