@@ -1484,6 +1484,10 @@
         "title": "Raccourci de l'agent vocal",
         "description": "Dites ce que vous voulez — votre agent IA écrit le résultat, pas vos mots"
       },
+      "translationHotkey": {
+        "title": "Raccourci de Traduction",
+        "description": "Dictez dans n'importe quelle langue : le texte collé ressort traduit"
+      },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
         "title": "Microphone"
@@ -2541,6 +2545,22 @@
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant"
     }
+  },
+  "dictationTranslation": {
+    "title": "Traduction de Dictée",
+    "description": "Un raccourci dédié qui colle votre dictée traduite dans une autre langue",
+    "enabled": "Activer la Traduction de Dictée",
+    "enabledDescription": "Les dictées lancées avec le raccourci de traduction sont nettoyées puis traduites avant d'être collées",
+    "sourceLanguage": "Langue parlée",
+    "sourceLanguageDescription": "La langue dans laquelle vous dictez : Automatique gère aussi les dictées mixtes",
+    "targetLanguage": "Traduire vers",
+    "targetLanguageDescription": "La langue du texte collé",
+    "targetLanguageMissing": "Choisissez une langue cible pour activer le raccourci de traduction",
+    "prompt": {
+      "title": "Prompt de Traduction",
+      "description": "Personnalisez la façon dont le modèle traduit votre dictée"
+    },
+    "hotkeyHint": "Définissez le raccourci dans Réglages → Général → Raccourci de Traduction"
   },
   "dictationAgent": {
     "enabled": "Activer l'agent vocal",

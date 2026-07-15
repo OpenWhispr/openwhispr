@@ -1609,6 +1609,10 @@
         "title": "Voice Agent Hotkey",
         "description": "Speak a request — your AI agent types the result, not your words"
       },
+      "translationHotkey": {
+        "title": "Translation Hotkey",
+        "description": "Dictate in any language — the pasted text comes out translated"
+      },
       "microphone": {
         "description": "Select which input device to use for dictation",
         "title": "Microphone"
@@ -2629,6 +2633,22 @@
       "startListening": "Start listening",
       "hideForNow": "Hide for now"
     }
+  },
+  "dictationTranslation": {
+    "title": "Dictation Translation",
+    "description": "A dedicated hotkey that pastes your dictation translated into another language",
+    "enabled": "Enable Dictation Translation",
+    "enabledDescription": "Dictations started with the translation hotkey are cleaned up and then translated before pasting",
+    "sourceLanguage": "Spoken language",
+    "sourceLanguageDescription": "The language you dictate in — Automatic also handles mixed-language dictation",
+    "targetLanguage": "Translate to",
+    "targetLanguageDescription": "The language of the pasted text",
+    "targetLanguageMissing": "Pick a target language to activate the translation hotkey",
+    "prompt": {
+      "title": "Translation Prompt",
+      "description": "Customize how the model translates your dictation"
+    },
+    "hotkeyHint": "Set the hotkey under Settings → General → Translation Hotkey"
   },
   "dictationAgent": {
     "enabled": "Enable voice agent",

@@ -1436,6 +1436,10 @@
         "title": "Sprachagent-Hotkey",
         "description": "Sagen Sie, was Sie brauchen — Ihr KI-Agent schreibt das Ergebnis, nicht Ihre Worte"
       },
+      "translationHotkey": {
+        "title": "Übersetzungs-Hotkey",
+        "description": "Diktiere in beliebiger Sprache — der eingefügte Text kommt übersetzt heraus"
+      },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
         "title": "Mikrofon"
@@ -2493,6 +2497,22 @@
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden"
     }
+  },
+  "dictationTranslation": {
+    "title": "Diktat-Übersetzung",
+    "description": "Ein eigener Hotkey, der dein Diktat übersetzt in eine andere Sprache einfügt",
+    "enabled": "Diktat-Übersetzung aktivieren",
+    "enabledDescription": "Mit dem Übersetzungs-Hotkey gestartete Diktate werden bereinigt und dann übersetzt, bevor sie eingefügt werden",
+    "sourceLanguage": "Gesprochene Sprache",
+    "sourceLanguageDescription": "Die Sprache, in der du diktierst — Automatisch funktioniert auch bei gemischten Diktaten",
+    "targetLanguage": "Übersetzen nach",
+    "targetLanguageDescription": "Die Sprache des eingefügten Textes",
+    "targetLanguageMissing": "Wähle eine Zielsprache, um den Übersetzungs-Hotkey zu aktivieren",
+    "prompt": {
+      "title": "Übersetzungs-Prompt",
+      "description": "Passe an, wie das Modell dein Diktat übersetzt"
+    },
+    "hotkeyHint": "Lege den Hotkey unter Einstellungen → Allgemein → Übersetzungs-Hotkey fest"
   },
   "dictationAgent": {
     "enabled": "Voice Agent aktivieren",

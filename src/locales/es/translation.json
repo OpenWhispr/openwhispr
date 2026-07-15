@@ -1484,6 +1484,10 @@
         "title": "Atajo del agente de voz",
         "description": "Di lo que necesitas y tu agente de IA escribe el resultado, no tus palabras"
       },
+      "translationHotkey": {
+        "title": "Atajo de Traducción",
+        "description": "Dicta en cualquier idioma: el texto pegado sale traducido"
+      },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
         "title": "Micrófono"
@@ -2541,6 +2545,22 @@
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora"
     }
+  },
+  "dictationTranslation": {
+    "title": "Traducción de Dictado",
+    "description": "Un atajo dedicado que pega tu dictado traducido a otro idioma",
+    "enabled": "Activar Traducción de Dictado",
+    "enabledDescription": "Los dictados iniciados con el atajo de traducción se limpian y luego se traducen antes de pegarse",
+    "sourceLanguage": "Idioma hablado",
+    "sourceLanguageDescription": "El idioma en el que dictas: Automático también gestiona dictados mixtos",
+    "targetLanguage": "Traducir a",
+    "targetLanguageDescription": "El idioma del texto pegado",
+    "targetLanguageMissing": "Elige un idioma de destino para activar el atajo de traducción",
+    "prompt": {
+      "title": "Prompt de Traducción",
+      "description": "Personaliza cómo el modelo traduce tu dictado"
+    },
+    "hotkeyHint": "Configura el atajo en Ajustes → General → Atajo de Traducción"
   },
   "dictationAgent": {
     "enabled": "Activar agente de voz",

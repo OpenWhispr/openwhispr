@@ -1431,6 +1431,10 @@
         "title": "語音助手快捷鍵",
         "description": "說出你的需求，AI 助手會輸入結果，而不是你說的原話"
       },
+      "translationHotkey": {
+        "title": "翻譯快捷鍵",
+        "description": "用任何語言聽寫——貼上的文字會自動翻譯"
+      },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",
         "title": "麥克風"
@@ -2488,6 +2492,22 @@
       "startListening": "開始錄音",
       "hideForNow": "暫時隱藏"
     }
+  },
+  "dictationTranslation": {
+    "title": "聽寫翻譯",
+    "description": "專用快捷鍵，將你的聽寫翻譯成另一種語言後貼上",
+    "enabled": "啟用聽寫翻譯",
+    "enabledDescription": "透過翻譯快捷鍵開始的聽寫會先整理再翻譯，然後貼上",
+    "sourceLanguage": "口說語言",
+    "sourceLanguageDescription": "你聽寫時使用的語言——自動偵測也能處理混合語言聽寫",
+    "targetLanguage": "翻譯為",
+    "targetLanguageDescription": "貼上文字的語言",
+    "targetLanguageMissing": "請選擇目標語言以啟用翻譯快捷鍵",
+    "prompt": {
+      "title": "翻譯提示詞",
+      "description": "自訂模型翻譯聽寫內容的方式"
+    },
+    "hotkeyHint": "在 設定 → 一般 → 翻譯快捷鍵 中設定快捷鍵"
   },
   "dictationAgent": {
     "enabled": "啟用語音代理",

@@ -1436,6 +1436,10 @@
         "title": "Scorciatoia dell'agente vocale",
         "description": "Di' cosa ti serve — il tuo agente IA scrive il risultato, non le tue parole"
       },
+      "translationHotkey": {
+        "title": "Hotkey Traduzione",
+        "description": "Detta in qualsiasi lingua: il testo incollato esce tradotto"
+      },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
         "title": "Microfono"
@@ -2493,6 +2497,22 @@
       "startListening": "Inizia ad ascoltare",
       "hideForNow": "Nascondi per ora"
     }
+  },
+  "dictationTranslation": {
+    "title": "Traduzione Dettatura",
+    "description": "Una hotkey dedicata che incolla la dettatura tradotta in un'altra lingua",
+    "enabled": "Abilita Traduzione Dettatura",
+    "enabledDescription": "Le dettature avviate con la hotkey di traduzione vengono ripulite e poi tradotte prima di essere incollate",
+    "sourceLanguage": "Lingua parlata",
+    "sourceLanguageDescription": "La lingua in cui detti: Automatico gestisce anche dettature miste",
+    "targetLanguage": "Traduci in",
+    "targetLanguageDescription": "La lingua del testo incollato",
+    "targetLanguageMissing": "Scegli una lingua di destinazione per attivare la hotkey di traduzione",
+    "prompt": {
+      "title": "Prompt di Traduzione",
+      "description": "Personalizza come il modello traduce la tua dettatura"
+    },
+    "hotkeyHint": "Imposta la hotkey in Impostazioni → Generali → Hotkey Traduzione"
   },
   "dictationAgent": {
     "enabled": "Attiva agente vocale",

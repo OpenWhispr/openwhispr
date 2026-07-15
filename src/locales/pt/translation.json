@@ -1415,6 +1415,10 @@
         "title": "Atalho do agente de voz",
         "description": "Diga o que você precisa — seu agente de IA escreve o resultado, não suas palavras"
       },
+      "translationHotkey": {
+        "title": "Atalho de Tradução",
+        "description": "Dite em qualquer idioma: o texto colado sai traduzido"
+      },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
         "title": "Microfone"
@@ -2493,6 +2497,22 @@
       "startListening": "Começar a ouvir",
       "hideForNow": "Ocultar por agora"
     }
+  },
+  "dictationTranslation": {
+    "title": "Tradução de Ditado",
+    "description": "Um atalho dedicado que cola seu ditado traduzido para outro idioma",
+    "enabled": "Ativar Tradução de Ditado",
+    "enabledDescription": "Ditados iniciados com o atalho de tradução são limpos e depois traduzidos antes de serem colados",
+    "sourceLanguage": "Idioma falado",
+    "sourceLanguageDescription": "O idioma em que você dita: Automático também lida com ditados mistos",
+    "targetLanguage": "Traduzir para",
+    "targetLanguageDescription": "O idioma do texto colado",
+    "targetLanguageMissing": "Escolha um idioma de destino para ativar o atalho de tradução",
+    "prompt": {
+      "title": "Prompt de Tradução",
+      "description": "Personalize como o modelo traduz seu ditado"
+    },
+    "hotkeyHint": "Defina o atalho em Configurações → Geral → Atalho de Tradução"
   },
   "dictationAgent": {
     "enabled": "Ativar agente de voz",

@@ -16,7 +16,7 @@ export const PROMPT_KINDS = {
   },
   translate: {
     i18nKey: "translatePrompt" as const,
-    fallback: enPrompts.translatePrompt ?? "",
+    fallback: enPrompts.translatePrompt,
   },
   chatAgent: {
     i18nKey: null,

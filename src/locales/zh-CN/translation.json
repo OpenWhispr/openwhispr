@@ -1431,6 +1431,10 @@
         "title": "语音助手快捷键",
         "description": "说出你的需求，AI 助手会输入结果，而不是你说的原话"
       },
+      "translationHotkey": {
+        "title": "翻译快捷键",
+        "description": "用任何语言听写——粘贴的文本会自动翻译"
+      },
       "microphone": {
         "description": "选择用于听写的输入设备",
         "title": "麦克风"
@@ -2488,6 +2492,22 @@
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏"
     }
+  },
+  "dictationTranslation": {
+    "title": "听写翻译",
+    "description": "专用快捷键，将你的听写翻译成另一种语言后粘贴",
+    "enabled": "启用听写翻译",
+    "enabledDescription": "通过翻译快捷键开始的听写会先整理再翻译，然后粘贴",
+    "sourceLanguage": "口语语言",
+    "sourceLanguageDescription": "你听写时使用的语言——自动检测也能处理混合语言听写",
+    "targetLanguage": "翻译为",
+    "targetLanguageDescription": "粘贴文本的语言",
+    "targetLanguageMissing": "请选择目标语言以启用翻译快捷键",
+    "prompt": {
+      "title": "翻译提示词",
+      "description": "自定义模型翻译听写内容的方式"
+    },
+    "hotkeyHint": "在 设置 → 通用 → 翻译快捷键 中设置快捷键"
   },
   "dictationAgent": {
     "enabled": "启用语音助手",
