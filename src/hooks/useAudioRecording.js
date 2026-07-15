@@ -21,7 +21,8 @@ export const useAudioRecording = (toast, options = {}) => {
   const wasRecordingRef = useRef(false);
   const { onToggle } = options;
 
-  const performStartRecording = useCallback(async ({ voiceAgentRequested = false } = {}) => {
+  const performStartRecording = useCallback(
+    async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
     if (startLockRef.current) return false;
     startLockRef.current = true;
     try {
@@ -31,6 +32,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (currentState.isRecording || currentState.isProcessing) return false;
 
       audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+      audioManagerRef.current.setTranslationRequested(translationRequested);
 
       // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
       if (!audioManagerRef.current.sttConfig) {
@@ -218,14 +220,14 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     });
 
-    const handleToggle = async ({ voiceAgentRequested = false } = {}) => {
+    const handleToggle = async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
       if (!audioManagerRef.current) return;
       // Lazily warm the mic driver on first dictation use, not at launch. See #871.
       audioManagerRef.current.warmupMicDriver?.();
       const currentState = audioManagerRef.current.getState();
 
       if (!currentState.isRecording && !currentState.isProcessing) {
-        await performStartRecording({ voiceAgentRequested });
+        await performStartRecording({ voiceAgentRequested, translationRequested });
       } else if (currentState.isRecording) {
         await performStopRecording();
       }
@@ -247,6 +249,11 @@ export const useAudioRecording = (toast, options = {}) => {
 
     const disposeVoiceAgentToggle = window.electronAPI.onToggleVoiceAgent?.(() => {
       handleToggle({ voiceAgentRequested: true });
+      onToggle?.();
+    });
+
+    const disposeTranslationToggle = window.electronAPI.onToggleTranslation?.(() => {
+      handleToggle({ translationRequested: true });
       onToggle?.();
     });
 
@@ -277,6 +284,7 @@ export const useAudioRecording = (toast, options = {}) => {
     return () => {
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
+      disposeTranslationToggle?.();
       disposeStart?.();
       disposeStop?.();
       disposeNoAudio?.();

@@ -241,6 +241,7 @@ class AudioManager {
     this.streamingFallbackChunks = [];
     this.skipReasoning = false;
     this.voiceAgentRequested = false;
+    this.translationRequested = false;
     this.context = "dictation";
     this.sttConfig = null;
     this.lastAudioBlob = null;
@@ -321,6 +322,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setVoiceAgentRequested(requested) {
     this.voiceAgentRequested = requested;
+  }
+
+  setTranslationRequested(requested) {
+    this.translationRequested = requested;
   }
 
   setContext(context) {
