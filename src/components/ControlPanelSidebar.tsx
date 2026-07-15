@@ -73,13 +73,9 @@ export default function ControlPanelSidebar({
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const { active: activeWorkspace } = useWorkspace();
 
-  const showLimitBanner = authLoaded && isSignedIn && !isProUser && isOverLimit;
-  const showUpgradeBanner =
-    !showLimitBanner &&
-    authLoaded &&
-    (!isSignedIn || usageLoaded !== false) &&
-    !isProUser &&
-    !upgradeDismissed;
+  // Fork: no Pro upsell or usage-limit banners.
+  const showLimitBanner = false;
+  const showUpgradeBanner = false;
 
   const navItems: {
     id: ControlPanelView;
