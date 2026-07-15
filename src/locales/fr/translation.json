@@ -2550,7 +2550,7 @@
         "title": "Raccourci indisponible",
         "description": "Le raccourci sélectionné n’a pas pu être enregistré. Veuillez en choisir un autre dans les paramètres."
       },
-      "cudaFallback": {
+      "gpuFallback": {
         "title": "Accélération GPU indisponible",
         "description": "La transcription utilise le CPU à la place. Vous pouvez désactiver l'accélération GPU dans les paramètres."
       },

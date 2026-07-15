@@ -124,13 +124,17 @@ export default function App() {
       });
     });
 
-    const unsubscribeCudaFallback = window.electronAPI?.onCudaFallbackNotification?.(() => {
+    const showGpuFallbackToast = () => {
       toast({
-        title: t("app.toasts.cudaFallback.title"),
-        description: t("app.toasts.cudaFallback.description"),
+        title: t("app.toasts.gpuFallback.title"),
+        description: t("app.toasts.gpuFallback.description"),
         duration: 10000,
       });
-    });
+    };
+    const unsubscribeCudaFallback =
+      window.electronAPI?.onCudaFallbackNotification?.(showGpuFallbackToast);
+    const unsubscribeGpuFallback =
+      window.electronAPI?.onGpuFallbackNotification?.(showGpuFallbackToast);
 
     const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
       if (words && words.length > 0) {
@@ -169,6 +173,7 @@ export default function App() {
       unsubscribeFallback?.();
       unsubscribeFailed?.();
       unsubscribeCudaFallback?.();
+      unsubscribeGpuFallback?.();
       unsubscribeCorrections?.();
     };
   }, [toast, dismiss, t]);

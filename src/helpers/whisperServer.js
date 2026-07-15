@@ -165,17 +165,18 @@ function buildWhisperServerArgs({
 
 function shouldFallbackToCpuAfterRequestError({
   isConnectionError,
-  useCuda,
+  useGpu,
   isRemote,
   stopRequested,
   generationChanged,
   processExited,
 }) {
-  // A local CUDA whisper-server that drops the connection and dies mid-request aborted on an
-  // unsupported GPU: retry on CPU. Skip remote/CPU servers, intentional stops, and restarts.
+  // A local GPU whisper-server that drops the connection and dies mid-request crashed
+  // (e.g. CUDA aborting on an unsupported GPU at the first kernel launch): retry on CPU.
+  // Skip remote/CPU servers, intentional stops, and restarts.
   return (
     !!isConnectionError &&
-    !!useCuda &&
+    !!useGpu &&
     !isRemote &&
     !stopRequested &&
     !generationChanged &&
@@ -839,7 +840,7 @@ class WhisperServerManager extends EventEmitter {
     if (!err?.isConnectionError || this.isRemote || this._stopRequested) throw err;
 
     if (this.startGeneration === generation) {
-      if (!this.useCuda) throw err;
+      if (!this.useCuda && !this.useVulkan) throw err;
 
       // The child's close handler clears this.process; wait for it so a crash is told
       // apart from a server that merely refused this one request.
@@ -848,20 +849,14 @@ class WhisperServerManager extends EventEmitter {
         this.startGeneration === generation &&
         shouldFallbackToCpuAfterRequestError({
           isConnectionError: true,
-          useCuda: this.useCuda,
+          useGpu: this.useCuda || this.useVulkan,
           isRemote: this.isRemote,
           stopRequested: this._stopRequested,
           generationChanged: false,
           processExited,
         })
       ) {
-        debugLogger.warn("CUDA whisper-server died during transcription, falling back to CPU", {
-          port: this.port,
-          model: modelPath ? path.basename(modelPath) : null,
-        });
-        this.emit("cuda-fallback");
-        await this.start(modelPath, { ...this.lastStartOptions, useCuda: false });
-        return await this._postInference(body, boundary);
+        return await this._fallbackToCpuAndRetry(body, boundary, modelPath);
       }
       if (this.startGeneration === generation) throw err;
     }
@@ -881,6 +876,33 @@ class WhisperServerManager extends EventEmitter {
     ) {
       throw err;
     }
+    try {
+      return await this._postInference(body, boundary);
+    } catch (retryErr) {
+      // The replacement can be another doomed GPU server (a peer restarted with the
+      // GPU flags still set): give it the same one-shot crash check before giving up.
+      if (
+        !retryErr?.isConnectionError ||
+        this._stopRequested ||
+        (!this.useCuda && !this.useVulkan)
+      ) {
+        throw retryErr;
+      }
+      const exited = await this._waitForProcessExit(PROCESS_EXIT_WAIT_MS);
+      if (!exited || this._stopRequested) throw retryErr;
+      return await this._fallbackToCpuAndRetry(body, boundary, modelPath);
+    }
+  }
+
+  async _fallbackToCpuAndRetry(body, boundary, modelPath) {
+    const backend = this.useCuda ? "cuda" : "vulkan";
+    debugLogger.warn(`${backend} whisper-server died during transcription, falling back to CPU`, {
+      port: this.port,
+      model: modelPath ? path.basename(modelPath) : null,
+    });
+    await this.start(modelPath, { ...this.lastStartOptions, useCuda: false, useVulkan: false });
+    // Emit only once the CPU server is up — the notification tells the user CPU is in use
+    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback");
     return await this._postInference(body, boundary);
   }
 

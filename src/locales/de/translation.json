@@ -2502,7 +2502,7 @@
         "title": "Tastenkombination nicht verfügbar",
         "description": "Die ausgewählte Tastenkombination konnte nicht registriert werden. Bitte wähle eine andere in den Einstellungen."
       },
-      "cudaFallback": {
+      "gpuFallback": {
         "title": "GPU-Beschleunigung nicht verfügbar",
         "description": "Die Transkription verwendet stattdessen die CPU. Du kannst die GPU-Beschleunigung in den Einstellungen deaktivieren."
       },

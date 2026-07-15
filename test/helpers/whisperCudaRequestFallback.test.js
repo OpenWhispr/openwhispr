@@ -10,14 +10,14 @@ const {
 
 const base = {
   isConnectionError: true,
-  useCuda: true,
+  useGpu: true,
   isRemote: false,
   stopRequested: false,
   generationChanged: false,
   processExited: true,
 };
 
-test("falls back when a local CUDA server drops the connection and exits", () => {
+test("falls back when a local GPU server drops the connection and exits", () => {
   assert.equal(shouldFallbackToCpuAfterRequestError(base), true);
 });
 
@@ -26,7 +26,7 @@ test("skips a failure that is not a connection error (server answered)", () => {
 });
 
 test("skips a CPU server (nothing to fall back to)", () => {
-  assert.equal(shouldFallbackToCpuAfterRequestError({ ...base, useCuda: false }), false);
+  assert.equal(shouldFallbackToCpuAfterRequestError({ ...base, useGpu: false }), false);
 });
 
 test("skips a remote server (its process is not ours to restart)", () => {
@@ -97,16 +97,17 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
-function createManager(port, { useCuda }) {
+function createManager(port, { useCuda, useVulkan = false }) {
   const manager = new WhisperServerManager();
   manager.ready = true;
   manager.hostname = "127.0.0.1";
   manager.port = port;
   manager.useCuda = useCuda;
+  manager.useVulkan = useVulkan;
   manager.canConvert = true;
   manager.process = {};
   manager.modelPath = "/tmp/model.bin";
-  manager.lastStartOptions = { useCuda: true };
+  manager.lastStartOptions = { useCuda, useVulkan };
   manager._convertToWav = async (buffer) => buffer;
   return manager;
 }
@@ -149,6 +150,94 @@ test("falls back to CPU and retries once when the CUDA server dies mid-request",
   assert.equal(fallbackEvents, 1);
   assert.equal(startCalls.length, 1);
   assert.equal(startCalls[0].modelPath, "/tmp/model.bin");
+  assert.equal(startCalls[0].options.useCuda, false);
+  assert.equal(startCalls[0].options.useVulkan, false);
+});
+
+test("falls back to CPU and emits gpu-fallback when a Vulkan server dies mid-request", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: false, useVulkan: true });
+
+  const startCalls = [];
+  manager.start = async (modelPath, options) => {
+    startCalls.push({ modelPath, options });
+    manager.useVulkan = false;
+    manager.ready = true;
+  };
+
+  const events = [];
+  manager.on("cuda-fallback", () => events.push("cuda-fallback"));
+  manager.on("gpu-fallback", () => events.push("gpu-fallback"));
+
+  const result = await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(result.text, "hello");
+  assert.equal(requestCount, 2);
+  assert.deepEqual(events, ["gpu-fallback"]);
+  assert.equal(startCalls.length, 1);
+  assert.equal(startCalls[0].options.useCuda, false);
+  assert.equal(startCalls[0].options.useVulkan, false);
+});
+
+test("falls back to CPU when a peer's replacement is another doomed CUDA server", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      // Crash, then simulate a peer restarting with CUDA still enabled.
+      manager.process = null;
+      manager.startGeneration += 1;
+      manager.ready = true;
+      req.socket.destroy();
+      return;
+    }
+    if (requestCount === 2) {
+      // The replacement CUDA server aborts at its first kernel launch too.
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true });
+
+  const startCalls = [];
+  manager.start = async (modelPath, options) => {
+    startCalls.push({ modelPath, options });
+    manager.useCuda = false;
+    manager.ready = true;
+  };
+
+  let fallbackEvents = 0;
+  manager.on("cuda-fallback", () => {
+    fallbackEvents += 1;
+  });
+
+  const result = await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(result.text, "hello");
+  assert.equal(requestCount, 3);
+  assert.equal(fallbackEvents, 1);
+  assert.equal(startCalls.length, 1);
   assert.equal(startCalls[0].options.useCuda, false);
 });
 
@@ -446,7 +535,7 @@ test("_waitForProcessExit resolves true as soon as the process exits mid-wait", 
   assert.ok(elapsed < 800, `expected an early exit, took ${elapsed}ms`);
 });
 
-test("propagates the CPU restart failure and still notifies once", async (t) => {
+test("propagates the CPU restart failure without notifying (CPU never came up)", async (t) => {
   let manager;
 
   const { server, port } = await startServer((req) => {
@@ -473,7 +562,7 @@ test("propagates the CPU restart failure and still notifies once", async (t) => 
     }
   );
 
-  assert.equal(fallbackEvents, 1);
+  assert.equal(fallbackEvents, 0);
 });
 
 test("rejects immediately for a CPU server without waiting for process exit", async (t) => {

@@ -2638,7 +2638,7 @@
         "title": "Hotkey unavailable",
         "description": "The selected hotkey could not be registered. Please choose a different one in settings."
       },
-      "cudaFallback": {
+      "gpuFallback": {
         "title": "GPU acceleration unavailable",
         "description": "Transcription is using the CPU instead. You can disable GPU acceleration in Settings."
       },

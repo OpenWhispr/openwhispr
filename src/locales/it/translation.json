@@ -2502,7 +2502,7 @@
         "title": "Scorciatoia non disponibile",
         "description": "Non è stato possibile registrare la scorciatoia selezionata. Scegline un’altra nelle impostazioni."
       },
-      "cudaFallback": {
+      "gpuFallback": {
         "title": "Accelerazione GPU non disponibile",
         "description": "La trascrizione sta usando la CPU. Puoi disattivare l'accelerazione GPU nelle Impostazioni."
       },

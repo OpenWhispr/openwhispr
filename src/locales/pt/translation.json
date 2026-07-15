@@ -2502,7 +2502,7 @@
         "title": "Atalho indisponível",
         "description": "Não foi possível registrar o atalho selecionado. Escolha outro nas configurações."
       },
-      "cudaFallback": {
+      "gpuFallback": {
         "title": "Aceleração GPU indisponível",
         "description": "A transcrição está usando a CPU. Você pode desativar a aceleração GPU nas Configurações."
       },
