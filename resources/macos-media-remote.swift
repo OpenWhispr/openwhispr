@@ -1,11 +1,9 @@
 import AppKit
 import Foundation
 
-// Posts a media play/pause NSEvent (NSEventSubtypeMediaKey / NX_KEYTYPE_PLAY).
-// This is the only call path that reaches apps listening for media keys
-// (Spotify, Music, Brain.fm, browser tabs). The previous implementation sent
-// F8 via System Events, which is NOT a media key on modern Macs and was
-// silently ignored — see https://github.com/OpenWhispr/openwhispr/issues/794.
+// Posts a media play/pause NSEvent (NSEventSubtypeMediaKey / NX_KEYTYPE_PLAY),
+// the only event class media apps (Spotify, Music, browser tabs) listen for —
+// synthetic F-key codes are not media keys.
 //
 // State-aware pause/resume is handled by the vendored mediaremote-adapter
 // loaded through /usr/bin/perl; this helper is the fallback when the adapter

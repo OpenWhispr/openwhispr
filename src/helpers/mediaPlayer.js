@@ -155,10 +155,7 @@ class MediaPlayer {
     const frameworkCandidates = [];
 
     if (process.resourcesPath) {
-      scriptCandidates.push(
-        path.join(process.resourcesPath, "mediaremote-adapter", "mediaremote-adapter.pl"),
-        path.join(process.resourcesPath, "bin", "mediaremote-adapter.pl")
-      );
+      scriptCandidates.push(path.join(process.resourcesPath, "bin", "mediaremote-adapter.pl"));
       frameworkCandidates.push(
         path.join(process.resourcesPath, "bin", "MediaRemoteAdapter.framework")
       );
@@ -443,7 +440,7 @@ class MediaPlayer {
 
     // Primary path: vendored mediaremote-adapter via /usr/bin/perl. Works on
     // macOS 15.4+ where the framework is closed to user processes.
-    const probe = await this._runAdapter(["get"]);
+    const probe = await this._runAdapter(["get", "--no-artwork"]);
     if (probe && probe.status === 0) {
       const output = (probe.stdout || "").trim();
       let playing = null;
@@ -528,10 +525,9 @@ class MediaPlayer {
   }
 
   // Posts a real NX_KEYTYPE_PLAY system-defined NSEvent via the bundled
-  // helper. The previous implementation sent F8 (key code 100) through
-  // System Events, which is NOT a media key on modern Macs — apps that listen
-  // for the media-play event (Spotify, Music, Brain.fm, browser tabs) ignored
-  // it. The helper posts the correct event via CGEventPost.
+  // helper. Media apps only respond to that event class — synthetic F-key
+  // codes (osascript "key code") are not media keys and land in the focused
+  // app as plain keystrokes instead.
   async _sendMacMediaKey() {
     const binary = this._resolveMacMediaRemote();
     if (!binary) return false;

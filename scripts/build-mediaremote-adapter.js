@@ -132,12 +132,7 @@ function walkHeaders(dir) {
 }
 
 // Source hash gate — skip rebuild when nothing changed.
-const dylibPath = path.join(
-  frameworkRoot,
-  "Versions",
-  FRAMEWORK_VERSION,
-  FRAMEWORK_NAME
-);
+const dylibPath = path.join(frameworkRoot, "Versions", FRAMEWORK_VERSION, FRAMEWORK_NAME);
 
 const currentHash = hashSources();
 if (
@@ -170,14 +165,8 @@ symlinkForce(
   path.join("Versions", "Current", FRAMEWORK_NAME),
   path.join(frameworkRoot, FRAMEWORK_NAME)
 );
-symlinkForce(
-  path.join("Versions", "Current", "Headers"),
-  path.join(frameworkRoot, "Headers")
-);
-symlinkForce(
-  path.join("Versions", "Current", "Resources"),
-  path.join(frameworkRoot, "Resources")
-);
+symlinkForce(path.join("Versions", "Current", "Headers"), path.join(frameworkRoot, "Headers"));
+symlinkForce(path.join("Versions", "Current", "Resources"), path.join(frameworkRoot, "Resources"));
 
 fs.copyFileSync(
   path.join(sourceRoot, PUBLIC_HEADER),
@@ -211,12 +200,7 @@ const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>
 `;
 fs.writeFileSync(path.join(versionRoot, "Resources", "Info.plist"), infoPlist);
 
-const includeFlags = [
-  "-I",
-  path.join(sourceRoot, "include"),
-  "-I",
-  path.join(sourceRoot, "src"),
-];
+const includeFlags = ["-I", path.join(sourceRoot, "include"), "-I", path.join(sourceRoot, "src")];
 
 const commonFlags = [
   "-fobjc-arc",
@@ -267,9 +251,7 @@ if (compile.status !== 0) {
 }
 
 if (!verifyDylibArch(dylibOut, targetArch)) {
-  console.error(
-    `[mra] FATAL: Compiled dylib architecture does not match target (${targetArch}).`
-  );
+  console.error(`[mra] FATAL: Compiled dylib architecture does not match target (${targetArch}).`);
   process.exit(1);
 }
 
@@ -277,11 +259,9 @@ if (!verifyDylibArch(dylibOut, targetArch)) {
 // will resign this with the developer identity during packaging on signed
 // builds; the ad-hoc signature is only relied on for dev runs and CSC_IDENTITY
 // _AUTO_DISCOVERY=false packs.
-const sign = spawnSync(
-  "codesign",
-  ["--force", "--sign", "-", "--timestamp=none", frameworkRoot],
-  { stdio: "inherit" }
-);
+const sign = spawnSync("codesign", ["--force", "--sign", "-", "--timestamp=none", frameworkRoot], {
+  stdio: "inherit",
+});
 if (sign.status !== 0) {
   console.error("[mra] codesign --force --sign - failed");
   process.exit(sign.status ?? 1);
