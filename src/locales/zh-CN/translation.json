@@ -1284,7 +1284,7 @@
           "sending": "正在发送...",
           "cancel": "取消",
           "sentTitle": "查看您的收件箱",
-          "sentDescription": "我们已发送确认链接。确认后更改即会生效。",
+          "sentDescription": "我们已向您当前的邮箱发送确认链接。确认后更改即会生效。",
           "close": "关闭"
         },
         "password": {

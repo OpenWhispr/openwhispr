@@ -1337,7 +1337,7 @@
           "sending": "Envoi...",
           "cancel": "Annuler",
           "sentTitle": "Vérifiez votre boîte de réception",
-          "sentDescription": "Nous avons envoyé un lien de confirmation. Le changement prend effet une fois que vous l'avez confirmé.",
+          "sentDescription": "Nous avons envoyé un lien de confirmation à votre adresse e-mail actuelle. Le changement prend effet une fois que vous l'avez confirmé.",
           "close": "Fermer"
         },
         "password": {

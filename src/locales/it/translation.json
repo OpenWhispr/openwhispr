@@ -1289,7 +1289,7 @@
           "sending": "Invio...",
           "cancel": "Annulla",
           "sentTitle": "Controlla la tua posta in arrivo",
-          "sentDescription": "Abbiamo inviato un link di conferma. La modifica avrà effetto una volta confermata.",
+          "sentDescription": "Abbiamo inviato un link di conferma al tuo indirizzo email attuale. La modifica avrà effetto una volta confermata.",
           "close": "Chiudi"
         },
         "password": {

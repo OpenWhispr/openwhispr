@@ -250,7 +250,7 @@ function toAuthActionError(source: unknown, fallbackMessage: string): AuthAction
 
 export async function updateDisplayName(name: string): Promise<{ error?: AuthActionError }> {
   try {
-    const { error } = await authClient.updateUser({ name: name.trim() });
+    const { error } = await authClient.updateUser({ name });
     if (error) return { error: toAuthActionError(error, "Failed to update name") };
     return {};
   } catch (error) {

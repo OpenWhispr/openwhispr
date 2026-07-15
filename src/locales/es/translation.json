@@ -1337,7 +1337,7 @@
           "sending": "Enviando...",
           "cancel": "Cancelar",
           "sentTitle": "Revisa tu bandeja de entrada",
-          "sentDescription": "Enviamos un enlace de confirmación. El cambio se aplicará cuando lo confirmes.",
+          "sentDescription": "Enviamos un enlace de confirmación a tu dirección de correo actual. El cambio se aplicará cuando lo confirmes.",
           "close": "Cerrar"
         },
         "password": {

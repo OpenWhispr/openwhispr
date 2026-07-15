@@ -1462,7 +1462,7 @@
           "sending": "Sending...",
           "cancel": "Cancel",
           "sentTitle": "Check your inbox",
-          "sentDescription": "We sent a confirmation link. The change takes effect once you confirm it.",
+          "sentDescription": "We sent a confirmation link to your current email address. The change takes effect once you confirm it.",
           "close": "Close"
         },
         "password": {

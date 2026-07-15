@@ -1268,7 +1268,7 @@
           "sending": "Enviando...",
           "cancel": "Cancelar",
           "sentTitle": "Verifique sua caixa de entrada",
-          "sentDescription": "Enviamos um link de confirmação. A alteração terá efeito assim que você confirmar.",
+          "sentDescription": "Enviamos um link de confirmação para o seu endereço de e-mail atual. A alteração terá efeito assim que você confirmar.",
           "close": "Fechar"
         },
         "password": {

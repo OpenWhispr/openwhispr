@@ -1289,7 +1289,7 @@
           "sending": "Wird gesendet...",
           "cancel": "Abbrechen",
           "sentTitle": "Prüfen Sie Ihr Postfach",
-          "sentDescription": "Wir haben einen Bestätigungslink gesendet. Die Änderung wird wirksam, sobald Sie sie bestätigen.",
+          "sentDescription": "Wir haben einen Bestätigungslink an Ihre aktuelle E-Mail-Adresse gesendet. Die Änderung wird wirksam, sobald Sie sie bestätigen.",
           "close": "Schließen"
         },
         "password": {

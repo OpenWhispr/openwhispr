@@ -1284,7 +1284,7 @@
           "sending": "寄送中...",
           "cancel": "取消",
           "sentTitle": "請查看您的收件匣",
-          "sentDescription": "我們已寄送確認連結。確認後變更即會生效。",
+          "sentDescription": "我們已向您目前的電子郵件地址寄送確認連結。確認後變更即會生效。",
           "close": "關閉"
         },
         "password": {
