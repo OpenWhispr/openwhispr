@@ -2550,6 +2550,10 @@
         "title": "Atajo no disponible",
         "description": "No se pudo registrar el atajo seleccionado. Elige otro en la configuración."
       },
+      "cudaFallback": {
+        "title": "Aceleración GPU no disponible",
+        "description": "La transcripción está usando la CPU. Puedes desactivar la aceleración GPU en Configuración."
+      },
       "addedToDict": "{{words}} añadido a tu diccionario",
       "undo": "Deshacer",
       "accessibilityMissing": {

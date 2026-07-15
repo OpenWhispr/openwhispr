@@ -20,6 +20,8 @@ const STARTUP_TIMEOUT_MS = 30000;
 const VULKAN_STARTUP_TIMEOUT_MS = 120000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
+const PROCESS_EXIT_WAIT_MS = 2000;
+const PROCESS_EXIT_POLL_INTERVAL_MS = 50;
 const DEFAULT_WHISPER_THREADS = 4;
 const MAX_AUTO_WHISPER_THREADS = 12;
 const MAX_MANUAL_WHISPER_THREADS = 64;
@@ -161,6 +163,38 @@ function buildWhisperServerArgs({
   return args;
 }
 
+function shouldFallbackToCpuAfterRequestError({
+  isConnectionError,
+  useCuda,
+  isRemote,
+  stopRequested,
+  generationChanged,
+  processExited,
+}) {
+  // A local CUDA whisper-server that drops the connection and dies mid-request aborted on an
+  // unsupported GPU: retry on CPU. Skip remote/CPU servers, intentional stops, and restarts.
+  return (
+    !!isConnectionError &&
+    !!useCuda &&
+    !isRemote &&
+    !stopRequested &&
+    !generationChanged &&
+    !!processExited
+  );
+}
+
+function shouldRetryAfterServerReplaced({
+  isConnectionError,
+  isRemote,
+  stopRequested,
+  ready,
+  sameModel,
+}) {
+  // A concurrent caller already restarted the server; retry only if it is up
+  // and still serving the same model (a model switch must not answer for it).
+  return !!isConnectionError && !isRemote && !stopRequested && !!ready && !!sameModel;
+}
+
 class WhisperServerManager extends EventEmitter {
   constructor() {
     super();
@@ -177,7 +211,8 @@ class WhisperServerManager extends EventEmitter {
     this.canConvert = false;
     this.useCuda = false;
     this.useVulkan = false;
-    this._abortStartup = false;
+    this.startGeneration = 0;
+    this._stopRequested = false;
     this.vadSignature = "vad:off";
     this.threadSignature = "threads:default";
     this.lastStartOptions = {};
@@ -412,6 +447,8 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async _doStart(modelPath, options = {}) {
+    this.startGeneration += 1;
+    this._stopRequested = false;
     const usingCuda = options.useCuda || false;
     const usingVulkan = !usingCuda && (options.useVulkan || false);
     const threadResolution = options.threadResolution || resolveWhisperThreads(options);
@@ -425,7 +462,6 @@ class WhisperServerManager extends EventEmitter {
     this.modelPath = modelPath;
     this.useCuda = usingCuda;
     this.useVulkan = usingVulkan;
-    this._abortStartup = false;
 
     // Check for FFmpeg first - only use --convert flag if FFmpeg is available
     const ffmpegPath = this.getFFmpegPath();
@@ -589,7 +625,7 @@ class WhisperServerManager extends EventEmitter {
     const STARTUP_POLL_INTERVAL_MS = 100;
 
     while (Date.now() - startTime < timeoutMs) {
-      if (this._abortStartup) {
+      if (this._stopRequested) {
         throw Object.assign(new Error("whisper-server startup interrupted by stop"), {
           isStopped: true,
         });
@@ -730,6 +766,17 @@ class WhisperServerManager extends EventEmitter {
     const bodyParts = parts.map((part) => (typeof part === "string" ? Buffer.from(part) : part));
     const body = Buffer.concat(bodyParts);
 
+    const generation = this.startGeneration;
+    const modelPath = this.modelPath;
+
+    try {
+      return await this._postInference(body, boundary);
+    } catch (err) {
+      return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
+    }
+  }
+
+  _postInference(body, boundary) {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
 
@@ -773,7 +820,10 @@ class WhisperServerManager extends EventEmitter {
       );
 
       req.on("error", (error) => {
-        reject(new Error(`whisper-server request failed: ${error.message}`));
+        const err = new Error(`whisper-server request failed: ${error.message}`);
+        err.isConnectionError = true;
+        err.code = error.code;
+        reject(err);
       });
       req.on("timeout", () => {
         req.destroy();
@@ -783,6 +833,64 @@ class WhisperServerManager extends EventEmitter {
       req.write(body);
       req.end();
     });
+  }
+
+  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath) {
+    if (!err?.isConnectionError || this.isRemote || this._stopRequested) throw err;
+
+    if (this.startGeneration === generation) {
+      if (!this.useCuda) throw err;
+
+      // The child's close handler clears this.process; wait for it so a crash is told
+      // apart from a server that merely refused this one request.
+      const processExited = await this._waitForProcessExit(PROCESS_EXIT_WAIT_MS);
+      if (
+        this.startGeneration === generation &&
+        shouldFallbackToCpuAfterRequestError({
+          isConnectionError: true,
+          useCuda: this.useCuda,
+          isRemote: this.isRemote,
+          stopRequested: this._stopRequested,
+          generationChanged: false,
+          processExited,
+        })
+      ) {
+        debugLogger.warn("CUDA whisper-server died during transcription, falling back to CPU", {
+          port: this.port,
+          model: modelPath ? path.basename(modelPath) : null,
+        });
+        this.emit("cuda-fallback");
+        await this.start(modelPath, { ...this.lastStartOptions, useCuda: false });
+        return await this._postInference(body, boundary);
+      }
+      if (this.startGeneration === generation) throw err;
+    }
+
+    // Another start already replaced the crashed server (concurrent fallback or
+    // model reload): retry only against a ready server holding the same model.
+    const pending = this.startupPromise;
+    if (pending) await pending.catch(() => {});
+    if (
+      !shouldRetryAfterServerReplaced({
+        isConnectionError: true,
+        isRemote: this.isRemote,
+        stopRequested: this._stopRequested,
+        ready: this.ready,
+        sameModel: this.modelPath === modelPath,
+      })
+    ) {
+      throw err;
+    }
+    return await this._postInference(body, boundary);
+  }
+
+  async _waitForProcessExit(timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (this.process) {
+      if (Date.now() >= deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, PROCESS_EXIT_POLL_INTERVAL_MS));
+    }
+    return true;
   }
 
   async _convertToWav(audioBuffer) {
@@ -807,7 +915,7 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async stop() {
-    this._abortStartup = true;
+    this._stopRequested = true;
     this.stopHealthCheck();
 
     if (this.isRemote) {
@@ -874,3 +982,5 @@ module.exports = WhisperServerManager;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
 module.exports.getVadSignature = getVadSignature;
 module.exports.resolveWhisperThreads = resolveWhisperThreads;
+module.exports.shouldFallbackToCpuAfterRequestError = shouldFallbackToCpuAfterRequestError;
+module.exports.shouldRetryAfterServerReplaced = shouldRetryAfterServerReplaced;

@@ -2497,6 +2497,10 @@
         "title": "快捷键不可用",
         "description": "无法注册所选快捷键。请在设置中选择其他快捷键。"
       },
+      "cudaFallback": {
+        "title": "GPU 加速不可用",
+        "description": "转录正在使用 CPU。你可以在设置中关闭 GPU 加速。"
+      },
       "addedToDict": "已将 {{words}} 添加到你的词典",
       "undo": "撤消",
       "accessibilityMissing": {

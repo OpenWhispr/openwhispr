@@ -2502,6 +2502,10 @@
         "title": "ホットキーが使用できません",
         "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
       },
+      "cudaFallback": {
+        "title": "GPU アクセラレーションを利用できません",
+        "description": "文字起こしは代わりに CPU を使用しています。設定で GPU アクセラレーションを無効にできます。"
+      },
       "addedToDict": "{{words}} を辞書に追加しました",
       "undo": "元に戻す",
       "accessibilityMissing": {

@@ -124,6 +124,14 @@ export default function App() {
       });
     });
 
+    const unsubscribeCudaFallback = window.electronAPI?.onCudaFallbackNotification?.(() => {
+      toast({
+        title: t("app.toasts.cudaFallback.title"),
+        description: t("app.toasts.cudaFallback.description"),
+        duration: 10000,
+      });
+    });
+
     const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
       if (words && words.length > 0) {
         const wordList = words.map((w) => `\u201c${w}\u201d`).join(", ");
@@ -160,6 +168,7 @@ export default function App() {
     return () => {
       unsubscribeFallback?.();
       unsubscribeFailed?.();
+      unsubscribeCudaFallback?.();
       unsubscribeCorrections?.();
     };
   }, [toast, dismiss, t]);
