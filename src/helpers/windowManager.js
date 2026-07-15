@@ -472,6 +472,13 @@ class WindowManager {
     this._sendDictationToggle("toggle-voice-agent");
   }
 
+  sendToggleTranslation() {
+    // Same PID-capture need as the voice agent: translation hotkeys don't
+    // capture the target at their call sites.
+    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+    this._sendDictationToggle("toggle-translation");
+  }
+
   sendStartDictation() {
     if (this.hotkeyManager.isInListeningMode()) {
       return;

@@ -891,6 +891,29 @@ async function startApp() {
     }
   }
 
+  // Set up translation hotkey (dictation cleaned up and translated into the
+  // configured target language before pasting)
+  const translationHotkeyCallback = () => {
+    windowManager.sendToggleTranslation();
+  };
+  windowManager._translationHotkeyCallback = translationHotkeyCallback;
+
+  const savedTranslationKey = environmentManager.getTranslationKey?.() || "";
+  if (savedTranslationKey) {
+    const result = await hotkeyManager.registerSlot(
+      "translation",
+      savedTranslationKey,
+      translationHotkeyCallback
+    );
+    if (!result.success) {
+      debugLogger.warn(
+        "Failed to restore translation hotkey",
+        { hotkey: savedTranslationKey },
+        "hotkey"
+      );
+    }
+  }
+
   // Set up meeting mode hotkey
   const meetingHotkeyCallback = () => {
     if (hotkeyManager.isInListeningMode()) return;
@@ -1104,13 +1127,19 @@ async function startApp() {
       const voiceAgentUsesGlobe = hotkeyManager
         .getSlotHotkeys("voiceAgent")
         .some(isGlobeLikeHotkey);
+      const translationUsesGlobe = hotkeyManager
+        .getSlotHotkeys("translation")
+        .some(isGlobeLikeHotkey);
       if (agentUsesGlobe) {
         windowManager.toggleAgentOverlay();
       }
       if (voiceAgentUsesGlobe) {
         windowManager.sendToggleVoiceAgent();
       }
-      if (!agentUsesGlobe && !voiceAgentUsesGlobe && !dictationUsesGlobe) {
+      if (translationUsesGlobe) {
+        windowManager.sendToggleTranslation();
+      }
+      if (!agentUsesGlobe && !voiceAgentUsesGlobe && !translationUsesGlobe && !dictationUsesGlobe) {
         debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
       }
     });
@@ -1159,6 +1188,9 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
         windowManager.sendToggleVoiceAgent();
+      }
+      if (hotkeyManager.slotHasHotkey("translation", modifier)) {
+        windowManager.sendToggleTranslation();
       }
 
       if (!hotkeyManager.slotHasHotkey("dictation", modifier)) return;
@@ -1218,7 +1250,7 @@ async function startApp() {
 
     const syncSuppressedMouseButtons = () => {
       const buttons = [];
-      for (const slotName of ["dictation", "agent", "voiceAgent"]) {
+      for (const slotName of ["dictation", "agent", "voiceAgent", "translation"]) {
         for (const hotkey of hotkeyManager.getSlotHotkeys(slotName)) {
           if (isMouseButtonHotkey(hotkey)) buttons.push(hotkey);
         }
@@ -1241,6 +1273,9 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
         windowManager.sendToggleVoiceAgent();
+      }
+      if (hotkeyManager.slotHasHotkey("translation", button)) {
+        windowManager.sendToggleTranslation();
       }
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
@@ -1367,6 +1402,8 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
         windowManager.sendToggleVoiceAgent();
+      } else if (hotkeyManager.slotHasHotkey("translation", key)) {
+        windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("agent", key)) {
         if (!hotkeyManager.isInListeningMode()) windowManager.toggleAgentOverlay();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
