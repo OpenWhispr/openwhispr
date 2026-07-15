@@ -4,6 +4,7 @@ import logger from "../../../utils/logger";
 
 export const anthropicProvider: InferenceProvider = {
   id: "anthropic",
+  supportsImages: true,
   async call({ text, model, agentName, config, ctx }) {
     if (typeof window === "undefined" || !window.electronAPI) {
       throw new Error("Anthropic reasoning is not available in this environment");

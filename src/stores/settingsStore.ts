@@ -114,6 +114,8 @@ const BOOLEAN_SETTINGS = new Set([
   "autoGenerateNoteTitle",
   "useCleanupModel",
   "useDictationAgent",
+  "voiceAgentScreenContext",
+  "useDictationAgentVisionModel",
   "preferBuiltInMic",
   "cloudBackupEnabled",
   "telemetryEnabled",
@@ -135,6 +137,7 @@ const BOOLEAN_SETTINGS = new Set([
   "showTranscriptionPreview",
   "cleanupDisableThinking",
   "dictationAgentDisableThinking",
+  "dictationAgentVisionDisableThinking",
   "noteFormattingDisableThinking",
   "chatAgentDisableThinking",
   "notificationsEnabled",
@@ -480,8 +483,20 @@ export interface SettingsState
   dictationAgentRemoteUrl: string;
   dictationAgentCustomApiKey: string;
 
+  // Voice-agent screen context: opt-in screenshot capture, plus an optional
+  // dedicated model used only when a screenshot is attached.
+  voiceAgentScreenContext: boolean;
+  useDictationAgentVisionModel: boolean;
+  dictationAgentVisionMode: InferenceMode;
+  dictationAgentVisionProvider: string;
+  dictationAgentVisionModel: string;
+  dictationAgentVisionCloudMode: string;
+  dictationAgentVisionCloudBaseUrl: string;
+  dictationAgentVisionCustomApiKey: string;
+
   cleanupDisableThinking: boolean;
   dictationAgentDisableThinking: boolean;
+  dictationAgentVisionDisableThinking: boolean;
   noteFormattingDisableThinking: boolean;
   chatAgentDisableThinking: boolean;
 
@@ -495,6 +510,16 @@ export interface SettingsState
   setDictationAgentCloudBaseUrl: (value: string) => void;
   setDictationAgentRemoteUrl: (url: string) => void;
   setDictationAgentCustomApiKey: (key: string) => void;
+
+  setVoiceAgentScreenContext: (value: boolean) => void;
+  setUseDictationAgentVisionModel: (value: boolean) => void;
+  setDictationAgentVisionMode: (mode: InferenceMode) => void;
+  setDictationAgentVisionProvider: (value: string) => void;
+  setDictationAgentVisionModel: (value: string) => void;
+  setDictationAgentVisionCloudMode: (value: string) => void;
+  setDictationAgentVisionCloudBaseUrl: (value: string) => void;
+  setDictationAgentVisionCustomApiKey: (key: string) => void;
+  setDictationAgentVisionDisableThinking: (value: boolean) => void;
 
   setTranscriptionMode: (mode: InferenceMode) => void;
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
@@ -1203,8 +1228,22 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentRemoteUrl: readString("dictationAgentRemoteUrl", ""),
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
 
+  voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
+  useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
+  dictationAgentVisionMode: (() => {
+    const v = readString("dictationAgentVisionMode", "openwhispr");
+    if (v === "openwhispr" || v === "providers") return v as InferenceMode;
+    return "openwhispr" as InferenceMode;
+  })(),
+  dictationAgentVisionProvider: readString("dictationAgentVisionProvider", ""),
+  dictationAgentVisionModel: readString("dictationAgentVisionModel", ""),
+  dictationAgentVisionCloudMode: readString("dictationAgentVisionCloudMode", "openwhispr"),
+  dictationAgentVisionCloudBaseUrl: readString("dictationAgentVisionCloudBaseUrl", ""),
+  dictationAgentVisionCustomApiKey: readString("dictationAgentVisionCustomApiKey", ""),
+
   cleanupDisableThinking: readBoolean("cleanupDisableThinking", true),
   dictationAgentDisableThinking: readBoolean("dictationAgentDisableThinking", true),
+  dictationAgentVisionDisableThinking: readBoolean("dictationAgentVisionDisableThinking", true),
   noteFormattingDisableThinking: readBoolean("noteFormattingDisableThinking", true),
   chatAgentDisableThinking: readBoolean("chatAgentDisableThinking", true),
 
@@ -1227,8 +1266,22 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDictationAgentRemoteUrl: createStringSetter("dictationAgentRemoteUrl"),
   setDictationAgentCustomApiKey: createStringSetter("dictationAgentCustomApiKey"),
 
+  setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
+  setUseDictationAgentVisionModel: createBooleanSetter("useDictationAgentVisionModel"),
+  setDictationAgentVisionMode: createStringSetter("dictationAgentVisionMode") as (
+    mode: InferenceMode
+  ) => void,
+  setDictationAgentVisionProvider: createStringSetter("dictationAgentVisionProvider"),
+  setDictationAgentVisionModel: createStringSetter("dictationAgentVisionModel"),
+  setDictationAgentVisionCloudMode: createStringSetter("dictationAgentVisionCloudMode"),
+  setDictationAgentVisionCloudBaseUrl: createStringSetter("dictationAgentVisionCloudBaseUrl"),
+  setDictationAgentVisionCustomApiKey: createStringSetter("dictationAgentVisionCustomApiKey"),
+
   setCleanupDisableThinking: createBooleanSetter("cleanupDisableThinking"),
   setDictationAgentDisableThinking: createBooleanSetter("dictationAgentDisableThinking"),
+  setDictationAgentVisionDisableThinking: createBooleanSetter(
+    "dictationAgentVisionDisableThinking"
+  ),
   setNoteFormattingDisableThinking: createBooleanSetter("noteFormattingDisableThinking"),
   setChatAgentDisableThinking: createBooleanSetter("chatAgentDisableThinking"),
 

@@ -100,7 +100,8 @@
     "microphone": "請開啟系統設定來配置麥克風權限。",
     "sound": "請開啟系統音效設定（例如 pavucontrol）。",
     "accessibility": "此平台不支援輔助使用設定。",
-    "systemAudio": "系統音訊設定在此平台上不可用。"
+    "systemAudio": "系統音訊設定在此平台上不可用。",
+    "screenRecording": "此平台不提供螢幕錄製設定。"
   },
   "upgradePrompt": {
     "paymentFailed": "我們無法處理你的付款",
@@ -557,6 +558,7 @@
       "errorTitles": {
         "sessionExpired": "工作階段已過期",
         "offline": "你目前離線",
+        "agentUnavailable": "助理無法使用",
         "dailyLimitReached": "已達每日上限",
         "providerRateLimited": "服務商速率限制"
       },
@@ -576,7 +578,8 @@
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
         "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
-        "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。"
+        "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。",
+        "agentReasoningFailed": "語音助理無法處理該指令，已改為插入原始逐字稿。"
       }
     },
     "clipboard": {
@@ -2528,6 +2531,17 @@
   "dictationAgent": {
     "enabled": "啟用語音代理",
     "enabledDescription": "向你的代理口述指令。說出 \"{{agentName}}\" 即可啟用。可於下方設定。",
+    "screenContext": {
+      "title": "螢幕內容",
+      "description": "在語音助理指令中附上目前螢幕的截圖。",
+      "enable": "分享螢幕內容",
+      "enableDescription": "語音助理開始錄音時，擷取游標所在的顯示器。絕不儲存，也不寫入記錄。",
+      "unsupported": "Linux Wayland 不支援螢幕擷取。",
+      "visionModel": "獨立的視覺模型",
+      "visionModelDescription": "將附有截圖的指令改由另一個支援影像的模型處理。",
+      "permissionTitle": "螢幕錄製",
+      "permissionDescription": "macOS 需要螢幕錄製權限才能擷取螢幕。"
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "使用 OpenWhispr 託管的代理，無需 API Key。",

@@ -100,7 +100,8 @@
     "microphone": "Veuillez ouvrir les paramètres système pour configurer les permissions du microphone.",
     "sound": "Veuillez ouvrir les paramètres son du système (par exemple, pavucontrol).",
     "accessibility": "Les paramètres d'accessibilité ne sont pas disponibles sur cette plateforme.",
-    "systemAudio": "Les paramètres audio système ne sont pas disponibles sur cette plateforme."
+    "systemAudio": "Les paramètres audio système ne sont pas disponibles sur cette plateforme.",
+    "screenRecording": "Les réglages d'enregistrement de l'écran ne sont pas disponibles sur cette plateforme."
   },
   "upgradePrompt": {
     "paymentFailed": "Nous n'avons pas pu traiter votre paiement",
@@ -557,6 +558,7 @@
       "errorTitles": {
         "sessionExpired": "Session expirée",
         "offline": "Vous êtes hors ligne",
+        "agentUnavailable": "Agent indisponible",
         "dailyLimitReached": "Limite quotidienne atteinte",
         "providerRateLimited": "Limite de débit du fournisseur"
       },
@@ -576,7 +578,8 @@
         "sessionExpired": "Votre session OpenWhispr Cloud est indisponible. Reconnectez-vous depuis Paramètres.",
         "offline": "Vous êtes hors ligne. La transcription cloud nécessite une connexion Internet.",
         "dailyLimitReached": "Vous avez atteint votre limite de transcription du jour. Réessayez demain ou améliorez votre forfait.",
-        "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez."
+        "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez.",
+        "agentReasoningFailed": "Votre agent vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place."
       }
     },
     "clipboard": {
@@ -2581,6 +2584,17 @@
   "dictationAgent": {
     "enabled": "Activer l'agent vocal",
     "enabledDescription": "Dictez des instructions à votre agent. Activez-le en disant « \"{{agentName}}\" ». Configurable ci-dessous.",
+    "screenContext": {
+      "title": "Contexte d'écran",
+      "description": "Joint une capture de votre écran actif aux commandes de l'agent vocal.",
+      "enable": "Partager le contexte d'écran",
+      "enableDescription": "Capture l'écran où se trouve le curseur au démarrage d'un enregistrement de l'agent vocal. Jamais enregistrée ni journalisée.",
+      "unsupported": "La capture d'écran n'est pas disponible sous Linux Wayland.",
+      "visionModel": "Modèle de vision distinct",
+      "visionModelDescription": "Envoie les commandes incluant une capture vers un autre modèle capable de vision.",
+      "permissionTitle": "Enregistrement de l'écran",
+      "permissionDescription": "macOS exige l'autorisation d'enregistrement de l'écran pour capturer votre écran."
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Utilisez l'agent géré par OpenWhispr, sans clé API.",

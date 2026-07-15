@@ -23,8 +23,14 @@ import {
   getEffectiveCleanupModel,
   isCloudCleanupMode,
   isCloudDictationAgentMode,
+  selectResolvedLLMConfig,
 } from "../stores/settingsStore";
-import { getBatchTranscriptionModel, getTranscriptionProvider } from "../models/ModelRegistry";
+import {
+  getBatchTranscriptionModel,
+  getTranscriptionProvider,
+  getCloudModel,
+} from "../models/ModelRegistry";
+import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -32,8 +38,12 @@ import {
 } from "./selfHostedTranscription";
 import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
 import { detectAgentName } from "../config/agentDetection";
-import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
-import { resolvePrompt } from "../config/prompts";
+import {
+  resolveDictationRouteKind,
+  resolveDictationAgentReachability,
+  resolveAgentImageTarget,
+} from "./dictationRouting";
+import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording } from "./recordingValidation";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
@@ -53,7 +63,10 @@ function dictationAgentReachable(settings) {
   });
 }
 
-function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
+const providerSupportsImages = (providerId) =>
+  !!(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);
+
+function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested, screenContext) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
   const agentModel = settings.dictationAgentModel?.trim() || "";
@@ -74,28 +87,74 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
     voiceAgentRequested,
   });
   if (kind === "agent") {
-    const provider = isCloudAgent
+    const baseProvider = isCloudAgent
       ? "openwhispr"
       : settings.dictationAgentProvider?.trim() || undefined;
-    const isCustomAgent = settings.dictationAgentMode === "providers" && provider === "custom";
+
+    // Unset vision-override fields resolve to the base agent config, matching
+    // what the settings UI displays for the dictationAgentVision scope.
+    const visionConfig = selectResolvedLLMConfig(settings, "dictationAgentVision");
+    const isCloudVision =
+      !!settings.isSignedIn &&
+      visionConfig.mode === "openwhispr" &&
+      visionConfig.cloudMode === "openwhispr";
+    const visionModel = visionConfig.model?.trim() || "";
+    const visionProvider = isCloudVision
+      ? "openwhispr"
+      : visionConfig.provider?.trim() || undefined;
+
+    const { attach, useVisionOverride } = resolveAgentImageTarget({
+      hasScreenContext: !!screenContext,
+      visionOverrideEnabled: !!settings.useDictationAgentVisionModel,
+      visionReachable: isCloudVision || !!visionModel,
+      visionProviderImageWired: providerSupportsImages(visionProvider),
+      baseProviderImageWired: providerSupportsImages(baseProvider),
+      isCloudAgent,
+      baseModelSupportsVision: !!getCloudModel(agentModel)?.supportsVision,
+    });
+
+    const target = useVisionOverride
+      ? {
+          provider: visionProvider,
+          model: isCloudVision ? "" : visionModel,
+          isCustom: visionConfig.mode === "providers" && visionProvider === "custom",
+          isSelfHosted: false,
+          remoteUrl: undefined,
+          baseUrl: visionConfig.cloudBaseUrl,
+          customApiKey: visionConfig.customApiKey,
+          disableThinking: visionConfig.disableThinking,
+        }
+      : {
+          provider: baseProvider,
+          model: agentModel,
+          isCustom: settings.dictationAgentMode === "providers" && baseProvider === "custom",
+          isSelfHosted: isSelfHostedAgent,
+          remoteUrl: settings.dictationAgentRemoteUrl,
+          baseUrl: settings.dictationAgentCloudBaseUrl,
+          customApiKey: settings.dictationAgentCustomApiKey,
+          disableThinking: settings.dictationAgentDisableThinking,
+        };
+
+    let systemPrompt = resolvePrompt("dictationAgent", {
+      agentName,
+      language: settings.preferredLanguage,
+      customDictionary: getDictionaryHintWords(settings),
+      uiLanguage: settings.uiLanguage,
+    });
+    if (attach) systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
+
     return {
       kind: "agent",
-      model: agentModel,
+      model: target.model,
       config: {
-        provider,
-        lanUrl: isSelfHostedAgent ? settings.dictationAgentRemoteUrl : undefined,
-        baseUrl: isCustomAgent ? settings.dictationAgentCloudBaseUrl || undefined : undefined,
+        provider: target.provider,
+        lanUrl: target.isSelfHosted ? target.remoteUrl : undefined,
+        baseUrl: target.isCustom ? target.baseUrl || undefined : undefined,
         customApiKey:
-          isCustomAgent || isSelfHostedAgent
-            ? settings.dictationAgentCustomApiKey || undefined
-            : undefined,
-        disableThinking: settings.dictationAgentDisableThinking,
-        systemPrompt: resolvePrompt("dictationAgent", {
-          agentName,
-          language: settings.preferredLanguage,
-          customDictionary: getDictionaryHintWords(settings),
-          uiLanguage: settings.uiLanguage,
-        }),
+          target.isCustom || target.isSelfHosted ? target.customApiKey || undefined : undefined,
+        disableThinking: target.disableThinking,
+        systemPrompt,
+        ...(attach ? { screenContext } : {}),
       },
     };
   }
@@ -244,6 +303,7 @@ class AudioManager {
     this.streamingFallbackChunks = [];
     this.skipReasoning = false;
     this.voiceAgentRequested = false;
+    this.screenContextPromise = null;
     this.context = "dictation";
     this.sttConfig = null;
     this.lastAudioBlob = null;
@@ -324,6 +384,41 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setVoiceAgentRequested(requested) {
     this.voiceAgentRequested = requested;
+    // A non-voice-agent recording must never see a stale capture (e.g. left
+    // over from a cancelled voice-agent recording).
+    if (!requested) this.screenContextPromise = null;
+  }
+
+  // Kicked off at voice-agent recording start (so the screenshot reflects the
+  // invocation moment) and consumed after transcription by the reasoning route.
+  beginScreenContextCapture() {
+    this.screenContextPromise = window.electronAPI?.captureScreenContext?.() ?? null;
+  }
+
+  async consumeScreenContext() {
+    const pending = this.screenContextPromise;
+    this.screenContextPromise = null;
+    if (!pending) return null;
+    try {
+      // Capture resolves in well under a second; the race only protects the
+      // paste path if the IPC ever hangs.
+      return await Promise.race([
+        pending,
+        new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
+      ]);
+    } catch {
+      return null;
+    }
+  }
+
+  // An agent-route failure pastes the spoken command verbatim into the focused
+  // app — surface that. Cleanup failures stay quiet; raw text is a fine result.
+  _notifyAgentReasoningFailed() {
+    this.onError?.({
+      code: "AGENT_REASONING_FAILED",
+      title: "Agent Unavailable",
+      messageKey: "hooks.audioRecording.errorDescriptions.agentReasoningFailed",
+    });
   }
 
   setContext(context) {
@@ -1356,12 +1451,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
 
     if (useReasoning) {
+      let route;
       try {
-        const route = resolveReasoningRoute(
+        const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
+        route = resolveReasoningRoute(
           normalizedText,
           getSettings(),
           agentName,
-          this.voiceAgentRequested
+          this.voiceAgentRequested,
+          screenContext
         );
         if (route.kind === "skip") return normalizedText;
 
@@ -1397,6 +1495,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           fallbackToCleanup: true,
         });
         logger.warn("Reasoning failed", { source, error: error.message }, "notes");
+        if (route?.kind === "agent") this._notifyAgentReasoningFailed();
       }
     }
 
@@ -1608,11 +1707,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (processedText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
+      const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       const route = resolveReasoningRoute(
         processedText,
         settings,
         agentName,
-        this.voiceAgentRequested
+        this.voiceAgentRequested,
+        screenContext
       );
       const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
 
@@ -1672,6 +1773,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           { error: reasonError.message },
           "transcription"
         );
+        if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
       timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
     }
@@ -3091,11 +3193,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (finalText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
+      const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
       const route = resolveReasoningRoute(
         finalText,
         stSettings,
         agentName,
-        this.voiceAgentRequested
+        this.voiceAgentRequested,
+        screenContext
       );
       const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
 
@@ -3175,6 +3279,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           { error: reasonError.message },
           "streaming"
         );
+        if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
     }
 

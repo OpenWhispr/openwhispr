@@ -35,6 +35,15 @@ export function wrapCleanupTranscript(text: string): string {
   return `<transcript>\n${text}\n</transcript>\n\nOutput only the cleaned transcript.`;
 }
 
+// Appended to the dictation-agent prompt only when a screenshot is attached.
+export function appendScreenContextSuffix(prompt: string, uiLanguage?: string): string {
+  const locale = normalizeUiLanguage(uiLanguage || "en");
+  const suffix = i18n.getFixedT(locale, "prompts")("screenContextSuffix", {
+    defaultValue: enPrompts.screenContextSuffix,
+  });
+  return prompt + suffix;
+}
+
 export function appendDictionarySuffix(
   prompt: string,
   customDictionary?: string[],

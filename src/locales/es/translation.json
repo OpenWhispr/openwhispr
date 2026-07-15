@@ -100,7 +100,8 @@
     "microphone": "Abre la configuración del sistema para permisos de micrófono.",
     "sound": "Abre la configuración de sonido del sistema (por ejemplo, pavucontrol).",
     "accessibility": "La configuración de accesibilidad no está disponible en esta plataforma.",
-    "systemAudio": "La configuración de audio del sistema no está disponible en esta plataforma."
+    "systemAudio": "La configuración de audio del sistema no está disponible en esta plataforma.",
+    "screenRecording": "La configuración de grabación de pantalla no está disponible en esta plataforma."
   },
   "upgradePrompt": {
     "paymentFailed": "No pudimos procesar tu pago",
@@ -557,6 +558,7 @@
       "errorTitles": {
         "sessionExpired": "Sesión expirada",
         "offline": "Sin conexión",
+        "agentUnavailable": "Agente no disponible",
         "dailyLimitReached": "Límite diario alcanzado",
         "providerRateLimited": "Límite de tasa del proveedor"
       },
@@ -576,7 +578,8 @@
         "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
         "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan.",
-        "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo."
+        "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+        "agentReasoningFailed": "Tu agente de voz no pudo procesar el comando; se insertó la transcripción sin procesar."
       }
     },
     "clipboard": {
@@ -2581,6 +2584,17 @@
   "dictationAgent": {
     "enabled": "Activar agente de voz",
     "enabledDescription": "Dicta instrucciones a tu agente. Actívalo diciendo \"{{agentName}}\". Configurable más abajo.",
+    "screenContext": {
+      "title": "Contexto de pantalla",
+      "description": "Adjunta una captura de tu pantalla activa a los comandos del agente de voz.",
+      "enable": "Compartir contexto de pantalla",
+      "enableDescription": "Captura la pantalla donde está el cursor al iniciar una grabación del agente de voz. Nunca se guarda ni se registra.",
+      "unsupported": "La captura de pantalla no está disponible en Linux Wayland.",
+      "visionModel": "Modelo de visión aparte",
+      "visionModelDescription": "Envía los comandos que incluyen una captura a otro modelo con capacidad de visión.",
+      "permissionTitle": "Grabación de pantalla",
+      "permissionDescription": "macOS requiere permiso de grabación de pantalla para capturar tu pantalla."
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Usa el agente gestionado por OpenWhispr, sin necesidad de clave API.",

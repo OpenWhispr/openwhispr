@@ -172,3 +172,126 @@ test("disabling the dictation agent overrides cloud reachability", async () => {
     false
   );
 });
+
+// Screen-context image routing on the agent route.
+const imageTarget = {
+  hasScreenContext: true,
+  visionOverrideEnabled: false,
+  visionReachable: false,
+  visionProviderImageWired: false,
+  baseProviderImageWired: true,
+  isCloudAgent: false,
+  baseModelSupportsVision: false,
+};
+
+test("no captured screenshot never attaches", async () => {
+  const { resolveAgentImageTarget } = await load();
+
+  assert.deepEqual(
+    resolveAgentImageTarget({
+      ...imageTarget,
+      hasScreenContext: false,
+      visionOverrideEnabled: true,
+      visionReachable: true,
+      visionProviderImageWired: true,
+      isCloudAgent: true,
+      baseModelSupportsVision: true,
+    }),
+    { attach: false, useVisionOverride: false }
+  );
+});
+
+test("cloud agent attaches to the base model (server picks the vision model)", async () => {
+  const { resolveAgentImageTarget } = await load();
+
+  assert.deepEqual(resolveAgentImageTarget({ ...imageTarget, isCloudAgent: true }), {
+    attach: true,
+    useVisionOverride: false,
+  });
+});
+
+test("BYOK base model attaches only when the registry marks it vision-capable", async () => {
+  const { resolveAgentImageTarget } = await load();
+
+  assert.deepEqual(resolveAgentImageTarget({ ...imageTarget, baseModelSupportsVision: true }), {
+    attach: true,
+    useVisionOverride: false,
+  });
+  assert.deepEqual(resolveAgentImageTarget(imageTarget), {
+    attach: false,
+    useVisionOverride: false,
+  });
+});
+
+test("an unwired base provider never gets the image", async () => {
+  const { resolveAgentImageTarget } = await load();
+
+  assert.deepEqual(
+    resolveAgentImageTarget({
+      ...imageTarget,
+      baseProviderImageWired: false,
+      isCloudAgent: true,
+      baseModelSupportsVision: true,
+    }),
+    { attach: false, useVisionOverride: false }
+  );
+});
+
+test("a reachable, image-wired vision override wins over the base model", async () => {
+  const { resolveAgentImageTarget } = await load();
+
+  assert.deepEqual(
+    resolveAgentImageTarget({
+      ...imageTarget,
+      visionOverrideEnabled: true,
+      visionReachable: true,
+      visionProviderImageWired: true,
+      baseModelSupportsVision: true,
+    }),
+    { attach: true, useVisionOverride: true }
+  );
+});
+
+test("vision override lets a text-only base agent still get screen context", async () => {
+  const { resolveAgentImageTarget } = await load();
+
+  assert.deepEqual(
+    resolveAgentImageTarget({
+      ...imageTarget,
+      visionOverrideEnabled: true,
+      visionReachable: true,
+      visionProviderImageWired: true,
+      baseProviderImageWired: false,
+    }),
+    { attach: true, useVisionOverride: true }
+  );
+});
+
+test("an unusable vision override drops the image instead of rerouting to base", async () => {
+  const { resolveAgentImageTarget } = await load();
+
+  // Override enabled but not configured (unreachable) — base could take the
+  // image, but silently ignoring the user's routing choice would be worse.
+  assert.deepEqual(
+    resolveAgentImageTarget({
+      ...imageTarget,
+      visionOverrideEnabled: true,
+      visionReachable: false,
+      visionProviderImageWired: true,
+      baseModelSupportsVision: true,
+    }),
+    { attach: false, useVisionOverride: false }
+  );
+
+  // Override pointing at a provider whose client can't send images.
+  assert.deepEqual(
+    resolveAgentImageTarget({
+      ...imageTarget,
+      visionOverrideEnabled: true,
+      visionReachable: true,
+      visionProviderImageWired: false,
+      isCloudAgent: true,
+    }),
+    { attach: false, useVisionOverride: false }
+  );
+});

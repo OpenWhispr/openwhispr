@@ -13,6 +13,7 @@ export interface PromptBundle {
   cleanupPrompt: string;
   fullPrompt: string;
   dictionarySuffix: string;
+  screenContextSuffix: string;
 }
 
 export const en: PromptBundle = enPrompts;
