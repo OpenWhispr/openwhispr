@@ -90,6 +90,13 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested, t
     translationRequested,
     translationReachable,
   });
+  if (translationRequested && kind !== "translation") {
+    logger.warn(
+      "Translation requested but unreachable, falling back",
+      { kind, useDictationTranslation: settings.useDictationTranslation, hasTarget: !!settings.translationTargetLanguage?.trim() },
+      "transcription"
+    );
+  }
   if (kind === "translation") {
     const provider = isCloudTranslation
       ? "openwhispr"
@@ -102,6 +109,7 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested, t
       cleanupConfig: { disableThinking: settings.cleanupDisableThinking },
       config: {
         provider,
+        language: settings.translationTargetLanguage,
         lanUrl: isSelfHostedTranslation ? settings.translationRemoteUrl : undefined,
         baseUrl: isCustomTranslation ? settings.translationCloudBaseUrl || undefined : undefined,
         customApiKey:
@@ -111,7 +119,6 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested, t
         disableThinking: settings.translationDisableThinking,
         systemPrompt: resolvePrompt("translate", {
           agentName,
-          language: settings.translationTargetLanguage,
           targetLanguageLabel: getLanguageLabel(settings.translationTargetLanguage),
           customDictionary: getDictionaryHintWords(settings),
           uiLanguage: settings.uiLanguage,

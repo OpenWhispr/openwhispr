@@ -21,7 +21,7 @@ export const openwhisprProvider: InferenceProvider = {
         // Routing already decided this is cleanup — stop the server from
         // flipping to the action prompt on an agent-name mention.
         promptMode: config.systemPrompt ? undefined : "cleanup",
-        language: ctx.getPreferredLanguage(),
+        language: config.language || ctx.getPreferredLanguage(),
         locale: ctx.getUiLanguage(),
       });
 

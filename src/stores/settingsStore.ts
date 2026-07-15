@@ -114,6 +114,7 @@ const BOOLEAN_SETTINGS = new Set([
   "autoGenerateNoteTitle",
   "useCleanupModel",
   "useDictationAgent",
+  "useDictationTranslation",
   "preferBuiltInMic",
   "cloudBackupEnabled",
   "telemetryEnabled",
