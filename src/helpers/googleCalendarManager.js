@@ -310,7 +310,15 @@ class GoogleCalendarManager {
         body: "Meeting starting now",
       });
       notif.on("click", () => {
-        this.broadcastToWindows("gcal-start-recording", { event });
+        this.meetingDetectionEngine
+          ?.joinCalendarMeeting(event.id, "calendar-notification")
+          .catch((error) =>
+            debugLogger.error(
+              "Failed to start recording from calendar reminder",
+              { error: error.message, eventId: event.id },
+              "gcal"
+            )
+          );
       });
       notif.show();
     }

@@ -918,10 +918,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "gcal-meeting-ended",
     (callback) => (_event, data) => callback(data)
   ),
-  onGcalStartRecording: registerListener(
-    "gcal-start-recording",
-    (callback) => (_event, data) => callback(data)
-  ),
   onGcalConnectionChanged: registerListener(
     "gcal-connection-changed",
     (callback) => (_event, data) => callback(data)
