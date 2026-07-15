@@ -1692,6 +1692,70 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             );
             if (reasoned) processedText = reasoned;
           }
+        } else if (route.kind === "translation") {
+          // Step 1: the configured cleanup, in the spoken language.
+          if (route.cleanupReachable) {
+            try {
+              if (cleanupCloudMode === "openwhispr") {
+                const reasonResult = await withSessionRefresh(async () => {
+                  const res = await window.electronAPI.cloudReason(processedText, {
+                    agentName,
+                    promptMode: "cleanup",
+                    customDictionary: getDictionaryHintWords(settings),
+                    customPrompt: this.getCustomPrompt(),
+                    language: this.getEffectiveSttLanguage(settings) || "auto",
+                    locale: settings.uiLanguage || "en",
+                    sttProvider: result.sttProvider,
+                    sttModel: result.sttModel,
+                    sttProcessingMs: result.sttProcessingMs,
+                    sttWordCount: result.sttWordCount,
+                    sttLanguage: result.sttLanguage,
+                    audioDurationMs: result.audioDurationMs,
+                    audioSizeBytes,
+                    audioFormat,
+                  });
+                  if (!res.success) {
+                    const err = new Error(res.error || "Cloud reasoning failed");
+                    err.code = res.code;
+                    throw err;
+                  }
+                  return res;
+                });
+                if (reasonResult.success && reasonResult.text) {
+                  processedText = reasonResult.text;
+                }
+              } else {
+                const effectiveModel = getEffectiveCleanupModel();
+                if (effectiveModel) {
+                  const cleaned = await this.processWithReasoningModel(
+                    processedText,
+                    effectiveModel,
+                    agentName,
+                    route.cleanupConfig
+                  );
+                  if (cleaned) processedText = cleaned;
+                }
+              }
+            } catch (cleanupError) {
+              logger.error(
+                "Cleanup step failed in translation chain, translating raw transcript",
+                { error: cleanupError.message },
+                "transcription"
+              );
+            }
+          }
+
+          // Step 2: translate, unless an explicit source equals the target.
+          const sourceLanguage = settings.translationSourceLanguage || "auto";
+          if (sourceLanguage === "auto" || sourceLanguage !== settings.translationTargetLanguage) {
+            const translated = await this.processWithReasoningModel(
+              processedText,
+              route.model,
+              agentName,
+              route.config
+            );
+            if (translated) processedText = translated;
+          }
         }
       } catch (reasonError) {
         logger.error(
@@ -3187,6 +3251,69 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
               "streaming"
             );
+          }
+        } else if (route.kind === "translation") {
+          if (route.cleanupReachable) {
+            try {
+              if (cleanupCloudMode === "openwhispr") {
+                const reasonResult = await withSessionRefresh(async () => {
+                  const res = await window.electronAPI.cloudReason(finalText, {
+                    agentName,
+                    promptMode: "cleanup",
+                    customDictionary: getDictionaryHintWords(stSettings),
+                    customPrompt: this.getCustomPrompt(),
+                    language: this.getEffectiveSttLanguage(stSettings) || "auto",
+                    locale: stSettings.uiLanguage || "en",
+                    sttProvider: this.getStreamingProviderName(),
+                    sttModel: streamingSttModel,
+                    sttProcessingMs: streamingSttProcessingMs,
+                    sttWordCount: streamingSttWordCount,
+                    sttLanguage: streamingSttLanguage,
+                    audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
+                    audioSizeBytes: streamingAudioBytesSent || undefined,
+                    audioFormat: "linear16",
+                  });
+                  if (!res.success) {
+                    const err = new Error(res.error || "Cloud reasoning failed");
+                    err.code = res.code;
+                    throw err;
+                  }
+                  return res;
+                });
+                if (reasonResult.success && reasonResult.text) {
+                  finalText = reasonResult.text;
+                }
+                usedCloudReasoning = true;
+              } else {
+                const effectiveModel = getEffectiveCleanupModel();
+                if (effectiveModel) {
+                  const cleaned = await this.processWithReasoningModel(
+                    finalText,
+                    effectiveModel,
+                    agentName,
+                    route.cleanupConfig
+                  );
+                  if (cleaned) finalText = cleaned;
+                }
+              }
+            } catch (cleanupError) {
+              logger.error(
+                "Cleanup step failed in translation chain, translating raw transcript",
+                { error: cleanupError.message },
+                "streaming"
+              );
+            }
+          }
+
+          const sourceLanguage = stSettings.translationSourceLanguage || "auto";
+          if (sourceLanguage === "auto" || sourceLanguage !== stSettings.translationTargetLanguage) {
+            const translated = await this.processWithReasoningModel(
+              finalText,
+              route.model,
+              agentName,
+              route.config
+            );
+            if (translated) finalText = translated;
           }
         }
       } catch (reasonError) {
