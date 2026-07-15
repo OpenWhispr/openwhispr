@@ -12,7 +12,6 @@ import {
   Shield,
   Command,
   Sparkles,
-  UserCircle,
   Users,
 } from "lucide-react";
 import TitleBar from "./TitleBar";
@@ -135,7 +134,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     () => parseHotkeyList(dictationKey)[0] || getDefaultHotkey()
   );
   const [agentName, setAgentName] = useState("OpenWhispr");
-  const [skipAuth, setSkipAuth] = useState(false);
+  // Fork: local-only by default — no signup. The full "continue without
+  // account" path already exists; defaulting this true activates it everywhere
+  // (welcome/auth step removed from the steps list below). Sign-in stays
+  // available later from Settings.
+  const [skipAuth, setSkipAuth] = useState(true);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
@@ -206,7 +209,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const steps = useMemo(() => {
     const list = [
-      { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
+      // Fork: signup/welcome-auth step removed — onboarding starts local-only.
       { id: "usecase", title: t("onboarding.steps.useCase"), icon: Sparkles },
       { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
     ];

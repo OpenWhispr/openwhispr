@@ -869,8 +869,11 @@ function createSecretSetter(
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
-  useLocalWhisper: readBoolean("useLocalWhisper", false),
-  whisperModel: readString("whisperModel", "base"),
+  // Fork default: fully local out of the box (no account/cloud required).
+  useLocalWhisper: readBoolean("useLocalWhisper", true),
+  // Fork default: large-v3-turbo — best accuracy that's still fast on Apple
+  // Silicon. Users can switch to small/base in onboarding or Settings.
+  whisperModel: readString("whisperModel", "turbo"),
   localTranscriptionProvider: (readString("localTranscriptionProvider", "whisper") === "nvidia"
     ? "nvidia"
     : "whisper") as LocalTranscriptionProvider,
