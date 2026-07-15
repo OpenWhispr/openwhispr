@@ -28,7 +28,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
-import { useSettingsStore } from "../stores/settingsStore";
+import { useSettingsStore, switchTranscriptionProvider } from "../stores/settingsStore";
 import LanguageSelector from "./ui/LanguageSelector";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
@@ -617,9 +617,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             {/* Unified configuration with integrated mode toggle */}
             <TranscriptionModelPicker
               selectedCloudProvider={cloudTranscriptionProvider}
-              onCloudProviderSelect={(provider) =>
-                updateTranscriptionSettings({ cloudTranscriptionProvider: provider })
-              }
+              onCloudProviderSelect={(provider) => switchTranscriptionProvider("base", provider)}
               selectedCloudModel={cloudTranscriptionModel}
               onCloudModelSelect={(model) =>
                 updateTranscriptionSettings({ cloudTranscriptionModel: model })

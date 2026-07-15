@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu } from "lucide-react";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { useSettingsStore, switchTranscriptionProvider } from "../../stores/settingsStore";
 import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
@@ -24,7 +24,6 @@ export function UploadTranscriptionPanel() {
     uploadParakeetModel,
     setUploadParakeetModel,
     uploadCloudTranscriptionProvider,
-    setUploadCloudTranscriptionProvider,
     uploadCloudTranscriptionModel,
     setUploadCloudTranscriptionModel,
     uploadCloudTranscriptionBaseUrl,
@@ -80,7 +79,7 @@ export function UploadTranscriptionPanel() {
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
     <TranscriptionModelPicker
       selectedCloudProvider={uploadCloudTranscriptionProvider}
-      onCloudProviderSelect={setUploadCloudTranscriptionProvider}
+      onCloudProviderSelect={(provider) => switchTranscriptionProvider("upload", provider)}
       selectedCloudModel={uploadCloudTranscriptionModel}
       onCloudModelSelect={setUploadCloudTranscriptionModel}
       selectedLocalModel={

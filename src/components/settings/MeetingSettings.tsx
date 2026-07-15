@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network } from "lucide-react";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { useSettingsStore, switchTranscriptionProvider } from "../../stores/settingsStore";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
@@ -43,7 +43,6 @@ export function MeetingTranscriptionPanel() {
     meetingParakeetModel,
     setMeetingParakeetModel,
     meetingCloudTranscriptionProvider,
-    setMeetingCloudTranscriptionProvider,
     meetingCloudTranscriptionModel,
     setMeetingCloudTranscriptionModel,
     meetingCloudTranscriptionBaseUrl,
@@ -108,7 +107,7 @@ export function MeetingTranscriptionPanel() {
     <TranscriptionModelPicker
       streamingOnly
       selectedCloudProvider={meetingCloudTranscriptionProvider}
-      onCloudProviderSelect={setMeetingCloudTranscriptionProvider}
+      onCloudProviderSelect={(provider) => switchTranscriptionProvider("meeting", provider)}
       selectedCloudModel={meetingCloudTranscriptionModel}
       onCloudModelSelect={setMeetingCloudTranscriptionModel}
       selectedLocalModel={
