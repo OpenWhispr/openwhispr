@@ -3,6 +3,24 @@ const debugLogger = require("./debugLogger");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 
+// Google Calendar omits the attendees array entirely for guest-less events, so
+// a solo personal/focus block has no attendees. A real meeting has at least one
+// attendee who isn't you (the attendee list, when present, includes yourself).
+function hasOtherAttendees(event) {
+  if (!event) return false;
+  if (event.attendees) {
+    try {
+      const list = JSON.parse(event.attendees);
+      if (Array.isArray(list)) {
+        return list.some((a) => a && a.self !== true);
+      }
+    } catch {
+      // Malformed JSON — fall back to the denormalized count below.
+    }
+  }
+  return (event.attendees_count || 0) > 0;
+}
+
 class MeetingDetectionEngine {
   constructor(
     googleCalendarManager,
@@ -167,6 +185,18 @@ class MeetingDetectionEngine {
     if (!event?.id) return;
 
     const detectionId = `calendar:${event.id}`;
+
+    // Don't remind for solo calendar entries (personal/focus blocks with no
+    // other attendees) — only the reminder is suppressed; the meeting-end timer
+    // and active-meeting state in GoogleCalendarManager are unaffected.
+    if (!hasOtherAttendees(event)) {
+      debugLogger.info(
+        "Suppressing calendar reminder — event has no other attendees (solo block)",
+        { detectionId },
+        "meeting"
+      );
+      return;
+    }
 
     if (this._meetingModeActive) {
       debugLogger.info(
