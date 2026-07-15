@@ -2197,7 +2197,13 @@
       "undo": "Desfazer",
       "emptySpace": "Nenhuma nota ainda. As notas aqui são visíveis para todos em {{space}}.",
       "noteCount_one": "{{count}} nota",
-      "noteCount_other": "{{count}} notas"
+      "noteCount_other": "{{count}} notas",
+      "accessRevoked": "Você não tem mais acesso a {{space}}",
+      "movedToPersonal": "Você não tem mais acesso a {{space}} — “{{title}}” foi movida para o seu espaço pessoal",
+      "conflictBanner": "Existe uma versão mais recente desta nota.",
+      "conflictRefresh": "Atualizar",
+      "conflictKeep": "Continuar editando",
+      "editedBy": "Editado por {{name}} · {{time}}"
     },
     "folders": {
       "title": "Pastas",

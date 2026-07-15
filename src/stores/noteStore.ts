@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
 import { findDefaultFolder } from "../components/notes/shared";
+import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
   NoteItem,
@@ -35,6 +36,9 @@ interface NoteState {
   isTreeLoading: boolean;
   migration: { total: number; done: number } | null;
   shareByCloudId: Map<string, NoteShareCacheEntry>;
+  // Cloud versions that arrived while the local row had unpushed edits,
+  // keyed by client_note_id. Consumed by the editor's conflict banner.
+  noteConflicts: Record<string, CloudNote>;
 }
 
 const EXPANDED_STORAGE_KEY = "notesTree.expanded";
@@ -69,6 +73,7 @@ const useNoteStore = create<NoteState>()(() => ({
   isTreeLoading: true,
   migration: null,
   shareByCloudId: new Map<string, NoteShareCacheEntry>(),
+  noteConflicts: {},
 }));
 
 let hasBoundIpcListeners = false;
@@ -151,9 +156,13 @@ function ensureIpcListeners() {
         if (previous && noteContainerKey(previous) !== noteContainerKey(note)) {
           loadFolders();
         }
-        // Sharing is per-note consent: edits to a shared note must reach the
-        // cloud even when the global backup toggle is off.
-        if (note.is_shared) {
+        // Sharing is per-note consent, and so is team-space membership: edits
+        // to a shared or team note must reach the cloud promptly even when
+        // the global backup toggle is off (teammates poll for them).
+        const spaceKind = useNoteStore
+          .getState()
+          .spaces.find((s) => s.id === note.space_id)?.kind;
+        if (note.is_shared || spaceKind === "team") {
           syncService.debouncedPush("note", note.id);
         }
       }
@@ -706,6 +715,25 @@ export async function startMigration(): Promise<void> {
   }
 
   useNoteStore.setState({ migration: null });
+}
+
+export function setNoteConflict(clientNoteId: string, cloudNote: CloudNote): void {
+  const { noteConflicts } = useNoteStore.getState();
+  useNoteStore.setState({ noteConflicts: { ...noteConflicts, [clientNoteId]: cloudNote } });
+}
+
+export function clearNoteConflict(clientNoteId: string): void {
+  const { noteConflicts } = useNoteStore.getState();
+  if (!(clientNoteId in noteConflicts)) return;
+  const next = { ...noteConflicts };
+  delete next[clientNoteId];
+  useNoteStore.setState({ noteConflicts: next });
+}
+
+export function useNoteConflict(clientNoteId: string | null): CloudNote | null {
+  return useNoteStore((state) =>
+    clientNoteId ? (state.noteConflicts[clientNoteId] ?? null) : null
+  );
 }
 
 export async function persistNoteShareState(

@@ -2125,7 +2125,13 @@
       "undo": "元に戻す",
       "emptySpace": "まだノートがありません。ここのノートは{{space}}の全員に表示されます。",
       "noteCount_one": "{{count}} 件のノート",
-      "noteCount_other": "{{count}} 件のノート"
+      "noteCount_other": "{{count}} 件のノート",
+      "accessRevoked": "{{space}} へのアクセス権がなくなりました",
+      "movedToPersonal": "{{space}} へのアクセス権がなくなったため、「{{title}}」は個人スペースに移動されました",
+      "conflictBanner": "このノートには新しいバージョンがあります。",
+      "conflictRefresh": "更新",
+      "conflictKeep": "編集を続ける",
+      "editedBy": "{{name}} が編集 · {{time}}"
     },
     "editor": {
       "transcribe": "文字起こし",

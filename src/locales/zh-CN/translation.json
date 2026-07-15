@@ -2197,7 +2197,13 @@
       "undo": "撤销",
       "emptySpace": "还没有笔记。这里的笔记对 {{space}} 中的所有人可见。",
       "noteCount_one": "{{count}} 条笔记",
-      "noteCount_other": "{{count}} 条笔记"
+      "noteCount_other": "{{count}} 条笔记",
+      "accessRevoked": "你已无法访问 {{space}}",
+      "movedToPersonal": "你已无法访问 {{space}}，“{{title}}”已移至你的个人空间",
+      "conflictBanner": "此笔记存在更新的版本。",
+      "conflictRefresh": "刷新",
+      "conflictKeep": "继续编辑",
+      "editedBy": "由 {{name}} 编辑 · {{time}}"
     },
     "folders": {
       "title": "文件夹",

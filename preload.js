@@ -147,6 +147,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSpaceByCloudTeamId: (cloudTeamId) =>
     ipcRenderer.invoke("db-get-space-by-cloud-team-id", cloudTeamId),
   upsertSpaceFromCloud: (team) => ipcRenderer.invoke("db-upsert-space-from-cloud", team),
+  setSpaceSyncStatus: (id, status) => ipcRenderer.invoke("db-set-space-sync-status", id, status),
   onSpacePurged: (callback) => {
     const listener = (_event, payload) => callback?.(payload);
     ipcRenderer.on("space-purged", listener);
@@ -839,7 +840,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-semantic-search-conversations", query, limit),
 
   // Sync operations
-  getPendingNotes: () => ipcRenderer.invoke("db-get-pending-notes"),
+  getPendingNotes: (spaceKind) => ipcRenderer.invoke("db-get-pending-notes", spaceKind),
   getPendingNoteDeletes: () => ipcRenderer.invoke("db-get-pending-note-deletes"),
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
   upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
@@ -848,7 +849,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
   hardDeleteNote: (id) => ipcRenderer.invoke("db-hard-delete-note", id),
 
-  getPendingFolders: () => ipcRenderer.invoke("db-get-pending-folders"),
+  getPendingFolders: (spaceKind) => ipcRenderer.invoke("db-get-pending-folders", spaceKind),
   getFolderByClientId: (clientFolderId) =>
     ipcRenderer.invoke("db-get-folder-by-client-id", clientFolderId),
   upsertFolderFromCloud: (cloudFolder, localSpaceId) =>
@@ -856,6 +857,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   markFolderSynced: (id, cloudId) => ipcRenderer.invoke("db-mark-folder-synced", id, cloudId),
   adoptFolderIdentity: (id, clientFolderId, cloudId, updatedAt) =>
     ipcRenderer.invoke("db-adopt-folder-identity", id, clientFolderId, cloudId, updatedAt),
+  forkFolderIdentity: (id) => ipcRenderer.invoke("db-fork-folder-identity", id),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   hardDeleteFolder: (id) => ipcRenderer.invoke("db-hard-delete-folder", id),

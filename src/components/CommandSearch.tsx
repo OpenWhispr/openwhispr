@@ -4,7 +4,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Search, FileText, Mic, Folder, Lock, Users, Upload, MessageSquare } from "lucide-react";
 import { cn } from "./lib/utils";
 import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../types/electron.js";
-import { normalizeDbDate } from "../utils/dateFormatting";
+import { formatRelativeTime } from "../utils/dateFormatting";
 
 interface ConversationResult {
   id: number;
@@ -37,23 +37,6 @@ type FlatItem =
   | { kind: "note"; note: NoteItem }
   | { kind: "transcript"; transcript: TranscriptionItem }
   | { kind: "conversation"; conversation: ConversationResult };
-
-function relativeTime(
-  dateStr: string,
-  t: (key: string, opts?: Record<string, unknown>) => string
-): string {
-  const date = normalizeDbDate(dateStr);
-  if (Number.isNaN(date.getTime())) return "";
-  const diff = Date.now() - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (minutes < 1) return t("notes.list.timeNow");
-  if (minutes < 60) return t("notes.list.minutesAgo", { count: minutes });
-  if (hours < 24) return t("notes.list.hoursAgo", { count: hours });
-  if (days < 7) return t("notes.list.daysAgo", { count: days });
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
 
 function stripMarkdownPreview(text: string): string {
   return text
@@ -392,7 +375,7 @@ export default function CommandSearch({
                     )}
                   </div>
                   <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-                    {relativeTime(conv.updated_at, t)}
+                    {formatRelativeTime(conv.updated_at, t)}
                   </span>
                 </button>
               ))
@@ -615,7 +598,7 @@ function NoteRow({
         )}
       </div>
       <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-        {relativeTime(note.updated_at, t)}
+        {formatRelativeTime(note.updated_at, t)}
       </span>
     </button>
   );
@@ -658,7 +641,7 @@ function TranscriptRow({
       />
       <p className="flex-1 text-xs text-foreground/75 truncate min-w-0">{transcript.text}</p>
       <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-        {relativeTime(transcript.created_at, t)}
+        {formatRelativeTime(transcript.created_at, t)}
       </span>
     </button>
   );

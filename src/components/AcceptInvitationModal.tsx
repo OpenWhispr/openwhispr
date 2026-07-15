@@ -18,6 +18,7 @@ import {
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useAuth } from "../hooks/useAuth";
 import { signOut } from "../lib/auth";
+import { syncService } from "../services/SyncService.js";
 import { useToast } from "./ui/useToast";
 import SignInDialog from "./SignInDialog";
 import type { InvitationPreview } from "../types/electron";
@@ -91,9 +92,11 @@ export default function AcceptInvitationModal({ token, onClose }: Props) {
   }
 
   // Stored token survives the sign-out reload, so the modal resurfaces for
-  // the next account.
+  // the next account. The old account's team content must not leak into the
+  // new one (the purge never blocks the switch).
   async function handleSwitchAccount() {
     if (token) storePendingInvitationToken(token);
+    await syncService.purgeTeamSpacesForSignOut();
     await signOut();
   }
 

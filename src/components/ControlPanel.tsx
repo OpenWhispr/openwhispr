@@ -43,6 +43,7 @@ import {
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import {
@@ -960,6 +961,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </main>
       </div>
       <BackgroundActionToastListener />
+      <SpaceSyncToastListener />
     </div>
   );
 }

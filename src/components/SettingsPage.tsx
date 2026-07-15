@@ -1368,6 +1368,9 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
+      // Team content is membership-scoped, not account data: drop it locally
+      // before the session ends (never blocks sign-out).
+      await syncService.purgeTeamSpacesForSignOut();
       await signOut();
       window.location.reload();
     } catch (error) {

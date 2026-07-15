@@ -43,7 +43,7 @@ import {
 } from "../../hooks/useTeamSpacesCapability";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
-import { normalizeDbDate } from "../../utils/dateFormatting";
+import { formatRelativeTime } from "../../utils/dateFormatting";
 import CreateSpaceDialog from "./CreateSpaceDialog";
 import type { FolderItem, NoteItem, SpaceItem } from "../../types/electron";
 import {
@@ -119,22 +119,6 @@ interface SpacesTreeProps {
 
 function spaceDisplayName(space: SpaceItem, t: TFn): string {
   return space.kind === "private" ? t("notes.spaces.personal") : space.name;
-}
-
-function relativeTime(dateStr: string, t: TFn): string {
-  const date = normalizeDbDate(dateStr);
-  if (Number.isNaN(date.getTime())) return dateStr;
-
-  const diff = Date.now() - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return t("notes.list.timeNow");
-  if (minutes < 60) return t("notes.list.minutesAgo", { count: minutes });
-  if (hours < 24) return t("notes.list.hoursAgo", { count: hours });
-  if (days < 7) return t("notes.list.daysAgo", { count: days });
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function useFileManagerName(): string {
@@ -791,7 +775,7 @@ function NoteLeaf({
         aria-hidden="true"
         className="text-[10px] tabular-nums shrink-0 text-foreground/35 dark:text-foreground/15 transition-opacity group-hover:opacity-0"
       >
-        {relativeTime(note.updated_at, t)}
+        {formatRelativeTime(note.updated_at, t)}
       </span>
       <DropdownMenu
         onOpenChange={(open) => {

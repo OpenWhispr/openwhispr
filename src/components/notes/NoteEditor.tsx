@@ -16,7 +16,13 @@ import {
   Share2,
 } from "lucide-react";
 import ShareNoteDialog from "./ShareNoteDialog";
-import { useShareCacheEntry } from "../../stores/noteStore";
+import {
+  useShareCacheEntry,
+  useNoteConflict,
+  clearNoteConflict,
+  updateNoteInStore,
+} from "../../stores/noteStore";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
@@ -36,7 +42,7 @@ import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
-import { normalizeDbDate } from "../../utils/dateFormatting";
+import { normalizeDbDate, formatRelativeTime } from "../../utils/dateFormatting";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
@@ -152,7 +158,7 @@ export default function NoteEditor({
   const [newFolderName, setNewFolderName] = useState("");
   const [isDiarizing, setIsDiarizing] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, user } = useAuth();
   const shareCache = useShareCacheEntry(note.cloud_id);
   // Persisted flag is the restart-safe truth; the live cache overlays it for
   // the current session (it reflects server state before the flag persists).
@@ -161,6 +167,16 @@ export default function NoteEditor({
   // An already-shared note stays manageable (unshare/revoke) after a lapse.
   const canShare =
     isSignedIn && (localStorage.getItem("isSubscribed") === "true" || Boolean(note.is_shared));
+  // A newer cloud copy arrived while this note had unpushed edits (plan §7.3).
+  const conflict = useNoteConflict(note.client_note_id);
+  const members = useWorkspaceStore((s) => s.members);
+  const conflictEditorName = useMemo(() => {
+    if (!conflict?.updated_by_user_id || !user?.id || conflict.updated_by_user_id === user.id) {
+      return null;
+    }
+    const member = members.find((m) => m.user_id === conflict.updated_by_user_id);
+    return member ? (member.name ?? member.email) : null;
+  }, [conflict, members, user?.id]);
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerProfiles, setSpeakerProfiles] = useState<
@@ -586,6 +602,24 @@ export default function NoteEditor({
     }
   }, [chatMode]);
 
+  // Apply the newer cloud copy over the local edits, keeping the note's
+  // current local placement.
+  const handleConflictRefresh = useCallback(async () => {
+    if (!conflict) return;
+    const fresh = await window.electronAPI.upsertNoteFromCloud?.(
+      conflict as unknown as Record<string, unknown>,
+      note.folder_id,
+      note.space_id
+    );
+    clearNoteConflict(note.client_note_id);
+    if (fresh) updateNoteInStore(fresh);
+  }, [conflict, note.client_note_id, note.folder_id, note.space_id]);
+
+  // Keep the local edits; the next push wins last-write.
+  const handleConflictKeep = useCallback(() => {
+    clearNoteConflict(note.client_note_id);
+  }, [note.client_note_id]);
+
   const noteDate = formatNoteDate(note.created_at);
   const shortDate = formatShortDate(note.created_at);
 
@@ -883,6 +917,43 @@ export default function NoteEditor({
             </div>
           </div>
         </div>
+
+        {conflict && (
+          <div
+            className={cn(
+              "flex items-center gap-2 px-5 h-8 mt-2 shrink-0",
+              "bg-amber-400/5 dark:bg-amber-400/[0.07]",
+              "border-y border-amber-400/15 dark:border-amber-400/20",
+              "animate-in slide-in-from-top-2 duration-300"
+            )}
+          >
+            <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
+            <p className="text-[11px] text-foreground/50 flex-1 truncate">
+              {t("notes.spaces.conflictBanner")}
+              {conflictEditorName && (
+                <span className="text-foreground/30">
+                  {" "}
+                  {t("notes.spaces.editedBy", {
+                    name: conflictEditorName,
+                    time: formatRelativeTime(conflict.updated_at, t),
+                  })}
+                </span>
+              )}
+            </p>
+            <button
+              onClick={handleConflictRefresh}
+              className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0"
+            >
+              {t("notes.spaces.conflictRefresh")}
+            </button>
+            <button
+              onClick={handleConflictKeep}
+              className="text-[11px] font-medium text-foreground/35 hover:text-foreground/55 transition-colors shrink-0"
+            >
+              {t("notes.spaces.conflictKeep")}
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 relative min-h-0">
           <div className="h-full overflow-y-auto">

@@ -3,6 +3,23 @@ export function normalizeDbDate(dateStr: string): Date {
   return new Date(source);
 }
 
+export function formatRelativeTime(
+  dateStr: string,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  const date = normalizeDbDate(dateStr);
+  if (Number.isNaN(date.getTime())) return "";
+  const diff = Date.now() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (minutes < 1) return t("notes.list.timeNow");
+  if (minutes < 60) return t("notes.list.minutesAgo", { count: minutes });
+  if (hours < 24) return t("notes.list.hoursAgo", { count: hours });
+  if (days < 7) return t("notes.list.daysAgo", { count: days });
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export function formatUpcomingDateGroup(date: Date | string, t: (key: string) => string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const now = new Date();

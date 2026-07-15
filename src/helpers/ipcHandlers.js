@@ -1480,7 +1480,9 @@ class IPCHandlers {
     });
 
     // Notes sync
-    ipcMain.handle("db-get-pending-notes", () => this.databaseManager.getPendingNotes());
+    ipcMain.handle("db-get-pending-notes", (_, spaceKind) =>
+      this.databaseManager.getPendingNotes(spaceKind)
+    );
     ipcMain.handle("db-get-pending-note-deletes", () =>
       this.databaseManager.getPendingNoteDeletes()
     );
@@ -1507,7 +1509,9 @@ class IPCHandlers {
     });
 
     // Folders sync
-    ipcMain.handle("db-get-pending-folders", () => this.databaseManager.getPendingFolders());
+    ipcMain.handle("db-get-pending-folders", (_, spaceKind) =>
+      this.databaseManager.getPendingFolders(spaceKind)
+    );
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)
     );
@@ -1519,6 +1523,9 @@ class IPCHandlers {
     );
     ipcMain.handle("db-adopt-folder-identity", (_, id, clientFolderId, cloudId, updatedAt) =>
       this.databaseManager.adoptFolderIdentity(id, clientFolderId, cloudId, updatedAt)
+    );
+    ipcMain.handle("db-fork-folder-identity", (_, id) =>
+      this.databaseManager.forkFolderIdentity(id)
     );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-get-pending-folder-deletes", () =>
@@ -1547,6 +1554,9 @@ class IPCHandlers {
     );
     ipcMain.handle("db-upsert-space-from-cloud", (_, team) =>
       this.databaseManager.upsertSpaceFromCloud(team)
+    );
+    ipcMain.handle("db-set-space-sync-status", (_, id, status) =>
+      this.databaseManager.setSpaceSyncStatus(id, status)
     );
 
     // Conversations sync

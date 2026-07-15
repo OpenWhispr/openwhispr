@@ -6,10 +6,15 @@ export function hasTeamSpacesDevOverride(): boolean {
 }
 
 /**
- * Whether the TEAM SPACES section should render. Phase 2: dev override or
- * locally known team spaces; Phase 3 swaps in the server capability probe.
+ * Whether the TEAM SPACES section should render: the cached server capability
+ * probe (written by the spaces sync pass), the dev override, or locally known
+ * team spaces.
  */
 export function useTeamSpacesCapability(): boolean {
   const spaces = useSpaces();
-  return hasTeamSpacesDevOverride() || spaces.some((space) => space.kind === "team");
+  return (
+    hasTeamSpacesDevOverride() ||
+    localStorage.getItem("teamSpacesCapability") === "true" ||
+    spaces.some((space) => space.kind === "team")
+  );
 }

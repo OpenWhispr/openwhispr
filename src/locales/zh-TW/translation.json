@@ -2197,7 +2197,13 @@
       "undo": "復原",
       "emptySpace": "還沒有筆記。這裡的筆記對 {{space}} 中的所有人可見。",
       "noteCount_one": "{{count}} 則筆記",
-      "noteCount_other": "{{count}} 則筆記"
+      "noteCount_other": "{{count}} 則筆記",
+      "accessRevoked": "你已無法存取 {{space}}",
+      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至你的個人空間",
+      "conflictBanner": "此筆記有更新的版本。",
+      "conflictRefresh": "重新整理",
+      "conflictKeep": "繼續編輯",
+      "editedBy": "由 {{name}} 編輯 · {{time}}"
     },
     "folders": {
       "title": "資料夾",

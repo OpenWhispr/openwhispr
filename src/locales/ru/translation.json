@@ -2201,7 +2201,13 @@
       "noteCount_one": "{{count}} заметка",
       "noteCount_few": "{{count}} заметки",
       "noteCount_many": "{{count}} заметок",
-      "noteCount_other": "{{count}} заметки"
+      "noteCount_other": "{{count}} заметки",
+      "accessRevoked": "У вас больше нет доступа к {{space}}",
+      "movedToPersonal": "У вас больше нет доступа к {{space}} — «{{title}}» перемещена в ваше личное пространство",
+      "conflictBanner": "Существует более новая версия этой заметки.",
+      "conflictRefresh": "Обновить",
+      "conflictKeep": "Продолжить редактирование",
+      "editedBy": "Изменено: {{name}} · {{time}}"
     },
     "folders": {
       "title": "Папки",

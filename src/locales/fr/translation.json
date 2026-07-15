@@ -2403,7 +2403,13 @@
       "undo": "Annuler",
       "emptySpace": "Aucune note pour le moment. Les notes ici sont visibles par tous les membres de {{space}}.",
       "noteCount_one": "{{count}} note",
-      "noteCount_other": "{{count}} notes"
+      "noteCount_other": "{{count}} notes",
+      "accessRevoked": "Vous n'avez plus accès à {{space}}",
+      "movedToPersonal": "Vous n'avez plus accès à {{space}} — « {{title}} » a été déplacée vers votre espace personnel",
+      "conflictBanner": "Une version plus récente de cette note existe.",
+      "conflictRefresh": "Actualiser",
+      "conflictKeep": "Continuer à modifier",
+      "editedBy": "Modifié par {{name}} · {{time}}"
     },
     "folders": {
       "title": "Dossiers",

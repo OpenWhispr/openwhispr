@@ -2403,7 +2403,13 @@
       "undo": "Rückgängig",
       "emptySpace": "Noch keine Notizen. Notizen hier sind für alle in {{space}} sichtbar.",
       "noteCount_one": "{{count}} Notiz",
-      "noteCount_other": "{{count}} Notizen"
+      "noteCount_other": "{{count}} Notizen",
+      "accessRevoked": "Du hast keinen Zugriff mehr auf {{space}}",
+      "movedToPersonal": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ wurde in deinen persönlichen Bereich verschoben",
+      "conflictBanner": "Es existiert eine neuere Version dieser Notiz.",
+      "conflictRefresh": "Aktualisieren",
+      "conflictKeep": "Weiter bearbeiten",
+      "editedBy": "Bearbeitet von {{name}} · {{time}}"
     },
     "folders": {
       "title": "Ordner",

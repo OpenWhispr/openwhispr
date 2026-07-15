@@ -1885,6 +1885,19 @@ class DatabaseManager {
     return this.updateSpace(id, { name });
   }
 
+  setSpaceSyncStatus(id, status) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare("UPDATE spaces SET sync_status = ? WHERE id = ?")
+        .run(status, id);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error("Error setting space sync status", { error: error.message }, "spaces");
+      throw error;
+    }
+  }
+
   getSpaceByCloudTeamId(cloudTeamId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -3034,9 +3047,16 @@ class DatabaseManager {
     }
   }
 
-  getPendingNotes() {
+  getPendingNotes(spaceKind = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      if (spaceKind != null) {
+        return this.db
+          .prepare(
+            "SELECT n.* FROM notes n JOIN spaces s ON s.id = n.space_id WHERE n.sync_status = 'pending' AND n.deleted_at IS NULL AND s.kind = ?"
+          )
+          .all(spaceKind);
+      }
       return this.db
         .prepare("SELECT * FROM notes WHERE sync_status = 'pending' AND deleted_at IS NULL")
         .all();
@@ -3163,9 +3183,16 @@ class DatabaseManager {
     }
   }
 
-  getPendingFolders() {
+  getPendingFolders(spaceKind = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      if (spaceKind != null) {
+        return this.db
+          .prepare(
+            "SELECT f.* FROM folders f JOIN spaces s ON s.id = f.space_id WHERE f.sync_status = 'pending' AND f.deleted_at IS NULL AND s.kind = ?"
+          )
+          .all(spaceKind);
+      }
       return this.db
         .prepare("SELECT * FROM folders WHERE sync_status = 'pending' AND deleted_at IS NULL")
         .all();
@@ -3267,6 +3294,24 @@ class DatabaseManager {
       return { success: true };
     } catch (error) {
       debugLogger.error("Error marking folder synced", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // A folder whose server row moved into a scope this user can no longer
+  // write gets a fresh identity, so the next push creates it as a new
+  // personal folder instead of PATCHing the inaccessible row forever.
+  forkFolderIdentity(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare(
+          "UPDATE folders SET client_folder_id = ?, cloud_id = NULL, sync_status = 'pending' WHERE id = ?"
+        )
+        .run(randomUUID(), id);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error("Error forking folder identity", { error: error.message }, "database");
       throw error;
     }
   }

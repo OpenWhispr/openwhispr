@@ -2197,7 +2197,13 @@
       "undo": "Annulla",
       "emptySpace": "Ancora nessuna nota. Le note qui sono visibili a tutti in {{space}}.",
       "noteCount_one": "{{count}} nota",
-      "noteCount_other": "{{count}} note"
+      "noteCount_other": "{{count}} note",
+      "accessRevoked": "Non hai più accesso a {{space}}",
+      "movedToPersonal": "Non hai più accesso a {{space}} — “{{title}}” è stata spostata nel tuo spazio personale",
+      "conflictBanner": "Esiste una versione più recente di questa nota.",
+      "conflictRefresh": "Aggiorna",
+      "conflictKeep": "Continua a modificare",
+      "editedBy": "Modificato da {{name}} · {{time}}"
     },
     "folders": {
       "title": "Cartelle",

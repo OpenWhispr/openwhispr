@@ -2403,7 +2403,13 @@
       "undo": "Undo",
       "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
       "noteCount_one": "{{count}} note",
-      "noteCount_other": "{{count}} notes"
+      "noteCount_other": "{{count}} notes",
+      "accessRevoked": "You no longer have access to {{space}}",
+      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to your Personal space",
+      "conflictBanner": "A newer version of this note exists.",
+      "conflictRefresh": "Refresh",
+      "conflictKeep": "Keep editing",
+      "editedBy": "Edited by {{name}} · {{time}}"
     },
     "folders": {
       "title": "Folders",

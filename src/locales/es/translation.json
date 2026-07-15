@@ -2245,7 +2245,13 @@
       "undo": "Deshacer",
       "emptySpace": "Aún no hay notas. Las notas aquí son visibles para todos en {{space}}.",
       "noteCount_one": "{{count}} nota",
-      "noteCount_other": "{{count}} notas"
+      "noteCount_other": "{{count}} notas",
+      "accessRevoked": "Ya no tienes acceso a {{space}}",
+      "movedToPersonal": "Ya no tienes acceso a {{space}} — “{{title}}” se movió a tu espacio personal",
+      "conflictBanner": "Existe una versión más reciente de esta nota.",
+      "conflictRefresh": "Actualizar",
+      "conflictKeep": "Seguir editando",
+      "editedBy": "Editado por {{name}} · {{time}}"
     },
     "folders": {
       "title": "Carpetas",

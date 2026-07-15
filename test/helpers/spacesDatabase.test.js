@@ -327,3 +327,48 @@ test("getNotes with spaceId and no folderId lists only the space's root notes", 
   assert.equal(folderNotes.length, 1);
   assert.equal(folderNotes[0].title, "Filed");
 });
+
+test("pending queues split by space kind", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = db.createSpace({ name: "Sales" }).space;
+  const privateFolder = db.createFolder("Ideas").folder;
+  const teamFolder = db.createFolder("Pipeline", team.id).folder;
+  const privateNote = db.saveNote("Mine", "body").note;
+  const teamNote = db.saveNote("Ours", "body", "personal", null, null, null, team.id).note;
+
+  assert.deepEqual(
+    db.getPendingNotes("team").map((n) => n.id),
+    [teamNote.id]
+  );
+  assert.ok(db.getPendingNotes("private").some((n) => n.id === privateNote.id));
+  assert.ok(!db.getPendingNotes("private").some((n) => n.id === teamNote.id));
+  assert.equal(
+    db.getPendingNotes().length,
+    db.getPendingNotes("private").length + db.getPendingNotes("team").length
+  );
+
+  assert.deepEqual(
+    db.getPendingFolders("team").map((f) => f.id),
+    [teamFolder.id]
+  );
+  assert.ok(db.getPendingFolders("private").some((f) => f.id === privateFolder.id));
+  assert.equal(
+    db.getPendingFolders().length,
+    db.getPendingFolders("private").length + db.getPendingFolders("team").length
+  );
+});
+
+test("setSpaceSyncStatus flips a space's sync_status", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = db.createSpace({ name: "Docs" }).space;
+
+  assert.ok(db.setSpaceSyncStatus(team.id, "synced").success);
+  assert.equal(db.getSpaces().find((s) => s.id === team.id).sync_status, "synced");
+
+  assert.ok(db.setSpaceSyncStatus(team.id, "pending").success);
+  assert.equal(db.getSpaces().find((s) => s.id === team.id).sync_status, "pending");
+
+  assert.equal(db.setSpaceSyncStatus(99999, "synced").success, false);
+});

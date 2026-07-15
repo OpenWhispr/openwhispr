@@ -651,6 +651,8 @@ declare global {
           participants?: string | null;
           diarization_enabled?: number | null;
           expected_speaker_count?: number | null;
+          client_note_id?: string;
+          cloud_id?: string | null;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
@@ -716,6 +718,10 @@ declare global {
       }>;
       getSpaceByCloudTeamId?: (cloudTeamId: string) => Promise<SpaceItem | null>;
       upsertSpaceFromCloud?: (team: Record<string, unknown>) => Promise<SpaceItem>;
+      setSpaceSyncStatus?: (
+        id: number,
+        status: SpaceItem["sync_status"]
+      ) => Promise<{ success: boolean }>;
       onSpacePurged?: (callback: (payload: { spaceId: number }) => void) => () => void;
 
       // Note files (markdown mirror)
@@ -1982,7 +1988,7 @@ declare global {
       sendDictationPreviewAudio?: (data: ArrayBuffer) => void;
 
       // Sync operations
-      getPendingNotes?: () => Promise<NoteItem[]>;
+      getPendingNotes?: (spaceKind?: "private" | "team") => Promise<NoteItem[]>;
       getPendingNoteDeletes?: () => Promise<NoteItem[]>;
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
       upsertNoteFromCloud?: (
@@ -1994,7 +2000,7 @@ declare global {
       markNoteSyncError?: (id: number) => Promise<void>;
       hardDeleteNote?: (id: number) => Promise<void>;
 
-      getPendingFolders?: () => Promise<FolderItem[]>;
+      getPendingFolders?: (spaceKind?: "private" | "team") => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
       upsertFolderFromCloud?: (
         cloudFolder: Record<string, unknown>,
@@ -2007,6 +2013,7 @@ declare global {
         cloudId: string,
         updatedAt?: string
       ) => Promise<void>;
+      forkFolderIdentity?: (id: number) => Promise<{ success: boolean }>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
