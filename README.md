@@ -27,6 +27,13 @@
 
 ---
 
+> **About this fork.** This is a fork of [OpenWhispr](https://github.com/OpenWhispr/openwhispr) maintained by [@futuregerald](https://github.com/futuregerald) as a fully local, private **Krisp/Granola replacement with real N-speaker speaker diarization**.
+>
+> - **Why it was forked:** to run meeting transcription with reliable speaker labels entirely on-device (no cloud, no Krisp), and to add a faster, more accurate on-device diarization engine.
+> - **What changed:** adds **[FluidAudio](https://github.com/FluidInference/FluidAudio)** (Swift/CoreML) as an optional macOS diarization backend that runs pyannote-community-1-class models on the **Apple Neural Engine** — higher accuracy and much lower power/latency than the default sherpa-onnx (CPU) engine. It's auto-selected on macOS when installed and **falls back to sherpa-onnx automatically** otherwise, so non-macOS machines are unaffected. Changes are isolated to `src/helpers/diarization.js` + one guard in `src/helpers/ipcHandlers.js`, plus an additive `scripts/setup-fluidaudio.js` and docs, so upstream updates merge cleanly. Speaker labels are computed as a **post-call pass** (seconds for a typical meeting).
+> - **How to run it:** `npm install` → `npm run setup:fluidaudio` (optional, macOS) → `npm run dev`.
+> - **More:** [Fork setup & sharing guide](docs/FORK-SETUP.md) · [FluidAudio integration notes](docs/FLUIDAUDIO-INTEGRATION.md) · [Research & decision record](docs/LOCAL-DIARIZATION-RESEARCH.md).
+
 OpenWhispr turns your voice into text, notes, and actions from your desktop. Press a hotkey, speak, and your words appear at your cursor. Choose between fully private offline transcription with local speech-to-text engines like Whisper and NVIDIA Parakeet — where your audio never leaves your device — or cloud processing for speed. No data collection, no telemetry, fully open source.
 
 ## Download
@@ -52,13 +59,14 @@ OpenWhispr turns your voice into text, notes, and actions from your desktop. Pre
 ## Quick start
 
 ```bash
-git clone https://github.com/OpenWhispr/openwhispr.git
+git clone https://github.com/futuregerald/openwhispr.git
 cd openwhispr
 npm install
+npm run setup:fluidaudio   # optional (macOS): build the FluidAudio ANE diarization engine
 npm run dev
 ```
 
-Requires Node.js 24+. See the [full documentation](https://docs.openwhispr.com/quickstart) for setup guides, platform-specific instructions, and build details.
+Requires Node.js 24+. `npm run setup:fluidaudio` additionally needs the Xcode Command Line Tools (`xcode-select --install`) and is macOS-only — skip it to use the cross-platform sherpa-onnx diarization engine. See [docs/FORK-SETUP.md](docs/FORK-SETUP.md) for the full fork setup, sharing, and upstream-sync guide, or the [upstream documentation](https://docs.openwhispr.com/quickstart) for platform-specific details.
 
 ## Documentation
 
