@@ -2,7 +2,7 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const speakerEmbeddings = require("./speakerEmbeddings");
 const { MAX_EMBEDDING_SECONDS } = speakerEmbeddings;
-const { downsample24kTo16k } = require("../utils/audioUtils");
+const { downsample24kTo16k, pcm16ToFloat32 } = require("../utils/audioUtils");
 const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
 
 function clampMaxSpeakers(value) {
@@ -30,17 +30,6 @@ const MATCH_THRESHOLD = 0.65;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
-
-function pcm16BufferToFloat32(buffer) {
-  const input = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length / 2);
-  const output = new Float32Array(input.length);
-
-  for (let i = 0; i < input.length; i += 1) {
-    output[i] = input[i] / 32768;
-  }
-
-  return output;
-}
 
 function appendFloat32(existing, next) {
   if (!existing.length) return next;
@@ -424,7 +413,7 @@ class LiveSpeakerIdentifier {
     );
     if (!downsampled.length) return;
 
-    this.audioRemainder = appendFloat32(this.audioRemainder, pcm16BufferToFloat32(downsampled));
+    this.audioRemainder = appendFloat32(this.audioRemainder, pcm16ToFloat32(downsampled));
 
     while (this.audioRemainder.length >= VAD_WINDOW_SIZE) {
       const window = this.audioRemainder.subarray(0, VAD_WINDOW_SIZE);

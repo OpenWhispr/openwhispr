@@ -15,7 +15,11 @@ function tryBind(port, host) {
 }
 
 async function isPortAvailable(port) {
-  return (await tryBind(port, "0.0.0.0")) && (await tryBind(port, "::")) && (await tryBind(port, "127.0.0.1"));
+  return (
+    (await tryBind(port, "0.0.0.0")) &&
+    (await tryBind(port, "::")) &&
+    (await tryBind(port, "127.0.0.1"))
+  );
 }
 
 async function findAvailablePort(rangeStart, rangeEnd) {

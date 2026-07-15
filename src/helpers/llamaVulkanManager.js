@@ -21,7 +21,10 @@ function githubReleaseHeaders() {
   return headers;
 }
 
-const GITHUB_RELEASE_URL = "https://api.github.com/repos/ggerganov/llama.cpp/releases/latest";
+// Pinned to the same build as the bundled CPU binary (download-llama-server.js).
+// Overridable via LLAMA_CPP_VERSION so GPU and CPU stay on one tested llama.cpp.
+const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b9763";
+const GITHUB_RELEASE_URL = `https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_TAG}`;
 
 const VULKAN_ASSETS = {
   "win32-x64": {

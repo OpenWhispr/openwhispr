@@ -8,7 +8,7 @@ const { resolveBinaryPath, gracefulStopProcess } = require("../utils/serverUtils
 const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
-const { applyProvisionalSpeaker, applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
+const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
 const sidecarPidFile = require("./sidecarPidFile");
 const {
   transcriptsOverlap,
@@ -16,7 +16,7 @@ const {
   buildMergedCandidates,
 } = require("./transcriptText");
 
-const DIARIZATION_TIMEOUT_MS = 300000; // 5 minutes
+const DIARIZATION_TIMEOUT_MS = 3600000; // 60 minutes
 const POST_MERGE_CONTEXT_WINDOW_MS = 6000;
 const POST_MERGE_CONTEXT_MERGE_LIMIT = 3;
 
@@ -60,7 +60,9 @@ const SILERO_VAD_ONNX = "silero_vad.onnx";
 
 class DiarizationManager {
   constructor() {
-    this._process = null;
+    // Meeting post-processing and upload/batch diarization can overlap, so
+    // track every live process, not a single slot.
+    this._processes = new Set();
     this.currentDownloadProcess = null;
     this.cachedBinaryPath = null;
   }
@@ -352,13 +354,21 @@ class DiarizationManager {
         detached: process.platform !== "win32",
       });
 
-      this._process = proc;
+      this._processes.add(proc);
       sidecarPidFile.write("diarization", proc.pid);
+
+      // The single pid-file slot tracks whichever process is still alive; only
+      // the reaper consumes it, and the Set is the real shutdown source.
+      const untrack = () => {
+        this._processes.delete(proc);
+        const survivor = this._processes.values().next().value;
+        if (survivor) sidecarPidFile.write("diarization", survivor.pid);
+        else sidecarPidFile.clear("diarization");
+      };
 
       const timeout = setTimeout(() => {
         debugLogger.warn("Diarization timed out", { timeoutMs: DIARIZATION_TIMEOUT_MS });
         gracefulStopProcess(proc);
-        this._process = null;
         resolve([]);
       }, DIARIZATION_TIMEOUT_MS);
 
@@ -372,8 +382,7 @@ class DiarizationManager {
 
       proc.on("close", (code) => {
         clearTimeout(timeout);
-        this._process = null;
-        sidecarPidFile.clear("diarization");
+        untrack();
 
         if (code !== 0) {
           debugLogger.warn("Diarization process exited with error", {
@@ -391,8 +400,7 @@ class DiarizationManager {
 
       proc.on("error", (err) => {
         clearTimeout(timeout);
-        this._process = null;
-        sidecarPidFile.clear("diarization");
+        untrack();
         debugLogger.warn("Diarization process error", { error: err.message });
         resolve([]);
       });
@@ -459,8 +467,6 @@ class DiarizationManager {
       return null;
     };
 
-    let fallbackSpeakerIndex = speakerSet.size;
-
     return deduped.map((seg, index) => {
       const enriched = { ...seg };
 
@@ -505,12 +511,6 @@ class DiarizationManager {
             speaker: speakerMap.get(bestSpeaker) || bestSpeaker,
             speakerIsPlaceholder: false,
           });
-        } else if (!enriched.speaker) {
-          applyProvisionalSpeaker(enriched, {
-            speaker: `speaker_${fallbackSpeakerIndex}`,
-            speakerIsPlaceholder: true,
-          });
-          fallbackSpeakerIndex += 1;
         }
       }
 
@@ -525,9 +525,10 @@ class DiarizationManager {
     }
 
     const tempDir = getSafeTempDir();
-    const timestamp = Date.now();
-    const inputWavPath = path.join(tempDir, `ow-diarize-${timestamp}-input.wav`);
-    const wavPath = path.join(tempDir, `ow-diarize-${timestamp}.wav`);
+    // Random suffix: concurrent conversions (meeting + upload) must never collide.
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const inputWavPath = path.join(tempDir, `ow-diarize-${runId}-input.wav`);
+    const wavPath = path.join(tempDir, `ow-diarize-${runId}.wav`);
 
     // Stream: write 44-byte WAV header, then pipe raw PCM — avoids loading entire file into memory
     const header = this._createWavHeader(stat.size, inputSampleRate, 1);
@@ -599,10 +600,9 @@ class DiarizationManager {
   }
 
   async shutdown() {
-    if (this._process) {
-      await gracefulStopProcess(this._process);
-      this._process = null;
-    }
+    const procs = [...this._processes];
+    this._processes.clear();
+    await Promise.all(procs.map((p) => gracefulStopProcess(p)));
   }
 }
 

@@ -1,4 +1,5 @@
 import type { InferenceProvider } from "./types";
+import { wrapCleanupTranscript } from "../../../config/prompts";
 import logger from "../../../utils/logger";
 
 export const anthropicProvider: InferenceProvider = {
@@ -14,10 +15,16 @@ export const anthropicProvider: InferenceProvider = {
     logger.logReasoning("ANTHROPIC_IPC_CALL", { model, textLength: text.length });
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
-    const result = await window.electronAPI.processAnthropicReasoning(text, model, agentName, {
-      ...config,
-      systemPrompt,
-    });
+    const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
+    const result = await window.electronAPI.processAnthropicReasoning(
+      userContent,
+      model,
+      agentName,
+      {
+        ...config,
+        systemPrompt,
+      }
+    );
 
     const processingTimeMs = Date.now() - startTime;
 

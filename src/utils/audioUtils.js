@@ -35,7 +35,17 @@ function pcm16ToWav(pcmBuffer, sampleRate = 16000, channels = 1) {
   return Buffer.concat([header, pcmBuffer]);
 }
 
+function pcm16ToFloat32(pcmBuffer) {
+  const input = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, pcmBuffer.length / 2);
+  const output = new Float32Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    output[i] = input[i] / 32768;
+  }
+  return output;
+}
+
 module.exports = {
   downsample24kTo16k,
   pcm16ToWav,
+  pcm16ToFloat32,
 };

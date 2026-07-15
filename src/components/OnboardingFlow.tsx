@@ -7,10 +7,13 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
+  Flag,
   Settings,
   Shield,
   Command,
+  Sparkles,
   UserCircle,
+  Users,
 } from "lucide-react";
 import TitleBar from "./TitleBar";
 import WindowControls from "./WindowControls";
@@ -18,36 +21,56 @@ import PermissionsSection from "./ui/PermissionsSection";
 import SupportDropdown from "./ui/SupportDropdown";
 import StepProgress from "./ui/StepProgress";
 import { AlertDialog, ConfirmDialog } from "./ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useDialogs } from "../hooks/useDialogs";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
+import { useSettingsStore } from "../stores/settingsStore";
 import LanguageSelector from "./ui/LanguageSelector";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
 import { setAgentName as saveAgentName } from "../utils/agentName";
-import { formatHotkeyLabel, getDefaultHotkey, isGlobeLikeHotkey } from "../utils/hotkeys";
+import {
+  formatHotkeyLabel,
+  formatHotkeyListLabel,
+  getDefaultHotkey,
+  isGlobeLikeHotkey,
+  parseHotkeyList,
+  serializeHotkeyList,
+} from "../utils/hotkeys";
 import { useAuth } from "../hooks/useAuth";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
+import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { getValidationMessage } from "../utils/hotkeyValidator";
+import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getCachedPlatform, getPlatform } from "../utils/platform";
 import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/permissions";
+import UseCaseStep from "./onboarding/UseCaseStep";
+import MeetingSetupStep from "./onboarding/MeetingSetupStep";
+import FinishStep from "./onboarding/FinishStep";
+import { USE_CASE_IDS } from "./onboarding/useCases";
+import { cloudPost } from "../services/cloudApi";
+
+// Highest possible step index across flow variants (skip-auth with meeting step).
+const MAX_STEP_INDEX = 7;
+
+// Steps whose primary action is optional — the user can advance without it.
+const SKIPPABLE_STEPS = new Set(["usecase", "voiceAgent", "meeting"]);
 
 interface OnboardingFlowProps {
-  onComplete: () => void;
+  onComplete: (options?: { openSettings?: boolean }) => void;
 }
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
-
-  const getMaxStep = () => (isSignedIn ? 2 : 3);
 
   const [currentStep, setCurrentStep, removeCurrentStep] = useLocalStorage(
     "onboardingCurrentStep",
@@ -57,11 +80,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       deserialize: (value) => {
         const parsed = parseInt(value, 10);
         // Clamp to valid range to handle users upgrading from older versions
-        // with different step counts
+        // with different step counts. The steps array is dynamic, so a second
+        // effect below clamps against the actual flow length.
         if (isNaN(parsed) || parsed < 0) return 0;
-        const maxStep = getMaxStep();
-        if (parsed > maxStep) return maxStep;
-        return parsed;
+        return Math.min(parsed, MAX_STEP_INDEX);
       },
     }
   );
@@ -84,23 +106,42 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
+    tinfoilApiKey,
     dictationKey,
+    meetingKey,
+    setMeetingKey,
+    voiceAgentKey,
+    setVoiceAgentKey,
     activationMode,
     setActivationMode,
     setDictationKey,
     setUseLocalWhisper,
     updateTranscriptionSettings,
     preferredLanguage,
+    onboardingUseCases,
+    setOnboardingUseCases,
+    onboardingUseCaseNote,
+    setOnboardingUseCaseNote,
   } = useSettings();
 
-  const [hotkey, setHotkey] = useState(dictationKey || getDefaultHotkey());
+  const cortiClientId = useSettingsStore((s) => s.cortiClientId);
+  const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+
+  // Onboarding edits only the primary dictation hotkey; extra bindings are
+  // preserved via withExtraDictationHotkeys.
+  const [hotkey, setHotkey] = useState(
+    () => parseHotkeyList(dictationKey)[0] || getDefaultHotkey()
+  );
   const [agentName, setAgentName] = useState("OpenWhispr");
   const [skipAuth, setSkipAuth] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
-  const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
+  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
+    useHotkeyModeInfo("onboarding");
   const readableHotkey = formatHotkeyLabel(hotkey);
+  const readableVoiceAgentKey = formatHotkeyListLabel(voiceAgentKey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
   const [connectivityDialog, setConnectivityDialog] = useState<{
@@ -111,9 +152,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const autoRegisterInFlightRef = useRef(false);
   const hotkeyStepInitializedRef = useRef(false);
 
+  // Replace the primary dictation hotkey while keeping additional bindings intact.
+  const withExtraDictationHotkeys = useCallback(
+    (primary: string) => serializeHotkeyList([primary, ...parseHotkeyList(dictationKey).slice(1)]),
+    [dictationKey]
+  );
+
   const { registerHotkey, isRegistering: isHotkeyRegistering } = useHotkeyRegistration({
     onSuccess: (registeredHotkey) => {
-      setHotkey(registeredHotkey);
+      setHotkey(parseHotkeyList(registeredHotkey)[0] || registeredHotkey);
       setDictationKey(registeredHotkey);
     },
     showSuccessToast: false,
@@ -123,6 +170,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const validateHotkeyForInput = useCallback(
     (hotkey: string) => getValidationMessage(hotkey, getPlatform()),
     []
+  );
+
+  const validateVoiceAgentHotkey = useCallback(
+    (newHotkey: string) =>
+      validateHotkeyForSlot(
+        newHotkey,
+        { "settingsPage.general.hotkey.title": withExtraDictationHotkeys(hotkey) },
+        t
+      ),
+    [hotkey, withExtraDictationHotkeys, t]
   );
 
   const permissionsHook = usePermissions(showAlertDialog);
@@ -140,43 +197,52 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setAccessibilitySkipped,
   ]);
 
-  // For signed-in users, permissions are folded into the "setup" step.
-  const steps = useMemo(
-    () =>
-      isSignedIn && !skipAuth
-        ? [
-            { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
-            { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
-            { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
-          ]
-        : [
-            { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
-            { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
-            { id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield },
-            { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
-          ],
-    [isSignedIn, skipAuth, t]
-  );
+  // Dynamic flow: signed-in users get permissions folded into "setup".
+  // The meeting step is temporarily hidden for all users while it gets more
+  // design polish — the step's render code and MeetingSetupStep stay in place.
+  // Restore by reinstating the relevance check:
+  //   systemAudio.granted || onboardingUseCases.includes(USE_CASE_IDS.meetings)
+  const showMeetingStep = false;
+
+  const steps = useMemo(() => {
+    const list = [
+      { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
+      { id: "usecase", title: t("onboarding.steps.useCase"), icon: Sparkles },
+      { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
+    ];
+    if (!(isSignedIn && !skipAuth)) {
+      list.push({ id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield });
+    }
+    list.push({ id: "activation", title: t("onboarding.steps.activation"), icon: Command });
+    // Hidden for continue-without-account users: they have no LLM, so the agent can't run.
+    if (isSignedIn && !skipAuth) {
+      list.push({ id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles });
+    }
+    if (showMeetingStep) {
+      list.push({ id: "meeting", title: t("onboarding.steps.meeting"), icon: Users });
+    }
+    list.push({ id: "finish", title: t("onboarding.steps.finish"), icon: Flag });
+    return list;
+  }, [isSignedIn, skipAuth, showMeetingStep, t]);
+
+  const currentStepId = steps[currentStep]?.id;
+
+  // The steps array can shrink (e.g. meeting step removed after deselecting
+  // meetings on the way back) — keep the index in range.
+  useEffect(() => {
+    if (currentStep > steps.length - 1) {
+      setCurrentStep(steps.length - 1);
+    }
+  }, [currentStep, steps.length, setCurrentStep]);
 
   // Only show progress for signed-up users after account creation step
   const showProgress = currentStep > 0;
 
   useEffect(() => {
-    const checkHotkeyMode = async () => {
-      try {
-        const info = await window.electronAPI?.getHotkeyModeInfo();
-        if (info?.isUsingNativeShortcut) {
-          setIsUsingNativeShortcut(true);
-          if (!info.supportsPushToTalk) {
-            setActivationMode("tap");
-          }
-        }
-      } catch (error) {
-        logger.error("Failed to check hotkey mode", { error }, "onboarding");
-      }
-    };
-    checkHotkeyMode();
-  }, [setActivationMode]);
+    if (isUsingNativeShortcut && !supportsPushToTalk) {
+      setActivationMode("tap");
+    }
+  }, [isUsingNativeShortcut, supportsPushToTalk, setActivationMode]);
 
   // Update wizard UI when backend falls back to a different hotkey.
   // Only update local state — don't persist to localStorage so the app
@@ -214,8 +280,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }, [useLocalWhisper, whisperModel, parakeetModel, localTranscriptionProvider]);
 
   // Auto-register default hotkey when entering the activation step
-  // (step 3 for non-signed-in, step 2 for signed-in users)
-  const activationStepIndex = isSignedIn && !skipAuth ? 2 : 3;
+  const activationStepIndex = steps.findIndex((step) => step.id === "activation");
 
   useEffect(() => {
     if (currentStep !== activationStepIndex) {
@@ -237,7 +302,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // Check if backend already registered a hotkey (e.g., KDE D-Bus fallback)
         const backendKey = localStorage.getItem("dictationKey");
         if (backendKey && backendKey.trim() !== "") {
-          setHotkey(backendKey);
+          setHotkey(parseHotkeyList(backendKey)[0] || backendKey);
           setDictationKey(backendKey);
           return;
         }
@@ -275,7 +340,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
 
     try {
-      const result = await window.electronAPI.updateHotkey(hotkey);
+      const result = await window.electronAPI.updateHotkey(withExtraDictationHotkeys(hotkey));
       if (result && !result.success) {
         showAlertDialog({
           title: t("onboarding.hotkey.couldNotRegisterTitle"),
@@ -292,14 +357,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       });
       return false;
     }
-  }, [hotkey, showAlertDialog, t]);
+  }, [hotkey, withExtraDictationHotkeys, showAlertDialog, t]);
 
   const saveSettings = useCallback(async () => {
     const hotkeyRegistered = await ensureHotkeyRegistered();
     if (!hotkeyRegistered) {
       return false;
     }
-    setDictationKey(hotkey);
+    setDictationKey(withExtraDictationHotkeys(hotkey));
     saveAgentName(agentName);
 
     const skippedAuth = skipAuth;
@@ -328,6 +393,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     return true;
   }, [
     hotkey,
+    withExtraDictationHotkeys,
     agentName,
     setDictationKey,
     ensureHotkeyRegistered,
@@ -336,6 +402,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     skipAuth,
     updateTranscriptionSettings,
   ]);
+
+  const [isFinishing, setIsFinishing] = useState(false);
+  const openSettingsOnCompleteRef = useRef(false);
 
   const nextStep = useCallback(async () => {
     if (currentStep >= steps.length - 1) {
@@ -351,6 +420,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       !permissionsHook.accessibilityPermissionGranted
     ) {
       setAccessibilitySkipped(true);
+    }
+
+    // Fire-and-forget intent sync — must never block onboarding.
+    if (currentStepId === "usecase" && isSignedIn && !skipAuth) {
+      cloudPost("/api/onboarding-intent", {
+        useCases: onboardingUseCases,
+        note: onboardingUseCaseNote || undefined,
+      }).catch((error) => {
+        logger.warn("Failed to sync onboarding intent", { error }, "onboarding");
+      });
     }
 
     const newStep = currentStep + 1;
@@ -369,6 +448,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     activationStepIndex,
     isSignedIn,
     skipAuth,
+    onboardingUseCases,
+    onboardingUseCaseNote,
     permissionsHook.accessibilityPermissionGranted,
     setAccessibilitySkipped,
   ]);
@@ -380,40 +461,49 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   }, [currentStep, setCurrentStep]);
 
-  const finishOnboarding = useCallback(async () => {
-    const saved = await saveSettings();
-    if (!saved) {
-      return;
-    }
+  const finishOnboarding = useCallback(
+    async (openSettings = false) => {
+      openSettingsOnCompleteRef.current = openSettings;
+      setIsFinishing(true);
+      try {
+        const saved = await saveSettings();
+        if (!saved) {
+          return;
+        }
 
-    const cloudHealthCheck = window.electronAPI?.cloudHealthCheck;
-    if (useLocalWhisper || !cloudHealthCheck) {
-      removeCurrentStep();
-      onComplete();
-      return;
-    }
+        const cloudHealthCheck = window.electronAPI?.cloudHealthCheck;
+        if (useLocalWhisper || !cloudHealthCheck) {
+          removeCurrentStep();
+          onComplete({ openSettings });
+          return;
+        }
 
-    let result;
-    try {
-      result = await cloudHealthCheck();
-    } catch (error) {
-      logger.error("Cloud health check threw", { error }, "onboarding");
-      result = { ok: false } as Awaited<ReturnType<typeof cloudHealthCheck>>;
-    }
+        let result;
+        try {
+          result = await cloudHealthCheck();
+        } catch (error) {
+          logger.error("Cloud health check threw", { error }, "onboarding");
+          result = { ok: false } as Awaited<ReturnType<typeof cloudHealthCheck>>;
+        }
 
-    // Any HTTP response (even 4xx) proves the network reached the server.
-    // Only a transport-level failure with no status warrants the warning.
-    if (result.ok || result.status !== undefined) {
-      removeCurrentStep();
-      onComplete();
-      return;
-    }
+        // Any HTTP response (even 4xx) proves the network reached the server.
+        // Only a transport-level failure with no status warrants the warning.
+        if (result.ok || result.status !== undefined) {
+          removeCurrentStep();
+          onComplete({ openSettings });
+          return;
+        }
 
-    setConnectivityDialog({
-      open: true,
-      cause: t(result.messageKey || "streaming.errors.cloudUnreachable.generic"),
-    });
-  }, [saveSettings, removeCurrentStep, onComplete, useLocalWhisper, t]);
+        setConnectivityDialog({
+          open: true,
+          cause: t(result.messageKey || "streaming.errors.cloudUnreachable.generic"),
+        });
+      } finally {
+        setIsFinishing(false);
+      }
+    },
+    [saveSettings, removeCurrentStep, onComplete, useLocalWhisper, t]
+  );
 
   const resolveConnectivity = useCallback(
     (useLocal: boolean) => {
@@ -422,14 +512,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       }
       setConnectivityDialog({ open: false, cause: "" });
       removeCurrentStep();
-      onComplete();
+      onComplete({ openSettings: openSettingsOnCompleteRef.current });
     },
     [setUseLocalWhisper, removeCurrentStep, onComplete]
   );
 
   const renderStep = () => {
-    switch (currentStep) {
-      case 0: // Authentication (with Welcome)
+    switch (currentStepId) {
+      case "welcome":
         if (pendingVerificationEmail) {
           return (
             <EmailVerificationStep
@@ -438,6 +528,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 setPendingVerificationEmail(null);
                 nextStep();
               }}
+              onBack={() => setPendingVerificationEmail(null)}
             />
           );
         }
@@ -456,7 +547,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           />
         );
 
-      case 1: // Setup - Choose Mode & Configure (merged with permissions for signed-in users)
+      case "usecase":
+        return (
+          <UseCaseStep
+            useCases={onboardingUseCases}
+            onUseCasesChange={setOnboardingUseCases}
+            note={onboardingUseCaseNote}
+            onNoteChange={setOnboardingUseCaseNote}
+          />
+        );
+
+      case "setup": // Choose Mode & Configure (merged with permissions for signed-in users)
         if (isSignedIn && !skipAuth) {
           return (
             <div className="space-y-6">
@@ -491,7 +592,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 <h3 className="text-sm font-medium text-foreground">
                   {t("onboarding.permissions.title")}
                 </h3>
-                <PermissionsSection permissions={permissionsHook} systemAudio={systemAudio} />
+                <PermissionsSection
+                  permissions={permissionsHook}
+                  systemAudio={systemAudio}
+                  systemAudioRecommended={onboardingUseCases.includes(USE_CASE_IDS.meetings)}
+                />
               </div>
             </div>
           );
@@ -565,13 +670,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           </div>
         );
 
-      case 2: // Permissions (only for non-signed-in users) or Activation (for signed-in users)
-        // For signed-in users, this is the activation step
-        if (isSignedIn && !skipAuth) {
-          return renderActivationStep();
-        }
-
-        // For non-signed-in users, this is the permissions step
+      case "permissions": {
         const platform = permissionsHook.pasteToolsInfo?.platform;
         const isMacOS = platform === "darwin";
 
@@ -589,12 +688,39 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               </p>
             </div>
 
-            <PermissionsSection permissions={permissionsHook} systemAudio={systemAudio} />
+            <PermissionsSection
+              permissions={permissionsHook}
+              systemAudio={systemAudio}
+              systemAudioRecommended={onboardingUseCases.includes(USE_CASE_IDS.meetings)}
+            />
           </div>
         );
+      }
 
-      case 3: // Activation (only for non-signed-in users)
+      case "activation":
         return renderActivationStep();
+
+      case "voiceAgent":
+        return renderVoiceAgentStep();
+
+      case "meeting":
+        return (
+          <MeetingSetupStep
+            meetingKey={meetingKey}
+            setMeetingKey={setMeetingKey}
+            dictationKey={hotkey}
+          />
+        );
+
+      case "finish":
+        return (
+          <FinishStep
+            isCloudUser={isSignedIn && !skipAuth && !useLocalWhisper}
+            useCases={onboardingUseCases}
+            onFinish={(openSettings) => void finishOnboarding(openSettings)}
+            isFinishing={isFinishing}
+          />
+        );
 
       default:
         return null;
@@ -611,19 +737,37 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         <p className="text-xs text-muted-foreground">{t("onboarding.activation.description")}</p>
       </div>
 
+      {isUsingHyprland && hyprlandConfigStatus && !hyprlandConfigStatus.canWrite && (
+        <Alert>
+          <AlertTitle>
+            {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningTitle")}
+          </AlertTitle>
+          <AlertDescription>
+            {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
+              path: hyprlandConfigStatus.path,
+            })}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Unified control surface */}
       <div className="rounded-lg border border-border-subtle bg-surface-1 overflow-hidden">
         {/* Hotkey section */}
         <div className="p-4 border-b border-border-subtle">
-          <div className="flex items-center justify-between mb-3">
+          <div className="mb-3">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {t("onboarding.activation.hotkey")}
             </span>
+            {isUsingHyprland && (
+              <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">
+                {t("settingsPage.general.hotkey.hyprlandUnbindDescription")}
+              </p>
+            )}
           </div>
           <HotkeyInput
             value={hotkey}
             onChange={async (newHotkey) => {
-              const success = await registerHotkey(newHotkey);
+              const success = await registerHotkey(withExtraDictationHotkeys(newHotkey));
               if (success) {
                 setHotkey(newHotkey);
               }
@@ -647,11 +791,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   : t("onboarding.activation.holdDescription")}
               </p>
             </div>
-            <ActivationModeSelector
-              value={activationMode}
-              onChange={setActivationMode}
-              variant="compact"
-            />
+            <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
           </div>
         )}
       </div>
@@ -677,11 +817,90 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     </div>
   );
 
+  const renderVoiceAgentStep = () => (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="text-center space-y-0.5">
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">
+          {t("onboarding.voiceAgent.title")}
+        </h2>
+        <p className="text-xs text-muted-foreground">{t("onboarding.voiceAgent.description")}</p>
+      </div>
+
+      {/* Hotkey section */}
+      <div className="rounded-lg border border-border-subtle bg-surface-1 overflow-hidden">
+        <div className="p-4 border-b border-border-subtle">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {t("onboarding.voiceAgent.hotkey")}
+            </span>
+          </div>
+          <HotkeyInput
+            value={parseHotkeyList(voiceAgentKey)[0] ?? ""}
+            onChange={(newHotkey) =>
+              setVoiceAgentKey(
+                serializeHotkeyList([newHotkey, ...parseHotkeyList(voiceAgentKey).slice(1)])
+              )
+            }
+            onClear={() =>
+              setVoiceAgentKey(serializeHotkeyList(parseHotkeyList(voiceAgentKey).slice(1)))
+            }
+            variant="hero"
+            validate={validateVoiceAgentHotkey}
+          />
+        </div>
+
+        <div className="p-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("onboarding.voiceAgent.howItWorks", { agentName })}
+          </p>
+        </div>
+      </div>
+
+      {/* Test area - minimal chrome */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {t("onboarding.voiceAgent.test")}
+          </span>
+          <span className="text-xs text-muted-foreground/60">
+            {voiceAgentKey
+              ? t("onboarding.voiceAgent.testInstruction", { hotkey: readableVoiceAgentKey })
+              : t("onboarding.voiceAgent.testSetHotkey")}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(t("onboarding.voiceAgent.examples", { returnObjects: true }) as string[]).map(
+            (example) => (
+              <span
+                key={example}
+                className="rounded-full border border-border-subtle bg-muted px-2.5 py-1 text-xs text-muted-foreground"
+              >
+                {example}
+              </span>
+            )
+          )}
+        </div>
+        <Textarea
+          rows={2}
+          placeholder={t("onboarding.voiceAgent.testPlaceholder")}
+          className="text-sm resize-none"
+        />
+      </div>
+
+      <p className="text-xs text-muted-foreground/60 text-center">
+        {t("onboarding.voiceAgent.optionalNote")}
+      </p>
+    </div>
+  );
+
   const canProceed = () => {
-    switch (currentStep) {
-      case 0:
-        return isSignedIn || skipAuth; // Authentication step
-      case 1:
+    switch (currentStepId) {
+      case "welcome":
+        return isSignedIn || skipAuth;
+      case "usecase":
+        return true; // Selection is optional — Next doubles as skip
+      case "setup":
         // For signed-in users: Setup step includes permissions
         if (isSignedIn && !skipAuth) {
           return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
@@ -698,25 +917,30 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return openaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "groq") {
             return groqApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "xai") {
+            return xaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {
             return mistralApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "corti") {
+            return cortiClientId.trim().length > 0 && cortiClientSecret.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "tinfoil") {
+            return tinfoilApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "custom") {
             // Custom can work without API key for local endpoints
             return true;
           }
           return openaiApiKey.trim().length > 0; // Default to OpenAI
         }
-      case 2: {
-        // For signed-in users, this is activation step
-        if (isSignedIn && !skipAuth) {
-          return hotkey.trim() !== "";
-        }
-
-        // For non-signed-in users, this is permissions step
+      case "permissions":
         return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
-      }
-      case 3:
-        return hotkey.trim() !== ""; // Activation step for non-signed-in users
+      case "activation":
+        return hotkey.trim() !== "";
+      case "voiceAgent":
+        return true; // Voice agent hotkey is optional
+      case "meeting":
+        return true; // Meeting hotkey is optional
+      case "finish":
+        return true; // FinishStep renders its own actions
       default:
         return false;
     }
@@ -791,12 +1015,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             showTitle={true}
             className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
             actions={isSignedIn ? <SupportDropdown /> : undefined}
+            center={
+              onboardingPlatform === "darwin" ? (
+                <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />
+              ) : undefined
+            }
           ></TitleBar>
         </div>
       )}
 
-      {/* Progress Bar - hidden on welcome/auth step */}
-      {showProgress && (
+      {/* Progress bar — on macOS it lives centered in the title bar instead */}
+      {showProgress && onboardingPlatform !== "darwin" && (
         <div className="shrink-0 bg-background/80 backdrop-blur-2xl border-b border-white/5 px-6 md:px-12 py-3 z-10">
           <div className="max-w-3xl mx-auto">
             <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />
@@ -838,25 +1067,26 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             {currentStep === 1 && isSignedIn && !skipAuth && <div />}
 
             <div className="flex items-center gap-2">
-              {currentStep === steps.length - 1 ? (
-                <Button
-                  onClick={finishOnboarding}
-                  disabled={!canProceed()}
-                  variant="success"
-                  className="h-8 px-6 rounded-full text-xs"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  {t("common.complete")}
-                </Button>
-              ) : (
-                <Button
-                  onClick={nextStep}
-                  disabled={!canProceed()}
-                  className="h-8 px-6 rounded-full text-xs"
-                >
-                  {t("common.next")}
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </Button>
+              {currentStepId !== "finish" && (
+                <>
+                  {SKIPPABLE_STEPS.has(currentStepId ?? "") && (
+                    <Button
+                      onClick={nextStep}
+                      variant="ghost"
+                      className="h-8 px-4 rounded-full text-xs text-muted-foreground"
+                    >
+                      {t("common.skip")}
+                    </Button>
+                  )}
+                  <Button
+                    onClick={nextStep}
+                    disabled={!canProceed()}
+                    className="h-8 px-6 rounded-full text-xs"
+                  >
+                    {t("common.next")}
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
+                </>
               )}
             </div>
           </div>

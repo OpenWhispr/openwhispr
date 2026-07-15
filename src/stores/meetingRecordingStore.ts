@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
+import { reconcileSavedMicSelection } from "../helpers/micSelectionRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
@@ -124,6 +125,21 @@ const getMeetingTranscriptionOptions = () => {
     };
   }
 
+  // Corti (BYOK) streams over its own WSS — independent of the server-driven catalog.
+  const selectedProvider =
+    state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider;
+  if (resolved.cloudTranscriptionMode === "byok" && selectedProvider === "corti") {
+    return {
+      provider: "corti-realtime" as const,
+      model: "corti-transcribe",
+      mode: "byok" as const,
+      language,
+      environment: state.cortiEnvironment,
+      tenant: state.cortiTenant,
+      keyterms: (state.customDictionary ?? []).filter(Boolean),
+    };
+  }
+
   const catalog = useStreamingProvidersStore.getState().providers;
   const provider =
     catalog?.find((p) => p.id === resolved.cloudTranscriptionProvider) ?? catalog?.[0];
@@ -209,7 +225,7 @@ const ensureRendererSystemAudioCapture = async ({
   systemAudioStrategy,
   systemCaptureResult,
 }: {
-  initialDisplayCaptureStrategy: "loopback" | "browser-portal" | null;
+  initialDisplayCaptureStrategy: "loopback" | null;
   systemAudioStrategy: SystemAudioStrategy;
   systemCaptureResult: { stream: MediaStream | null; error: Error | null };
 }) => {
@@ -280,7 +296,7 @@ export const primeMeetingWorklet = () => {
 };
 
 const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
-  const { preferBuiltInMic, selectedMicDeviceId } = getSettings();
+  const { preferBuiltInMic, selectedMicDeviceId, selectedMicDeviceLabel } = getSettings();
 
   if (preferBuiltInMic) {
     try {
@@ -307,9 +323,26 @@ const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
   }
 
   if (selectedMicDeviceId && selectedMicDeviceId !== "default") {
+    let resolvedDeviceId = selectedMicDeviceId;
+
+    try {
+      const reconciled = await reconcileSavedMicSelection(
+        selectedMicDeviceId,
+        selectedMicDeviceLabel,
+        "meeting"
+      );
+      resolvedDeviceId = reconciled.deviceId;
+    } catch (err) {
+      logger.debug(
+        "Failed to reconcile selected microphone for meeting transcription",
+        { error: (err as Error).message },
+        "meeting"
+      );
+    }
+
     return {
       audio: {
-        deviceId: { exact: selectedMicDeviceId },
+        deviceId: { exact: resolvedDeviceId },
         ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
       },
     };
@@ -522,6 +555,16 @@ function reserveSpeakerIndex(speakerId?: string) {
   nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, idx + 1);
 }
 
+// Other-speaker cap is expectedCount - 1 (the mic track is "you"); mirrors the
+// backend cap so live labels can't climb past the count the user expects.
+function mintPlaceholderSpeakerId(): string {
+  const expected = useMeetingRecordingStore.getState().sessionExpectedCount;
+  const cap = Math.max(1, expected - 1);
+  const index = Math.min(nextPlaceholderSpeakerIndex, cap - 1);
+  nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, index + 1);
+  return `speaker_${index}`;
+}
+
 function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment {
   if (segment.source !== "system" || segment.speaker) return segment;
 
@@ -569,8 +612,7 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
     });
   }
 
-  const speakerId = `speaker_${nextPlaceholderSpeakerIndex}`;
-  nextPlaceholderSpeakerIndex += 1;
+  const speakerId = mintPlaceholderSpeakerId();
 
   return normalizeTranscriptSegment({
     ...segment,
@@ -816,6 +858,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
     });
     const systemAudioHandledInMain =
       systemAudioMode !== "unsupported" && !isRendererSystemAudioStrategy(systemAudioStrategy);
+    if (systemAudioHandledInMain && systemCaptureResult.stream) {
+      stopMediaStream(systemCaptureResult.stream);
+      systemCaptureResult = { stream: null, error: null };
+    }
     const systemCaptureError = systemAudioHandledInMain ? null : systemCaptureResult.error;
 
     if (!micResult && (systemAudioHandledInMain || systemCaptureResult.stream)) {
@@ -873,9 +919,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
           } else {
             useMeetingRecordingStore.setState({ systemPartial: data.text });
             if (!systemPartialSpeakerIdValue) {
-              const speakerId = `speaker_${nextPlaceholderSpeakerIndex}`;
-              nextPlaceholderSpeakerIndex += 1;
-              setSystemPartialSpeakerIdentity(speakerId, null);
+              // Reuse the recent system speaker before minting — the partial id is
+              // cleared after every final, so always minting spawned one per utterance.
+              const carried = getRecentSystemSpeaker(Date.now());
+              setSystemPartialSpeakerIdentity(
+                carried?.speakerId ?? mintPlaceholderSpeakerId(),
+                carried?.speakerName ?? null
+              );
             }
           }
           return;
@@ -1082,18 +1132,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
         systemProcessor = processor;
       });
     } else if (systemCaptureError) {
-      if (systemAudioStrategy === "browser-portal") {
-        logger.warn(
-          "Linux system audio capture failed, continuing with mic only",
-          { error: systemCaptureError.message },
-          "meeting"
-        );
-      } else if (systemAudioStrategy === "loopback") {
+      if (systemAudioStrategy === "loopback") {
         logger.warn(
           "System audio loopback failed, continuing with mic only",
           { error: systemCaptureError.message },
           "meeting"
         );
+        if (micResult) {
+          useMeetingRecordingStore.setState({
+            error: "System audio capture failed. Continuing with microphone only.",
+          });
+        }
       }
     }
 

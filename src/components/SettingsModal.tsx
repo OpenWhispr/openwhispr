@@ -28,6 +28,7 @@ const SECTION_ALIASES: Record<string, SettingsSectionType> = {
   meetings: "llms",
   prompts: "llms",
   transcription: "speechToText",
+  uploadTranscription: "speechToText",
   softwareUpdates: "system",
   privacy: "privacyData",
   permissions: "privacyData",
@@ -36,6 +37,7 @@ const SECTION_ALIASES: Record<string, SettingsSectionType> = {
 
 const LEGACY_SUB_TAB: Record<string, string> = {
   transcription: "dictation",
+  uploadTranscription: "upload",
   meetings: "noteFormatting",
   intelligence: "dictationCleanup",
   agentMode: "chatIntelligence",

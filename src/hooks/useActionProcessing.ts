@@ -26,6 +26,7 @@ export function useActionProcessing(noteId: number | null) {
       if (noteId == null) return;
       runBackgroundAction(noteId, noteContent, contentHash, action, options, {
         noModel: t("notes.actions.errors.noModel"),
+        noEndpoint: t("notes.actions.errors.noEndpoint"),
         actionFailed: t("notes.actions.errors.actionFailed"),
       });
     },

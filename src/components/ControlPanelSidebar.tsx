@@ -28,12 +28,7 @@ import { WORKSPACES_ENABLED } from "../lib/features";
 const platform = getCachedPlatform();
 
 export type ControlPanelView =
-  | "home"
-  | "chat"
-  | "personal-notes"
-  | "dictionary"
-  | "upload"
-  | "integrations";
+  "home" | "chat" | "personal-notes" | "dictionary" | "upload" | "integrations";
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
@@ -256,9 +251,7 @@ export default function ControlPanelSidebar({
 
         {WORKSPACES_ENABLED && isSignedIn && (
           <button
-            onClick={() =>
-              activeWorkspace ? setInviteOpen(true) : setCreateWorkspaceOpen(true)
-            }
+            onClick={() => (activeWorkspace ? setInviteOpen(true) : setCreateWorkspaceOpen(true))}
             aria-label={
               activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")
             }

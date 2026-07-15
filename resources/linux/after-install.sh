@@ -1,8 +1,9 @@
 #!/bin/bash
 # Post-install script for OpenWhispr (deb/rpm)
-# Sets up chrome-sandbox permissions and ydotool daemon prerequisites
+# Sets up chrome-sandbox permissions and ydotool daemon prerequisites.
+# Best-effort: nothing here may fail the package install.
 
-set -euo pipefail
+set -uo pipefail
 
 # 0. Set SUID bit on chrome-sandbox (required by Electron for Linux sandboxing)
 #    Find it wherever dpkg placed the package files, rather than hardcoding /opt/...
@@ -12,25 +13,33 @@ if [ -z "$CHROME_SANDBOX" ]; then
   CHROME_SANDBOX="/opt/OpenWhispr/chrome-sandbox"
 fi
 if [ -f "$CHROME_SANDBOX" ]; then
-  chown root:root "$CHROME_SANDBOX"
-  chmod 4755 "$CHROME_SANDBOX"
+  chown root:root "$CHROME_SANDBOX" 2>/dev/null || true
+  chmod 4755 "$CHROME_SANDBOX" 2>/dev/null || true
 fi
 
 UDEV_RULE='KERNEL=="uinput", GROUP="input", MODE="0660", TAG+="uaccess"'
 UDEV_RULE_PATH="/etc/udev/rules.d/70-uinput.rules"
 SERVICE_PATH="/usr/lib/systemd/user/ydotoold.service"
 
-# Detect the real user (not root) who triggered the install
+# Detect the real user (not root) who triggered the install.
+# No SUDO_USER and no tty (GUI installers, D-Bus backed ones like Aptkit) is fine:
+# the user-specific steps below are simply skipped.
 REAL_USER="${SUDO_USER:-}"
 if [ -z "$REAL_USER" ] || [ "$REAL_USER" = "root" ]; then
   REAL_USER=$(logname 2>/dev/null || echo "")
 fi
+if [ "$REAL_USER" = "root" ]; then
+  REAL_USER=""
+fi
 
-# 1. udev rule for /dev/uinput
-if [ ! -f "$UDEV_RULE_PATH" ] || ! grep -q uinput "$UDEV_RULE_PATH" 2>/dev/null; then
-  echo "$UDEV_RULE" > "$UDEV_RULE_PATH"
-  udevadm control --reload-rules 2>/dev/null || true
-  udevadm trigger /dev/uinput 2>/dev/null || true
+# 1. udev rule for /dev/uinput — only where udev actually exists (skipped in
+#    containers, chroots and minimal systems, where the rule is useless anyway)
+if [ -d /etc/udev/rules.d ]; then
+  if [ ! -f "$UDEV_RULE_PATH" ] || ! grep -q uinput "$UDEV_RULE_PATH" 2>/dev/null; then
+    echo "$UDEV_RULE" > "$UDEV_RULE_PATH" 2>/dev/null || true
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger /dev/uinput 2>/dev/null || true
+  fi
 fi
 
 # 2. Add user to input group
@@ -42,11 +51,13 @@ fi
 
 # 3. systemd user service for ydotoold
 # Skip if a service already exists (e.g. Fedora ships one with the ydotool package)
-if [ ! -f "$SERVICE_PATH" ] && [ ! -f "/usr/lib/systemd/user/ydotool.service" ]; then
+# or if systemd is not present on this system at all.
+if [ -d /usr/lib/systemd ] && [ ! -f "$SERVICE_PATH" ] && [ ! -f "/usr/lib/systemd/user/ydotool.service" ]; then
   YDOTOOLD_BIN=$(command -v ydotoold 2>/dev/null || echo "/usr/bin/ydotoold")
   if [ -x "$YDOTOOLD_BIN" ] || [ -f "$YDOTOOLD_BIN" ]; then
-    mkdir -p "$(dirname "$SERVICE_PATH")"
-    cat > "$SERVICE_PATH" << SERVICEEOF
+    mkdir -p "$(dirname "$SERVICE_PATH")" 2>/dev/null || true
+    if [ -d "$(dirname "$SERVICE_PATH")" ]; then
+      cat > "$SERVICE_PATH" 2>/dev/null << SERVICEEOF || true
 [Unit]
 Description=ydotoold - ydotool daemon
 After=graphical-session.target
@@ -61,6 +72,7 @@ RestartSec=1s
 [Install]
 WantedBy=graphical-session.target
 SERVICEEOF
+    fi
   fi
 fi
 

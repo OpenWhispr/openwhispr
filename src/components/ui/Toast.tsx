@@ -29,7 +29,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const toast = React.useCallback(
-    (props: Omit<ToastProps, "id">) => {
+    (props: Omit<ToastProps, "id">): string => {
       const id = Math.random().toString(36).substring(2, 11);
       const newToast: ToastState = { ...props, id, createdAt: Date.now() };
 

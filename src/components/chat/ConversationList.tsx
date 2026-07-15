@@ -9,8 +9,7 @@ import ConversationDateGroup from "./ConversationDateGroup";
 import EmptyConversationList from "./EmptyConversationList";
 
 type FlatItem =
-  | { type: "header"; label: string }
-  | { type: "conversation"; data: ConversationPreview };
+  { type: "header"; label: string } | { type: "conversation"; data: ConversationPreview };
 
 interface ConversationListProps {
   activeConversationId: number | null;

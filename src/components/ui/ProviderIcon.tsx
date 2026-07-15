@@ -1,12 +1,10 @@
 import { Brain, Wrench, HardDrive } from "lucide-react";
-import { getProviderIcon } from "@/utils/providerIcons";
+import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
 
 interface ProviderIconProps {
   provider: string;
   className?: string;
 }
-
-const MONOCHROME_PROVIDERS = ["openai", "whisper", "anthropic", "openai-oss"];
 
 export function ProviderIcon({ provider, className = "w-5 h-5" }: ProviderIconProps) {
   if (provider === "custom") {
@@ -23,7 +21,7 @@ export function ProviderIcon({ provider, className = "w-5 h-5" }: ProviderIconPr
     return <Brain className={className} />;
   }
 
-  const isMonochrome = MONOCHROME_PROVIDERS.includes(provider);
+  const isMonochrome = isMonochromeProvider(provider);
 
   return (
     <img

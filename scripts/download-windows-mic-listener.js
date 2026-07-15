@@ -57,9 +57,7 @@ async function main() {
 
   if (!release) {
     console.error("[windows-mic-listener] Could not find a release matching prefix:", TAG_PREFIX);
-    console.log(
-      "[windows-mic-listener] Mic detection will use fallback mode (polling)"
-    );
+    console.log("[windows-mic-listener] Mic detection will use fallback mode (polling)");
     return;
   }
 
@@ -121,9 +119,7 @@ async function main() {
     }
 
     // Don't fail the build — mic detection can fall back to polling
-    console.log(
-      "[windows-mic-listener] Mic detection will use fallback mode (polling)"
-    );
+    console.log("[windows-mic-listener] Mic detection will use fallback mode (polling)");
     console.log(
       "[windows-mic-listener] To compile locally, install Visual Studio Build Tools or MinGW-w64"
     );

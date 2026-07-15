@@ -225,8 +225,7 @@ export function useModelDownload({
           }
         } else {
           const result = (await window.electronAPI?.modelDownload?.(modelId)) as unknown as
-            | { success: boolean; error?: string; code?: string }
-            | undefined;
+            { success: boolean; error?: string; code?: string } | undefined;
           if (result && !result.success && result.error) {
             const msg = getDownloadErrorMessage(t, result.error, result.code);
             setDownloadError(msg);
