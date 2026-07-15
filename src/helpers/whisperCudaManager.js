@@ -15,7 +15,7 @@ const {
 } = require("./downloadUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 
-const GITHUB_RELEASE_URL = "https://api.github.com/repos/EktosWhispr/whisper.cpp/releases/latest";
+const GITHUB_RELEASE_URL = "https://api.github.com/repos/OpenWhispr/whisper.cpp/releases/latest";
 
 const PLATFORM_BINARY_NAMES = {
   linux: "whisper-server-linux-x64-cuda",

@@ -2590,9 +2590,10 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
             preferredLanguage: warmupLang,
             cloudTranscriptionModel,
           } = getSettings();
+          const warmupBaseLang = getBaseLanguageCode(warmupLang);
           const res = await provider.warmup({
             sampleRate: 16000,
-            language: warmupLang && warmupLang !== "auto" ? warmupLang : undefined,
+            language: warmupBaseLang || undefined,
             keyterms: this.getKeyterms(),
             model: cloudTranscriptionModel,
             mode: "byok",

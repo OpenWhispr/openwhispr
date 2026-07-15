@@ -160,7 +160,7 @@ const getMeetingTranscriptionOptions = () => {
     provider.models.find((m) => m.id === resolved.cloudTranscriptionModel)?.id ??
     provider.models.find((m) => m.default)?.id ??
     provider.models[0]?.id;
-  return { provider: `${provider.id}-realtime` as const, model, mode };
+  return { provider: `${provider.id}-realtime` as const, model, mode, language };
 };
 
 const stopMediaStream = (stream: MediaStream | null) => {

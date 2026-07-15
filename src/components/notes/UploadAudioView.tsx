@@ -29,7 +29,7 @@ import {
   getSettings,
 } from "../../stores/settingsStore";
 import { generateNoteTitle } from "../../utils/generateTitle";
-import { getBaseLanguageCode } from "../../utils/languageSupport";
+import { getBaseLanguageCode, getMultiLanguagePromptHint } from "../../utils/languageSupport";
 
 type UploadState = "idle" | "selected" | "transcribing" | "complete" | "error";
 
@@ -115,6 +115,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
   const cortiTenant = useSettingsStore((s) => s.cortiTenant);
   const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
+  const customDictionary = useSettingsStore((s) => s.customDictionary);
   const isCloudCleanup = useSettingsStore(selectIsCloudCleanupMode);
   const effectiveCleanupModel = useSettingsStore((s) =>
     selectIsCloudCleanupMode(s) ? "" : s.cleanupModel
@@ -346,9 +347,16 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       let res: { success: boolean; text?: string; error?: string; code?: string; warning?: string };
 
       if (useLocalWhisper) {
+        const isWhisper = localTranscriptionProvider === "whisper";
+        const uploadLanguage = isWhisper ? getBaseLanguageCode(preferredLanguage) : undefined;
+        const langHint = isWhisper ? getMultiLanguagePromptHint(preferredLanguage) : "";
+        const dictWords = (customDictionary ?? []).filter(Boolean).join(", ");
+        const initialPrompt = [langHint, dictWords].filter(Boolean).join(" ") || undefined;
         res = await window.electronAPI.transcribeAudioFile(file.path, {
           provider: localTranscriptionProvider as "whisper" | "nvidia",
           model: localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel,
+          ...(uploadLanguage && { language: uploadLanguage }),
+          ...(initialPrompt && { initialPrompt }),
         });
       } else {
         res = await window.electronAPI.transcribeAudioFileByok!({

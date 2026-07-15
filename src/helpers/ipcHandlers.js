@@ -4783,7 +4783,7 @@ class IPCHandlers {
         if (abs > peak) peak = abs;
       }
       const rms = Math.sqrt(sumSq / samples.length);
-      if (rms < 0.0015 && peak < 0.05) {
+      if (rms < 0.003 && peak < 0.07) {
         debugLogger.debug("Skipping silent meeting chunk", {
           source,
           rms: rms.toFixed(4),
@@ -4819,12 +4819,36 @@ class IPCHandlers {
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
+            verboseJson: true,
             ...vadOptions,
           });
+          // Filter out segments where whisper itself signals no speech
+          if (result?.success && Array.isArray(result.segments) && result.segments.length > 0) {
+            const NO_SPEECH_THRESHOLD = 0.6;
+            const goodSegments = result.segments.filter(
+              (s) => (s.no_speech_prob ?? 0) < NO_SPEECH_THRESHOLD
+            );
+            if (goodSegments.length === 0) {
+              debugLogger.debug("Meeting chunk rejected: all segments below no_speech_prob threshold", {
+                source,
+                segments: result.segments.length,
+              });
+              return;
+            }
+            const filteredText = goodSegments.map((s) => s.text).join("").trim();
+            result = { ...result, text: filteredText };
+          }
         }
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
+          if (this.whisperManager.isHallucinatedText(text, meetingLocalLanguage)) {
+            debugLogger.debug("Meeting chunk rejected: hallucination detected", {
+              source,
+              text: text.slice(0, 80),
+            });
+            return;
+          }
           const segTimestamp = Date.now();
           const chunkDurationEstimateMs = (pcm24k.length / 2 / 24000) * 1000;
           const segEndMs = meetingStartedAt != null ? segTimestamp - meetingStartedAt : undefined;
@@ -5779,6 +5803,7 @@ class IPCHandlers {
             model: options.model || "gpt-4o-mini-transcribe",
             captureRate: 16000,
             preconfigured: false,
+            language: options.language || undefined,
           });
         } catch (err) {
           if (this._dictationStreaming === streaming) this._dictationStreaming = null;

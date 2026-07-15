@@ -980,7 +980,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     "tap" | "push",
 
-  preferBuiltInMic: readBoolean("preferBuiltInMic", true),
+  preferBuiltInMic: readBoolean("preferBuiltInMic", false),
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
 
   theme: (() => {
@@ -991,11 +991,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cloudBackupEnabled: readBoolean("cloudBackupEnabled", false),
   telemetryEnabled: readBoolean("telemetryEnabled", false),
   audioRetentionDays: (() => {
-    if (!isBrowser) return 1;
+    if (!isBrowser) return 0;
     const stored = localStorage.getItem("audioRetentionDays");
-    if (stored === null) return 1;
+    if (stored === null) return 0;
     const parsed = parseInt(stored, 10);
-    return isNaN(parsed) ? 1 : parsed;
+    return isNaN(parsed) ? 0 : parsed;
   })(),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   saveDiscardedTranscriptions: readBoolean("saveDiscardedTranscriptions", false),
@@ -2339,7 +2339,7 @@ export async function initializeSettings(): Promise<void> {
       const parsed = Number(newValue);
       if (Number.isNaN(parsed)) {
         value =
-          key === "audioRetentionDays" ? 30 : (state as unknown as Record<string, unknown>)[key];
+          key === "audioRetentionDays" ? 0 : (state as unknown as Record<string, unknown>)[key];
       } else {
         value = key === "audioRetentionDays" ? Math.round(parsed) : parsed;
       }
