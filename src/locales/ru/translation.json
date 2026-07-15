@@ -2513,6 +2513,7 @@
     "targetLanguage": "Перевести на",
     "targetLanguageDescription": "Язык вставляемого текста",
     "targetLanguageMissing": "Выберите целевой язык, чтобы активировать горячую клавишу перевода",
+    "selectLanguage": "Выберите язык…",
     "prompt": {
       "title": "Промпт перевода",
       "description": "Настройте, как модель переводит вашу диктовку"

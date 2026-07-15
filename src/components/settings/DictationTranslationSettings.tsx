@@ -56,6 +56,7 @@ export default function DictationTranslationSettings() {
                   value={translationTargetLanguage}
                   onChange={setTranslationTargetLanguage}
                   options={TARGET_OPTIONS}
+                  placeholder={t("dictationTranslation.selectLanguage")}
                 />
               </SettingsRow>
             </SettingsPanelRow>

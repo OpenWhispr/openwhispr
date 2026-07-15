@@ -2557,6 +2557,7 @@
     "targetLanguage": "Traduire vers",
     "targetLanguageDescription": "La langue du texte collé",
     "targetLanguageMissing": "Choisissez une langue cible pour activer le raccourci de traduction",
+    "selectLanguage": "Sélectionner la langue…",
     "prompt": {
       "title": "Prompt de Traduction",
       "description": "Personnalisez la façon dont le modèle traduit votre dictée"

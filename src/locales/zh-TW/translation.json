@@ -2504,6 +2504,7 @@
     "targetLanguage": "翻譯為",
     "targetLanguageDescription": "貼上文字的語言",
     "targetLanguageMissing": "請選擇目標語言以啟用翻譯快捷鍵",
+    "selectLanguage": "選擇語言…",
     "prompt": {
       "title": "翻譯提示詞",
       "description": "自訂模型翻譯聽寫內容的方式"

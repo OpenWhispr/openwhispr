@@ -2509,6 +2509,7 @@
     "targetLanguage": "Übersetzen nach",
     "targetLanguageDescription": "Die Sprache des eingefügten Textes",
     "targetLanguageMissing": "Wähle eine Zielsprache, um den Übersetzungs-Hotkey zu aktivieren",
+    "selectLanguage": "Sprache auswählen…",
     "prompt": {
       "title": "Übersetzungs-Prompt",
       "description": "Passe an, wie das Modell dein Diktat übersetzt"

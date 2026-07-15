@@ -2504,6 +2504,7 @@
     "targetLanguage": "翻译为",
     "targetLanguageDescription": "粘贴文本的语言",
     "targetLanguageMissing": "请选择目标语言以启用翻译快捷键",
+    "selectLanguage": "选择语言…",
     "prompt": {
       "title": "翻译提示词",
       "description": "自定义模型翻译听写内容的方式"

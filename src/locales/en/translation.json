@@ -2645,6 +2645,7 @@
     "targetLanguage": "Translate to",
     "targetLanguageDescription": "The language of the pasted text",
     "targetLanguageMissing": "Pick a target language to activate the translation hotkey",
+    "selectLanguage": "Select language…",
     "prompt": {
       "title": "Translation Prompt",
       "description": "Customize how the model translates your dictation"

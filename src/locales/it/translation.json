@@ -2509,6 +2509,7 @@
     "targetLanguage": "Traduci in",
     "targetLanguageDescription": "La lingua del testo incollato",
     "targetLanguageMissing": "Scegli una lingua di destinazione per attivare la hotkey di traduzione",
+    "selectLanguage": "Seleziona lingua…",
     "prompt": {
       "title": "Prompt di Traduzione",
       "description": "Personalizza come il modello traduce la tua dettatura"

@@ -2509,6 +2509,7 @@
     "targetLanguage": "Traduzir para",
     "targetLanguageDescription": "O idioma do texto colado",
     "targetLanguageMissing": "Escolha um idioma de destino para ativar o atalho de tradução",
+    "selectLanguage": "Selecionar idioma…",
     "prompt": {
       "title": "Prompt de Tradução",
       "description": "Personalize como o modelo traduz seu ditado"

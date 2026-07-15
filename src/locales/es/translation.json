@@ -2557,6 +2557,7 @@
     "targetLanguage": "Traducir a",
     "targetLanguageDescription": "El idioma del texto pegado",
     "targetLanguageMissing": "Elige un idioma de destino para activar el atajo de traducción",
+    "selectLanguage": "Seleccionar idioma…",
     "prompt": {
       "title": "Prompt de Traducción",
       "description": "Personaliza cómo el modelo traduce tu dictado"
