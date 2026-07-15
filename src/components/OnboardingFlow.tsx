@@ -15,7 +15,6 @@ import {
   Users,
 } from "lucide-react";
 import TitleBar from "./TitleBar";
-import WindowControls from "./WindowControls";
 import PermissionsSection from "./ui/PermissionsSection";
 import SupportDropdown from "./ui/SupportDropdown";
 import StepProgress from "./ui/StepProgress";
@@ -51,17 +50,15 @@ import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/permissions";
-import UseCaseStep from "./onboarding/UseCaseStep";
 import MeetingSetupStep from "./onboarding/MeetingSetupStep";
 import FinishStep from "./onboarding/FinishStep";
 import { USE_CASE_IDS } from "./onboarding/useCases";
-import { cloudPost } from "../services/cloudApi";
 
 // Highest possible step index across flow variants (skip-auth with meeting step).
 const MAX_STEP_INDEX = 7;
 
 // Steps whose primary action is optional — the user can advance without it.
-const SKIPPABLE_STEPS = new Set(["usecase", "voiceAgent", "meeting"]);
+const SKIPPABLE_STEPS = new Set(["voiceAgent", "meeting"]);
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -120,9 +117,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     updateTranscriptionSettings,
     preferredLanguage,
     onboardingUseCases,
-    setOnboardingUseCases,
-    onboardingUseCaseNote,
-    setOnboardingUseCaseNote,
   } = useSettings();
 
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
@@ -209,8 +203,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const steps = useMemo(() => {
     const list = [
-      // Fork: signup/welcome-auth step removed — onboarding starts local-only.
-      { id: "usecase", title: t("onboarding.steps.useCase"), icon: Sparkles },
+      // Fork: signup/welcome-auth and "how are you using the app" steps removed —
+      // onboarding starts straight at local transcription setup.
       { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
     ];
     if (!(isSignedIn && !skipAuth)) {
@@ -238,8 +232,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   }, [currentStep, steps.length, setCurrentStep]);
 
-  // Only show progress for signed-up users after account creation step
-  const showProgress = currentStep > 0;
+  // Fork: every step shows the title bar + footer nav (no special "hero" first
+  // step anymore), so the wizard is always advanceable.
+  const showProgress = true;
 
   useEffect(() => {
     if (isUsingNativeShortcut && !supportsPushToTalk) {
@@ -425,16 +420,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       setAccessibilitySkipped(true);
     }
 
-    // Fire-and-forget intent sync — must never block onboarding.
-    if (currentStepId === "usecase" && isSignedIn && !skipAuth) {
-      cloudPost("/api/onboarding-intent", {
-        useCases: onboardingUseCases,
-        note: onboardingUseCaseNote || undefined,
-      }).catch((error) => {
-        logger.warn("Failed to sync onboarding intent", { error }, "onboarding");
-      });
-    }
-
     const newStep = currentStep + 1;
     setCurrentStep(newStep);
 
@@ -451,8 +436,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     activationStepIndex,
     isSignedIn,
     skipAuth,
-    onboardingUseCases,
-    onboardingUseCaseNote,
     permissionsHook.accessibilityPermissionGranted,
     setAccessibilitySkipped,
   ]);
@@ -547,16 +530,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             onNeedsVerification={(email) => {
               setPendingVerificationEmail(email);
             }}
-          />
-        );
-
-      case "usecase":
-        return (
-          <UseCaseStep
-            useCases={onboardingUseCases}
-            onUseCasesChange={setOnboardingUseCases}
-            note={onboardingUseCaseNote}
-            onNoteChange={setOnboardingUseCaseNote}
           />
         );
 
@@ -901,8 +874,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     switch (currentStepId) {
       case "welcome":
         return isSignedIn || skipAuth;
-      case "usecase":
-        return true; // Selection is optional — Next doubles as skip
       case "setup":
         // For signed-in users: Setup step includes permissions
         if (isSignedIn && !skipAuth) {
@@ -949,17 +920,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   };
 
-  // Load Google Font only in the browser
-  React.useEffect(() => {
-    const link = document.createElement("link");
-    link.href =
-      "https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700&display=swap";
-    link.rel = "stylesheet";
-    document.head.appendChild(link);
-    return () => {
-      document.head.removeChild(link);
-    };
-  }, []);
+  // Fork: removed the Google Fonts <link> injection (an external request to
+  // fonts.googleapis.com). The UI falls back to the system font stack.
 
   const onboardingPlatform =
     typeof window !== "undefined" && window.electronAPI?.getPlatform
@@ -1000,49 +962,34 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         onOk={() => {}}
       />
 
-      {/* Title Bar / drag region */}
-      {currentStep === 0 ? (
-        <div
-          className="flex items-center justify-end w-full h-10 shrink-0"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-        >
-          {onboardingPlatform !== "darwin" && (
-            <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-              <WindowControls />
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="shrink-0 z-10">
-          <TitleBar
-            showTitle={true}
-            className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
-            actions={isSignedIn ? <SupportDropdown /> : undefined}
-            center={
-              onboardingPlatform === "darwin" ? (
-                <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />
-              ) : undefined
-            }
-          ></TitleBar>
-        </div>
-      )}
+      {/* Title Bar — shown on every step in this fork */}
+      <div className="shrink-0 z-10">
+        <TitleBar
+          showTitle={true}
+          className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
+          actions={isSignedIn ? <SupportDropdown /> : undefined}
+          center={
+            onboardingPlatform === "darwin" ? (
+              <StepProgress steps={steps} currentStep={currentStep} />
+            ) : undefined
+          }
+        ></TitleBar>
+      </div>
 
       {/* Progress bar — on macOS it lives centered in the title bar instead */}
       {showProgress && onboardingPlatform !== "darwin" && (
         <div className="shrink-0 bg-background/80 backdrop-blur-2xl border-b border-white/5 px-6 md:px-12 py-3 z-10">
           <div className="max-w-3xl mx-auto">
-            <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />
+            <StepProgress steps={steps} currentStep={currentStep} />
           </div>
         </div>
       )}
 
       {/* Content - This will grow to fill available space */}
-      <div
-        className={`flex-1 px-6 md:px-12 overflow-y-auto ${currentStep === 0 ? "flex items-center" : "py-6"}`}
-      >
-        <div className={`w-full ${currentStep === 0 ? "max-w-sm" : "max-w-3xl"} mx-auto`}>
+      <div className="flex-1 px-6 md:px-12 overflow-y-auto py-6">
+        <div className="w-full max-w-3xl mx-auto">
           <Card className="bg-card/90 backdrop-blur-2xl border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
-            <CardContent className={currentStep === 0 ? "p-6" : "p-6 md:p-8"}>
+            <CardContent className="p-6 md:p-8">
               {renderStep()}
             </CardContent>
           </Card>
