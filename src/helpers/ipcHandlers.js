@@ -4307,6 +4307,26 @@ class IPCHandlers {
             apiKey: this.environmentManager.getTinfoilKey(),
           });
           if (text) result = { text, source: "tinfoil", model };
+        } else if (settings?.cloudTranscriptionProvider === "corti") {
+          // OAuth interaction flow — without this branch a Corti retry would fall
+          // into the generic else and post the audio to OpenAI.
+          const clientId = this.environmentManager.getCortiClientId();
+          const clientSecret = this.environmentManager.getCortiClientSecret();
+          if (!clientId || !clientSecret) {
+            throw new Error("Corti credentials not configured");
+          }
+          const { transcribeAudio } = require("./cortiTranscription");
+          const cortiResult = await transcribeAudio({
+            environment: settings?.cortiEnvironment || "us",
+            tenant: (settings?.cortiTenant || "").trim() || "base",
+            clientId,
+            clientSecret,
+            audioBuffer: buffer,
+            language: language || "en",
+          });
+          if (cortiResult?.text) {
+            result = { text: cortiResult.text, source: "corti", model: "corti-transcribe" };
+          }
         } else {
           const provider = settings?.cloudTranscriptionProvider || "openai";
           const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);

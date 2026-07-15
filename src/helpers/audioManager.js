@@ -74,9 +74,13 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
     voiceAgentRequested,
   });
   if (kind === "agent") {
+    // Local mode stores model-family ids (qwen/llama/...) with no PROVIDER_REGISTRY
+    // entry — leave provider unset so the model lookup resolves to "local".
     const provider = isCloudAgent
       ? "openwhispr"
-      : settings.dictationAgentProvider?.trim() || undefined;
+      : settings.dictationAgentMode === "local"
+        ? undefined
+        : settings.dictationAgentProvider?.trim() || undefined;
     const isCustomAgent = settings.dictationAgentMode === "providers" && provider === "custom";
     return {
       kind: "agent",
@@ -1710,6 +1714,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const fallbackModel = apiSettings.fallbackWhisperModel || "base";
 
     try {
+      // Self-hosted with no URL isn't detected by isSelfHostedTranscription and
+      // would fall through to the leftover BYOK provider — fail closed instead.
+      if (
+        apiSettings.transcriptionMode === "self-hosted" &&
+        !(apiSettings.remoteTranscriptionUrl || "").trim()
+      ) {
+        throw new Error("Self-hosted transcription URL is not configured");
+      }
+
       const durationSeconds = metadata.durationSeconds ?? null;
       const model = this.getTranscriptionModel();
       const provider = apiSettings.cloudTranscriptionProvider || "openai";
@@ -1839,7 +1852,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const apiCallStart = performance.now();
 
       // Mistral uses x-api-key auth (not Bearer) and doesn't allow browser CORS — proxy through main process
-      if (provider === "mistral" && window.electronAPI?.proxyMistralTranscription) {
+      if (
+        provider === "mistral" &&
+        !isSelfHostedTranscription(apiSettings) &&
+        window.electronAPI?.proxyMistralTranscription
+      ) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = { audioBuffer, model, language };
 
@@ -1875,7 +1892,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // xAI STT has a non-OpenAI-compatible API — proxy through main process. See #910.
-      if (provider === "xai" && window.electronAPI?.proxyXaiTranscription) {
+      if (
+        provider === "xai" &&
+        !isSelfHostedTranscription(apiSettings) &&
+        window.electronAPI?.proxyXaiTranscription
+      ) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = { audioBuffer, language: language !== "auto" ? language : undefined };
 
@@ -1908,7 +1929,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through main process
-      if (provider === "corti" && window.electronAPI?.proxyCortiTranscription) {
+      if (
+        provider === "corti" &&
+        !isSelfHostedTranscription(apiSettings) &&
+        window.electronAPI?.proxyCortiTranscription
+      ) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = {
           audioBuffer,
@@ -2227,7 +2252,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const isSelfHosted = isSelfHostedTranscription(s);
     const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
 
-    // Never fall back to the cloud default for self-hosted — fail closed instead.
+    // Never fall back to the cloud default for self-hosted or custom — fail closed.
+    // Self-hosted with an empty URL isn't detected by isSelfHostedTranscription, so
+    // check the mode explicitly or the request would leak to the leftover provider.
+    if (transcriptionMode === "self-hosted" && !remoteUrl) {
+      throw new Error("Self-hosted transcription URL is not configured");
+    }
     if (isSelfHosted) {
       const normalizedRemote = normalizeBaseUrl(remoteUrl);
       if (!normalizedRemote || !isSecureEndpoint(normalizedRemote)) {
@@ -2269,7 +2299,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (isSelfHosted) {
         base = remoteUrl;
       } else if (currentProvider === "custom") {
-        base = currentBaseUrl.trim() || API_ENDPOINTS.TRANSCRIPTION_BASE;
+        // An empty custom URL must not default to OpenAI — the custom key would
+        // be sent to api.openai.com. Fail closed like self-hosted.
+        if (!currentBaseUrl.trim()) {
+          throw new Error("Custom transcription endpoint URL is not configured");
+        }
+        base = currentBaseUrl.trim();
       } else if (currentProvider === "groq") {
         base = API_ENDPOINTS.GROQ_BASE;
       } else if (currentProvider === "xai") {
@@ -2321,6 +2356,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
 
       if (!normalizedBase) {
+        if (isCustomEndpoint) {
+          throw new Error("Custom transcription endpoint URL is invalid");
+        }
         logger.debug(
           "STT endpoint: using default (normalization failed)",
           { rawBase: base },
@@ -2329,14 +2367,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return cacheResult(API_ENDPOINTS.TRANSCRIPTION);
       }
 
-      // Only validate HTTPS for custom endpoints (known providers are already HTTPS)
+      // Only validate HTTPS for custom endpoints (known providers are already HTTPS).
+      // Fail closed — falling back to the default endpoint would send the custom
+      // key to api.openai.com.
       if (isCustomEndpoint && !isSecureEndpoint(normalizedBase)) {
-        logger.warn(
-          "STT endpoint: HTTPS required, falling back to default",
-          { attemptedUrl: normalizedBase },
-          "transcription"
-        );
-        return cacheResult(API_ENDPOINTS.TRANSCRIPTION);
+        throw new Error("Custom transcription endpoint URL is invalid or unsupported");
       }
 
       let endpoint;
@@ -2381,7 +2416,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         { error: error.message, stack: error.stack },
         "transcription"
       );
-      if (isSelfHosted) throw error;
+      if (isCustomEndpoint) throw error;
       this.cachedTranscriptionEndpoint = API_ENDPOINTS.TRANSCRIPTION;
       this.cachedEndpointProvider = currentProvider;
       this.cachedEndpointBaseUrl = currentBaseUrl;
