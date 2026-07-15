@@ -8,7 +8,7 @@ import {
   buildAzureTranscriptionUrl,
 } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
-import { getBaseLanguageCode } from "../utils/languageSupport";
+import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
 import {
   createLocalSpeechGateState,
   getLocalSpeechGateDecision,
@@ -22,6 +22,7 @@ import {
   getEffectiveCleanupModel,
   isCloudCleanupMode,
   isCloudDictationAgentMode,
+  isCloudTranslationMode,
 } from "../stores/settingsStore";
 import { getBatchTranscriptionModel, getTranscriptionProvider } from "../models/ModelRegistry";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
@@ -31,7 +32,11 @@ import {
 } from "./selfHostedTranscription";
 import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
 import { detectAgentName } from "../config/agentDetection";
-import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
+import {
+  resolveDictationRouteKind,
+  resolveDictationAgentReachability,
+  resolveDictationTranslationReachability,
+} from "./dictationRouting";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording } from "./recordingValidation";
@@ -52,7 +57,7 @@ function dictationAgentReachable(settings) {
   });
 }
 
-function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
+function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested, translationRequested) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
   const agentModel = settings.dictationAgentModel?.trim() || "";
@@ -66,12 +71,54 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
     isSelfHostedAgent,
   });
 
+  const isCloudTranslation = isCloudTranslationMode();
+  const isSelfHostedTranslation =
+    settings.translationMode === "self-hosted" && !!settings.translationRemoteUrl?.trim();
+  const translationReachable = resolveDictationTranslationReachability({
+    useDictationTranslation: settings.useDictationTranslation,
+    translationTargetLanguage: settings.translationTargetLanguage,
+    translationModel: settings.translationModel,
+    isCloudTranslation,
+    isSelfHostedTranslation,
+  });
+
   const kind = resolveDictationRouteKind({
     cleanupReachable,
     agentReachable,
     agentInvoked: !!agentName && detectAgentName(text, agentName),
     voiceAgentRequested,
+    translationRequested,
+    translationReachable,
   });
+  if (kind === "translation") {
+    const provider = isCloudTranslation
+      ? "openwhispr"
+      : settings.translationProvider?.trim() || undefined;
+    const isCustomTranslation = settings.translationMode === "providers" && provider === "custom";
+    return {
+      kind: "translation",
+      model: settings.translationModel?.trim() || "",
+      cleanupReachable,
+      cleanupConfig: { disableThinking: settings.cleanupDisableThinking },
+      config: {
+        provider,
+        lanUrl: isSelfHostedTranslation ? settings.translationRemoteUrl : undefined,
+        baseUrl: isCustomTranslation ? settings.translationCloudBaseUrl || undefined : undefined,
+        customApiKey:
+          isCustomTranslation || isSelfHostedTranslation
+            ? settings.translationCustomApiKey || undefined
+            : undefined,
+        disableThinking: settings.translationDisableThinking,
+        systemPrompt: resolvePrompt("translate", {
+          agentName,
+          language: settings.translationTargetLanguage,
+          targetLanguageLabel: getLanguageLabel(settings.translationTargetLanguage),
+          customDictionary: getDictionaryHintWords(settings),
+          uiLanguage: settings.uiLanguage,
+        }),
+      },
+    };
+  }
   if (kind === "agent") {
     const provider = isCloudAgent
       ? "openwhispr"
@@ -326,6 +373,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setTranslationRequested(requested) {
     this.translationRequested = requested;
+  }
+
+  // In translation mode the STT hint is the configured source language, not
+  // the UI-wide preferred language; "auto" keeps whisper auto-detection.
+  getEffectiveSttLanguage(settings) {
+    if (this.translationRequested) {
+      return settings.translationSourceLanguage || "auto";
+    }
+    return settings.preferredLanguage;
   }
 
   setContext(context) {
@@ -1542,7 +1598,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const timings = {};
     const settings = getSettings();
-    const language = getBaseLanguageCode(settings.preferredLanguage);
+    const language = getBaseLanguageCode(this.getEffectiveSttLanguage(settings));
 
     const arrayBuffer = await audioBlob.arrayBuffer();
     const audioSizeBytes = audioBlob.size;
@@ -1582,7 +1638,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         processedText,
         settings,
         agentName,
-        this.voiceAgentRequested
+        this.voiceAgentRequested,
+        this.translationRequested
       );
       const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
 
@@ -1602,7 +1659,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
-              language: settings.preferredLanguage || "auto",
+              language: this.getEffectiveSttLanguage(settings) || "auto",
               locale: settings.uiLanguage || "en",
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
@@ -1675,7 +1732,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async processWithOpenAIAPI(audioBlob, metadata = {}) {
     const timings = {};
     const apiSettings = getSettings();
-    const language = getBaseLanguageCode(apiSettings.preferredLanguage);
+    const language = getBaseLanguageCode(this.getEffectiveSttLanguage(apiSettings));
     const allowLocalFallback = apiSettings.allowLocalFallback;
     const fallbackModel = apiSettings.fallbackWhisperModel || "base";
 
@@ -3045,7 +3102,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingSttModel = stopResult?.model || "nova-3";
     const streamingSttProcessingMs = Math.round(tTerminate - t0);
     const streamingAudioBytesSent = stopResult?.audioBytesSent || 0;
-    const streamingSttLanguage = getBaseLanguageCode(stSettings.preferredLanguage) || undefined;
+    const streamingSttLanguage =
+      getBaseLanguageCode(this.getEffectiveSttLanguage(stSettings)) || undefined;
     const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
 
     let usedCloudReasoning = false;
@@ -3056,7 +3114,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         finalText,
         stSettings,
         agentName,
-        this.voiceAgentRequested
+        this.voiceAgentRequested,
+        this.translationRequested
       );
       const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
 
@@ -3081,7 +3140,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
-              language: stSettings.preferredLanguage || "auto",
+              language: this.getEffectiveSttLanguage(stSettings) || "auto",
               locale: stSettings.uiLanguage || "en",
               sttProvider: this.getStreamingProviderName(),
               sttModel: streamingSttModel,
