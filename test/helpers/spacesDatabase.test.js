@@ -740,3 +740,81 @@ test("getFolderNoteCounts attributes space-root notes per space", (t) => {
     "no root row for spaces without root notes"
   );
 });
+
+test("folders rebuild succeeds on a legacy DB with notes referencing folders", (t) => {
+  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-spaces-db-"));
+  let BetterSqlite;
+  try {
+    BetterSqlite = require("better-sqlite3");
+  } catch (error) {
+    if (isNativeBindingUnavailable(error)) {
+      t.skip("better-sqlite3 native binding is not available for this Node runtime");
+      return;
+    }
+    throw error;
+  }
+
+  // Pre-migration shape: folders still carries the table-level UNIQUE(name)
+  // and notes rows reference them. better-sqlite3 enables foreign_keys by
+  // default, so the rebuild's DROP TABLE used to throw on exactly this DB.
+  const legacy = new BetterSqlite(path.join(userDataDir, "transcriptions.db"));
+  legacy.exec(`
+    CREATE TABLE folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL DEFAULT 'Untitled Note',
+      content TEXT NOT NULL DEFAULT '',
+      note_type TEXT NOT NULL DEFAULT 'personal',
+      source_file TEXT,
+      audio_duration_seconds REAL,
+      folder_id INTEGER REFERENCES folders(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    INSERT INTO folders (name, is_default, sort_order) VALUES ('Personal', 1, 0), ('Projects', 0, 1);
+    INSERT INTO notes (title, content, folder_id) VALUES
+      ('Legacy note one', 'body', 1),
+      ('Legacy note two', 'body', 2),
+      ('Legacy note three', 'body', 2);
+  `);
+  legacy.close();
+
+  const db = new DatabaseManager();
+
+  const foldersSql = db.db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'folders'")
+    .get().sql;
+  assert.ok(!foldersSql.includes("UNIQUE"), "rebuild dropped the UNIQUE(name) constraint");
+  assert.equal(
+    db.db.pragma("foreign_keys", { simple: true }),
+    1,
+    "foreign key enforcement is restored after the rebuild"
+  );
+
+  const privateId = db.getPrivateSpaceId();
+  const notes = db.db.prepare("SELECT title, folder_id, space_id FROM notes ORDER BY id").all();
+  assert.equal(notes.length, 3, "all legacy notes survive the rebuild");
+  assert.deepEqual(
+    notes.map((n) => n.folder_id),
+    [1, 2, 2],
+    "notes keep their folder references"
+  );
+  assert.ok(
+    notes.every((n) => n.space_id === privateId),
+    "legacy notes are backfilled into the private space"
+  );
+  const folders = db.db.prepare("SELECT id, name, space_id FROM folders ORDER BY id").all();
+  assert.equal(folders.length, 2, "both legacy folders survive");
+  assert.ok(
+    folders.every((f) => f.space_id === privateId),
+    "legacy folders are backfilled into the private space"
+  );
+  db.db.close();
+});

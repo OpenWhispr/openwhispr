@@ -692,12 +692,18 @@ class DatabaseManager {
 
       // Rebuild folders to drop the table-level UNIQUE(name); per-space name
       // uniqueness is enforced by idx_folders_space_name below.
+      // better-sqlite3 enables foreign_keys by default, so DROP TABLE folders
+      // would fail while notes.folder_id rows reference it; the pragma is a
+      // no-op inside a transaction, so toggle it around the rebuild.
       const foldersTable = this.db
         .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'folders'")
         .get();
       if (foldersTable?.sql.includes("UNIQUE")) {
-        this.db.transaction(() => {
-          this.db.exec(`
+        const foreignKeysWereOn = this.db.pragma("foreign_keys", { simple: true }) === 1;
+        this.db.pragma("foreign_keys = OFF");
+        try {
+          this.db.transaction(() => {
+            this.db.exec(`
             CREATE TABLE folders_new (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               name TEXT NOT NULL,
@@ -712,19 +718,22 @@ class DatabaseManager {
               space_id INTEGER
             )
           `);
-          this.db.exec(`
+            this.db.exec(`
             INSERT INTO folders_new (id, name, is_default, sort_order, created_at, updated_at,
               client_folder_id, cloud_id, sync_status, deleted_at, space_id)
             SELECT id, name, is_default, sort_order, created_at, updated_at,
               client_folder_id, cloud_id, sync_status, deleted_at, space_id
             FROM folders
           `);
-          this.db.exec("DROP TABLE folders");
-          this.db.exec("ALTER TABLE folders_new RENAME TO folders");
-          this.db.exec(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_client_folder_id ON folders(client_folder_id)"
-          );
-        })();
+            this.db.exec("DROP TABLE folders");
+            this.db.exec("ALTER TABLE folders_new RENAME TO folders");
+            this.db.exec(
+              "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_client_folder_id ON folders(client_folder_id)"
+            );
+          })();
+        } finally {
+          if (foreignKeysWereOn) this.db.pragma("foreign_keys = ON");
+        }
       }
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_name ON folders(space_id, name) WHERE deleted_at IS NULL"
