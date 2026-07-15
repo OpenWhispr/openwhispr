@@ -564,7 +564,7 @@ function resolveAuthUrl() {
     process.env.AUTH_URL ||
     process.env.VITE_AUTH_URL ||
     runtimeEnv.VITE_AUTH_URL ||
-    "https://auth.openwhispr.com"
+    "" // Fork: no hardcoded auth backend — nothing phones home by default.
   );
 }
 
@@ -606,6 +606,7 @@ async function migrateCookieToBearerToken() {
 
   const cookieName = getOauthCookieName();
   const authUrl = resolveAuthUrl();
+  if (!authUrl) return; // Fork: no auth backend configured — nothing to migrate.
 
   try {
     const cookies = await session.defaultSession.cookies.get({ url: authUrl, name: cookieName });
@@ -1048,7 +1049,9 @@ async function startApp() {
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 
-  updateManager.checkForUpdatesOnStartup();
+  // Fork: disabled the automatic update check on startup (no phone-home). A
+  // manual "check for updates" via the tray/IPC still works if the user asks.
+  // updateManager.checkForUpdatesOnStartup();
 
   if (process.platform === "darwin") {
     const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");

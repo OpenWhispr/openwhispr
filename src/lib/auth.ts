@@ -3,22 +3,29 @@ import { ssoClient } from "@better-auth/sso/client";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { openExternalLink } from "../utils/externalLinks";
 
-export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
-export const authClient = createAuthClient({
-  baseURL: AUTH_URL,
-  plugins: [ssoClient()],
-  fetchOptions: {
-    auth: {
-      type: "Bearer",
-      token: async () => (await window.electronAPI?.authGetToken?.()) ?? "",
-    },
-    headers: { "x-openwhispr-source": "desktop" },
-    onSuccess: async (ctx: { response: Response }) => {
-      const newToken = ctx.response.headers.get("set-auth-token");
-      if (newToken) await window.electronAPI?.authSetToken?.(newToken);
-    },
-  },
-});
+// Fork: default to NO auth backend so nothing pings auth.openwhispr.com. Better
+// Auth's useSession() would otherwise fire a get-session request on every
+// renderer mount, even when signed out. Set VITE_AUTH_URL to opt back into
+// OpenWhispr accounts/cloud; authClient is null when no backend is configured
+// (consumers already guard on `!authClient` / `!AUTH_URL`).
+export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "";
+export const authClient = AUTH_URL
+  ? createAuthClient({
+      baseURL: AUTH_URL,
+      plugins: [ssoClient()],
+      fetchOptions: {
+        auth: {
+          type: "Bearer",
+          token: async () => (await window.electronAPI?.authGetToken?.()) ?? "",
+        },
+        headers: { "x-openwhispr-source": "desktop" },
+        onSuccess: async (ctx: { response: Response }) => {
+          const newToken = ctx.response.headers.get("set-auth-token");
+          if (newToken) await window.electronAPI?.authSetToken?.(newToken);
+        },
+      },
+    })
+  : null;
 
 export type SocialProvider = "google" | "microsoft" | "apple";
 
@@ -130,6 +137,10 @@ export async function deleteAccount(): Promise<{ error?: Error }> {
 }
 
 export async function signOut(): Promise<void> {
+  if (!authClient) {
+    markSignedOutState();
+    return;
+  }
   try {
     await authClient.signOut();
     if (window.electronAPI?.authClearSession) {
@@ -173,6 +184,7 @@ export async function withSessionRefresh<T>(operation: () => Promise<T>): Promis
 const DESKTOP_OAUTH_CALLBACK_URL = "https://openwhispr.com/auth/desktop-callback";
 
 export async function signInWithSocial(provider: SocialProvider): Promise<{ error?: Error }> {
+  if (!AUTH_URL || !authClient) return { error: new Error("Auth not configured") };
   try {
     const isElectron = Boolean((window as any).electronAPI);
 
@@ -197,6 +209,7 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
 }
 
 export async function signInWithSSO(email: string): Promise<{ error?: Error }> {
+  if (!AUTH_URL || !authClient) return { error: new Error("Auth not configured") };
   try {
     const isElectron = Boolean((window as any).electronAPI);
 
@@ -221,6 +234,7 @@ export async function signInWithSSO(email: string): Promise<{ error?: Error }> {
 }
 
 export async function requestPasswordReset(email: string): Promise<{ error?: Error }> {
+  if (!authClient) return { error: new Error("Auth not configured") };
   try {
     await authClient.requestPasswordReset({
       email: email.trim(),
