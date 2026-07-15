@@ -395,12 +395,9 @@ export default function TranscriptionModelPicker({
     () => (streamingOnly ? getStreamingTranscriptionProviders() : getTranscriptionProviders()),
     [streamingOnly]
   );
-  const cloudProviderTabs = useMemo(() => {
-    const visibleIds = new Set([...cloudProviders.map((p) => p.id), "custom"]);
-    return CLOUD_PROVIDER_TABS.filter((p) => visibleIds.has(p.id)).map((provider) =>
-      provider.id === "custom" ? { ...provider, name: t("transcription.customProvider") } : provider
-    );
-  }, [cloudProviders, t]);
+  // Fork: hosted cloud STT providers removed — only the self-hosted (custom,
+  // OpenAI-compatible endpoint) provider remains.
+  const cloudProviderTabs = useMemo(() => [{ id: "custom", name: "Self-hosted" }], []);
 
   useEffect(() => {
     selectedLocalModelRef.current = selectedLocalModel;
@@ -459,41 +456,11 @@ export default function TranscriptionModelPicker({
   }, []);
 
   const ensureValidCloudSelection = useCallback(() => {
-    const isValidProvider = VALID_CLOUD_PROVIDER_IDS.includes(selectedCloudProvider);
-
-    if (!isValidProvider) {
-      const knownProviderUrls = cloudProviders.map((p) => p.baseUrl);
-      const hasCustomUrl =
-        cloudTranscriptionBaseUrl &&
-        cloudTranscriptionBaseUrl.trim() !== "" &&
-        cloudTranscriptionBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE &&
-        !knownProviderUrls.includes(cloudTranscriptionBaseUrl);
-
-      if (hasCustomUrl) {
-        onCloudProviderSelect("custom");
-      } else {
-        const firstProvider = cloudProviders[0];
-        if (firstProvider) {
-          onCloudProviderSelect(firstProvider.id);
-          if (firstProvider.models?.length) {
-            onCloudModelSelect(firstProvider.models[0].id);
-          }
-        }
-      }
-    } else if (selectedCloudProvider !== "custom" && !selectedCloudModel) {
-      const provider = cloudProviders.find((p) => p.id === selectedCloudProvider);
-      if (provider?.models?.length) {
-        onCloudModelSelect(provider.models[0].id);
-      }
+    // Fork: only the self-hosted (custom) provider remains, so always select it.
+    if (selectedCloudProvider !== "custom") {
+      onCloudProviderSelect("custom");
     }
-  }, [
-    cloudProviders,
-    cloudTranscriptionBaseUrl,
-    selectedCloudProvider,
-    selectedCloudModel,
-    onCloudProviderSelect,
-    onCloudModelSelect,
-  ]);
+  }, [selectedCloudProvider, onCloudProviderSelect]);
 
   useEffect(() => {
     loadLocalModelsRef.current = loadLocalModels;

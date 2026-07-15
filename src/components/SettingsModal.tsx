@@ -56,31 +56,7 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
   const { t } = useTranslation();
   const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(
     () => [
-      {
-        id: "account",
-        label: t("settingsModal.sections.account.label"),
-        icon: UserCircle,
-        description: t("settingsModal.sections.account.description"),
-        group: t("settingsModal.groups.account"),
-      },
-      {
-        id: "plansBilling",
-        label: t("settingsModal.sections.plansBilling.label"),
-        icon: CreditCard,
-        description: t("settingsModal.sections.plansBilling.description"),
-        group: t("settingsModal.groups.account"),
-      },
-      ...(WORKSPACES_ENABLED
-        ? [
-            {
-              id: "workspace" as const,
-              label: t("settingsModal.sections.workspace.label"),
-              icon: Users,
-              description: t("settingsModal.sections.workspace.description"),
-              group: t("settingsModal.groups.account"),
-            },
-          ]
-        : []),
+      // Fork: Account, Plans & Billing, and Workspace sections removed (local-only, no account).
       {
         id: "general",
         label: t("settingsModal.sections.general.label"),
@@ -128,9 +104,11 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
   );
 
   const resolveSection = (section: string | undefined): SettingsSectionType => {
-    if (!section) return "account";
+    if (!section) return "general";
     const resolved = (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
-    if (resolved === "workspace" && !WORKSPACES_ENABLED) return "account";
+    // Fork: removed sections (account/plans/billing/workspace) fall back to General.
+    if (resolved === "workspace" || resolved === "account" || resolved === "plansBilling")
+      return "general";
     return resolved;
   };
 

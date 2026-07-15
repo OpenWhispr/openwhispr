@@ -886,24 +886,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;
           return modelToCheck !== "" && isModelDownloaded;
         } else {
-          // For cloud mode, check if appropriate API key is set
-          if (cloudTranscriptionProvider === "openai") {
-            return openaiApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "groq") {
-            return groqApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "xai") {
-            return xaiApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "mistral") {
-            return mistralApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "corti") {
-            return cortiClientId.trim().length > 0 && cortiClientSecret.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "tinfoil") {
-            return tinfoilApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "custom") {
-            // Custom can work without API key for local endpoints
-            return true;
-          }
-          return openaiApiKey.trim().length > 0; // Default to OpenAI
+          // Fork: only the self-hosted (custom) provider remains; it works
+          // without an API key (points at your own endpoint).
+          return true;
         }
       case "permissions":
         return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
