@@ -1,8 +1,9 @@
-const { net, Notification, BrowserWindow } = require("electron");
+const { net, BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
+const MEETING_REMINDER_LEAD_MS = 60 * 1000;
 
 class GoogleCalendarManager {
   constructor(databaseManager, windowManager) {
@@ -271,7 +272,7 @@ class GoogleCalendarManager {
     const next = upcoming.find((e) => !this.notifiedMeetings.has(e.id));
     if (!next) return;
 
-    const delay = new Date(next.start_time).getTime() - Date.now();
+    const delay = new Date(next.start_time).getTime() - MEETING_REMINDER_LEAD_MS - Date.now();
     if (delay <= 0) {
       this.onMeetingStart(next);
       return;
@@ -296,34 +297,8 @@ class GoogleCalendarManager {
     this.activeMeeting = event;
     this.notifiedMeetings.add(event.id);
 
-    const nPrefs = this.windowManager?.notificationPrefs || {};
-    const showReminder =
-      nPrefs.notificationsEnabled !== false && nPrefs.notifyCalendarReminders !== false;
-    debugLogger.info(
-      "Calendar meeting started",
-      { summary: event.summary, reminderShown: showReminder },
-      "gcal"
-    );
-    if (showReminder) {
-      const notif = new Notification({
-        title: event.summary || "Meeting",
-        body: "Meeting starting now",
-      });
-      notif.on("click", () => {
-        this.meetingDetectionEngine
-          ?.joinCalendarMeeting(event.id, "calendar-notification")
-          .catch((error) =>
-            debugLogger.error(
-              "Failed to start recording from calendar reminder",
-              { error: error.message, eventId: event.id },
-              "gcal"
-            )
-          );
-      });
-      notif.show();
-    }
-
-    this.broadcastToWindows("gcal-meeting-starting", { event });
+    debugLogger.info("Calendar meeting reminder due", { summary: event.summary }, "gcal");
+    this.meetingDetectionEngine?.handleCalendarReminder(event);
 
     if (this.meetingEndTimer) {
       clearTimeout(this.meetingEndTimer);
@@ -340,7 +315,6 @@ class GoogleCalendarManager {
 
   onMeetingEnd() {
     debugLogger.info("Calendar meeting ended", { summary: this.activeMeeting?.summary }, "gcal");
-    this.broadcastToWindows("gcal-meeting-ended", { event: this.activeMeeting });
     this.activeMeeting = null;
     if (this.meetingEndTimer) {
       clearTimeout(this.meetingEndTimer);

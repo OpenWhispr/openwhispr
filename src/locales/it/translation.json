@@ -277,11 +277,6 @@
       "title": "Note delle riunioni",
       "description": "Cattura e riassumi le tue riunioni",
       "autoDetect": "OpenWhispr rileva automaticamente quando sei in riunione e ti propone di avviare le note — nulla viene registrato senza di te.",
-      "notification": {
-        "title": "Riunione rilevata",
-        "body": "Sembra che tu sia in riunione. Vuoi prendere appunti?",
-        "cta": "Avvia registrazione"
-      },
       "hotkeyLabel": "Scorciatoia riunione",
       "hotkeyHint": "Facoltativa — premila in qualsiasi riunione per avviare subito una nota."
     },
@@ -2913,5 +2908,15 @@
       "successDescription": "Bienvenue dans {{name}}.",
       "errorTitle": "Impossible d'accepter l'invitation"
     }
+  },
+  "meetingNotification": {
+    "title": "Riunione rilevata",
+    "body": {
+      "detected": "Sembra che tu sia in riunione. Vuoi prendere appunti?",
+      "starting": "La tua riunione sta per iniziare. Vuoi prendere appunti?",
+      "underway": "Sembra che la tua riunione sia già in corso. Vuoi prendere appunti?"
+    },
+    "start": "Avvia registrazione",
+    "join": "Partecipa"
   }
 }

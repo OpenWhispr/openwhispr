@@ -37,17 +37,6 @@ export interface MeetingDetectionPreferences {
   audioDetection: boolean;
 }
 
-export interface MeetingDetection {
-  detectionId: string;
-  source: "calendar" | "process" | "audio";
-  data: {
-    appName?: string;
-    durationMs?: number;
-    detectedAt: number;
-  };
-  imminentEvent?: CalendarEvent | null;
-}
-
 export interface CalendarAttendee {
   email: string;
   displayName: string | null;

@@ -277,11 +277,6 @@
       "title": "Notas de reuniones",
       "description": "Captura y resume tus reuniones",
       "autoDetect": "OpenWhispr detecta automáticamente cuando estás en una reunión y te ofrece iniciar notas; no se graba nada sin tu permiso.",
-      "notification": {
-        "title": "Reunión detectada",
-        "body": "Parece que estás en una reunión. ¿Quieres tomar notas?",
-        "cta": "Empezar a grabar"
-      },
       "hotkeyLabel": "Atajo de reunión",
       "hotkeyHint": "Opcional: púlsalo en cualquier reunión para iniciar una nota al instante."
     },
@@ -2913,5 +2908,15 @@
       "successDescription": "Bienvenido a {{name}}.",
       "errorTitle": "No se pudo aceptar la invitación"
     }
+  },
+  "meetingNotification": {
+    "title": "Reunión detectada",
+    "body": {
+      "detected": "Parece que estás en una reunión. ¿Quieres tomar notas?",
+      "starting": "Tu reunión está por comenzar. ¿Quieres tomar notas?",
+      "underway": "Parece que tu reunión ya está en curso. ¿Quieres tomar notas?"
+    },
+    "start": "Empezar a grabar",
+    "join": "Unirse"
   }
 }

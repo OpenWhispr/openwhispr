@@ -1168,6 +1168,9 @@ class WindowManager {
       ...position,
     });
 
+    // Keep the prompt visible to the user but out of screen shares and recordings.
+    this.notificationWindow.setContentProtection(true);
+
     if (process.platform === "darwin") {
       this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });
     }

@@ -910,14 +910,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getMD5Hash: (text) => ipcRenderer.invoke("get-md5-hash", text),
 
   // Google Calendar event listeners
-  onGcalMeetingStarting: registerListener(
-    "gcal-meeting-starting",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onGcalMeetingEnded: registerListener(
-    "gcal-meeting-ended",
-    (callback) => (_event, data) => callback(data)
-  ),
   onGcalConnectionChanged: registerListener(
     "gcal-connection-changed",
     (callback) => (_event, data) => callback(data)
@@ -939,14 +931,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-set-session-speaker-config", config),
   getWhisperVadConfig: () => ipcRenderer.invoke("whisper-vad-get-config"),
   setWhisperVadConfig: (config) => ipcRenderer.invoke("whisper-vad-set-config", config),
-  onMeetingDetected: registerListener(
-    "meeting-detected",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onMeetingDetectedStartRecording: registerListener(
-    "meeting-detected-start-recording",
-    (callback) => (_event, data) => callback(data)
-  ),
   onMeetingNotificationData: registerListener(
     "meeting-notification-data",
     (callback) => (_event, data) => callback(data)

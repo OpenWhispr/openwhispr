@@ -277,11 +277,6 @@
       "title": "会議メモ",
       "description": "会議を記録して要約します",
       "autoDetect": "OpenWhispr は会議中であることを自動的に検出し、メモの開始を提案します。あなたの操作なしに録音されることはありません。",
-      "notification": {
-        "title": "会議を検出しました",
-        "body": "会議中のようです。メモを取りますか？",
-        "cta": "録音を開始"
-      },
       "hotkeyLabel": "会議ホットキー",
       "hotkeyHint": "任意 — 会議中に押すとすぐにメモを開始できます。"
     },
@@ -2913,5 +2908,15 @@
       "successDescription": "Bienvenido a {{name}}.",
       "errorTitle": "No se pudo aceptar la invitación"
     }
+  },
+  "meetingNotification": {
+    "title": "会議を検出しました",
+    "body": {
+      "detected": "会議中のようです。メモを取りますか？",
+      "starting": "まもなく会議が始まります。メモを取りますか？",
+      "underway": "会議はすでに進行中のようです。メモを取りますか？"
+    },
+    "start": "録音を開始",
+    "join": "参加"
   }
 }
