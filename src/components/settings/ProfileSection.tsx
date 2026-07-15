@@ -57,7 +57,7 @@ export default function ProfileSection({ name, email, onSessionRefresh }: Profil
   const [savingName, setSavingName] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
-  const [hasPassword, setHasPassword] = useState(true);
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
 
   useEffect(() => {
     setDisplayName(name);
