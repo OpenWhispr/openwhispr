@@ -559,6 +559,10 @@
         "title": "Modalità fallback",
         "description": "Whisper locale non riuscito. Utilizzata l'API OpenAI."
       },
+      "cleanupWarning": {
+        "title": "Pulizia non riuscita",
+        "description": "È stata usata la trascrizione grezza perché la pulizia della dettatura non è riuscita. Controlla le impostazioni del modello di pulizia se continua a succedere."
+      },
       "noAudio": {
         "title": "Nessun audio rilevato",
         "description": "La registrazione non contiene audio rilevabile. Riprova."

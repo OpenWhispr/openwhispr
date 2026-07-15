@@ -559,6 +559,10 @@
         "title": "回退模式",
         "description": "本地 Whisper 失败，已改用 OpenAI API。"
       },
+      "cleanupWarning": {
+        "title": "清理失败",
+        "description": "听写清理失败，已使用原始转写文本。如果持续发生，请检查清理模型设置。"
+      },
       "noAudio": {
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"

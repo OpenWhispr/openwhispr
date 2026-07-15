@@ -559,6 +559,10 @@
         "title": "備援模式",
         "description": "本機 Whisper 失敗，已改用 OpenAI API。"
       },
+      "cleanupWarning": {
+        "title": "清理失敗",
+        "description": "聽寫清理失敗，已使用原始轉寫文字。如果持續發生，請檢查清理模型設定。"
+      },
       "noAudio": {
         "title": "未偵測到音訊",
         "description": "錄音中未偵測到聲音。請再試一次。"

@@ -538,6 +538,10 @@
         "title": "Modo de fallback",
         "description": "O Whisper local falhou. A API da OpenAI foi usada no lugar."
       },
+      "cleanupWarning": {
+        "title": "Falha na limpeza",
+        "description": "A transcrição bruta foi usada porque a limpeza do ditado falhou. Verifique as configurações do modelo de limpeza se isso continuar acontecendo."
+      },
       "noAudio": {
         "title": "Nenhum áudio detectado",
         "description": "A gravação não contém áudio detectável. Tente novamente."

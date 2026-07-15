@@ -559,6 +559,10 @@
         "title": "Mode de secours",
         "description": "Whisper local a échoué. L'API OpenAI a pris le relais."
       },
+      "cleanupWarning": {
+        "title": "Échec du nettoyage",
+        "description": "La transcription brute a été utilisée car le nettoyage de la dictée a échoué. Vérifiez les paramètres du modèle de nettoyage si cela continue."
+      },
       "noAudio": {
         "title": "Aucun audio détecté",
         "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."

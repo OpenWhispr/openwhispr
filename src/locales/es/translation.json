@@ -559,6 +559,10 @@
         "title": "Modo de respaldo",
         "description": "Whisper local falló. Se usó la API de OpenAI."
       },
+      "cleanupWarning": {
+        "title": "Falló la limpieza",
+        "description": "Se usó la transcripción sin procesar porque falló la limpieza del dictado. Revisa la configuración del modelo de limpieza si vuelve a ocurrir."
+      },
       "noAudio": {
         "title": "No se detectó audio",
         "description": "La grabación no contiene audio detectable. Inténtalo de nuevo."

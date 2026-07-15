@@ -7,6 +7,7 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { getCleanupFailedWarningToast } from "../utils/transcriptionWarnings";
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -177,9 +178,20 @@ export const useAudioRecording = (toast, options = {}) => {
             await navigator.clipboard.writeText(result.text);
           }
 
-          audioManagerRef.current.saveTranscription(result.text, result.rawText ?? result.text, {
-            clientTranscriptionId: result.clientTranscriptionId,
+          const transcriptionSaved = await audioManagerRef.current.saveTranscription(
+            result.text,
+            result.rawText ?? result.text,
+            {
+              clientTranscriptionId: result.clientTranscriptionId,
+            }
+          );
+
+          const cleanupWarningToast = getCleanupFailedWarningToast(result, t, {
+            transcriptionSaved,
           });
+          if (cleanupWarningToast) {
+            toast(cleanupWarningToast);
+          }
 
           if (result.source === "openai" && getSettings().useLocalWhisper) {
             toast({
