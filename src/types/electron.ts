@@ -503,6 +503,7 @@ declare global {
       showDictationPanel: () => Promise<void>;
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
+      onToggleTranslation?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
@@ -1412,6 +1413,8 @@ declare global {
       updateAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
       updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
       getVoiceAgentKey?: () => Promise<string>;
+      updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      getTranslationKey?: () => Promise<string>;
       getAgentKey?: () => Promise<string>;
       saveAgentKey?: (key: string) => Promise<void>;
       createAgentConversation?: (
