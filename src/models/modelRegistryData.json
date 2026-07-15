@@ -128,7 +128,6 @@
       "expectedSizeBytes": 148000000,
       "fileName": "ggml-base.bin",
       "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-      "recommended": true,
       "descriptionKey": "models.descriptions.whisper.base"
     },
     "small": {
@@ -169,6 +168,7 @@
       "expectedSizeBytes": 1670000000,
       "fileName": "ggml-large-v3-turbo.bin",
       "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+      "recommended": true,
       "descriptionKey": "models.descriptions.whisper.turbo"
     }
   },

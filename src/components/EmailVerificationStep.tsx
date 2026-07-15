@@ -64,6 +64,10 @@ export default function EmailVerificationStep({
     setIsResending(true);
     setError(null);
     try {
+      if (!authClient) {
+        setError(t("emailVerification.errors.serverUnreachable"));
+        return;
+      }
       const result = await authClient.sendVerificationEmail({ email });
       if (result.error) {
         setError(result.error.message || t("emailVerification.errors.resendFailed"));

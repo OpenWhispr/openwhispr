@@ -30,7 +30,10 @@
 > **About this fork.** This is a fork of [OpenWhispr](https://github.com/OpenWhispr/openwhispr) maintained by [@futuregerald](https://github.com/futuregerald) as a fully local, private **Krisp/Granola replacement with real N-speaker speaker diarization**.
 >
 > - **Why it was forked:** to run meeting transcription with reliable speaker labels entirely on-device (no cloud, no Krisp), and to add a faster, more accurate on-device diarization engine.
-> - **What changed:** adds **[FluidAudio](https://github.com/FluidInference/FluidAudio)** (Swift/CoreML) as an optional macOS diarization backend that runs pyannote-community-1-class models on the **Apple Neural Engine** — higher accuracy and much lower power/latency than the default sherpa-onnx (CPU) engine. It's auto-selected on macOS when installed and **falls back to sherpa-onnx automatically** otherwise, so non-macOS machines are unaffected. Changes are isolated to `src/helpers/diarization.js` + one guard in `src/helpers/ipcHandlers.js`, plus an additive `scripts/setup-fluidaudio.js` and docs, so upstream updates merge cleanly. Speaker labels are computed as a **post-call pass** (seconds for a typical meeting).
+> - **Real N-speaker diarization on the ANE:** adds **[FluidAudio](https://github.com/FluidInference/FluidAudio)** (Swift/CoreML) as an optional macOS diarization backend running pyannote-community-1-class models on the **Apple Neural Engine** — higher accuracy and much lower power/latency than the default sherpa-onnx (CPU) engine. Auto-selected on macOS when installed and **falls back to sherpa-onnx automatically** otherwise, so non-macOS machines are unaffected. Speaker labels are a **post-call pass** (seconds for a typical meeting).
+> - **Local-only, no signup:** onboarding has no account/signup step and no "how are you using the app" step — first run goes straight to on-device transcription (default Whisper `turbo`, changeable in Settings). Cloud/BYOK stays available but strictly opt-in.
+> - **No phone-home:** this fork disables the little that reached out by default — the Better Auth session ping to `auth.openwhispr.com`, the automatic startup update check, and a Google Fonts fetch. There is no analytics SDK. Nothing leaves your device unless you opt into a cloud provider. See [Privacy](docs/FORK-SETUP.md#privacy--no-phone-home).
+> - **Merges stay clean:** changes are isolated (diarization dispatcher in `src/helpers/diarization.js` + small guards, default flips, additive `scripts/setup-fluidaudio.js` and docs), so upstream updates merge without fuss.
 > - **How to run it:** `npm install` → `npm run setup:fluidaudio` (optional, macOS) → `npm run dev`.
 > - **More:** [Fork setup & sharing guide](docs/FORK-SETUP.md) · [FluidAudio integration notes](docs/FLUIDAUDIO-INTEGRATION.md) · [Research & decision record](docs/LOCAL-DIARIZATION-RESEARCH.md).
 
@@ -67,6 +70,26 @@ npm run dev
 ```
 
 Requires Node.js 24+. `npm run setup:fluidaudio` additionally needs the Xcode Command Line Tools (`xcode-select --install`) and is macOS-only — skip it to use the cross-platform sherpa-onnx diarization engine. See [docs/FORK-SETUP.md](docs/FORK-SETUP.md) for the full fork setup, sharing, and upstream-sync guide, or the [upstream documentation](https://docs.openwhispr.com/quickstart) for platform-specific details.
+
+First run starts a **local-only** onboarding — no account or signup. Transcription defaults to on-device Whisper (`turbo` model); you can switch models or enable a cloud provider later in Settings.
+
+## Build a shareable app (macOS)
+
+To hand coworkers a double-clickable app instead of having them run from source:
+
+```bash
+npm run build:mac:arm64   # Apple Silicon (use build:mac:x64 for Intel Macs)
+```
+
+`prebuild:mac` runs automatically first: it compiles the native helpers, downloads the whisper/sherpa/qdrant binaries, and **builds and bundles the FluidAudio diarization engine** — so the installed app needs no `npm run setup:fluidaudio`. Output `.dmg` and `.zip` land in `dist/`.
+
+These builds are **unsigned and un-notarized** (the fork doesn't ship an Apple Developer ID), so macOS Gatekeeper blocks the app on first launch. Each recipient clears the quarantine flag once after installing:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/OpenWhispr.app"
+```
+
+First launch downloads the default `turbo` Whisper model (~1.6 GB); weaker machines can pick `small`/`base` in Settings. To re-enable real signing/notarization with your own Developer ID, see [docs/FORK-SETUP.md](docs/FORK-SETUP.md).
 
 ## Documentation
 

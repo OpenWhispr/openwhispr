@@ -118,6 +118,7 @@
         "linux-text-monitor",
         "linux-key-listener*",
         "meeting-aec-helper-*",
+        "fluidaudio-diarize-*",
         "windows-key-listener*",
         "windows-mic-listener*",
         "windows-system-audio-helper*",
@@ -148,8 +149,8 @@
     "hardenedRuntime": true,
     "entitlements": "resources/mac/entitlements.mac.plist",
     "entitlementsInherit": "resources/mac/entitlements.mac.plist",
-    "identity": "Gizmo Labs Inc. (T832773L2J)",
-    "notarize": true,
+    "identity": null,
+    "notarize": false,
     "extraResources": [
       {
         "from": "src/assets/Assets.car",
@@ -263,7 +264,7 @@
   },
   "publish": {
     "provider": "github",
-    "owner": "OpenWhispr",
+    "owner": "futuregerald",
     "repo": "openwhispr",
     "private": false,
     "releaseType": "draft"
