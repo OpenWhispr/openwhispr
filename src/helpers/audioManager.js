@@ -108,6 +108,11 @@ function buildWavFromPcmChunks(chunks) {
 }
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
+// Keep the mic stream alive for this many ms after a recording stops.
+// Prevents wireless/USB headsets from going to sleep between recordings,
+// which causes a 1-2 second wake-up delay at the start of the next capture.
+const MIC_STREAM_KEEP_ALIVE_MS = 20000;
+
 function dictationAgentReachable(settings) {
   return resolveDictationAgentReachability({
     useDictationAgent: settings.useDictationAgent,
@@ -235,6 +240,15 @@ class AudioManager {
     this._onDeviceChange = () => {
       this.cachedMicDeviceId = null;
       this.micDriverWarmedUp = false;
+      // Release the persistent stream so the next recording picks up the new device.
+      if (this.persistentMicReleaseTimer) {
+        clearTimeout(this.persistentMicReleaseTimer);
+        this.persistentMicReleaseTimer = null;
+      }
+      if (this.persistentMicStream) {
+        this.persistentMicStream.getTracks().forEach((t) => t.stop());
+        this.persistentMicStream = null;
+      }
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
     this.cachedTranscriptionEndpoint = null;
@@ -262,6 +276,8 @@ class AudioManager {
     this._gateSource = null;
     this._gainNode = null;
     this._pcmCollector = null;
+    this.persistentMicStream = null;
+    this.persistentMicReleaseTimer = null;
     this._pcmChunks = [];
     this._pcmFlushPromise = null;
     this._pcmCollectorBlobUrl = null;
@@ -516,21 +532,60 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
     }
   }
 
+  /**
+   * Returns the persistent mic stream if the track is still live and the
+   * device hasn't changed. Falls back to getUserMedia otherwise.
+   * Cancels any pending release timer so the stream isn't stopped mid-use.
+   */
+  async _acquireMicStream(forceDefaultMic = false) {
+    if (this.persistentMicReleaseTimer) {
+      clearTimeout(this.persistentMicReleaseTimer);
+      this.persistentMicReleaseTimer = null;
+    }
+
+    if (!forceDefaultMic && this.persistentMicStream) {
+      const track = this.persistentMicStream.getAudioTracks()[0];
+      if (track && track.readyState === "live") {
+        logger.debug("Reusing persistent mic stream (headset stays warm)", {}, "audio");
+        return this.persistentMicStream;
+      }
+      // Track died — fall through to re-acquire
+      this.persistentMicStream = null;
+    }
+
+    const constraints = await this.getAudioConstraints(forceDefaultMic);
+    const stream = await reacquireIfDead(
+      await navigator.mediaDevices.getUserMedia(constraints),
+      () => {
+        this.cachedMicDeviceId = null;
+        return this.getAudioConstraints();
+      },
+      logger
+    );
+    this.persistentMicStream = stream;
+    return stream;
+  }
+
+  /** Schedules release of the persistent mic stream after MIC_STREAM_KEEP_ALIVE_MS. */
+  _scheduleStreamRelease() {
+    if (this.persistentMicReleaseTimer) clearTimeout(this.persistentMicReleaseTimer);
+    this.persistentMicReleaseTimer = setTimeout(() => {
+      if (this.persistentMicStream) {
+        this.persistentMicStream.getTracks().forEach((t) => t.stop());
+        this.persistentMicStream = null;
+        logger.debug("Persistent mic stream released after inactivity", {}, "audio");
+      }
+      this.persistentMicReleaseTimer = null;
+    }, MIC_STREAM_KEEP_ALIVE_MS);
+  }
+
   async startRecording(forceDefaultMic = false) {
     try {
       if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") {
         return false;
       }
 
-      const constraints = await this.getAudioConstraints(forceDefaultMic);
-      const micStream = await reacquireIfDead(
-        await navigator.mediaDevices.getUserMedia(constraints),
-        () => {
-          this.cachedMicDeviceId = null;
-          return this.getAudioConstraints();
-        },
-        logger
-      );
+      const micStream = await this._acquireMicStream(forceDefaultMic);
       const audioTrack = micStream.getAudioTracks()[0];
 
       if (audioTrack) {
@@ -665,13 +720,13 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
           this._localSpeechGateState = null;
           this.onStateChange?.({ isRecording: false, isProcessing: false });
           this.onTranscriptionComplete?.({ success: true, text: "" });
-          micStream.getTracks().forEach((track) => track.stop());
+          this._scheduleStreamRelease();
           return;
         }
 
         await this.processAudio(audioBlob, { durationSeconds });
 
-        micStream.getTracks().forEach((track) => track.stop());
+        this._scheduleStreamRelease();
       };
 
       const {
@@ -749,6 +804,11 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
         // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
         logger.warn("Pinned microphone unavailable, retrying on default mic", {}, "audio");
         this.cachedMicDeviceId = null;
+        // Drop the persistent stream — it belongs to the stale device.
+        if (this.persistentMicStream) {
+          this.persistentMicStream.getTracks().forEach((t) => t.stop());
+          this.persistentMicStream = null;
+        }
         return this.startRecording(true);
       }
 
@@ -858,10 +918,7 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
       };
 
       this.mediaRecorder.stop();
-
-      if (this.mediaRecorder.stream) {
-        this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-      }
+      this._scheduleStreamRelease();
 
       return true;
     }
@@ -3371,6 +3428,14 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
     }
     if (this.mediaRecorder?.state === "recording") {
       this.stopRecording();
+    }
+    if (this.persistentMicReleaseTimer) {
+      clearTimeout(this.persistentMicReleaseTimer);
+      this.persistentMicReleaseTimer = null;
+    }
+    if (this.persistentMicStream) {
+      this.persistentMicStream.getTracks().forEach((t) => t.stop());
+      this.persistentMicStream = null;
     }
     if (this.persistentAudioContext && this.persistentAudioContext.state !== "closed") {
       this.persistentAudioContext.close().catch(() => {});
