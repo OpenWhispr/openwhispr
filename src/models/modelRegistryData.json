@@ -286,7 +286,8 @@
           "description": "Flagship GPT-5.6 for complex coding, research, and agentic work, 1M context",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_sol",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5.6-terra",
@@ -294,7 +295,8 @@
           "description": "Balanced capability, speed, and cost for everyday work",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_terra",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5.6-luna",
@@ -302,7 +304,8 @@
           "description": "Fastest and lowest-cost model in the GPT-5.6 family",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_luna",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5.5",
@@ -310,7 +313,8 @@
           "description": "Frontier model for complex reasoning, 1M context",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_5",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5.2",
@@ -318,7 +322,8 @@
           "description": "Strong reasoning model",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5-mini",
@@ -326,7 +331,8 @@
           "description": "Fast and cost-efficient",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5-nano",
@@ -334,7 +340,8 @@
           "description": "Ultra-fast, low latency",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-4.1",
@@ -342,7 +349,8 @@
           "description": "Strong baseline, 1M context",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
+          "supportsTemperature": true,
+          "supportsVision": true
         },
         {
           "id": "gpt-4.1-mini",
@@ -350,7 +358,8 @@
           "description": "Smaller GPT-4.1 model",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_mini",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
+          "supportsTemperature": true,
+          "supportsVision": true
         },
         {
           "id": "gpt-4.1-nano",
@@ -358,7 +367,8 @@
           "description": "Lowest latency GPT-4.1",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_nano",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
+          "supportsTemperature": true,
+          "supportsVision": true
         }
       ]
     },
@@ -370,55 +380,64 @@
           "id": "claude-fable-5",
           "name": "Claude Fable 5",
           "description": "Anthropic's most capable model, Mythos-class, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5",
+          "supportsVision": true
         },
         {
           "id": "claude-sonnet-5",
           "name": "Claude Sonnet 5",
           "description": "Fast, capable agentic model at lower cost",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
+          "supportsVision": true
         },
         {
           "id": "claude-sonnet-4-6",
           "name": "Claude Sonnet 4.6",
           "description": "Balanced performance",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6",
+          "supportsVision": true
         },
         {
           "id": "claude-haiku-4-5",
           "name": "Claude Haiku 4.5",
           "description": "Fast with near-frontier intelligence",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5",
+          "supportsVision": true
         },
         {
           "id": "claude-opus-4-8",
           "name": "Claude Opus 4.8",
           "description": "Powerful Opus model tuned for honesty and reliability, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8",
+          "supportsVision": true
         },
         {
           "id": "claude-opus-4-7",
           "name": "Claude Opus 4.7",
           "description": "Powerful Opus model, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7",
+          "supportsVision": true
         },
         {
           "id": "claude-opus-4-6",
           "name": "Claude Opus 4.6",
           "description": "Previous Opus generation, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6",
+          "supportsVision": true
         },
         {
           "id": "claude-sonnet-4-5",
           "name": "Claude Sonnet 4.5",
           "description": "Previous Sonnet generation",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5",
+          "supportsVision": true
         },
         {
           "id": "claude-opus-4-5",
           "name": "Claude Opus 4.5",
           "description": "Earlier Opus model",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5",
+          "supportsVision": true
         }
       ]
     },
@@ -431,25 +450,29 @@
           "name": "Gemini 3.5 Flash",
           "description": "Latest fast, high-capability Gemini model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
-          "supportsThinking": true
+          "supportsThinking": true,
+          "supportsVision": true
         },
         {
           "id": "gemini-3.1-pro-preview",
           "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
+          "supportsVision": true
         },
         {
           "id": "gemini-3-flash-preview",
           "name": "Gemini 3 Flash",
           "description": "Ultra-fast, high-capability next-gen model",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
+          "supportsVision": true
         },
         {
           "id": "gemini-2.5-flash-lite",
           "name": "Gemini 2.5 Flash Lite",
           "description": "Lowest latency and cost",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite",
+          "supportsVision": true
         },
         {
           "id": "gemma-4-31b-it",

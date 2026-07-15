@@ -31,6 +31,9 @@ export const useAudioRecording = (toast, options = {}) => {
       if (currentState.isRecording || currentState.isProcessing) return false;
 
       audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+      if (voiceAgentRequested && getSettings().voiceAgentScreenContext) {
+        audioManagerRef.current.beginScreenContextCapture();
+      }
 
       // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
       if (!audioManagerRef.current.sttConfig) {
@@ -209,6 +212,9 @@ export const useAudioRecording = (toast, options = {}) => {
     });
 
     audioManagerRef.current.setContext("dictation");
+    // Keep overlay content protection in sync with the screen-context setting
+    // so the dictation pill stays out of captures (survives window recreation).
+    window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
     window.electronAPI.getSttConfig?.().then((config) => {
       if (config?.success && audioManagerRef.current) {
         audioManagerRef.current.setSttConfig(config);

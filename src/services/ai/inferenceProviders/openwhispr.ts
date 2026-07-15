@@ -5,12 +5,27 @@ import logger from "../../../utils/logger";
 
 export const openwhisprProvider: InferenceProvider = {
   id: "openwhispr",
+  supportsImages: true,
   async call({ text, model, agentName, config, ctx }) {
-    logger.logReasoning("OPENWHISPR_START", { model, agentName });
+    logger.logReasoning("OPENWHISPR_START", {
+      model,
+      agentName,
+      hasScreenContext: !!config.screenContext,
+    });
 
     const customPrompt = config.systemPrompt
       ? undefined
       : getSettings().customPrompts.cleanup || undefined;
+
+    // "agent" only rides with a screenshot (which already requires the new
+    // API) — older servers reject unknown promptMode values, so plain agent
+    // requests omit it. Explicit "cleanup" stops the server flipping to the
+    // action prompt on an agent-name mention.
+    const promptMode = config.systemPrompt
+      ? config.screenContext
+        ? "agent"
+        : undefined
+      : "cleanup";
 
     const result = await withSessionRefresh(async () => {
       const res = await window.electronAPI?.cloudReason?.(text, {
@@ -18,9 +33,8 @@ export const openwhisprProvider: InferenceProvider = {
         customDictionary: ctx.getCustomDictionary(),
         customPrompt,
         systemPrompt: config.systemPrompt,
-        // Routing already decided this is cleanup — stop the server from
-        // flipping to the action prompt on an agent-name mention.
-        promptMode: config.systemPrompt ? undefined : "cleanup",
+        promptMode,
+        screenContext: config.screenContext,
         language: ctx.getPreferredLanguage(),
         locale: ctx.getUiLanguage(),
       });
@@ -42,6 +56,7 @@ export const openwhisprProvider: InferenceProvider = {
       resultLength: result.text.length,
       promptMode: result.promptMode,
       matchType: result.matchType,
+      screenContextApplied: result.screenContextApplied,
     });
 
     return result.text;

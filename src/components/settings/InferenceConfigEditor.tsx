@@ -43,6 +43,7 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
   noteFormatting: "settingsPage.aiModels.modes",
   dictationAgent: "dictationAgent.modes",
+  dictationAgentVision: "dictationAgent.modes",
   chatIntelligence: "agentMode.settings.modes",
 };
 
@@ -56,15 +57,21 @@ function startCloudOnboarding() {
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
   onModeChange?: (mode: InferenceMode) => void;
+  /** Restrict the selectable modes (e.g. vision override offers cloud/BYOK only). */
+  allowedModes?: InferenceMode[];
 }
 
-export default function InferenceConfigEditor({ scope, onModeChange }: InferenceConfigEditorProps) {
+export default function InferenceConfigEditor({
+  scope,
+  onModeChange,
+  allowedModes,
+}: InferenceConfigEditorProps) {
   const { t } = useTranslation();
   const config = useSettingsStore(useShallow((s) => selectResolvedLLMConfig(s, scope)));
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
 
   const prefix = MODE_LABEL_PREFIX[scope];
-  const modes: InferenceModeOption[] = [
+  const allModes: InferenceModeOption[] = [
     {
       id: "openwhispr",
       label: t(`${prefix}.openwhispr`),
@@ -98,6 +105,7 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       icon: <Building2 className="w-4 h-4" />,
     },
   ];
+  const modes = allowedModes ? allModes.filter((m) => allowedModes.includes(m.id)) : allModes;
 
   const setField = useCallback(
     <K extends keyof Omit<typeof config, "scope">>(field: K) =>

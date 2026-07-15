@@ -100,7 +100,8 @@
     "microphone": "Please open your system settings to configure microphone permissions.",
     "sound": "Please open your system sound settings (for example, pavucontrol).",
     "accessibility": "Accessibility settings are not available on this platform.",
-    "systemAudio": "System audio settings are not available on this platform."
+    "systemAudio": "System audio settings are not available on this platform.",
+    "screenRecording": "Screen recording settings are not available on this platform."
   },
   "upgradePrompt": {
     "paymentFailed": "We couldn't process your payment",
@@ -552,6 +553,7 @@
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
+        "agentUnavailable": "Agent Unavailable",
         "dailyLimitReached": "Daily Limit Reached",
         "providerRateLimited": "Provider Rate Limited"
       },
@@ -571,7 +573,8 @@
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
-        "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again."
+        "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
+        "agentReasoningFailed": "Your voice agent couldn't process the command — the raw transcript was inserted instead."
       }
     },
     "clipboard": {
@@ -2664,6 +2667,17 @@
   "dictationAgent": {
     "enabled": "Enable voice agent",
     "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "screenContext": {
+      "title": "Screen Context",
+      "description": "Attach a screenshot of your active screen to voice agent commands.",
+      "enable": "Share screen context",
+      "enableDescription": "Captures the display your cursor is on when a voice agent recording starts. Never saved or logged.",
+      "unsupported": "Screen capture isn't available on Linux Wayland.",
+      "visionModel": "Separate vision model",
+      "visionModelDescription": "Route commands that include a screenshot to a different, vision-capable model.",
+      "permissionTitle": "Screen Recording",
+      "permissionDescription": "macOS requires Screen Recording permission to capture your screen."
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",

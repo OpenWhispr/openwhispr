@@ -121,6 +121,7 @@ async function detectServerType(base: string): Promise<void> {
 
 export const openaiProvider: InferenceProvider = {
   id: "openai",
+  supportsImages: true,
   async call({ text, model, agentName, config, ctx }) {
     const resolvedProvider = config.provider || getSettings().cleanupProvider || "";
     const isCustomProvider = resolvedProvider === "custom";
@@ -144,10 +145,30 @@ export const openaiProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
-    const messages = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userContent },
-    ];
+    const imageDataUrl = config.screenContext
+      ? `data:${config.screenContext.mediaType};base64,${config.screenContext.data}`
+      : null;
+    // The Responses and Chat Completions APIs name image content parts differently.
+    const buildMessages = (type: "responses" | "chat") =>
+      imageDataUrl
+        ? [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: [
+                type === "responses"
+                  ? { type: "input_text", text: userContent }
+                  : { type: "text", text: userContent },
+                type === "responses"
+                  ? { type: "input_image", image_url: imageDataUrl }
+                  : { type: "image_url", image_url: { url: imageDataUrl } },
+              ],
+            },
+          ]
+        : [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContent },
+          ];
 
     const openAiBase = isOpenRouter
       ? API_ENDPOINTS.OPENROUTER_BASE
@@ -202,11 +223,11 @@ export const openaiProvider: InferenceProvider = {
           const requestBody: Record<string, unknown> = { model };
 
           if (type === "responses") {
-            requestBody.input = messages;
+            requestBody.input = buildMessages(type);
             requestBody.store = false;
             requestBody.max_output_tokens = maxTokens;
           } else {
-            requestBody.messages = messages;
+            requestBody.messages = buildMessages(type);
             requestBody[apiConfig.tokenParam] = maxTokens;
             if (!config.systemPrompt && model.includes("gpt-oss")) {
               requestBody.reasoning_effort = "low";
