@@ -79,6 +79,7 @@ import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
+import DictationTranslationSettings from "./settings/DictationTranslationSettings";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
@@ -4083,7 +4084,12 @@ EOF`,
                 </div>
               </div>
             )}
-            renderDictationAgent={() => <DictationAgentSettings />}
+            renderDictationAgent={() => (
+              <div className="space-y-6">
+                <DictationAgentSettings />
+                <DictationTranslationSettings />
+              </div>
+            )}
             renderNoteFormatting={() => <NoteFormattingSettings />}
           />
         </TabPanel>
