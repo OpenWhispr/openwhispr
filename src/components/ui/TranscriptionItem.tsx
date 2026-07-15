@@ -196,7 +196,13 @@ export default function TranscriptionItem({
             </Tooltip>
           )}
           {isFailed && hasAudio && (
-            <Tooltip content={t("controlPanel.history.retryTranscription")}>
+            <Tooltip
+              content={t(
+                item.route_kind === "translation"
+                  ? "controlPanel.history.retryTranslationMode"
+                  : "controlPanel.history.retryTranscription"
+              )}
+            >
               <Button
                 size="icon"
                 variant="ghost"
@@ -240,7 +246,13 @@ export default function TranscriptionItem({
             </Tooltip>
           )}
           {!isFailed && !isDiscarded && hasAudio && (
-            <Tooltip content={t("controlPanel.history.retryTranscription")}>
+            <Tooltip
+              content={t(
+                item.route_kind === "translation"
+                  ? "controlPanel.history.retryTranslationMode"
+                  : "controlPanel.history.retryTranscription"
+              )}
+            >
               <Button
                 size="icon"
                 variant="ghost"

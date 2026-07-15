@@ -389,6 +389,7 @@
       "showInFolderWindows": "Im Explorer anzeigen",
       "showInFolderLinux": "Im Dateimanager anzeigen",
       "retryTranscription": "Erneut transkribieren",
+      "retryTranslationMode": "Übersetzungsmodus",
       "retrying": "Wird erneut transkribiert…",
       "retrySuccess": "Transkription aktualisiert",
       "retryError": "Erneute Transkription fehlgeschlagen",

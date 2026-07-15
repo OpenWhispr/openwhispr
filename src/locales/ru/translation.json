@@ -389,6 +389,7 @@
       "showInFolderWindows": "Показать в Проводнике",
       "showInFolderLinux": "Показать в файловом менеджере",
       "retryTranscription": "Повторить расшифровку",
+      "retryTranslationMode": "Режим перевода",
       "retrying": "Повторная расшифровка…",
       "retrySuccess": "Расшифровка обновлена",
       "retryError": "Не удалось повторить расшифровку",

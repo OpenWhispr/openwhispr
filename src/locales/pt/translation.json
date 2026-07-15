@@ -368,6 +368,7 @@
       "showInFolderWindows": "Mostrar no Explorador",
       "showInFolderLinux": "Mostrar no gerenciador de arquivos",
       "retryTranscription": "Retranscrever",
+      "retryTranslationMode": "Modo de Tradução",
       "retrying": "Retranscrevendo…",
       "retrySuccess": "Transcrição atualizada",
       "retryError": "Falha ao retranscrever",

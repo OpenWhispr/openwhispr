@@ -377,6 +377,7 @@
       "showInFolderWindows": "Show in Explorer",
       "showInFolderLinux": "Show in File Manager",
       "retryTranscription": "Re-transcribe",
+      "retryTranslationMode": "Translation Mode",
       "retrying": "Re-transcribing...",
       "retrySuccess": "Transcription updated",
       "retryError": "Failed to re-transcribe",

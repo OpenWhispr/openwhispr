@@ -389,6 +389,7 @@
       "showInFolderWindows": "在资源管理器中显示",
       "showInFolderLinux": "在文件管理器中显示",
       "retryTranscription": "重新转录",
+      "retryTranslationMode": "翻译模式",
       "retrying": "正在重新转录…",
       "retrySuccess": "转录已更新",
       "retryError": "重新转录失败",

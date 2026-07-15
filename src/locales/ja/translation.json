@@ -389,6 +389,7 @@
       "showInFolderWindows": "エクスプローラーで表示",
       "showInFolderLinux": "ファイルマネージャーで表示",
       "retryTranscription": "再文字起こし",
+      "retryTranslationMode": "翻訳モード",
       "retrying": "再文字起こし中…",
       "retrySuccess": "文字起こしが更新されました",
       "retryError": "再文字起こしに失敗しました",
