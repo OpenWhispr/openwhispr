@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { useToast } from "./components/ui/useToast";
 import { LoadingDots } from "./components/ui/LoadingDots";
 import { useHotkey } from "./hooks/useHotkey";
-import { formatHotkeyLabel } from "./utils/hotkeys";
+import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useSettingsStore } from "./stores/settingsStore";
@@ -294,7 +294,7 @@ export default function App() {
       case "hover":
         return {
           className: `${baseClasses} bg-black/50 cursor-pointer`,
-          tooltip: formatHotkeyLabel(hotkey),
+          tooltip: formatHotkeyListLabel(hotkey),
         };
       case "recording":
         return {

@@ -1,18 +1,19 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
-const net = require("net");
 const path = require("path");
 const http = require("http");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
+const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
 
-const PORT_RANGE_START = 8200;
-const PORT_RANGE_END = 8220;
-const STARTUP_TIMEOUT_MS = 60000;
-const VULKAN_STARTUP_TIMEOUT_MS = 60000;
+// Range kept clear of cliBridge (8200-8219) to avoid port-bind collisions.
+const PORT_RANGE_START = 8221;
+const PORT_RANGE_END = 8240;
+const STARTUP_TIMEOUT_MS = 120000;
+const VULKAN_STARTUP_TIMEOUT_MS = 120000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
@@ -97,21 +98,9 @@ class LlamaServerManager {
 
   async findAvailablePort() {
     for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
-      if (await this.isPortAvailable(port)) return port;
+      if (await isPortAvailable(port)) return port;
     }
     throw new Error(`No available ports in range ${PORT_RANGE_START}-${PORT_RANGE_END}`);
-  }
-
-  isPortAvailable(port) {
-    return new Promise((resolve) => {
-      const server = net.createServer();
-      server.once("error", () => resolve(false));
-      server.once("listening", () => {
-        server.close();
-        resolve(true);
-      });
-      server.listen(port, "127.0.0.1");
-    });
   }
 
   async start(modelPath, options = {}) {
@@ -219,9 +208,15 @@ class LlamaServerManager {
       env.PATH = binDir + (env.PATH ? `;${env.PATH}` : "");
     }
 
-    if (process.env.INTELLIGENCE_GPU_INDEX) {
-      env.CUDA_VISIBLE_DEVICES = process.env.INTELLIGENCE_GPU_INDEX;
+    // Select GPU by UUID + PCI_BUS_ID order so the device is unambiguous. See #531.
+    env.CUDA_DEVICE_ORDER = "PCI_BUS_ID";
+    if (process.env.INTELLIGENCE_GPU_UUID) {
+      env.CUDA_VISIBLE_DEVICES = process.env.INTELLIGENCE_GPU_UUID;
     }
+
+    // Disable llama.cpp auto-fit memory probing (adds ~70s to startup). Set via env
+    // so builds without --fit ignore it instead of erroring. See LLAMA_ARG_FIT.
+    env.LLAMA_ARG_FIT = process.env.LLAMA_ARG_FIT || "off";
 
     return env;
   }
@@ -491,7 +486,8 @@ class LlamaServerManager {
 
             try {
               const response = JSON.parse(data);
-              const text = response.choices?.[0]?.message?.content || "";
+              const message = response.choices?.[0]?.message;
+              const text = message?.content || message?.reasoning_content || "";
               resolve(text.trim());
             } catch (e) {
               reject(new Error(`Failed to parse llama-server response: ${e.message}`));

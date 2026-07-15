@@ -1,12 +1,13 @@
 const { spawn } = require("child_process");
 const EventEmitter = require("events");
 const fs = require("fs");
-const net = require("net");
 const path = require("path");
 const http = require("http");
+const os = require("os");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
+const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
@@ -17,6 +18,95 @@ const PORT_RANGE_END = 8199;
 const STARTUP_TIMEOUT_MS = 30000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
+const DEFAULT_WHISPER_THREADS = 4;
+const MAX_AUTO_WHISPER_THREADS = 12;
+const MAX_MANUAL_WHISPER_THREADS = 64;
+const AUTO_THREAD_RATIO = 0.75;
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function parsePositiveInteger(value) {
+  const normalized = String(value ?? "").trim();
+  if (!/^\d+$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return parsed > 0 ? parsed : null;
+}
+
+function getAvailableParallelism() {
+  try {
+    if (typeof os.availableParallelism === "function") {
+      return os.availableParallelism();
+    }
+  } catch {}
+
+  const cpus = os.cpus();
+  return Array.isArray(cpus) && cpus.length > 0 ? cpus.length : DEFAULT_WHISPER_THREADS;
+}
+
+function createThreadResolution(threads, source, availableParallelism) {
+  return { threads, source, availableParallelism };
+}
+
+function resolveWhisperThreads(options = {}, runtime = {}) {
+  const availableParallelism =
+    parsePositiveInteger(runtime.availableParallelism) || getAvailableParallelism();
+
+  const explicitThreads = parsePositiveInteger(options.threads);
+  if (explicitThreads) {
+    return createThreadResolution(
+      clamp(explicitThreads, 1, MAX_MANUAL_WHISPER_THREADS),
+      "options",
+      availableParallelism
+    );
+  }
+
+  const env = runtime.env || process.env;
+  const envThreads = env.WHISPER_THREADS;
+  const shouldAutoTune = !envThreads || String(envThreads).trim().toLowerCase() === "auto";
+
+  if (!shouldAutoTune) {
+    const parsedEnvThreads = parsePositiveInteger(envThreads);
+    if (parsedEnvThreads) {
+      return createThreadResolution(
+        clamp(parsedEnvThreads, 1, MAX_MANUAL_WHISPER_THREADS),
+        "env",
+        availableParallelism
+      );
+    }
+  }
+
+  const autoThreads = clamp(
+    Math.floor(availableParallelism * AUTO_THREAD_RATIO),
+    DEFAULT_WHISPER_THREADS,
+    MAX_AUTO_WHISPER_THREADS
+  );
+
+  if (autoThreads <= DEFAULT_WHISPER_THREADS) {
+    return createThreadResolution(
+      null,
+      shouldAutoTune ? "default" : "invalid-env",
+      availableParallelism
+    );
+  }
+
+  return createThreadResolution(
+    autoThreads,
+    shouldAutoTune ? "auto" : "invalid-env-auto",
+    availableParallelism
+  );
+}
+
+function shouldFallbackToDefaultThreads(resolution) {
+  return (
+    resolution.threads && (resolution.source === "auto" || resolution.source === "invalid-env-auto")
+  );
+}
+
+function getThreadSignature(resolution) {
+  return `threads:${resolution.threads || "default"}`;
+}
 
 function isVadActive(options = {}) {
   return options.vadEnabled === true && !!options.vadModelPath;
@@ -85,6 +175,8 @@ class WhisperServerManager extends EventEmitter {
     this.canConvert = false;
     this.useCuda = false;
     this.vadSignature = "vad:off";
+    this.threadSignature = "threads:default";
+    this.lastStartOptions = {};
   }
 
   getFFmpegPath() {
@@ -273,32 +365,27 @@ class WhisperServerManager extends EventEmitter {
 
   async findAvailablePort() {
     for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
-      if (await this.isPortAvailable(port)) return port;
+      if (await isPortAvailable(port)) return port;
     }
     throw new Error(`No available ports in range ${PORT_RANGE_START}-${PORT_RANGE_END}`);
-  }
-
-  isPortAvailable(port) {
-    return new Promise((resolve) => {
-      const server = net.createServer();
-      server.once("error", () => resolve(false));
-      server.once("listening", () => {
-        server.close();
-        resolve(true);
-      });
-      server.listen(port, "127.0.0.1");
-    });
   }
 
   async start(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
+    // Remember the options so a wake re-warm can reload with the same VAD/thread
+    // signature and survive start()'s no-op guard on the next dictation. See #766.
+    this.lastStartOptions = { ...options };
+
+    const threadResolution = resolveWhisperThreads(options);
+    const nextThreadSignature = getThreadSignature(threadResolution);
     const nextVadSignature = getVadSignature(options);
     if (
       this.ready &&
       this.modelPath === modelPath &&
       !this.isRemote &&
-      this.vadSignature === nextVadSignature
+      this.vadSignature === nextVadSignature &&
+      this.threadSignature === nextThreadSignature
     ) {
       return;
     }
@@ -310,7 +397,8 @@ class WhisperServerManager extends EventEmitter {
     this.isRemote = false;
     this.hostname = "127.0.0.1";
     this.vadSignature = nextVadSignature;
-    this.startupPromise = this._doStart(modelPath, options);
+    this.threadSignature = nextThreadSignature;
+    this.startupPromise = this._doStart(modelPath, { ...options, threadResolution });
     try {
       await this.startupPromise;
     } finally {
@@ -320,6 +408,7 @@ class WhisperServerManager extends EventEmitter {
 
   async _doStart(modelPath, options = {}) {
     const usingCuda = options.useCuda || false;
+    const threadResolution = options.threadResolution || resolveWhisperThreads(options);
     const serverBinary = this.getServerBinaryPath(usingCuda ? { preferCuda: true } : {});
     if (!serverBinary) throw new Error("whisper-server binary not found");
     if (!fs.existsSync(modelPath)) throw new Error(`Model file not found: ${modelPath}`);
@@ -343,15 +432,19 @@ class WhisperServerManager extends EventEmitter {
     const serverBinaryDir = path.dirname(serverBinary);
     spawnEnv.PATH = serverBinaryDir + pathSep + (process.env.PATH || "");
 
-    if (usingCuda && process.env.TRANSCRIPTION_GPU_INDEX) {
-      spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_INDEX;
+    // Select GPU by UUID + PCI_BUS_ID order so the device is unambiguous. See #531.
+    if (usingCuda) {
+      spawnEnv.CUDA_DEVICE_ORDER = "PCI_BUS_ID";
+      if (process.env.TRANSCRIPTION_GPU_UUID) {
+        spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_UUID;
+      }
     }
 
     const args = buildWhisperServerArgs({
       modelPath,
       port: this.port,
       language: options.language,
-      threads: options.threads,
+      threads: threadResolution.threads,
       vadEnabled: options.vadEnabled === true,
       vadModelPath: options.vadModelPath || null,
       vadConfig: options.vadConfig,
@@ -372,6 +465,7 @@ class WhisperServerManager extends EventEmitter {
       args,
       cwd: serverBinaryDir,
       cuda: usingCuda,
+      threads: threadResolution,
     });
 
     const startTime = Date.now();
@@ -424,6 +518,24 @@ class WhisperServerManager extends EventEmitter {
         this.emit("cuda-fallback");
         return this._doStart(modelPath, { ...options, useCuda: false });
       }
+      if (shouldFallbackToDefaultThreads(threadResolution)) {
+        const defaultThreadResolution = createThreadResolution(
+          null,
+          "auto-fallback",
+          threadResolution.availableParallelism
+        );
+        debugLogger.warn("Auto whisper thread count failed, falling back to default", {
+          selectedThreads: threadResolution.threads,
+          availableParallelism: threadResolution.availableParallelism,
+          stderr: stderrBuffer.slice(0, 200),
+        });
+        await this.stop();
+        this.threadSignature = getThreadSignature(threadResolution);
+        return this._doStart(modelPath, {
+          ...options,
+          threadResolution: defaultThreadResolution,
+        });
+      }
       throw err;
     }
 
@@ -433,6 +545,9 @@ class WhisperServerManager extends EventEmitter {
       port: this.port,
       model: path.basename(modelPath),
       cuda: this.useCuda,
+      threads: threadResolution.threads || DEFAULT_WHISPER_THREADS,
+      threadSource: threadResolution.source,
+      availableParallelism: threadResolution.availableParallelism,
     });
   }
 
@@ -723,3 +838,4 @@ class WhisperServerManager extends EventEmitter {
 module.exports = WhisperServerManager;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
 module.exports.getVadSignature = getVadSignature;
+module.exports.resolveWhisperThreads = resolveWhisperThreads;

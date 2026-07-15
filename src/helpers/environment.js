@@ -5,15 +5,14 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
+const { BYOK_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
-  "OPENAI_API_KEY",
-  "ANTHROPIC_API_KEY",
-  "GEMINI_API_KEY",
-  "GROQ_API_KEY",
-  "MISTRAL_API_KEY",
+  ...BYOK_API_KEYS.map((k) => k.env),
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
+  "CORTI_CLIENT_ID",
+  "CORTI_CLIENT_SECRET",
   "CUSTOM_TRANSCRIPTION_API_KEY",
   "CUSTOM_CLEANUP_API_KEY",
   "BEDROCK_ACCESS_KEY_ID",
@@ -38,6 +37,7 @@ const PERSISTED_KEYS = [
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
   "CHAT_AGENT_KEY",
+  "VOICE_AGENT_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
@@ -45,8 +45,9 @@ const PERSISTED_KEYS = [
   "START_MINIMIZED",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
-  "TRANSCRIPTION_GPU_INDEX",
-  "INTELLIGENCE_GPU_INDEX",
+  "WHISPER_THREADS",
+  "TRANSCRIPTION_GPU_UUID",
+  "INTELLIGENCE_GPU_UUID",
   "BEDROCK_REGION",
   "BEDROCK_PROFILE",
   "AZURE_OPENAI_ENDPOINT",
@@ -55,6 +56,10 @@ const PERSISTED_KEYS = [
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
 ];
+
+// Module-level so writes are serialized across all instances — hotkeyManager
+// creates its own EnvironmentManager alongside the main.js singleton.
+let envWriteQueue = Promise.resolve();
 
 class EnvironmentManager {
   constructor() {
@@ -87,17 +92,11 @@ class EnvironmentManager {
     }
   }
 
-  // Encryption init runs after construction; safeStorage fallback needs app.whenReady().
+  // Encryption initializes lazily. Probing it eagerly would touch the macOS
+  // Keychain before any window is visible. Migration and _loadAllSecrets are
+  // both no-ops on fresh installs, so neither path triggers Keychain until
+  // the user actually saves their first secret.
   async init() {
-    if (!this._encryptionAvailable()) {
-      debugLogger.warn(
-        "Secret encryption unavailable — secrets remain in plaintext .env",
-        { platform: process.platform },
-        "environment"
-      );
-      return;
-    }
-
     if (!fs.existsSync(this._getMigrationSentinelPath())) {
       await this._migrateToSecureStorage();
     }
@@ -217,7 +216,14 @@ class EnvironmentManager {
     );
   }
 
-  async _writeEnvFileAtomic(envPath) {
+  _writeEnvFileAtomic(envPath) {
+    // Concurrent write+rename pairs share the same .env.tmp path, and the
+    // loser's rename throws ENOENT (#903).
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._writeEnvFile(envPath));
+    return envWriteQueue;
+  }
+
+  async _writeEnvFile(envPath) {
     // Only strip plaintext secrets once migration has fully completed —
     // otherwise a partial-migration recovery can lose unencrypted secrets.
     const stripSecrets =
@@ -255,46 +261,6 @@ class EnvironmentManager {
     return { success: true };
   }
 
-  getOpenAIKey() {
-    return this._getKey("OPENAI_API_KEY");
-  }
-
-  saveOpenAIKey(key) {
-    return this._saveKey("OPENAI_API_KEY", key);
-  }
-
-  getAnthropicKey() {
-    return this._getKey("ANTHROPIC_API_KEY");
-  }
-
-  saveAnthropicKey(key) {
-    return this._saveKey("ANTHROPIC_API_KEY", key);
-  }
-
-  getGeminiKey() {
-    return this._getKey("GEMINI_API_KEY");
-  }
-
-  saveGeminiKey(key) {
-    return this._saveKey("GEMINI_API_KEY", key);
-  }
-
-  getGroqKey() {
-    return this._getKey("GROQ_API_KEY");
-  }
-
-  saveGroqKey(key) {
-    return this._saveKey("GROQ_API_KEY", key);
-  }
-
-  getMistralKey() {
-    return this._getKey("MISTRAL_API_KEY");
-  }
-
-  saveMistralKey(key) {
-    return this._saveKey("MISTRAL_API_KEY", key);
-  }
-
   getAssemblyAIKey() {
     return this._getKey("ASSEMBLYAI_API_KEY");
   }
@@ -309,6 +275,22 @@ class EnvironmentManager {
 
   saveDeepgramKey(key) {
     return this._saveKey("DEEPGRAM_API_KEY", key);
+  }
+
+  getCortiClientId() {
+    return this._getKey("CORTI_CLIENT_ID");
+  }
+
+  saveCortiClientId(key) {
+    return this._saveKey("CORTI_CLIENT_ID", key);
+  }
+
+  getCortiClientSecret() {
+    return this._getKey("CORTI_CLIENT_SECRET");
+  }
+
+  saveCortiClientSecret(key) {
+    return this._saveKey("CORTI_CLIENT_SECRET", key);
   }
 
   getCustomTranscriptionKey() {
@@ -429,6 +411,16 @@ class EnvironmentManager {
     return result;
   }
 
+  getVoiceAgentKey() {
+    return this._getKey("VOICE_AGENT_KEY");
+  }
+
+  saveVoiceAgentKey(key) {
+    const result = this._saveKey("VOICE_AGENT_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
   getMeetingKey() {
     return this._getKey("MEETING_KEY");
   }
@@ -500,6 +492,17 @@ class EnvironmentManager {
     require("dotenv").config({ path: envPath });
     return { success: true, path: envPath };
   }
+}
+
+// Generate the uniform BYOK key accessors (getOpenAIKey/saveOpenAIKey/…) from
+// the shared manifest so each provider is defined in exactly one place.
+for (const k of BYOK_API_KEYS) {
+  EnvironmentManager.prototype[k.get] = function () {
+    return this._getKey(k.env);
+  };
+  EnvironmentManager.prototype[k.save] = function (key) {
+    return this._saveKey(k.env, key);
+  };
 }
 
 module.exports = EnvironmentManager;

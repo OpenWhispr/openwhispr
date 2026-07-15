@@ -29,9 +29,7 @@ export default function WorkspaceSwitcher({ userName }: { userName?: string | nu
   const [createOpen, setCreateOpen] = useState(false);
 
   const label = active ? active.name : t("workspaces.switcher.personal");
-  const initials = active
-    ? workspaceInitials(active.name)
-    : (userName?.[0]?.toUpperCase() ?? "P");
+  const initials = active ? workspaceInitials(active.name) : (userName?.[0]?.toUpperCase() ?? "P");
 
   return (
     <>

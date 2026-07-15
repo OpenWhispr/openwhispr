@@ -46,7 +46,11 @@ import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
-import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
+import {
+  useSettingsStore,
+  selectIsCloudNoteFormattingMode,
+  selectResolvedNoteFormatting,
+} from "../../stores/settingsStore";
 import { useFolderManagement } from "../../hooks/useFolderManagement";
 import { useNoteDragAndDrop } from "../../hooks/useNoteDragAndDrop";
 import { cn } from "../lib/utils";
@@ -54,6 +58,7 @@ import { MEETINGS_FOLDER_NAME, findDefaultFolder } from "./shared";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
+import { resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   useNotes,
   useActiveNoteId,
@@ -75,6 +80,7 @@ import {
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import NotesOnboarding from "./NotesOnboarding";
+import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 
 const FOLDER_INPUT_CLASS =
   "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
@@ -122,17 +128,21 @@ export default function PersonalNotesView({
   const [syncedNoteId, setSyncedNoteIdState] = useState<number | null>(null);
   const localContentRef = useRef(localContent);
   const localTitleRef = useRef(localTitle);
+  const localEnhancedContentRef = useRef(localEnhancedContent);
   useEffect(() => {
     localContentRef.current = localContent;
     localTitleRef.current = localTitle;
   }, [localContent, localTitle]);
+  useEffect(() => {
+    localEnhancedContentRef.current = localEnhancedContent;
+  }, [localEnhancedContent]);
   const markNoteAsSynced = (id: number | null) => {
     activeNoteRef.current = id;
     setSyncedNoteIdState(id);
   };
   const { toast } = useToast();
-  const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
-  const effectiveModelId = useSettingsStore((s) => s.cleanupModel);
+  const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
+  const effectiveModelId = useSettingsStore((s) => selectResolvedNoteFormatting(s).model);
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const fileManagerName = navigator.platform.startsWith("Mac")
     ? "Finder"
@@ -224,7 +234,7 @@ export default function PersonalNotesView({
       folderId: note?.folder_id ?? null,
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: note?.expected_speaker_count ?? null,
+      expectedCount: resolveExpectedSpeakerCount(note),
     });
   }, [notes]);
 
@@ -233,55 +243,72 @@ export default function PersonalNotesView({
   }, []);
 
   useEffect(() => {
-    const syncNote = async () => {
-      if (activeNote && activeNote.id !== activeNoteRef.current) {
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-          saveTimeoutRef.current = null;
-          if (activeNoteRef.current) {
-            await window.electronAPI.updateNote(activeNoteRef.current, {
-              title: localTitleRef.current,
-              content: localContentRef.current,
-            });
-          }
-        }
-        if (enhancedSaveTimeoutRef.current) {
-          clearTimeout(enhancedSaveTimeoutRef.current);
-          enhancedSaveTimeoutRef.current = null;
-        }
-        markNoteAsSynced(activeNote.id);
-        setLocalTitle(activeNote.title);
-        setLocalContent(activeNote.content);
+    if (activeNote && activeNote.id !== activeNoteRef.current) {
+      // --- Switching notes ---
+      // 1. Capture old note state before anything changes
+      const oldNoteId = activeNoteRef.current;
+      const oldTitle = localTitleRef.current;
+      const oldContent = localContentRef.current;
+      const hadPendingSave = !!saveTimeoutRef.current;
+
+      // 2. Clear all pending timers
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (enhancedSaveTimeoutRef.current) {
+        clearTimeout(enhancedSaveTimeoutRef.current);
+        enhancedSaveTimeoutRef.current = null;
+      }
+
+      // 3. Switch to new note IMMEDIATELY (no await, eliminates race window)
+      markNoteAsSynced(activeNote.id);
+      setLocalTitle(activeNote.title);
+      setLocalContent(activeNote.content);
+      setLocalEnhancedContent(activeNote.enhanced_content ?? null);
+      // Also update refs directly so callbacks are correct before next render
+      localTitleRef.current = activeNote.title;
+      localContentRef.current = activeNote.content;
+
+      // 4. Flush old note data fire-and-forget (uses captured values, not refs)
+      if (hadPendingSave && oldNoteId) {
+        window.electronAPI
+          .updateNote(oldNoteId, { title: oldTitle, content: oldContent })
+          .catch((err: unknown) => {
+            logger.warn(
+              "Failed to flush note on switch",
+              { error: (err as Error).message },
+              "notes"
+            );
+          });
+      }
+    } else if (activeNote && activeNote.id === activeNoteRef.current && !saveTimeoutRef.current) {
+      // External update (e.g. AI chat tool) — resync only when no user save is pending
+      if (activeNote.title !== localTitleRef.current) setLocalTitle(activeNote.title);
+      if (activeNote.content !== localContentRef.current) setLocalContent(activeNote.content);
+      if ((activeNote.enhanced_content ?? null) !== localEnhancedContentRef.current) {
         setLocalEnhancedContent(activeNote.enhanced_content ?? null);
-      } else if (activeNote && activeNote.id === activeNoteRef.current && !saveTimeoutRef.current) {
-        // External update (e.g. AI chat tool) — resync only when no user save is pending
-        if (activeNote.title !== localTitleRef.current) setLocalTitle(activeNote.title);
-        if (activeNote.content !== localContentRef.current) setLocalContent(activeNote.content);
-        if ((activeNote.enhanced_content ?? null) !== localEnhancedContent) {
-          setLocalEnhancedContent(activeNote.enhanced_content ?? null);
-        }
       }
-      if (!activeNote) {
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-          saveTimeoutRef.current = null;
-        }
-        if (enhancedSaveTimeoutRef.current) {
-          clearTimeout(enhancedSaveTimeoutRef.current);
-          enhancedSaveTimeoutRef.current = null;
-        }
-        markNoteAsSynced(null);
-        setLocalTitle("");
-        setLocalContent("");
-        setLocalEnhancedContent(null);
+    } else if (!activeNote) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
       }
-    };
-    syncNote();
-  }, [activeNote, localEnhancedContent]);
+      if (enhancedSaveTimeoutRef.current) {
+        clearTimeout(enhancedSaveTimeoutRef.current);
+        enhancedSaveTimeoutRef.current = null;
+      }
+      markNoteAsSynced(null);
+      setLocalTitle("");
+      setLocalContent("");
+      setLocalEnhancedContent(null);
+    }
+  }, [activeNote]);
 
   const debouncedSave = useCallback((noteId: number, title: string, content: string) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
+      saveTimeoutRef.current = null;
       setIsSaving(true);
       try {
         await window.electronAPI.updateNote(noteId, { title, content });
@@ -324,6 +351,7 @@ export default function PersonalNotesView({
     const noteId = activeNoteRef.current;
     if (enhancedSaveTimeoutRef.current) clearTimeout(enhancedSaveTimeoutRef.current);
     enhancedSaveTimeoutRef.current = setTimeout(async () => {
+      enhancedSaveTimeoutRef.current = null;
       setIsSaving(true);
       try {
         await window.electronAPI.updateNote(noteId, { enhanced_content: content });
@@ -454,11 +482,20 @@ export default function PersonalNotesView({
     runAction,
   } = useActionProcessing(activeNoteId ?? null);
 
+  // The realtime transcript outlives its recording — only use it for the note it was recorded on.
+  const activeNoteRawTranscript =
+    (recordingNoteId === activeNote?.id ? realtimeTranscript : "") || activeNote?.transcript || "";
+
   const isEnhancementStale = useMemo(() => {
     if (!activeNote?.enhanced_content || !activeNote?.enhanced_at_content_hash) return false;
-    const currentHash = makeContentHash(localContent);
+    const currentHash = makeContentHash(`${localContent}\n${activeNoteRawTranscript}`);
     return currentHash !== activeNote.enhanced_at_content_hash;
-  }, [activeNote?.enhanced_content, activeNote?.enhanced_at_content_hash, localContent]);
+  }, [
+    activeNote?.enhanced_content,
+    activeNote?.enhanced_at_content_hash,
+    localContent,
+    activeNoteRawTranscript,
+  ]);
 
   const handleExportNote = useCallback(
     async (format: "md" | "txt") => {
@@ -486,7 +523,7 @@ export default function PersonalNotesView({
       folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: note?.expected_speaker_count ?? null,
+      expectedCount: resolveExpectedSpeakerCount(note),
     });
     onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, notes, onMeetingRecordingRequestHandled]);
@@ -896,6 +933,7 @@ export default function PersonalNotesView({
         {editorNote ? (
           <>
             <NoteEditor
+              key={editorNote.id}
               note={editorNote}
               onTitleChange={handleTitleChange}
               onContentChange={handleContentChange}
@@ -943,14 +981,15 @@ export default function PersonalNotesView({
               actionPicker={
                 <ActionPicker
                   onRunAction={(action) => {
-                    const rawTranscript = realtimeTranscript || activeNote?.transcript;
-                    const hasNotes = !!localContent.trim();
-                    if (!hasNotes && !rawTranscript) return;
+                    if (!editorNote) return;
+                    const noteContent = editorNote.content;
+                    const hasNotes = !!noteContent.trim();
+                    if (!hasNotes && !activeNoteRawTranscript) return;
 
                     let formattedTranscript = "";
                     let isMeetingNote = false;
-                    if (rawTranscript) {
-                      const segments = parseTranscriptSegments(rawTranscript);
+                    if (activeNoteRawTranscript) {
+                      const segments = parseTranscriptSegments(activeNoteRawTranscript);
                       if (segments.length > 0) {
                         isMeetingNote = true;
                         formattedTranscript = segments
@@ -961,25 +1000,41 @@ export default function PersonalNotesView({
                           .join("\n");
                       }
                       if (!formattedTranscript) {
-                        formattedTranscript = rawTranscript;
+                        formattedTranscript = activeNoteRawTranscript;
                       }
                     }
 
                     const parts = [
-                      hasNotes ? localContent : "",
+                      hasNotes ? noteContent : "",
                       formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
                     ]
                       .filter(Boolean)
                       .join("\n\n");
-                    runAction(action, parts, makeContentHash(localContentRef.current), {
-                      isCloudMode,
-                      modelId: effectiveModelId,
-                      isMeetingNote,
-                    });
+                    runAction(
+                      action,
+                      parts,
+                      makeContentHash(`${noteContent}\n${activeNoteRawTranscript}`),
+                      {
+                        isCloudMode,
+                        modelId: effectiveModelId,
+                        isMeetingNote,
+                        allowTitleGeneration: isRegenerableNoteTitle(
+                          editorNote.title,
+                          [
+                            t("notes.list.untitledNote"),
+                            t("notes.list.newNote"),
+                            t("notes.sidebar.newNote"),
+                          ],
+                          calendarEventName
+                        ),
+                      }
+                    );
                   }}
                   onManageActions={() => setShowActionManager(true)}
                   disabled={
-                    (!localContent.trim() && !realtimeTranscript && !activeNote?.transcript) ||
+                    (!editorNote?.content?.trim() &&
+                      !realtimeTranscript &&
+                      !activeNote?.transcript) ||
                     actionProcessingState === "processing"
                   }
                 />

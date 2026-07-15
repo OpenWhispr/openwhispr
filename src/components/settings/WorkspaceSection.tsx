@@ -45,9 +45,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
     useWorkspaceStore();
   const [tab, setTab] = useLocalStorage<WorkspaceTab>(
     "settings.workspaceTab",
-    (SUB_TABS.includes(initialSubTab as WorkspaceTab)
-      ? (initialSubTab as WorkspaceTab)
-      : "members")
+    SUB_TABS.includes(initialSubTab as WorkspaceTab) ? (initialSubTab as WorkspaceTab) : "members"
   );
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -117,9 +115,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
                   "hover:bg-foreground/5 dark:hover:bg-white/5 focus-visible:ring-1 focus-visible:ring-primary/30"
                 )}
               >
-                <h2 className="text-sm font-semibold text-foreground truncate">
-                  {workspace.name}
-                </h2>
+                <h2 className="text-sm font-semibold text-foreground truncate">{workspace.name}</h2>
                 <span className="text-xs text-muted-foreground">▾</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
@@ -160,9 +156,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
               className={cn(
                 "px-3 h-8 text-xs font-medium outline-none transition-colors relative",
                 "focus-visible:ring-1 focus-visible:ring-primary/30 rounded-md",
-                tab === id
-                  ? "text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                tab === id ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {t(`settingsPage.workspace.tab.${id}`)}

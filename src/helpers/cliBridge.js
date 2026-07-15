@@ -1,10 +1,10 @@
 const http = require("http");
-const net = require("net");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { isPortAvailable } = require("../utils/serverUtils");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -17,18 +17,6 @@ const NO_CONTENT = Symbol("CliBridge.NoContent");
 
 function getBridgeFilePath() {
   return path.join(os.homedir(), ".openwhispr", "cli-bridge.json");
-}
-
-function isPortAvailable(port) {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once("error", () => resolve(false));
-    server.once("listening", () => {
-      server.close();
-      resolve(true);
-    });
-    server.listen(port, HOST);
-  });
 }
 
 async function findAvailablePort() {

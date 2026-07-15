@@ -1,4 +1,9 @@
-import { formatHotkeyLabelForPlatform, isGlobeLikeHotkey, isMouseButtonHotkey } from "./hotkeys";
+import {
+  formatHotkeyLabelForPlatform,
+  isGlobeLikeHotkey,
+  isMouseButtonHotkey,
+  parseHotkeyList,
+} from "./hotkeys";
 
 export type Platform = "darwin" | "win32" | "linux";
 
@@ -517,6 +522,25 @@ export function validateHotkey(
 ): ValidationResult {
   if (!hotkey || hotkey.trim() === "") {
     return { valid: false, error: "Please enter a valid shortcut." };
+  }
+
+  // A slot may hold several hotkeys as a comma-separated list (#936) — validate
+  // each entry independently and return the first failure. parseHotkeyList keeps
+  // comma-key hotkeys like "Control+," intact, so a single such hotkey falls
+  // through to the regular single-hotkey validation below.
+  if (hotkey.includes(",")) {
+    const items = parseHotkeyList(hotkey);
+    if (items.length === 0) {
+      return { valid: false, error: "Please enter a valid shortcut." };
+    }
+    if (items.length > 1) {
+      for (const item of items) {
+        const result = validateHotkey(item, platform, existingHotkeys);
+        if (!result.valid) return result;
+      }
+      return { valid: true };
+    }
+    hotkey = items[0];
   }
 
   if (isGlobeLikeHotkey(hotkey)) {
