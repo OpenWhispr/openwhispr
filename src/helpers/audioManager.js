@@ -791,8 +791,12 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
 
           const provider = localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
           const model = provider === "nvidia" ? parakeetModel : whisperModel;
-          const language = getBaseLanguageCode(getSettings().preferredLanguage);
-          window.electronAPI?.startDictationPreview?.({ provider, model, language });
+          const preferredLanguage = getSettings().preferredLanguage;
+          const language = getBaseLanguageCode(preferredLanguage);
+          const langHint = getMultiLanguagePromptHint(preferredLanguage);
+          const dictionaryWords = this.getCustomDictionaryPrompt();
+          const initialPrompt = [langHint, dictionaryWords].filter(Boolean).join(" ") || undefined;
+          window.electronAPI?.startDictationPreview?.({ provider, model, language, initialPrompt });
         } catch (e) {
           logger.warn("Preview worklet setup failed", { error: e.message }, "audio");
         }

@@ -5876,6 +5876,7 @@ class IPCHandlers {
     let dictationPreviewProvider = null;
     let dictationPreviewModel = null;
     let dictationPreviewLanguage = null;
+    let dictationPreviewInitialPrompt = null;
     let dictationPreviewSessionActive = false;
     let dictationPreviewChunkCount = 0;
 
@@ -5896,6 +5897,7 @@ class IPCHandlers {
       dictationPreviewProvider = null;
       dictationPreviewModel = null;
       dictationPreviewLanguage = null;
+      dictationPreviewInitialPrompt = null;
     };
 
     const transcribeDictationPreviewChunk = async () => {
@@ -5918,16 +5920,36 @@ class IPCHandlers {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: dictationPreviewModel,
           });
+          if (result?.success && result.text?.trim()) {
+            this.windowManager.appendTranscriptionPreview(result.text.trim());
+          }
         } else {
           const vadOptions = this._resolveWhisperVadOptions("dictation");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: dictationPreviewModel,
-            language: dictationPreviewLanguage,
+            language: dictationPreviewLanguage || undefined,
+            initialPrompt: dictationPreviewInitialPrompt || undefined,
+            verboseJson: true,
             ...vadOptions,
           });
-        }
-        if (result?.success && result.text?.trim()) {
-          this.windowManager.appendTranscriptionPreview(result.text.trim());
+
+          if (result?.success) {
+            // Filter segments where whisper itself signals no speech
+            const NO_SPEECH_THRESHOLD = 0.6;
+            let text;
+            if (Array.isArray(result.segments) && result.segments.length > 0) {
+              text = result.segments
+                .filter((s) => (s.no_speech_prob ?? 0) < NO_SPEECH_THRESHOLD)
+                .map((s) => s.text)
+                .join(" ")
+                .trim();
+            } else {
+              text = result.text?.trim() || "";
+            }
+            if (text && !this.whisperManager.isHallucinatedText(text, dictationPreviewLanguage)) {
+              this.windowManager.appendTranscriptionPreview(text);
+            }
+          }
         }
       } catch (error) {
         debugLogger.error("Dictation preview chunk failed", { error: error.message }, "audio");
@@ -5936,13 +5958,14 @@ class IPCHandlers {
       }
     };
 
-    ipcMain.handle("start-dictation-preview", async (_event, { provider, model, language }) => {
+    ipcMain.handle("start-dictation-preview", async (_event, { provider, model, language, initialPrompt }) => {
       resetDictationPreviewState();
       dictationPreviewMode = true;
       dictationPreviewSessionActive = true;
       dictationPreviewProvider = provider;
       dictationPreviewModel = model;
       dictationPreviewLanguage = language || null;
+      dictationPreviewInitialPrompt = initialPrompt || null;
       dictationPreviewChunkCount = 0;
       this.windowManager.showTranscriptionPreview("");
       const gen = dictationPreviewGen;
