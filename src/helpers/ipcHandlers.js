@@ -4212,6 +4212,7 @@ class IPCHandlers {
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveSelfHostedRetryRoute } = await import("./retryTranscriptionRouting.js");
+        const { resolveTranscriptionRoute } = await import("./transcriptionRoute.js");
         const selfHostedRoute = resolveSelfHostedRetryRoute(settings);
 
         if (selfHostedRoute?.kind === "configuration-error") {
@@ -4327,63 +4328,88 @@ class IPCHandlers {
           if (cortiResult?.text) {
             result = { text: cortiResult.text, source: "corti", model: "corti-transcribe" };
           }
-        } else {
-          const provider = settings?.cloudTranscriptionProvider || "openai";
-          const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);
-
-          let apiKey, endpoint;
-          if (provider === "groq") {
-            apiKey = this.environmentManager.getGroqKey();
-            endpoint = "https://api.groq.com/openai/v1/audio/transcriptions";
-          } else if (provider === "xai") {
-            apiKey = this.environmentManager.getXaiKey();
-            endpoint = XAI_STT_URL;
-          } else if (provider === "mistral") {
-            apiKey = this.environmentManager.getMistralKey();
-            endpoint = MISTRAL_TRANSCRIPTION_URL;
-          } else if (provider === "custom") {
-            apiKey = this.environmentManager.getCustomTranscriptionKey();
-            const base = (settings?.cloudTranscriptionBaseUrl || "").trim();
-            endpoint = base
-              ? /\/audio\/(transcriptions|translations)$/i.test(base)
-                ? base
-                : `${base}/audio/transcriptions`
-              : "https://api.openai.com/v1/audio/transcriptions";
-          } else {
-            apiKey = this.environmentManager.getOpenAIKey();
-            endpoint = "https://api.openai.com/v1/audio/transcriptions";
+        } else if (settings?.cloudTranscriptionProvider === "xai") {
+          const apiKey = this.environmentManager.getXaiKey();
+          if (!apiKey) throw new Error("xai API key not configured");
+          const formData = new FormData();
+          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+          // xAI STT does not accept a model field; language only when in supported set
+          if (language && XAI_STT_LANGUAGES.has(language)) {
+            formData.append("language", language);
+            formData.append("format", "true");
           }
-          if (!apiKey && provider !== "custom") {
-            throw new Error(`${provider} API key not configured`);
+          const response = await proxyFetch(XAI_STT_URL, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${apiKey}` },
+            body: formData,
+          });
+          if (!response.ok) {
+            throw new Error(`xai API Error: ${response.status} ${await response.text()}`);
+          }
+          const data = await response.json();
+          if (data?.text) result = { text: data.text, source: "xai", model: "grok-stt" };
+        } else if (settings?.cloudTranscriptionProvider === "mistral") {
+          const apiKey = this.environmentManager.getMistralKey();
+          if (!apiKey) throw new Error("mistral API key not configured");
+          const model = this._resolveByokModel("mistral", settings?.cloudTranscriptionModel);
+          const formData = new FormData();
+          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+          formData.append("model", model);
+          if (language) formData.append("language", language);
+          const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
+            method: "POST",
+            headers: { "x-api-key": apiKey },
+            body: formData,
+          });
+          if (!response.ok) {
+            throw new Error(`mistral API Error: ${response.status} ${await response.text()}`);
+          }
+          const data = await response.json();
+          if (data?.text) result = { text: data.text, source: "mistral", model };
+        } else {
+          // openai / groq / custom (incl. Azure) / self-hosted — one resolver, fail-closed.
+          const route = resolveTranscriptionRoute(settings);
+          if (route.transport === "error") throw new Error(route.message);
+          if (route.transport !== "http-batch") {
+            throw new Error(`Unsupported retry transcription route: ${route.transport}`);
+          }
+          const apiKey =
+            route.auth.keyRef === "custom"
+              ? this.environmentManager.getCustomTranscriptionKey()
+              : route.auth.keyRef === "groq"
+                ? this.environmentManager.getGroqKey()
+                : route.auth.keyRef === "openai"
+                  ? this.environmentManager.getOpenAIKey()
+                  : "";
+          if (!apiKey && route.auth.scheme !== "none") {
+            throw new Error(`${route.provider} API key not configured`);
           }
 
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          if (provider === "xai") {
-            // xAI STT does not accept a model field; language only when in supported set
-            if (language && XAI_STT_LANGUAGES.has(language)) {
-              formData.append("language", language);
-              formData.append("format", "true");
-            }
-          } else {
-            formData.append("model", model);
-            if (language) formData.append("language", language);
-          }
+          if (route.model) formData.append("model", route.model);
+          if (language) formData.append("language", language);
+
           const headers = {};
-          if (provider === "mistral") {
-            headers["x-api-key"] = apiKey;
+          if (route.auth.scheme === "azure-api-key") {
+            headers["api-key"] = apiKey;
           } else if (apiKey) {
             headers.Authorization = `Bearer ${apiKey}`;
           }
 
-          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
+          const response = await proxyFetch(route.endpoint, {
+            method: "POST",
+            headers,
+            body: formData,
+          });
           if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
+            throw new Error(
+              `${route.provider} API Error: ${response.status} ${await response.text()}`
+            );
           }
           const data = await response.json();
           if (data?.text) {
-            result = { text: data.text, source: provider, model };
+            result = { text: data.text, source: route.provider, model: route.model };
           }
         }
 
