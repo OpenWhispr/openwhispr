@@ -799,6 +799,8 @@ export default function SettingsPage({
   const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
+  const translationKey = useSettingsStore((s) => s.translationKey);
+  const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
 
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -979,10 +981,11 @@ export default function SettingsPage({
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, voiceAgentKey, t]
+    [meetingKey, chatAgentKey, voiceAgentKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -993,10 +996,11 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, voiceAgentKey, t]
+    [dictationKey, chatAgentKey, voiceAgentKey, translationKey, t]
   );
 
   const validateChatAgentHotkey = useCallback(
@@ -1007,10 +1011,11 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, voiceAgentKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, translationKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1021,10 +1026,26 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, t]
+    [dictationKey, meetingKey, chatAgentKey, translationKey, t]
+  );
+
+  const validateTranslationHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, chatAgentKey, voiceAgentKey, t]
   );
 
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
@@ -3290,6 +3311,26 @@ EOF`,
                     onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
                     onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
                     validate={validateVoiceAgentHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                  />
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Translation Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.translationHotkey.title")}
+                description={t("settingsPage.general.translationHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyListInput
+                    value={translationKey}
+                    onChange={(list) => commitAgentHotkey(setTranslationKey, list)}
+                    onClear={() => commitAgentHotkey(setTranslationKey, "")}
+                    validate={validateTranslationHotkey}
                     disabled={isAgentHotkeyCommitting}
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />

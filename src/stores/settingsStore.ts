@@ -641,6 +641,8 @@ export interface SettingsState
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
   setVoiceAgentKey: (key: string) => Promise<boolean>;
+  translationKey: string;
+  setTranslationKey: (key: string) => Promise<boolean>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -724,7 +726,7 @@ function createBooleanSetter(key: string) {
 // being persisted. Rolls back to the previous key if registration fails.
 // Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
-  key: "chatAgentKey" | "voiceAgentKey",
+  key: "chatAgentKey" | "voiceAgentKey" | "translationKey",
   label: string,
   getRegisterFn: () =>
     ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
@@ -968,6 +970,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   activeDictationKey: null,
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
+  translationKey: readString("translationKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
@@ -1505,6 +1508,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "voiceAgentKey",
     "voice agent hotkey",
     () => window.electronAPI?.updateVoiceAgentHotkey
+  ),
+  setTranslationKey: createRegisteredHotkeySetter(
+    "translationKey",
+    "translation hotkey",
+    () => window.electronAPI?.updateTranslationHotkey
   ),
 
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
@@ -2219,6 +2227,20 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync voice agent hotkey on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync translation hotkey from main process
+    try {
+      const envKey = await window.electronAPI.getTranslationKey?.();
+      if (envKey && envKey !== state.translationKey) {
+        createStringSetter("translationKey")(envKey);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync translation hotkey on startup",
         { error: (err as Error).message },
         "settings"
       );
