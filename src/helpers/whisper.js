@@ -30,11 +30,18 @@ function getValidModelNames() {
   return Object.keys(modelRegistryData.whisperModels);
 }
 
-function shouldRewarmOnWake({ isRemote, useCuda, modelName, transcribing, rewarmInFlight }) {
-  // Only re-warm a running local CUDA whisper-server: sleep evicts its model from
+function shouldRewarmOnWake({
+  isRemote,
+  useCuda,
+  useVulkan,
+  modelName,
+  transcribing,
+  rewarmInFlight,
+}) {
+  // Only re-warm a running local GPU whisper-server: sleep evicts its model from
   // VRAM. Skip remote/CPU servers, and skip while a transcription (already warming
   // the server) or another re-warm is in flight. See #766.
-  return !isRemote && !!useCuda && !!modelName && !transcribing && !rewarmInFlight;
+  return !isRemote && !!(useCuda || useVulkan) && !!modelName && !transcribing && !rewarmInFlight;
 }
 
 class WhisperManager {
@@ -95,7 +102,7 @@ class WhisperManager {
       await cleanupStaleDownloads(this.getModelsDir());
 
       // Pre-warm whisper-server if local mode enabled (eliminates 2-5s cold-start delay)
-      const { localTranscriptionProvider, whisperModel, useCuda } = settings;
+      const { localTranscriptionProvider, whisperModel, useCuda, useVulkan } = settings;
 
       if (
         localTranscriptionProvider === "whisper" &&
@@ -109,11 +116,15 @@ class WhisperManager {
             model: whisperModel,
             modelPath,
             cuda: !!useCuda,
+            vulkan: !!useVulkan,
           });
 
           try {
             const serverStartTime = Date.now();
-            await this.serverManager.start(modelPath, { useCuda: !!useCuda });
+            await this.serverManager.start(modelPath, {
+              useCuda: !!useCuda,
+              useVulkan: !!useVulkan,
+            });
             this.currentServerModel = whisperModel;
 
             debugLogger.info("whisper-server pre-warmed successfully", {
@@ -251,6 +262,7 @@ class WhisperManager {
       !shouldRewarmOnWake({
         isRemote: sm.isRemote,
         useCuda: sm.useCuda,
+        useVulkan: sm.useVulkan,
         modelName,
         transcribing: this._transcribing,
         rewarmInFlight: this._rewarmInFlight,
@@ -259,10 +271,11 @@ class WhisperManager {
       return false;
     }
 
-    // Replay the last start options (VAD, threads) so the reloaded server matches the
-    // signature the next dictation will use; a bare start would otherwise be rejected
-    // by start()'s no-op guard and reload the model on the first dictation. See #766.
-    const options = { ...sm.lastStartOptions, useCuda: true };
+    // Replay the last start options (VAD, threads, GPU backend) so the reloaded
+    // server matches the signature the next dictation will use; a bare start would
+    // otherwise be rejected by start()'s no-op guard and reload the model on the
+    // first dictation. See #766.
+    const options = { ...sm.lastStartOptions };
     this._rewarmInFlight = true;
     try {
       debugLogger.info("Re-warming whisper-server after wake from sleep", { model: modelName });
@@ -350,6 +363,7 @@ class WhisperManager {
 
     await this.serverManager.start(modelPath, {
       useCuda: this.serverManager.useCuda,
+      useVulkan: this.serverManager.useVulkan,
       vadEnabled,
       vadModelPath,
       vadConfig: options.vadConfig || null,

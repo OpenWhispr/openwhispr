@@ -246,8 +246,16 @@ export interface GpuInfo {
 
 export interface CudaWhisperStatus {
   downloaded: boolean;
+  downloading: boolean;
   path: string | null;
   gpuInfo: GpuInfo;
+}
+
+export interface VulkanWhisperStatus {
+  downloaded: boolean;
+  downloading: boolean;
+  vulkan: VulkanGpuResult;
+  hasNvidiaGpu: boolean;
 }
 
 export interface WhisperCheckResult {
@@ -822,6 +830,20 @@ declare global {
         }) => void
       ) => () => void;
       onCudaFallbackNotification: (callback: () => void) => () => void;
+
+      // Vulkan GPU acceleration (whisper on AMD/Intel GPUs)
+      getVulkanWhisperStatus: () => Promise<VulkanWhisperStatus>;
+      downloadVulkanWhisperBinary: () => Promise<{ success: boolean; error?: string }>;
+      cancelVulkanWhisperDownload: () => Promise<{ success: boolean }>;
+      deleteVulkanWhisperBinary: () => Promise<{ success: boolean; deletedCount?: number }>;
+      onVulkanWhisperDownloadProgress: (
+        callback: (data: {
+          downloadedBytes: number;
+          totalBytes: number;
+          percentage: number;
+        }) => void
+      ) => () => void;
+      onGpuFallbackNotification: (callback: () => void) => () => void;
 
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (

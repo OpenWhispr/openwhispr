@@ -274,6 +274,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
 
+  // Vulkan GPU acceleration (whisper on AMD/Intel GPUs)
+  getVulkanWhisperStatus: () => ipcRenderer.invoke("get-vulkan-whisper-status"),
+  downloadVulkanWhisperBinary: () => ipcRenderer.invoke("download-vulkan-whisper-binary"),
+  cancelVulkanWhisperDownload: () => ipcRenderer.invoke("cancel-vulkan-whisper-download"),
+  deleteVulkanWhisperBinary: () => ipcRenderer.invoke("delete-vulkan-whisper-binary"),
+  onVulkanWhisperDownloadProgress: registerListener(
+    "vulkan-whisper-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGpuFallbackNotification: registerListener(
+    "gpu-fallback-notification",
+    (callback) => () => callback()
+  ),
+
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),

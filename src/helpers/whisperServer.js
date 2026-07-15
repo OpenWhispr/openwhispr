@@ -16,6 +16,8 @@ const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whis
 const PORT_RANGE_START = 8178;
 const PORT_RANGE_END = 8199;
 const STARTUP_TIMEOUT_MS = 30000;
+// Vulkan cold starts compile shaders and load the full model before the port binds. See #698.
+const VULKAN_STARTUP_TIMEOUT_MS = 120000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const DEFAULT_WHISPER_THREADS = 4;
@@ -174,6 +176,8 @@ class WhisperServerManager extends EventEmitter {
     this.cachedFFmpegPath = null;
     this.canConvert = false;
     this.useCuda = false;
+    this.useVulkan = false;
+    this._abortStartup = false;
     this.vadSignature = "vad:off";
     this.threadSignature = "threads:default";
     this.lastStartOptions = {};
@@ -270,11 +274,12 @@ class WhisperServerManager extends EventEmitter {
   }
 
   getServerBinaryPath(options = {}) {
-    if (options.preferCuda) {
+    const gpuBackend = options.preferCuda ? "cuda" : options.preferVulkan ? "vulkan" : null;
+    if (gpuBackend) {
       const ext = process.platform === "win32" ? ".exe" : "";
-      const cudaBinary = `whisper-server-${process.platform}-${process.arch}-cuda${ext}`;
-      const cudaPath = path.join(app.getPath("userData"), "bin", cudaBinary);
-      if (fs.existsSync(cudaPath)) return cudaPath;
+      const gpuBinary = `whisper-server-${process.platform}-${process.arch}-${gpuBackend}${ext}`;
+      const gpuPath = path.join(app.getPath("userData"), "bin", gpuBinary);
+      if (fs.existsSync(gpuPath)) return gpuPath;
     }
 
     if (this.cachedServerBinaryPath) return this.cachedServerBinaryPath;
@@ -408,14 +413,19 @@ class WhisperServerManager extends EventEmitter {
 
   async _doStart(modelPath, options = {}) {
     const usingCuda = options.useCuda || false;
+    const usingVulkan = !usingCuda && (options.useVulkan || false);
     const threadResolution = options.threadResolution || resolveWhisperThreads(options);
-    const serverBinary = this.getServerBinaryPath(usingCuda ? { preferCuda: true } : {});
+    const serverBinary = this.getServerBinaryPath(
+      usingCuda ? { preferCuda: true } : usingVulkan ? { preferVulkan: true } : {}
+    );
     if (!serverBinary) throw new Error("whisper-server binary not found");
     if (!fs.existsSync(modelPath)) throw new Error(`Model file not found: ${modelPath}`);
 
     this.port = await this.findAvailablePort();
     this.modelPath = modelPath;
     this.useCuda = usingCuda;
+    this.useVulkan = usingVulkan;
+    this._abortStartup = false;
 
     // Check for FFmpeg first - only use --convert flag if FFmpeg is available
     const ffmpegPath = this.getFFmpegPath();
@@ -465,6 +475,7 @@ class WhisperServerManager extends EventEmitter {
       args,
       cwd: serverBinaryDir,
       cuda: usingCuda,
+      vulkan: usingVulkan,
       threads: threadResolution,
     });
 
@@ -508,8 +519,25 @@ class WhisperServerManager extends EventEmitter {
     });
 
     try {
-      await this.waitForReady(() => ({ stderr: stderrBuffer, exitCode }));
+      await this.waitForReady(
+        () => ({ stderr: stderrBuffer, exitCode }),
+        usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS
+      );
     } catch (err) {
+      // An intentional stop() during startup is not a GPU/thread failure
+      if (err.isStopped) throw err;
+      if (usingVulkan) {
+        // Fall back on ANY startup rejection — Vulkan can die late (VRAM OOM
+        // mid-model-load) or hang, not just exit early like the CUDA rule below
+        debugLogger.warn("Vulkan whisper-server failed, falling back to CPU", {
+          error: err.message,
+          exitCode,
+          stderr: stderrBuffer.slice(0, 200),
+        });
+        this.emit("gpu-fallback");
+        await this.stop();
+        return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
+      }
       if (usingCuda && earlyExit) {
         debugLogger.warn("CUDA whisper-server failed, falling back to CPU", {
           exitCode,
@@ -545,13 +573,14 @@ class WhisperServerManager extends EventEmitter {
       port: this.port,
       model: path.basename(modelPath),
       cuda: this.useCuda,
+      vulkan: this.useVulkan,
       threads: threadResolution.threads || DEFAULT_WHISPER_THREADS,
       threadSource: threadResolution.source,
       availableParallelism: threadResolution.availableParallelism,
     });
   }
 
-  async waitForReady(getProcessInfo) {
+  async waitForReady(getProcessInfo, timeoutMs = STARTUP_TIMEOUT_MS) {
     const startTime = Date.now();
     let pollCount = 0;
 
@@ -559,7 +588,12 @@ class WhisperServerManager extends EventEmitter {
     // This saves 0-400ms average vs 500ms polling
     const STARTUP_POLL_INTERVAL_MS = 100;
 
-    while (Date.now() - startTime < STARTUP_TIMEOUT_MS) {
+    while (Date.now() - startTime < timeoutMs) {
+      if (this._abortStartup) {
+        throw Object.assign(new Error("whisper-server startup interrupted by stop"), {
+          isStopped: true,
+        });
+      }
       if (!this.process || this.process.killed) {
         const info = getProcessInfo ? getProcessInfo() : {};
         const stderr = info.stderr ? info.stderr.trim().slice(0, 200) : "";
@@ -582,7 +616,7 @@ class WhisperServerManager extends EventEmitter {
       await new Promise((resolve) => setTimeout(resolve, STARTUP_POLL_INTERVAL_MS));
     }
 
-    throw new Error(`whisper-server failed to start within ${STARTUP_TIMEOUT_MS}ms`);
+    throw new Error(`whisper-server failed to start within ${timeoutMs}ms`);
   }
 
   checkHealth() {
@@ -773,6 +807,7 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async stop() {
+    this._abortStartup = true;
     this.stopHealthCheck();
 
     if (this.isRemote) {
