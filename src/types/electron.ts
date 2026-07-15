@@ -26,6 +26,7 @@ export interface TranscriptionItem {
   id: number;
   text: string;
   raw_text: string | null;
+  cleanup_level: "light" | "medium" | "high" | null;
   timestamp: string;
   created_at: string;
   has_audio: number;
@@ -540,6 +541,7 @@ declare global {
           errorMessage?: string | null;
           errorCode?: TranscriptionErrorCode;
           clientTranscriptionId?: string;
+          cleanupLevel?: "light" | "medium" | "high" | null;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
       getTranscriptions: (
@@ -588,7 +590,8 @@ declare global {
       updateTranscriptionText: (
         id: number,
         text: string,
-        rawText: string
+        rawText: string,
+        cleanupLevel?: "light" | "medium" | "high" | null
       ) => Promise<{ success: boolean; transcription?: TranscriptionItem; error?: string }>;
 
       // Dictionary operations

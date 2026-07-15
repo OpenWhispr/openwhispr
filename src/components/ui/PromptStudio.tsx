@@ -20,6 +20,7 @@ import ReasoningService from "../../services/ReasoningService";
 import { getModelProvider } from "../../models/ModelRegistry";
 import logger from "../../utils/logger";
 import { getDefaultPromptText, type PromptKind } from "../../config/prompts";
+import { applyCleanupLevel } from "../../config/cleanupLevels";
 import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
 
 interface PromptStudioProps {
@@ -64,6 +65,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
   const cleanupModel = useSettingsStore((s) => s.cleanupModel);
+  const cleanupLevel = useSettingsStore((s) => s.cleanupLevel);
 
   const customPrompt = useSettingsStore((s) => s.customPrompts[kind]);
   const setCustomPrompt = useSettingsStore((s) => s.setCustomPrompt);
@@ -153,7 +155,11 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       const modelToUse = isCloudMode ? cleanupModel || "auto" : cleanupModel;
 
       const previous = customPrompt;
-      setCustomPrompt(kind, editedPrompt);
+      const promptToTest =
+        kind === "cleanup" && !customPrompt
+          ? applyCleanupLevel(editedPrompt, cleanupLevel)
+          : editedPrompt;
+      setCustomPrompt(kind, promptToTest);
       try {
         const result = await ReasoningService.processText(testText, modelToUse, agentName, {
           disableThinking: useSettingsStore.getState().cleanupDisableThinking,
@@ -178,7 +184,9 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
   const isAgentAddressed = testText.toLowerCase().includes(agentName.toLowerCase());
   const isCustomPrompt = customPrompt.length > 0;
-  const currentPrompt = customPrompt || defaultPrompt;
+  const currentPrompt =
+    customPrompt ||
+    (kind === "cleanup" ? applyCleanupLevel(defaultPrompt, cleanupLevel) : defaultPrompt);
 
   const tabs = [
     { id: "current" as const, label: t("promptStudio.tabs.view"), icon: Eye },

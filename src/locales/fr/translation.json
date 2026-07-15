@@ -390,6 +390,7 @@
       "audioNotFound": "Fichier audio introuvable ou expiré",
       "noAiProcessing": "Aucun traitement IA n'a été appliqué à cette transcription",
       "rawTranscript": "Transcription brute",
+      "cleanupLevelApplied": "Nettoyage par IA : {{level}}",
       "discarded": {
         "show": "Afficher les abandonnées",
         "hide": "Masquer les abandonnées",
@@ -1335,6 +1336,29 @@
       }
     },
     "aiModels": {
+      "cleanupLevel": {
+        "title": "Niveau de nettoyage",
+        "description": "Choisissez le degré de modification par l’IA pour chaque dictée. Si l’historique est activé, la transcription brute est conservée avec le texte nettoyé.",
+        "customPromptOverride": "Votre invite de nettoyage personnalisée remplace le niveau de modification sélectionné.",
+        "options": {
+          "none": {
+            "title": "Aucun",
+            "description": "Conserver la transcription brute, erreurs comprises"
+          },
+          "light": {
+            "title": "Léger",
+            "description": "Supprimer les hésitations et corriger la grammaire"
+          },
+          "medium": {
+            "title": "Moyen",
+            "description": "Améliorer la clarté tout en préservant votre voix"
+          },
+          "high": {
+            "title": "Élevé",
+            "description": "Réécrire pour gagner en concision et en finition"
+          }
+        }
+      },
       "customSetup": "Configuration personnalisée",
       "customSetupDescription": "Utilisez votre propre fournisseur et clé API.",
       "description": "Corrige les transcriptions, gère les commandes et corrige les erreurs tout en préservant votre ton.",

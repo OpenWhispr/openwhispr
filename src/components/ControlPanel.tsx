@@ -542,7 +542,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
                     reasonedText,
-                    rawText
+                    rawText,
+                    s.cleanupLevel === "none" ? null : s.cleanupLevel
                   );
                   if (updated.success && updated.transcription) {
                     finalTranscription = updated.transcription;

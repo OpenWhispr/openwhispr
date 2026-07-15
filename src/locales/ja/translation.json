@@ -390,6 +390,7 @@
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
       "rawTranscript": "生の文字起こし",
+      "cleanupLevelApplied": "AIクリーンアップ：{{level}}",
       "discarded": {
         "show": "破棄したものを表示",
         "hide": "破棄したものを非表示",
@@ -1287,6 +1288,17 @@
       }
     },
     "aiModels": {
+      "cleanupLevel": {
+        "title": "クリーンアップレベル",
+        "description": "各音声入力に適用する AI 編集の強さを選びます。履歴が有効な場合、元の文字起こしは整形後のテキストと一緒に保存されます。",
+        "customPromptOverride": "カスタムクリーンアッププロンプトは、選択した編集レベルより優先されます。",
+        "options": {
+          "none": { "title": "なし", "description": "誤りを含む元の文字起こしを保持" },
+          "light": { "title": "軽め", "description": "フィラーを除き、文法を修正" },
+          "medium": { "title": "標準", "description": "話し方を保ちながら明瞭さを改善" },
+          "high": { "title": "強め", "description": "簡潔で洗練された文章に書き換え" }
+        }
+      },
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",
       "description": "文字起こしのクリーンアップ、コマンド処理、エラー修正を行いながら、あなたの話し方を維持します。",

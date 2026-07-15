@@ -27,6 +27,11 @@ import type {
   ChatAgentSettings,
 } from "../hooks/useSettings";
 import type { Snippet } from "../utils/snippets";
+import {
+  getCleanupLevelForEnabled,
+  normalizeCleanupLevel,
+  type CleanupLevel,
+} from "../config/cleanupLevels";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -55,6 +60,14 @@ function readStringArray(key: string, fallback: string[]): string[] {
   } catch {
     return fallback;
   }
+}
+
+function readInitialCleanupState(): Pick<CleanupSettings, "cleanupLevel" | "useCleanupModel"> {
+  const cleanupLevel = normalizeCleanupLevel(
+    readString("cleanupLevel", ""),
+    readBoolean("useCleanupModel", true)
+  );
+  return { cleanupLevel, useCleanupModel: cleanupLevel !== "none" };
 }
 
 // One-time migration for legacy `meetingFollows{Transcription,Reasoning}` flags.
@@ -559,6 +572,7 @@ export interface SettingsState
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
+  setCleanupLevel: (level: CleanupLevel) => void;
   setUseDictationAgent: (value: boolean) => void;
   setCleanupModel: (value: string) => void;
   setCleanupProvider: (value: string) => void;
@@ -904,7 +918,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
-  useCleanupModel: readBoolean("useCleanupModel", true),
+  ...readInitialCleanupState(),
   useDictationAgent: readBoolean("useDictationAgent", true),
   cleanupModel: readString("cleanupModel", ""),
   cleanupProvider: readString("cleanupProvider", "openai"),
@@ -1251,7 +1265,24 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupCloudBaseUrl: createStringSetter("cleanupCloudBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
   setAutoGenerateNoteTitle: createBooleanSetter("autoGenerateNoteTitle"),
-  setUseCleanupModel: createBooleanSetter("useCleanupModel"),
+  setUseCleanupModel: (value: boolean) => {
+    const currentLevel = get().cleanupLevel;
+    const cleanupLevel = getCleanupLevelForEnabled(value, currentLevel);
+    if (isBrowser) {
+      localStorage.setItem("useCleanupModel", String(value));
+      localStorage.setItem("cleanupLevel", cleanupLevel);
+    }
+    set({ useCleanupModel: value, cleanupLevel });
+  },
+  setCleanupLevel: (level: CleanupLevel) => {
+    const cleanupLevel = normalizeCleanupLevel(level);
+    const useCleanupModel = cleanupLevel !== "none";
+    if (isBrowser) {
+      localStorage.setItem("cleanupLevel", cleanupLevel);
+      localStorage.setItem("useCleanupModel", String(useCleanupModel));
+    }
+    set({ cleanupLevel, useCleanupModel });
+  },
   setUseDictationAgent: createBooleanSetter("useDictationAgent"),
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
@@ -1717,7 +1748,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => {
     const s = useSettingsStore.getState();
-    if (settings.useCleanupModel !== undefined) s.setUseCleanupModel(settings.useCleanupModel);
+    if (settings.cleanupLevel !== undefined) s.setCleanupLevel(settings.cleanupLevel);
+    else if (settings.useCleanupModel !== undefined) s.setUseCleanupModel(settings.useCleanupModel);
     if (settings.useDictationAgent !== undefined)
       s.setUseDictationAgent(settings.useDictationAgent);
     if (settings.cleanupModel !== undefined) s.setCleanupModel(settings.cleanupModel);
@@ -2328,6 +2360,25 @@ export async function initializeSettings(): Promise<void> {
 
     const { key, newValue } = event;
 
+    if (key === "cleanupLevel") {
+      const cleanupLevel = normalizeCleanupLevel(newValue);
+      useSettingsStore.setState({
+        cleanupLevel,
+        useCleanupModel: cleanupLevel !== "none",
+      });
+      return;
+    }
+
+    if (key === "useCleanupModel") {
+      const useCleanupModel = newValue === "true";
+      const currentLevel = useSettingsStore.getState().cleanupLevel;
+      useSettingsStore.setState({
+        useCleanupModel,
+        cleanupLevel: getCleanupLevelForEnabled(useCleanupModel, currentLevel),
+      });
+      return;
+    }
+
     if (key.startsWith("customPrompt.")) {
       const kind = key.slice("customPrompt.".length) as PromptKind;
       if (!PROMPT_KIND_LIST.includes(kind)) return;
@@ -2386,6 +2437,14 @@ export async function initializeSettings(): Promise<void> {
   // Sync settings pushed from main process (e.g., hotkey changed in control panel)
   window.electronAPI?.onSettingUpdated?.((data: { key: string; value: unknown }) => {
     const state = useSettingsStore.getState();
+    if (data.key === "cleanupLevel" && typeof data.value === "string") {
+      state.setCleanupLevel(normalizeCleanupLevel(data.value));
+      return;
+    }
+    if (data.key === "useCleanupModel" && typeof data.value === "boolean") {
+      state.setUseCleanupModel(data.value);
+      return;
+    }
     if (
       data.key in state &&
       typeof (state as unknown as Record<string, unknown>)[data.key] !== "function"

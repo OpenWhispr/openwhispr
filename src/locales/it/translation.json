@@ -390,6 +390,7 @@
       "audioNotFound": "File audio non trovato o scaduto",
       "noAiProcessing": "Nessuna elaborazione IA applicata a questa trascrizione",
       "rawTranscript": "Trascrizione grezza",
+      "cleanupLevelApplied": "Pulizia IA: {{level}}",
       "discarded": {
         "show": "Mostra scartate",
         "hide": "Nascondi scartate",
@@ -1287,6 +1288,26 @@
       }
     },
     "aiModels": {
+      "cleanupLevel": {
+        "title": "Livello di pulizia",
+        "description": "Scegli quanto l’IA deve modificare ogni dettatura. Quando la cronologia è attiva, la trascrizione originale viene conservata insieme al testo ripulito.",
+        "customPromptOverride": "Il prompt di pulizia personalizzato sostituisce il livello di modifica selezionato.",
+        "options": {
+          "none": {
+            "title": "Nessuno",
+            "description": "Mantieni la trascrizione originale, inclusi gli errori"
+          },
+          "light": {
+            "title": "Leggero",
+            "description": "Rimuovi i riempitivi e correggi la grammatica"
+          },
+          "medium": {
+            "title": "Medio",
+            "description": "Migliora la chiarezza preservando la tua voce"
+          },
+          "high": { "title": "Alto", "description": "Riscrivi per brevità e rifinitura" }
+        }
+      },
       "customSetup": "Configurazione personalizzata",
       "customSetupDescription": "Usa il tuo provider e la tua chiave API.",
       "description": "Correggi le trascrizioni, gestisci i comandi e risolvi gli errori preservando il tuo tono.",

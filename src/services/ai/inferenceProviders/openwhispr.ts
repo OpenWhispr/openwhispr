@@ -1,6 +1,8 @@
 import type { InferenceProvider } from "./types";
 import { withSessionRefresh } from "../../../lib/auth";
 import { getSettings } from "../../../stores/settingsStore";
+import { getDefaultPromptText } from "../../../config/prompts";
+import { getCleanupPromptOverride } from "../../../config/cleanupLevels";
 import logger from "../../../utils/logger";
 
 export const openwhisprProvider: InferenceProvider = {
@@ -8,9 +10,14 @@ export const openwhisprProvider: InferenceProvider = {
   async call({ text, model, agentName, config, ctx }) {
     logger.logReasoning("OPENWHISPR_START", { model, agentName });
 
+    const settings = getSettings();
     const customPrompt = config.systemPrompt
       ? undefined
-      : getSettings().customPrompts.cleanup || undefined;
+      : getCleanupPromptOverride(
+          settings.customPrompts.cleanup,
+          settings.cleanupLevel,
+          getDefaultPromptText("cleanup", ctx.getUiLanguage())
+        );
 
     const result = await withSessionRefresh(async () => {
       const res = await window.electronAPI?.cloudReason?.(text, {

@@ -2408,7 +2408,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async saveTranscription(text, rawText = null, { clientTranscriptionId } = {}) {
-    if (!getSettings().dataRetentionEnabled) {
+    const settings = getSettings();
+    if (!settings.dataRetentionEnabled) {
       logger.debug("Skipping transcription save — data retention disabled", {}, "audio");
       this.lastAudioBlob = null;
       this.lastAudioMetadata = null;
@@ -2418,6 +2419,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       const result = await window.electronAPI.saveTranscription(text, rawText, {
         clientTranscriptionId,
+        cleanupLevel:
+          rawText !== null && text !== rawText && settings.useCleanupModel
+            ? settings.cleanupLevel
+            : null,
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
