@@ -153,11 +153,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteAction: (id) => ipcRenderer.invoke("db-delete-action", id),
 
   // Audio file operations
-  selectAudioFile: () => ipcRenderer.invoke("select-audio-file"),
+  selectAudioFile: (options) => ipcRenderer.invoke("select-audio-file", options),
   getFileSize: (filePath) => ipcRenderer.invoke("get-file-size", filePath),
   transcribeAudioFile: (filePath, options) =>
     ipcRenderer.invoke("transcribe-audio-file", filePath, options),
-  getPathForFile: (file) => webUtils.getPathForFile(file),
+  getPathForFile: (file) => {
+    const filePath = webUtils.getPathForFile(file);
+    // Register real dropped-file paths so the main-process audio allowlist accepts them.
+    if (filePath) ipcRenderer.send("approve-audio-path", filePath);
+    return filePath;
+  },
+
+  // URL audio download
+  downloadUrlAudio: (url, downloadId) => ipcRenderer.invoke("download-url-audio", url, downloadId),
+  cancelUrlDownload: (downloadId) => ipcRenderer.invoke("cancel-url-download", downloadId),
+  deleteTempFile: (filePath) => ipcRenderer.invoke("delete-temp-file", filePath),
+  onUrlDownloadProgress: registerListener(
+    "url-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
 
   onNoteAdded: (callback) => {
     const listener = (_event, note) => callback?.(note);
@@ -284,6 +298,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDiarizationModelStatus: () => ipcRenderer.invoke("get-diarization-model-status"),
   deleteDiarizationModels: () => ipcRenderer.invoke("delete-diarization-models"),
   cancelDiarizationDownload: () => ipcRenderer.invoke("cancel-diarization-download"),
+  diarizeAudioFile: (filePath, options) =>
+    ipcRenderer.invoke("diarize-audio-file", filePath, options),
+  mergeSpeakerText: (segments, text, duration) =>
+    ipcRenderer.invoke("merge-speaker-text", { segments, text, duration }),
   onDiarizationDownloadProgress: registerListener(
     "diarization-download-progress",
     (callback) => (_event, data) => callback(data)
@@ -910,18 +928,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getMD5Hash: (text) => ipcRenderer.invoke("get-md5-hash", text),
 
   // Google Calendar event listeners
-  onGcalMeetingStarting: registerListener(
-    "gcal-meeting-starting",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onGcalMeetingEnded: registerListener(
-    "gcal-meeting-ended",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onGcalStartRecording: registerListener(
-    "gcal-start-recording",
-    (callback) => (_event, data) => callback(data)
-  ),
   onGcalConnectionChanged: registerListener(
     "gcal-connection-changed",
     (callback) => (_event, data) => callback(data)
@@ -943,14 +949,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-set-session-speaker-config", config),
   getWhisperVadConfig: () => ipcRenderer.invoke("whisper-vad-get-config"),
   setWhisperVadConfig: (config) => ipcRenderer.invoke("whisper-vad-set-config", config),
-  onMeetingDetected: registerListener(
-    "meeting-detected",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onMeetingDetectedStartRecording: registerListener(
-    "meeting-detected-start-recording",
-    (callback) => (_event, data) => callback(data)
-  ),
   onMeetingNotificationData: registerListener(
     "meeting-notification-data",
     (callback) => (_event, data) => callback(data)

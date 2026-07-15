@@ -60,6 +60,7 @@ export interface OnboardingSettings {
 export interface MicrophoneSettings {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
+  selectedMicDeviceLabel: string;
 }
 
 export interface ApiKeySettings {
@@ -324,8 +325,9 @@ function useSettingsInternal() {
     setPanelStartPosition: store.setPanelStartPosition,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
+    selectedMicDeviceLabel: store.selectedMicDeviceLabel,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
-    setSelectedMicDeviceId: store.setSelectedMicDeviceId,
+    setSelectedMicDevice: store.setSelectedMicDevice,
     autoLearnCorrections,
     setAutoLearnCorrections,
     showTranscriptionPreview: store.showTranscriptionPreview,

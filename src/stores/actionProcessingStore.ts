@@ -3,6 +3,7 @@ import reasoningService from "../services/ReasoningService";
 import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
+import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
 import type { ActionItem } from "../types/electron";
 
 export type ActionProcessingStatus = "idle" | "processing" | "success";
@@ -94,6 +95,7 @@ export interface RunActionOptions {
 
 export interface RunActionLabels {
   noModel: string;
+  noEndpoint: string;
   actionFailed: string;
 }
 
@@ -117,6 +119,14 @@ export function runBackgroundAction(
     return;
   }
 
+  const settings = getSettings();
+  const noteFormatting = selectResolvedNoteFormatting(settings);
+  // A self-hosted config without a URL would fall through to a cloud provider.
+  if (!options.isCloudMode && noteFormatting.mode === "self-hosted" && !noteFormatting.remoteUrl) {
+    pushErrorEvent({ noteId, message: labels.noEndpoint });
+    return;
+  }
+
   cancelledFlags.set(noteId, false);
   processingFlags.set(noteId, true);
   setNoteState(noteId, { status: "processing", actionName: action.name });
@@ -124,19 +134,11 @@ export function runBackgroundAction(
   (async () => {
     try {
       const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
-      const settings = getSettings();
-      const noteFormatting = selectResolvedNoteFormatting(settings);
-      const provider = options.isCloudMode
-        ? "openwhispr"
-        : noteFormatting.mode === "providers"
-          ? noteFormatting.provider || undefined
-          : undefined;
-      const isCustom = provider === "custom";
-      const providerOverrides = {
-        provider,
-        baseUrl: isCustom ? noteFormatting.cloudBaseUrl || undefined : undefined,
-        customApiKey: isCustom ? settings.noteFormattingCustomApiKey || undefined : undefined,
-      };
+      const providerOverrides = buildNoteFormattingOverrides(
+        noteFormatting,
+        options.isCloudMode,
+        settings.noteFormattingCustomApiKey
+      );
       const systemPrompt = appendDictionarySuffix(
         basePrompt + action.prompt,
         options.isMeetingNote ? settings.customDictionary : undefined,

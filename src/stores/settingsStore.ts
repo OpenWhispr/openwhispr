@@ -623,7 +623,7 @@ export interface SettingsState
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
-  setSelectedMicDeviceId: (value: string) => void;
+  setSelectedMicDevice: (deviceId: string, label: string) => void;
 
   setTheme: (value: "light" | "dark" | "auto") => void;
   setCloudBackupEnabled: (value: boolean) => void;
@@ -954,6 +954,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   preferBuiltInMic: readBoolean("preferBuiltInMic", true),
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
+  selectedMicDeviceLabel: readString("selectedMicDeviceLabel", ""),
 
   theme: (() => {
     const v = readString("theme", "auto");
@@ -1469,7 +1470,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setPreferBuiltInMic: createBooleanSetter("preferBuiltInMic"),
-  setSelectedMicDeviceId: createStringSetter("selectedMicDeviceId"),
+  setSelectedMicDevice: (deviceId: string, label: string) => {
+    if (isBrowser) {
+      localStorage.setItem("selectedMicDeviceLabel", label);
+      localStorage.setItem("selectedMicDeviceId", deviceId);
+    }
+    set({ selectedMicDeviceId: deviceId, selectedMicDeviceLabel: label });
+  },
 
   setTheme: (value: "light" | "dark" | "auto") => {
     if (isBrowser) localStorage.setItem("theme", value);

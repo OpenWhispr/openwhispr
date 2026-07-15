@@ -403,6 +403,7 @@ function initializeCoreManagers() {
     databaseManager
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
+  googleCalendarManager.meetingDetectionEngine = meetingDetectionEngine;
   updateManager = new UpdateManager();
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();
@@ -511,7 +512,7 @@ app.on("open-url", (event, url) => {
     return;
   }
 
-  if (url.includes("/invitations/")) {
+  if (isInvitationDeepLink(url)) {
     handleInvitationDeepLink(url);
     return;
   }
@@ -523,6 +524,10 @@ app.on("open-url", (event, url) => {
     windowManager.controlPanelWindow.focus();
   }
 });
+
+function isInvitationDeepLink(url) {
+  return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
+}
 
 function handleInvitationDeepLink(deepLinkUrl) {
   try {
@@ -1043,7 +1048,6 @@ async function startApp() {
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 
-  updateManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   updateManager.checkForUpdatesOnStartup();
 
   if (process.platform === "darwin") {
@@ -1139,6 +1143,27 @@ async function startApp() {
 
       // Fn release also stops compound push-to-talk for Fn+F-key hotkeys
       windowManager.handleMacPushModifierUp("fn");
+    });
+
+    // Another key was pressed while Fn was held — user is using Fn as a
+    // navigation modifier (Fn+Arrow → Home, Fn+Backspace → Forward Delete, etc.).
+    // Cancel any bare-Fn push-to-talk in progress instead of transcribing noise.
+    // Only the bare-Fn path uses globeKeyDownTime/globeKeyIsRecording, so compound
+    // Fn-hotkey push-to-talk and tap mode are untouched.
+    globeKeyManager.on("globe-interrupted", () => {
+      if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
+        return;
+      }
+      const wasRecording = globeKeyIsRecording;
+      debugLogger?.debug("[Globe] Fn+key interrupted push-to-talk", { wasRecording });
+      globeKeyDownTime = 0;
+      globeKeyIsRecording = false;
+      globeLastStopTime = Date.now();
+      if (wasRecording) {
+        windowManager.sendCancelDictation();
+      } else {
+        windowManager.hideDictationPanel();
+      }
     });
 
     globeKeyManager.on("modifier-up", (modifier) => {
@@ -1482,7 +1507,7 @@ if (gotSingleInstanceLock) {
     if (url) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
-      } else if (url.includes("/invitations/")) {
+      } else if (isInvitationDeepLink(url)) {
         handleInvitationDeepLink(url);
       } else {
         void handleOAuthDeepLink(url);

@@ -494,6 +494,17 @@ class WindowManager {
     }
   }
 
+  sendCancelDictation() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-hotkey-pressed");
+      this._isDictatingToggle = false;
+      this.meetingDetectionEngine?.setUserRecording(false);
+    }
+  }
+
   getActivationMode() {
     return this._cachedActivationMode;
   }
@@ -1167,6 +1178,9 @@ class WindowManager {
       ...NOTIFICATION_WINDOW_CONFIG,
       ...position,
     });
+
+    // Keep the prompt visible to the user but out of screen shares and recordings.
+    this.notificationWindow.setContentProtection(true);
 
     if (process.platform === "darwin") {
       this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });

@@ -277,11 +277,6 @@
       "title": "Meeting-Notizen",
       "description": "Erfasse und fasse deine Meetings zusammen",
       "autoDetect": "OpenWhispr erkennt automatisch, wenn du in einem Meeting bist, und bietet an, Notizen zu starten — ohne dich wird nichts aufgenommen.",
-      "notification": {
-        "title": "Meeting erkannt",
-        "body": "Es klingt, als wärst du in einem Meeting. Notizen aufnehmen?",
-        "cta": "Aufnahme starten"
-      },
       "hotkeyLabel": "Meeting-Hotkey",
       "hotkeyHint": "Optional — drücke ihn in jedem Meeting, um sofort eine Notiz zu starten."
     },
@@ -1925,7 +1920,9 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Schnelle mehrsprachige ASR mit automatischer Spracherkennung (25 Sprachen)",
-        "parakeet_unified_en_0_6b": "Englisch-only ASR mit Spitzen-Genauigkeit (5,91% durchschnittliche WER)"
+        "parakeet_unified_en_0_6b": "Englisch-only ASR mit Spitzen-Genauigkeit (5,91% durchschnittliche WER)",
+        "nemotron_speech_streaming_en_0_6b": "Englische Streaming-ASR von NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "Mehrsprachige Streaming-ASR von NVIDIA Nemotron mit automatischer Spracherkennung (15 Sprachen)"
       },
       "whisper": {
         "tiny": "Am schnellsten, geringere Qualität",
@@ -2029,7 +2026,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Googles neuestes multimodales Modell, starkes Reasoning",
         "gemma_gemma_4_e2b_it_q4_k_m": "Kompaktes Gemma 4 von Google, schnell und effizient",
         "gemma_gemma_3_12b_it_q4_k_m": "Googles Mittelklasse-Modell, starkes Reasoning",
-        "gemma_gemma_3_1b_it_q4_k_m": "Ultraschnelles Google-Modell, ideal für kurze Diktat-Bereinigung"
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultraschnelles Google-Modell, ideal für kurze Diktat-Bereinigung",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Effizientes On-Device-Modell von Liquid AI, hervorragende Anweisungsbefolgung",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE von Liquid AI, hohe Qualität mit nur 1,5B aktiven Parametern",
+        "liquidai_lfm2_2_6b_q4_k_m": "Ausgewogenes LFM2 für hochwertigere Bereinigung",
+        "liquidai_lfm2_5_350m_q8_0": "Ultraleichtes Modell für schnelle Diktatbereinigung",
+        "liquidai_lfm2_5_230m_q8_0": "Winziges Modell, sofortige Bereinigung auf bescheidener Hardware"
       },
       "diarization": {
         "segmentation": "Sprachgrenzerkennung für die Sprecherzuordnung",
@@ -2212,7 +2214,40 @@
       "switchToCloudForLargeFiles": "Wechsle zu OpenWhispr Cloud, um diese Datei zu transkribieren.",
       "createAccount": "Konto erstellen",
       "upgrade": "Upgraden",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "oder",
+      "urlPlaceholder": "YouTube- oder Audio-URL einfügen",
+      "urlDownloading": "Audio wird heruntergeladen...",
+      "urlResolving": "URL wird aufgelöst...",
+      "urlInvalid": "Ungültige URL. Fügen Sie einen YouTube-Link oder eine direkte Audio-URL ein.",
+      "urlVideoUnavailable": "Dieses Video ist nicht verfügbar. Es ist möglicherweise privat, entfernt oder geografisch gesperrt.",
+      "urlPlaylistNotSupported": "Playlists werden nicht unterstützt. Fügen Sie die URL eines einzelnen Videos ein.",
+      "urlContentTypeInvalid": "Diese URL verweist nicht auf eine Audio- oder Videodatei.",
+      "urlDownloadFailed": "Download fehlgeschlagen. Überprüfen Sie die URL und versuchen Sie es erneut.",
+      "urlCancelDownload": "Download abbrechen",
+      "addToQueue": "Zur Warteschlange hinzufügen",
+      "queueProgress": "{{completed}}/{{total}} abgeschlossen",
+      "cancelAll": "Alle abbrechen",
+      "clearQueue": "Leeren",
+      "pasteUrls": "URLs einfügen (eine pro Zeile)",
+      "speakerDetection": "Sprechererkennung",
+      "speakerDetectionDescription": "Verschiedene Sprecher im Audio identifizieren",
+      "numSpeakersPlaceholder": "Automatisch erkennen",
+      "downloadingModels": "Modelle werden heruntergeladen...",
+      "openaiDiarizeNote": "Überschreibt Ihr Transkriptionsmodell mit gpt-4o-transcribe-diarize, dem einzigen OpenAI-Modell mit Sprechererkennung. Die Kosten können von Ihrem gewählten Modell abweichen.",
+      "mistralDiarizeNote": "Sprechererkennung ohne Zusatzkosten mit Voxtral enthalten.",
+      "groqDiarizeNote": "Sprechererkennung ist mit Groq nicht verfügbar. Stattdessen wird die lokale Diarisierung verwendet.",
+      "batchCancelled": "Abgebrochen",
+      "batchTranscriptionFailed": "Transkription fehlgeschlagen",
+      "batchSaveFailed": "Notiz konnte nicht gespeichert werden",
+      "batchUnknownError": "Unbekannter Fehler",
+      "removeFromQueue": "Aus Warteschlange entfernen",
+      "diarizationRunsLocally": "Die Sprechererkennung läuft lokal auf Ihrem Gerät.",
+      "urlSubmit": "Link hinzufügen",
+      "urlsSkipped": "Einige Links konnten nicht hinzugefügt werden ({{n}})",
+      "queueFailed": "{{n}} fehlgeschlagen",
+      "urlFileTooLarge": "Die Datei ist zu groß zum Herunterladen. Die maximale Größe beträgt 500 MB.",
+      "urlYoutubeBlocked": "YouTube blockiert Downloads aus Ihrem Netzwerk vorübergehend. Versuchen Sie es später erneut."
     },
     "meeting": {
       "title": "Besprechungsnotizen",
@@ -2259,6 +2294,7 @@
       },
       "errors": {
         "noModel": "Kein KI-Modell ausgewählt. Konfigurieren Sie eins in den Einstellungen.",
+        "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen.",
         "actionFailed": "Aktion fehlgeschlagen"
       }
     },
@@ -2952,5 +2988,15 @@
       "successDescription": "Willkommen bei {{name}}.",
       "errorTitle": "Einladung konnte nicht angenommen werden"
     }
+  },
+  "meetingNotification": {
+    "title": "Meeting erkannt",
+    "body": {
+      "detected": "Es klingt, als wärst du in einem Meeting. Notizen aufnehmen?",
+      "starting": "Dein Meeting beginnt gleich. Notizen aufnehmen?",
+      "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
+    },
+    "start": "Aufnahme starten",
+    "join": "Beitreten"
   }
 }

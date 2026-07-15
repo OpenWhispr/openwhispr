@@ -277,11 +277,6 @@
       "title": "Notas de reuniones",
       "description": "Captura y resume tus reuniones",
       "autoDetect": "OpenWhispr detecta automáticamente cuando estás en una reunión y te ofrece iniciar notas; no se graba nada sin tu permiso.",
-      "notification": {
-        "title": "Reunión detectada",
-        "body": "Parece que estás en una reunión. ¿Quieres tomar notas?",
-        "cta": "Empezar a grabar"
-      },
       "hotkeyLabel": "Atajo de reunión",
       "hotkeyHint": "Opcional: púlsalo en cualquier reunión para iniciar una nota al instante."
     },
@@ -1973,7 +1968,9 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingüe rápido con detección automática de idioma (25 idiomas)",
-        "parakeet_unified_en_0_6b": "ASR solo en inglés con precisión de vanguardia (5,91% WER promedio)"
+        "parakeet_unified_en_0_6b": "ASR solo en inglés con precisión de vanguardia (5,91% WER promedio)",
+        "nemotron_speech_streaming_en_0_6b": "ASR en inglés por streaming de NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "ASR multilingüe por streaming de NVIDIA Nemotron con detección automática de idioma (15 idiomas)"
       },
       "whisper": {
         "tiny": "El más rápido, menor calidad",
@@ -2077,7 +2074,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Último multimodal de Google, razonamiento avanzado",
         "gemma_gemma_4_e2b_it_q4_k_m": "Gemma 4 compacto de Google, rápido y eficiente",
         "gemma_gemma_3_12b_it_q4_k_m": "Modelo de gama media de Google, razonamiento sólido",
-        "gemma_gemma_3_1b_it_q4_k_m": "Modelo Google ultrarrápido, ideal para limpieza de dictado corto"
+        "gemma_gemma_3_1b_it_q4_k_m": "Modelo Google ultrarrápido, ideal para limpieza de dictado corto",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Modelo eficiente de Liquid AI, excelente seguimiento de instrucciones",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE de Liquid AI, alta calidad con solo 1.5B parámetros activos",
+        "liquidai_lfm2_2_6b_q4_k_m": "LFM2 equilibrado para una limpieza de mayor calidad",
+        "liquidai_lfm2_5_350m_q8_0": "Modelo ultraligero para limpieza rápida de dictado",
+        "liquidai_lfm2_5_230m_q8_0": "Modelo diminuto, limpieza instantánea en hardware modesto"
       },
       "diarization": {
         "segmentation": "Detección de límites del habla para la identificación de hablantes",
@@ -2260,7 +2262,40 @@
       "switchToCloudForLargeFiles": "Cambia a OpenWhispr Cloud para transcribir este archivo.",
       "createAccount": "Crear cuenta",
       "upgrade": "Mejorar plan",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "o",
+      "urlPlaceholder": "Pega una URL de YouTube o de audio",
+      "urlDownloading": "Descargando audio...",
+      "urlResolving": "Resolviendo URL...",
+      "urlInvalid": "URL no válida. Pega un enlace de YouTube o una URL directa de archivo de audio.",
+      "urlVideoUnavailable": "Este video no está disponible. Puede ser privado, eliminado o bloqueado geográficamente.",
+      "urlPlaylistNotSupported": "Las listas de reproducción no son compatibles. Pega la URL de un solo video.",
+      "urlContentTypeInvalid": "Esta URL no apunta a un archivo de audio o video.",
+      "urlDownloadFailed": "Error en la descarga. Verifica la URL e inténtalo de nuevo.",
+      "urlCancelDownload": "Cancelar descarga",
+      "addToQueue": "Agregar a la cola",
+      "queueProgress": "{{completed}}/{{total}} completados",
+      "cancelAll": "Cancelar todo",
+      "clearQueue": "Limpiar",
+      "pasteUrls": "Pegar URLs (una por línea)",
+      "speakerDetection": "Detección de hablantes",
+      "speakerDetectionDescription": "Identificar diferentes hablantes en el audio",
+      "numSpeakersPlaceholder": "Detección automática",
+      "downloadingModels": "Descargando modelos...",
+      "openaiDiarizeNote": "Reemplaza tu modelo de transcripción con gpt-4o-transcribe-diarize, el único modelo de OpenAI con detección de hablantes. Los costos pueden diferir de tu modelo seleccionado.",
+      "mistralDiarizeNote": "Detección de hablantes incluida sin costo adicional con Voxtral.",
+      "groqDiarizeNote": "La detección de hablantes no está disponible con Groq. Se usará la diarización local en su lugar.",
+      "batchCancelled": "Cancelado",
+      "batchTranscriptionFailed": "Error en la transcripción",
+      "batchSaveFailed": "Error al guardar la nota",
+      "batchUnknownError": "Error desconocido",
+      "removeFromQueue": "Eliminar de la cola",
+      "diarizationRunsLocally": "La detección de hablantes se ejecuta localmente en tu dispositivo.",
+      "urlSubmit": "Añadir enlace",
+      "urlsSkipped": "Algunos enlaces no se pudieron añadir ({{n}})",
+      "queueFailed": "{{n}} con error",
+      "urlFileTooLarge": "El archivo es demasiado grande para descargar. El tamaño máximo es 500 MB.",
+      "urlYoutubeBlocked": "YouTube está bloqueando temporalmente las descargas desde tu red. Inténtalo de nuevo más tarde."
     },
     "meeting": {
       "title": "Notas de reunión",
@@ -2307,6 +2342,7 @@
       },
       "errors": {
         "noModel": "No hay modelo de IA seleccionado. Configura uno en Ajustes.",
+        "noEndpoint": "No hay URL del servidor autoalojado configurada. Configura una en Ajustes.",
         "actionFailed": "La acción falló"
       }
     },
@@ -2952,5 +2988,15 @@
       "successDescription": "Bienvenido a {{name}}.",
       "errorTitle": "No se pudo aceptar la invitación"
     }
+  },
+  "meetingNotification": {
+    "title": "Reunión detectada",
+    "body": {
+      "detected": "Parece que estás en una reunión. ¿Quieres tomar notas?",
+      "starting": "Tu reunión está por comenzar. ¿Quieres tomar notas?",
+      "underway": "Parece que tu reunión ya está en curso. ¿Quieres tomar notas?"
+    },
+    "start": "Empezar a grabar",
+    "join": "Unirse"
   }
 }

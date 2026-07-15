@@ -179,6 +179,12 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **Available Models**:
   - `parakeet-tdt-0.6b-v3`: Multilingual (25 languages), ~680MB
   - `parakeet-unified-en-0.6b`: English-only, ~631MB, state-of-the-art EN accuracy (5.91% avg WER on Open ASR Leaderboard)
+  - `nemotron-speech-streaming-en-0.6b`: English-only, ~632MB, cache-aware streaming FastConformer (`"runtime": "online"` in the registry)
+  - `nemotron-3.5-asr-streaming-0.6b`: Multilingual (15 transcription-ready languages, auto detection), ~650MB, cache-aware streaming FastConformer (`"runtime": "online"`)
+
+- **Runtimes**: Models are `offline` (default) or `online` per their registry `runtime` field. Offline models use the bundled `sherpa-onnx-ws-{platform}-{arch}` (offline websocket server); online models use `sherpa-onnx-online-ws-{platform}-{arch}` (online websocket server). Both are downloaded by `scripts/download-sherpa-onnx.js`. The final transcription path still records-then-transcribes; audio is chunked over the websocket and partial/final JSON results are merged by `parakeetWsResult.js`.
+
+- **Live Transcription Preview**: When the preview toggle is on and an online-runtime model is selected, the preview uses a persistent websocket stream (`createOnlineStream` in `parakeetWsServer.js`): worklet PCM is fed as it is captured (`sendPcm16` converts to the float32 wire format inside the ws layer), and partial results update the preview window live (replacing text via `showTranscriptionPreview`). Offline models keep the 1.5s buffered-chunk path (appending via `appendTranscriptionPreview`). If the stream can't start, the preview falls back to the chunked path. Tests: `test/helpers/parakeetOnlineStream.test.js` (mock websocket server).
 
 - **Download URLs**: Models from sherpa-onnx ASR models release on GitHub
 
@@ -560,13 +566,21 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 - Linux: `pactl subscribe` — PulseAudio source-output events
 - All platforms: Graceful fallback to polling if native binary/command unavailable
 
+**Calendar Reminders** (scheduled meetings):
+
+- `GoogleCalendarManager` fires `meetingDetectionEngine.handleCalendarReminder(event)` 1 minute before the scheduled start (`MEETING_REMINDER_LEAD_MS`) — no native OS notifications; all meeting prompts use the in-app overlay so they survive Focus/DND and screen-share notification muting
+- Calendar-sourced prompts show a Join primary action when the event has a meeting link (`getMeetingJoinUrl` in `src/helpers/meetingJoinUrl.js`, shared with the renderer's Upcoming Meetings join button) — Join opens the link and starts the note
+
 **UX Rules**:
 
+- All prompts render in one always-on-top overlay window (`MeetingNotificationCard`), content-protected so it never appears in screen shares
+- Prompt copy is derived in the renderer from `{ variant, event, joinUrl }` (`meetingNotification.*` i18n keys); variants: `detected` (mic evidence), `starting` (calendar event not yet started), `underway` (event in progress)
+- Per-source notification prefs: `notifyCalendarReminders` gates calendar prompts, `notifyMeetingDetection` gates mic/process prompts
 - During recording (tap-to-talk or push-to-talk): ALL notifications suppressed
 - After recording: 2.5s cooldown before showing queued notifications
-- Multiple signals coalesced: process > audio priority, one notification shown
-- Calendar-aware: if imminent calendar event exists, notification shows event name
-- Active calendar meeting recording: all detections suppressed
+- Multiple signals coalesced: one overlay at a time; a newer prompt replaces the current one
+- Calendar-aware: if an ongoing or imminent calendar event exists, the prompt shows the event name and links the note to the event
+- Active meeting recording (meeting mode): all detections suppressed
 
 **Binary Distribution**:
 

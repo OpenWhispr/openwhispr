@@ -47,6 +47,46 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming.tar.bz2",
       "extractDir": "sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming",
       "descriptionKey": "models.descriptions.parakeet.parakeet_unified_en_0_6b"
+    },
+    "nemotron-speech-streaming-en-0.6b": {
+      "name": "Nemotron Speech Streaming EN 0.6B",
+      "description": "English streaming ASR from NVIDIA Nemotron",
+      "size": "632MB",
+      "sizeMb": 632,
+      "language": "en",
+      "supportedLanguages": ["en"],
+      "runtime": "online",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25.tar.bz2",
+      "extractDir": "sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25",
+      "descriptionKey": "models.descriptions.parakeet.nemotron_speech_streaming_en_0_6b"
+    },
+    "nemotron-3.5-asr-streaming-0.6b": {
+      "name": "Nemotron 3.5 ASR Streaming 0.6B",
+      "description": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)",
+      "size": "650MB",
+      "sizeMb": 650,
+      "language": "multilingual",
+      "supportedLanguages": [
+        "en",
+        "es",
+        "fr",
+        "it",
+        "pt",
+        "nl",
+        "de",
+        "tr",
+        "ru",
+        "ar",
+        "hi",
+        "ja",
+        "ko",
+        "vi",
+        "uk"
+      ],
+      "runtime": "online",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
+      "extractDir": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
+      "descriptionKey": "models.descriptions.parakeet.nemotron_3_5_asr_streaming_0_6b"
     }
   },
   "diarizationModels": {
@@ -1011,6 +1051,75 @@
           "hfRepo": "bartowski/google_gemma-3-1b-it-GGUF",
           "recommended": false,
           "descriptionKey": "models.descriptions.local.gemma_gemma_3_1b_it_q4_k_m"
+        }
+      ]
+    },
+    {
+      "id": "liquidai",
+      "name": "Liquid AI",
+      "baseUrl": "https://huggingface.co",
+      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
+      "models": [
+        {
+          "id": "lfm2.5-1.2b-instruct-q4_k_m",
+          "name": "LFM2.5 1.2B",
+          "size": "0.73GB",
+          "sizeBytes": 730895168,
+          "description": "Liquid AI's efficient on-device model, excellent instruction following",
+          "fileName": "LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 32768,
+          "hfRepo": "LiquidAI/LFM2.5-1.2B-Instruct-GGUF",
+          "recommended": true,
+          "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_1_2b_instruct_q4_k_m"
+        },
+        {
+          "id": "lfm2.5-8b-a1b-q4_k_m",
+          "name": "LFM2.5 8B MoE",
+          "size": "4.8GB",
+          "sizeBytes": 5155564768,
+          "description": "Liquid AI's MoE, high quality with only 1.5B active params",
+          "fileName": "LFM2.5-8B-A1B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 32768,
+          "hfRepo": "LiquidAI/LFM2.5-8B-A1B-GGUF",
+          "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_8b_a1b_q4_k_m"
+        },
+        {
+          "id": "lfm2-2.6b-q4_k_m",
+          "name": "LFM2 2.6B",
+          "size": "1.5GB",
+          "sizeBytes": 1563668704,
+          "description": "Balanced LFM2 for higher quality cleanup",
+          "fileName": "LFM2-2.6B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 32768,
+          "hfRepo": "LiquidAI/LFM2-2.6B-GGUF",
+          "descriptionKey": "models.descriptions.local.liquidai_lfm2_2_6b_q4_k_m"
+        },
+        {
+          "id": "lfm2.5-350m-q8_0",
+          "name": "LFM2.5 350M",
+          "size": "0.38GB",
+          "sizeBytes": 379217632,
+          "description": "Ultra-light model for fast dictation cleanup",
+          "fileName": "LFM2.5-350M-Q8_0.gguf",
+          "quantization": "q8_0",
+          "contextLength": 32768,
+          "hfRepo": "LiquidAI/LFM2.5-350M-GGUF",
+          "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_350m_q8_0"
+        },
+        {
+          "id": "lfm2.5-230m-q8_0",
+          "name": "LFM2.5 230M",
+          "size": "0.25GB",
+          "sizeBytes": 246598496,
+          "description": "Tiny model, instant cleanup on modest hardware",
+          "fileName": "LFM2.5-230M-Q8_0.gguf",
+          "quantization": "q8_0",
+          "contextLength": 32768,
+          "hfRepo": "LiquidAI/LFM2.5-230M-GGUF",
+          "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_230m_q8_0"
         }
       ]
     }

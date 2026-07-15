@@ -99,6 +99,7 @@ export interface ParakeetModelInfo {
   sizeMb: number;
   language: string;
   supportedLanguages: string[];
+  runtime?: "offline" | "online";
   recommended?: boolean;
   downloadUrl: string;
   extractDir: string;
@@ -373,6 +374,7 @@ export function getModelProvider(modelId: string): string {
       modelId.includes("qwen") ||
       modelId.includes("llama") ||
       modelId.includes("mistral") ||
+      modelId.includes("lfm2") ||
       modelId.includes("gpt-oss-20b-mxfp4")
     )
       return "local";

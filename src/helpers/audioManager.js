@@ -15,6 +15,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
+import { reconcileSavedMicSelection } from "./micSelectionRecovery";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
@@ -212,6 +213,7 @@ class AudioManager {
     // Otherwise wake-after-idle keeps requesting a stale deviceId that yields silence.
     this._onDeviceChange = () => {
       this.cachedMicDeviceId = null;
+      this.validatedSelectedMicDeviceId = null;
       this.micDriverWarmedUp = false;
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
@@ -232,6 +234,7 @@ class AudioManager {
     this.streamingTextResolve = null;
     this.streamingTextDebounce = null;
     this.cachedMicDeviceId = null;
+    this.validatedSelectedMicDeviceId = null;
     this.persistentAudioContext = null;
     this.workletModuleLoaded = false;
     this.workletBlobUrl = null;
@@ -352,8 +355,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async getAudioConstraints(forceDefaultMic = false) {
-    const { preferBuiltInMic: preferBuiltIn, selectedMicDeviceId: selectedDeviceId } =
-      getSettings();
+    const {
+      preferBuiltInMic: preferBuiltIn,
+      selectedMicDeviceId: selectedDeviceId,
+      selectedMicDeviceLabel: selectedDeviceLabel,
+    } = getSettings();
 
     // All browser audio processing disabled to avoid OS-level side-effects.
     // AGC off: Chromium's AGC on Windows mutates the system mic volume via WASAPI (#476).
@@ -407,8 +413,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (!preferBuiltIn && selectedDeviceId) {
-      logger.debug("Using selected microphone", { deviceId: selectedDeviceId }, "audio");
-      return { audio: { deviceId: { exact: selectedDeviceId }, ...noProcessing } };
+      let resolvedDeviceId = selectedDeviceId;
+
+      if (this.validatedSelectedMicDeviceId !== selectedDeviceId) {
+        try {
+          const reconciled = await reconcileSavedMicSelection(
+            selectedDeviceId,
+            selectedDeviceLabel,
+            "audio"
+          );
+          resolvedDeviceId = reconciled.deviceId;
+
+          if (reconciled.resolved) {
+            this.validatedSelectedMicDeviceId = resolvedDeviceId;
+          } else {
+            // Avoid enumerating on every recording while the saved device is
+            // unplugged. A devicechange event clears this cache when it returns.
+            this.validatedSelectedMicDeviceId = reconciled.labelsAvailable
+              ? selectedDeviceId
+              : null;
+          }
+        } catch (error) {
+          logger.debug(
+            "Failed to reconcile selected microphone",
+            { error: error.message },
+            "audio"
+          );
+        }
+      }
+
+      logger.debug("Using selected microphone", { deviceId: resolvedDeviceId }, "audio");
+      return { audio: { deviceId: { exact: resolvedDeviceId }, ...noProcessing } };
     }
 
     logger.debug("Using default microphone", {}, "audio");
@@ -2192,6 +2227,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const isSelfHosted = isSelfHostedTranscription(s);
     const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
 
+    // Never fall back to the cloud default for self-hosted — fail closed instead.
+    if (isSelfHosted) {
+      const normalizedRemote = normalizeBaseUrl(remoteUrl);
+      if (!normalizedRemote || !isSecureEndpoint(normalizedRemote)) {
+        throw new Error("Self-hosted transcription URL is invalid or unsupported");
+      }
+    }
+
     if (
       this.cachedTranscriptionEndpoint &&
       (this.cachedEndpointProvider !== currentProvider ||
@@ -2338,6 +2381,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         { error: error.message, stack: error.stack },
         "transcription"
       );
+      if (isSelfHosted) throw error;
       this.cachedTranscriptionEndpoint = API_ENDPOINTS.TRANSCRIPTION;
       this.cachedEndpointProvider = currentProvider;
       this.cachedEndpointBaseUrl = currentBaseUrl;

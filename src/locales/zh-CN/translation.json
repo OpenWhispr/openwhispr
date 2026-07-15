@@ -277,11 +277,6 @@
       "title": "会议笔记",
       "description": "捕捉并总结你的会议",
       "autoDetect": "OpenWhispr 会自动检测你是否在开会，并提议开始记录 — 未经你确认不会录制任何内容。",
-      "notification": {
-        "title": "检测到会议",
-        "body": "你似乎正在开会。要开始记录吗？",
-        "cta": "开始录制"
-      },
       "hotkeyLabel": "会议快捷键",
       "hotkeyHint": "可选 — 在任何会议中按下即可立即开始记录。"
     },
@@ -1920,7 +1915,9 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",
-        "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）"
+        "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）",
+        "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron 英语流式语音识别",
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多语言流式语音识别，自动语言检测（15 种语言）"
       },
       "whisper": {
         "tiny": "最快速度，较低质量",
@@ -2024,7 +2021,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Google 最新多模态模型，强大推理能力",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google 紧凑型 Gemma 4，快速高效",
         "gemma_gemma_3_12b_it_q4_k_m": "Google 中型模型，强推理能力",
-        "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理"
+        "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AI 高效端侧模型，指令遵循出色",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AI 的 MoE 模型，仅 1.5B 激活参数即可实现高质量",
+        "liquidai_lfm2_2_6b_q4_k_m": "更高质量清理的均衡 LFM2 模型",
+        "liquidai_lfm2_5_350m_q8_0": "超轻量模型，快速清理听写文本",
+        "liquidai_lfm2_5_230m_q8_0": "微型模型，低配硬件也能即时清理"
       },
       "diarization": {
         "segmentation": "用于说话人分离的语音边界检测",
@@ -2207,7 +2209,40 @@
       "switchToCloudForLargeFiles": "切换到 OpenWhispr Cloud 来转录此文件。",
       "createAccount": "创建账户",
       "upgrade": "升级",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "或",
+      "urlPlaceholder": "粘贴 YouTube 或音频 URL",
+      "urlDownloading": "正在下载音频...",
+      "urlResolving": "正在解析 URL...",
+      "urlInvalid": "无效的 URL。请粘贴 YouTube 链接或直接音频文件 URL。",
+      "urlVideoUnavailable": "此视频不可用。可能是私密、已删除或受地区限制。",
+      "urlPlaylistNotSupported": "不支持播放列表。请粘贴单个视频的 URL。",
+      "urlContentTypeInvalid": "此 URL 不指向音频或视频文件。",
+      "urlDownloadFailed": "下载失败。请检查 URL 后重试。",
+      "urlCancelDownload": "取消下载",
+      "addToQueue": "添加到队列",
+      "queueProgress": "{{completed}}/{{total}} 已完成",
+      "cancelAll": "取消全部",
+      "clearQueue": "清除",
+      "pasteUrls": "粘贴 URL（每行一个）",
+      "speakerDetection": "说话人检测",
+      "speakerDetectionDescription": "识别音频中的不同说话人",
+      "numSpeakersPlaceholder": "自动检测",
+      "downloadingModels": "正在下载模型...",
+      "openaiDiarizeNote": "将替换您的转录模型为 gpt-4o-transcribe-diarize，这是唯一支持说话人检测的 OpenAI 模型。费用可能与您选择的模型不同。",
+      "mistralDiarizeNote": "使用 Voxtral 时说话人检测无需额外费用。",
+      "groqDiarizeNote": "Groq 不支持说话人检测。将改用本地分离。",
+      "batchCancelled": "已取消",
+      "batchTranscriptionFailed": "转录失败",
+      "batchSaveFailed": "保存笔记失败",
+      "batchUnknownError": "未知错误",
+      "removeFromQueue": "从队列中移除",
+      "diarizationRunsLocally": "说话人检测在您的设备上本地运行。",
+      "urlSubmit": "添加链接",
+      "urlsSkipped": "部分链接无法添加（{{n}} 个）",
+      "queueFailed": "{{n}} 个失败",
+      "urlFileTooLarge": "文件过大，无法下载。最大大小为 500 MB。",
+      "urlYoutubeBlocked": "YouTube 暂时阻止了来自您网络的下载。请稍后重试。"
     },
     "meeting": {
       "title": "会议笔记",
@@ -2254,6 +2289,7 @@
       },
       "errors": {
         "noModel": "未选择 AI 模型。请在设置中配置。",
+        "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。",
         "actionFailed": "操作失败"
       }
     },
@@ -2947,5 +2983,15 @@
       "successDescription": "Bienvenido a {{name}}.",
       "errorTitle": "No se pudo aceptar la invitación"
     }
+  },
+  "meetingNotification": {
+    "title": "检测到会议",
+    "body": {
+      "detected": "你似乎正在开会。要开始记录吗？",
+      "starting": "你的会议即将开始。要开始记录吗？",
+      "underway": "你的会议似乎已在进行中。要开始记录吗？"
+    },
+    "start": "开始录制",
+    "join": "加入"
   }
 }
