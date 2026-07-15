@@ -68,6 +68,26 @@ npm run dev
 
 Requires Node.js 24+. `npm run setup:fluidaudio` additionally needs the Xcode Command Line Tools (`xcode-select --install`) and is macOS-only — skip it to use the cross-platform sherpa-onnx diarization engine. See [docs/FORK-SETUP.md](docs/FORK-SETUP.md) for the full fork setup, sharing, and upstream-sync guide, or the [upstream documentation](https://docs.openwhispr.com/quickstart) for platform-specific details.
 
+First run starts a **local-only** onboarding — no account or signup. Transcription defaults to on-device Whisper (`turbo` model); you can switch models or enable a cloud provider later in Settings.
+
+## Build a shareable app (macOS)
+
+To hand coworkers a double-clickable app instead of having them run from source:
+
+```bash
+npm run build:mac:arm64   # Apple Silicon (use build:mac:x64 for Intel Macs)
+```
+
+`prebuild:mac` runs automatically first: it compiles the native helpers, downloads the whisper/sherpa/qdrant binaries, and **builds and bundles the FluidAudio diarization engine** — so the installed app needs no `npm run setup:fluidaudio`. Output `.dmg` and `.zip` land in `dist/`.
+
+These builds are **unsigned and un-notarized** (the fork doesn't ship an Apple Developer ID), so macOS Gatekeeper blocks the app on first launch. Each recipient clears the quarantine flag once after installing:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/OpenWhispr.app"
+```
+
+First launch downloads the default `turbo` Whisper model (~1.6 GB); weaker machines can pick `small`/`base` in Settings. To re-enable real signing/notarization with your own Developer ID, see [docs/FORK-SETUP.md](docs/FORK-SETUP.md).
+
 ## Documentation
 
 Visit **[docs.openwhispr.com](https://docs.openwhispr.com)** for:
