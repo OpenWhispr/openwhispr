@@ -273,3 +273,57 @@ test("saveNote resolves default folders within the target space", (t) => {
   assert.equal(teamDoc.folder_id, null);
   assert.equal(teamDoc.space_id, team.id);
 });
+
+test("moveFolderToSpace moves the folder and its live notes in one transaction", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = db.createSpace({ name: "Growth" }).space;
+  const folder = db.createFolder("Campaigns").folder;
+  const filed = db.saveNote("Plan", "body", "personal", null, null, folder.id).note;
+  const loose = db.saveNote("Loose", "body").note;
+
+  const moved = db.moveFolderToSpace(folder.id, team.id);
+  assert.ok(moved.success);
+  assert.equal(moved.folder.space_id, team.id);
+  assert.equal(moved.folder.sync_status, "pending");
+  assert.deepEqual(
+    moved.notes.map((n) => n.id),
+    [filed.id]
+  );
+
+  const movedNote = db.getNote(filed.id);
+  assert.equal(movedNote.space_id, team.id);
+  assert.equal(movedNote.folder_id, folder.id, "notes keep their folder link");
+  assert.equal(movedNote.sync_status, "pending");
+  assert.equal(db.getNote(loose.id).space_id, privateId, "notes outside the folder stay put");
+
+  const duplicate = db.createFolder("Campaigns").folder;
+  assert.equal(
+    db.moveFolderToSpace(duplicate.id, team.id).success,
+    false,
+    "a same-named folder in the target space blocks the move"
+  );
+
+  const meetings = db.getMeetingsFolder();
+  assert.equal(db.moveFolderToSpace(meetings.id, team.id).success, false);
+});
+
+test("getNotes with spaceId and no folderId lists only the space's root notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = db.createSpace({ name: "Ops" }).space;
+  const folder = db.createFolder("Docs", team.id).folder;
+  const rootNote = db.saveNote("Root", "body", "personal", null, null, null, team.id).note;
+  db.saveNote("Filed", "body", "personal", null, null, folder.id);
+
+  const rootNotes = db.getNotes(null, 50, null, team.id);
+  assert.deepEqual(
+    rootNotes.map((n) => n.id),
+    [rootNote.id]
+  );
+
+  const folderNotes = db.getNotes(null, 50, folder.id);
+  assert.equal(folderNotes.length, 1);
+  assert.equal(folderNotes[0].title, "Filed");
+});

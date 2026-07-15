@@ -1571,6 +1571,9 @@ class DatabaseManager {
       if (folderId != null) {
         conditions.push("folder_id = ?");
         params.push(folderId);
+      } else if (spaceId != null) {
+        // spaceId without folderId lists a space's root: folderless notes only.
+        conditions.push("folder_id IS NULL");
       }
       if (spaceId != null) {
         conditions.push("space_id = ?");
@@ -1742,6 +1745,46 @@ class DatabaseManager {
       return { success: true, folder: updated };
     } catch (error) {
       debugLogger.error("Error renaming folder", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  moveFolderToSpace(id, spaceId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const folder = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
+      if (!folder) return { success: false, error: "Folder not found" };
+      if (folder.is_default) return { success: false, error: "Cannot move default folders" };
+      const space = this.db
+        .prepare("SELECT id FROM spaces WHERE id = ? AND deleted_at IS NULL")
+        .get(spaceId);
+      if (!space) return { success: false, error: "Space not found" };
+      if (folder.space_id === spaceId) return { success: true, folder, notes: [] };
+      const existing = this.db
+        .prepare(
+          "SELECT id FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND id != ?"
+        )
+        .get(folder.name, spaceId, id);
+      if (existing) return { success: false, error: "A folder with that name already exists" };
+      const notes = this.db.transaction(() => {
+        this.db
+          .prepare(
+            "UPDATE folders SET space_id = ?, sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
+          )
+          .run(spaceId, id);
+        this.db
+          .prepare(
+            "UPDATE notes SET space_id = ?, sync_status = 'pending', updated_at = datetime('now') WHERE folder_id = ? AND deleted_at IS NULL"
+          )
+          .run(spaceId, id);
+        return this.db
+          .prepare("SELECT * FROM notes WHERE folder_id = ? AND deleted_at IS NULL")
+          .all(id);
+      })();
+      const updated = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
+      return { success: true, folder: updated, notes };
+    } catch (error) {
+      debugLogger.error("Error moving folder to space", { error: error.message }, "spaces");
       throw error;
     }
   }

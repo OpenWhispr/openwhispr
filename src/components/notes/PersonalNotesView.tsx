@@ -1,72 +1,54 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Plus,
-  Loader2,
-  FolderOpen,
-  MoreHorizontal,
-  Pencil,
-  Trash2,
-  Check,
-  SquarePen,
-  Search,
-  Sparkles,
-  ExternalLink,
-} from "lucide-react";
+import { Plus, SquarePen, Search, Sparkles } from "lucide-react";
 import { Button } from "../ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "../ui/dropdown-menu";
-import {
-  ConfirmDialog,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "../ui/dialog";
-import { useDialogs } from "../../hooks/useDialogs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
+  SelectGroup,
+  SelectLabel,
   SelectItem,
   SelectSeparator,
 } from "../ui/select";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
-import NoteListItem from "./NoteListItem";
 import NoteEditor from "./NoteEditor";
+import SpacesTree from "./SpacesTree";
 import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
+import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
   selectResolvedNoteFormatting,
 } from "../../stores/settingsStore";
-import { useFolderManagement } from "../../hooks/useFolderManagement";
-import { useNoteDragAndDrop } from "../../hooks/useNoteDragAndDrop";
 import { cn } from "../lib/utils";
-import { MEETINGS_FOLDER_NAME, findDefaultFolder } from "./shared";
+import { findDefaultFolder } from "./shared";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
 import { resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   useNotes,
+  useSpaces,
+  useFolders,
+  useActiveNote,
   useActiveNoteId,
   useActiveFolderId,
+  useActiveContext,
   initializeNotes,
+  initializeNotesTree,
+  loadFolders,
   setActiveNoteId,
-  setActiveFolderId,
-  removeNote,
+  setActiveContext,
+  revealContainer,
+  createFolder,
+  getNoteFromStore,
 } from "../../stores/noteStore";
 import {
   useMeetingRecordingStore,
@@ -80,9 +62,6 @@ import {
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import NotesOnboarding from "./NotesOnboarding";
-
-const FOLDER_INPUT_CLASS =
-  "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
 
 function makeContentHash(content: string): string {
   return String(content.length) + "-" + content.slice(0, 50);
@@ -118,7 +97,8 @@ export default function PersonalNotesView({
   const [localEnhancedContent, setLocalEnhancedContent] = useState<string | null>(null);
   const [showActionManager, setShowActionManager] = useState(false);
   const [showNewNoteDialog, setShowNewNoteDialog] = useState(false);
-  const [newNoteFolderId, setNewNoteFolderId] = useState<string>("");
+  const [showAddNotesDialog, setShowAddNotesDialog] = useState(false);
+  const [newNoteTarget, setNewNoteTarget] = useState<string>("");
   const [isCreatingNewNoteFolder, setIsCreatingNewNoteFolder] = useState(false);
   const [newNoteFolderName, setNewNoteFolderName] = useState("");
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -142,12 +122,6 @@ export default function PersonalNotesView({
   const { toast } = useToast();
   const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
   const effectiveModelId = useSettingsStore((s) => selectResolvedNoteFormatting(s).model);
-  const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
-  const fileManagerName = navigator.platform.startsWith("Mac")
-    ? "Finder"
-    : navigator.platform.startsWith("Win")
-      ? "Explorer"
-      : "Files";
   const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
 
   const isTranscribing = useMeetingRecordingStore((s) => s.isRecording);
@@ -163,54 +137,28 @@ export default function PersonalNotesView({
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
   const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
 
-  const {
-    folders,
-    folderCounts,
-    isLoading,
-    isCreatingFolder,
-    newFolderName,
-    renamingFolderId,
-    renameValue,
-    showAddNotesDialog,
-    newFolderInputRef,
-    renameInputRef,
-    setIsCreatingFolder,
-    setNewFolderName,
-    setRenamingFolderId,
-    setRenameValue,
-    setShowAddNotesDialog,
-    loadFolders,
-    handleCreateFolder,
-    handleConfirmRename,
-    handleDeleteFolder,
-  } = useFolderManagement();
+  const spaces = useSpaces();
+  const folders = useFolders();
+  const activeContext = useActiveContext();
 
-  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
+  useEffect(() => {
+    initializeNotesTree();
+  }, []);
 
-  const requestDeleteFolder = useCallback(
-    (folder: { id: number; name: string }) => {
-      const count = folderCounts[folder.id] ?? 0;
-      showConfirmDialog({
-        title: t("notes.folders.deleteTitle"),
-        description:
-          count > 0
-            ? t("notes.folders.deleteDescription", { name: folder.name, count })
-            : t("notes.folders.deleteDescriptionEmpty", { name: folder.name }),
-        confirmText: t("notes.folders.deleteConfirm"),
-        variant: "destructive",
-        onConfirm: () => handleDeleteFolder(folder.id),
-      });
-    },
-    [folderCounts, handleDeleteFolder, showConfirmDialog, t]
-  );
-
-  const activeNote = notes.find((n) => n.id === activeNoteId) ?? null;
+  const activeNote = useActiveNote();
 
   // Derive folder name and calendar event name for the metadata chips
   const activeFolderName = useMemo(() => {
     if (!activeNote?.folder_id) return null;
     return folders.find((f) => f.id === activeNote.folder_id)?.name ?? null;
   }, [activeNote?.folder_id, folders]);
+
+  // The editor's move-to-folder chip only offers folders in the note's own
+  // space; cross-space moves change the audience and need an explicit confirm.
+  const editorFolders = useMemo(
+    () => (activeNote ? folders.filter((f) => f.space_id === activeNote.space_id) : folders),
+    [activeNote, folders]
+  );
 
   const [calendarEventName, setCalendarEventName] = useState<string | null>(null);
   useEffect(() => {
@@ -225,7 +173,7 @@ export default function PersonalNotesView({
 
   const startRecording = useCallback(async () => {
     const noteId = activeNoteRef.current;
-    const note = notes.find((n) => n.id === noteId);
+    const note = activeNote?.id === noteId ? activeNote : null;
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
     await storeStartRecording({
       noteId,
@@ -235,7 +183,7 @@ export default function PersonalNotesView({
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
       expectedCount: resolveExpectedSpeakerCount(note),
     });
-  }, [notes]);
+  }, [activeNote]);
 
   const stopRecording = useCallback(async () => {
     await storeStopRecording();
@@ -360,110 +308,142 @@ export default function PersonalNotesView({
     }, 1000);
   }, []);
 
-  const handleNewNote = useCallback(async () => {
-    if (!activeFolderId) return;
-    const result = await window.electronAPI.saveNote(
-      t("notes.list.untitledNote"),
-      "",
-      "personal",
-      null,
-      null,
-      activeFolderId
-    );
-    if (result.success && result.note) {
-      setActiveNoteId(result.note.id);
-      loadFolders();
-    }
-  }, [activeFolderId, loadFolders, t]);
+  const handleNewNoteIn = useCallback(
+    async (spaceId: number, folderId: number | null) => {
+      const result = await window.electronAPI.saveNote(
+        t("notes.list.untitledNote"),
+        "",
+        "personal",
+        null,
+        null,
+        folderId,
+        spaceId
+      );
+      if (result.success && result.note) {
+        setActiveContext(result.note.space_id, result.note.folder_id);
+        revealContainer(result.note.space_id, result.note.folder_id);
+        setActiveNoteId(result.note.id);
+      }
+    },
+    [t]
+  );
+
+  const handleNewNote = useCallback(() => {
+    if (!activeContext) return;
+    handleNewNoteIn(activeContext.spaceId, activeContext.folderId);
+  }, [activeContext, handleNewNoteIn]);
+
+  const privateSpaceId = useMemo(
+    () => spaces.find((s) => s.kind === "private")?.id ?? null,
+    [spaces]
+  );
+
+  const spaceIdForTarget = useCallback(
+    (target: string): number | null => {
+      if (target.startsWith("f:")) {
+        return folders.find((f) => f.id === Number(target.slice(2)))?.space_id ?? null;
+      }
+      if (target.startsWith("s:")) return Number(target.slice(2));
+      return null;
+    },
+    [folders]
+  );
 
   const handleOpenNewNoteDialog = useCallback(() => {
-    const personal = findDefaultFolder(folders);
-    setNewNoteFolderId(personal ? String(personal.id) : folders[0] ? String(folders[0].id) : "");
+    let target = "";
+    if (activeContext?.folderId != null) {
+      target = `f:${activeContext.folderId}`;
+    } else if (activeContext && activeContext.spaceId !== privateSpaceId) {
+      target = `s:${activeContext.spaceId}`;
+    }
+    if (!target) {
+      const personal = findDefaultFolder(folders) ?? folders[0];
+      target = personal ? `f:${personal.id}` : "";
+    }
+    setNewNoteTarget(target);
     setShowNewNoteDialog(true);
-  }, [folders]);
+  }, [activeContext, privateSpaceId, folders]);
 
-  const handleNewNoteFolderChange = useCallback((val: string) => {
+  const handleNewNoteTargetChange = useCallback((val: string) => {
     if (val === "__create_new__") {
       setIsCreatingNewNoteFolder(true);
       return;
     }
-    setNewNoteFolderId(val);
+    setNewNoteTarget(val);
   }, []);
 
   const handleCreateNewNoteFolder = useCallback(async () => {
     const trimmed = newNoteFolderName.trim();
     if (!trimmed) return;
-    const res = await window.electronAPI.createFolder(trimmed);
+    const spaceId = spaceIdForTarget(newNoteTarget) ?? privateSpaceId;
+    if (spaceId == null) return;
+    const res = await createFolder(trimmed, spaceId);
     if (res.success && res.folder) {
-      await loadFolders();
-      setNewNoteFolderId(String(res.folder.id));
+      setNewNoteTarget(`f:${res.folder.id}`);
+    } else if (res.error) {
+      toast({
+        title: t("notes.folders.couldNotCreate"),
+        description: res.error,
+        variant: "destructive",
+      });
     }
     setNewNoteFolderName("");
     setIsCreatingNewNoteFolder(false);
-  }, [newNoteFolderName, loadFolders]);
+  }, [newNoteFolderName, newNoteTarget, spaceIdForTarget, privateSpaceId, toast, t]);
 
   const handleConfirmNewNote = useCallback(async () => {
-    const folderId = Number(newNoteFolderId);
-    if (!folderId) return;
-    const result = await window.electronAPI.saveNote(
-      t("notes.list.untitledNote"),
-      "",
-      "personal",
-      null,
-      null,
-      folderId
-    );
-    if (result.success && result.note) {
-      setActiveFolderId(folderId);
-      setActiveNoteId(result.note.id);
-      loadFolders();
-    }
+    const spaceId = spaceIdForTarget(newNoteTarget);
+    if (spaceId == null) return;
+    const folderId = newNoteTarget.startsWith("f:") ? Number(newNoteTarget.slice(2)) : null;
+    await handleNewNoteIn(spaceId, folderId);
     setShowNewNoteDialog(false);
-  }, [newNoteFolderId, loadFolders, t]);
+  }, [newNoteTarget, spaceIdForTarget, handleNewNoteIn]);
 
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
       await initializeNotes(null, 50, activeFolderId);
     }
     loadFolders();
-  }, [activeFolderId, loadFolders]);
+  }, [activeFolderId]);
 
-  const handleDelete = useCallback(
-    async (id: number) => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
+  const handleDelete = useCallback(async (id: number) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    await window.electronAPI.deleteNote(id);
+  }, []);
+
+  const handleMoveNote = useCallback(
+    async (noteId: number, target: NoteMoveTarget) => {
+      await window.electronAPI.updateNote(noteId, {
+        folder_id: target.folderId,
+        space_id: target.spaceId,
+      });
+      if (noteId === activeNoteId) {
+        setActiveContext(target.spaceId, target.folderId);
+        revealContainer(target.spaceId, target.folderId);
       }
-      await window.electronAPI.deleteNote(id);
-      loadFolders();
     },
-    [loadFolders]
+    [activeNoteId]
   );
 
   const handleMoveToFolder = useCallback(
     async (noteId: number, folderId: number) => {
-      await window.electronAPI.updateNote(noteId, { folder_id: folderId });
-      if (noteId === activeNoteId) {
-        setActiveFolderId(folderId);
-      } else {
-        removeNote(noteId);
-      }
-      loadFolders();
+      const folder = folders.find((f) => f.id === folderId);
+      if (!folder) return;
+      await handleMoveNote(noteId, { spaceId: folder.space_id, folderId });
     },
-    [activeNoteId, loadFolders]
+    [folders, handleMoveNote]
   );
-
-  const { dragState, noteDragHandlers, folderDropHandlers } = useNoteDragAndDrop({
-    onMoveToFolder: handleMoveToFolder,
-    currentFolderId: activeFolderId,
-  });
 
   const handleCreateFolderAndMove = useCallback(
     async (noteId: number, folderName: string) => {
-      const result = await window.electronAPI.createFolder(folderName);
+      const spaceId = getNoteFromStore(noteId)?.space_id ?? privateSpaceId;
+      if (spaceId == null) return;
+      const result = await createFolder(folderName, spaceId);
       if (result.success && result.folder) {
-        await window.electronAPI.updateNote(noteId, { folder_id: result.folder.id });
-        await loadFolders();
+        await handleMoveToFolder(noteId, result.folder.id);
       } else if (result.error) {
         toast({
           title: t("notes.folders.couldNotCreate"),
@@ -472,7 +452,7 @@ export default function PersonalNotesView({
         });
       }
     },
-    [loadFolders, toast, t]
+    [privateSpaceId, handleMoveToFolder, toast, t]
   );
 
   const {
@@ -514,7 +494,7 @@ export default function PersonalNotesView({
 
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
-    const note = notes.find((n) => n.id === meetingRecordingRequest.noteId);
+    const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
     storeStartRecording({
       noteId: meetingRecordingRequest.noteId,
@@ -525,7 +505,7 @@ export default function PersonalNotesView({
       expectedCount: resolveExpectedSpeakerCount(note),
     });
     onMeetingRecordingRequestHandled?.();
-  }, [meetingRecordingRequest, activeNoteId, notes, onMeetingRecordingRequestHandled]);
+  }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
 
   const prevTranscribingRef = useRef(false);
 
@@ -622,309 +602,12 @@ export default function PersonalNotesView({
             </button>
           </div>
 
-          {/* Folders */}
-          <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-foreground/25">
-              {t("notes.folders.title")}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsCreatingFolder(true)}
-              aria-label={t("notes.context.newFolder")}
-              className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
-            >
-              <Plus size={13} />
-            </Button>
-          </div>
-
-          <div className="px-1.5 space-y-px">
-            {folders.map((folder) => {
-              const isActive = folder.id === activeFolderId;
-              const isMeetings = folder.name === MEETINGS_FOLDER_NAME;
-              const count = folderCounts[folder.id] || 0;
-              const isRenaming = renamingFolderId === folder.id;
-
-              if (isRenaming) {
-                return (
-                  <div key={folder.id} className="px-2">
-                    <input
-                      ref={renameInputRef}
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleConfirmRename();
-                        if (e.key === "Escape") {
-                          setRenamingFolderId(null);
-                          setRenameValue("");
-                        }
-                      }}
-                      onBlur={handleConfirmRename}
-                      className={FOLDER_INPUT_CLASS}
-                    />
-                  </div>
-                );
-              }
-
-              const isDragOver = dragState.dragOverFolderId === folder.id;
-              const isDropSuccess = dragState.dropSuccessFolderId === folder.id;
-
-              return (
-                <button
-                  key={folder.id}
-                  onClick={() => setActiveFolderId(folder.id)}
-                  {...folderDropHandlers(folder.id, folder.name)}
-                  className={cn(
-                    "group relative flex items-center gap-2 w-full h-7 px-2 rounded-md cursor-pointer text-left transition-all duration-150",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
-                    isActive
-                      ? "bg-primary/8 dark:bg-primary/10"
-                      : "hover:bg-foreground/4 dark:hover:bg-white/4",
-                    isDragOver &&
-                      !isMeetings &&
-                      "bg-primary/12 dark:bg-primary/15 ring-1 ring-primary/25 scale-[1.02]",
-                    isDropSuccess &&
-                      "bg-emerald-500/10 dark:bg-emerald-400/10 ring-1 ring-emerald-500/20"
-                  )}
-                >
-                  <FolderOpen
-                    size={13}
-                    className={cn(
-                      "shrink-0 transition-colors duration-150",
-                      isDragOver || isActive
-                        ? "text-primary"
-                        : "text-foreground/35 dark:text-foreground/20 group-hover:text-foreground/50 dark:group-hover:text-foreground/35"
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "text-xs truncate flex-1 transition-colors duration-150",
-                      isDragOver || isActive
-                        ? "text-foreground font-medium"
-                        : "text-foreground/50 group-hover:text-foreground/70"
-                    )}
-                  >
-                    {folder.name}
-                  </span>
-
-                  {isDropSuccess ? (
-                    <Check
-                      size={10}
-                      className="text-emerald-500 dark:text-emerald-400 shrink-0 animate-[scale-in_200ms_ease-out]"
-                    />
-                  ) : (
-                    <span
-                      className={cn(
-                        "text-xs tabular-nums shrink-0 transition-colors group-hover:opacity-0",
-                        isActive
-                          ? "text-foreground/50 dark:text-foreground/30"
-                          : "text-foreground/35 dark:text-foreground/15"
-                      )}
-                    >
-                      {count > 0 ? count : ""}
-                    </span>
-                  )}
-                  {(!folder.is_default || noteFilesEnabled) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <span
-                          role="button"
-                          tabIndex={-1}
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-4 w-4 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute right-1.5 text-foreground/25 hover:text-foreground/50 cursor-pointer"
-                        >
-                          <MoreHorizontal size={11} />
-                        </span>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" sideOffset={4} className="min-w-32">
-                        {noteFilesEnabled && (
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.electronAPI?.showFolderInExplorer?.(folder.name);
-                            }}
-                            className="text-xs gap-2 rounded-md px-2 py-1"
-                          >
-                            <ExternalLink size={11} className="text-muted-foreground/60" />
-                            {t("notes.context.showInFileManager", { manager: fileManagerName })}
-                          </DropdownMenuItem>
-                        )}
-                        {!folder.is_default && (
-                          <>
-                            {noteFilesEnabled && <DropdownMenuSeparator />}
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRenamingFolderId(folder.id);
-                                setRenameValue(folder.name);
-                              }}
-                              className="text-xs gap-2 rounded-md px-2 py-1"
-                            >
-                              <Pencil size={11} className="text-muted-foreground/60" />
-                              {t("notes.context.rename")}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                requestDeleteFolder(folder);
-                              }}
-                              className="text-xs gap-2 rounded-md px-2 py-1 text-destructive focus:text-destructive focus:bg-destructive/10"
-                            >
-                              <Trash2 size={11} />
-                              {t("notes.context.delete")}
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </button>
-              );
-            })}
-
-            {isCreatingFolder && (
-              <div className="px-2">
-                <input
-                  ref={newFolderInputRef}
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleCreateFolder();
-                    if (e.key === "Escape") {
-                      setIsCreatingFolder(false);
-                      setNewFolderName("");
-                    }
-                  }}
-                  onBlur={handleCreateFolder}
-                  placeholder={t("notes.folders.folderName")}
-                  className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/20")}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="mx-3 h-px bg-border/10 dark:bg-white/4 my-2" />
-
-          {/* Notes list */}
-          <div className="flex items-center justify-between px-3 py-1">
-            <span className="text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-foreground/25">
-              {t("notes.list.title")}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleNewNote}
-              aria-label={t("notes.list.newNote")}
-              className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
-            >
-              <Plus size={13} />
-            </Button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 size={12} className="animate-spin text-foreground/15" />
-              </div>
-            ) : notes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 px-4">
-                <svg
-                  className="text-foreground dark:text-white mb-3"
-                  width="40"
-                  height="36"
-                  viewBox="0 0 40 36"
-                  fill="none"
-                >
-                  <rect
-                    x="12"
-                    y="1"
-                    width="20"
-                    height="26"
-                    rx="2"
-                    transform="rotate(5 22 14)"
-                    fill="currentColor"
-                    fillOpacity={0.025}
-                    stroke="currentColor"
-                    strokeOpacity={0.06}
-                  />
-                  <rect
-                    x="8"
-                    y="3"
-                    width="20"
-                    height="26"
-                    rx="2"
-                    fill="currentColor"
-                    fillOpacity={0.04}
-                    stroke="currentColor"
-                    strokeOpacity={0.08}
-                  />
-                  <rect
-                    x="12"
-                    y="9"
-                    width="10"
-                    height="1.5"
-                    rx="0.75"
-                    fill="currentColor"
-                    fillOpacity={0.07}
-                  />
-                  <rect
-                    x="12"
-                    y="13"
-                    width="12"
-                    height="1.5"
-                    rx="0.75"
-                    fill="currentColor"
-                    fillOpacity={0.05}
-                  />
-                  <rect
-                    x="12"
-                    y="17"
-                    width="8"
-                    height="1.5"
-                    rx="0.75"
-                    fill="currentColor"
-                    fillOpacity={0.04}
-                  />
-                </svg>
-                <p className="text-xs text-foreground/50 dark:text-foreground/25 mb-3">
-                  {t("notes.empty.emptyFolder")}
-                </p>
-                <div className="flex flex-col gap-1.5 w-full max-w-36">
-                  <button
-                    onClick={handleNewNote}
-                    className="flex items-center justify-center gap-1.5 h-6 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
-                  >
-                    <Plus size={10} />
-                    {t("notes.empty.createNote")}
-                  </button>
-                  <button
-                    onClick={() => setShowAddNotesDialog(true)}
-                    className="flex items-center justify-center gap-1.5 h-6 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
-                  >
-                    {t("notes.addToFolder.addExisting")}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              notes.map((note) => (
-                <NoteListItem
-                  key={note.id}
-                  note={note}
-                  isActive={note.id === activeNoteId}
-                  onClick={() => setActiveNoteId(note.id)}
-                  onDelete={handleDelete}
-                  folders={folders}
-                  currentFolderId={activeFolderId}
-                  onMoveToFolder={handleMoveToFolder}
-                  onCreateFolderAndMove={handleCreateFolderAndMove}
-                  dragHandlers={noteDragHandlers(note.id, note.title)}
-                  isDragging={dragState.draggingNoteId === note.id}
-                  noteFilesEnabled={noteFilesEnabled}
-                />
-              ))
-            )}
-          </div>
+          <SpacesTree
+            onDeleteNote={handleDelete}
+            onMoveNote={handleMoveNote}
+            onCreateFolderAndMove={handleCreateFolderAndMove}
+            onNewNote={handleNewNoteIn}
+          />
         </div>
       </div>
 
@@ -972,7 +655,7 @@ export default function PersonalNotesView({
               onSetSessionExpectedCount={setSessionExpectedCount}
               folderName={activeFolderName}
               calendarEventName={calendarEventName}
-              folders={folders}
+              folders={editorFolders}
               onMoveToFolder={handleMoveToFolder}
               onCreateFolderAndMove={handleCreateFolderAndMove}
               actionProcessingState={actionProcessingState}
@@ -1218,16 +901,37 @@ export default function PersonalNotesView({
                 <label className="text-xs font-medium text-foreground/50">
                   {t("notes.folders.title")}
                 </label>
-                <Select value={newNoteFolderId} onValueChange={handleNewNoteFolderChange}>
+                <Select value={newNoteTarget} onValueChange={handleNewNoteTargetChange}>
                   <SelectTrigger>
                     <SelectValue placeholder={t("notes.upload.selectFolder")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {folders.map((f) => (
-                      <SelectItem key={f.id} value={String(f.id)}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
+                    {spaces.map((space) => {
+                      const spaceFolders = folders.filter((f) => f.space_id === space.id);
+                      const isTeam = space.kind === "team";
+                      if (!isTeam && spaceFolders.length === 0) return null;
+                      return (
+                        <SelectGroup key={space.id}>
+                          {spaces.length > 1 && (
+                            <SelectLabel>
+                              {isTeam
+                                ? `${space.emoji ? `${space.emoji} ` : ""}${space.name}`
+                                : t("notes.spaces.personal")}
+                            </SelectLabel>
+                          )}
+                          {isTeam && (
+                            <SelectItem value={`s:${space.id}`}>
+                              {t("notes.spaces.spaceRoot")}
+                            </SelectItem>
+                          )}
+                          {spaceFolders.map((f) => (
+                            <SelectItem key={f.id} value={`f:${f.id}`}>
+                              {f.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      );
+                    })}
                     <SelectSeparator />
                     <SelectItem value="__create_new__">
                       <span className="flex items-center gap-1.5 text-primary/60">
@@ -1262,7 +966,7 @@ export default function PersonalNotesView({
                 <Button variant="ghost" onClick={() => setShowNewNoteDialog(false)}>
                   {t("notes.upload.cancel")}
                 </Button>
-                <Button onClick={handleConfirmNewNote} disabled={!newNoteFolderId}>
+                <Button onClick={handleConfirmNewNote} disabled={!newNoteTarget}>
                   {t("notes.upload.create")}
                 </Button>
               </>
@@ -1270,17 +974,6 @@ export default function PersonalNotesView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfirmDialog
-        open={confirmDialog.open}
-        onOpenChange={(open) => !open && hideConfirmDialog()}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        confirmText={confirmDialog.confirmText}
-        cancelText={confirmDialog.cancelText}
-        onConfirm={confirmDialog.onConfirm}
-        variant={confirmDialog.variant}
-      />
     </div>
   );
 }

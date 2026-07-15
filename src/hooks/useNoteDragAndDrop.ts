@@ -1,42 +1,85 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { MEETINGS_FOLDER_NAME } from "../components/notes/shared";
+import { folderContainerKey, spaceContainerKey } from "../stores/noteStore";
+
+export interface NoteMoveTarget {
+  spaceId: number;
+  folderId: number | null;
+}
+
+export interface DraggedNoteInfo {
+  id: number;
+  title: string;
+  folderId: number | null;
+  spaceId: number;
+}
+
+interface DropTargetInfo extends NoteMoveTarget {
+  folderName?: string;
+  isDefaultFolder?: boolean;
+}
 
 interface DragState {
   draggingNoteId: number | null;
-  dragOverFolderId: number | null;
-  dropSuccessFolderId: number | null;
+  dragOverKey: string | null;
+  dropSuccessKey: string | null;
 }
 
 interface UseNoteDragAndDropOptions {
-  onMoveToFolder: (noteId: number, folderId: number) => Promise<void>;
-  currentFolderId: number | null;
+  onMoveToTarget: (noteId: number, target: NoteMoveTarget) => void | Promise<void>;
+  /** Cross-space drops change the note's audience — the caller confirms, then calls commit(). */
+  onCrossSpaceDrop: (note: DraggedNoteInfo, target: NoteMoveTarget, commit: () => void) => void;
+  /** Fired after hovering a target for 500ms mid-drag (auto-expand collapsed containers). */
+  onHoverTarget?: (key: string) => void;
 }
 
-export function useNoteDragAndDrop({ onMoveToFolder, currentFolderId }: UseNoteDragAndDropOptions) {
+const HOVER_EXPAND_DELAY_MS = 500;
+
+function targetKey(target: NoteMoveTarget): string {
+  return target.folderId != null
+    ? folderContainerKey(target.folderId)
+    : spaceContainerKey(target.spaceId);
+}
+
+export function useNoteDragAndDrop({
+  onMoveToTarget,
+  onCrossSpaceDrop,
+  onHoverTarget,
+}: UseNoteDragAndDropOptions) {
   const [dragState, setDragState] = useState<DragState>({
     draggingNoteId: null,
-    dragOverFolderId: null,
-    dropSuccessFolderId: null,
+    dragOverKey: null,
+    dropSuccessKey: null,
   });
 
   const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const enterCounterRef = useRef<Map<number, number>>(new Map());
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hoverKeyRef = useRef<string | null>(null);
+  const enterCounterRef = useRef<Map<string, number>>(new Map());
+  const draggedNoteRef = useRef<DraggedNoteInfo | null>(null);
+
+  const clearHoverTimeout = useCallback(() => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = null;
+    hoverKeyRef.current = null;
+  }, []);
 
   useEffect(() => {
     return () => {
       if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     };
   }, []);
 
   const noteDragHandlers = useCallback(
-    (noteId: number, noteTitle: string) => ({
+    (note: DraggedNoteInfo) => ({
       draggable: true as const,
       onDragStart: (e: React.DragEvent) => {
         e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("application/x-note-id", String(noteId));
+        e.dataTransfer.setData("application/x-note-id", String(note.id));
 
         const ghost = document.createElement("div");
-        const label = noteTitle || "Untitled";
+        const label = note.title || "Untitled";
         ghost.textContent = label.length > 24 ? label.slice(0, 24) + "…" : label;
         ghost.style.cssText = `
           position: fixed; top: -200px; left: -200px;
@@ -54,82 +97,117 @@ export function useNoteDragAndDrop({ onMoveToFolder, currentFolderId }: UseNoteD
         e.dataTransfer.setDragImage(ghost, 0, 0);
         requestAnimationFrame(() => ghost.remove());
 
-        setDragState((prev) => ({ ...prev, draggingNoteId: noteId }));
+        draggedNoteRef.current = note;
+        setDragState((prev) => ({ ...prev, draggingNoteId: note.id }));
         enterCounterRef.current.clear();
       },
       onDragEnd: () => {
+        draggedNoteRef.current = null;
+        clearHoverTimeout();
         setDragState((prev) => ({
           ...prev,
           draggingNoteId: null,
-          dragOverFolderId: null,
+          dragOverKey: null,
         }));
         enterCounterRef.current.clear();
       },
     }),
-    []
+    [clearHoverTimeout]
   );
 
-  const folderDropHandlers = useCallback(
-    (folderId: number, folderName: string) => {
-      const isMeetings = folderName === MEETINGS_FOLDER_NAME;
-      const isSameFolder = folderId === currentFolderId;
-      const canDrop = !isMeetings && !isSameFolder;
+  const commitDrop = useCallback(
+    (noteId: number, target: NoteMoveTarget, key: string) => {
+      setDragState((prev) => ({ ...prev, dropSuccessKey: key }));
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      successTimeoutRef.current = setTimeout(() => {
+        setDragState((prev) =>
+          prev.dropSuccessKey === key ? { ...prev, dropSuccessKey: null } : prev
+        );
+      }, 800);
+      void onMoveToTarget(noteId, target);
+    },
+    [onMoveToTarget]
+  );
+
+  const dropTargetHandlers = useCallback(
+    (targetInfo: DropTargetInfo) => {
+      const target: NoteMoveTarget = { spaceId: targetInfo.spaceId, folderId: targetInfo.folderId };
+      const key = targetKey(target);
+      const canDrop = () => {
+        const note = draggedNoteRef.current;
+        if (!note) return false;
+        const isSameContainer =
+          target.folderId != null
+            ? note.folderId === target.folderId
+            : note.folderId == null && note.spaceId === target.spaceId;
+        if (isSameContainer) return false;
+        // The default Meetings folder of the note's own space stays a non-target.
+        const isOwnMeetings =
+          !!targetInfo.isDefaultFolder &&
+          targetInfo.folderName === MEETINGS_FOLDER_NAME &&
+          targetInfo.spaceId === note.spaceId;
+        return !isOwnMeetings;
+      };
 
       return {
         onDragOver: (e: React.DragEvent) => {
-          if (!canDrop) return;
+          if (!canDrop()) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = "move";
         },
         onDragEnter: (e: React.DragEvent) => {
           e.preventDefault();
-          if (!canDrop) return;
-          const count = (enterCounterRef.current.get(folderId) ?? 0) + 1;
-          enterCounterRef.current.set(folderId, count);
+          if (!canDrop()) return;
+          const count = (enterCounterRef.current.get(key) ?? 0) + 1;
+          enterCounterRef.current.set(key, count);
           if (count === 1) {
-            setDragState((prev) => ({ ...prev, dragOverFolderId: folderId }));
+            setDragState((prev) => ({ ...prev, dragOverKey: key }));
+            if (onHoverTarget) {
+              clearHoverTimeout();
+              hoverKeyRef.current = key;
+              hoverTimeoutRef.current = setTimeout(() => onHoverTarget(key), HOVER_EXPAND_DELAY_MS);
+            }
           }
         },
         onDragLeave: () => {
-          if (!canDrop) return;
-          const count = (enterCounterRef.current.get(folderId) ?? 0) - 1;
-          enterCounterRef.current.set(folderId, Math.max(0, count));
+          if (!canDrop()) return;
+          const count = (enterCounterRef.current.get(key) ?? 0) - 1;
+          enterCounterRef.current.set(key, Math.max(0, count));
           if (count <= 0) {
-            enterCounterRef.current.set(folderId, 0);
+            enterCounterRef.current.set(key, 0);
+            if (hoverKeyRef.current === key) clearHoverTimeout();
             setDragState((prev) =>
-              prev.dragOverFolderId === folderId ? { ...prev, dragOverFolderId: null } : prev
+              prev.dragOverKey === key ? { ...prev, dragOverKey: null } : prev
             );
           }
         },
-        onDrop: async (e: React.DragEvent) => {
+        onDrop: (e: React.DragEvent) => {
           e.preventDefault();
-          if (!canDrop) return;
+          if (!canDrop()) return;
 
-          const noteIdStr = e.dataTransfer.getData("application/x-note-id");
-          const noteId = parseInt(noteIdStr, 10);
-          if (isNaN(noteId)) return;
+          const note = draggedNoteRef.current;
+          const noteId = parseInt(e.dataTransfer.getData("application/x-note-id"), 10);
+          if (!note || isNaN(noteId) || noteId !== note.id) return;
 
+          clearHoverTimeout();
           enterCounterRef.current.clear();
+          draggedNoteRef.current = null;
           setDragState((prev) => ({
             ...prev,
             draggingNoteId: null,
-            dragOverFolderId: null,
-            dropSuccessFolderId: folderId,
+            dragOverKey: null,
           }));
 
-          if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
-          successTimeoutRef.current = setTimeout(() => {
-            setDragState((prev) =>
-              prev.dropSuccessFolderId === folderId ? { ...prev, dropSuccessFolderId: null } : prev
-            );
-          }, 800);
-
-          await onMoveToFolder(noteId, folderId);
+          if (note.spaceId !== target.spaceId) {
+            onCrossSpaceDrop(note, target, () => commitDrop(noteId, target, key));
+          } else {
+            commitDrop(noteId, target, key);
+          }
         },
       };
     },
-    [currentFolderId, onMoveToFolder]
+    [onCrossSpaceDrop, onHoverTarget, commitDrop, clearHoverTimeout]
   );
 
-  return { dragState, noteDragHandlers, folderDropHandlers };
+  return { dragState, noteDragHandlers, dropTargetHandlers };
 }

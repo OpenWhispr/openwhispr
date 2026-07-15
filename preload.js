@@ -135,6 +135,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   createFolder: (name, spaceId) => ipcRenderer.invoke("db-create-folder", name, spaceId),
   deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
   renameFolder: (id, name) => ipcRenderer.invoke("db-rename-folder", id, name),
+  moveFolderToSpace: (id, spaceId) => ipcRenderer.invoke("db-move-folder-to-space", id, spaceId),
   getFolderNoteCounts: () => ipcRenderer.invoke("db-get-folder-note-counts"),
 
   // Space functions

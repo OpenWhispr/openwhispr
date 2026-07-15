@@ -690,6 +690,10 @@ declare global {
         id: number,
         name: string
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
+      moveFolderToSpace: (
+        id: number,
+        spaceId: number
+      ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
       getFolderNoteCounts: () => Promise<Array<{ folder_id: number; count: number }>>;
 
       // Space operations

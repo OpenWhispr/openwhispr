@@ -1276,6 +1276,17 @@ class IPCHandlers {
       return result;
     });
 
+    ipcMain.handle("db-move-folder-to-space", async (event, id, spaceId) => {
+      const result = this.databaseManager.moveFolderToSpace(id, spaceId);
+      if (result?.success) {
+        // Qdrant payloads carry space_id — refresh the moved notes' vectors.
+        for (const note of result.notes ?? []) {
+          this._asyncVectorUpsert(note);
+        }
+      }
+      return result;
+    });
+
     ipcMain.handle("db-get-folder-note-counts", async () => {
       return this.databaseManager.getFolderNoteCounts();
     });

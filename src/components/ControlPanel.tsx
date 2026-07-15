@@ -36,6 +36,7 @@ import { isAccessibilitySkipped } from "../utils/permissions";
 import {
   setActiveNoteId,
   setActiveFolderId,
+  navigateToContainer,
   useActiveNoteId,
   initializeNotes,
 } from "../stores/noteStore";
@@ -715,9 +716,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             open={showSearch}
             onOpenChange={setShowSearch}
             transcriptions={history}
-            onNoteSelect={(id, folderId) => {
-              if (folderId) setActiveFolderId(folderId);
+            onNoteSelect={(id, folderId, spaceId) => {
+              if (folderId != null) setActiveFolderId(folderId);
+              else if (spaceId != null) navigateToContainer(spaceId, null);
               setActiveNoteId(id);
+              setActiveView("personal-notes");
+            }}
+            onContainerSelect={(spaceId, folderId) => {
+              navigateToContainer(spaceId, folderId);
               setActiveView("personal-notes");
             }}
             onTranscriptSelect={() => {
