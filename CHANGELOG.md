@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-15
+
+Fork release (futuregerald/openwhispr) — a fully local, private meeting transcriber. Real N-speaker diarization, on-device by default, with nothing sent off-device unless you opt in.
+
+### Added
+- **FluidAudio (Apple Neural Engine) speaker-diarization backend** — auto-selected on macOS, with the cross-platform sherpa-onnx engine as fallback; bundled into packaged builds (no manual setup).
+
+### Changed
+- **Default local transcription engine is now NVIDIA Parakeet TDT 0.6B** (faster, smaller, higher English/European accuracy); Whisper remains available in Settings.
+- **Local-only onboarding** — removed the signup/account step and the "how are you using the app" survey; first run goes straight to on-device setup.
+- **Speech-to-Text, note recording, and audio upload offer only Local and Self-hosted** — removed OpenWhispr-cloud and the hosted BYOK providers (OpenAI/Groq/xAI/Mistral/Corti/Tinfoil).
+
+### Removed
+- **Account, Plans & Billing, and Workspace** settings sections, and the **Pro upsell** banners.
+- **Telemetry / phone-home by default** — the Better Auth session ping to auth.openwhispr.com, the automatic startup update check, and a Google Fonts fetch are disabled. (OpenWhispr has no analytics SDK.)
+
+### Build
+- Unsigned macOS builds (no upstream Apple Developer ID); recipients clear the Gatekeeper quarantine flag once. See `docs/FORK-SETUP.md`.
+
 ## [1.7.5] - 2026-07-10
 
 A model-breadth and reliability release on top of 1.7.4: the latest cloud reasoning models (OpenAI GPT-5.6 and Anthropic Claude Fable 5 / Sonnet 5), Corti as a private clinical reasoning provider with in-region routing that keeps transcribed medical text off third-party LLMs, Tinfoil confidential transcription extended to uploaded audio and every batch path, OpenRouter as a first-class LLM provider with a searchable model picker, enterprise Agent Mode chat with region-aware Bedrock and a live model catalog, multiple hotkeys per action, and a broad stack of meeting-notes, notes, transcription, and platform fixes.
