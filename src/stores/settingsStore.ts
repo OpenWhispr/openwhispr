@@ -472,6 +472,18 @@ export interface SettingsState
   noteFormattingRemoteUrl: string;
   noteFormattingCustomApiKey: string;
 
+  translationMode: InferenceMode;
+  translationProvider: string;
+  translationModel: string;
+  translationCloudMode: string;
+  translationCloudBaseUrl: string;
+  translationRemoteUrl: string;
+  translationCustomApiKey: string;
+  translationDisableThinking: boolean;
+  useDictationTranslation: boolean;
+  translationSourceLanguage: string;
+  translationTargetLanguage: string;
+
   dictationAgentMode: InferenceMode;
   dictationAgentProvider: string;
   dictationAgentModel: string;
@@ -532,6 +544,18 @@ export interface SettingsState
   setNoteFormattingCloudBaseUrl: (value: string) => void;
   setNoteFormattingRemoteUrl: (url: string) => void;
   setNoteFormattingCustomApiKey: (key: string) => void;
+
+  setTranslationMode: (mode: InferenceMode) => void;
+  setTranslationProvider: (value: string) => void;
+  setTranslationModel: (value: string) => void;
+  setTranslationCloudMode: (value: string) => void;
+  setTranslationCloudBaseUrl: (value: string) => void;
+  setTranslationRemoteUrl: (value: string) => void;
+  setTranslationCustomApiKey: (value: string) => void;
+  setTranslationDisableThinking: (value: boolean) => void;
+  setUseDictationTranslation: (value: boolean) => void;
+  setTranslationSourceLanguage: (value: string) => void;
+  setTranslationTargetLanguage: (value: string) => void;
 
   setCleanupDisableThinking: (value: boolean) => void;
   setDictationAgentDisableThinking: (value: boolean) => void;
@@ -1112,6 +1136,29 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   noteFormattingRemoteUrl: readString("noteFormattingRemoteUrl", ""),
   noteFormattingCustomApiKey: readString("noteFormattingCustomApiKey", ""),
 
+  translationMode: (() => {
+    const v = readString("translationMode", "openwhispr");
+    if (
+      v === "openwhispr" ||
+      v === "providers" ||
+      v === "local" ||
+      v === "self-hosted" ||
+      v === "enterprise"
+    )
+      return v;
+    return "openwhispr" as InferenceMode;
+  })(),
+  translationProvider: readString("translationProvider", ""),
+  translationModel: readString("translationModel", ""),
+  translationCloudMode: readString("translationCloudMode", "openwhispr"),
+  translationCloudBaseUrl: readString("translationCloudBaseUrl", ""),
+  translationRemoteUrl: readString("translationRemoteUrl", ""),
+  translationCustomApiKey: readString("translationCustomApiKey", ""),
+  translationDisableThinking: readBoolean("translationDisableThinking", true),
+  useDictationTranslation: readBoolean("useDictationTranslation", false),
+  translationSourceLanguage: readString("translationSourceLanguage", "auto"),
+  translationTargetLanguage: readString("translationTargetLanguage", ""),
+
   setTranscriptionMode: createStringSetter("transcriptionMode") as (mode: InferenceMode) => void,
   setRemoteTranscriptionType: createStringSetter("remoteTranscriptionType") as (
     type: SelfHostedType
@@ -1162,6 +1209,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNoteFormattingCloudBaseUrl: createStringSetter("noteFormattingCloudBaseUrl"),
   setNoteFormattingRemoteUrl: createStringSetter("noteFormattingRemoteUrl"),
   setNoteFormattingCustomApiKey: createStringSetter("noteFormattingCustomApiKey"),
+
+  setTranslationMode: createStringSetter("translationMode") as (mode: InferenceMode) => void,
+  setTranslationProvider: createStringSetter("translationProvider"),
+  setTranslationModel: createStringSetter("translationModel"),
+  setTranslationCloudMode: createStringSetter("translationCloudMode"),
+  setTranslationCloudBaseUrl: createStringSetter("translationCloudBaseUrl"),
+  setTranslationRemoteUrl: createStringSetter("translationRemoteUrl"),
+  setTranslationCustomApiKey: createStringSetter("translationCustomApiKey"),
+  setTranslationDisableThinking: createBooleanSetter("translationDisableThinking"),
+  setUseDictationTranslation: createBooleanSetter("useDictationTranslation"),
+  setTranslationSourceLanguage: createStringSetter("translationSourceLanguage"),
+  setTranslationTargetLanguage: createStringSetter("translationTargetLanguage"),
 
   chatAgentModel: readString("chatAgentModel", "openai/gpt-oss-120b"),
   chatAgentProvider: readString("chatAgentProvider", "groq"),
@@ -1802,6 +1861,11 @@ export const selectIsCloudDictationAgentMode = (state: SettingsState) =>
   state.dictationAgentMode === "openwhispr" &&
   state.dictationAgentCloudMode === "openwhispr";
 
+export const selectIsCloudTranslationMode = (state: SettingsState) =>
+  state.isSignedIn &&
+  state.translationMode === "openwhispr" &&
+  state.translationCloudMode === "openwhispr";
+
 export const selectIsCloudNoteFormattingMode = (state: SettingsState) => {
   const cfg = selectResolvedNoteFormatting(state);
   return state.isSignedIn && cfg.mode === "openwhispr" && cfg.cloudMode === "openwhispr";
@@ -1991,6 +2055,10 @@ export function isCloudCleanupMode() {
 
 export function isCloudDictationAgentMode() {
   return selectIsCloudDictationAgentMode(useSettingsStore.getState());
+}
+
+export function isCloudTranslationMode() {
+  return selectIsCloudTranslationMode(useSettingsStore.getState());
 }
 
 // --- Initialization ---

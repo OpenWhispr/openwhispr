@@ -44,6 +44,7 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   noteFormatting: "settingsPage.aiModels.modes",
   dictationAgent: "dictationAgent.modes",
   chatIntelligence: "agentMode.settings.modes",
+  dictationTranslation: "settingsPage.aiModels.modes",
 };
 
 function startCloudOnboarding() {
