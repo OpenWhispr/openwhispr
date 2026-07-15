@@ -136,8 +136,8 @@ if (!gotSingleInstanceLock) {
 
 const isLiveWindow = (window) => window && !window.isDestroyed();
 
-// Ensure macOS menus use the proper casing for the app name
-if (process.platform === "darwin" && app.getName() !== "EktosWhispr") {
+// Ensure the OS process name and menus use the correct app name on all platforms
+if (app.getName() !== "EktosWhispr") {
   app.setName("EktosWhispr");
 }
 

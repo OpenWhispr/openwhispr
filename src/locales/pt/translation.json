@@ -2396,7 +2396,9 @@
         "signoffTrigger": "Assinatura",
         "signoffText": "Abraços, Alex · alex@example.com"
       },
-      "addPlaceholder": "Adicione uma frase-gatilho — \"minha agenda\", \"meu LinkedIn\""
+      "addPlaceholder": "Adicione uma frase-gatilho — \"minha agenda\", \"meu LinkedIn\"",
+      "searchPlaceholder": "Pesquisar snippets…",
+      "searchNoMatches": "Nenhum snippet corresponde a \"{{word}}\""
     },
     "emptyTitle": "Seu dicionário está vazio",
     "emptyDescription": "Adicione palavras que {{agentName}} deve sempre acertar: nomes, ferramentas, siglas.",

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { CornerDownLeft, Mic, Pencil, Plus, X } from "lucide-react";
+import { Mic, Pencil, Plus, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,6 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { useSettings } from "../hooks/useSettings";
-import { getCachedPlatform } from "../utils/platform";
 import type { Snippet } from "../utils/snippets";
 
 const EXAMPLE_KEYS = ["linkedin", "rewrite", "intro", "signoff"] as const;
@@ -108,7 +107,7 @@ function EditSnippetDialog({
             </Label>
             <Input
               id="snippet-trigger"
-              autoFocus={snippet?.trigger === ""}
+              autoFocus
               value={trigger}
               onChange={(e) => setTrigger(e.target.value)}
               placeholder={t("dictionary.snippets.triggerPlaceholder")}
@@ -124,7 +123,6 @@ function EditSnippetDialog({
             </Label>
             <Textarea
               id="snippet-replacement"
-              autoFocus={snippet?.trigger !== ""}
               value={replacement}
               onChange={(e) => setReplacement(e.target.value)}
               placeholder={t("dictionary.snippets.replacementPlaceholder")}
@@ -196,11 +194,8 @@ function EditSnippetDialog({
 export default function SnippetsView() {
   const { t } = useTranslation();
   const { snippets, setSnippets } = useSettings();
-  const [trigger, setTrigger] = useState("");
-  const [expansion, setExpansion] = useState("");
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Snippet | null>(null);
-  const triggerInputRef = useRef<HTMLInputElement>(null);
 
   const triggerExists = (value: string, except?: string) => {
     const lower = value.toLowerCase();
@@ -211,39 +206,19 @@ export default function SnippetsView() {
     });
   };
 
-  const trimmedTrigger = trigger.trim();
-  const duplicate = !!trimmedTrigger && triggerExists(trimmedTrigger);
+  const searchQuery = search.trim().toLowerCase();
+  const visibleSnippets = searchQuery
+    ? snippets.filter(
+        (s) =>
+          s.trigger.toLowerCase().includes(searchQuery) ||
+          s.replacement.toLowerCase().includes(searchQuery)
+      )
+    : snippets;
 
-  const searchQuery = trimmedTrigger.toLowerCase();
-  const visibleSnippets =
-    searchQuery && !panelOpen
-      ? snippets.filter(
-          (s) =>
-            s.trigger.toLowerCase().includes(searchQuery) ||
-            s.replacement.toLowerCase().includes(searchQuery)
-        )
-      : snippets;
-
-  const openPanel = () => {
-    if (!trimmedTrigger || duplicate) return;
-    setPanelOpen(true);
-  };
-
-  const closePanel = () => {
-    setPanelOpen(false);
-    setExpansion("");
-    triggerInputRef.current?.focus();
-  };
-
-  const handleCreate = () => {
-    setSnippets([...snippets, { trigger: trimmedTrigger, replacement: expansion.trim(), apps: [] }]);
-    setTrigger("");
-    closePanel();
-  };
+  const openNewDialog = () => setEditing({ trigger: "", replacement: "", apps: [] });
 
   const handleSaveEdit = (snippet: Snippet) => {
     if (editing?.trigger === "") {
-      // Creating via dialog
       setSnippets([...snippets, snippet]);
     } else {
       setSnippets(snippets.map((s) => (s.trigger === editing?.trigger ? snippet : s)));
@@ -251,13 +226,9 @@ export default function SnippetsView() {
     setEditing(null);
   };
 
-  const openNewDialog = () => setEditing({ trigger: "", replacement: "", apps: [] });
-
   const handleRemove = (removed: string) => {
     setSnippets(snippets.filter((s) => s.trigger !== removed));
   };
-
-  const canCreate = !!trimmedTrigger && !!expansion.trim() && !duplicate;
 
   return (
     <div className="px-5 py-4 flex flex-col gap-3">
@@ -270,70 +241,19 @@ export default function SnippetsView() {
         onSave={handleSaveEdit}
       />
 
-      {/* ─── Add snippet ─── */}
-      <div>
-        <div className="relative">
-          <Input
-            ref={triggerInputRef}
-            placeholder={t("dictionary.snippets.addPlaceholder")}
-            value={trigger}
-            onChange={(e) => setTrigger(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") openPanel();
-            }}
-            maxLength={80}
-            className="w-full h-8 text-xs pr-16 placeholder:text-foreground/20"
-          />
-          <button
-            onClick={openPanel}
-            disabled={!trimmedTrigger || duplicate}
-            aria-label={t("dictionary.snippets.create")}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-foreground/30 enabled:hover:text-primary disabled:text-foreground/15 transition-colors"
-          >
-            {t("dictionary.add")}
-            <CornerDownLeft size={10} />
-          </button>
-        </div>
-        {duplicate && (
-          <p className="mt-1.5 text-xs text-destructive">{t("dictionary.snippets.duplicate")}</p>
-        )}
+      {/* ─── Header: search + add button ─── */}
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder={t("dictionary.snippets.searchPlaceholder")}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 h-8 text-xs placeholder:text-foreground/20"
+        />
+        <Button size="sm" onClick={openNewDialog} className="h-8 shrink-0 gap-1.5">
+          <Plus size={12} />
+          {t("dictionary.snippets.new")}
+        </Button>
       </div>
-
-      {/* ─── Expansion panel ─── */}
-      {panelOpen && (
-        <div className="rounded-md border border-primary/30 dark:border-primary/40 px-3 pt-2.5 pb-2">
-          <Textarea
-            autoFocus
-            value={expansion}
-            onChange={(e) => setExpansion(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") closePanel();
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canCreate) handleCreate();
-            }}
-            placeholder={t("dictionary.snippets.replacementPlaceholder")}
-            rows={4}
-            className="min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/20 hover:border-0 focus:border-0 focus:ring-0"
-          />
-          <div className="flex items-center justify-between pt-1.5">
-            <div className="flex items-center gap-0.5">
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
-                {getCachedPlatform() === "darwin" ? "⌘" : "Ctrl"}
-              </kbd>
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
-                ⏎
-              </kbd>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={closePanel}>
-                {t("common.cancel")}
-              </Button>
-              <Button size="sm" onClick={handleCreate} disabled={!canCreate}>
-                {t("dictionary.snippets.create")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─── Snippet list ─── */}
       <div className="rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3">
@@ -356,10 +276,6 @@ export default function SnippetsView() {
               <p className="mt-1.5 text-xs text-foreground/30 leading-relaxed">
                 {t("dictionary.snippets.emptyDescription")}
               </p>
-              <Button size="sm" className="mt-4" onClick={openNewDialog}>
-                <Plus size={12} />
-                {t("dictionary.snippets.new")}
-              </Button>
             </div>
             <div className="flex-1 min-w-[260px] rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-3.5 py-3 flex flex-col gap-2.5">
               {EXAMPLE_KEYS.map((key) => (
@@ -378,7 +294,7 @@ export default function SnippetsView() {
           </div>
         ) : visibleSnippets.length === 0 ? (
           <p className="py-6 text-xs text-foreground/20 text-center">
-            {t("dictionary.noMatches", { word: trimmedTrigger })}
+            {t("dictionary.snippets.searchNoMatches", { word: search.trim() })}
           </p>
         ) : (
           <ul>

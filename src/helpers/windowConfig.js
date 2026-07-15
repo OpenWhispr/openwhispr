@@ -1,4 +1,5 @@
 const path = require("path");
+const { app } = require("electron");
 
 const isGnomeWayland =
   process.platform === "linux" &&
@@ -60,11 +61,18 @@ const MAIN_WINDOW_CONFIG = {
   type: MAIN_OVERLAY_TYPE,
 };
 
+// Resolve the application icon for BrowserWindow (dev and packaged).
+function resolveAppIcon() {
+  const ext = process.platform === "darwin" ? "icns" : process.platform === "win32" ? "ico" : "png";
+  return path.join(app.getAppPath(), "src", "assets", `icon.${ext}`);
+}
+
 // Control panel window configuration
 const CONTROL_PANEL_CONFIG = {
   width: 1200,
   height: 800,
   backgroundColor: "#1c1c2e",
+  icon: resolveAppIcon(),
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
