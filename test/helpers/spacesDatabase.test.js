@@ -743,9 +743,10 @@ test("getFolderNoteCounts attributes space-root notes per space", (t) => {
 
 test("folders rebuild succeeds on a legacy DB with notes referencing folders", (t) => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-spaces-db-"));
-  let BetterSqlite;
+  let legacy;
   try {
-    BetterSqlite = require("better-sqlite3");
+    const BetterSqlite = require("better-sqlite3");
+    legacy = new BetterSqlite(path.join(userDataDir, "transcriptions.db"));
   } catch (error) {
     if (isNativeBindingUnavailable(error)) {
       t.skip("better-sqlite3 native binding is not available for this Node runtime");
@@ -757,7 +758,6 @@ test("folders rebuild succeeds on a legacy DB with notes referencing folders", (
   // Pre-migration shape: folders still carries the table-level UNIQUE(name)
   // and notes rows reference them. better-sqlite3 enables foreign_keys by
   // default, so the rebuild's DROP TABLE used to throw on exactly this DB.
-  const legacy = new BetterSqlite(path.join(userDataDir, "transcriptions.db"));
   legacy.exec(`
     CREATE TABLE folders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
