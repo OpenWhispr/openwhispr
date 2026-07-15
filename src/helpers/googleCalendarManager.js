@@ -297,7 +297,14 @@ class GoogleCalendarManager {
     this.notifiedMeetings.add(event.id);
 
     const nPrefs = this.windowManager?.notificationPrefs || {};
-    if (nPrefs.notificationsEnabled !== false && nPrefs.notifyCalendarReminders !== false) {
+    const showReminder =
+      nPrefs.notificationsEnabled !== false && nPrefs.notifyCalendarReminders !== false;
+    debugLogger.info(
+      "Calendar meeting started",
+      { summary: event.summary, reminderShown: showReminder },
+      "gcal"
+    );
+    if (showReminder) {
       const notif = new Notification({
         title: event.summary || "Meeting",
         body: "Meeting starting now",
@@ -324,6 +331,7 @@ class GoogleCalendarManager {
   }
 
   onMeetingEnd() {
+    debugLogger.info("Calendar meeting ended", { summary: this.activeMeeting?.summary }, "gcal");
     this.broadcastToWindows("gcal-meeting-ended", { event: this.activeMeeting });
     this.activeMeeting = null;
     if (this.meetingEndTimer) {

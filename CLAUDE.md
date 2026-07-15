@@ -571,8 +571,8 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 - During recording (tap-to-talk or push-to-talk): ALL notifications suppressed
 - After recording: 2.5s cooldown before showing queued notifications
 - Multiple signals coalesced: process > audio priority, one notification shown
-- Calendar-aware: if imminent calendar event exists, notification shows event name
-- Active calendar meeting recording: all detections suppressed
+- Calendar-aware: if an ongoing or imminent calendar event exists, notification shows event name and links the note to the event
+- Active meeting recording (meeting mode): all detections suppressed
 
 **Binary Distribution**:
 
