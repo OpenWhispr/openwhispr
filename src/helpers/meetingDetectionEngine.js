@@ -335,14 +335,21 @@ class MeetingDetectionEngine {
   }
 
   handleNotificationTimeout() {
-    for (const [detectionId, detection] of this.activeDetections) {
-      if (!detection.dismissed) {
-        this._dismiss();
-        detection.dismissed = true;
-      }
+    // Expiring unanswered is not a decline: only an audio prompt's timeout cools
+    // down the mic detector, so an ignored calendar reminder leaves mic detection
+    // armed and joining the call late still prompts.
+    const audioTimedOut = [...this.activeDetections.values()].some(
+      (d) => !d.dismissed && d.source === "audio"
+    );
+    if (audioTimedOut) {
+      this._dismiss();
     }
     this.activeDetections.clear();
-    debugLogger.info("Notification auto-dismissed, detections cleared", {}, "meeting");
+    debugLogger.info(
+      "Notification auto-dismissed, detections cleared",
+      { audioTimedOut },
+      "meeting"
+    );
   }
 
   _flushNotificationQueue() {

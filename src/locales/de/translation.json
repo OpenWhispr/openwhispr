@@ -2949,7 +2949,7 @@
       "starting": "Dein Meeting beginnt gleich. Notizen aufnehmen?",
       "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
     },
-    "start": "Aufnahme starten",
-    "join": "Beitreten"
+    "start": "Notizen aufnehmen",
+    "join": "Beitreten & transkribieren"
   }
 }

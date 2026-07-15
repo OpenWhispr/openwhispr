@@ -2949,7 +2949,7 @@
       "starting": "Your meeting is starting. Want to take notes?",
       "underway": "It sounds like your meeting is underway. Want to take notes?"
     },
-    "start": "Start Recording",
-    "join": "Join"
+    "start": "Take notes",
+    "join": "Join & transcribe"
   }
 }
