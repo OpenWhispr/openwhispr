@@ -131,6 +131,10 @@ function buildWhisperServerArgs({
 
   if (threads) args.push("--threads", String(threads));
 
+  // Sample 5 candidates and pick the highest-probability one.
+  // Improves word accuracy on ambiguous or low-SNR audio with minimal latency cost.
+  args.push("--best-of", "5");
+
   // whisper.cpp defaults to English when --language is omitted;
   // explicitly pass "auto" to enable language auto-detection
   args.push("--language", language || "auto");
