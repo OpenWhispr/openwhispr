@@ -150,7 +150,13 @@ class MeetingDetectionEngine {
 
     debugLogger.info(
       "Showing notification",
-      { detectionId, source, variant, title: calendarEvent?.summary ?? null, hasJoinUrl: !!joinUrl },
+      {
+        detectionId,
+        source,
+        variant,
+        title: calendarEvent?.summary ?? null,
+        hasJoinUrl: !!joinUrl,
+      },
       "meeting"
     );
 
@@ -201,7 +207,6 @@ class MeetingDetectionEngine {
             { noteId: noteResult?.note?.id, folderId: meetingsFolder?.id },
             "meeting"
           );
-          this.activeDetections.delete(detectionId);
           return;
         }
 
@@ -234,13 +239,10 @@ class MeetingDetectionEngine {
         });
 
         this.audioActivityDetector.resetPrompt();
-
-        this.activeDetections.delete(detectionId);
       } else if (action === "dismiss") {
         if (detection) {
           this._dismiss();
         }
-        this.activeDetections.delete(detectionId);
       }
     } catch (error) {
       this._meetingModeActive = false;
@@ -250,6 +252,9 @@ class MeetingDetectionEngine {
         "meeting"
       );
     } finally {
+      // One overlay at a time — a response settles every pending detection,
+      // including any the responded prompt replaced.
+      this.activeDetections.clear();
       this.windowManager.dismissMeetingNotification();
     }
   }
@@ -345,6 +350,9 @@ class MeetingDetectionEngine {
 
     if (this._meetingModeActive) {
       debugLogger.info("Dropping queued notifications — meeting mode active", {}, "meeting");
+      for (const { source, key } of this._notificationQueue) {
+        this.activeDetections.delete(`${source}:${key}`);
+      }
       this._notificationQueue = [];
       return;
     }
