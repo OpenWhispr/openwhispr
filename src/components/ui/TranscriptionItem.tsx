@@ -97,7 +97,7 @@ export default function TranscriptionItem({
             ? "border-border/30 bg-muted/20 hover:bg-muted/30 opacity-80"
             : "border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 hover:bg-muted/30 dark:hover:bg-surface-2/80",
         // Subtle left accent for translation records; transparent keeps others pixel-aligned.
-        item.route_kind === "translation" ? "border-l-primary/30" : "border-l-transparent"
+        item.route_kind === "translation" ? "border-l-primary/70" : "border-l-transparent"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
