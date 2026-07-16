@@ -617,7 +617,7 @@ export interface SettingsState
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
   setVoiceAgentKey: (key: string) => Promise<boolean>;
-  setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
+  setMeetingLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
@@ -946,7 +946,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   voiceAgentKey: readString("voiceAgentKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
-  meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
+  meetingLayoutMode: (readString("meetingLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
@@ -1449,9 +1449,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     () => window.electronAPI?.updateVoiceAgentHotkey
   ),
 
-  setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
-    if (isBrowser) localStorage.setItem("meetingHotkeyLayoutMode", mode);
-    set({ meetingHotkeyLayoutMode: mode });
+  setMeetingLayoutMode: (mode: "side-panel" | "full-width") => {
+    if (isBrowser) localStorage.setItem("meetingLayoutMode", mode);
+    set({ meetingLayoutMode: mode });
   },
 
   setOnboardingUseCases: (useCases: string[]) => {

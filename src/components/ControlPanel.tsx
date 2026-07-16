@@ -329,7 +329,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       // Snap to the side-panel layout for every meeting-mode entry point (hotkey,
       // the "Start Recording" notification CTA, and clicking an upcoming meeting)
       // when the user's layout preference is side-panel (Settings → Appearance).
-      if (useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel") {
+      if (useSettingsStore.getState().meetingLayoutMode === "side-panel") {
         window.electronAPI?.snapToMeetingMode?.();
       }
     };

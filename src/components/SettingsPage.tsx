@@ -722,8 +722,8 @@ export default function SettingsPage({
     setDictationKey,
     meetingKey,
     setMeetingKey,
-    meetingHotkeyLayoutMode,
-    setMeetingHotkeyLayoutMode,
+    meetingLayoutMode,
+    setMeetingLayoutMode,
     autoLearnCorrections,
     setAutoLearnCorrections,
     updateTranscriptionSettings,
@@ -2419,9 +2419,9 @@ export default function SettingsPage({
                     {t("settingsPage.general.appearance.meetingLayoutLabel")}
                   </span>
                   <Select
-                    value={meetingHotkeyLayoutMode}
+                    value={meetingLayoutMode}
                     onValueChange={(value) =>
-                      setMeetingHotkeyLayoutMode(value as "side-panel" | "full-width")
+                      setMeetingLayoutMode(value as "side-panel" | "full-width")
                     }
                   >
                     <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
