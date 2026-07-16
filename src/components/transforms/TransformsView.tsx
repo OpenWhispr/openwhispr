@@ -1,9 +1,11 @@
 import React, { useState } from "react";
-import { Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Download, Plus, Upload } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { Transform } from "../../stores/settingsStore";
 import TransformEditor from "./TransformEditor";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
+import { useToast } from "../ui/useToast";
 
 const MAX_TRANSFORMS = 10;
 
@@ -72,11 +74,47 @@ function CreateCard({ onClick }: { onClick: () => void }) {
 }
 
 export default function TransformsView() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const transforms = useSettingsStore((s) => s.transforms);
   const setTransforms = useSettingsStore((s) => s.setTransforms);
 
   const [editingTransform, setEditingTransform] = useState<Transform | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  const handleBackup = async () => {
+    const result = await window.electronAPI?.transformsBackup?.(transforms);
+    if (result?.error) {
+      toast({
+        title: t("transforms.backupFailed"),
+        description: result.error,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRestore = async () => {
+    const result = await window.electronAPI?.transformsRestore?.();
+    if (!result || result.canceled) return;
+    if (result.error || !Array.isArray(result.transforms)) {
+      toast({
+        title: t("transforms.restoreFailed"),
+        description: result?.error,
+        variant: "destructive",
+      });
+      return;
+    }
+    const existingIds = new Set(transforms.map((tr) => tr.id));
+    const imported = result.transforms
+      .filter((tr) => tr && typeof tr.name === "string" && tr.rules)
+      .map((tr) => (existingIds.has(tr.id) ? { ...tr, id: crypto.randomUUID() } : tr));
+    const room = Math.max(MAX_TRANSFORMS - transforms.length, 0);
+    const toAdd = imported.slice(0, room);
+    if (toAdd.length > 0) {
+      setTransforms([...transforms, ...toAdd]);
+      toast({ title: t("transforms.restoreSuccess", { count: toAdd.length }) });
+    }
+  };
 
   const openCreate = () => {
     setEditingTransform(null);
@@ -108,15 +146,33 @@ export default function TransformsView() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
         <h1 className="text-lg font-semibold text-foreground">Transforms</h1>
-        {transforms.length < MAX_TRANSFORMS && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-medium hover:bg-foreground/90 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            onClick={handleRestore}
+            title={t("transforms.restore")}
+            aria-label={t("transforms.restore")}
+            className="flex items-center justify-center h-8 w-8 rounded-lg border border-border/40 text-muted-foreground hover:text-foreground hover:bg-surface-1/80 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
-            <Plus size={13} />
-            Create New
+            <Upload size={13} />
           </button>
-        )}
+          <button
+            onClick={handleBackup}
+            title={t("transforms.backup")}
+            aria-label={t("transforms.backup")}
+            className="flex items-center justify-center h-8 w-8 rounded-lg border border-border/40 text-muted-foreground hover:text-foreground hover:bg-surface-1/80 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <Download size={13} />
+          </button>
+          {transforms.length < MAX_TRANSFORMS && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-medium hover:bg-foreground/90 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <Plus size={13} />
+              Create New
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 pb-6">

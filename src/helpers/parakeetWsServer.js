@@ -159,9 +159,10 @@ class ParakeetWsServer {
     });
 
     this.process.stderr.on("data", (data) => {
-      stderrBuffer += data.toString();
-      debugLogger.debug("parakeet-ws stderr", { data: data.toString().trim() });
-      if (data.toString().includes("Listening on:")) {
+      const chunk = data.toString();
+      if (stderrBuffer.length < 65536) stderrBuffer += chunk;
+      debugLogger.debug("parakeet-ws stderr", { data: chunk.trim() });
+      if (chunk.includes("Listening on:")) {
         readyResolve(true);
       }
     });

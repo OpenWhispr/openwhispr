@@ -11,6 +11,7 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const AudioStorageManager = require("./audioStorage");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
+const micMuteManager = require("./micMuteManager");
 
 // Tinfoil's only realtime STT model — fallback when the renderer omits one.
 const TINFOIL_REALTIME_MODEL = "voxtral-mini-4b-realtime";
@@ -1182,6 +1183,146 @@ class IPCHandlers {
       return { snippets: imported };
     });
 
+    ipcMain.handle("dictionary-restore", async () => {
+      const { dialog } = require("electron");
+      const fs = require("fs");
+      const result = await dialog.showOpenDialog({
+        properties: ["openFile"],
+        filters: [{ name: "Dictionary", extensions: ["txt", "json"] }],
+      });
+      if (result.canceled || !result.filePaths.length) return { canceled: true };
+      try {
+        const content = fs.readFileSync(result.filePaths[0], "utf-8");
+        return { content };
+      } catch (error) {
+        debugLogger.error("Error restoring dictionary", { error: error.message }, "dictionary");
+        return { error: error.message };
+      }
+    });
+
+    ipcMain.handle("transforms-backup", async (_event, transforms) => {
+      const { dialog } = require("electron");
+      const fs = require("fs");
+      const result = await dialog.showSaveDialog({
+        defaultPath: "transforms-backup.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (result.canceled || !result.filePath) return { canceled: true };
+      try {
+        fs.writeFileSync(result.filePath, JSON.stringify(transforms ?? [], null, 2), "utf-8");
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Error backing up transforms", { error: error.message }, "transform");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("transforms-restore", async () => {
+      const { dialog } = require("electron");
+      const fs = require("fs");
+      const result = await dialog.showOpenDialog({
+        properties: ["openFile"],
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (result.canceled || !result.filePaths.length) return { canceled: true };
+      try {
+        const raw = fs.readFileSync(result.filePaths[0], "utf-8");
+        const imported = JSON.parse(raw);
+        if (!Array.isArray(imported)) return { error: "Invalid file format" };
+        return { transforms: imported };
+      } catch (error) {
+        debugLogger.error("Error restoring transforms", { error: error.message }, "transform");
+        return { error: error.message };
+      }
+    });
+
+    ipcMain.handle("notes-backup", async () => {
+      const { dialog } = require("electron");
+      const fs = require("fs");
+      const result = await dialog.showSaveDialog({
+        defaultPath: "notes-backup.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (result.canceled || !result.filePath) return { canceled: true };
+      try {
+        const folders = this.databaseManager.getFolders();
+        const notes = this.databaseManager.getNotes(null, 100000);
+        const folderNameById = new Map(folders.map((f) => [f.id, f.name]));
+        const payload = {
+          folders: folders.map((f) => ({ name: f.name })),
+          notes: notes.map((n) => ({
+            title: n.title,
+            content: n.content,
+            noteType: n.note_type,
+            folderName: folderNameById.get(n.folder_id) || null,
+          })),
+        };
+        fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2), "utf-8");
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Error backing up notes", { error: error.message }, "notes");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("notes-restore", async () => {
+      const { dialog } = require("electron");
+      const fs = require("fs");
+      const result = await dialog.showOpenDialog({
+        properties: ["openFile"],
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (result.canceled || !result.filePaths.length) return { canceled: true };
+      try {
+        const raw = fs.readFileSync(result.filePaths[0], "utf-8");
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.notes)) return { error: "Invalid file format" };
+
+        const folderByName = new Map(this.databaseManager.getFolders().map((f) => [f.name, f.id]));
+        const existingKeys = new Set(
+          this.databaseManager.getNotes(null, 100000).map((n) => `${n.title}::${n.content}`)
+        );
+
+        let imported = 0;
+        for (const note of parsed.notes) {
+          if (!note || typeof note.title !== "string" || typeof note.content !== "string") continue;
+          const key = `${note.title}::${note.content}`;
+          if (existingKeys.has(key)) continue;
+
+          let folderId = null;
+          if (note.folderName) {
+            folderId = folderByName.get(note.folderName) || null;
+            if (!folderId) {
+              const created = this.databaseManager.createFolder(note.folderName);
+              if (created?.success && created.folder) {
+                folderId = created.folder.id;
+                folderByName.set(note.folderName, folderId);
+              }
+            }
+          }
+
+          const saveResult = this.databaseManager.saveNote(
+            note.title,
+            note.content,
+            note.noteType || "personal",
+            null,
+            null,
+            folderId
+          );
+          if (saveResult?.success) {
+            imported++;
+            existingKeys.add(key);
+            if (saveResult.note) this._asyncVectorUpsert(saveResult.note);
+          }
+        }
+
+        return { success: true, imported };
+      } catch (error) {
+        debugLogger.error("Error restoring notes", { error: error.message }, "notes");
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("undo-learned-corrections", async (_event, words) => {
       try {
         if (!Array.isArray(words) || words.length === 0) {
@@ -1877,6 +2018,10 @@ class IPCHandlers {
         }, 500);
       }
       return result;
+    });
+
+    ipcMain.handle("set-mic-muted", async (_event, muted) => {
+      return micMuteManager.setMuted(!!muted);
     });
 
     ipcMain.handle("get-last-target-app-name", () => {
@@ -2606,6 +2751,128 @@ class IPCHandlers {
 
     ipcMain.handle("cancel-diarization-download", async () => {
       return this.diarizationManager.cancelDownload();
+    });
+
+    ipcMain.handle("full-backup", async (_event, settings) => {
+      const { dialog } = require("electron");
+      const result = await dialog.showSaveDialog({
+        defaultPath: `ektoswhispr-backup-${new Date().toISOString().slice(0, 10)}.json`,
+        filters: [{ name: "EktosWhispr Backup", extensions: ["json"] }],
+      });
+      if (result.canceled || !result.filePath) return { canceled: true };
+
+      try {
+        const isDev = process.env.NODE_ENV === "development";
+        const dbPath = path.join(
+          app.getPath("userData"),
+          isDev ? "transcriptions-dev.db" : "transcriptions.db"
+        );
+        let dbBase64 = null;
+        if (fs.existsSync(dbPath)) {
+          try {
+            this.databaseManager?.db?.pragma("wal_checkpoint(TRUNCATE)");
+          } catch (_) {}
+          dbBase64 = fs.readFileSync(dbPath).toString("base64");
+        }
+
+        const envPath = path.join(app.getPath("userData"), ".env");
+        const envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf-8") : null;
+
+        const payload = {
+          type: "ektoswhispr-full-backup",
+          version: 1,
+          createdAt: new Date().toISOString(),
+          db: dbBase64,
+          env: envContent,
+          settings: settings && typeof settings === "object" ? settings : {},
+        };
+
+        fs.writeFileSync(result.filePath, JSON.stringify(payload), "utf-8");
+        return { success: true, filePath: result.filePath };
+      } catch (error) {
+        debugLogger.error("Error creating full backup", { error: error.message }, "backup");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("full-restore", async () => {
+      const { dialog } = require("electron");
+      const result = await dialog.showOpenDialog({
+        properties: ["openFile"],
+        filters: [{ name: "EktosWhispr Backup", extensions: ["json"] }],
+      });
+      if (result.canceled || !result.filePaths.length) return { canceled: true };
+
+      try {
+        const raw = fs.readFileSync(result.filePaths[0], "utf-8");
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.type !== "ektoswhispr-full-backup") {
+          return { success: false, error: "Invalid backup file" };
+        }
+
+        // Release file handles before overwriting them.
+        try {
+          await this.parakeetManager?.stopServer();
+        } catch (_) {}
+        try {
+          this.whisperManager?.stopServer();
+        } catch (_) {}
+        try {
+          this.databaseManager?.db?.close();
+        } catch (_) {}
+
+        const isDev = process.env.NODE_ENV === "development";
+        const dbPath = path.join(
+          app.getPath("userData"),
+          isDev ? "transcriptions-dev.db" : "transcriptions.db"
+        );
+
+        if (typeof parsed.db === "string" && parsed.db.length > 0) {
+          if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+          if (fs.existsSync(dbPath + "-wal")) fs.unlinkSync(dbPath + "-wal");
+          if (fs.existsSync(dbPath + "-shm")) fs.unlinkSync(dbPath + "-shm");
+          fs.writeFileSync(dbPath, Buffer.from(parsed.db, "base64"));
+        }
+
+        if (typeof parsed.env === "string") {
+          const envPath = path.join(app.getPath("userData"), ".env");
+          fs.writeFileSync(envPath, parsed.env, "utf-8");
+        }
+
+        // Push restored settings into localStorage before relaunch so the next
+        // launch hydrates settingsStore from the restored values.
+        const mainWindow = this.windowManager?.mainWindow;
+        if (mainWindow?.webContents && parsed.settings && typeof parsed.settings === "object") {
+          const script = `(function() {
+            localStorage.clear();
+            const data = ${JSON.stringify(parsed.settings)};
+            for (const key of Object.keys(data)) {
+              try { localStorage.setItem(key, data[key]); } catch (_) {}
+            }
+          })();`;
+          try {
+            await mainWindow.webContents.executeJavaScript(script);
+          } catch (e) {
+            debugLogger.error(
+              "Error writing restored settings to localStorage",
+              { error: e.message },
+              "backup"
+            );
+          }
+        }
+
+        // Relaunch after the IPC reply flushes so the renderer can show a
+        // confirmation before the whole process restarts with fresh state.
+        setTimeout(() => {
+          app.relaunch();
+          app.quit();
+        }, 300);
+
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Error restoring full backup", { error: error.message }, "backup");
+        return { success: false, error: error.message };
+      }
     });
 
     ipcMain.handle("cleanup-app", async (event) => {
@@ -3662,6 +3929,10 @@ class IPCHandlers {
         return { success: false, error: error.message };
       }
     };
+
+    ipcMain.on("open-control-panel", () => {
+      this.windowManager.createControlPanelWindow();
+    });
 
     ipcMain.handle("open-microphone-settings", () => openSystemSettings("microphone"));
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));

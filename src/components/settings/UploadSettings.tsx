@@ -4,6 +4,7 @@ import { Cloud, Key, Cpu } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
+import { WHISPER_MODEL_INFO, PARAKEET_MODEL_INFO } from "../../models/ModelRegistry";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
@@ -32,6 +33,14 @@ export function UploadTranscriptionPanel() {
     setUploadCloudTranscriptionMode,
   } = useSettingsStore();
 
+  const selectedUploadLocalModelId =
+    uploadLocalTranscriptionProvider === "nvidia" ? uploadParakeetModel : uploadWhisperModel;
+  const activeUploadLocalModelName = selectedUploadLocalModelId
+    ? (uploadLocalTranscriptionProvider === "nvidia"
+        ? PARAKEET_MODEL_INFO[selectedUploadLocalModelId]?.name
+        : WHISPER_MODEL_INFO[selectedUploadLocalModelId]?.name) ?? selectedUploadLocalModelId
+    : undefined;
+
   const transcriptionModes: InferenceModeOption[] = [
     {
       id: "providers",
@@ -44,6 +53,7 @@ export function UploadTranscriptionPanel() {
       label: t("settingsPage.transcription.modes.local"),
       description: t("settingsPage.transcription.modes.localDesc"),
       icon: <Cpu className="w-4 h-4" />,
+      activeLabel: activeUploadLocalModelName,
     },
   ];
 

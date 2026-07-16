@@ -492,8 +492,9 @@ class WhisperServerManager extends EventEmitter {
     });
 
     this.process.stderr.on("data", (data) => {
-      stderrBuffer += data.toString();
-      debugLogger.debug("whisper-server stderr", { data: data.toString().trim() });
+      const chunk = data.toString();
+      if (stderrBuffer.length < 65536) stderrBuffer += chunk;
+      debugLogger.debug("whisper-server stderr", { data: chunk.trim() });
     });
 
     this.process.on("error", (error) => {

@@ -4,6 +4,12 @@
     "createNew": "Criar Nova",
     "noTransforms": "Nenhuma transformação ainda. Crie uma para começar.",
     "disabled": "Desativada",
+    "backup": "Fazer backup para arquivo",
+    "restore": "Restaurar de um arquivo",
+    "backupFailed": "Falha ao fazer backup",
+    "restoreFailed": "Falha ao restaurar",
+    "restoreSuccess_one": "{{count}} transformação importada",
+    "restoreSuccess_other": "{{count}} transformações importadas",
     "editor": {
       "namePlaceholder": "Nome da transformação",
       "descriptionPlaceholder": "Descrição curta (opcional)",
@@ -174,13 +180,28 @@
   "onboarding": {
     "steps": {
       "welcome": "Boas-vindas",
-      "setup": "Configuração",
+      "setup": "Voz para Texto",
+      "languageModel": "Modelo de Linguagem",
+      "localModel": "Modelo Local",
       "permissions": "Permissões",
       "activation": "Ditado",
       "useCase": "Sobre você",
       "meeting": "Reuniões",
       "finish": "Concluir",
-      "voiceAgent": "Agente de voz"
+      "voiceAgent": "Agente de voz",
+      "language": "Idioma"
+    },
+    "languageModel": {
+      "description": "Escolha o modelo de IA para limpeza de ditado, agente, formatação de notas e transformações"
+    },
+    "localModel": {
+      "description": "Baixe e selecione um modelo de IA local para executar no seu dispositivo"
+    },
+    "language": {
+      "title": "Escolha seu idioma",
+      "description": "Defina o idioma da interface e da transcrição",
+      "uiLanguageLabel": "Idioma da interface",
+      "transcriptionLanguageLabel": "Idiomas de transcrição"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Não foi possível registrar esse atalho",
@@ -300,6 +321,10 @@
       "cleanupNote": "A limpeza de texto por IA usa padrões sensatos. Você pode ajustá-la a qualquer momento nas Configurações.",
       "openSettings": "Abrir Configurações",
       "skipForNow": "Pular por enquanto",
+      "autoStart": "Iniciar ao ligar",
+      "autoStartDescription": "Abre o EktosWhispr automaticamente ao fazer login",
+      "startMinimized": "Iniciar minimizado",
+      "startMinimizedDescription": "Inicia sem mostrar a janela do painel de controle",
       "corti": {
         "title": "Você nos disse que está aqui pela transcrição clínica",
         "description": "Firmamos parceria com a Corti — voz para texto de nível clínico com a maior precisão e em conformidade com a HIPAA.",
@@ -976,6 +1001,10 @@
     "gain": {
       "label": "Ganho do microfone",
       "description": "Amplifica o nível de entrada — atual: {{percent}}%. 100% = sem alteração. Aplica-se na próxima gravação."
+    },
+    "autoUnmute": {
+      "label": "Desmutar microfone automaticamente",
+      "description": "Desmuta automaticamente o microfone do sistema ao iniciar o ditado e o muta novamente ao parar."
     }
   },
   "pasteToolsInfo": {
@@ -1376,6 +1405,27 @@
         "title": "Remover modelos baixados?"
       },
       "removing": "Removendo...",
+      "fullBackup": {
+        "label": "Backup e restauração completos",
+        "description": "Faça backup de todas as notas, transcrições, pastas, snippets, dicionário e configurações do app em um único arquivo. Chaves de API e modelos baixados não são incluídos.",
+        "action": "Fazer backup",
+        "backingUp": "Fazendo backup...",
+        "failedTitle": "Falha no backup",
+        "failedDescription": "Algo deu errado ao criar o backup. Tente novamente.",
+        "successTitle": "Backup criado",
+        "successDescription": "Seus dados foram salvos no arquivo selecionado."
+      },
+      "fullRestore": {
+        "action": "Restaurar",
+        "restoring": "Restaurando...",
+        "title": "Restaurar a partir de backup?",
+        "description": "Isso substitui todas as notas, transcrições, pastas, snippets, dicionário e configurações do app atuais pelo conteúdo do arquivo de backup. Isso não pode ser desfeito. O app será reiniciado para aplicar as alterações.",
+        "confirmText": "Restaurar backup",
+        "failedTitle": "Falha ao restaurar",
+        "failedDescription": "Algo deu errado ao restaurar o backup. Verifique o arquivo e tente novamente.",
+        "successTitle": "Backup restaurado",
+        "successDescription": "O app será reiniciado agora para aplicar os dados restaurados."
+      },
       "resetAll": {
         "confirmText": "Excluir tudo",
         "description": "Isso excluirá permanentemente todas as configurações locais, transcrições, gravações de áudio, modelos de IA baixados, conexões de calendário e dados em cache. Os dados na nuvem e sua conta não serão afetados. O aplicativo será recarregado após a redefinição.",
@@ -2142,7 +2192,13 @@
       "timeNow": "Agora",
       "minutesAgo": "{{count}}m",
       "hoursAgo": "{{count}}h",
-      "daysAgo": "{{count}}d"
+      "daysAgo": "{{count}}d",
+      "backup": "Fazer backup para arquivo",
+      "restore": "Restaurar de um arquivo",
+      "backupFailed": "Falha ao fazer backup",
+      "restoreFailed": "Falha ao restaurar",
+      "restoreSuccess_one": "{{count}} nota importada",
+      "restoreSuccess_other": "{{count}} notas importadas"
     },
     "editor": {
       "untitled": "Sem título",
@@ -2376,6 +2432,10 @@
     "yourDictionary": "Seu dicionário",
     "exportDictionary": "Exportar dicionário",
     "exportFailed": "Falha ao exportar",
+    "importDictionary": "Importar de um arquivo",
+    "importFailed": "Falha ao importar",
+    "importSuccess_one": "{{count}} palavra importada",
+    "importSuccess_other": "{{count}} palavras importadas",
     "editWord": "Editar {{word}}",
     "noMatches": "Nenhuma correspondência — pressione Enter para adicionar \"{{word}}\"",
     "tabDictionary": "Dicionário",

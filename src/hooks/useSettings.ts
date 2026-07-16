@@ -62,6 +62,7 @@ export interface MicrophoneSettings {
   selectedMicDeviceId: string;
   micNoiseSuppression: boolean;
   micGain: number;
+  autoUnmuteMicEnabled: boolean;
 }
 
 export interface ApiKeySettings {
@@ -330,10 +331,12 @@ function useSettingsInternal() {
     selectedMicDeviceId: store.selectedMicDeviceId,
     micNoiseSuppression: store.micNoiseSuppression,
     micGain: store.micGain,
+    autoUnmuteMicEnabled: store.autoUnmuteMicEnabled,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
     setSelectedMicDeviceId: store.setSelectedMicDeviceId,
     setMicNoiseSuppression: store.setMicNoiseSuppression,
     setMicGain: store.setMicGain,
+    setAutoUnmuteMicEnabled: store.setAutoUnmuteMicEnabled,
     autoLearnCorrections,
     setAutoLearnCorrections,
     showTranscriptionPreview: store.showTranscriptionPreview,

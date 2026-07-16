@@ -232,7 +232,10 @@ class MeetingAecManager {
   }
 
   _consumeStdout(chunk) {
-    this.stdoutBuffer = Buffer.concat([this.stdoutBuffer, chunk]);
+    // Avoid allocation when there's no leftover from the previous frame (common case).
+    this.stdoutBuffer = this.stdoutBuffer.length === 0
+      ? chunk
+      : Buffer.concat([this.stdoutBuffer, chunk]);
 
     while (this.stdoutBuffer.length >= 4) {
       const frameLength = this.stdoutBuffer.readUInt32LE(0);
@@ -240,9 +243,9 @@ class MeetingAecManager {
         return;
       }
 
-      const payload = this.stdoutBuffer.subarray(4, 4 + frameLength);
+      // slice() copies only the payload bytes; subarray would keep the full buffer alive.
+      this.onMicChunk?.(this.stdoutBuffer.slice(4, 4 + frameLength));
       this.stdoutBuffer = this.stdoutBuffer.subarray(4 + frameLength);
-      this.onMicChunk?.(Buffer.from(payload));
     }
   }
 

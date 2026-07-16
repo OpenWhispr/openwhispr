@@ -135,6 +135,7 @@ const BOOLEAN_SETTINGS = new Set([
   "useCleanupModel",
   "useDictationAgent",
   "preferBuiltInMic",
+  "autoUnmuteMicEnabled",
   "cloudBackupEnabled",
   "telemetryEnabled",
   "audioCuesEnabled",
@@ -452,6 +453,7 @@ export interface SettingsState
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
   showTranscriptionPreview: boolean;
   autoPasteEnabled: boolean;
+  autoUnmuteMicEnabled: boolean;
   keepTranscriptionInClipboard: boolean;
   noteFilesEnabled: boolean;
   noteFilesPath: string;
@@ -686,6 +688,7 @@ export interface SettingsState
   setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => void;
   setShowTranscriptionPreview: (value: boolean) => void;
   setAutoPasteEnabled: (value: boolean) => void;
+  setAutoUnmuteMicEnabled: (value: boolean) => void;
   setKeepTranscriptionInClipboard: (value: boolean) => void;
   setNoteFilesEnabled: (value: boolean) => void;
   setNoteFilesPath: (value: string) => void;
@@ -931,8 +934,45 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
   })(),
   transforms: (() => {
+    const raw = isBrowser ? localStorage.getItem("transforms") : null;
+    if (raw === null) {
+      return [
+        {
+          id: "default-professional",
+          name: "Professional",
+          description: "Makes text concise, clear, well-structured, and removes frustration",
+          hotkey: "Control+Shift+1",
+          enabled: true,
+          rules: {
+            makeMoreConcise: true,
+            rewordForClarity: true,
+            reorderForReadability: true,
+            addStructureForReadability: true,
+            removeFrustration: true,
+          },
+          customPrompt: "",
+        },
+        {
+          id: "default-chat",
+          name: "Chat",
+          description: "",
+          hotkey: "Control+Shift+2",
+          enabled: true,
+          rules: {
+            makeMoreConcise: true,
+            rewordForClarity: true,
+            reorderForReadability: false,
+            addStructureForReadability: true,
+            removeFrustration: false,
+          },
+          customPrompt: "use abreviations, short lines and a few minor emoticons",
+          includeActiveApp: false,
+          richText: true,
+        },
+      ] as Transform[];
+    }
     try {
-      const parsed = JSON.parse(readString("transforms", "[]"));
+      const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? (parsed as Transform[]) : [];
     } catch {
       return [];
@@ -1017,8 +1057,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   saveDiscardedTranscriptions: readBoolean("saveDiscardedTranscriptions", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", true),
-  floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
-  startMinimized: readBoolean("startMinimized", true),
+  floatingIconAutoHide: readBoolean("floatingIconAutoHide", true),
+  startMinimized: readBoolean("startMinimized", false),
   notificationsEnabled: readBoolean("notificationsEnabled", true),
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", false),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
@@ -1064,12 +1104,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     readString("whisperVadSamplesOverlap", "0.5")
   ),
   panelStartPosition: (() => {
-    const v = readString("panelStartPosition", "bottom-right");
+    const v = readString("panelStartPosition", "center");
     if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
-    return "bottom-right" as const;
+    return "center" as const;
   })(),
   showTranscriptionPreview: readBoolean("showTranscriptionPreview", false),
-  autoPasteEnabled: readBoolean("autoPasteEnabled", false),
+  autoPasteEnabled: readBoolean("autoPasteEnabled", true),
+  autoUnmuteMicEnabled: readBoolean("autoUnmuteMicEnabled", false),
   keepTranscriptionInClipboard: readBoolean("keepTranscriptionInClipboard", false),
   noteFilesEnabled: readBoolean("noteFilesEnabled", false),
   noteFilesPath: readString("noteFilesPath", ""),
@@ -1086,9 +1127,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
   remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
   cleanupMode: (() => {
-    const v = readString("cleanupMode", "providers");
+    const v = readString("cleanupMode", "local");
     if (v === "providers" || v === "local" || v === "self-hosted" || v === "enterprise") return v;
-    return "providers" as InferenceMode;
+    return "local" as InferenceMode;
   })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
 
@@ -1097,7 +1138,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (v === "providers" || v === "local" || v === "self-hosted") return v;
     return "providers" as InferenceMode;
   })(),
-  meetingUseLocalWhisper: readBoolean("meetingUseLocalWhisper", false),
+  meetingUseLocalWhisper: readBoolean("meetingUseLocalWhisper", true),
   meetingWhisperModel: readString("meetingWhisperModel", ""),
   meetingLocalTranscriptionProvider: (readString("meetingLocalTranscriptionProvider", "whisper") ===
   "nvidia"
@@ -1119,7 +1160,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (v === "providers" || v === "local" || v === "self-hosted") return v;
     return "providers" as InferenceMode;
   })(),
-  uploadUseLocalWhisper: readBoolean("uploadUseLocalWhisper", false),
+  uploadUseLocalWhisper: readBoolean("uploadUseLocalWhisper", true),
   uploadWhisperModel: readString("uploadWhisperModel", ""),
   uploadLocalTranscriptionProvider: (readString("uploadLocalTranscriptionProvider", "whisper") ===
   "nvidia"
@@ -1655,6 +1696,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setShowTranscriptionPreview: createBooleanSetter("showTranscriptionPreview"),
   setAutoPasteEnabled: createBooleanSetter("autoPasteEnabled"),
+  setAutoUnmuteMicEnabled: createBooleanSetter("autoUnmuteMicEnabled"),
   setKeepTranscriptionInClipboard: createBooleanSetter("keepTranscriptionInClipboard"),
   setNoteFilesEnabled: createBooleanSetter("noteFilesEnabled"),
   setNoteFilesPath: createStringSetter("noteFilesPath"),

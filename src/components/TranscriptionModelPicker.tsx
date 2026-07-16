@@ -954,23 +954,6 @@ export default function TranscriptionModelPicker({
         </>
       ) : (
         <>
-          {(() => {
-            const modelList = internalLocalProvider === "nvidia" ? parakeetModels : localModels;
-            const modelInfo = internalLocalProvider === "nvidia"
-              ? PARAKEET_MODEL_INFO[selectedLocalModel]
-              : WHISPER_MODEL_INFO[selectedLocalModel];
-            const isActive = selectedLocalModel && modelList.find((m) => m.model === selectedLocalModel)?.downloaded;
-            if (!isActive) return null;
-            return (
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-green-500/10 border border-green-500/20">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.5)] animate-[pulse-glow_2s_ease-in-out_infinite] shrink-0" />
-                <span className="text-xs font-medium text-foreground truncate">
-                  {modelInfo?.name || selectedLocalModel}
-                </span>
-              </div>
-            );
-          })()}
-
           <ProviderTabs
             providers={LOCAL_PROVIDER_TABS}
             selectedId={internalLocalProvider}

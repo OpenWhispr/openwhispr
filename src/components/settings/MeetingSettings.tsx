@@ -4,6 +4,7 @@ import { Cloud, Key, Cpu, Network } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
+import { WHISPER_MODEL_INFO, PARAKEET_MODEL_INFO } from "../../models/ModelRegistry";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
@@ -53,6 +54,14 @@ export function MeetingTranscriptionPanel() {
     setMeetingRemoteTranscriptionUrl,
   } = useSettingsStore();
 
+  const selectedMeetingLocalModelId =
+    meetingLocalTranscriptionProvider === "nvidia" ? meetingParakeetModel : meetingWhisperModel;
+  const activeMeetingLocalModelName = selectedMeetingLocalModelId
+    ? (meetingLocalTranscriptionProvider === "nvidia"
+        ? PARAKEET_MODEL_INFO[selectedMeetingLocalModelId]?.name
+        : WHISPER_MODEL_INFO[selectedMeetingLocalModelId]?.name) ?? selectedMeetingLocalModelId
+    : undefined;
+
   const transcriptionModes: InferenceModeOption[] = [
     {
       id: "providers",
@@ -65,6 +74,7 @@ export function MeetingTranscriptionPanel() {
       label: t("settingsPage.transcription.modes.local"),
       description: t("settingsPage.transcription.modes.localDesc"),
       icon: <Cpu className="w-4 h-4" />,
+      activeLabel: activeMeetingLocalModelName,
     },
     {
       id: "self-hosted",

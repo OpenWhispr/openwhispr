@@ -72,6 +72,8 @@ function MainApp() {
       // Keep the dictation overlay hidden during onboarding — OnboardingFlow
       // shows it explicitly when the user reaches the activation step.
       window.electronAPI?.hideWindow?.();
+      // Ensure the control panel (which renders the wizard) is open and visible.
+      window.electronAPI?.openControlPanel?.();
     }
 
     setIsLoading(false);

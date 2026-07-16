@@ -43,6 +43,7 @@ const registerListener = (channel, handlerFactory) => {
 
 contextBridge.exposeInMainWorld("electronAPI", {
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
+  setMicMuted: (muted) => ipcRenderer.invoke("set-mic-muted", muted),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
@@ -92,6 +93,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setSnippets: (snippets) => ipcRenderer.invoke("db-set-snippets", snippets),
   snippetsBackup: () => ipcRenderer.invoke("snippets-backup"),
   snippetsRestore: () => ipcRenderer.invoke("snippets-restore"),
+  dictionaryRestore: () => ipcRenderer.invoke("dictionary-restore"),
+  transformsBackup: (transforms) => ipcRenderer.invoke("transforms-backup", transforms),
+  transformsRestore: () => ipcRenderer.invoke("transforms-restore"),
+  notesBackup: () => ipcRenderer.invoke("notes-backup"),
+  notesRestore: () => ipcRenderer.invoke("notes-restore"),
   onSnippetsUpdated: (callback) => {
     const listener = (_event, snippets) => callback?.(snippets);
     ipcRenderer.on("snippets-updated", listener);
@@ -329,6 +335,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   snapToMeetingMode: () => ipcRenderer.invoke("snap-to-meeting-mode"),
   restoreFromMeetingMode: () => ipcRenderer.invoke("restore-from-meeting-mode"),
   getPlatform: () => process.platform,
+
+  // Full backup / restore
+  fullBackup: (settings) => ipcRenderer.invoke("full-backup", settings),
+  fullRestore: () => ipcRenderer.invoke("full-restore"),
 
   // Cleanup function
   cleanupApp: () => ipcRenderer.invoke("cleanup-app"),
@@ -623,6 +633,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Start minimized
   notifyStartMinimizedChanged: (enabled) => ipcRenderer.send("start-minimized-changed", enabled),
 
+  // Open control panel window from renderer
+  openControlPanel: () => ipcRenderer.send("open-control-panel"),
+
   // Auto-start management
   getAutoStartEnabled: () => ipcRenderer.invoke("get-auto-start-enabled"),
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),
@@ -749,6 +762,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Transforms
   syncTransforms: (transforms) => ipcRenderer.invoke("sync-transforms", transforms),
+  onTransformActivated: registerListener(
+    "transform-activated",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   onRunTransform: registerListener(
     "run-transform",
     (callback) => (_event, payload) => callback(payload)

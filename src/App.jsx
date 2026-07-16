@@ -216,12 +216,21 @@ export default function App() {
     return () => unsubscribe?.();
   }, []);
 
+  // Play the activation cue the instant the hotkey fires — before the
+  // copy/clipboard-poll pipeline in transformManager.js runs (which can take ~1s)
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onTransformActivated?.(() => {
+      setIsTransforming(true);
+      playTransformStartCue();
+    });
+    return () => unsubscribe?.();
+  }, []);
+
   // Handle transform execution requests from main process
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onRunTransform?.(async ({ id, text, systemPrompt, activeApp, richText }) => {
       console.log(`[Transform] Received run-transform id=${id} textLength=${text?.length} activeApp=${activeApp ?? "none"}`);
       setIsTransforming(true);
-      playTransformStartCue();
       let succeeded = false;
       let cfg = null;
       let effectivePrompt = "";

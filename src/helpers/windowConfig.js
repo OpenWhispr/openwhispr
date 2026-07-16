@@ -86,7 +86,6 @@ const CONTROL_PANEL_CONFIG = {
     // directly from the browser. These would be blocked by CORS otherwise.
     webSecurity: false,
     spellcheck: false,
-    backgroundThrottling: false,
   },
   title: "Control Panel",
   resizable: true,
@@ -262,7 +261,6 @@ const AGENT_OVERLAY_CONFIG = {
     sandbox: false,
     webSecurity: false,
     spellcheck: false,
-    backgroundThrottling: false,
   },
 };
 

@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { useSettings } from "./useSettings";
+import { useSettingsStore } from "../stores/settingsStore";
 
 export function useTheme() {
-  const { theme, setTheme } = useSettings();
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
 
   useEffect(() => {
     const htmlElement = document.documentElement;

@@ -38,11 +38,11 @@ export default function OptionCard({
           className={cn(
             "w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-colors duration-150",
             selected
-              ? "bg-primary/15 dark:bg-primary/20"
-              : "bg-primary/10 dark:bg-primary/15 group-hover:bg-primary/15"
+              ? "bg-primary/10 dark:bg-primary/15"
+              : "bg-muted/60 dark:bg-surface-raised group-hover:bg-muted dark:group-hover:bg-surface-3"
           )}
         >
-          <Icon className="w-4 h-4 text-primary" />
+          <Icon className={cn("w-4 h-4", selected ? "text-primary" : "text-muted-foreground")} />
         </div>
 
         <div className="flex-1 min-w-0">

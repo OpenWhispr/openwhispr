@@ -35,7 +35,7 @@ class VectorIndex {
     try {
       const vector = await localEmbeddings.embedText(text);
       await this.client.upsert(this.collectionName, {
-        points: [{ id: noteId, vector: Array.from(vector), payload: {} }],
+        points: [{ id: noteId, vector: [...vector], payload: {} }],
       });
     } catch (err) {
       debugLogger.debug("Vector index upsert failed", { noteId, error: err.message });
@@ -56,7 +56,7 @@ class VectorIndex {
     try {
       const vector = await localEmbeddings.embedText(queryText);
       const results = await this.client.search(this.collectionName, {
-        vector: Array.from(vector),
+        vector: [...vector],
         limit,
       });
       return results.map((r) => ({ noteId: r.id, score: r.score }));
@@ -148,7 +148,7 @@ class VectorIndex {
     try {
       const vector = await localEmbeddings.embedText(queryText);
       const results = await this.client.search(this.conversationChunksCollection, {
-        vector: Array.from(vector),
+        vector: [...vector],
         limit: limit * 3,
       });
 

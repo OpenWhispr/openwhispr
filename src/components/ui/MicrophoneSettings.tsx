@@ -22,6 +22,8 @@ interface MicrophoneSettingsProps {
   onMicNoiseSuppressionChange: (value: boolean) => void;
   micGain: number;
   onMicGainChange: (value: number) => void;
+  autoUnmuteMic: boolean;
+  onAutoUnmuteMicChange: (value: boolean) => void;
 }
 
 export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
@@ -33,6 +35,8 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
   onMicNoiseSuppressionChange,
   micGain,
   onMicGainChange,
+  autoUnmuteMic,
+  onAutoUnmuteMicChange,
 }) => {
   const { t } = useTranslation();
   const [devices, setDevices] = useState<AudioDevice[]>([]);
@@ -207,6 +211,13 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
             {gainPercent}%
           </span>
         </div>
+      </SettingsRow>
+
+      <SettingsRow
+        label={t("microphoneSettings.autoUnmute.label")}
+        description={t("microphoneSettings.autoUnmute.description")}
+      >
+        <Toggle checked={autoUnmuteMic} onChange={onAutoUnmuteMicChange} />
       </SettingsRow>
     </div>
   );

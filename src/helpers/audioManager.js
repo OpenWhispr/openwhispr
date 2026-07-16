@@ -762,10 +762,16 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
       if (this._gateCtx && this._gainNode && this._pcmCollectorLoaded) {
         try {
           this._pcmChunks = [];
+          this._pcmSamplesCount = 0;
           this._pcmCollector = new AudioWorkletNode(this._gateCtx, "pcm-collector-processor");
           this._pcmCollector.port.onmessage = (event) => {
             if (event.data !== null) {
-              this._pcmChunks.push(new Int16Array(event.data));
+              // Cap at 10 min (9,600,000 samples @ 16 kHz)
+              if (this._pcmSamplesCount < 9_600_000) {
+                const chunk = new Int16Array(event.data);
+                this._pcmChunks.push(chunk);
+                this._pcmSamplesCount += chunk.length;
+              }
             }
           };
           this._gainNode.connect(this._pcmCollector);
@@ -887,7 +893,12 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
     if (this._gateSource && !this._previewProcessor) {
       try { this._gateSource.disconnect(); } catch {}
       this._gateSource = null;
-      this._gateCtx?.suspend().catch(() => {});
+      if (this._gateCtx && this._gateCtx.state !== "closed") {
+        this._gateCtx.close().catch(() => {});
+        this._gateCtx = null;
+        this._gateWorkletLoaded = false;
+        this._pcmCollectorLoaded = false;
+      }
     }
   }
 
@@ -963,6 +974,7 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
         },
         "audio"
       );
+      this.lastAudioBlob = null;
       this.isProcessing = false;
       this.onStateChange?.({ isRecording: false, isProcessing: false });
       this.onTranscriptionComplete?.({ success: true, text: "" });
@@ -3356,7 +3368,12 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
       try { this._gateSource.disconnect(); } catch {}
       this._gateSource = null;
     }
-    this._gateCtx?.suspend().catch(() => {});
+    if (this._gateCtx && this._gateCtx.state !== "closed") {
+      this._gateCtx.close().catch(() => {});
+      this._gateCtx = null;
+      this._gateWorkletLoaded = false;
+      this._pcmCollectorLoaded = false;
+    }
 
     if (dismiss) {
       window.electronAPI?.dismissDictationPreview?.();
@@ -3394,6 +3411,11 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
     }
 
     this.streamingAudioContext = null;
+    if (this.persistentAudioContext && this.persistentAudioContext.state !== "closed") {
+      this.persistentAudioContext.close().catch(() => {});
+      this.persistentAudioContext = null;
+      this.workletModuleLoaded = false;
+    }
 
     if (this.streamingStream) {
       this.streamingStream.getTracks().forEach((track) => track.stop());

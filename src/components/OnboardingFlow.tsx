@@ -11,8 +11,9 @@ import {
   Settings,
   Shield,
   Command,
-  Sparkles,
-  UserCircle,
+  Languages,
+  Brain,
+  Cpu,
   Users,
 } from "lucide-react";
 import TitleBar from "./TitleBar";
@@ -28,12 +29,13 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
-import { useSettingsStore } from "../stores/settingsStore";
+import { useSettingsStore, selectResolvedLLMConfig, setResolvedLLMConfig } from "../stores/settingsStore";
 import LanguageSelector from "./ui/LanguageSelector";
+import InferenceConfigEditor from "./settings/InferenceConfigEditor";
+import LocalModelSection from "./settings/LocalModelSection";
 import { setAgentName as saveAgentName } from "../utils/agentName";
 import {
   formatHotkeyLabel,
-  formatHotkeyListLabel,
   getDefaultHotkey,
   isGlobeLikeHotkey,
   parseHotkeyList,
@@ -43,7 +45,6 @@ import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { getValidationMessage } from "../utils/hotkeyValidator";
-import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getCachedPlatform, getPlatform } from "../utils/platform";
 import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
@@ -58,7 +59,7 @@ import { USE_CASE_IDS } from "./onboarding/useCases";
 const MAX_STEP_INDEX = 7;
 
 // Steps whose primary action is optional — the user can advance without it.
-const SKIPPABLE_STEPS = new Set(["voiceAgent", "meeting"]);
+const SKIPPABLE_STEPS = new Set(["meeting"]);
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -115,6 +116,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setUseLocalWhisper,
     updateTranscriptionSettings,
     preferredLanguage,
+    uiLanguage,
+    setUiLanguage,
     onboardingUseCases,
     setOnboardingUseCases,
     onboardingUseCaseNote,
@@ -123,6 +126,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+  const cleanupMode = useSettingsStore((s) => s.cleanupMode);
+  const showLocalModelStep = cleanupMode === "local";
 
   // Onboarding edits only the primary dictation hotkey; extra bindings are
   // preserved via withExtraDictationHotkeys.
@@ -130,11 +135,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     () => parseHotkeyList(dictationKey)[0] || getDefaultHotkey()
   );
   const [agentName, setAgentName] = useState("EktosWhispr");
+  const [autoStartEnabled, setAutoStartEnabled] = useState(false);
+  const [startMinimized, setStartMinimized] = useState(false);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
     useHotkeyModeInfo("onboarding");
   const readableHotkey = formatHotkeyLabel(hotkey);
-  const readableVoiceAgentKey = formatHotkeyListLabel(voiceAgentKey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
   const [connectivityDialog, setConnectivityDialog] = useState<{
@@ -165,20 +171,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     []
   );
 
-  const validateVoiceAgentHotkey = useCallback(
-    (newHotkey: string) =>
-      validateHotkeyForSlot(
-        newHotkey,
-        { "settingsPage.general.hotkey.title": withExtraDictationHotkeys(hotkey) },
-        t
-      ),
-    [hotkey, withExtraDictationHotkeys, t]
-  );
-
   const permissionsHook = usePermissions(showAlertDialog);
   useClipboard(showAlertDialog); // Initialize clipboard hook for permission checks
 
   const systemAudio = useSystemAudioPermission();
+
+  // Wizard always starts with local modes regardless of any stale stored values.
+  useEffect(() => {
+    const store = useSettingsStore.getState();
+    if (!store.useLocalWhisper) {
+      store.setUseLocalWhisper(true);
+    }
+    if (store.cleanupMode !== "local") {
+      store.setCleanupMode("local");
+    }
+  }, []);
 
   useEffect(() => {
     if (permissionsHook.accessibilityPermissionGranted && accessibilitySkipped) {
@@ -199,17 +206,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const steps = useMemo(() => {
     const list = [
+      { id: "language", title: t("onboarding.steps.language"), icon: Languages },
       { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
-      { id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield },
-      { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
-      { id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles },
+      { id: "languageModel", title: t("onboarding.steps.languageModel"), icon: Brain },
     ];
+    if (showLocalModelStep) {
+      list.push({ id: "localModel", title: t("onboarding.steps.localModel"), icon: Cpu });
+    }
+    list.push({ id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield });
+    list.push({ id: "activation", title: t("onboarding.steps.activation"), icon: Command });
     if (showMeetingStep) {
       list.push({ id: "meeting", title: t("onboarding.steps.meeting"), icon: Users });
     }
     list.push({ id: "finish", title: t("onboarding.steps.finish"), icon: Flag });
     return list;
-  }, [showMeetingStep, t]);
+  }, [showMeetingStep, showLocalModelStep, t]);
 
   const currentStepId = steps[currentStep]?.id;
 
@@ -353,6 +364,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setDictationKey(withExtraDictationHotkeys(hotkey));
     saveAgentName(agentName);
 
+    // Ensure all transcription modes are set to "local" after wizard completion
+    const store = useSettingsStore.getState();
+    store.setTranscriptionMode("local");
+    store.setMeetingTranscriptionMode("local");
+    store.setUploadTranscriptionMode("local");
+
     localStorage.setItem("onboardingCompleted", "true");
 
     // Fresh install: write the bundle-migration sentinel so the
@@ -367,7 +384,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       logger.error("Failed to persist API keys", { error }, "onboarding");
     }
 
-    void window.electronAPI?.setAutoStartEnabled?.(true);
+    void window.electronAPI?.setAutoStartEnabled?.(autoStartEnabled);
+    useSettingsStore.getState().setStartMinimized(startMinimized);
 
     window.electronAPI?.downloadWhisperModel?.("base")?.catch?.(() => {});
     window.electronAPI?.modelDownload?.("qwen3.5-2b-q4_k_m")?.catch?.(() => {});
@@ -402,6 +420,44 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       setAccessibilitySkipped(true);
     }
 
+    // When leaving the STT step, mirror the full selection (mode + model + provider) to
+    // meeting and upload scopes so the dictation test step already uses the right model.
+    if (currentStepId === "setup") {
+      const store = useSettingsStore.getState();
+      store.setUseLocalWhisper(true);
+      store.setMeetingUseLocalWhisper(true);
+      store.setUploadUseLocalWhisper(true);
+      const selectedProvider = store.localTranscriptionProvider;
+      store.setMeetingLocalTranscriptionProvider(selectedProvider);
+      store.setUploadLocalTranscriptionProvider(selectedProvider);
+      const selectedWhisperModel = store.whisperModel;
+      if (selectedWhisperModel) {
+        store.setMeetingWhisperModel(selectedWhisperModel);
+        store.setUploadWhisperModel(selectedWhisperModel);
+      }
+      const selectedParakeetModel = store.parakeetModel;
+      if (selectedParakeetModel) {
+        store.setMeetingParakeetModel(selectedParakeetModel);
+        store.setUploadParakeetModel(selectedParakeetModel);
+      }
+    }
+
+    // When leaving the Language Model step, mirror dictationCleanup config to all other scopes
+    if (currentStepId === "languageModel") {
+      const cfg = selectResolvedLLMConfig(useSettingsStore.getState(), "dictationCleanup");
+      const patch = {
+        mode: cfg.mode,
+        provider: cfg.provider,
+        model: cfg.model,
+        cloudMode: cfg.cloudMode,
+        cloudBaseUrl: cfg.cloudBaseUrl,
+        remoteUrl: cfg.remoteUrl,
+      };
+      setResolvedLLMConfig("dictationAgent", patch);
+      setResolvedLLMConfig("noteFormatting", patch);
+      setResolvedLLMConfig("chatIntelligence", patch);
+    }
+
     const newStep = currentStep + 1;
     setCurrentStep(newStep);
 
@@ -420,6 +476,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     onboardingUseCaseNote,
     permissionsHook.accessibilityPermissionGranted,
     setAccessibilitySkipped,
+    useLocalWhisper,
   ]);
 
   const prevStep = useCallback(() => {
@@ -509,21 +566,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 updateTranscriptionSettings({ cloudTranscriptionBaseUrl: url })
               }
               variant="onboarding"
+              mode="local"
             />
 
-            {/* Language Selection - shown for both modes */}
-            <div className="space-y-2 p-3 bg-muted/50 border border-border/60 rounded">
-              <label className="block text-xs font-medium text-muted-foreground">
-                {t("onboarding.transcription.preferredLanguage")}
-              </label>
-              <LanguageSelector
-                value={preferredLanguage}
-                onChange={(value) => {
-                  updateTranscriptionSettings({ preferredLanguage: value });
-                }}
-                className="w-full"
-              />
-            </div>
           </div>
         );
 
@@ -557,8 +602,38 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "activation":
         return renderActivationStep();
 
-      case "voiceAgent":
-        return renderVoiceAgentStep();
+      case "language":
+        return renderLanguageStep();
+
+      case "languageModel":
+        return (
+          <div className="space-y-4">
+            <div className="text-center space-y-0.5">
+              <h2 className="text-lg font-semibold text-foreground tracking-tight">
+                {t("onboarding.steps.languageModel")}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {t("onboarding.languageModel.description")}
+              </p>
+            </div>
+            <InferenceConfigEditor scope="dictationCleanup" />
+          </div>
+        );
+
+      case "localModel":
+        return (
+          <div className="space-y-4">
+            <div className="text-center space-y-0.5">
+              <h2 className="text-lg font-semibold text-foreground tracking-tight">
+                {t("onboarding.steps.localModel")}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {t("onboarding.localModel.description")}
+              </p>
+            </div>
+            <LocalModelSection />
+          </div>
+        );
 
       case "meeting":
         return (
@@ -576,6 +651,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             useCases={onboardingUseCases}
             onFinish={(openSettings) => void finishOnboarding(openSettings)}
             isFinishing={isFinishing}
+            autoStartEnabled={autoStartEnabled}
+            onAutoStartChange={setAutoStartEnabled}
+            startMinimized={startMinimized}
+            onStartMinimizedChange={setStartMinimized}
           />
         );
 
@@ -674,80 +753,45 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     </div>
   );
 
-  const renderVoiceAgentStep = () => (
+  const UI_LANGUAGE_OPTIONS = [
+    { value: "en", label: "English", flag: "🇺🇸" },
+    { value: "pt", label: "Português", flag: "🇵🇹" },
+  ];
+
+  const renderLanguageStep = () => (
     <div className="space-y-4">
-      {/* Header */}
       <div className="text-center space-y-0.5">
         <h2 className="text-lg font-semibold text-foreground tracking-tight">
-          {t("onboarding.voiceAgent.title")}
+          {t("onboarding.language.title")}
         </h2>
-        <p className="text-xs text-muted-foreground">{t("onboarding.voiceAgent.description")}</p>
+        <p className="text-xs text-muted-foreground">{t("onboarding.language.description")}</p>
       </div>
 
-      {/* Hotkey section */}
-      <div className="rounded-lg border border-border-subtle bg-surface-1 overflow-hidden">
-        <div className="p-4 border-b border-border-subtle">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {t("onboarding.voiceAgent.hotkey")}
-            </span>
-          </div>
-          <HotkeyInput
-            value={parseHotkeyList(voiceAgentKey)[0] ?? ""}
-            onChange={(newHotkey) =>
-              setVoiceAgentKey(
-                serializeHotkeyList([newHotkey, ...parseHotkeyList(voiceAgentKey).slice(1)])
-              )
-            }
-            onClear={() =>
-              setVoiceAgentKey(serializeHotkeyList(parseHotkeyList(voiceAgentKey).slice(1)))
-            }
-            variant="hero"
-            validate={validateVoiceAgentHotkey}
+      <div className="space-y-3">
+        <div className="space-y-1.5 p-3 bg-muted/50 border border-border/60 rounded">
+          <label className="block text-xs font-medium text-muted-foreground">
+            {t("onboarding.language.uiLanguageLabel")}
+          </label>
+          <LanguageSelector
+            value={uiLanguage}
+            onChange={setUiLanguage}
+            options={UI_LANGUAGE_OPTIONS}
+            className="w-full"
           />
         </div>
 
-        <div className="p-4">
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {t("onboarding.voiceAgent.howItWorks", { agentName })}
-          </p>
+        <div className="space-y-1.5 p-3 bg-muted/50 border border-border/60 rounded">
+          <label className="block text-xs font-medium text-muted-foreground">
+            {t("onboarding.language.transcriptionLanguageLabel")}
+          </label>
+          <LanguageSelector
+            value={preferredLanguage}
+            onChange={(value) => updateTranscriptionSettings({ preferredLanguage: value })}
+            multiSelect
+            className="w-full"
+          />
         </div>
       </div>
-
-      {/* Test area - minimal chrome */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            {t("onboarding.voiceAgent.test")}
-          </span>
-          <span className="text-xs text-muted-foreground/60">
-            {voiceAgentKey
-              ? t("onboarding.voiceAgent.testInstruction", { hotkey: readableVoiceAgentKey })
-              : t("onboarding.voiceAgent.testSetHotkey")}
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {(t("onboarding.voiceAgent.examples", { returnObjects: true }) as string[]).map(
-            (example) => (
-              <span
-                key={example}
-                className="rounded-full border border-border-subtle bg-muted px-2.5 py-1 text-xs text-muted-foreground"
-              >
-                {example}
-              </span>
-            )
-          )}
-        </div>
-        <Textarea
-          rows={2}
-          placeholder={t("onboarding.voiceAgent.testPlaceholder")}
-          className="text-sm resize-none"
-        />
-      </div>
-
-      <p className="text-xs text-muted-foreground/60 text-center">
-        {t("onboarding.voiceAgent.optionalNote")}
-      </p>
     </div>
   );
 
@@ -782,8 +826,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
       case "activation":
         return hotkey.trim() !== "";
-      case "voiceAgent":
-        return true; // Voice agent hotkey is optional
+      case "language":
+        return true;
+      case "languageModel":
+        return true;
+      case "localModel":
+        return true;
       case "meeting":
         return true; // Meeting hotkey is optional
       case "finish":
@@ -883,7 +931,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       {/* Content - This will grow to fill available space */}
       <div className="flex-1 px-6 md:px-12 overflow-y-auto py-6">
         <div className="w-full max-w-3xl mx-auto">
-          <Card className="bg-card/90 backdrop-blur-2xl border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
+          <Card className="bg-card border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
             <CardContent className="p-6 md:p-8">
               {renderStep()}
             </CardContent>

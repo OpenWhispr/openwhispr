@@ -515,6 +515,7 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<void>;
+      setMicMuted: (muted: boolean) => Promise<{ success: boolean; error?: string }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       onToggleDictation: (callback: () => void) => () => void;
@@ -595,6 +596,22 @@ declare global {
       ) => Promise<{ success: boolean }>;
       snippetsBackup?: () => Promise<{ success?: boolean; canceled?: boolean }>;
       snippetsRestore?: () => Promise<{ snippets?: Array<{ trigger: string; replacement: string; apps?: string[] }>; canceled?: boolean; error?: string }>;
+      dictionaryRestore?: () => Promise<{ content?: string; canceled?: boolean; error?: string }>;
+      transformsBackup?: (
+        transforms: import("../stores/settingsStore").Transform[]
+      ) => Promise<{ success?: boolean; canceled?: boolean; error?: string }>;
+      transformsRestore?: () => Promise<{
+        transforms?: import("../stores/settingsStore").Transform[];
+        canceled?: boolean;
+        error?: string;
+      }>;
+      notesBackup?: () => Promise<{ success?: boolean; canceled?: boolean; error?: string }>;
+      notesRestore?: () => Promise<{
+        success?: boolean;
+        imported?: number;
+        canceled?: boolean;
+        error?: string;
+      }>;
       onSnippetsUpdated?: (
         callback: (snippets: Array<{ trigger: string; replacement: string; apps?: string[] }>) => void
       ) => () => void;
@@ -606,6 +623,9 @@ declare global {
       syncTransforms?: (
         transforms: import("../stores/settingsStore").Transform[]
       ) => Promise<{ success: boolean }>;
+      onTransformActivated?: (
+        callback: (payload: { id: string }) => void
+      ) => () => void;
       onRunTransform?: (
         callback: (payload: { id: string; text: string; systemPrompt: string }) => void
       ) => () => void;
@@ -962,6 +982,10 @@ declare global {
 
       // App management
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
+      fullBackup?: (
+        settings: Record<string, string>
+      ) => Promise<{ success?: boolean; canceled?: boolean; filePath?: string; error?: string }>;
+      fullRestore?: () => Promise<{ success?: boolean; canceled?: boolean; error?: string }>;
 
       // Update operations
       checkForUpdates: () => Promise<UpdateCheckResult>;

@@ -268,8 +268,9 @@ class LlamaServerManager {
       });
 
       this.process.stderr.on("data", (data) => {
-        stderrBuffer += data.toString();
-        debugLogger.debug("llama-server stderr", { data: data.toString().trim() });
+        const chunk = data.toString();
+        if (stderrBuffer.length < 65536) stderrBuffer += chunk;
+        debugLogger.debug("llama-server stderr", { data: chunk.trim() });
       });
 
       this.process.on("error", (error) => {

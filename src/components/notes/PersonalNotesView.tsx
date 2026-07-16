@@ -12,6 +12,8 @@ import {
   Search,
   Sparkles,
   ExternalLink,
+  Download,
+  Upload,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -420,6 +422,34 @@ export default function PersonalNotesView({
     loadFolders();
   }, [activeFolderId, loadFolders]);
 
+  const handleBackupNotes = useCallback(async () => {
+    const result = await window.electronAPI?.notesBackup?.();
+    if (result?.error) {
+      toast({
+        title: t("notes.list.backupFailed"),
+        description: result.error,
+        variant: "destructive",
+      });
+    }
+  }, [toast, t]);
+
+  const handleRestoreNotes = useCallback(async () => {
+    const result = await window.electronAPI?.notesRestore?.();
+    if (!result || result.canceled) return;
+    if (result.error || result.success === false) {
+      toast({
+        title: t("notes.list.restoreFailed"),
+        description: result.error,
+        variant: "destructive",
+      });
+      return;
+    }
+    await handleNotesAdded();
+    if (result.imported) {
+      toast({ title: t("notes.list.restoreSuccess", { count: result.imported }) });
+    }
+  }, [handleNotesAdded, toast, t]);
+
   const handleDelete = useCallback(
     async (id: number) => {
       if (saveTimeoutRef.current) {
@@ -803,15 +833,37 @@ export default function PersonalNotesView({
             <span className="text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-foreground/25">
               {t("notes.list.title")}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleNewNote}
-              aria-label={t("notes.list.newNote")}
-              className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
-            >
-              <Plus size={13} />
-            </Button>
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleRestoreNotes}
+                aria-label={t("notes.list.restore")}
+                title={t("notes.list.restore")}
+                className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
+              >
+                <Upload size={12} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleBackupNotes}
+                aria-label={t("notes.list.backup")}
+                title={t("notes.list.backup")}
+                className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
+              >
+                <Download size={12} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleNewNote}
+                aria-label={t("notes.list.newNote")}
+                className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
+              >
+                <Plus size={13} />
+              </Button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto">

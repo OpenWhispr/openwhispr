@@ -77,6 +77,7 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       label: t(`${prefix}.local`),
       description: t(`${prefix}.localDesc`),
       icon: <Cpu className="w-4 h-4" />,
+      activeLabel: activeLocalModelName ?? undefined,
     },
     {
       id: "self-hosted",

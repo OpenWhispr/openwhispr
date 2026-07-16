@@ -98,6 +98,10 @@ require("dotenv").config({
   override: false,
 });
 
+// Cap V8 old-space per process. Without this Electron's default is ~1.5GB on 64-bit,
+// leaving hundreds of MB of committed virtual heap that the app never needs.
+app.commandLine.appendSwitch("js-flags", "--max-old-space-size=256");
+
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
 // --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
@@ -290,9 +294,6 @@ function initializeCoreManagers() {
   audioTapManager = new AudioTapManager();
   linuxPortalAudioManager = new LinuxPortalAudioManager();
   windowsLoopbackAudioManager = new WindowsLoopbackAudioManager();
-  // Warm the capability cache off the hot path so the first meeting start
-  // doesn't pay the probe spawn. No-ops on non-Windows.
-  windowsLoopbackAudioManager.getCapability().catch(() => {});
   cleanupOrphanedLinuxRestoreToken();
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
@@ -341,6 +342,9 @@ function registerSidecars() {
 
 // Phase 2: Non-critical setup after windows are visible
 function initializeDeferredManagers() {
+  // Warm Windows loopback capability cache so first meeting start doesn't pay the probe spawn.
+  windowsLoopbackAudioManager.getCapability().catch(() => {});
+
   ensureYdotool().catch((err) => {
     require("./src/helpers/debugLogger").warn(
       "ydotool setup error",
@@ -431,15 +435,19 @@ async function startApp() {
   }
 
   // Create windows FIRST so the user sees UI as soon as possible
-  const startMinimized = environmentManager.getStartMinimized();
-  if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized });
+  // Don't honor the setting if the user still needs to see the post-migration
+  // permissions modal (PostMigrationOnboarding) — a minimized window would hide it.
+  const postMigrationDetector = require("./src/helpers/postMigrationDetector");
+  const needsPostMigrationOnboarding = postMigrationDetector.isReturningFromOldBundle();
+  const startMinimized = environmentManager.getStartMinimized() && !needsPostMigrationOnboarding;
+  if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, needsPostMigrationOnboarding });
   await windowManager.createMainWindow();
-  if (!startMinimized) {
-    await windowManager.createControlPanelWindow();
+  if (startMinimized && windowManager.mainWindow && !windowManager.mainWindow.isDestroyed()) {
+    windowManager.mainWindow.minimize();
   }
-
-  // Create agent window (hidden) and set up agent hotkey
-  await windowManager.createAgentWindow();
+  // Control panel and agent window are created on first use (lazy) to reduce startup RAM.
+  // All tray / hotkey / second-instance code paths already call createControlPanelWindow()
+  // and toggleAgentOverlay() handles lazy creation internally.
 
   const agentHotkeyCallback = () => {
     if (hotkeyManager.isInListeningMode()) return;
@@ -588,32 +596,13 @@ async function startApp() {
     });
   }
 
+  // Qdrant starts lazily on first semantic search (ensureQdrantReady in ipcHandlers.js).
   const QdrantManager = require("./src/helpers/qdrantManager");
   qdrantManager = new QdrantManager();
   sidecarRegistry.register("qdrant", () => qdrantManager.stop());
-  if (qdrantManager.isAvailable()) {
-    qdrantManager
-      .start()
-      .then(() => {
-        if (qdrantManager.isReady()) {
-          const vectorIndex = require("./src/helpers/vectorIndex");
-          vectorIndex.init(qdrantManager.getPort());
-          vectorIndex.ensureCollection().catch((err) => {
-            debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
-          });
-        }
-      })
-      .catch((err) => {
-        debugLogger.debug("Qdrant startup error (non-fatal)", { error: err.message });
-      });
-  }
 
-  const localEmbeddings = require("./src/helpers/localEmbeddings");
-  if (!localEmbeddings.isAvailable()) {
-    localEmbeddings.downloadModel().catch((err) => {
-      debugLogger.debug("Embedding model download error (non-fatal)", { error: err.message });
-    });
-  }
+  // Make the instance accessible to ipcHandlers for lazy init.
+  global.__qdrantManager = qdrantManager;
 
   if (process.platform === "win32") {
     const nircmdStatus = clipboardManager.getNircmdStatus();

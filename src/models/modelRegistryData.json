@@ -708,8 +708,7 @@
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
           "supportsThinking": true,
-          "descriptionKey": "models.descriptions.local.qwen_qwen3_5_4b_q4_k_m",
-          "recommended": true
+          "descriptionKey": "models.descriptions.local.qwen_qwen3_5_4b_q4_k_m"
         },
         {
           "id": "qwen3.5-2b-q4_k_m",
@@ -805,8 +804,7 @@
           "quantization": "q4_k_m",
           "contextLength": 32768,
           "hfRepo": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
-          "descriptionKey": "models.descriptions.local.mistral_mistral_7b_instruct_v0_3_q4_k_m",
-          "recommended": true
+          "descriptionKey": "models.descriptions.local.mistral_mistral_7b_instruct_v0_3_q4_k_m"
         }
       ]
     },
@@ -838,7 +836,6 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/Llama-3.2-3B-Instruct-GGUF",
-          "recommended": true,
           "descriptionKey": "models.descriptions.local.llama_llama_3_2_3b_instruct_q4_k_m"
         },
         {
@@ -852,26 +849,6 @@
           "contextLength": 131072,
           "hfRepo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
           "descriptionKey": "models.descriptions.local.llama_llama_3_1_8b_instruct_q4_k_m"
-        }
-      ]
-    },
-    {
-      "id": "phi",
-      "name": "Microsoft Phi",
-      "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
-      "models": [
-        {
-          "id": "phi-4-mini-instruct-q4_k_m",
-          "name": "Phi-4 Mini",
-          "size": "2.4GB",
-          "sizeBytes": 2516582400,
-          "description": "Microsoft's compact 3.8B model, punches above its weight for reasoning",
-          "fileName": "Phi-4-mini-instruct-Q4_K_M.gguf",
-          "quantization": "q4_k_m",
-          "contextLength": 131072,
-          "hfRepo": "bartowski/Phi-4-mini-instruct-GGUF",
-          "recommended": true
         }
       ]
     },
@@ -891,7 +868,6 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF",
-          "recommended": true,
           "supportsThinking": true
         }
       ]
@@ -912,8 +888,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/google_gemma-4-E2B-it-GGUF",
-          "descriptionKey": "models.descriptions.local.gemma_gemma_4_e2b_it_q4_k_m",
-          "recommended": true
+          "descriptionKey": "models.descriptions.local.gemma_gemma_4_e2b_it_q4_k_m"
         },
         {
           "id": "gemma-3-4b-it-q4_k_m",

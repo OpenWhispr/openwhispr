@@ -1,15 +1,29 @@
 import { useTranslation } from "react-i18next";
 import { Check, Settings } from "lucide-react";
 import { Button } from "../ui/button";
+import { Toggle } from "../ui/toggle";
+import { SettingsPanel, SettingsPanelRow, SettingsRow } from "../ui/SettingsSection";
 
 interface FinishStepProps {
   isCloudUser: boolean;
   useCases: string[];
   onFinish: (openSettings: boolean) => void;
   isFinishing: boolean;
+  autoStartEnabled: boolean;
+  onAutoStartChange: (value: boolean) => void;
+  startMinimized: boolean;
+  onStartMinimizedChange: (value: boolean) => void;
 }
 
-export default function FinishStep({ isCloudUser, onFinish, isFinishing }: FinishStepProps) {
+export default function FinishStep({
+  isCloudUser,
+  onFinish,
+  isFinishing,
+  autoStartEnabled,
+  onAutoStartChange,
+  startMinimized,
+  onStartMinimizedChange,
+}: FinishStepProps) {
   const { t } = useTranslation();
 
   return (
@@ -27,6 +41,25 @@ export default function FinishStep({ isCloudUser, onFinish, isFinishing }: Finis
             : t("onboarding.finish.localDescription")}
         </p>
       </div>
+
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("onboarding.finish.autoStart")}
+            description={t("onboarding.finish.autoStartDescription")}
+          >
+            <Toggle checked={autoStartEnabled} onChange={onAutoStartChange} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("onboarding.finish.startMinimized")}
+            description={t("onboarding.finish.startMinimizedDescription")}
+          >
+            <Toggle checked={startMinimized} onChange={onStartMinimizedChange} />
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
 
       <p className="text-xs text-muted-foreground text-center">
         {t("onboarding.finish.cleanupNote")}

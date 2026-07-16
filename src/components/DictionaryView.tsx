@@ -113,6 +113,30 @@ export default function DictionaryView() {
     }
   }, [customDictionary, toast, t]);
 
+  const handleImportFromFile = useCallback(async () => {
+    const result = await window.electronAPI?.dictionaryRestore?.();
+    if (!result || result.canceled) return;
+    if (result.error || !result.content) {
+      toast({
+        title: t("dictionary.importFailed"),
+        description: result.error,
+        variant: "destructive",
+      });
+      return;
+    }
+    let text = result.content;
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) text = parsed.join("\n");
+    } catch {
+      // Not JSON — treat as plain text (comma/newline separated)
+    }
+    const count = addWords(text);
+    if (count > 0) {
+      toast({ title: t("dictionary.importSuccess", { count }) });
+    }
+  }, [addWords, toast, t]);
+
   const emptyState = (
     <div className="flex flex-col items-center text-center py-8">
       <div className="w-10 h-10 rounded-[10px] bg-gradient-to-b from-primary/8 to-primary/4 dark:from-primary/12 dark:to-primary/6 border border-primary/10 dark:border-primary/15 flex items-center justify-center mb-3.5">
@@ -252,8 +276,17 @@ export default function DictionaryView() {
                       {t("dictionary.clearAll")}
                     </button>
                     <button
+                      onClick={handleImportFromFile}
+                      aria-label={t("dictionary.importDictionary")}
+                      title={t("dictionary.importDictionary")}
+                      className="text-foreground/25 hover:text-foreground/60 transition-colors"
+                    >
+                      <Upload size={12} />
+                    </button>
+                    <button
                       onClick={handleExport}
                       aria-label={t("dictionary.exportDictionary")}
+                      title={t("dictionary.exportDictionary")}
                       className="text-foreground/25 hover:text-foreground/60 transition-colors"
                     >
                       <Download size={12} />

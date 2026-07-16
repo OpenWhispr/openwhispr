@@ -19,6 +19,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
   const wasRecordingRef = useRef(false);
+  const lastPasteRef = useRef({ text: "", atMs: 0 });
   const { onToggle } = options;
 
   const performStartRecording = useCallback(async ({ voiceAgentRequested = false } = {}) => {
@@ -31,6 +32,11 @@ export const useAudioRecording = (toast, options = {}) => {
       if (currentState.isRecording || currentState.isProcessing) return false;
 
       audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+
+      const autoUnmuteMic = getSettings().autoUnmuteMicEnabled;
+      if (autoUnmuteMic) {
+        await window.electronAPI?.setMicMuted?.(false);
+      }
 
       // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
       if (!audioManagerRef.current.sttConfig) {
@@ -56,6 +62,9 @@ export const useAudioRecording = (toast, options = {}) => {
             void playStartCue();
           }
         }, 300);
+      } else if (autoUnmuteMic) {
+        // Start failed or ended immediately — don't leave the system mic unmuted.
+        window.electronAPI?.setMicMuted?.(true);
       }
 
       return didStart;
@@ -74,6 +83,10 @@ export const useAudioRecording = (toast, options = {}) => {
       if (!currentState.isRecording && !currentState.isStreamingStartInProgress) return false;
 
       window.electronAPI?.unregisterCancelHotkey?.();
+
+      if (getSettings().autoUnmuteMicEnabled) {
+        window.electronAPI?.setMicMuted?.(true);
+      }
 
       if (currentState.isStreaming || currentState.isStreamingStartInProgress) {
         void playStopCue();
@@ -115,6 +128,12 @@ export const useAudioRecording = (toast, options = {}) => {
       onError: (error) => {
         if (error?.title !== "Paste Error") {
           window.electronAPI?.hideDictationPreview?.();
+          // Paste errors happen after recording already stopped (mic already
+          // re-muted by performStopRecording) — anything else may have failed
+          // mid-recording, so don't leave the system mic unmuted.
+          if (getSettings().autoUnmuteMicEnabled) {
+            window.electronAPI?.setMicMuted?.(true);
+          }
         }
         const title = getRecordingErrorTitle(error, t);
         const description = getRecordingErrorDescription(error, t);
@@ -172,7 +191,23 @@ export const useAudioRecording = (toast, options = {}) => {
           const isStreaming = result.source?.includes("streaming");
           const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
 
-          if (autoPasteEnabled) {
+          // Guard against the same transcript being auto-pasted twice in a row
+          // (e.g. an overlapping start/stop toggle producing two near-identical
+          // results for one utterance). A real second dictation of the exact
+          // same text within this window is rare enough that skipping it is
+          // the safer default.
+          const now = performance.now();
+          const isDuplicatePaste =
+            lastPasteRef.current.text === result.text && now - lastPasteRef.current.atMs < 4000;
+
+          if (autoPasteEnabled && isDuplicatePaste) {
+            logger.warn(
+              "Skipped duplicate auto-paste",
+              { textLength: result.text.length, sinceLastMs: Math.round(now - lastPasteRef.current.atMs) },
+              "audio"
+            );
+          } else if (autoPasteEnabled) {
+            lastPasteRef.current = { text: result.text, atMs: now };
             const pasteStart = performance.now();
             await audioManagerRef.current.safePaste(result.text, {
               ...(isStreaming ? { fromStreaming: true } : {}),
@@ -296,6 +331,9 @@ export const useAudioRecording = (toast, options = {}) => {
       const state = audioManagerRef.current.getState();
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
+      }
+      if (getSettings().autoUnmuteMicEnabled) {
+        window.electronAPI?.setMicMuted?.(true);
       }
       if (state.isStreaming) {
         return await audioManagerRef.current.stopStreamingRecording();

@@ -39,6 +39,7 @@ class WindowManager {
     this.dragManager = new DragManager();
     this.isQuitting = false;
     this.loadErrorShown = false;
+    this.onControlPanelDestroyed = null;
     this.macCompoundPushState = null;
     this.winPushState = null;
     this._cachedActivationMode = "tap";
@@ -660,16 +661,20 @@ class WindowManager {
       this.controlPanelWindow.focus();
     });
 
-    this.controlPanelWindow.on("close", (event) => {
-      if (!this.isQuitting) {
-        event.preventDefault();
-        this.hideControlPanelToTray();
-      }
+    this.controlPanelWindow.on("close", () => {
+      // Let the window close naturally — it will be recreated on next tray/hotkey open.
     });
 
     this.controlPanelWindow.on("closed", () => {
       clearVisibilityTimer();
       this.controlPanelWindow = null;
+      // Hide dock icon on macOS when no settings window is open.
+      if (process.platform === "darwin" && app.dock) {
+        app.dock.hide();
+      }
+      // If the window was destroyed while a HotkeyInput had focus (capture mode active),
+      // the React cleanup never ran — force-exit capture mode so hotkeys are restored.
+      this.onControlPanelDestroyed?.();
     });
 
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
@@ -744,7 +749,10 @@ class WindowManager {
   }
 
   toggleAgentOverlay() {
-    if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
+    if (!this.agentWindow || this.agentWindow.isDestroyed()) {
+      this.createAgentWindow().then(() => this.showAgentOverlay()).catch(() => {});
+      return;
+    }
 
     if (this.agentWindow.isVisible()) {
       this.agentWindow.webContents.send("agent-toggle-recording");
@@ -754,7 +762,10 @@ class WindowManager {
   }
 
   showAgentOverlay() {
-    if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
+    if (!this.agentWindow || this.agentWindow.isDestroyed()) {
+      this.createAgentWindow().then(() => this.showAgentOverlay()).catch(() => {});
+      return;
+    }
 
     this._clearAgentAnimation();
 
@@ -795,8 +806,10 @@ class WindowManager {
     if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
 
     this._clearAgentAnimation();
+    // Notify renderer to clean up before destroy.
     this.agentWindow.webContents.send("agent-stop-recording");
-    this.agentWindow.hide();
+    // Destroy instead of hide — recreated on demand via toggleAgentOverlay().
+    this.agentWindow.destroy();
   }
 
   async ensureTranscriptionPreviewWindow() {
@@ -1075,12 +1088,9 @@ class WindowManager {
     if (!this.controlPanelWindow || this.controlPanelWindow.isDestroyed()) {
       return;
     }
-
-    this.controlPanelWindow.hide();
-
-    if (process.platform === "darwin" && app.dock) {
-      app.dock.hide();
-    }
+    // Destroy instead of hide so the renderer process is unloaded from memory.
+    // The window is recreated on demand via createControlPanelWindow().
+    this.controlPanelWindow.destroy();
   }
 
   hideDictationPanel() {

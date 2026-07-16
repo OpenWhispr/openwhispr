@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Home,
   NotebookPen,
@@ -6,7 +6,6 @@ import {
   Upload,
   Settings,
   HelpCircle,
-  UserCircle,
   Search,
   Wand2,
   Braces,
@@ -15,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
 import { getCachedPlatform } from "../utils/platform";
+import logo from "../assets/logo.svg";
 
 const platform = getCachedPlatform();
 
@@ -26,9 +26,6 @@ interface ControlPanelSidebarProps {
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenSearch?: () => void;
-  userName?: string | null;
-  userEmail?: string | null;
-  userImage?: string | null;
   updateAction?: React.ReactNode;
 }
 
@@ -37,12 +34,23 @@ export default function ControlPanelSidebar({
   onViewChange,
   onOpenSettings,
   onOpenSearch,
-  userName,
-  userEmail,
-  userImage,
   updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.electronAPI
+      ?.getAppVersion?.()
+      .then((result) => {
+        if (!cancelled && result?.version) setAppVersion(result.version);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const navItems: {
     id: ControlPanelView;
@@ -63,6 +71,19 @@ export default function ControlPanelSidebar({
         className="w-full h-10 shrink-0"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
+
+      <div
+        className="flex items-center gap-2.5 px-3 pt-1 pb-3"
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      >
+        <img src={logo} alt="EktosWhispr" className="w-8 h-8 rounded-full shrink-0" />
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-foreground truncate">EktosWhispr</p>
+          {appVersion && (
+            <p className="text-[11px] text-muted-foreground/70 truncate">v{appVersion}</p>
+          )}
+        </div>
+      </div>
 
       {onOpenSearch && (
         <div className="px-2 pt-2 pb-1">
@@ -96,15 +117,15 @@ export default function ControlPanelSidebar({
               key={item.id}
               onClick={() => onViewChange(item.id)}
               className={cn(
-                "group relative flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md outline-none transition-colors duration-150 text-left",
+                "group relative flex items-center gap-2.5 w-full h-9 px-3 rounded-lg outline-none transition-colors duration-150 text-left",
                 "focus-visible:ring-1 focus-visible:ring-primary/30",
                 isActive
-                  ? "bg-primary/8 dark:bg-primary/10"
+                  ? "bg-foreground/6 dark:bg-white/8"
                   : "hover:bg-foreground/4 dark:hover:bg-white/4 active:bg-foreground/6"
               )}
             >
               <Icon
-                size={15}
+                size={16}
                 className={cn(
                   "shrink-0 transition-colors duration-150",
                   isActive
@@ -136,20 +157,6 @@ export default function ControlPanelSidebar({
           </div>
         )}
 
-        <button
-          onClick={onOpenSettings}
-          aria-label={t("sidebar.settings")}
-          className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
-        >
-          <Settings
-            size={15}
-            className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-          />
-          <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-            {t("sidebar.settings")}
-          </span>
-        </button>
-
         <SupportDropdown
           trigger={
             <button
@@ -167,29 +174,19 @@ export default function ControlPanelSidebar({
           }
         />
 
-        <div className="mx-1 h-px bg-border/10 dark:bg-white/6 my-1.5!" />
-
-        <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md">
-          {userImage ? (
-            <img src={userImage} alt="" className="w-6 h-6 rounded-full shrink-0 object-cover" />
-          ) : (
-            <UserCircle size={18} className="shrink-0 text-foreground/50 dark:text-foreground/45" />
-          )}
-          <div className="flex-1 min-w-0">
-            {(userName || userEmail) && (
-              <>
-                <p className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight">
-                  {userName || t("sidebar.defaultUser")}
-                </p>
-                {userEmail && (
-                  <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
-                    {userEmail}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <button
+          onClick={onOpenSettings}
+          aria-label={t("sidebar.settings")}
+          className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+        >
+          <Settings
+            size={15}
+            className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
+          />
+          <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
+            {t("sidebar.settings")}
+          </span>
+        </button>
       </div>
 
     </div>

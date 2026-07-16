@@ -27,6 +27,7 @@ import {
   FileAudio,
   Wand2,
   Upload,
+  Download,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { signOut } from "../lib/auth";
@@ -36,6 +37,7 @@ import PermissionCard from "./ui/PermissionCard";
 import PasteToolsInfo from "./ui/PasteToolsInfo";
 import NixOsPasteInfo from "./ui/NixOsPasteInfo";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
+import { WHISPER_MODEL_INFO, PARAKEET_MODEL_INFO } from "../models/ModelRegistry";
 import SelfHostedPanel from "./SelfHostedPanel";
 import {
   ConfirmDialog,
@@ -82,7 +84,13 @@ import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
 import type { GpuDevice, LocalTranscriptionProvider, InferenceMode } from "../types/electron";
 import logger from "../utils/logger";
-import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
+import {
+  SettingsRow,
+  InferenceModeSelector,
+  SettingsPanel,
+  SettingsPanelRow,
+  SectionHeader,
+} from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
@@ -115,56 +123,6 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
 ];
 
 const noop = () => {};
-
-function SettingsPanel({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/30 dark:divide-border-subtle/50 ${className}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function SettingsPanelRow({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const { isCompact } = useSettingsLayout();
-
-  return (
-    <div className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>{children}</div>
-  );
-}
-
-function SectionHeader({
-  title,
-  description,
-  note,
-}: {
-  title: string;
-  description?: string;
-  note?: string;
-}) {
-  return (
-    <div className="mb-3">
-      <h3 className="text-xs font-semibold text-foreground tracking-tight">{title}</h3>
-      {description && (
-        <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
-      )}
-      {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
-    </div>
-  );
-}
 
 interface TranscriptionSectionProps {
   isSignedIn: boolean;
@@ -234,6 +192,14 @@ function TranscriptionSection({
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
 
+  const selectedLocalTranscriptionModelId =
+    localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;
+  const activeLocalTranscriptionModelName = selectedLocalTranscriptionModelId
+    ? (localTranscriptionProvider === "nvidia"
+        ? PARAKEET_MODEL_INFO[selectedLocalTranscriptionModelId]?.name
+        : WHISPER_MODEL_INFO[selectedLocalTranscriptionModelId]?.name) ?? selectedLocalTranscriptionModelId
+    : undefined;
+
   const transcriptionModes: InferenceModeOption[] = [
     {
       id: "providers",
@@ -246,6 +212,7 @@ function TranscriptionSection({
       label: t("settingsPage.transcription.modes.local"),
       description: t("settingsPage.transcription.modes.localDesc"),
       icon: <Cpu className="w-4 h-4" />,
+      activeLabel: activeLocalTranscriptionModelName,
     },
     {
       id: "self-hosted",
@@ -669,10 +636,12 @@ export default function SettingsPage({
     selectedMicDeviceId,
     micNoiseSuppression,
     micGain,
+    autoUnmuteMicEnabled,
     setPreferBuiltInMic,
     setSelectedMicDeviceId,
     setMicNoiseSuppression,
     setMicGain,
+    setAutoUnmuteMicEnabled,
     setUseLocalWhisper,
     setUiLanguage,
     setWhisperModel,
@@ -1130,6 +1099,78 @@ export default function SettingsPage({
       },
     });
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
+
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+
+  const handleFullBackup = useCallback(async () => {
+    if (isBackingUp) return;
+    setIsBackingUp(true);
+    try {
+      const snapshot: Record<string, string> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) snapshot[key] = localStorage.getItem(key) ?? "";
+      }
+      const result = await window.electronAPI?.fullBackup?.(snapshot);
+      if (!result || result.canceled) return;
+      if (!result.success) {
+        showAlertDialog({
+          title: t("settingsPage.developer.fullBackup.failedTitle"),
+          description: result.error || t("settingsPage.developer.fullBackup.failedDescription"),
+        });
+        return;
+      }
+      showAlertDialog({
+        title: t("settingsPage.developer.fullBackup.successTitle"),
+        description: t("settingsPage.developer.fullBackup.successDescription"),
+      });
+    } catch {
+      showAlertDialog({
+        title: t("settingsPage.developer.fullBackup.failedTitle"),
+        description: t("settingsPage.developer.fullBackup.failedDescription"),
+      });
+    } finally {
+      setIsBackingUp(false);
+    }
+  }, [isBackingUp, showAlertDialog, t]);
+
+  const handleFullRestore = useCallback(() => {
+    if (isRestoringBackup) return;
+
+    showConfirmDialog({
+      title: t("settingsPage.developer.fullRestore.title"),
+      description: t("settingsPage.developer.fullRestore.description"),
+      confirmText: t("settingsPage.developer.fullRestore.confirmText"),
+      variant: "destructive",
+      onConfirm: async () => {
+        setIsRestoringBackup(true);
+        try {
+          const result = await window.electronAPI?.fullRestore?.();
+          if (!result || result.canceled) return;
+          if (!result.success) {
+            showAlertDialog({
+              title: t("settingsPage.developer.fullRestore.failedTitle"),
+              description:
+                result.error || t("settingsPage.developer.fullRestore.failedDescription"),
+            });
+            return;
+          }
+          showAlertDialog({
+            title: t("settingsPage.developer.fullRestore.successTitle"),
+            description: t("settingsPage.developer.fullRestore.successDescription"),
+          });
+        } catch {
+          showAlertDialog({
+            title: t("settingsPage.developer.fullRestore.failedTitle"),
+            description: t("settingsPage.developer.fullRestore.failedDescription"),
+          });
+        } finally {
+          setIsRestoringBackup(false);
+        }
+      },
+    });
+  }, [isRestoringBackup, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn } = useAuth();
   const startOnboarding = useCallback(() => {
@@ -1602,6 +1643,8 @@ export default function SettingsPage({
                     onDeviceSelect={setSelectedMicDeviceId}
                     onMicNoiseSuppressionChange={setMicNoiseSuppression}
                     onMicGainChange={setMicGain}
+                    autoUnmuteMic={autoUnmuteMicEnabled}
+                    onAutoUnmuteMicChange={setAutoUnmuteMicEnabled}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -1983,43 +2026,41 @@ EOF`,
                         </SettingsPanel>
                       ) : (
                         <>
-                          <div className="rounded-xl border border-border overflow-hidden">
-                            <div className="divide-y divide-border">
-                              {checks.map((item) => (
-                                <div key={item.key} className="px-4 py-3">
-                                  <div className="flex items-center gap-2.5">
-                                    {item.ok ? (
-                                      <CircleCheck className="h-4 w-4 shrink-0 text-emerald-500" />
-                                    ) : (
-                                      <CircleX className="h-4 w-4 shrink-0 text-red-500" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <span className="text-sm font-medium">{item.label}</span>
-                                      <span className="text-xs text-muted-foreground ml-2">
-                                        {item.desc}
-                                      </span>
-                                      {item.note && (
-                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
-                                          {item.note}
-                                        </p>
-                                      )}
-                                    </div>
-                                    {!item.ok && (
-                                      <button
-                                        onClick={() => setYdotoolGuideKey(item.key)}
-                                        className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-muted transition-colors text-foreground"
-                                      >
-                                        <BookOpen className="w-3 h-3" />
-                                        {t("settingsPage.general.waylandPaste.guide.open", {
-                                          defaultValue: "Guide",
-                                        })}
-                                      </button>
+                          <SettingsPanel>
+                            {checks.map((item) => (
+                              <SettingsPanelRow key={item.key}>
+                                <div className="flex items-center gap-2.5">
+                                  {item.ok ? (
+                                    <CircleCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                                  ) : (
+                                    <CircleX className="h-4 w-4 shrink-0 text-red-500" />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium">{item.label}</span>
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                      {item.desc}
+                                    </span>
+                                    {item.note && (
+                                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                                        {item.note}
+                                      </p>
                                     )}
                                   </div>
+                                  {!item.ok && (
+                                    <button
+                                      onClick={() => setYdotoolGuideKey(item.key)}
+                                      className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-muted transition-colors text-foreground"
+                                    >
+                                      <BookOpen className="w-3 h-3" />
+                                      {t("settingsPage.general.waylandPaste.guide.open", {
+                                        defaultValue: "Guide",
+                                      })}
+                                    </button>
+                                  )}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
+                              </SettingsPanelRow>
+                            ))}
+                          </SettingsPanel>
                           <button
                             onClick={refreshYdotoolStatus}
                             className="flex items-center gap-1.5 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -2224,7 +2265,7 @@ EOF`,
                       setMeetingHotkeyLayoutMode(value as "side-panel" | "full-width")
                     }
                   >
-                    <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                    <SelectTrigger className="h-7 w-36 text-xs px-2.5 [&>svg]:h-3 [&>svg]:w-3">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2481,6 +2522,40 @@ EOF`,
                           {isRemovingModels
                             ? t("settingsPage.developer.removing")
                             : t("settingsPage.developer.clearCache")}
+                        </Button>
+                      </div>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                </SettingsPanel>
+
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.developer.fullBackup.label")}
+                      description={t("settingsPage.developer.fullBackup.description")}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleFullRestore}
+                          disabled={isRestoringBackup || isBackingUp}
+                        >
+                          <Upload className="mr-1.5 h-3.5 w-3.5" />
+                          {isRestoringBackup
+                            ? t("settingsPage.developer.fullRestore.restoring")
+                            : t("settingsPage.developer.fullRestore.action")}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleFullBackup}
+                          disabled={isBackingUp || isRestoringBackup}
+                        >
+                          <Download className="mr-1.5 h-3.5 w-3.5" />
+                          {isBackingUp
+                            ? t("settingsPage.developer.fullBackup.backingUp")
+                            : t("settingsPage.developer.fullBackup.action")}
                         </Button>
                       </div>
                     </SettingsRow>

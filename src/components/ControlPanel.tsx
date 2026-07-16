@@ -141,15 +141,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         setIsLoading(true);
         await initializeTranscriptions(undefined, includeDiscarded);
       } catch {
-        showAlertDialog({
-          title: t("controlPanel.history.couldNotLoadTitle"),
-          description: t("controlPanel.history.couldNotLoadDescription"),
-        });
+        // Silently handle load errors — transcriptions stay empty
       } finally {
         setIsLoading(false);
       }
     },
-    [showAlertDialog, t]
+    []
   );
 
   useEffect(() => {
@@ -650,9 +647,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               setSettingsSection(undefined);
               setShowSettings(true);
             }}
-            userName={user?.name}
-            userEmail={user?.email}
-            userImage={user?.image}
             updateAction={
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||

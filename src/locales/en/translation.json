@@ -4,6 +4,12 @@
     "createNew": "Create New",
     "noTransforms": "No transforms yet. Create one to get started.",
     "disabled": "Disabled",
+    "backup": "Backup to file",
+    "restore": "Restore from file",
+    "backupFailed": "Backup failed",
+    "restoreFailed": "Restore failed",
+    "restoreSuccess_one": "Imported {{count}} transform",
+    "restoreSuccess_other": "Imported {{count}} transforms",
     "editor": {
       "namePlaceholder": "Transform name",
       "descriptionPlaceholder": "Short description (optional)",
@@ -195,13 +201,28 @@
   "onboarding": {
     "steps": {
       "welcome": "Welcome",
-      "setup": "Setup",
+      "setup": "Speech-to-Text",
+      "languageModel": "Language Model",
+      "localModel": "Local Model",
       "permissions": "Permissions",
       "activation": "Dictation",
       "useCase": "About you",
       "meeting": "Meetings",
       "finish": "Finish",
-      "voiceAgent": "Voice Agent"
+      "voiceAgent": "Voice Agent",
+      "language": "Language"
+    },
+    "languageModel": {
+      "description": "Choose the AI model for dictation cleanup, agent, note formatting, and transforms"
+    },
+    "localModel": {
+      "description": "Download and select a local AI model to run on your device"
+    },
+    "language": {
+      "title": "Choose your language",
+      "description": "Set the interface and transcription language",
+      "uiLanguageLabel": "Interface language",
+      "transcriptionLanguageLabel": "Transcription languages"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Couldn't register that hotkey",
@@ -321,6 +342,10 @@
       "cleanupNote": "AI text cleanup runs with sensible defaults. You can adjust it anytime in Settings.",
       "openSettings": "Open Settings",
       "skipForNow": "Skip for now",
+      "autoStart": "Launch at startup",
+      "autoStartDescription": "Open EktosWhispr automatically when you log in",
+      "startMinimized": "Start minimized",
+      "startMinimizedDescription": "Launch without showing the control panel window",
       "corti": {
         "title": "You told us you're here for clinical transcription",
         "description": "We've partnered with Corti — clinical-grade speech-to-text with the highest accuracy, and it's HIPAA compliant.",
@@ -1085,6 +1110,10 @@
     "gain": {
       "label": "Microphone Gain",
       "description": "Boost input level — current: {{percent}}%. 100% = no change. Takes effect on the next recording."
+    },
+    "autoUnmute": {
+      "label": "Auto-Unmute Microphone",
+      "description": "Automatically unmute your system microphone when dictation starts, and mute it again when it stops."
     }
   },
   "pasteToolsInfo": {
@@ -1570,6 +1599,27 @@
         "title": "Remove downloaded models?"
       },
       "removing": "Removing...",
+      "fullBackup": {
+        "label": "Full backup & restore",
+        "description": "Back up all notes, transcriptions, folders, snippets, dictionary, and app settings to a single file. API keys and downloaded models are not included.",
+        "action": "Backup",
+        "backingUp": "Backing up...",
+        "failedTitle": "Backup failed",
+        "failedDescription": "Something went wrong creating the backup. Please try again.",
+        "successTitle": "Backup created",
+        "successDescription": "Your data has been saved to the selected file."
+      },
+      "fullRestore": {
+        "action": "Restore",
+        "restoring": "Restoring...",
+        "title": "Restore from backup?",
+        "description": "This replaces all current notes, transcriptions, folders, snippets, dictionary, and app settings with the contents of the backup file. This cannot be undone. The app will restart to apply the changes.",
+        "confirmText": "Restore Backup",
+        "failedTitle": "Restore failed",
+        "failedDescription": "Something went wrong restoring the backup. Please check the file and try again.",
+        "successTitle": "Backup restored",
+        "successDescription": "The app will now restart to apply the restored data."
+      },
       "resetAll": {
         "confirmText": "Delete Everything",
         "description": "This will permanently delete all local settings, transcriptions, audio recordings, downloaded AI models, calendar connections, and cached data. Cloud data and your account will not be affected. The app will reload after reset.",
@@ -2342,7 +2392,13 @@
       "timeNow": "now",
       "minutesAgo": "{{count}}m",
       "hoursAgo": "{{count}}h",
-      "daysAgo": "{{count}}d"
+      "daysAgo": "{{count}}d",
+      "backup": "Backup to file",
+      "restore": "Restore from file",
+      "backupFailed": "Backup failed",
+      "restoreFailed": "Restore failed",
+      "restoreSuccess_one": "Imported {{count}} note",
+      "restoreSuccess_other": "Imported {{count}} notes"
     },
     "editor": {
       "untitled": "Untitled",
@@ -2576,6 +2632,10 @@
     "yourDictionary": "Your dictionary",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
+    "importDictionary": "Import from file",
+    "importFailed": "Import failed",
+    "importSuccess_one": "Imported {{count}} word",
+    "importSuccess_other": "Imported {{count}} words",
     "editWord": "Edit {{word}}",
     "noMatches": "No matches — press Enter to add \"{{word}}\"",
     "tabDictionary": "Dictionary",

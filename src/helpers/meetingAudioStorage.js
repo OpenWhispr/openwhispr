@@ -149,4 +149,37 @@ function getStorageUsage() {
   }
 }
 
-module.exports = { saveAudio, getAudioPath, deleteAudio, getStorageUsage };
+/**
+ * Delete meeting audio files older than retentionDays. Returns { deleted, kept }.
+ * @param {number} retentionDays
+ */
+function cleanupExpiredAudio(retentionDays) {
+  try {
+    const dir = getStorageDir();
+    const cutoffMs = Date.now() - retentionDays * 86400000;
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".webm"));
+    let deleted = 0;
+    let kept = 0;
+    for (const file of files) {
+      const filePath = path.join(dir, file);
+      try {
+        const { mtimeMs } = fs.statSync(filePath);
+        if (mtimeMs < cutoffMs) {
+          fs.unlinkSync(filePath);
+          deleted++;
+        } else {
+          kept++;
+        }
+      } catch (err) {
+        debugLogger.warn("[MeetingAudio] cleanup: could not process file", { file, error: err.message });
+      }
+    }
+    debugLogger.info("[MeetingAudio] cleanup complete", { deleted, kept, retentionDays });
+    return { deleted, kept };
+  } catch (err) {
+    debugLogger.error("[MeetingAudio] cleanup failed", { error: err.message });
+    return { deleted: 0, kept: 0 };
+  }
+}
+
+module.exports = { saveAudio, getAudioPath, deleteAudio, getStorageUsage, cleanupExpiredAudio };

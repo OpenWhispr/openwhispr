@@ -70,6 +70,9 @@ class TransformManager {
       if (!transform.enabled || !transform.hotkey) continue;
       const t = transform;
       hm.registerSlot(`transform-${t.id}`, t.hotkey, () => {
+        // Fire the activation cue immediately so the user gets instant feedback —
+        // the actual copy/clipboard-poll pipeline below can take up to ~1s.
+        this._windowManager?.mainWindow?.webContents.send("transform-activated", { id: t.id });
         this._execute(t).catch((err) => {
           try {
             require("./debugLogger").error(
