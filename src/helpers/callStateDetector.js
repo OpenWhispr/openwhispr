@@ -18,6 +18,11 @@ const { resolveBinaryPath } = require("../utils/serverUtils");
 
 const ACTIVATE_DEBOUNCE_MS = 2500; // avoid firing on brief device blips
 const DEACTIVATE_DEBOUNCE_MS = 8000; // survive short device flaps mid-call
+// While WE are recording, our own capture holds the mic device, so the mic
+// signal can no longer tell us the call ended. End detection then polls the
+// camera (only the call holds it) and the meeting URL instead.
+const END_POLL_MS = 12000;
+const END_MISS_THRESHOLD = 2; // ~24s of "not in call" before auto-stop
 
 class CallStateDetector extends EventEmitter {
   constructor({ urlChecker = null } = {}) {
@@ -29,6 +34,10 @@ class CallStateDetector extends EventEmitter {
     this._activateTimer = null;
     this._deactivateTimer = null;
     this._callActive = false;
+    this._selfRecording = false; // true while OUR recording is holding the mic
+    this._callUsedCamera = false;
+    this._endPollTimer = null;
+    this._endMisses = 0;
   }
 
   _binaryPath() {
@@ -98,6 +107,12 @@ class CallStateDetector extends EventEmitter {
   }
 
   _reconcile() {
+    if (this.state.camera) this._callUsedCamera = true;
+
+    // While our own recording holds the mic, the device signal can't tell us the
+    // call ended — end detection runs in _endPollTick() via setSelfRecording().
+    if (this._selfRecording) return;
+
     if (this._anyActive()) {
       if (this._deactivateTimer) {
         clearTimeout(this._deactivateTimer);
@@ -145,6 +160,69 @@ class CallStateDetector extends EventEmitter {
     return this._callActive;
   }
 
+  // The engine calls this when it auto-starts/stops a recording. While true, our
+  // own capture holds the mic, so we switch end-detection to a poll (camera +
+  // meeting URL) that isn't fooled by our own mic usage.
+  setSelfRecording(active) {
+    this._selfRecording = active;
+    if (active) {
+      this._startEndPoll();
+    } else {
+      this._stopEndPoll();
+      this._callUsedCamera = false;
+    }
+  }
+
+  _startEndPoll() {
+    this._endMisses = 0;
+    if (this._endPollTimer) return;
+    this._endPollTimer = setInterval(() => {
+      this._endPollTick().catch(() => {});
+    }, END_POLL_MS);
+  }
+
+  _stopEndPoll() {
+    if (this._endPollTimer) {
+      clearInterval(this._endPollTimer);
+      this._endPollTimer = null;
+    }
+    this._endMisses = 0;
+  }
+
+  async _endPollTick() {
+    if (!this._selfRecording) return;
+    let stillInCall;
+    if (this._callUsedCamera) {
+      // Video call: the camera is released the instant you leave, and we never
+      // hold the camera ourselves — so it's the reliable end signal. (The URL
+      // isn't: Meet's "you left" screen keeps the meeting-code URL.)
+      stillInCall = this.state.camera;
+    } else if (this.urlChecker) {
+      // Audio-only / camera-off: fall back to whether a meeting URL is still open
+      // (ends when the tab is closed/navigated away). The self-held mic is ignored.
+      try {
+        const match = await this.urlChecker();
+        stillInCall = !!match?.matched;
+      } catch {
+        stillInCall = true; // on error, stay conservative and rely on the max cap
+      }
+    } else {
+      stillInCall = true; // no usable signal — rely on the max-duration safety cap
+    }
+    if (stillInCall) {
+      this._endMisses = 0;
+      return;
+    }
+    this._endMisses += 1;
+    if (this._endMisses >= END_MISS_THRESHOLD) {
+      this._stopEndPoll();
+      this._callActive = false;
+      this._selfRecording = false;
+      this._callUsedCamera = false;
+      this.emit("call-ended");
+    }
+  }
+
   stop() {
     if (this._activateTimer) {
       clearTimeout(this._activateTimer);
@@ -163,6 +241,9 @@ class CallStateDetector extends EventEmitter {
       this.proc = null;
     }
     this._callActive = false;
+    this._selfRecording = false;
+    this._callUsedCamera = false;
+    this._stopEndPoll();
     this.state = { camera: false, microphone: false };
   }
 }

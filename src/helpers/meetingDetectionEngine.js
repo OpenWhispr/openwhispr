@@ -3,6 +3,7 @@ const debugLogger = require("./debugLogger");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
+const MAX_AUTO_RECORD_MS = 4 * 60 * 60 * 1000; // safety cap for auto-started recordings
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 
@@ -43,6 +44,7 @@ class MeetingDetectionEngine {
     this._userRecording = false;
     this._meetingModeActive = false;
     this._autoStarted = false;
+    this._autoStopTimer = null;
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
     this._bindListeners();
@@ -104,19 +106,46 @@ class MeetingDetectionEngine {
       "meeting"
     );
     this._autoStarted = true;
-    this._beginMeetingSession(placeholderEvent("__detected__"), "auto-start").catch((error) => {
-      this._autoStarted = false;
-      debugLogger.error("Auto-start meeting failed", { error: error?.message }, "meeting");
-    });
+    this._beginMeetingSession(placeholderEvent("__detected__"), "auto-start")
+      .then((ok) => {
+        if (ok) {
+          // Tell the detector we now hold the mic, so it switches to camera/URL
+          // end-detection, and arm a max-duration safety stop.
+          this.callStateDetector?.setSelfRecording(true);
+          this._armAutoStopSafety();
+        } else {
+          this._autoStarted = false;
+        }
+      })
+      .catch((error) => {
+        this._autoStarted = false;
+        debugLogger.error("Auto-start meeting failed", { error: error?.message }, "meeting");
+      });
   }
 
   _handleCallEnded() {
+    this._clearAutoStopSafety();
     // Only auto-stop sessions that were auto-started — never a manual recording.
     if (this._autoStarted && this._userRecording) {
       debugLogger.info("Call ended — auto-stopping recording", {}, "meeting");
       this.broadcastToWindows("meeting-auto-stop-request", {});
     }
     this._autoStarted = false;
+  }
+
+  _armAutoStopSafety() {
+    this._clearAutoStopSafety();
+    this._autoStopTimer = setTimeout(() => {
+      debugLogger.warn("Auto-started recording hit the max duration; stopping", {}, "meeting");
+      this._handleCallEnded();
+    }, MAX_AUTO_RECORD_MS);
+  }
+
+  _clearAutoStopSafety() {
+    if (this._autoStopTimer) {
+      clearTimeout(this._autoStopTimer);
+      this._autoStopTimer = null;
+    }
   }
 
   // Shared "begin a meeting recording" path used by both the notification
@@ -460,6 +489,11 @@ class MeetingDetectionEngine {
         this._postRecordingCooldown = null;
       }
     } else {
+      // Recording stopped (manually or auto): stop treating the mic as ours and
+      // clear the auto-start bookkeeping.
+      this.callStateDetector?.setSelfRecording(false);
+      this._autoStarted = false;
+      this._clearAutoStopSafety();
       this._postRecordingCooldown = setTimeout(() => {
         this._postRecordingCooldown = null;
         this._flushNotificationQueue();
@@ -506,6 +540,7 @@ class MeetingDetectionEngine {
     this.audioActivityDetector.stop();
     this.callStateDetector?.stop();
     this._autoStarted = false;
+    this._clearAutoStopSafety();
     this.activeDetections.clear();
     this._meetingModeActive = false;
     if (this._postRecordingCooldown) {
