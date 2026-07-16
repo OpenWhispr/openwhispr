@@ -44,7 +44,10 @@
     "help": "Help",
     "learnMore": "Learn More",
     "file": "File",
-    "closeWindow": "Close Window"
+    "closeWindow": "Close Window",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "actualSize": "Actual Size"
   },
   "window": {
     "voiceRecorderTitle": "Voice Recorder",

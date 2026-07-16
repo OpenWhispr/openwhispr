@@ -2,6 +2,36 @@ const { Menu } = require("electron");
 const { i18nMain } = require("./i18nMain");
 
 class MenuManager {
+  // Zoom items route through onZoom(window, direction) so a single app-managed
+  // zoom level stays in sync across every window (see ZoomManager). Plain
+  // `role` items would only zoom the focused webContents and emit no event.
+  static zoomMenuItems(onZoom) {
+    return [
+      {
+        label: i18nMain.t("menu.actualSize"),
+        accelerator: "CommandOrControl+0",
+        click: (_item, window) => onZoom?.(window, "reset"),
+      },
+      {
+        label: i18nMain.t("menu.zoomIn"),
+        accelerator: "CommandOrControl+Plus",
+        click: (_item, window) => onZoom?.(window, "in"),
+      },
+      {
+        // Common habit: Ctrl/Cmd + "=" (the unshifted "+" key).
+        label: i18nMain.t("menu.zoomIn"),
+        accelerator: "CommandOrControl+=",
+        visible: false,
+        click: (_item, window) => onZoom?.(window, "in"),
+      },
+      {
+        label: i18nMain.t("menu.zoomOut"),
+        accelerator: "CommandOrControl+-",
+        click: (_item, window) => onZoom?.(window, "out"),
+      },
+    ];
+  }
+
   static setupMainMenu(onOpenSettings) {
     if (process.platform === "darwin") {
       const template = [
@@ -31,7 +61,7 @@ class MenuManager {
     }
   }
 
-  static setupControlPanelMenu(controlPanelWindow, onOpenSettings) {
+  static setupControlPanelMenu(controlPanelWindow, onOpenSettings, onZoom) {
     if (process.platform === "darwin") {
       // On macOS, create a proper application menu
       const template = [
@@ -81,9 +111,7 @@ class MenuManager {
             { role: "forceReload" },
             { role: "toggleDevTools" },
             { type: "separator" },
-            { role: "resetZoom" },
-            { role: "zoomIn" },
-            { role: "zoomOut" },
+            ...MenuManager.zoomMenuItems(onZoom),
             { type: "separator" },
             { role: "togglefullscreen" },
           ],
@@ -150,9 +178,7 @@ class MenuManager {
             { role: "forceReload" },
             { role: "toggleDevTools" },
             { type: "separator" },
-            { role: "resetZoom" },
-            { role: "zoomIn" },
-            { role: "zoomOut" },
+            ...MenuManager.zoomMenuItems(onZoom),
             { type: "separator" },
             { role: "togglefullscreen" },
           ],

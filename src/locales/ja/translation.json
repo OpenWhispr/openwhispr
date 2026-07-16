@@ -44,7 +44,10 @@
     "help": "ヘルプ",
     "learnMore": "詳細を見る",
     "file": "ファイル",
-    "closeWindow": "ウィンドウを閉じる"
+    "closeWindow": "ウィンドウを閉じる",
+    "zoomIn": "拡大",
+    "zoomOut": "縮小",
+    "actualSize": "実際のサイズ"
   },
   "window": {
     "voiceRecorderTitle": "ボイスレコーダー",

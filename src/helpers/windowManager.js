@@ -4,6 +4,7 @@ const HotkeyManager = require("./hotkeyManager");
 const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
+const ZoomManager = require("./zoomManager");
 const DevServerManager = require("./devServerManager");
 const { i18nMain } = require("./i18nMain");
 const { DEV_SERVER_PORT } = DevServerManager;
@@ -37,6 +38,13 @@ class WindowManager {
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
     this.dragManager = new DragManager();
+    this.zoomManager = new ZoomManager();
+    // Fixed-size windows must grow with the zoom factor so zoomed content fits.
+    // Track the state needed to re-scale them live when the zoom level changes.
+    this._mainWindowSizeKey = "BASE";
+    this._lastPreviewContentSize = null;
+    this._lastAgentContentSize = null;
+    this.zoomManager.setOnChange(() => this._applyZoomToOpenWindows());
     this.isQuitting = false;
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
@@ -70,6 +78,7 @@ class WindowManager {
 
     this.setMainWindowInteractivity(false);
     this.registerMainWindowEvents();
+    this.zoomManager.register(this.mainWindow.webContents);
 
     // Register load event handlers BEFORE loading to catch all events
     this.mainWindow.webContents.on(
@@ -101,6 +110,11 @@ class WindowManager {
     });
 
     await this.loadMainWindow();
+    // If a non-default zoom is already persisted, scale the overlay to match so
+    // the zoomed pill/toast content isn't clipped by the default 96x96 frame.
+    if (this.zoomManager.getFactor() !== 1) {
+      this.resizeMainWindow(this._mainWindowSizeKey);
+    }
     await this.initializeHotkey();
     this.dragManager.setTargetWindow(this.mainWindow);
     MenuManager.setupMainMenu(() => this.openSettings());
@@ -141,7 +155,13 @@ class WindowManager {
       return { success: false, message: "Window not available" };
     }
 
-    const newSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
+    const baseSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
+    this._mainWindowSizeKey = WINDOW_SIZES[sizeKey] ? sizeKey : "BASE";
+    const factor = this.zoomManager.getFactor();
+    const newSize = {
+      width: Math.round(baseSize.width * factor),
+      height: Math.round(baseSize.height * factor),
+    };
     const currentBounds = this.mainWindow.getBounds();
     const position = this._panelStartPosition;
 
@@ -181,6 +201,40 @@ class WindowManager {
     });
 
     return { success: true, bounds: { x: newX, y: newY, ...newSize } };
+  }
+
+  // Re-scale the fixed-size windows that are currently open when the shared zoom
+  // level changes, so their frames keep matching the zoomed content. Content
+  // windows (control panel, agent chat scroll) don't need this. Invoked by the
+  // ZoomManager onChange hook.
+  _applyZoomToOpenWindows() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.resizeMainWindow(this._mainWindowSizeKey);
+    }
+
+    const factor = this.zoomManager.getFactor();
+    for (const win of [this.notificationWindow, this.updateNotificationWindow]) {
+      if (win && !win.isDestroyed() && win.isVisible()) {
+        const bounds = win.getBounds();
+        const display = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y });
+        win.setBounds(WindowPositionUtil.getNotificationPosition(display, factor));
+      }
+    }
+
+    if (
+      this._lastPreviewContentSize &&
+      this.transcriptionPreviewWindow &&
+      !this.transcriptionPreviewWindow.isDestroyed()
+    ) {
+      this.resizeTranscriptionPreview(
+        this._lastPreviewContentSize.width,
+        this._lastPreviewContentSize.height
+      );
+    }
+
+    if (this._lastAgentContentSize && this.agentWindow && !this.agentWindow.isDestroyed()) {
+      this.resizeAgentWindow(this._lastAgentContentSize.width, this._lastAgentContentSize.height);
+    }
   }
 
   async loadWindowContent(window, isControlPanel = false, isAgent = false) {
@@ -619,6 +673,7 @@ class WindowManager {
     }
 
     this.controlPanelWindow = new BrowserWindow(CONTROL_PANEL_CONFIG);
+    this.zoomManager.register(this.controlPanelWindow.webContents);
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
       const appUrl = DevServerManager.getAppUrl(true);
@@ -683,7 +738,11 @@ class WindowManager {
       this.controlPanelWindow = null;
     });
 
-    MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
+    MenuManager.setupControlPanelMenu(
+      this.controlPanelWindow,
+      () => this.openSettings(),
+      (window, direction) => this.zoomManager.applyZoomCommand(window, direction)
+    );
 
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
       clearVisibilityTimer();
@@ -738,6 +797,7 @@ class WindowManager {
     }
 
     this.agentWindow = new BrowserWindow(AGENT_OVERLAY_CONFIG);
+    this.zoomManager.register(this.agentWindow.webContents);
 
     this.agentWindow.once("ready-to-show", () => {
       WindowPositionUtil.setupAlwaysOnTop(this.agentWindow);
@@ -776,7 +836,7 @@ class WindowManager {
     const display = screen.getDisplayNearestPoint({ x: refPoint.x, y: refPoint.y });
     const workArea = display.workArea || display.bounds;
 
-    const width = AGENT_OVERLAY_CONFIG.width;
+    const width = Math.round(AGENT_OVERLAY_CONFIG.width * this.zoomManager.getFactor());
     const height = workArea.height;
 
     // Center horizontally relative to main window, fill work area height
@@ -816,6 +876,7 @@ class WindowManager {
     }
 
     this.transcriptionPreviewWindow = new BrowserWindow(TRANSCRIPTION_PREVIEW_CONFIG);
+    this.zoomManager.register(this.transcriptionPreviewWindow.webContents);
 
     this.transcriptionPreviewWindow.on("closed", () => {
       this.transcriptionPreviewWindow = null;
@@ -844,9 +905,10 @@ class WindowManager {
 
     if (mainBounds) {
       const display = screen.getDisplayNearestPoint({ x: mainBounds.x, y: mainBounds.y });
+      const factor = this.zoomManager.getFactor();
       const position = WindowPositionUtil.getTranscriptionPreviewPosition(display, mainBounds, {
-        width: TRANSCRIPTION_PREVIEW_CONFIG.width,
-        height: TRANSCRIPTION_PREVIEW_CONFIG.height,
+        width: Math.round(TRANSCRIPTION_PREVIEW_CONFIG.width * factor),
+        height: Math.round(TRANSCRIPTION_PREVIEW_CONFIG.height * factor),
       });
       this.transcriptionPreviewWindow.setBounds(position);
     }
@@ -891,13 +953,18 @@ class WindowManager {
       return { success: false, error: "Preview window not available" };
     }
 
+    // Renderer measures content in unzoomed CSS px; scale to device px so the
+    // zoomed content fits. Clamp against the design limits scaled by the same
+    // factor. Remember the unscaled request to re-apply if the zoom changes.
+    this._lastPreviewContentSize = { width, height };
+    const factor = this.zoomManager.getFactor();
     const targetWidth = Math.max(
-      TRANSCRIPTION_PREVIEW_SIZE_LIMITS.minWidth,
-      Math.min(Math.round(width), TRANSCRIPTION_PREVIEW_SIZE_LIMITS.maxWidth)
+      TRANSCRIPTION_PREVIEW_SIZE_LIMITS.minWidth * factor,
+      Math.min(Math.round(width * factor), TRANSCRIPTION_PREVIEW_SIZE_LIMITS.maxWidth * factor)
     );
     const targetHeight = Math.max(
-      TRANSCRIPTION_PREVIEW_SIZE_LIMITS.minHeight,
-      Math.min(Math.round(height), TRANSCRIPTION_PREVIEW_SIZE_LIMITS.maxHeight)
+      TRANSCRIPTION_PREVIEW_SIZE_LIMITS.minHeight * factor,
+      Math.min(Math.round(height * factor), TRANSCRIPTION_PREVIEW_SIZE_LIMITS.maxHeight * factor)
     );
 
     const anchorBounds =
@@ -930,13 +997,17 @@ class WindowManager {
     const ANIMATION_DURATION_MS = 250;
     const TICK_MS = 16;
 
+    // Renderer measures in unzoomed CSS px; scale to device px (and scale the
+    // clamp limits by the same factor) so zoomed chat content fits.
+    this._lastAgentContentSize = { width, height };
+    const factor = this.zoomManager.getFactor();
     const targetWidth = Math.max(
-      AGENT_OVERLAY_CONFIG.minWidth,
-      Math.min(width, AGENT_OVERLAY_CONFIG.maxWidth)
+      AGENT_OVERLAY_CONFIG.minWidth * factor,
+      Math.min(width * factor, AGENT_OVERLAY_CONFIG.maxWidth * factor)
     );
     const targetHeight = Math.max(
-      AGENT_OVERLAY_CONFIG.minHeight,
-      Math.min(height, AGENT_OVERLAY_CONFIG.maxHeight)
+      AGENT_OVERLAY_CONFIG.minHeight * factor,
+      Math.min(height * factor, AGENT_OVERLAY_CONFIG.maxHeight * factor)
     );
 
     const currentBounds = this.agentWindow.getBounds();
@@ -1172,12 +1243,16 @@ class WindowManager {
     }
 
     const display = screen.getPrimaryDisplay();
-    const position = WindowPositionUtil.getNotificationPosition(display);
+    const position = WindowPositionUtil.getNotificationPosition(
+      display,
+      this.zoomManager.getFactor()
+    );
 
     this.notificationWindow = new BrowserWindow({
       ...NOTIFICATION_WINDOW_CONFIG,
       ...position,
     });
+    this.zoomManager.register(this.notificationWindow.webContents);
 
     // Keep the prompt visible to the user but out of screen shares and recordings.
     this.notificationWindow.setContentProtection(true);
@@ -1269,12 +1344,16 @@ class WindowManager {
     }
 
     const display = screen.getPrimaryDisplay();
-    const position = WindowPositionUtil.getNotificationPosition(display);
+    const position = WindowPositionUtil.getNotificationPosition(
+      display,
+      this.zoomManager.getFactor()
+    );
 
     this.updateNotificationWindow = new BrowserWindow({
       ...NOTIFICATION_WINDOW_CONFIG,
       ...position,
     });
+    this.zoomManager.register(this.updateNotificationWindow.webContents);
 
     WindowPositionUtil.setupAlwaysOnTop(this.updateNotificationWindow);
 
@@ -1403,7 +1482,11 @@ class WindowManager {
     MenuManager.setupMainMenu(() => this.openSettings());
 
     if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
-      MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
+      MenuManager.setupControlPanelMenu(
+        this.controlPanelWindow,
+        () => this.openSettings(),
+        (window, direction) => this.zoomManager.applyZoomCommand(window, direction)
+      );
       this.controlPanelWindow.setTitle(i18nMain.t("window.controlPanelTitle"));
     }
 
