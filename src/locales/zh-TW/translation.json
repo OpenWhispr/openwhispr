@@ -1038,7 +1038,9 @@
       "providerLabel": "供應商",
       "run": "執行測試",
       "customEndpoint": "自訂端點",
-      "apiKeyMissing": "未設定 {{provider}} API 金鑰。請在 AI 模型設定中新增。"
+      "apiKeyMissing": "未設定 {{provider}} API 金鑰。請在 AI 模型設定中新增。",
+      "translationDisabled": "啟用聽寫翻譯以測試此提示詞",
+      "noTargetLanguage": "請先選擇目標語言"
     },
     "view": {
       "customPrompt": "自訂提示詞",
@@ -2510,7 +2512,12 @@
       "title": "翻譯提示詞",
       "description": "自訂模型翻譯聽寫內容的方式"
     },
-    "hotkeyHint": "在 設定 → 一般 → 翻譯快捷鍵 中設定快捷鍵"
+    "hotkeyHint": "在 設定 → 一般 → 翻譯快捷鍵 中設定快捷鍵",
+    "targetsLabel": "目標語言",
+    "addTarget": "新增語言…",
+    "activeTarget": "目前目標語言",
+    "removeTarget": "移除{{language}}",
+    "maxTargets": "最多 {{max}} 種語言"
   },
   "dictationAgent": {
     "enabled": "啟用語音代理",

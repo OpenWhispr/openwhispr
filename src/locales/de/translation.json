@@ -1038,7 +1038,9 @@
       "providerLabel": "Anbieter",
       "run": "Test ausführen",
       "customEndpoint": "Benutzerdefinierter Endpoint",
-      "apiKeyMissing": "{{provider}} API-Schlüssel nicht konfiguriert. Fügen Sie ihn in den KI-Modelle-Einstellungen hinzu."
+      "apiKeyMissing": "{{provider}} API-Schlüssel nicht konfiguriert. Fügen Sie ihn in den KI-Modelle-Einstellungen hinzu.",
+      "translationDisabled": "Aktiviere die Diktatübersetzung, um diesen Prompt zu testen",
+      "noTargetLanguage": "Wähle zuerst eine Zielsprache"
     },
     "view": {
       "customPrompt": "Benutzerdefinierter Prompt",
@@ -2515,7 +2517,12 @@
       "title": "Übersetzungs-Prompt",
       "description": "Passe an, wie das Modell dein Diktat übersetzt"
     },
-    "hotkeyHint": "Lege den Hotkey unter Einstellungen → Allgemein → Übersetzungs-Hotkey fest"
+    "hotkeyHint": "Lege den Hotkey unter Einstellungen → Allgemein → Übersetzungs-Hotkey fest",
+    "targetsLabel": "Zielsprachen",
+    "addTarget": "Sprache hinzufügen…",
+    "activeTarget": "Aktive Zielsprache",
+    "removeTarget": "{{language}} entfernen",
+    "maxTargets": "Bis zu {{max}} Sprachen"
   },
   "dictationAgent": {
     "enabled": "Voice Agent aktivieren",

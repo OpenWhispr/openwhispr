@@ -19,8 +19,14 @@ import { useAgentName } from "../../utils/agentName";
 import ReasoningService from "../../services/ReasoningService";
 import { getModelProvider } from "../../models/ModelRegistry";
 import logger from "../../utils/logger";
-import { getDefaultPromptText, type PromptKind } from "../../config/prompts";
-import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
+import { getDefaultPromptText, resolvePrompt, type PromptKind } from "../../config/prompts";
+import {
+  useSettingsStore,
+  selectIsCloudCleanupMode,
+  selectIsCloudTranslationMode,
+} from "../../stores/settingsStore";
+import { getLanguageLabel } from "../../utils/languageSupport";
+import { getDictionaryHintWords } from "../../utils/snippets";
 
 interface PromptStudioProps {
   className?: string;
@@ -65,6 +71,19 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
   const cleanupModel = useSettingsStore((s) => s.cleanupModel);
 
+  const isCloudTranslation = useSettingsStore(selectIsCloudTranslationMode);
+  const useDictationTranslation = useSettingsStore((s) => s.useDictationTranslation);
+  const translationMode = useSettingsStore((s) => s.translationMode);
+  const translationProvider = useSettingsStore((s) => s.translationProvider);
+  const translationModel = useSettingsStore((s) => s.translationModel);
+  const translationRemoteUrl = useSettingsStore((s) => s.translationRemoteUrl);
+  const translationCloudBaseUrl = useSettingsStore((s) => s.translationCloudBaseUrl);
+  const translationCustomApiKey = useSettingsStore((s) => s.translationCustomApiKey);
+  const translationDisableThinking = useSettingsStore((s) => s.translationDisableThinking);
+  const translationTargetLanguage = useSettingsStore((s) => s.translationTargetLanguage);
+
+  const isTranslate = kind === "translate";
+
   const customPrompt = useSettingsStore((s) => s.customPrompts[kind]);
   const setCustomPrompt = useSettingsStore((s) => s.setCustomPrompt);
   const defaultPrompt = getDefaultPromptText(kind, uiLanguage);
@@ -100,6 +119,56 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
     setTestResult("");
 
     try {
+      if (isTranslate) {
+        if (!useDictationTranslation) {
+          setTestResult(t("promptStudio.test.translationDisabled"));
+          return;
+        }
+        if (!translationTargetLanguage.trim()) {
+          setTestResult(t("promptStudio.test.noTargetLanguage"));
+          return;
+        }
+
+        const isSelfHosted =
+          translationMode === "self-hosted" && !!translationRemoteUrl.trim();
+        const isCustom =
+          translationMode === "providers" && translationProvider.trim() === "custom";
+
+        if (!isCloudTranslation && !isSelfHosted && !translationModel.trim()) {
+          setTestResult(t("promptStudio.test.noModelSelected"));
+          return;
+        }
+
+        const provider = isCloudTranslation
+          ? "openwhispr"
+          : translationProvider.trim() || undefined;
+        const modelToUse = isCloudTranslation ? translationModel || "auto" : translationModel;
+
+        const previous = customPrompt;
+        setCustomPrompt(kind, editedPrompt);
+        try {
+          const result = await ReasoningService.processText(testText, modelToUse, agentName, {
+            provider,
+            lanUrl: isSelfHosted ? translationRemoteUrl : undefined,
+            baseUrl: isCustom ? translationCloudBaseUrl || undefined : undefined,
+            customApiKey:
+              isCustom || isSelfHosted ? translationCustomApiKey || undefined : undefined,
+            disableThinking: translationDisableThinking,
+            language: translationTargetLanguage,
+            systemPrompt: resolvePrompt("translate", {
+              agentName,
+              targetLanguageLabel: getLanguageLabel(translationTargetLanguage),
+              customDictionary: getDictionaryHintWords(useSettingsStore.getState()),
+              uiLanguage,
+            }),
+          });
+          setTestResult(result);
+        } finally {
+          setCustomPrompt(kind, previous);
+        }
+        return;
+      }
+
       const cleanupProvider = isCloudMode
         ? "openwhispr"
         : cleanupModel
@@ -330,7 +399,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
             return (
               <div className="divide-y divide-border/40 dark:divide-border-subtle">
-                {!useCleanupModel && (
+                {!isTranslate && !useCleanupModel && (
                   <div className="px-5 py-4">
                     <div className="rounded-lg border border-warning/20 bg-warning/5 dark:bg-warning/10 px-4 py-3">
                       <div className="flex items-start gap-2.5">
@@ -401,7 +470,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 <div className="px-5 py-4">
                   <Button
                     onClick={testPrompt}
-                    disabled={!testText.trim() || isLoading || !useCleanupModel}
+                    disabled={!testText.trim() || isLoading || (!isTranslate && !useCleanupModel)}
                     size="sm"
                     className="w-full"
                   >

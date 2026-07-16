@@ -1038,7 +1038,9 @@
       "providerLabel": "プロバイダー",
       "run": "テスト実行",
       "customEndpoint": "カスタムエンドポイント",
-      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。"
+      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。",
+      "translationDisabled": "このプロンプトをテストするには音声入力翻訳を有効にしてください",
+      "noTargetLanguage": "先に翻訳先の言語を選択してください"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
@@ -2515,7 +2517,12 @@
       "title": "翻訳プロンプト",
       "description": "モデルによる音声入力の翻訳方法をカスタマイズします"
     },
-    "hotkeyHint": "ホットキーは 設定 → 一般 → 翻訳ホットキー で設定できます"
+    "hotkeyHint": "ホットキーは 設定 → 一般 → 翻訳ホットキー で設定できます",
+    "targetsLabel": "翻訳先の言語",
+    "addTarget": "言語を追加…",
+    "activeTarget": "使用中の翻訳先言語",
+    "removeTarget": "{{language}}を削除",
+    "maxTargets": "最大{{max}}言語"
   },
   "dictationAgent": {
     "enabled": "音声エージェントを有効にする",

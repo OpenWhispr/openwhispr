@@ -1126,7 +1126,9 @@
       "providerLabel": "Provider",
       "run": "Run Test",
       "customEndpoint": "Custom endpoint",
-      "apiKeyMissing": "{{provider}} API key not configured. Add it in AI Models settings."
+      "apiKeyMissing": "{{provider}} API key not configured. Add it in AI Models settings.",
+      "translationDisabled": "Enable Dictation Translation to test this prompt",
+      "noTargetLanguage": "Pick a target language first"
     },
     "view": {
       "customPrompt": "Custom prompt",
@@ -2651,7 +2653,12 @@
       "title": "Translation Prompt",
       "description": "Customize how the model translates your dictation"
     },
-    "hotkeyHint": "Set the hotkey under Settings → General → Translation Hotkey"
+    "hotkeyHint": "Set the hotkey under Settings → General → Translation Hotkey",
+    "targetsLabel": "Target languages",
+    "addTarget": "Add language…",
+    "activeTarget": "Active target language",
+    "removeTarget": "Remove {{language}}",
+    "maxTargets": "Up to {{max}} languages"
   },
   "dictationAgent": {
     "enabled": "Enable voice agent",

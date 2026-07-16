@@ -1086,7 +1086,9 @@
       "providerLabel": "Fournisseur",
       "run": "Lancer le test",
       "customEndpoint": "Endpoint personnalisé",
-      "apiKeyMissing": "Clé API {{provider}} non configurée. Ajoutez-la dans les paramètres Modèles IA."
+      "apiKeyMissing": "Clé API {{provider}} non configurée. Ajoutez-la dans les paramètres Modèles IA.",
+      "translationDisabled": "Activez la traduction de dictée pour tester ce prompt",
+      "noTargetLanguage": "Choisissez d’abord une langue cible"
     },
     "view": {
       "customPrompt": "Prompt personnalisé",
@@ -2563,7 +2565,12 @@
       "title": "Prompt de Traduction",
       "description": "Personnalisez la façon dont le modèle traduit votre dictée"
     },
-    "hotkeyHint": "Définissez le raccourci dans Réglages → Général → Raccourci de Traduction"
+    "hotkeyHint": "Définissez le raccourci dans Réglages → Général → Raccourci de Traduction",
+    "targetsLabel": "Langues cibles",
+    "addTarget": "Ajouter une langue…",
+    "activeTarget": "Langue cible active",
+    "removeTarget": "Supprimer {{language}}",
+    "maxTargets": "Jusqu’à {{max}} langues"
   },
   "dictationAgent": {
     "enabled": "Activer l'agent vocal",

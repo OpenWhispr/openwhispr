@@ -485,6 +485,7 @@ export interface SettingsState
   useDictationTranslation: boolean;
   translationSourceLanguage: string;
   translationTargetLanguage: string;
+  translationTargets: string[];
 
   dictationAgentMode: InferenceMode;
   dictationAgentProvider: string;
@@ -558,6 +559,7 @@ export interface SettingsState
   setUseDictationTranslation: (value: boolean) => void;
   setTranslationSourceLanguage: (value: string) => void;
   setTranslationTargetLanguage: (value: string) => void;
+  setTranslationTargets: (targets: string[]) => void;
 
   setCleanupDisableThinking: (value: boolean) => void;
   setDictationAgentDisableThinking: (value: boolean) => void;
@@ -895,6 +897,8 @@ function createSecretSetter(
   };
 }
 
+export const MAX_TRANSLATION_TARGETS = 5;
+
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
   useLocalWhisper: readBoolean("useLocalWhisper", false),
@@ -1163,6 +1167,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   useDictationTranslation: readBoolean("useDictationTranslation", false),
   translationSourceLanguage: readString("translationSourceLanguage", "auto"),
   translationTargetLanguage: readString("translationTargetLanguage", ""),
+  translationTargets: (() => {
+    // Seed from the saved array; otherwise from the single active target if set.
+    const stored = isBrowser ? localStorage.getItem("translationTargets") : null;
+    if (stored !== null) return readStringArray("translationTargets", []);
+    const active = readString("translationTargetLanguage", "");
+    return active ? [active] : [];
+  })(),
 
   setTranscriptionMode: createStringSetter("transcriptionMode") as (mode: InferenceMode) => void,
   setRemoteTranscriptionType: createStringSetter("remoteTranscriptionType") as (
@@ -1226,6 +1237,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUseDictationTranslation: createBooleanSetter("useDictationTranslation"),
   setTranslationSourceLanguage: createStringSetter("translationSourceLanguage"),
   setTranslationTargetLanguage: createStringSetter("translationTargetLanguage"),
+  setTranslationTargets: (targets: string[]) => {
+    // Drop blanks, "auto", and duplicates while preserving order.
+    const normalized = Array.from(
+      new Set(targets.filter((v) => typeof v === "string" && v.trim() && v !== "auto"))
+    );
+    if (isBrowser) localStorage.setItem("translationTargets", JSON.stringify(normalized));
+    set({ translationTargets: normalized });
+  },
 
   chatAgentModel: readString("chatAgentModel", "openai/gpt-oss-120b"),
   chatAgentProvider: readString("chatAgentProvider", "groq"),

@@ -1086,7 +1086,9 @@
       "providerLabel": "Proveedor",
       "run": "Ejecutar prueba",
       "customEndpoint": "Endpoint personalizado",
-      "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA."
+      "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA.",
+      "translationDisabled": "Activa la traducción de dictado para probar este prompt",
+      "noTargetLanguage": "Elige primero un idioma de destino"
     },
     "view": {
       "customPrompt": "Prompt personalizado",
@@ -2563,7 +2565,12 @@
       "title": "Prompt de Traducción",
       "description": "Personaliza cómo el modelo traduce tu dictado"
     },
-    "hotkeyHint": "Configura el atajo en Ajustes → General → Atajo de Traducción"
+    "hotkeyHint": "Configura el atajo en Ajustes → General → Atajo de Traducción",
+    "targetsLabel": "Idiomas de destino",
+    "addTarget": "Añadir idioma…",
+    "activeTarget": "Idioma de destino activo",
+    "removeTarget": "Quitar {{language}}",
+    "maxTargets": "Hasta {{max}} idiomas"
   },
   "dictationAgent": {
     "enabled": "Activar agente de voz",
