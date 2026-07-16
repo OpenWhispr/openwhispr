@@ -40,6 +40,7 @@ import {
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
+import { shouldRunTranslateStep } from "../helpers/translationChain";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
@@ -552,10 +553,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   }
                 }
                 // Step 2: translate unless an explicit source equals the target language.
-                const sourceLanguage = settings.translationSourceLanguage || "auto";
                 if (
-                  sourceLanguage === "auto" ||
-                  sourceLanguage !== settings.translationTargetLanguage
+                  shouldRunTranslateStep(
+                    settings.translationSourceLanguage,
+                    settings.translationTargetLanguage
+                  )
                 ) {
                   const translated = await ReasoningService.processText(
                     text,

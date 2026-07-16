@@ -31,6 +31,7 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
 import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
+import { executeTranslationChain, shouldRunTranslateStep } from "./translationChain";
 import { detectAgentName } from "../config/agentDetection";
 import {
   resolveDictationRouteKind,
@@ -1352,73 +1353,66 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Cleanup-then-translate chain shared by batch, cloud, and streaming paths: Step 1
   // (optional cleanup) soft-fails to input; Step 2 translates unless source === target.
   async runTranslationChain({ text, settings, agentName, route, cleanup }) {
-    let out = text;
-    let usedCloudReasoning = false;
-
-    if (route.cleanupReachable) {
-      try {
-        if (cleanup.mode === "cloudReason") {
-          const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(out, {
-              agentName,
-              promptMode: "cleanup",
-              customDictionary: getDictionaryHintWords(settings),
-              customPrompt: this.getCustomPrompt(),
-              language: this.getEffectiveSttLanguage(settings) || "auto",
-              locale: settings.uiLanguage || "en",
-              ...(cleanup.meta || {}),
-            });
-            if (!res.success) {
-              const err = new Error(res.error || "Cloud reasoning failed");
-              err.code = res.code;
-              throw err;
-            }
-            return res;
+    const runCleanup = async (currentText) => {
+      if (cleanup.mode === "cloudReason") {
+        const reasonResult = await withSessionRefresh(async () => {
+          const res = await window.electronAPI.cloudReason(currentText, {
+            agentName,
+            promptMode: "cleanup",
+            customDictionary: getDictionaryHintWords(settings),
+            customPrompt: this.getCustomPrompt(),
+            language: this.getEffectiveSttLanguage(settings) || "auto",
+            locale: settings.uiLanguage || "en",
+            ...(cleanup.meta || {}),
           });
-          if (reasonResult.success && reasonResult.text) {
-            out = reasonResult.text;
+          if (!res.success) {
+            const err = new Error(res.error || "Cloud reasoning failed");
+            err.code = res.code;
+            throw err;
           }
-          usedCloudReasoning = true;
-        } else {
-          const cleanupModel = cleanup.model;
-          if (cleanupModel) {
-            const cleaned = await this.processWithReasoningModel(
-              out,
-              cleanupModel,
-              agentName,
-              route.cleanupConfig
-            );
-            if (cleaned) out = cleaned;
-          }
-        }
-      } catch (cleanupError) {
+          return res;
+        });
+        return reasonResult.success && reasonResult.text ? reasonResult.text : null;
+      }
+      const cleanupModel = cleanup.model;
+      if (cleanupModel) {
+        return this.processWithReasoningModel(
+          currentText,
+          cleanupModel,
+          agentName,
+          route.cleanupConfig
+        );
+      }
+      return null;
+    };
+
+    const runTranslate = async (currentText) =>
+      this.processWithReasoningModel(currentText, route.model, agentName, route.config);
+
+    return executeTranslationChain({
+      text,
+      cleanupReachable: route.cleanupReachable,
+      cleanupIsCloud: cleanup.mode === "cloudReason",
+      runCleanup,
+      runTranslate,
+      shouldTranslate: shouldRunTranslateStep(
+        settings.translationSourceLanguage,
+        settings.translationTargetLanguage
+      ),
+      translateIsCloud: route.config?.provider === "openwhispr",
+      onCleanupError: (cleanupError) => {
         const { level = "error", channel, extra } = cleanup.log || {};
         logger[level](
           "Cleanup step failed in translation chain, translating raw transcript",
           { ...(extra || {}), error: cleanupError.message },
           channel
         );
-      }
-    }
-
-    const sourceLanguage = settings.translationSourceLanguage || "auto";
-    if (sourceLanguage === "auto" || sourceLanguage !== settings.translationTargetLanguage) {
-      const translated = await this.processWithReasoningModel(
-        out,
-        route.model,
-        agentName,
-        route.config
-      );
-      if (translated) {
-        out = translated;
-      } else {
+      },
+      onEmptyTranslate: () => {
         const { channel } = cleanup.log || {};
         logger.warn("Translation step returned empty text, keeping previous text", {}, channel);
-      }
-      if (route.config?.provider === "openwhispr") usedCloudReasoning = true;
-    }
-
-    return { text: out, usedCloudReasoning };
+      },
+    });
   }
 
   async processTranscription(text, source) {
