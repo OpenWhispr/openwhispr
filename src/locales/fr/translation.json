@@ -1446,7 +1446,10 @@
         "light": "Clair",
         "theme": "Thème",
         "themeDescription": "Choisissez clair, sombre ou suivre le système",
-        "title": "Apparence"
+        "title": "Apparence",
+        "meetingLayoutLabel": "Open meeting mode in:",
+        "meetingLayoutSidePanel": "Panneau latéral",
+        "meetingLayoutFullWidth": "Pleine largeur"
       },
       "floatingIcon": {
         "autoHide": "Masquer automatiquement au repos",
@@ -1475,10 +1478,7 @@
       },
       "meetingHotkey": {
         "title": "Raccourci mode réunion",
-        "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran",
-        "layoutLabel": "Open meeting mode in:",
-        "layoutSidePanel": "Panneau latéral",
-        "layoutFullWidth": "Pleine largeur"
+        "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran"
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'agent vocal",

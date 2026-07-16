@@ -2416,7 +2416,7 @@ export default function SettingsPage({
                 </SettingsPanelRow>
                 <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
                   <span className="text-xs text-muted-foreground/80">
-                    {t("settingsPage.general.meetingHotkey.layoutLabel")}
+                    {t("settingsPage.general.appearance.meetingLayoutLabel")}
                   </span>
                   <Select
                     value={meetingHotkeyLayoutMode}
@@ -2432,13 +2432,13 @@ export default function SettingsPage({
                         value="side-panel"
                         className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
                       >
-                        {t("settingsPage.general.meetingHotkey.layoutSidePanel")}
+                        {t("settingsPage.general.appearance.meetingLayoutSidePanel")}
                       </SelectItem>
                       <SelectItem
                         value="full-width"
                         className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
                       >
-                        {t("settingsPage.general.meetingHotkey.layoutFullWidth")}
+                        {t("settingsPage.general.appearance.meetingLayoutFullWidth")}
                       </SelectItem>
                     </SelectContent>
                   </Select>

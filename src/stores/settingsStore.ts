@@ -946,9 +946,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   voiceAgentKey: readString("voiceAgentKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
-  meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "side-panel") === "full-width"
-    ? "full-width"
-    : "side-panel") as "side-panel" | "full-width",
+  meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
+    ? "side-panel"
+    : "full-width") as "side-panel" | "full-width",
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     "tap" | "push",
 

@@ -1398,7 +1398,10 @@
         "light": "Hell",
         "theme": "Design",
         "themeDescription": "Wählen Sie zwischen Hell, Dunkel oder Systemstandard",
-        "title": "Darstellung"
+        "title": "Darstellung",
+        "meetingLayoutLabel": "Open meeting mode in:",
+        "meetingLayoutSidePanel": "Seitenleiste",
+        "meetingLayoutFullWidth": "Volle Breite"
       },
       "floatingIcon": {
         "autoHide": "Automatisch ausblenden bei Inaktivität",
@@ -1427,10 +1430,7 @@
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
-        "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
-        "layoutLabel": "Open meeting mode in:",
-        "layoutSidePanel": "Seitenleiste",
-        "layoutFullWidth": "Volle Breite"
+        "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben"
       },
       "voiceAgentHotkey": {
         "title": "Sprachagent-Hotkey",

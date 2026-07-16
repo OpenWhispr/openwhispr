@@ -1398,7 +1398,10 @@
         "light": "Светлая",
         "theme": "Тема",
         "themeDescription": "Выберите светлую, тёмную тему или следуйте системным настройкам",
-        "title": "Внешний вид"
+        "title": "Внешний вид",
+        "meetingLayoutLabel": "Open meeting mode in:",
+        "meetingLayoutSidePanel": "Боковая панель",
+        "meetingLayoutFullWidth": "Полная ширина"
       },
       "floatingIcon": {
         "autoHide": "Скрывать при бездействии",
@@ -1427,10 +1430,7 @@
       },
       "meetingHotkey": {
         "title": "Горячая клавиша режима встречи",
-        "description": "Запустить режим встречи и закрепить панель сбоку экрана",
-        "layoutLabel": "Open meeting mode in:",
-        "layoutSidePanel": "Боковая панель",
-        "layoutFullWidth": "Полная ширина"
+        "description": "Запустить режим встречи и закрепить панель сбоку экрана"
       },
       "voiceAgentHotkey": {
         "title": "Горячая клавиша голосового агента",

@@ -1393,7 +1393,10 @@
         "light": "浅色",
         "theme": "主题",
         "themeDescription": "选择浅色、深色或跟随系统",
-        "title": "外观"
+        "title": "外观",
+        "meetingLayoutLabel": "Open meeting mode in:",
+        "meetingLayoutSidePanel": "侧边栏",
+        "meetingLayoutFullWidth": "全宽"
       },
       "floatingIcon": {
         "autoHide": "空闲时自动隐藏",
@@ -1422,10 +1425,7 @@
       },
       "meetingHotkey": {
         "title": "会议模式快捷键",
-        "description": "启动会议模式并将面板固定到屏幕侧边",
-        "layoutLabel": "Open meeting mode in:",
-        "layoutSidePanel": "侧边栏",
-        "layoutFullWidth": "全宽"
+        "description": "启动会议模式并将面板固定到屏幕侧边"
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",

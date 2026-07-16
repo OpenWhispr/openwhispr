@@ -1398,7 +1398,10 @@
         "light": "ライト",
         "theme": "テーマ",
         "themeDescription": "ライト、ダーク、またはシステムに合わせる",
-        "title": "外観"
+        "title": "外観",
+        "meetingLayoutLabel": "Open meeting mode in:",
+        "meetingLayoutSidePanel": "サイドパネル",
+        "meetingLayoutFullWidth": "全幅"
       },
       "floatingIcon": {
         "autoHide": "使用していないときに自動で非表示",
@@ -1427,10 +1430,7 @@
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
-        "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
-        "layoutLabel": "Open meeting mode in:",
-        "layoutSidePanel": "サイドパネル",
-        "layoutFullWidth": "全幅"
+        "description": "ミーティングモードを開始し、パネルを画面の横に配置する"
       },
       "voiceAgentHotkey": {
         "title": "ボイスエージェントホットキー",

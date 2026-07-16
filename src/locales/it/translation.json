@@ -1398,7 +1398,10 @@
         "light": "Chiaro",
         "theme": "Tema",
         "themeDescription": "Scegli chiaro, scuro o in base al sistema",
-        "title": "Aspetto"
+        "title": "Aspetto",
+        "meetingLayoutLabel": "Open meeting mode in:",
+        "meetingLayoutSidePanel": "Pannello laterale",
+        "meetingLayoutFullWidth": "Larghezza completa"
       },
       "floatingIcon": {
         "autoHide": "Nascondi automaticamente quando inattivo",
@@ -1427,10 +1430,7 @@
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
-        "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo",
-        "layoutLabel": "Open meeting mode in:",
-        "layoutSidePanel": "Pannello laterale",
-        "layoutFullWidth": "Larghezza completa"
+        "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo"
       },
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'agente vocale",

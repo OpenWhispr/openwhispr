@@ -1571,7 +1571,10 @@
         "light": "Light",
         "theme": "Theme",
         "themeDescription": "Choose light, dark, or match your system",
-        "title": "Appearance"
+        "title": "Appearance",
+        "meetingLayoutLabel": "Open meeting mode in:",
+        "meetingLayoutSidePanel": "Side panel",
+        "meetingLayoutFullWidth": "Full width"
       },
       "floatingIcon": {
         "autoHide": "Auto-hide when idle",
@@ -1600,10 +1603,7 @@
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",
-        "description": "Start meeting mode and snap the panel to the side of the screen",
-        "layoutLabel": "Open meeting mode in:",
-        "layoutSidePanel": "Side panel",
-        "layoutFullWidth": "Full width"
+        "description": "Start meeting mode and snap the panel to the side of the screen"
       },
       "voiceAgentHotkey": {
         "title": "Voice Agent Hotkey",
