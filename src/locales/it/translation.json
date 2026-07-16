@@ -567,6 +567,14 @@
         "title": "Trascrizione parziale",
         "description": "Non è stato possibile trascrivere una parte della registrazione."
       },
+      "cancelHotkeyFallback": {
+        "title": "Scorciatoia di annullamento non disponibile",
+        "description": "Impossibile registrare {{hotkey}}. {{fallback}} annullerà questa registrazione."
+      },
+      "cancelHotkeyUnavailable": {
+        "title": "Scorciatoia di annullamento non disponibile",
+        "description": "OpenWhispr non ha potuto registrare una scorciatoia di annullamento. Usa la scorciatoia di dettatura per interrompere."
+      },
       "errorDescriptions": {
         "sessionExpired": "La tua sessione OpenWhispr Cloud non è disponibile. Effettua di nuovo l'accesso dalle Impostazioni.",
         "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
@@ -1419,6 +1427,12 @@
         "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non verranno mantenute",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr non può scrivere in {{path}}, quindi le scorciatoie non sopravvivranno a un ricaricamento della configurazione di Hyprland. Assicurati che il file esista e sia scrivibile.",
         "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
+      },
+      "cancelHotkey": {
+        "title": "Scorciatoia per annullare la registrazione",
+        "description": "Annulla la registrazione attiva senza salvarne l’audio",
+        "reset": "Ripristina Escape",
+        "unsupported": "Globe, Fn, i pulsanti del mouse e i modificatori del lato destro non possono ancora annullare le registrazioni."
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",

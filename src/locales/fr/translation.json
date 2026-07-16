@@ -567,6 +567,14 @@
         "title": "Transcription partielle",
         "description": "Une partie de l'enregistrement n'a pas pu être transcrite."
       },
+      "cancelHotkeyFallback": {
+        "title": "Raccourci d’annulation indisponible",
+        "description": "Impossible d’enregistrer {{hotkey}}. {{fallback}} annulera cet enregistrement."
+      },
+      "cancelHotkeyUnavailable": {
+        "title": "Raccourci d’annulation indisponible",
+        "description": "OpenWhispr n’a pas pu enregistrer de raccourci d’annulation. Utilisez le raccourci de dictée pour arrêter."
+      },
       "errorDescriptions": {
         "sessionExpired": "Votre session OpenWhispr Cloud est indisponible. Reconnectez-vous depuis Paramètres.",
         "offline": "Vous êtes hors ligne. La transcription cloud nécessite une connexion Internet.",
@@ -1467,6 +1475,12 @@
         "hyprlandConfigWriteWarningTitle": "Les raccourcis Hyprland ne seront pas conservés",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr ne peut pas écrire dans {{path}} ; les raccourcis ne survivront donc pas à un rechargement de la configuration Hyprland. Vérifiez que le fichier existe et qu'il est accessible en écriture.",
         "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr réserve le raccourci sélectionné. Tout raccourci Hyprland existant utilisant la même combinaison de touches sera supprimé quand OpenWhispr enregistrera son raccourci."
+      },
+      "cancelHotkey": {
+        "title": "Raccourci d’annulation de l’enregistrement",
+        "description": "Annuler l’enregistrement actif sans conserver son audio",
+        "reset": "Réinitialiser sur Échap",
+        "unsupported": "Les touches Globe, Fn, les boutons de souris et les modificateurs de droite ne peuvent pas encore annuler un enregistrement."
       },
       "meetingHotkey": {
         "title": "Raccourci mode réunion",

@@ -567,6 +567,14 @@
         "title": "部分的な文字起こし",
         "description": "録音の一部を文字起こしできませんでした。"
       },
+      "cancelHotkeyFallback": {
+        "title": "キャンセルショートカットを使用できません",
+        "description": "{{hotkey}} を登録できませんでした。この録音では代わりに {{fallback}} を使用します。"
+      },
+      "cancelHotkeyUnavailable": {
+        "title": "キャンセルショートカットを使用できません",
+        "description": "録音キャンセル用ショートカットを登録できませんでした。停止するにはディクテーションのショートカットを使用してください。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
@@ -1419,6 +1427,12 @@
         "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
         "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。"
+      },
+      "cancelHotkey": {
+        "title": "録音キャンセルのショートカット",
+        "description": "音声を保存せずに録音をキャンセルします",
+        "reset": "Escape に戻す",
+        "unsupported": "Globe、Fn、マウスボタン、右側の修飾キーはまだ録音のキャンセルには使用できません。"
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",

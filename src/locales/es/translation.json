@@ -567,6 +567,14 @@
         "title": "Transcripción parcial",
         "description": "No se pudo transcribir una parte de la grabación."
       },
+      "cancelHotkeyFallback": {
+        "title": "Atajo de cancelación no disponible",
+        "description": "No se pudo registrar {{hotkey}}. {{fallback}} cancelará esta grabación."
+      },
+      "cancelHotkeyUnavailable": {
+        "title": "Atajo de cancelación no disponible",
+        "description": "OpenWhispr no pudo registrar un atajo para cancelar la grabación. Usa el atajo de dictado para detenerla."
+      },
       "errorDescriptions": {
         "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
@@ -1467,6 +1475,12 @@
         "hyprlandConfigWriteWarningTitle": "Los atajos de Hyprland no se conservarán",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr no puede escribir en {{path}}, así que los atajos no sobrevivirán a una recarga de la configuración de Hyprland. Asegúrate de que el archivo exista y se pueda escribir.",
         "hyprlandUnbindDescription": "En Hyprland, OpenWhispr reserva el atajo seleccionado. Cualquier atajo existente de Hyprland que use la misma combinación de teclas se desvinculará cuando OpenWhispr registre su atajo."
+      },
+      "cancelHotkey": {
+        "title": "Atajo para cancelar la grabación",
+        "description": "Cancela la grabación activa sin guardar el audio",
+        "reset": "Restablecer a Escape",
+        "unsupported": "Globe, Fn, los botones del ratón y los modificadores del lado derecho aún no pueden cancelar grabaciones."
       },
       "meetingHotkey": {
         "title": "Atajo modo reunión",

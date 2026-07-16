@@ -7,6 +7,7 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { DEFAULT_CANCEL_HOTKEY, registerRecordingCancelHotkey } from "../helpers/cancelHotkey";
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -21,44 +22,70 @@ export const useAudioRecording = (toast, options = {}) => {
   const wasRecordingRef = useRef(false);
   const { onToggle } = options;
 
-  const performStartRecording = useCallback(async ({ voiceAgentRequested = false } = {}) => {
-    if (startLockRef.current) return false;
-    startLockRef.current = true;
-    try {
-      if (!audioManagerRef.current) return false;
+  const registerConfiguredCancelHotkey = useCallback(async () => {
+    const registerCancel = window.electronAPI?.registerCancelHotkey;
+    if (!registerCancel) return;
 
-      const currentState = audioManagerRef.current.getState();
-      if (currentState.isRecording || currentState.isProcessing) return false;
-
-      audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
-
-      // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
-      if (!audioManagerRef.current.sttConfig) {
-        const config = await window.electronAPI.getSttConfig?.();
-        if (config?.success) {
-          audioManagerRef.current.setSttConfig(config);
-        }
-      }
-
-      const didStart = audioManagerRef.current.shouldUseStreaming()
-        ? await audioManagerRef.current.startStreamingRecording()
-        : await audioManagerRef.current.startRecording();
-
-      // A quick tap can end the recording inside the start call itself (deferred
-      // streaming stop) — don't pause media for a recording that already ended. See #1060.
-      if (didStart && audioManagerRef.current.getState().isRecording) {
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.pauseMediaPlayback?.();
-        }
-        window.electronAPI?.registerCancelHotkey?.("Escape");
-        void playStartCue();
-      }
-
-      return didStart;
-    } finally {
-      startLockRef.current = false;
+    const configuredHotkey = getSettings().cancelKey;
+    const registration = await registerRecordingCancelHotkey(registerCancel, configuredHotkey);
+    if (registration.usedFallback) {
+      toast({
+        title: t("hooks.audioRecording.cancelHotkeyFallback.title"),
+        description: t("hooks.audioRecording.cancelHotkeyFallback.description", {
+          hotkey: configuredHotkey,
+          fallback: DEFAULT_CANCEL_HOTKEY,
+        }),
+      });
+    } else if (!registration.success) {
+      toast({
+        title: t("hooks.audioRecording.cancelHotkeyUnavailable.title"),
+        description: t("hooks.audioRecording.cancelHotkeyUnavailable.description"),
+        variant: "destructive",
+      });
     }
-  }, []);
+  }, [t, toast]);
+
+  const performStartRecording = useCallback(
+    async ({ voiceAgentRequested = false } = {}) => {
+      if (startLockRef.current) return false;
+      startLockRef.current = true;
+      try {
+        if (!audioManagerRef.current) return false;
+
+        const currentState = audioManagerRef.current.getState();
+        if (currentState.isRecording || currentState.isProcessing) return false;
+
+        audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+
+        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
+        if (!audioManagerRef.current.sttConfig) {
+          const config = await window.electronAPI.getSttConfig?.();
+          if (config?.success) {
+            audioManagerRef.current.setSttConfig(config);
+          }
+        }
+
+        const didStart = audioManagerRef.current.shouldUseStreaming()
+          ? await audioManagerRef.current.startStreamingRecording()
+          : await audioManagerRef.current.startRecording();
+
+        // A quick tap can end the recording inside the start call itself (deferred
+        // streaming stop) — don't pause media for a recording that already ended. See #1060.
+        if (didStart && audioManagerRef.current.getState().isRecording) {
+          if (getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.pauseMediaPlayback?.();
+          }
+          await registerConfiguredCancelHotkey();
+          void playStartCue();
+        }
+
+        return didStart;
+      } finally {
+        startLockRef.current = false;
+      }
+    },
+    [registerConfiguredCancelHotkey]
+  );
 
   const performStopRecording = useCallback(async () => {
     if (stopLockRef.current) return false;

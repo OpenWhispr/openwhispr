@@ -567,6 +567,14 @@
         "title": "部分轉錄",
         "description": "部分錄音內容無法轉錄。"
       },
+      "cancelHotkeyFallback": {
+        "title": "取消快速鍵無法使用",
+        "description": "無法註冊 {{hotkey}}。本次錄音將改用 {{fallback}} 取消。"
+      },
+      "cancelHotkeyUnavailable": {
+        "title": "取消快速鍵無法使用",
+        "description": "OpenWhispr 無法註冊錄音取消快速鍵。請使用聽寫快速鍵停止錄音。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
@@ -1414,6 +1422,12 @@
         "hyprlandConfigWriteWarningTitle": "Hyprland 按鍵綁定不會保留",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr 無法寫入 {{path}}，因此重新載入 Hyprland 設定後按鍵綁定不會保留。請確認該檔案存在且可寫入。",
         "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 會佔用所選快捷鍵。當 OpenWhispr 註冊該快捷鍵時，任何使用相同按鍵組合的既有 Hyprland 綁定都會被解除。"
+      },
+      "cancelHotkey": {
+        "title": "取消錄音快速鍵",
+        "description": "取消目前錄音且不儲存音訊",
+        "reset": "重設為 Escape",
+        "unsupported": "Globe、Fn、滑鼠按鈕和右側修飾鍵目前尚無法用來取消錄音。"
       },
       "meetingHotkey": {
         "title": "會議模式快捷鍵",

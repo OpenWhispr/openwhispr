@@ -68,3 +68,19 @@ test("re-registering a slot replaces its previous accelerators", async () => {
   assert.equal(registered.has("F6"), true);
   assert.equal(registered.has("F5"), true);
 });
+
+test("the temporary cancel slot dispatches once and releases its accelerator", async () => {
+  const mgr = new HotkeyManager();
+  let cancelEvents = 0;
+
+  const result = await mgr.registerSlot("cancel", "Control+Shift+X", () => {
+    cancelEvents += 1;
+  });
+  assert.equal(result.success, true);
+
+  registered.get("Control+Shift+X")();
+  assert.equal(cancelEvents, 1);
+
+  mgr.unregisterSlot("cancel");
+  assert.equal(registered.has("Control+Shift+X"), false);
+});
