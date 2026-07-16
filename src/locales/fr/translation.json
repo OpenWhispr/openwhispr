@@ -1475,10 +1475,7 @@
       },
       "meetingHotkey": {
         "title": "Raccourci mode réunion",
-        "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran",
-        "layoutLabel": "Lors du déclenchement par raccourci, ouvrir en :",
-        "layoutFullWidth": "Pleine largeur",
-        "layoutSidePanel": "Panneau latéral"
+        "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran"
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'agent vocal",
