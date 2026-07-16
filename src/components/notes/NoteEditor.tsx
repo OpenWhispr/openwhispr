@@ -522,10 +522,14 @@ export default function NoteEditor({
   );
 
   const handleTitleInput = useCallback(() => {
-    if (titleRef.current) {
-      const text = titleRef.current.textContent || "";
-      onTitleChange(text);
-    }
+    // Only treat this as a real title edit when the title element is actually
+    // focused. The title text is applied imperatively after paint, so during the
+    // editor's remount (e.g. when a meeting note loads and the window snaps to
+    // meeting mode) a transient event on the momentarily-empty contentEditable
+    // would otherwise report "" and clobber the saved title.
+    if (!titleRef.current || document.activeElement !== titleRef.current) return;
+    const text = titleRef.current.textContent || "";
+    onTitleChange(text);
   }, [onTitleChange]);
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
