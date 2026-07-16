@@ -98,6 +98,7 @@ export type SettingsSectionType =
   | "hotkeys"
   | "speechToText"
   | "llms"
+  | "localModel"
   | "privacyData"
   | "system";
 
@@ -430,11 +431,10 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
 }
 
 type SpeechTab = "dictation" | "noteRecording" | "upload";
-type LlmTab = "localModel" | "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
+type LlmTab = "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
 
 const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording", "upload"];
 const LLM_TABS: LlmTab[] = [
-  "localModel",
   "dictationCleanup",
   "dictationAgent",
   "noteFormatting",
@@ -526,14 +526,12 @@ function SpeechToTextTabs({
 
 function LlmsTabs({
   initialTab,
-  renderLocalModel,
   renderDictationCleanup,
   renderDictationAgent,
   renderNoteFormatting,
   renderChatIntelligence,
 }: {
   initialTab?: LlmTab;
-  renderLocalModel: () => React.ReactNode;
   renderDictationCleanup: () => React.ReactNode;
   renderDictationAgent: () => React.ReactNode;
   renderNoteFormatting: () => React.ReactNode;
@@ -543,7 +541,6 @@ function LlmsTabs({
   const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", LLM_TABS, initialTab);
 
   const subTabs = [
-    { id: "localModel", name: t("settingsPage.llms.tabs.localModel") },
     { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
     { id: "dictationAgent", name: t("settingsPage.llms.tabs.dictationAgent") },
     { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
@@ -561,14 +558,12 @@ function LlmsTabs({
         selectedId={tab}
         onSelect={(id) => setTab(id as LlmTab)}
         renderIcon={(id) => {
-          if (id === "localModel") return <Cpu className="w-3.5 h-3.5" />;
           if (id === "dictationCleanup") return <Wand2 className="w-3.5 h-3.5" />;
           if (id === "dictationAgent") return <Sparkles className="w-3.5 h-3.5" />;
           if (id === "noteFormatting") return <BookOpen className="w-3.5 h-3.5" />;
           return <Wand2 className="w-3.5 h-3.5" />;
         }}
       />
-      <TabPanel active={tab === "localModel"}>{renderLocalModel()}</TabPanel>
       <TabPanel active={tab === "dictationCleanup"}>{renderDictationCleanup()}</TabPanel>
       <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
       <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
@@ -798,11 +793,15 @@ export default function SettingsPage({
     activeSection === "speechToText"
   );
   const [hasMountedLlms, setHasMountedLlms] = useState(activeSection === "llms");
+  const [hasMountedLocalModel, setHasMountedLocalModel] = useState(activeSection === "localModel");
   if (activeSection === "speechToText" && !hasMountedSpeechToText) {
     setHasMountedSpeechToText(true);
   }
   if (activeSection === "llms" && !hasMountedLlms) {
     setHasMountedLlms(true);
+  }
+  if (activeSection === "localModel" && !hasMountedLocalModel) {
+    setHasMountedLocalModel(true);
   }
 
   const handleClearAllAudio = async () => {
@@ -2252,6 +2251,7 @@ EOF`,
 
       case "speechToText":
       case "llms":
+      case "localModel":
         return null;
 
       case "privacyData":
@@ -2628,18 +2628,24 @@ EOF`,
           />
         </TabPanel>
       )}
+      {hasMountedLocalModel && (
+        <TabPanel active={activeSection === "localModel"}>
+          <div className="space-y-4">
+            <SectionHeader
+              title={t("settingsPage.llms.tabs.localModel")}
+              description={t("settingsPage.llms.localModel.description")}
+            />
+            <LocalModelSection />
+            <GpuDeviceSelector purpose="intelligence" />
+          </div>
+        </TabPanel>
+      )}
       {hasMountedLlms && (
         <TabPanel active={activeSection === "llms"}>
           <LlmsTabs
             initialTab={
               activeSection === "llms" ? (initialSubTab as LlmTab | undefined) : undefined
             }
-            renderLocalModel={() => (
-              <div className="space-y-4">
-                <LocalModelSection />
-                <GpuDeviceSelector purpose="intelligence" />
-              </div>
-            )}
             renderChatIntelligence={() => <ChatAgentSettings />}
             renderDictationCleanup={() => (
               <div className="space-y-6">

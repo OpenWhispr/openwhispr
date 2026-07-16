@@ -1092,6 +1092,10 @@
         "description": "Modelos para chat, limpeza e resumos",
         "label": "Modelos de linguagem"
       },
+      "localModel": {
+        "description": "Modelo local de IA e configuração de GPU",
+        "label": "Modelo Local"
+      },
       "privacyData": {
         "description": "Privacidade, permissões e análise",
         "label": "Privacidade e dados"
@@ -1691,7 +1695,8 @@
         "chatIntelligence": "Transforms"
       },
       "localModel": {
-        "sharedNotice": "Usando configuração de Modelo Local compartilhada — selecione o modelo e GPU na aba Modelo Local"
+        "sharedNotice": "Usando configuração de Modelo Local compartilhada — selecione o modelo e GPU na secção Modelo Local",
+        "description": "Escolha qual modelo local de IA alimenta todos os escopos de inferência local"
       }
     },
     "noteFormatting": {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Cpu } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import LocalModelPicker, { type LocalProvider } from "../LocalModelPicker";
 import { GpuModeSelector } from "../ui/GpuModeSelector";
@@ -52,20 +53,37 @@ export default function LocalModelSection() {
     loadDownloadedModels();
   }, [loadDownloadedModels]);
 
-  const handleProviderChange = async (providerId: string) => {
+  const handleProviderChange = (providerId: string) => {
     setLocalProvider(providerId);
-    const downloaded = await loadDownloadedModels();
-    const provider = localProviders.find((p) => p.id === providerId);
-    const models = provider?.models ?? [];
-    if (models.length > 0) {
-      const firstDownloaded = models.find((m) => downloaded.has(m.id));
-      setLocalModel(firstDownloaded?.id ?? "");
-    }
+    // Do NOT auto-select a model — only the user clicking on a model changes the active model.
   };
+
+  const activeModelInfo = useMemo(() => {
+    if (!localModel) return null;
+    for (const provider of localProviders) {
+      const model = provider.models.find((m) => m.id === localModel);
+      if (model) return { providerName: provider.name, modelName: model.name, modelSize: model.size };
+    }
+    return null;
+  }, [localModel, localProviders]);
 
   return (
     <div className="space-y-4">
-      <GpuModeSelector type="llama" />
+      <div className="flex items-center gap-3">
+        <GpuModeSelector type="llama" />
+        {activeModelInfo ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-sm">
+            <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.7)] animate-[pulse-glow_2s_ease-in-out_infinite] shrink-0" />
+            <span className="text-green-600 dark:text-green-400 font-medium">{activeModelInfo.modelName}</span>
+            <span className="text-muted-foreground/60 text-xs">{activeModelInfo.providerName} · {activeModelInfo.modelSize}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/40 border border-border/30 text-sm">
+            <Cpu className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+            <span className="text-muted-foreground/60 text-xs">No local model selected</span>
+          </div>
+        )}
+      </div>
       <LocalModelPicker
         providers={localProviders}
         selectedModel={localModel}

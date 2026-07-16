@@ -93,8 +93,8 @@ export function ModelCard({
     }
     if (isDownloaded) {
       return isSelected
-        ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)]"
-        : "bg-success shadow-[0_0_4px_rgba(34,197,94,0.5)]";
+        ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.7)]"
+        : "bg-primary shadow-[0_0_4px_oklch(0.62_0.22_260/0.5)]";
     }
     if (isDownloading) {
       return "bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)]";
@@ -112,7 +112,7 @@ export function ModelCard({
       <div className="flex items-center gap-1.5">
         <div
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusDotClass()} ${
-            isSelected && isDownloaded
+            isLocalMode && isSelected && isDownloaded
               ? "animate-[pulse-glow_2s_ease-in-out_infinite]"
               : isDownloading
                 ? "animate-[spinner-rotate_1s_linear_infinite]"

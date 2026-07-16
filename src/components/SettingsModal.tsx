@@ -4,6 +4,7 @@ import {
   Sliders,
   Mic,
   Brain,
+  Cpu,
   Wrench,
   Keyboard,
   Shield,
@@ -81,6 +82,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         group: t("settingsModal.groups.aiModels"),
       },
       {
+        id: "localModel",
+        label: t("settingsModal.sections.localModel.label"),
+        icon: Cpu,
+        description: t("settingsModal.sections.localModel.description"),
+        group: t("settingsModal.groups.aiModels"),
+      },
+      {
         id: "privacyData",
         label: t("settingsModal.sections.privacyData.label"),
         icon: Shield,
@@ -101,7 +109,7 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
   const resolveSection = (section: string | undefined): SettingsSectionType => {
     if (!section) return "general";
     const resolved = (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
-    if (!["general", "hotkeys", "speechToText", "llms", "privacyData", "system"].includes(resolved)) return "general";
+    if (!["general", "hotkeys", "speechToText", "llms", "localModel", "privacyData", "system"].includes(resolved)) return "general";
     return resolved;
   };
 

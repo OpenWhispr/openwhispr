@@ -1205,6 +1205,10 @@
         "description": "Models for chat, cleanup & summaries",
         "label": "Language Models"
       },
+      "localModel": {
+        "description": "Local AI model & GPU configuration",
+        "label": "Local Model"
+      },
       "privacyData": {
         "description": "Privacy, permissions & analytics",
         "label": "Privacy & Data"
@@ -1885,7 +1889,8 @@
         "chatIntelligence": "Transforms"
       },
       "localModel": {
-        "sharedNotice": "Using shared Local Model configuration — select model and GPU in the Local Model tab"
+        "sharedNotice": "Using shared Local Model configuration — select model and GPU in the Local Model section",
+        "description": "Choose which local AI model powers all local inference scopes"
       }
     },
     "noteFormatting": {
