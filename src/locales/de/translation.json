@@ -995,6 +995,7 @@
       "save": "Speichern"
     },
     "defaultTestInput": "Hey Whispr, wie ist das Wetter heute?",
+    "defaultTestInputTranslate": "Das Wetter ist heute wunderschön, hast du Lust auf einen Spaziergang?",
     "dialogs": {
       "reset": {
         "description": "Der Prompt wurde auf den Standardwert zurückgesetzt.",
@@ -1019,6 +1020,8 @@
     },
     "test": {
       "addressHint": "Versuchen Sie, '{{agentName}}' anzusprechen, um den Anweisungsmodus zu testen",
+      "translateHint": "Der Text wird in {{language}} übersetzt",
+      "translation": "Übersetzung",
       "aiModels": "KI-Modelle",
       "baseUrlMissing": "{{provider}} Basis-URL fehlt. Fügen Sie sie in den KI-Modelle-Einstellungen hinzu.",
       "cleanup": "Textbereinigung",

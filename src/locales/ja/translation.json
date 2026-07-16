@@ -995,6 +995,7 @@
       "save": "保存"
     },
     "defaultTestInput": "ねぇ Whispr、今日の天気はどう？",
+    "defaultTestInputTranslate": "今日はいい天気ですね、散歩に行きませんか？",
     "dialogs": {
       "reset": {
         "description": "プロンプトをデフォルト値にリセットしました。",
@@ -1019,6 +1020,8 @@
     },
     "test": {
       "addressHint": "「{{agentName}}」と呼びかけて指示モードをテストしてみてください",
+      "translateHint": "テキストは{{language}}に翻訳されます",
+      "translation": "翻訳",
       "aiModels": "AI モデル",
       "baseUrlMissing": "{{provider}} のベース URL が未設定です。AI モデル設定で追加してください。",
       "cleanup": "クリーンアップ",

@@ -974,6 +974,7 @@
       "save": "Salvar"
     },
     "defaultTestInput": "Ei Whispr, como está o tempo hoje?",
+    "defaultTestInputTranslate": "O tempo está lindo hoje, quer dar um passeio?",
     "dialogs": {
       "reset": {
         "description": "O prompt foi redefinido para o valor padrão.",
@@ -998,6 +999,8 @@
     },
     "test": {
       "addressHint": "Tente chamar \"{{agentName}}\" para testar o modo de instrução",
+      "translateHint": "O texto será traduzido para {{language}}",
+      "translation": "Tradução",
       "aiModels": "Modelos de IA",
       "baseUrlMissing": "URL base do {{provider}} ausente. Adicione nas configurações de Modelos de IA.",
       "cleanup": "Limpeza",

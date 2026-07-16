@@ -58,7 +58,9 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
 export default function PromptStudio({ className = "", kind = "cleanup" }: PromptStudioProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"current" | "edit" | "test">("current");
-  const [testText, setTestText] = useState(() => t("promptStudio.defaultTestInput"));
+  const [testText, setTestText] = useState(() =>
+    t(kind === "translate" ? "promptStudio.defaultTestInputTranslate" : "promptStudio.defaultTestInput")
+  );
   const [testResult, setTestResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
@@ -380,20 +382,24 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         {/* ── Test Tab ── */}
         {activeTab === "test" &&
           (() => {
-            const cleanupProvider = isCloudMode
+            const testIsCloud = isTranslate ? isCloudTranslation : isCloudMode;
+            const testModel = isTranslate ? translationModel : cleanupModel;
+            const testProvider = testIsCloud
               ? "openwhispr"
-              : cleanupModel
-                ? getModelProvider(cleanupModel)
-                : "openai";
-            const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
-              label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
+              : isTranslate && translationProvider.trim()
+                ? translationProvider.trim()
+                : testModel
+                  ? getModelProvider(testModel)
+                  : "openai";
+            const providerConfig = PROVIDER_CONFIG[testProvider] || {
+              label: testProvider.charAt(0).toUpperCase() + testProvider.slice(1),
             };
 
-            const displayModel = isCloudMode
+            const displayModel = testIsCloud
               ? t("promptStudio.test.openwhisprCloud")
-              : cleanupModel || t("promptStudio.test.none");
+              : testModel || t("promptStudio.test.none");
             const displayProvider =
-              cleanupProvider === "custom"
+              testProvider === "custom"
                 ? t("promptStudio.test.customEndpoint")
                 : providerConfig.label;
 
@@ -444,14 +450,16 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     {testText && (
                       <span
                         className={`text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
-                          isAgentAddressed
+                          isTranslate || isAgentAddressed
                             ? "bg-primary/10 text-primary dark:bg-primary/15"
                             : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {isAgentAddressed
-                          ? t("promptStudio.test.instruction")
-                          : t("promptStudio.test.cleanup")}
+                        {isTranslate
+                          ? t("promptStudio.test.translation")
+                          : isAgentAddressed
+                            ? t("promptStudio.test.instruction")
+                            : t("promptStudio.test.cleanup")}
                       </span>
                     )}
                   </div>
@@ -463,7 +471,11 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     placeholder={t("promptStudio.test.inputPlaceholder")}
                   />
                   <p className="text-xs text-muted-foreground/40 mt-1.5">
-                    {t("promptStudio.test.addressHint", { agentName })}
+                    {isTranslate
+                      ? t("promptStudio.test.translateHint", {
+                          language: getLanguageLabel(translationTargetLanguage),
+                        })
+                      : t("promptStudio.test.addressHint", { agentName })}
                   </p>
                 </div>
 

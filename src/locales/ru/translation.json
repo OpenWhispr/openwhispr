@@ -995,6 +995,7 @@
       "save": "Сохранить"
     },
     "defaultTestInput": "Привет, Whispr, какая сегодня погода?",
+    "defaultTestInputTranslate": "Сегодня прекрасная погода, хочешь прогуляться?",
     "dialogs": {
       "reset": {
         "description": "Промпт сброшен до значения по умолчанию.",
@@ -1019,6 +1020,8 @@
     },
     "test": {
       "addressHint": "Попробуйте обратиться к «{{agentName}}» для проверки режима инструкций",
+      "translateHint": "Текст будет переведён на {{language}}",
+      "translation": "Перевод",
       "aiModels": "ИИ-модели",
       "baseUrlMissing": "Базовый URL для {{provider}} не указан. Добавьте его в настройках ИИ-моделей.",
       "cleanup": "Очистка",

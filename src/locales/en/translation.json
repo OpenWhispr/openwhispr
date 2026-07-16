@@ -1083,6 +1083,7 @@
       "save": "Save"
     },
     "defaultTestInput": "Hey Whispr, what's the weather like today?",
+    "defaultTestInputTranslate": "The weather is beautiful today, want to go for a walk?",
     "dialogs": {
       "reset": {
         "description": "Prompt has been reset to the default value.",
@@ -1107,6 +1108,8 @@
     },
     "test": {
       "addressHint": "Try addressing \"{{agentName}}\" to test instruction mode",
+      "translateHint": "The text will be translated to {{language}}",
+      "translation": "Translation",
       "aiModels": "AI Models",
       "baseUrlMissing": "{{provider}} base URL missing. Add it in AI Models settings.",
       "cleanup": "Cleanup",

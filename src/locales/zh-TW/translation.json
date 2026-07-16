@@ -995,6 +995,7 @@
       "save": "儲存"
     },
     "defaultTestInput": "嘿 Whispr，今天天氣怎麼樣？",
+    "defaultTestInputTranslate": "今天天氣真好，要不要出去走走？",
     "dialogs": {
       "reset": {
         "description": "提示詞已重設為預設值。",
@@ -1019,6 +1020,8 @@
     },
     "test": {
       "addressHint": "試試對「{{agentName}}」說話以測試指令模式",
+      "translateHint": "文字將翻譯為{{language}}",
+      "translation": "翻譯",
       "aiModels": "AI 模型",
       "baseUrlMissing": "缺少 {{provider}} 的 URL。請在 AI 模型設定中新增。",
       "cleanup": "文字整理",

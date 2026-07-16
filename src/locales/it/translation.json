@@ -995,6 +995,7 @@
       "save": "Salva"
     },
     "defaultTestInput": "Ehi Whispr, che tempo fa oggi?",
+    "defaultTestInputTranslate": "Che bella giornata oggi, ti va di fare due passi?",
     "dialogs": {
       "reset": {
         "description": "Il prompt è stato reimpostato al valore predefinito.",
@@ -1019,6 +1020,8 @@
     },
     "test": {
       "addressHint": "Prova a rivolgerti a \"{{agentName}}\" per testare la modalità istruzione",
+      "translateHint": "Il testo verrà tradotto in {{language}}",
+      "translation": "Traduzione",
       "aiModels": "Modelli IA",
       "baseUrlMissing": "URL base di {{provider}} mancante. Aggiungilo nelle impostazioni Modelli IA.",
       "cleanup": "Correzione",
