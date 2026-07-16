@@ -571,6 +571,15 @@
         "title": "Звук не обнаружен",
         "description": "В записи не обнаружен звук. Попробуйте ещё раз."
       },
+      "micDisconnected": {
+        "title": "Микрофон отключён",
+        "description": "Запись всё ещё активна и возобновится, когда микрофон станет доступен.",
+        "meetingDescription": "Встреча продолжает запись системного звука; запись с микрофона возобновится автоматически."
+      },
+      "micRestored": {
+        "title": "Микрофон восстановлен",
+        "description": "Захват звука возобновлён."
+      },
       "partialTranscription": {
         "title": "Частичная транскрипция",
         "description": "Не удалось транскрибировать часть записи."
@@ -2227,7 +2236,8 @@
       "back": "Назад"
     },
     "meetingPill": {
-      "returnToNote": "Вернуться к записи"
+      "returnToNote": "Вернуться к записи",
+      "waitingForMicrophone": "Ожидание микрофона"
     },
     "context": {
       "moveToFolder": "Переместить в папку",
@@ -2545,7 +2555,8 @@
       "hotkeyToSpeak": "{{hotkey}} для записи",
       "recording": "Запись...",
       "processing": "Обработка...",
-      "clickToSpeak": "Нажмите для записи"
+      "clickToSpeak": "Нажмите для записи",
+      "waitingForMicrophone": "Ожидание микрофона…"
     },
     "buttons": {
       "cancelRecording": "Отменить запись",

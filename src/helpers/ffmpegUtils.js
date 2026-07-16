@@ -1,5 +1,6 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const debugLogger = require("./debugLogger");
 
@@ -346,6 +347,79 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
   });
 }
 
+async function mergeAudioSegments(segments) {
+  if (!Array.isArray(segments) || segments.length === 0) {
+    throw new Error("At least one audio segment is required");
+  }
+  if (segments.length === 1) return Buffer.from(segments[0].buffer);
+
+  const ffmpegPath = getFFmpegPath();
+  if (!ffmpegPath) throw new Error("FFmpeg not found - required for audio segment recovery");
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-audio-merge-"));
+  const outputPath = path.join(tempDir, "merged.webm");
+  try {
+    const inputPaths = segments.map((segment, index) => {
+      const mimeType = segment.mimeType || "audio/webm";
+      const extension = mimeType.includes("ogg")
+        ? "ogg"
+        : mimeType.includes("mp4")
+          ? "m4a"
+          : "webm";
+      const inputPath = path.join(tempDir, `segment-${index}.${extension}`);
+      fs.writeFileSync(inputPath, Buffer.from(segment.buffer));
+      return inputPath;
+    });
+
+    const filters = inputPaths.map(
+      (_, index) =>
+        `[${index}:a]aresample=16000,aformat=sample_fmts=fltp:channel_layouts=mono[s${index}]`
+    );
+    filters.push(
+      `${inputPaths.map((_, index) => `[s${index}]`).join("")}concat=n=${inputPaths.length}:v=0:a=1[out]`
+    );
+
+    await new Promise((resolve, reject) => {
+      const args = inputPaths.flatMap((inputPath) => ["-i", inputPath]);
+      args.push(
+        "-filter_complex",
+        filters.join(";"),
+        "-map",
+        "[out]",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "64k",
+        "-y",
+        outputPath
+      );
+      const proc = spawn(ffmpegPath, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      let stderr = "";
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+      proc.on("error", (error) => reject(new Error(`FFmpeg process error: ${error.message}`)));
+      proc.on("close", (code) => {
+        if (code !== 0) {
+          const preview = stderr.slice(-500).trim();
+          reject(
+            new Error(`FFmpeg audio merge exited with code ${code}${preview ? `: ${preview}` : ""}`)
+          );
+          return;
+        }
+        resolve();
+      });
+    });
+
+    return fs.readFileSync(outputPath);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 function clearCache() {
   cachedFFmpegPath = null;
 }
@@ -358,5 +432,6 @@ module.exports = {
   splitAudioFile,
   wavToFloat32Samples,
   computeFloat32RMS,
+  mergeAudioSegments,
   clearCache,
 };

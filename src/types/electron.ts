@@ -603,6 +603,12 @@ declare global {
         audioBuffer: ArrayBuffer,
         metadata?: { durationMs?: number; provider?: string; model?: string }
       ) => Promise<{ success: boolean; path?: string }>;
+      mergeAudioSegments: (
+        segments: Array<{ buffer: ArrayBuffer; mimeType: string }>
+      ) => Promise<
+        | { success: true; buffer: ArrayBuffer; mimeType: "audio/webm" }
+        | { success: false; error: string }
+      >;
       getAudioPath: (id: number) => Promise<string | null>;
       showAudioInFolder: (id: number) => Promise<{ success: boolean }>;
       getAudioBuffer: (id: number) => Promise<ArrayBuffer | null>;

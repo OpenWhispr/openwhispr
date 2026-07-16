@@ -15,6 +15,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
+import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { reconcileSavedMicSelection } from "./micSelectionRecovery";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
@@ -47,6 +48,7 @@ import {
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording } from "./recordingValidation";
+import { isEmptyRecording } from "./recordingGuard";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 
@@ -282,6 +284,7 @@ class AudioManager {
     this.onError = null;
     this.onTranscriptionComplete = null;
     this.onPartialTranscript = null;
+    this.micCaptureStatus = "inactive";
     this.cachedApiKey = null;
     this.cachedApiKeyProvider = null;
 
@@ -336,6 +339,34 @@ class AudioManager {
     this._localSpeechGateState = null;
     this._streamingCommitActive = false;
     this._previewFlushResolve = null;
+    this._batchSegments = [];
+    this._rotatingBatchRecorder = null;
+    this._rotationResolve = null;
+    this._stopRequestedDuringMicRecovery = false;
+    this._cancelRequestedDuringMicRecovery = false;
+    this._streamingFallbackSegments = [];
+    this._streamingMicSwapPromise = null;
+    this.micRecovery = new ActiveMicRecoveryController({
+      mediaDevices: navigator.mediaDevices,
+      acquire: async () => {
+        // Prefer the user's configured mic — it may have only blipped (e.g. a
+        // Bluetooth mute); fall back to the system default when it's truly gone.
+        try {
+          const constraints = await this.getAudioConstraints();
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+          logger.debug(
+            "Preferred mic unavailable during recovery, falling back to default",
+            { error: error.message },
+            "audio"
+          );
+          const fallback = await this.getAudioConstraints(true);
+          return navigator.mediaDevices.getUserMedia(fallback);
+        }
+      },
+      onRecovered: (replacement, previous) => this.replaceActiveMic(replacement, previous),
+      onStatusChange: (status) => this.setMicCaptureStatus(status),
+    });
   }
 
   getWorkletBlobUrl() {
@@ -411,6 +442,69 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Fail-open: translation degraded/failed but raw text is still pasted. Surface why.
   notifyTranslationFallback(reason) {
     this.onTranslationFallback?.({ reason });
+  }
+
+  setMicCaptureStatus(status) {
+    if (this.micCaptureStatus === status) return;
+    this.micCaptureStatus = status;
+    this.onStateChange?.({
+      isRecording: this.isRecording,
+      isProcessing: this.isProcessing,
+      isStreaming: this.isStreaming,
+      micCaptureStatus: status,
+    });
+  }
+
+  followsSystemDefaultMic() {
+    const settings = getSettings();
+    // Chromium's "default" pseudo-device is a follow-the-OS-default selection, not a pin.
+    return (
+      !settings.preferBuiltInMic &&
+      (!settings.selectedMicDeviceId || settings.selectedMicDeviceId === "default")
+    );
+  }
+
+  async beginMicRecovery(stream) {
+    // A stop/cancel can land during the awaits between recorder start and this
+    // call; never arm recovery for a recording that already ended.
+    if (!this.isRecording) return;
+    await this.micRecovery.start(stream, { followDefault: this.followsSystemDefaultMic() });
+  }
+
+  async replaceActiveMic(replacement, previous) {
+    if (!this.isRecording) throw new Error("Recording is no longer active");
+    if (this.isStreaming) {
+      await this.replaceStreamingMic(replacement, previous);
+    } else {
+      await this.replaceBatchMic(replacement, previous);
+    }
+  }
+
+  async mergeRecordedSegments(segments) {
+    // Header-only segments carry no audio frames and crash FFmpeg's concat (#871).
+    // Returns null (not an empty Blob) when nothing usable remains so callers'
+    // truthiness checks behave like the pre-recovery code.
+    const usable = segments.filter((segment) => segment && !isEmptyRecording(segment.size));
+    if (usable.length === 0) return null;
+    if (usable.length === 1) return usable[0];
+    const payload = await Promise.all(
+      usable.map(async (segment) => ({
+        buffer: await segment.arrayBuffer(),
+        mimeType: segment.type || "audio/webm",
+      }))
+    );
+    const result = await window.electronAPI.mergeAudioSegments(payload);
+    if (!result?.success) throw new Error(result?.error || "Failed to merge audio segments");
+    return new Blob([result.buffer], { type: result.mimeType });
+  }
+
+  getLargestRecordedSegment(segments) {
+    return segments
+      .filter((segment) => segment && !isEmptyRecording(segment.size))
+      .reduce(
+        (largest, segment) => (segment.size > (largest?.size || 0) ? segment : largest),
+        null
+      );
   }
 
   setSkipReasoning(skip) {
@@ -698,8 +792,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         this._silenceAnalyser = this._silenceCtx.createAnalyser();
         this._silenceAnalyser.fftSize = 2048;
-        const sourceNode = this._silenceCtx.createMediaStreamSource(micStream);
-        sourceNode.connect(this._silenceAnalyser);
+        this._silenceSource = this._silenceCtx.createMediaStreamSource(micStream);
+        this._silenceSource.connect(this._silenceAnalyser);
         this._localSpeechGateState = createLocalSpeechGateState();
         const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
         this._silenceInterval = setInterval(() => {
@@ -722,86 +816,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._localSpeechGateState = null;
       }
 
-      this.mediaRecorder = new MediaRecorder(micStream);
       this.audioChunks = [];
+      this._batchSegments = [];
+      this._stopRequestedDuringMicRecovery = false;
+      this._cancelRequestedDuringMicRecovery = false;
       this._receivedAudioData = false;
       this.recordingStartTime = Date.now();
-      this.recordingMimeType = this.mediaRecorder.mimeType || "audio/webm";
-
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          this._receivedAudioData = true;
-          this.audioChunks.push(event.data);
-        }
-      };
-
-      this.mediaRecorder.onstop = async () => {
-        this.teardownSpeechGate();
-
-        const previewStopPromise = this.cleanupPreview({
-          showCleanup: this.shouldShowPreviewCleanupState(),
-        });
-
-        this.isRecording = false;
-        this.isProcessing = true;
-        this.onStateChange?.({ isRecording: false, isProcessing: true });
-
-        const audioBlob = new Blob(this.audioChunks, { type: this.recordingMimeType });
-        this.lastAudioBlob = audioBlob;
-
-        logger.info(
-          "Recording stopped",
-          {
-            blobSize: audioBlob.size,
-            blobType: audioBlob.type,
-            chunksCount: this.audioChunks.length,
-          },
-          "audio"
-        );
-
-        const durationSeconds = this.recordingStartTime
-          ? (Date.now() - this.recordingStartTime) / 1000
-          : null;
-        this.recordingStartTime = null;
-
-        // Drop header-only / no-frame recordings before they crash FFmpeg. See #871.
-        const recordingCheck = evaluateFinishedRecording({
-          blobSize: audioBlob.size,
-          receivedAudioData: this._receivedAudioData,
-        });
-        if (!recordingCheck.usable) {
-          logger.info(
-            "Dropping degenerate recording before transcription",
-            {
-              blobSize: audioBlob.size,
-              reason: recordingCheck.reason,
-              receivedAudioData: this._receivedAudioData,
-            },
-            "audio"
-          );
-          this.isProcessing = false;
-          this._localSpeechGateState = null;
-          this.onStateChange?.({ isRecording: false, isProcessing: false });
-          this.onTranscriptionComplete?.({ success: true, text: "" });
-          micStream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        // Non-commit sessions stop concurrently with the decode below.
-        const previewStop = this._streamingCommitActive ? await previewStopPromise : null;
-        this._streamingCommitActive = false;
-
-        await this.processAudio(audioBlob, {
-          durationSeconds,
-          ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
-        });
-
-        micStream.getTracks().forEach((track) => track.stop());
-      };
-
-      this.mediaRecorder.start(RECORDING_TIMESLICE_MS);
+      this.createBatchRecorder(micStream);
       this.isRecording = true;
-      this.onStateChange?.({ isRecording: true, isProcessing: false });
+      this.onStateChange?.({
+        isRecording: true,
+        isProcessing: false,
+        micCaptureStatus: "active",
+      });
 
       const {
         showTranscriptionPreview,
@@ -848,6 +875,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       }
 
+      await this.beginMicRecovery(micStream);
+
       return true;
     } catch (error) {
       if (isStaleDeviceError(error) && !forceDefaultMic) {
@@ -885,9 +914,163 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  createBatchRecorder(micStream) {
+    const recorder = new MediaRecorder(micStream);
+    const segmentChunks = [];
+    this.mediaRecorder = recorder;
+    this.audioChunks = segmentChunks;
+    this.recordingMimeType = recorder.mimeType || "audio/webm";
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        this._receivedAudioData = true;
+        segmentChunks.push(event.data);
+      }
+    };
+
+    recorder.onstop = async () => {
+      const segment = new Blob(segmentChunks, { type: recorder.mimeType || "audio/webm" });
+      segmentChunks.length = 0;
+      const rotating = this._rotatingBatchRecorder === recorder;
+      // The recorder also stops on its own when its mic track dies (the stream
+      // goes inactive). While recovery is armed, treat that like a rotation:
+      // bank the segment and keep the recording alive for the replacement mic.
+      if (rotating || this.micRecovery.started) {
+        if (segment.size > 0) this._batchSegments.push(segment);
+        micStream.getTracks().forEach((track) => track.stop());
+        if (rotating) {
+          this._rotatingBatchRecorder = null;
+          this._rotationResolve?.();
+          this._rotationResolve = null;
+        } else {
+          void this.micRecovery.recover("recorder-stopped");
+        }
+        return;
+      }
+
+      micStream.getTracks().forEach((track) => track.stop());
+      await this.finalizeBatchRecording(segment);
+    };
+
+    recorder.start(RECORDING_TIMESLICE_MS);
+    return recorder;
+  }
+
+  async finalizeBatchRecording(finalSegment) {
+    this.micRecovery.stop();
+    this.teardownSpeechGate();
+    const previewStopPromise = this.cleanupPreview({
+      showCleanup: this.shouldShowPreviewCleanupState(),
+    });
+    this.isRecording = false;
+    this.isProcessing = true;
+    this.onStateChange?.({
+      isRecording: false,
+      isProcessing: true,
+      micCaptureStatus: "inactive",
+    });
+
+    const segments = finalSegment ? [...this._batchSegments, finalSegment] : this._batchSegments;
+    this._batchSegments = [];
+    const segmentsCount = segments.filter((segment) => segment?.size > 0).length;
+    let audioBlob = null;
+    try {
+      audioBlob = await this.mergeRecordedSegments(segments);
+    } catch (error) {
+      logger.error("Failed to assemble recovered recording", { error: error.message }, "audio");
+      // Salvage the largest segment rather than dropping the whole recording.
+      audioBlob = this.getLargestRecordedSegment(segments);
+    }
+    audioBlob = audioBlob || new Blob([], { type: this.recordingMimeType || "audio/webm" });
+    this.lastAudioBlob = audioBlob;
+
+    logger.info(
+      "Recording stopped",
+      {
+        blobSize: audioBlob.size,
+        blobType: audioBlob.type,
+        segmentsCount,
+      },
+      "audio"
+    );
+
+    const durationSeconds = this.recordingStartTime
+      ? (Date.now() - this.recordingStartTime) / 1000
+      : null;
+    this.recordingStartTime = null;
+    const recordingCheck = evaluateFinishedRecording({
+      blobSize: audioBlob.size,
+      receivedAudioData: this._receivedAudioData,
+    });
+    if (!recordingCheck.usable) {
+      this.isProcessing = false;
+      this._localSpeechGateState = null;
+      this.onStateChange?.({ isRecording: false, isProcessing: false });
+      this.onTranscriptionComplete?.({ success: true, text: "" });
+      return;
+    }
+    // Non-commit sessions stop concurrently with the decode below.
+    const previewStop = this._streamingCommitActive ? await previewStopPromise : null;
+    this._streamingCommitActive = false;
+
+    await this.processAudio(audioBlob, {
+      durationSeconds,
+      ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
+    });
+  }
+
+  async replaceBatchMic(replacement) {
+    try {
+      const recorder = this.mediaRecorder;
+      if (!recorder) throw new Error("Batch recorder is no longer active");
+      // An auto-stopped recorder (mic track died) already banked its segment in
+      // onstop; only a live recorder needs the explicit rotation handshake.
+      if (recorder.state === "recording") {
+        await new Promise((resolve) => {
+          this._rotatingBatchRecorder = recorder;
+          this._rotationResolve = resolve;
+          recorder.stop();
+        });
+      }
+      if (!this.isRecording) throw new Error("Recording stopped during microphone recovery");
+
+      this._silenceSource?.disconnect();
+      if (this._silenceCtx && this._silenceAnalyser) {
+        this._silenceSource = this._silenceCtx.createMediaStreamSource(replacement);
+        this._silenceSource.connect(this._silenceAnalyser);
+      }
+      this._previewSource?.disconnect();
+      if (this._previewAudioContext && this._previewProcessor) {
+        this._previewSource = this._previewAudioContext.createMediaStreamSource(replacement);
+        this._previewSource.connect(this._previewProcessor);
+      }
+      this.createBatchRecorder(replacement);
+    } finally {
+      // Honor a stop/cancel that arrived mid-rotation even when the swap failed —
+      // dropping it would leave an unstoppable recording (isRecording stuck true).
+      const cancelRequested = this._cancelRequestedDuringMicRecovery;
+      const stopRequested = this._stopRequestedDuringMicRecovery;
+      this._cancelRequestedDuringMicRecovery = false;
+      this._stopRequestedDuringMicRecovery = false;
+      if (cancelRequested) this.cancelRecording();
+      else if (stopRequested) this.stopRecording();
+    }
+  }
+
   stopRecording() {
+    this.micRecovery.stop();
+    if (this._rotatingBatchRecorder) {
+      this._stopRequestedDuringMicRecovery = true;
+      return true;
+    }
     if (this.mediaRecorder?.state === "recording") {
       this.mediaRecorder.stop();
+      return true;
+    }
+    if (this.isRecording && !this.isStreaming) {
+      // The mic died mid-recovery, so no live recorder exists; finalize what
+      // was captured instead of leaving the recording unstoppable.
+      void this.finalizeBatchRecording(null);
       return true;
     }
     return false;
@@ -901,47 +1084,113 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._silenceCtx?.close().catch(() => {});
     this._silenceCtx = null;
     this._silenceAnalyser = null;
+    this._silenceSource = null;
   }
 
   cancelRecording() {
+    this.micRecovery.stop();
+    if (this._rotatingBatchRecorder) {
+      this._cancelRequestedDuringMicRecovery = true;
+      return true;
+    }
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+      const recorder = this.mediaRecorder;
+      const discarded = this.takeDiscardedBatchSnapshot();
       this.mediaRecorder.onstop = () => {
-        this.teardownSpeechGate();
-        this._localSpeechGateState = null;
-
-        const durationSeconds = this.recordingStartTime
-          ? (Date.now() - this.recordingStartTime) / 1000
-          : null;
-        const shouldSave =
-          shouldSaveDiscardedRecording(getSettings(), durationSeconds) &&
-          this.audioChunks.length > 0;
-        const blob = shouldSave
-          ? new Blob(this.audioChunks, { type: this.recordingMimeType })
-          : null;
-
-        this.cleanupPreview({ dismiss: true });
-        this.isRecording = false;
-        this.isProcessing = false;
-        this.audioChunks = [];
-        this.recordingStartTime = null;
-        this.onStateChange?.({ isRecording: false, isProcessing: false });
-
-        if (blob) {
-          this.saveDiscardedTranscription(blob, durationSeconds).catch((err) => {
-            logger.warn("Failed to save discarded transcription", { error: err.message }, "audio");
-          });
-        }
+        recorder.stream?.getTracks().forEach((track) => track.stop());
+        this.persistDiscardedBatchRecording(discarded);
       };
 
-      this.mediaRecorder.stop();
+      // Detach this recording from manager state before requesting the final
+      // MediaRecorder dataavailable/onstop events. Those events are async, so
+      // keeping the old recorder here would prevent a new recording from
+      // starting and let its late callback observe the next recording's state.
+      this.resetDiscardedBatchRecordingState();
 
-      if (this.mediaRecorder.stream) {
-        this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+      recorder.stop();
+
+      if (recorder.stream) {
+        recorder.stream.getTracks().forEach((track) => track.stop());
       }
 
       return true;
     }
+    if (this.isRecording && !this.isStreaming) {
+      // The mic died mid-recovery, so no live recorder exists; discard what was
+      // captured instead of leaving the recording uncancelable.
+      this.discardBatchRecording();
+      return true;
+    }
     return false;
+  }
+
+  discardBatchRecording() {
+    const discarded = this.takeDiscardedBatchSnapshot();
+    this.resetDiscardedBatchRecordingState();
+    this.persistDiscardedBatchRecording(discarded);
+  }
+
+  takeDiscardedBatchSnapshot() {
+    return {
+      durationSeconds: this.recordingStartTime
+        ? (Date.now() - this.recordingStartTime) / 1000
+        : null,
+      chunks: this.audioChunks,
+      segments: this._batchSegments,
+      mimeType: this.recordingMimeType,
+    };
+  }
+
+  resetDiscardedBatchRecordingState() {
+    this.teardownSpeechGate();
+    this._localSpeechGateState = null;
+
+    this.cleanupPreview({ dismiss: true });
+    this.isRecording = false;
+    this.isProcessing = false;
+    this.mediaRecorder = null;
+    this.audioChunks = [];
+    this._batchSegments = [];
+    this.recordingStartTime = null;
+    this.onStateChange?.({ isRecording: false, isProcessing: false });
+  }
+
+  persistDiscardedBatchRecording({ durationSeconds, chunks, segments, mimeType }) {
+    // This must run after MediaRecorder's final dataavailable event, so decide
+    // whether to retain the discarded audio from the snapshot rather than live
+    // manager state (which may already belong to a new recording).
+    const shouldSave =
+      shouldSaveDiscardedRecording(getSettings(), durationSeconds) &&
+      (chunks.length > 0 || segments.length > 0);
+    if (shouldSave) {
+      // Assemble and save in the background — the merge crosses IPC into FFmpeg
+      // and must not delay the recorder becoming available again.
+      void (async () => {
+        try {
+          const current = new Blob(chunks, { type: mimeType });
+          const blob = await this.mergeRecordedSegments([...segments, current]);
+          if (blob) await this.saveDiscardedTranscription(blob, durationSeconds);
+        } catch (error) {
+          const fallback = this.getLargestRecordedSegment([
+            ...segments,
+            new Blob(chunks, { type: mimeType }),
+          ]);
+          if (fallback) {
+            try {
+              await this.saveDiscardedTranscription(fallback, durationSeconds);
+            } catch (fallbackError) {
+              logger.warn(
+                "Failed to save discarded recording fallback",
+                { error: fallbackError.message },
+                "audio"
+              );
+            }
+            return;
+          }
+          logger.warn("Failed to save discarded recording", { error: error.message }, "audio");
+        }
+      })();
+    }
   }
 
   cancelProcessing() {
@@ -2903,6 +3152,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       isProcessing: this.isProcessing,
       isStreaming: this.isStreaming,
       isStreamingStartInProgress: this.streamingStartInProgress,
+      micCaptureStatus: this.micCaptureStatus,
     };
   }
 
@@ -3053,6 +3303,74 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.persistentAudioContext;
   }
 
+  startStreamingFallbackRecorder(stream) {
+    try {
+      const chunks = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size > 0) chunks.push(event.data);
+      };
+      recorder._openWhisprChunks = chunks;
+      recorder.start(RECORDING_TIMESLICE_MS);
+      this.streamingFallbackRecorder = recorder;
+      this.streamingFallbackChunks = chunks;
+      return recorder;
+    } catch (error) {
+      logger.debug("Fallback recorder failed to start", { error: error.message }, "streaming");
+      this.streamingFallbackRecorder = null;
+      return null;
+    }
+  }
+
+  async finishStreamingFallbackSegment() {
+    const recorder = this.streamingFallbackRecorder;
+    if (!recorder) return null;
+    const collect = () =>
+      new Blob(recorder._openWhisprChunks || [], { type: recorder.mimeType || "audio/webm" });
+    let blob;
+    if (recorder.state === "recording") {
+      blob = await new Promise((resolve) => {
+        recorder.onstop = () => resolve(collect());
+        recorder.stop();
+      });
+    } else {
+      // The recorder auto-stops when its track dies; its chunks still hold the
+      // audio captured up to that point.
+      blob = collect();
+    }
+    this.streamingFallbackRecorder = null;
+    this.streamingFallbackChunks = [];
+    if (blob?.size > 0) this._streamingFallbackSegments.push(blob);
+    return blob;
+  }
+
+  async replaceStreamingMic(replacement, previous) {
+    if (!this.streamingProcessor || !this.streamingAudioContext) {
+      throw new Error("Streaming audio pipeline is unavailable");
+    }
+    const swap = (async () => {
+      const nextSource = this.streamingAudioContext.createMediaStreamSource(replacement);
+      nextSource.connect(this.streamingProcessor);
+      this.streamingSource?.disconnect();
+      this.streamingSource = nextSource;
+      await this.finishStreamingFallbackSegment();
+      if (!this.isStreaming || !this.isRecording) {
+        throw new Error("Streaming stopped during microphone recovery");
+      }
+      this.startStreamingFallbackRecorder(replacement);
+      previous?.getTracks().forEach((track) => track.stop());
+      this.streamingStream = replacement;
+    })();
+    // Expose the swap so stopStreamingRecording can wait for it instead of
+    // racing it (losing the newest fallback segment / orphaning a recorder).
+    this._streamingMicSwapPromise = swap.catch(() => {});
+    try {
+      await swap;
+    } finally {
+      this._streamingMicSwapPromise = null;
+    }
+  }
+
   async startStreamingRecording(forceDefaultMic = false) {
     try {
       if (this.streamingStartInProgress) {
@@ -3095,18 +3413,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
 
-      // Start fallback recorder in case streaming produces no results
-      try {
-        this.streamingFallbackChunks = [];
-        this.streamingFallbackRecorder = new MediaRecorder(stream);
-        this.streamingFallbackRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) this.streamingFallbackChunks.push(e.data);
-        };
-        this.streamingFallbackRecorder.start();
-      } catch (e) {
-        logger.debug("Fallback recorder failed to start", { error: e.message }, "streaming");
-        this.streamingFallbackRecorder = null;
-      }
+      // Start fallback recorder in case streaming produces no results.
+      this._streamingFallbackSegments = [];
+      this.startStreamingFallbackRecorder(stream);
 
       // 2. Set up audio pipeline so frames flow the instant WebSocket is ready.
       //    Frames sent before the connection is open are buffered (bounded) by
@@ -3187,6 +3496,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.isRecording = true;
       this.recordingStartTime = Date.now();
       this.onStateChange?.({ isRecording: true, isProcessing: false, isStreaming: true });
+      await this.beginMicRecovery(stream);
 
       // 4. Connect WebSocket — audio is already flowing from the pipeline above,
       //    so Deepgram receives data immediately (no idle timeout).
@@ -3334,6 +3644,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (!this.isStreaming) return false;
+    this.micRecovery.stop();
+    // Let an in-flight mic swap settle so its fallback segment isn't lost and
+    // its replacement recorder doesn't outlive this stop.
+    if (this._streamingMicSwapPromise) await this._streamingMicSwapPromise;
 
     const durationSeconds = this.recordingStartTime
       ? (Date.now() - this.recordingStartTime) / 1000
@@ -3370,20 +3684,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // Stop fallback recorder before stopping media tracks
     let fallbackBlob = null;
-    if (this.streamingFallbackRecorder?.state === "recording") {
-      fallbackBlob = await new Promise((resolve) => {
-        this.streamingFallbackRecorder.onstop = () => {
-          const mimeType = this.streamingFallbackRecorder.mimeType || "audio/webm";
-          resolve(new Blob(this.streamingFallbackChunks, { type: mimeType }));
-        };
-        this.streamingFallbackRecorder.stop();
-      });
+    await this.finishStreamingFallbackSegment();
+    try {
+      fallbackBlob = await this.mergeRecordedSegments(this._streamingFallbackSegments);
+    } catch (error) {
+      logger.warn(
+        "Failed to merge streaming fallback audio",
+        { error: error.message },
+        "streaming"
+      );
+      fallbackBlob = this.getLargestRecordedSegment(this._streamingFallbackSegments);
     }
     if (fallbackBlob) {
       this.lastAudioBlob = fallbackBlob;
     }
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
+    this._streamingFallbackSegments = [];
 
     if (this.streamingStream) {
       this.streamingStream.getTracks().forEach((track) => track.stop());
@@ -3788,11 +4105,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async cleanupStreaming() {
+    this.micRecovery.stop();
     this.cleanupStreamingAudio();
     this.cleanupStreamingListeners();
   }
 
   cleanup() {
+    this.micRecovery.stop();
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
     if (this.isStreaming) {

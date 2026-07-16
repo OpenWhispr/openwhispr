@@ -571,6 +571,15 @@
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
       },
+      "micDisconnected": {
+        "title": "Mikrofon getrennt",
+        "description": "Die Aufnahme ist weiterhin aktiv und wird fortgesetzt, sobald ein Mikrofon verfügbar ist.",
+        "meetingDescription": "Das Meeting zeichnet weiterhin Systemaudio auf und setzt die Mikrofonaufnahme automatisch fort."
+      },
+      "micRestored": {
+        "title": "Mikrofon wiederhergestellt",
+        "description": "Die Audioaufnahme wurde fortgesetzt."
+      },
       "partialTranscription": {
         "title": "Unvollständige Transkription",
         "description": "Ein Teil der Aufnahme konnte nicht transkribiert werden."
@@ -2227,7 +2236,8 @@
       "back": "Zurück"
     },
     "meetingPill": {
-      "returnToNote": "Zurück zur Aufnahme"
+      "returnToNote": "Zurück zur Aufnahme",
+      "waitingForMicrophone": "Warte auf Mikrofon"
     },
     "context": {
       "moveToFolder": "In Ordner verschieben",
@@ -2541,7 +2551,8 @@
       "hotkeyToSpeak": "{{hotkey}} zum Sprechen",
       "recording": "Aufnahme...",
       "processing": "Verarbeitung...",
-      "clickToSpeak": "Klicken zum Sprechen"
+      "clickToSpeak": "Klicken zum Sprechen",
+      "waitingForMicrophone": "Warte auf Mikrofon…"
     },
     "buttons": {
       "cancelRecording": "Aufnahme abbrechen",

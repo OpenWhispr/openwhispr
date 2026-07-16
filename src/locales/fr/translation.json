@@ -571,6 +571,15 @@
         "title": "Aucun audio détecté",
         "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."
       },
+      "micDisconnected": {
+        "title": "Microphone déconnecté",
+        "description": "L'enregistrement est toujours actif et reprendra dès qu'un microphone sera disponible.",
+        "meetingDescription": "La réunion continue d'enregistrer l'audio système et reprendra automatiquement la capture du microphone."
+      },
+      "micRestored": {
+        "title": "Microphone rétabli",
+        "description": "La capture audio a repris."
+      },
       "partialTranscription": {
         "title": "Transcription partielle",
         "description": "Une partie de l'enregistrement n'a pas pu être transcrite."
@@ -2340,7 +2349,8 @@
       "back": "Retour"
     },
     "meetingPill": {
-      "returnToNote": "Revenir à l'enregistrement"
+      "returnToNote": "Revenir à l'enregistrement",
+      "waitingForMicrophone": "En attente du microphone"
     },
     "empty": {
       "title": "Aucune note ici pour l'instant",
@@ -2589,7 +2599,8 @@
       "hotkeyToSpeak": "{{hotkey}} pour parler",
       "recording": "Enregistrement...",
       "processing": "Traitement...",
-      "clickToSpeak": "Cliquez pour parler"
+      "clickToSpeak": "Cliquez pour parler",
+      "waitingForMicrophone": "En attente du microphone…"
     },
     "buttons": {
       "cancelRecording": "Annuler l’enregistrement",

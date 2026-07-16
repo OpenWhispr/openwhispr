@@ -13,12 +13,14 @@ export const useAudioRecording = (toast, options = {}) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [micCaptureStatus, setMicCaptureStatus] = useState("inactive");
   const [transcript, setTranscript] = useState("");
   const [partialTranscript, setPartialTranscript] = useState("");
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
   const wasRecordingRef = useRef(false);
+  const wasMicUnavailableRef = useRef(false);
   const { onToggle } = options;
 
   const performStartRecording = useCallback(
@@ -96,7 +98,7 @@ export const useAudioRecording = (toast, options = {}) => {
     audioManagerRef.current = new AudioManager();
 
     audioManagerRef.current.setCallbacks({
-      onStateChange: ({ isRecording, isProcessing, isStreaming }) => {
+      onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
         if (!isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Resume media the instant recording ends, not after transcription.
@@ -108,6 +110,27 @@ export const useAudioRecording = (toast, options = {}) => {
         setIsRecording(isRecording);
         setIsProcessing(isProcessing);
         setIsStreaming(isStreaming ?? false);
+        if (micCaptureStatus) {
+          setMicCaptureStatus(micCaptureStatus);
+          const unavailable = micCaptureStatus === "unavailable";
+          if (unavailable && !wasMicUnavailableRef.current) {
+            wasMicUnavailableRef.current = true;
+            toast({
+              title: t("hooks.audioRecording.micDisconnected.title"),
+              description: t("hooks.audioRecording.micDisconnected.description"),
+              variant: "default",
+            });
+          } else if (micCaptureStatus === "active" && wasMicUnavailableRef.current) {
+            wasMicUnavailableRef.current = false;
+            toast({
+              title: t("hooks.audioRecording.micRestored.title"),
+              description: t("hooks.audioRecording.micRestored.description"),
+              variant: "default",
+            });
+          } else if (micCaptureStatus === "inactive") {
+            wasMicUnavailableRef.current = false;
+          }
+        }
         if (!isStreaming) {
           setPartialTranscript("");
         }
@@ -347,6 +370,7 @@ export const useAudioRecording = (toast, options = {}) => {
     isRecording,
     isProcessing,
     isStreaming,
+    micCaptureStatus,
     transcript,
     partialTranscript,
     startRecording: performStartRecording,

@@ -571,6 +571,15 @@
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
       },
+      "micDisconnected": {
+        "title": "Microphone disconnected",
+        "description": "Recording is still active and will resume when a microphone is available.",
+        "meetingDescription": "The meeting is still recording system audio and will resume microphone capture automatically."
+      },
+      "micRestored": {
+        "title": "Microphone restored",
+        "description": "Audio capture has resumed."
+      },
       "partialTranscription": {
         "title": "Partial Transcription",
         "description": "Part of the recording couldn't be transcribed."
@@ -2428,7 +2437,8 @@
       "back": "Back"
     },
     "meetingPill": {
-      "returnToNote": "Return to recording"
+      "returnToNote": "Return to recording",
+      "waitingForMicrophone": "Waiting for microphone"
     },
     "empty": {
       "title": "No notes here yet",
@@ -2677,7 +2687,8 @@
       "hotkeyToSpeak": "{{hotkey}} to talk",
       "recording": "Recording...",
       "processing": "Processing...",
-      "clickToSpeak": "Click to speak"
+      "clickToSpeak": "Click to speak",
+      "waitingForMicrophone": "Waiting for microphone…"
     },
     "buttons": {
       "cancelRecording": "Cancel recording",

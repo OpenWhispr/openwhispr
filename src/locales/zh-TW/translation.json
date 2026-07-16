@@ -571,6 +571,15 @@
         "title": "未偵測到音訊",
         "description": "錄音中未偵測到聲音。請再試一次。"
       },
+      "micDisconnected": {
+        "title": "麥克風已中斷",
+        "description": "錄音仍在進行中，麥克風可用後將自動恢復。",
+        "meetingDescription": "會議仍在錄製系統音訊，麥克風錄製將自動恢復。"
+      },
+      "micRestored": {
+        "title": "麥克風已恢復",
+        "description": "音訊擷取已恢復。"
+      },
       "partialTranscription": {
         "title": "部分轉錄",
         "description": "部分錄音內容無法轉錄。"
@@ -2227,7 +2236,8 @@
       "back": "返回"
     },
     "meetingPill": {
-      "returnToNote": "返回到錄音"
+      "returnToNote": "返回到錄音",
+      "waitingForMicrophone": "等待麥克風"
     },
     "context": {
       "moveToFolder": "移動到資料夾",
@@ -2541,7 +2551,8 @@
       "hotkeyToSpeak": "{{hotkey}} 說話",
       "recording": "錄音中...",
       "processing": "處理中...",
-      "clickToSpeak": "點擊開始說話"
+      "clickToSpeak": "點擊開始說話",
+      "waitingForMicrophone": "等待麥克風…"
     },
     "buttons": {
       "cancelRecording": "取消錄音",
