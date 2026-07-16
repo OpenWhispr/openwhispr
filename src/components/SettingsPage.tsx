@@ -98,7 +98,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
-import { useSettingsStore } from "../stores/settingsStore";
+import { useSettingsStore, switchTranscriptionProvider } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import { WORKSPACES_ENABLED } from "../lib/features";
@@ -198,7 +198,6 @@ interface TranscriptionSectionProps {
   setUseLocalWhisper: (value: boolean) => void;
   updateTranscriptionSettings: (settings: { useLocalWhisper: boolean }) => void;
   cloudTranscriptionProvider: string;
-  setCloudTranscriptionProvider: (provider: string) => void;
   cloudTranscriptionModel: string;
   setCloudTranscriptionModel: (model: string) => void;
   localTranscriptionProvider: string;
@@ -234,7 +233,6 @@ function TranscriptionSection({
   setUseLocalWhisper,
   updateTranscriptionSettings,
   cloudTranscriptionProvider,
-  setCloudTranscriptionProvider,
   cloudTranscriptionModel,
   setCloudTranscriptionModel,
   localTranscriptionProvider,
@@ -338,7 +336,7 @@ function TranscriptionSection({
   const renderTranscriptionPicker = (mode?: "cloud" | "local") => (
     <TranscriptionModelPicker
       selectedCloudProvider={cloudTranscriptionProvider}
-      onCloudProviderSelect={setCloudTranscriptionProvider}
+      onCloudProviderSelect={(provider) => switchTranscriptionProvider("base", provider)}
       selectedCloudModel={cloudTranscriptionModel}
       onCloudModelSelect={setCloudTranscriptionModel}
       selectedLocalModel={localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel}
@@ -715,7 +713,6 @@ export default function SettingsPage({
     setWhisperModel,
     setLocalTranscriptionProvider,
     setParakeetModel,
-    setCloudTranscriptionProvider,
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
     setUseCleanupModel,
@@ -3977,7 +3974,6 @@ EOF`,
                   setUseLocalWhisper={setUseLocalWhisper}
                   updateTranscriptionSettings={updateTranscriptionSettings}
                   cloudTranscriptionProvider={cloudTranscriptionProvider}
-                  setCloudTranscriptionProvider={setCloudTranscriptionProvider}
                   cloudTranscriptionModel={cloudTranscriptionModel}
                   setCloudTranscriptionModel={setCloudTranscriptionModel}
                   localTranscriptionProvider={localTranscriptionProvider}

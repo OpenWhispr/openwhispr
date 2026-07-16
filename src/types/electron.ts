@@ -578,6 +578,8 @@ declare global {
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
           remoteTranscriptionModel?: string;
+          cortiEnvironment?: string;
+          cortiTenant?: string;
         }
       ) => Promise<{
         success: boolean;

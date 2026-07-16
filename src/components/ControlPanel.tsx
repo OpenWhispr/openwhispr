@@ -516,6 +516,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
           remoteTranscriptionModel: s.remoteTranscriptionModel,
+          cortiEnvironment: s.cortiEnvironment,
+          cortiTenant: s.cortiTenant,
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;

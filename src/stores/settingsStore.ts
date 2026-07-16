@@ -9,6 +9,7 @@ import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
+import { swapTranscriptionProviderConfig } from "../helpers/transcriptionProviderConfig";
 import {
   INFERENCE_SCOPES,
   type InferenceScope,
@@ -288,6 +289,59 @@ function migrateUploadTranscription() {
 
 migrateUploadTranscription();
 
+export type TranscriptionProviderScope = "base" | "meeting" | "upload";
+export interface TranscriptionProviderConfig {
+  model?: string;
+  baseUrl?: string;
+}
+export type TranscriptionProviderConfigs = Record<
+  TranscriptionProviderScope,
+  Record<string, TranscriptionProviderConfig>
+>;
+
+const TRANSCRIPTION_SCOPE_KEYS = {
+  base: {
+    provider: "cloudTranscriptionProvider",
+    model: "cloudTranscriptionModel",
+    baseUrl: "cloudTranscriptionBaseUrl",
+  },
+  meeting: {
+    provider: "meetingCloudTranscriptionProvider",
+    model: "meetingCloudTranscriptionModel",
+    baseUrl: "meetingCloudTranscriptionBaseUrl",
+  },
+  upload: {
+    provider: "uploadCloudTranscriptionProvider",
+    model: "uploadCloudTranscriptionModel",
+    baseUrl: "uploadCloudTranscriptionBaseUrl",
+  },
+} as const;
+
+// Seed per-provider config memory from the flat scalars so the currently
+// configured provider keeps its model/URL.
+function migrateTranscriptionProviderConfigs() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("_transcriptionProviderConfigsMigrated") === "1") return;
+
+  const map: TranscriptionProviderConfigs = { base: {}, meeting: {}, upload: {} };
+  for (const scope of Object.keys(TRANSCRIPTION_SCOPE_KEYS) as TranscriptionProviderScope[]) {
+    const keys = TRANSCRIPTION_SCOPE_KEYS[scope];
+    const provider = localStorage.getItem(keys.provider);
+    if (!provider) continue;
+    const model = (localStorage.getItem(keys.model) || "").trim();
+    const baseUrl = (localStorage.getItem(keys.baseUrl) || "").trim();
+    if (model || baseUrl) {
+      map[scope][provider] = { ...(model ? { model } : {}), ...(baseUrl ? { baseUrl } : {}) };
+    }
+  }
+  if (!localStorage.getItem("transcriptionProviderConfigs")) {
+    localStorage.setItem("transcriptionProviderConfigs", JSON.stringify(map));
+  }
+  localStorage.setItem("_transcriptionProviderConfigsMigrated", "1");
+}
+
+migrateTranscriptionProviderConfigs();
+
 function migrateAgentMode() {
   if (!isBrowser) return;
   if (localStorage.getItem("_agentModeMigrated") === "1") return;
@@ -439,6 +493,7 @@ export interface SettingsState
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   remoteTranscriptionModel: string;
+  transcriptionProviderConfigs: TranscriptionProviderConfigs;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
 
@@ -1041,6 +1096,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
   remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
+  transcriptionProviderConfigs: (() => {
+    try {
+      const parsed = JSON.parse(readString("transcriptionProviderConfigs", "{}"));
+      return {
+        base: parsed?.base ?? {},
+        meeting: parsed?.meeting ?? {},
+        upload: parsed?.upload ?? {},
+      } as TranscriptionProviderConfigs;
+    } catch {
+      return { base: {}, meeting: {}, upload: {} } as TranscriptionProviderConfigs;
+    }
+  })(),
   cleanupMode: (() => {
     const v = readString("cleanupMode", "openwhispr");
     if (
@@ -1945,6 +2012,39 @@ export const selectResolvedLLMConfig = (
     disableThinking,
   };
 };
+
+// Non-destructive provider switch (see transcriptionProviderConfig.js).
+export function switchTranscriptionProvider(
+  scope: TranscriptionProviderScope,
+  providerId: string
+): void {
+  const keys = TRANSCRIPTION_SCOPE_KEYS[scope];
+  const state = useSettingsStore.getState();
+  const currentProvider = (state[keys.provider] as string) || "";
+  if (currentProvider === providerId) return;
+
+  const { configs, model, baseUrl } = swapTranscriptionProviderConfig({
+    configs: state.transcriptionProviderConfigs,
+    scope,
+    fromProvider: currentProvider,
+    fromModel: state[keys.model] as string,
+    fromBaseUrl: state[keys.baseUrl] as string,
+    toProvider: providerId,
+  });
+
+  if (isBrowser) {
+    localStorage.setItem(keys.provider, providerId);
+    localStorage.setItem(keys.model, model);
+    localStorage.setItem(keys.baseUrl, baseUrl);
+    localStorage.setItem("transcriptionProviderConfigs", JSON.stringify(configs));
+  }
+  useSettingsStore.setState({
+    [keys.provider]: providerId,
+    [keys.model]: model,
+    [keys.baseUrl]: baseUrl,
+    transcriptionProviderConfigs: configs,
+  });
+}
 
 export function setResolvedLLMConfig(
   scope: InferenceScope,

@@ -1,12 +1,7 @@
 import ReasoningService from "../services/ReasoningService";
-import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
 import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import {
-  isSecureEndpoint,
-  isAzureOpenAIEndpoint,
-  buildAzureTranscriptionUrl,
-} from "../utils/urlUtils";
+import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import {
@@ -31,6 +26,7 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
 import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
+import { resolveTranscriptionRoute } from "./transcriptionRoute";
 import { detectAgentName } from "../config/agentDetection";
 import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
 import { resolvePrompt } from "../config/prompts";
@@ -74,9 +70,13 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
     voiceAgentRequested,
   });
   if (kind === "agent") {
+    // Local mode stores model-family ids (qwen/llama/...) with no PROVIDER_REGISTRY
+    // entry — leave provider unset so the model lookup resolves to "local".
     const provider = isCloudAgent
       ? "openwhispr"
-      : settings.dictationAgentProvider?.trim() || undefined;
+      : settings.dictationAgentMode === "local"
+        ? undefined
+        : settings.dictationAgentProvider?.trim() || undefined;
     const isCustomAgent = settings.dictationAgentMode === "providers" && provider === "custom";
     return {
       kind: "agent",
@@ -217,9 +217,6 @@ class AudioManager {
       this.micDriverWarmedUp = false;
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
-    this.cachedTranscriptionEndpoint = null;
-    this.cachedEndpointProvider = null;
-    this.cachedEndpointBaseUrl = null;
     this.recordingStartTime = null;
     this.reasoningAvailabilityCache = { value: false, expiresAt: 0 };
     this.cachedReasoningPreference = null;
@@ -1710,6 +1707,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const fallbackModel = apiSettings.fallbackWhisperModel || "base";
 
     try {
+      // Self-hosted with no URL isn't detected by isSelfHostedTranscription and
+      // would fall through to the leftover BYOK provider — fail closed instead.
+      if (
+        apiSettings.transcriptionMode === "self-hosted" &&
+        !(apiSettings.remoteTranscriptionUrl || "").trim()
+      ) {
+        throw new Error("Self-hosted transcription URL is not configured");
+      }
+
       const durationSeconds = metadata.durationSeconds ?? null;
       const model = this.getTranscriptionModel();
       const provider = apiSettings.cloudTranscriptionProvider || "openai";
@@ -1798,48 +1804,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      const endpoint = this.getTranscriptionEndpoint(model);
-
-      // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
-      // 890 leaves margin for UTF-16 vs codepoint counting drift.
-      const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
-      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
+      // Untruncated here: the mistral proxy re-tokenizes it, the http-batch path truncates it.
       let dictionaryPrompt = this.getCustomDictionaryPrompt();
-      if (dictionaryPrompt) {
-        if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
-          const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
-          logger.debug(
-            "Custom dictionary prompt truncated",
-            {
-              originalLength,
-              truncatedLength: dictionaryPrompt.length,
-              maxChars: MAX_PROMPT_CHARS,
-            },
-            "transcription"
-          );
-        }
-        formData.append("prompt", dictionaryPrompt);
-      }
-
-      const shouldStream = this.shouldStreamTranscription(model, provider);
-      if (shouldStream) {
-        formData.append("stream", "true");
-      }
-
-      const isCustomEndpoint =
-        provider === "custom" ||
-        (!endpoint.includes("api.openai.com") &&
-          !endpoint.includes("api.groq.com") &&
-          !endpoint.includes("api.x.ai") &&
-          !endpoint.includes("api.mistral.ai"));
 
       const apiCallStart = performance.now();
 
       // Mistral uses x-api-key auth (not Bearer) and doesn't allow browser CORS — proxy through main process
-      if (provider === "mistral" && window.electronAPI?.proxyMistralTranscription) {
+      if (
+        provider === "mistral" &&
+        !isSelfHostedTranscription(apiSettings) &&
+        window.electronAPI?.proxyMistralTranscription
+      ) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = { audioBuffer, model, language };
 
@@ -1875,7 +1850,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // xAI STT has a non-OpenAI-compatible API — proxy through main process. See #910.
-      if (provider === "xai" && window.electronAPI?.proxyXaiTranscription) {
+      if (
+        provider === "xai" &&
+        !isSelfHostedTranscription(apiSettings) &&
+        window.electronAPI?.proxyXaiTranscription
+      ) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = { audioBuffer, language: language !== "auto" ? language : undefined };
 
@@ -1908,7 +1887,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through main process
-      if (provider === "corti" && window.electronAPI?.proxyCortiTranscription) {
+      if (
+        provider === "corti" &&
+        !isSelfHostedTranscription(apiSettings) &&
+        window.electronAPI?.proxyCortiTranscription
+      ) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = {
           audioBuffer,
@@ -1937,6 +1920,44 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
         throw new Error("No text transcribed - Corti response was empty");
       }
+
+      // Resolved after the proxy dispatch — the resolver throws for proxied transports.
+      const endpoint = this.getTranscriptionEndpoint();
+
+      let endpointHost = "";
+      try {
+        endpointHost = new URL(endpoint).hostname;
+      } catch {}
+
+      // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
+      // 890 leaves margin for UTF-16 vs codepoint counting drift.
+      const isGroqEndpoint = provider === "groq" || endpointHost === "api.groq.com";
+      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
+      if (dictionaryPrompt) {
+        if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
+          const originalLength = dictionaryPrompt.length;
+          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
+          const lastComma = truncated.lastIndexOf(",");
+          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+          logger.debug(
+            "Custom dictionary prompt truncated",
+            {
+              originalLength,
+              truncatedLength: dictionaryPrompt.length,
+              maxChars: MAX_PROMPT_CHARS,
+            },
+            "transcription"
+          );
+        }
+        formData.append("prompt", dictionaryPrompt);
+      }
+
+      const shouldStream = this.shouldStreamTranscription(model, provider);
+      if (shouldStream) {
+        formData.append("stream", "true");
+      }
+
+      const isCustomEndpoint = provider === "custom" || isSelfHostedTranscription(apiSettings);
 
       logger.debug(
         "Making transcription API request",
@@ -2082,7 +2103,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const text = await this.processTranscription(result.text, "openai");
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
-        const source = (await this.isReasoningAvailable()) ? "openai-reasoned" : "openai";
+        const label = isSelfHostedTranscription(apiSettings) ? "self-hosted" : provider;
+        const source = (await this.isReasoningAvailable()) ? `${label}-reasoned` : label;
         logger.debug(
           "Transcription successful",
           {
@@ -2209,186 +2231,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  getTranscriptionEndpoint(deploymentName = "") {
-    const s = getSettings();
-    const currentProvider = s.cloudTranscriptionProvider || "openai";
-
-    // Backstop against the OpenAI-default leak: Tinfoil goes through the main-process
-    // proxy, never here — except self-hosted, which resolves its remote URL below.
-    if (currentProvider === "tinfoil" && !isSelfHostedTranscription(s)) {
-      throw new Error("Tinfoil transcription must go through the attested main-process proxy");
+  getTranscriptionEndpoint() {
+    // Single source of truth for endpoint construction and fail-closed validation.
+    // Only the renderer-fetch (http-batch) providers reach here; proxied providers
+    // (tinfoil/mistral/xai/corti) are dispatched before this and never fetch here.
+    const route = resolveTranscriptionRoute(getSettings());
+    if (route.transport === "error") {
+      throw new Error(route.message);
     }
-
-    const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
-    const transcriptionMode = s.transcriptionMode || "";
-    const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
-    const deployment = (deploymentName || "").trim();
-
-    const isSelfHosted = isSelfHostedTranscription(s);
-    const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
-
-    // Never fall back to the cloud default for self-hosted — fail closed instead.
-    if (isSelfHosted) {
-      const normalizedRemote = normalizeBaseUrl(remoteUrl);
-      if (!normalizedRemote || !isSecureEndpoint(normalizedRemote)) {
-        throw new Error("Self-hosted transcription URL is invalid or unsupported");
-      }
-    }
-
-    if (
-      this.cachedTranscriptionEndpoint &&
-      (this.cachedEndpointProvider !== currentProvider ||
-        this.cachedEndpointDeployment !== deployment ||
-        this.cachedEndpointBaseUrl !== currentBaseUrl ||
-        this.cachedEndpointMode !== transcriptionMode ||
-        this.cachedEndpointRemoteUrl !== remoteUrl)
-    ) {
-      logger.debug(
-        "STT endpoint cache invalidated",
-        {
-          previousProvider: this.cachedEndpointProvider,
-          newProvider: currentProvider,
-          previousBaseUrl: this.cachedEndpointBaseUrl,
-          newBaseUrl: currentBaseUrl,
-          previousMode: this.cachedEndpointMode,
-          newMode: transcriptionMode,
-          previousRemoteUrl: this.cachedEndpointRemoteUrl,
-          newRemoteUrl: remoteUrl,
-        },
-        "transcription"
+    if (route.transport !== "http-batch") {
+      throw new Error(
+        `Transcription provider must not use the direct HTTP path: ${route.provider}`
       );
-      this.cachedTranscriptionEndpoint = null;
     }
-
-    if (this.cachedTranscriptionEndpoint) {
-      return this.cachedTranscriptionEndpoint;
-    }
-
-    try {
-      let base;
-      if (isSelfHosted) {
-        base = remoteUrl;
-      } else if (currentProvider === "custom") {
-        base = currentBaseUrl.trim() || API_ENDPOINTS.TRANSCRIPTION_BASE;
-      } else if (currentProvider === "groq") {
-        base = API_ENDPOINTS.GROQ_BASE;
-      } else if (currentProvider === "xai") {
-        base = API_ENDPOINTS.XAI_BASE;
-      } else if (currentProvider === "mistral") {
-        base = API_ENDPOINTS.MISTRAL_BASE;
-      } else {
-        // OpenAI or other standard providers
-        base = API_ENDPOINTS.TRANSCRIPTION_BASE;
-      }
-
-      const normalizedBase = normalizeBaseUrl(base);
-
-      logger.debug(
-        "STT endpoint resolution",
-        {
-          provider: currentProvider,
-          mode: transcriptionMode,
-          isSelfHosted,
-          isCustomEndpoint,
-          rawBaseUrl: currentBaseUrl,
-          remoteUrl,
-          normalizedBase,
-          defaultBase: API_ENDPOINTS.TRANSCRIPTION_BASE,
-        },
-        "transcription"
-      );
-
-      const cacheResult = (endpoint) => {
-        this.cachedTranscriptionEndpoint = endpoint;
-        this.cachedEndpointProvider = currentProvider;
-        this.cachedEndpointBaseUrl = currentBaseUrl;
-        this.cachedEndpointMode = transcriptionMode;
-        this.cachedEndpointRemoteUrl = remoteUrl;
-        this.cachedEndpointDeployment = deployment;
-
-        logger.debug(
-          "STT endpoint resolved",
-          {
-            endpoint,
-            provider: currentProvider,
-            isCustomEndpoint,
-            usingDefault: endpoint === API_ENDPOINTS.TRANSCRIPTION,
-          },
-          "transcription"
-        );
-
-        return endpoint;
-      };
-
-      if (!normalizedBase) {
-        logger.debug(
-          "STT endpoint: using default (normalization failed)",
-          { rawBase: base },
-          "transcription"
-        );
-        return cacheResult(API_ENDPOINTS.TRANSCRIPTION);
-      }
-
-      // Only validate HTTPS for custom endpoints (known providers are already HTTPS)
-      if (isCustomEndpoint && !isSecureEndpoint(normalizedBase)) {
-        logger.warn(
-          "STT endpoint: HTTPS required, falling back to default",
-          { attemptedUrl: normalizedBase },
-          "transcription"
-        );
-        return cacheResult(API_ENDPOINTS.TRANSCRIPTION);
-      }
-
-      let endpoint;
-      if (isCustomEndpoint && isAzureOpenAIEndpoint(normalizedBase)) {
-        // Azure OpenAI routes by deployment in the URL path and requires an
-        // api-version query string — the plain {base}/audio/transcriptions
-        // shape returns DeploymentNotFound. Build the deployment-style URL.
-        // The api-version defaults to a transcribe-capable preview; a user can
-        // override it by appending ?api-version=... to their endpoint URL.
-        const azureUrl = buildAzureTranscriptionUrl(normalizedBase, deployment);
-        if (azureUrl) {
-          endpoint = azureUrl;
-          logger.debug(
-            "STT endpoint: built Azure deployment URL",
-            { base: normalizedBase, deployment, endpoint },
-            "transcription"
-          );
-        } else {
-          endpoint = buildApiUrl(normalizedBase, "/audio/transcriptions");
-          logger.warn(
-            "STT endpoint: Azure host detected but no deployment name; falling back to default path",
-            { base: normalizedBase, endpoint },
-            "transcription"
-          );
-        }
-      } else if (/\/audio\/(transcriptions|translations)$/i.test(normalizedBase)) {
-        endpoint = normalizedBase;
-        logger.debug("STT endpoint: using full path from config", { endpoint }, "transcription");
-      } else {
-        endpoint = buildApiUrl(normalizedBase, "/audio/transcriptions");
-        logger.debug(
-          "STT endpoint: appending /audio/transcriptions to base",
-          { base: normalizedBase, endpoint },
-          "transcription"
-        );
-      }
-
-      return cacheResult(endpoint);
-    } catch (error) {
-      logger.error(
-        "STT endpoint resolution failed",
-        { error: error.message, stack: error.stack },
-        "transcription"
-      );
-      if (isSelfHosted) throw error;
-      this.cachedTranscriptionEndpoint = API_ENDPOINTS.TRANSCRIPTION;
-      this.cachedEndpointProvider = currentProvider;
-      this.cachedEndpointBaseUrl = currentBaseUrl;
-      this.cachedEndpointMode = transcriptionMode;
-      this.cachedEndpointRemoteUrl = remoteUrl;
-      return API_ENDPOINTS.TRANSCRIPTION;
-    }
+    return route.endpoint;
   }
 
   async safePaste(text, options = {}) {

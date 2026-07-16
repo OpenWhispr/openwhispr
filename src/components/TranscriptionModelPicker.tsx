@@ -469,31 +469,15 @@ export default function TranscriptionModelPicker({
         cloudTranscriptionBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE &&
         !knownProviderUrls.includes(cloudTranscriptionBaseUrl);
 
+      // Model/baseUrl defaults are filled by the effect below once the switch
+      // lands, so a remembered per-provider config is never overwritten here.
       if (hasCustomUrl) {
         onCloudProviderSelect("custom");
-      } else {
-        const firstProvider = cloudProviders[0];
-        if (firstProvider) {
-          onCloudProviderSelect(firstProvider.id);
-          if (firstProvider.models?.length) {
-            onCloudModelSelect(firstProvider.models[0].id);
-          }
-        }
-      }
-    } else if (selectedCloudProvider !== "custom" && !selectedCloudModel) {
-      const provider = cloudProviders.find((p) => p.id === selectedCloudProvider);
-      if (provider?.models?.length) {
-        onCloudModelSelect(provider.models[0].id);
+      } else if (cloudProviders[0]) {
+        onCloudProviderSelect(cloudProviders[0].id);
       }
     }
-  }, [
-    cloudProviders,
-    cloudTranscriptionBaseUrl,
-    selectedCloudProvider,
-    selectedCloudModel,
-    onCloudProviderSelect,
-    onCloudModelSelect,
-  ]);
+  }, [cloudProviders, cloudTranscriptionBaseUrl, selectedCloudProvider, onCloudProviderSelect]);
 
   useEffect(() => {
     loadLocalModelsRef.current = loadLocalModels;
@@ -627,25 +611,31 @@ export default function TranscriptionModelPicker({
     [onModeChange, ensureValidCloudSelection]
   );
 
-  const handleCloudProviderChange = useCallback(
-    (providerId: string) => {
-      onCloudProviderSelect(providerId);
-      const provider = cloudProviders.find((p) => p.id === providerId);
-
-      if (providerId === "custom") {
-        onCloudModelSelect("whisper-1");
-        return;
-      }
-
-      if (provider) {
-        setCloudTranscriptionBaseUrl?.(provider.baseUrl);
-        if (provider.models?.length) {
-          onCloudModelSelect(provider.models[0].id);
-        }
-      }
-    },
-    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, setCloudTranscriptionBaseUrl]
-  );
+  // Provider switching restores each provider's remembered model/baseUrl (see
+  // switchTranscriptionProvider); this only fills defaults for first-time picks.
+  useEffect(() => {
+    if (effectiveLocal) return;
+    if (selectedCloudProvider === "custom") {
+      if (!selectedCloudModel) onCloudModelSelect("whisper-1");
+      return;
+    }
+    const provider = cloudProviders.find((p) => p.id === selectedCloudProvider);
+    if (!provider) return;
+    if (!selectedCloudModel && provider.models?.length) {
+      onCloudModelSelect(provider.models[0].id);
+    }
+    if (setCloudTranscriptionBaseUrl && cloudTranscriptionBaseUrl !== provider.baseUrl) {
+      setCloudTranscriptionBaseUrl(provider.baseUrl);
+    }
+  }, [
+    effectiveLocal,
+    selectedCloudProvider,
+    selectedCloudModel,
+    cloudProviders,
+    cloudTranscriptionBaseUrl,
+    onCloudModelSelect,
+    setCloudTranscriptionBaseUrl,
+  ]);
 
   const handleLocalProviderChange = useCallback(
     (providerId: string) => {
@@ -943,7 +933,7 @@ export default function TranscriptionModelPicker({
           <ProviderTabs
             providers={cloudProviderTabs}
             selectedId={selectedCloudProvider}
-            onSelect={handleCloudProviderChange}
+            onSelect={onCloudProviderSelect}
             colorScheme="purple"
             wrap
           />
