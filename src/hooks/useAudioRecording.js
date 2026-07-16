@@ -18,6 +18,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
+  const pendingStopRef = useRef(false);
   const wasRecordingRef = useRef(false);
   const { onToggle } = options;
 
@@ -65,6 +66,13 @@ export const useAudioRecording = (toast, options = {}) => {
   );
 
   const performStopRecording = useCallback(async () => {
+    // A push-to-talk release can arrive after the main process has requested
+    // start, but before async audio startup has marked the recorder active.
+    // Queue that release so it is consumed as soon as startup finishes.
+    if (startLockRef.current) {
+      pendingStopRef.current = true;
+      return true;
+    }
     if (stopLockRef.current) return false;
     stopLockRef.current = true;
     try {
@@ -255,6 +263,10 @@ export const useAudioRecording = (toast, options = {}) => {
     const handleStart = async () => {
       audioManagerRef.current?.warmupMicDriver?.();
       await performStartRecording();
+      if (pendingStopRef.current) {
+        pendingStopRef.current = false;
+        await performStopRecording();
+      }
     };
 
     const handleStop = async () => {

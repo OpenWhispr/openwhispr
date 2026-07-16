@@ -1193,8 +1193,6 @@ async function startApp() {
       globeLastStopTime = Date.now();
       if (wasRecording) {
         windowManager.sendCancelDictation();
-      } else {
-        windowManager.hideDictationPanel();
       }
     });
 
