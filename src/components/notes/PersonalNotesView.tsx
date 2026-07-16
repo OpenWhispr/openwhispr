@@ -272,15 +272,13 @@ export default function PersonalNotesView({
 
       // 4. Flush old note data fire-and-forget (uses captured values, not refs)
       if (hadPendingSave && oldNoteId) {
-        window.electronAPI
-          .updateNote(oldNoteId, { title: oldTitle, content: oldContent })
-          .catch((err: unknown) => {
-            logger.warn(
-              "Failed to flush note on switch",
-              { error: (err as Error).message },
-              "notes"
-            );
-          });
+        // Don't flush a blank title over a real one — oldTitle can be a transient
+        // "" captured during a load/remount (see debouncedSave for the same guard).
+        const flushUpdates: { title?: string; content: string } = { content: oldContent };
+        if (oldTitle !== "") flushUpdates.title = oldTitle;
+        window.electronAPI.updateNote(oldNoteId, flushUpdates).catch((err: unknown) => {
+          logger.warn("Failed to flush note on switch", { error: (err as Error).message }, "notes");
+        });
       }
     } else if (activeNote && activeNote.id === activeNoteRef.current && !saveTimeoutRef.current) {
       // External update (e.g. AI chat tool) — resync only when no user save is pending
@@ -305,20 +303,29 @@ export default function PersonalNotesView({
     }
   }, [activeNote]);
 
-  const debouncedSave = useCallback((noteId: number, title: string, content: string) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(async () => {
-      saveTimeoutRef.current = null;
-      setIsSaving(true);
-      try {
-        await window.electronAPI.updateNote(noteId, { title, content });
-      } catch (err) {
-        logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
-      } finally {
-        setIsSaving(false);
-      }
-    }, 1000);
-  }, []);
+  const debouncedSave = useCallback(
+    (noteId: number, title: string, content: string, allowEmptyTitle = false) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(async () => {
+        saveTimeoutRef.current = null;
+        setIsSaving(true);
+        try {
+          const updates: { title?: string; content: string } = { content };
+          // Only persist an empty title for a deliberate (focused) title edit.
+          // A content autosave must never blank the title — during a note
+          // load/remount `localTitleRef` can be transiently "", which would
+          // otherwise clobber a real title (e.g. a calendar meeting note's).
+          if (title !== "" || allowEmptyTitle) updates.title = title;
+          await window.electronAPI.updateNote(noteId, updates);
+        } catch (err) {
+          logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
+        } finally {
+          setIsSaving(false);
+        }
+      }, 1000);
+    },
+    []
+  );
 
   useEffect(() => {
     return () => {
@@ -331,7 +338,7 @@ export default function PersonalNotesView({
     (title: string) => {
       setLocalTitle(title);
       if (activeNoteRef.current)
-        debouncedSave(activeNoteRef.current, title, localContentRef.current);
+        debouncedSave(activeNoteRef.current, title, localContentRef.current, true);
     },
     [debouncedSave]
   );
