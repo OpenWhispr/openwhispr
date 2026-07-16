@@ -136,7 +136,6 @@ guard let keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, han
     if fnIsDown && !fnWasUsedWithNonModifierKey {
         fnWasUsedWithNonModifierKey = true
         emit("FN_INTERRUPTED")
-        emit("FN_CHORDED")
     }
 }) else {
     NSEvent.removeMonitor(monitor)

@@ -1063,13 +1063,11 @@ async function startApp() {
     const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
-    let globeKeyWasUsedAsModifier = false;
     let globeLastStopTime = 0;
     const MIN_HOLD_DURATION_MS = 150;
     const POST_STOP_COOLDOWN_MS = 300;
 
     globeKeyManager.on("globe-down", async () => {
-      globeKeyWasUsedAsModifier = false;
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
       const mainWindowLive = isLiveWindow(windowManager.mainWindow);
       debugLogger?.debug("[Globe] globe-down received", {
@@ -1101,11 +1099,7 @@ async function startApp() {
             globeKeyDownTime = pressTime;
             globeKeyIsRecording = false;
             setTimeout(async () => {
-              if (
-                globeKeyDownTime === pressTime &&
-                !globeKeyIsRecording &&
-                !globeKeyWasUsedAsModifier
-              ) {
+              if (globeKeyDownTime === pressTime && !globeKeyIsRecording) {
                 globeKeyIsRecording = true;
                 debugLogger?.debug("[Globe] Starting dictation (push hold)");
                 windowManager.sendStartDictation();
@@ -1119,25 +1113,8 @@ async function startApp() {
 
     });
 
-    globeKeyManager.on("globe-used-as-modifier", () => {
-      globeKeyWasUsedAsModifier = true;
-      globeKeyDownTime = 0;
-      if (globeKeyIsRecording) {
-        globeKeyIsRecording = false;
-        globeLastStopTime = Date.now();
-        debugLogger?.debug("[Globe] Stopping dictation (Fn used as modifier)");
-        windowManager.sendStopDictation();
-      } else if (
-        hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey) &&
-        isLiveWindow(windowManager.mainWindow) &&
-        windowManager.getActivationMode() === "push"
-      ) {
-        windowManager.hideDictationPanel();
-      }
-    });
-
     globeKeyManager.on("globe-up", async (event = {}) => {
-      const usedAsModifier = globeKeyWasUsedAsModifier || !!event.usedAsModifier;
+      const usedAsModifier = !!event.usedAsModifier;
       const dictationUsesGlobe = hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey);
       const mainWindowLive = isLiveWindow(windowManager.mainWindow);
       debugLogger?.debug("[Globe] globe-up received", {
@@ -1154,7 +1131,6 @@ async function startApp() {
       windowManager.handleMacPushModifierUp("fn");
 
       if (usedAsModifier) {
-        globeKeyWasUsedAsModifier = false;
         globeKeyDownTime = 0;
         debugLogger?.debug("[Globe] Ignored — Fn was used with another key");
         return;
@@ -1199,7 +1175,6 @@ async function startApp() {
         debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE");
       }
 
-      globeKeyWasUsedAsModifier = false;
     });
 
     // Another key was pressed while Fn was held — user is using Fn as a

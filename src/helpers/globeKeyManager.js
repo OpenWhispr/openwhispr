@@ -121,8 +121,6 @@ class GlobeKeyManager extends EventEmitter {
         .forEach((line) => {
           if (line === "FN_DOWN") {
             this.emit("globe-down");
-          } else if (line === "FN_CHORDED") {
-            this.emit("globe-used-as-modifier");
           } else if (line === "FN_UP") {
             this.emit("globe-up", { usedAsModifier: false });
           } else if (line === "FN_UP_CHORDED") {
