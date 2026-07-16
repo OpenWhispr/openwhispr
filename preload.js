@@ -45,6 +45,9 @@ const registerListener = (channel, handlerFactory) => {
 
 contextBridge.exposeInMainWorld("electronAPI", {
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
+  captureSelectedText: () => ipcRenderer.invoke("capture-selected-text"),
+  replaceSelectedText: (sessionId, text, options) =>
+    ipcRenderer.invoke("replace-selected-text", sessionId, text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),

@@ -42,6 +42,7 @@ typedef enum {
 /* evdev keycodes for portal mode */
 #define PORTAL_KEY_LEFTCTRL  29
 #define PORTAL_KEY_LEFTSHIFT 42
+#define PORTAL_KEY_C         46
 #define PORTAL_KEY_V         47
 #define PORTAL_KEY_INSERT    110
 
@@ -54,6 +55,7 @@ typedef struct {
     char            *restore_token;
     guint            signal_id;
     paste_mode_t     mode;
+    int              copy_mode;
 } PortalData;
 
 static char *get_sender_path(GDBusConnection *conn)
@@ -89,7 +91,18 @@ static void portal_emit_key(PortalData *app, gint32 keycode, guint32 pressed,
 
 static void portal_send_paste(PortalData *app)
 {
-    if (app->mode == PASTE_MODE_SHIFT_INSERT) {
+    if (app->copy_mode) {
+        const int use_shift = (app->mode == PASTE_MODE_CTRL_SHIFT_V);
+        portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 1, "Ctrl press");
+        if (use_shift)
+            portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
+        portal_emit_key(app, PORTAL_KEY_C, 1, "C press");
+        usleep(20000);
+        portal_emit_key(app, PORTAL_KEY_C, 0, "C release");
+        if (use_shift)
+            portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 0, "Shift release");
+        portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 0, "Ctrl release");
+    } else if (app->mode == PASTE_MODE_SHIFT_INSERT) {
         portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
         portal_emit_key(app, PORTAL_KEY_INSERT,    1, "Insert press");
         usleep(20000);
@@ -264,10 +277,11 @@ static gboolean on_portal_timeout(gpointer user_data)
     return G_SOURCE_REMOVE;
 }
 
-static int paste_via_portal(paste_mode_t mode, const char *restore_token)
+static int paste_via_portal(paste_mode_t mode, const char *restore_token, int copy_mode)
 {
     PortalData app = { 0 };
     app.mode = mode;
+    app.copy_mode = copy_mode;
     if (restore_token) app.restore_token = g_strdup(restore_token);
 
     GError *err = NULL;
@@ -328,7 +342,7 @@ static const char *terminal_classes[] = {
     "konsole", "gnome-terminal", "terminal", "kitty", "alacritty",
     "terminator", "xterm", "urxvt", "rxvt", "tilix", "terminology",
     "wezterm", "foot", "st", "yakuake", "ghostty", "guake", "tilda",
-    "hyper", "tabby", "sakura", "warp", "termius", NULL
+    "hyper", "tabby", "sakura", "warp", "termius", "waveterm", NULL
 };
 
 static int is_terminal(const char *wm_class) {
@@ -401,6 +415,124 @@ static int detect_terminal_atspi(void) {
     }
     return -1;
 }
+
+/* Native Wayland compositors do not expose an X11 window id.  AT-SPI gives us
+ * both the active application's PID (a stable paste target) and the focused
+ * text object's selection without synthesising Ctrl+C. */
+static AtspiAccessible *find_active_atspi_window(AtspiAccessible **app_out) {
+    AtspiAccessible *desktop = atspi_get_desktop(0);
+    if (!desktop) return NULL;
+
+    int app_count = atspi_accessible_get_child_count(desktop, NULL);
+    for (int i = 0; i < app_count; i++) {
+        AtspiAccessible *app = atspi_accessible_get_child_at_index(desktop, i, NULL);
+        if (!app) continue;
+        int window_count = atspi_accessible_get_child_count(app, NULL);
+        for (int j = 0; j < window_count; j++) {
+            AtspiAccessible *win = atspi_accessible_get_child_at_index(app, j, NULL);
+            if (!win) continue;
+            AtspiStateSet *states = atspi_accessible_get_state_set(win);
+            gboolean active = states && atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
+            if (states) g_object_unref(states);
+            if (active) {
+                if (app_out) *app_out = g_object_ref(app);
+                g_object_unref(app);
+                g_object_unref(desktop);
+                return win;
+            }
+            g_object_unref(win);
+        }
+        g_object_unref(app);
+    }
+    g_object_unref(desktop);
+    return NULL;
+}
+
+static AtspiAccessible *find_focused_text(AtspiAccessible *node, int depth) {
+    if (!node || depth > 32) return NULL;
+
+    AtspiStateSet *states = atspi_accessible_get_state_set(node);
+    gboolean focused = states && atspi_state_set_contains(states, ATSPI_STATE_FOCUSED);
+    if (states) g_object_unref(states);
+    if (focused && atspi_accessible_is_text(node)) return g_object_ref(node);
+
+    int child_count = atspi_accessible_get_child_count(node, NULL);
+    for (int i = 0; i < child_count; i++) {
+        AtspiAccessible *child = atspi_accessible_get_child_at_index(node, i, NULL);
+        AtspiAccessible *focused_child = find_focused_text(child, depth + 1);
+        if (child) g_object_unref(child);
+        if (focused_child) return focused_child;
+    }
+    return NULL;
+}
+
+static int atspi_active_pid(AtspiAccessible *app) {
+    GError *error = NULL;
+    gint pid = atspi_accessible_get_process_id(app, &error);
+    if (error) {
+        g_error_free(error);
+        return 0;
+    }
+    return pid > 0 ? pid : 0;
+}
+
+static int print_atspi_target(void) {
+    AtspiAccessible *app = NULL;
+    AtspiAccessible *win = find_active_atspi_window(&app);
+    int pid = app ? atspi_active_pid(app) : 0;
+    if (win) g_object_unref(win);
+    if (app) g_object_unref(app);
+    if (!pid) return 1;
+    printf("TARGET ATSPI %d\n", pid);
+    return 0;
+}
+
+static int print_atspi_selection(void) {
+    AtspiAccessible *app = NULL;
+    AtspiAccessible *win = find_active_atspi_window(&app);
+    int pid = app ? atspi_active_pid(app) : 0;
+    AtspiAccessible *focused = win ? find_focused_text(win, 0) : NULL;
+    if (win) g_object_unref(win);
+    if (app) g_object_unref(app);
+    if (!pid || !focused) {
+        if (focused) g_object_unref(focused);
+        return 1;
+    }
+
+    AtspiText *text = atspi_accessible_get_text_iface(focused);
+    g_object_unref(focused);
+    if (!text) return 1;
+
+    GError *error = NULL;
+    int selection_count = atspi_text_get_n_selections(text, &error);
+    if (error || selection_count < 1) {
+        if (error) g_error_free(error);
+        g_object_unref(text);
+        printf("ATSPI_NONE %d\n", pid);
+        return 0;
+    }
+
+    AtspiRange *range = atspi_text_get_selection(text, 0, &error);
+    if (error || !range) {
+        if (error) g_error_free(error);
+        g_object_unref(text);
+        return 1;
+    }
+    gchar *selected = atspi_text_get_text(text, range->start_offset, range->end_offset, &error);
+    g_free(range);
+    g_object_unref(text);
+    if (error || !selected) {
+        if (error) g_error_free(error);
+        g_free(selected);
+        return 1;
+    }
+
+    gchar *encoded = g_base64_encode((const guchar *)selected, strlen(selected));
+    g_free(selected);
+    printf("ATSPI_SELECTED %d %s\n", pid, encoded);
+    g_free(encoded);
+    return 0;
+}
 #endif
 
 static Window get_active_window(Display *dpy) {
@@ -466,7 +598,7 @@ static void emit_key(int fd, int code, int val) {
     emit(fd, EV_SYN, SYN_REPORT, 0);
 }
 
-static int paste_via_uinput(paste_mode_t mode) {
+static int paste_via_uinput(paste_mode_t mode, int copy_mode) {
     int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if (fd < 0) {
         fprintf(stderr, "Cannot open /dev/uinput: %s\n", strerror(errno));
@@ -476,6 +608,7 @@ static int paste_via_uinput(paste_mode_t mode) {
     if (ioctl(fd, UI_SET_EVBIT, EV_KEY) < 0 ||
         ioctl(fd, UI_SET_KEYBIT, KEY_LEFTCTRL) < 0 ||
         ioctl(fd, UI_SET_KEYBIT, KEY_LEFTSHIFT) < 0 ||
+        ioctl(fd, UI_SET_KEYBIT, KEY_C) < 0 ||
         ioctl(fd, UI_SET_KEYBIT, KEY_V) < 0 ||
         ioctl(fd, UI_SET_KEYBIT, KEY_INSERT) < 0) {
         close(fd);
@@ -497,7 +630,7 @@ static int paste_via_uinput(paste_mode_t mode) {
 
     usleep(50000);
 
-    if (mode == PASTE_MODE_SHIFT_INSERT) {
+    if (!copy_mode && mode == PASTE_MODE_SHIFT_INSERT) {
         emit_key(fd, KEY_LEFTSHIFT, 1);
         usleep(8000);
         emit_key(fd, KEY_INSERT, 1);
@@ -511,9 +644,10 @@ static int paste_via_uinput(paste_mode_t mode) {
         emit_key(fd, KEY_LEFTCTRL, 1);
         if (use_shift) emit_key(fd, KEY_LEFTSHIFT, 1);
         usleep(8000);
-        emit_key(fd, KEY_V, 1);
+        const int key = copy_mode ? KEY_C : KEY_V;
+        emit_key(fd, key, 1);
         usleep(8000);
-        emit_key(fd, KEY_V, 0);
+        emit_key(fd, key, 0);
         usleep(8000);
         if (use_shift) emit_key(fd, KEY_LEFTSHIFT, 0);
         emit_key(fd, KEY_LEFTCTRL, 0);
@@ -629,6 +763,10 @@ int main(int argc, char *argv[]) {
     int use_uinput = 0;
     int use_portal = 0;
     int media_play_pause = 0;
+    int copy_mode = 0;
+    int capabilities_only = 0;
+    int atspi_target_only = 0;
+    int atspi_selection = 0;
     const char *restore_token = NULL;
     Window target_window = None;
 
@@ -643,11 +781,44 @@ int main(int argc, char *argv[]) {
             use_portal = 1;
         } else if (strcmp(argv[i], "--media-play-pause") == 0) {
             media_play_pause = 1;
+        } else if (strcmp(argv[i], "--copy") == 0) {
+            copy_mode = 1;
+        } else if (strcmp(argv[i], "--capabilities") == 0) {
+            capabilities_only = 1;
+        } else if (strcmp(argv[i], "--atspi-target") == 0) {
+            atspi_target_only = 1;
+        } else if (strcmp(argv[i], "--atspi-selection") == 0) {
+            atspi_selection = 1;
         } else if (strcmp(argv[i], "--restore-token") == 0 && i + 1 < argc) {
             restore_token = argv[++i];
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
             target_window = (Window)strtoul(argv[++i], NULL, 0);
         }
+    }
+
+    if (capabilities_only) {
+        printf("paste-v1 selection-copy-v1 target-window-v1");
+#ifdef HAVE_ATSPI
+        printf(" atspi-selection-v1");
+#endif
+        printf("\n");
+        return 0;
+    }
+
+    if (atspi_target_only) {
+#ifdef HAVE_ATSPI
+        return print_atspi_target();
+#else
+        return 5;
+#endif
+    }
+
+    if (atspi_selection) {
+#ifdef HAVE_ATSPI
+        return print_atspi_selection();
+#else
+        return 5;
+#endif
     }
 
     if (media_play_pause) {
@@ -657,7 +828,7 @@ int main(int argc, char *argv[]) {
     if (use_portal) {
 #ifdef HAVE_GIO
         paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
-        return paste_via_portal(mode, restore_token);
+        return paste_via_portal(mode, restore_token, copy_mode);
 #else
         fprintf(stderr, "portal support not compiled in\n");
         return 5;
@@ -667,7 +838,7 @@ int main(int argc, char *argv[]) {
     if (use_uinput) {
 #ifdef HAVE_UINPUT
         paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
-        return paste_via_uinput(mode);
+        return paste_via_uinput(mode, copy_mode);
 #else
         fprintf(stderr, "uinput support not compiled in\n");
         return 3;
@@ -689,7 +860,7 @@ int main(int argc, char *argv[]) {
 
     paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
 
-    if (mode == PASTE_MODE_SHIFT_INSERT) {
+    if (!copy_mode && mode == PASTE_MODE_SHIFT_INSERT) {
         KeyCode shift  = XKeysymToKeycode(dpy, XK_Shift_L);
         KeyCode insert = XKeysymToKeycode(dpy, XK_Insert);
 
@@ -704,15 +875,15 @@ int main(int argc, char *argv[]) {
         const int use_shift = (mode == PASTE_MODE_CTRL_SHIFT_V);
         KeyCode ctrl = XKeysymToKeycode(dpy, XK_Control_L);
         KeyCode shift = XKeysymToKeycode(dpy, XK_Shift_L);
-        KeyCode v = XKeysymToKeycode(dpy, XK_v);
+        KeyCode key = XKeysymToKeycode(dpy, copy_mode ? XK_c : XK_v);
 
         XTestFakeKeyEvent(dpy, ctrl, True, CurrentTime);
         if (use_shift)
             XTestFakeKeyEvent(dpy, shift, True, CurrentTime);
         usleep(8000);
-        XTestFakeKeyEvent(dpy, v, True, CurrentTime);
+        XTestFakeKeyEvent(dpy, key, True, CurrentTime);
         usleep(8000);
-        XTestFakeKeyEvent(dpy, v, False, CurrentTime);
+        XTestFakeKeyEvent(dpy, key, False, CurrentTime);
         usleep(8000);
         if (use_shift)
             XTestFakeKeyEvent(dpy, shift, False, CurrentTime);
@@ -722,5 +893,6 @@ int main(int argc, char *argv[]) {
     XFlush(dpy);
     usleep(20000);
     XCloseDisplay(dpy);
+    if (copy_mode) printf("COPY_OK\n");
     return 0;
 }

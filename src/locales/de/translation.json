@@ -223,7 +223,7 @@
       "title": "Sprachagent-Einrichtung",
       "description": "Sprechen Sie mit Ihrem KI-Agenten per Tastendruck",
       "hotkey": "Hotkey",
-      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. {{agentName}} schreibt das Ergebnis direkt an Ihren Cursor. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
+      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. Ist Text markiert, bearbeitet und ersetzt {{agentName}} diese Auswahl; andernfalls schreibt {{agentName}} das Ergebnis an Ihren Cursor. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
       "test": "Ausprobieren",
       "testInstruction": "Klicke unten, drücke {{hotkey}} und sprich einen Befehl",
       "testSetHotkey": "Lege oben einen Hotkey fest, um es auszuprobieren",
@@ -589,6 +589,15 @@
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
         "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan.",
         "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut."
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "Auswahlbearbeitung nicht angewendet",
+        "changed": "Der ausgewählte Text oder die Ziel-App wurde während der Verarbeitung geändert. Es wurde nichts ersetzt.",
+        "expired": "Die Auswahlbearbeitung ist abgelaufen. Wähle den Text erneut aus und versuche es noch einmal.",
+        "pasteFailed": "OpenWhispr hat die Bearbeitung erstellt, konnte den ausgewählten Text aber nicht ersetzen.",
+        "unavailable": "OpenWhispr konnte den ausgewählten Text nicht sicher lesen. Prüfe die Bedienungshilfen oder Eingabeautomatisierung.",
+        "tooLarge": "Die Auswahl ist zu groß. Wähle höchstens 6.000 Zeichen aus.",
+        "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert."
       }
     },
     "clipboard": {
@@ -1296,7 +1305,7 @@
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
-      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, führt die KI Ihren Befehl aus — Inhalte verfassen, Text formatieren oder Fragen beantworten — statt ihn wörtlich zu transkribieren.",
+      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, führt die KI Ihren Befehl aus. Ist Text markiert, wird er an Ihr konfiguriertes Voice-Agent-Modell gesendet und sicher durch das Ergebnis ersetzt.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",
@@ -1304,7 +1313,7 @@
       "title": "Sprachagent",
       "examples": {
         "formalEmail": "Hey {{agentName}}, schreibe eine formelle E-Mail zum Thema Budget",
-        "professional": "Hey {{agentName}}, mach das professioneller",
+        "professional": "Text markieren, dann sagen: Hey {{agentName}}, mach das professioneller",
         "bulletPoints": "Hey {{agentName}}, wandle das in Stichpunkte um"
       }
     },
@@ -1451,7 +1460,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Sprachagent-Hotkey",
-        "description": "Sagen Sie, was Sie brauchen — Ihr KI-Agent schreibt das Ergebnis, nicht Ihre Worte"
+        "description": "Sagen Sie, was Sie brauchen — markierter Text wird direkt bearbeitet, andernfalls schreibt Ihr Agent an den Cursor"
       },
       "translationHotkey": {
         "title": "Übersetzungs-Hotkey",
@@ -2588,7 +2597,7 @@
   },
   "dictationAgent": {
     "enabled": "Voice Agent aktivieren",
-    "enabledDescription": "Diktieren Sie Anweisungen an Ihren Agenten. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen. Unten konfigurierbar.",
+    "enabledDescription": "Diktieren Sie Anweisungen an Ihren Agenten. Markierter Text wird an das konfigurierte Modell gesendet und direkt bearbeitet. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen.",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Den von OpenWhispr verwalteten Agenten nutzen, kein API-Schlüssel nötig.",

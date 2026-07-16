@@ -404,6 +404,7 @@ class IPCHandlers {
     this.windowsKeyManager = managers.windowsKeyManager;
     this.linuxKeyManager = managers.linuxKeyManager;
     this.textEditMonitor = managers.textEditMonitor;
+    this.selectionManager = managers.selectionManager;
     this.getTrayManager = managers.getTrayManager;
     this.whisperCudaManager = managers.whisperCudaManager;
     this.whisperVulkanManager = managers.whisperVulkanManager;
@@ -1866,6 +1867,24 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("capture-selected-text", async () => {
+      if (!this.selectionManager) {
+        return { status: "unavailable", code: "selection_manager_unavailable" };
+      }
+      return this.selectionManager.captureSelectedText();
+    });
+
+    ipcMain.handle("replace-selected-text", async (event, sessionId, text, options = {}) => {
+      if (!this.selectionManager) {
+        return { success: false, code: "selection_manager_unavailable" };
+      }
+      return this.selectionManager.replaceSelectedText(sessionId, text, {
+        restoreClipboard: options.restoreClipboard !== false,
+        allowClipboardFallback: options.allowClipboardFallback === true,
+        webContents: event.sender,
+      });
+    });
+
     ipcMain.handle("paste-text", async (event, text, options) => {
       const mainWindow = this.windowManager?.mainWindow;
       const targetPid = this.textEditMonitor?.lastTargetPid || null;
@@ -3317,7 +3336,7 @@ class IPCHandlers {
           // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
           // derives support from the model registry and we honor that here.
           const useTemperature = config?.supportsTemperature !== false;
-          const { text: generated } = await generateText({
+          const { text: generated, finishReason } = await generateText({
             model,
             system: config?.systemPrompt || "",
             prompt: text,
@@ -3325,6 +3344,13 @@ class IPCHandlers {
             ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
             abortSignal: AbortSignal.timeout(timeoutMs),
           });
+
+          if (
+            config?.requireCompleteOutput &&
+            ["length", "max-tokens", "max_tokens"].includes(finishReason)
+          ) {
+            throw new Error("Model output was truncated before the selection edit completed");
+          }
 
           return { success: true, text: (generated || "").trim() };
         } catch (err) {
@@ -3665,6 +3691,9 @@ class IPCHandlers {
           }
 
           const data = await response.json();
+          if (config?.requireCompleteOutput && data.stop_reason === "max_tokens") {
+            throw new Error("Model output was truncated before the selection edit completed");
+          }
           return { success: true, text: data.content[0].text.trim() };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);

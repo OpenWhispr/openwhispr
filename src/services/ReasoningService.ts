@@ -300,6 +300,9 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const choice = response.choices[0];
+    if (config.requireCompleteOutput && ["length", "max_tokens"].includes(choice?.finish_reason)) {
+      throw new Error("Model output was truncated before the selection edit completed");
+    }
     // Reasoning models leak <think> blocks into non-streamed output; strip them
     // unless the user explicitly enabled thinking (same default as streaming).
     const rawContent = choice.message?.content?.trim() || "";

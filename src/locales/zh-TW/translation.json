@@ -223,7 +223,7 @@
       "title": "語音助手設定",
       "description": "一鍵喚起你的 AI 助手",
       "hotkey": "快捷鍵",
-      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。{{agentName}} 會把結果輸入到游標所在的位置。無需先說「Hey {{agentName}}」。",
+      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代所選內容；否則會把結果輸入到游標所在的位置。無需先說「Hey {{agentName}}」。",
       "test": "試試看",
       "testInstruction": "點擊下方，按下 {{hotkey}} 並說出指令",
       "testSetHotkey": "在上方設定快捷鍵即可試用",
@@ -589,6 +589,15 @@
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
         "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
         "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。"
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "未套用選取文字編輯",
+        "changed": "處理期間，選取的文字或目標應用程式已變更。未取代任何內容。",
+        "expired": "選取文字編輯已逾時。請重新選取文字後再試。",
+        "pasteFailed": "OpenWhispr 已產生編輯結果，但無法取代選取的文字。",
+        "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
+        "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
+        "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
       }
     },
     "clipboard": {
@@ -1296,7 +1305,7 @@
       },
       "examplesTitle": "範例",
       "helper": "選個簡短、自然、好說的名字",
-      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，AI 會執行你的命令——撰寫內容、格式化文字或回答問題——而不是逐字轉寫。",
+      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，AI 會執行你的命令。如果有選取的文字，該文字會傳送到你設定的語音代理模型，並安全地取代為結果。",
       "howItWorksTitle": "運作方式",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1304,7 +1313,7 @@
       "title": "語音助理",
       "examples": {
         "formalEmail": "Hey {{agentName}}，撰寫一封關於預算的正式郵件",
-        "professional": "Hey {{agentName}}，讓這個更專業",
+        "professional": "先選取文字，再說：Hey {{agentName}}，讓這個更專業",
         "bulletPoints": "Hey {{agentName}}，將這個轉換成要點列表"
       }
     },
@@ -1451,7 +1460,7 @@
       },
       "voiceAgentHotkey": {
         "title": "語音助手快捷鍵",
-        "description": "說出你的需求，AI 助手會輸入結果，而不是你說的原話"
+        "description": "說出你的需求——選取的文字會就地編輯，否則代理會把結果輸入到游標位置"
       },
       "translationHotkey": {
         "title": "翻譯快捷鍵",
@@ -2588,7 +2597,7 @@
   },
   "dictationAgent": {
     "enabled": "啟用語音代理",
-    "enabledDescription": "向你的代理口述指令。說出 \"{{agentName}}\" 即可啟用。可於下方設定。",
+    "enabledDescription": "向你的代理口述指令。選取的文字會傳送到所設定的模型並就地編輯。說出 \"{{agentName}}\" 即可啟用。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "使用 OpenWhispr 託管的代理，無需 API Key。",

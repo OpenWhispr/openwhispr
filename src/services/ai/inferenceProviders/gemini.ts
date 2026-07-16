@@ -115,6 +115,9 @@ export const geminiProvider: InferenceProvider = {
     }, createApiRetryStrategy());
 
     const candidate = response.candidates?.[0];
+    if (config.requireCompleteOutput && candidate?.finishReason === "MAX_TOKENS") {
+      throw new Error("Model output was truncated before the selection edit completed");
+    }
     if (!candidate?.content?.parts?.[0]?.text) {
       logger.logReasoning("GEMINI_EMPTY_RESPONSE", {
         model,

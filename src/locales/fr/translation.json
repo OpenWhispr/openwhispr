@@ -223,7 +223,7 @@
       "title": "Configuration de l'agent vocal",
       "description": "Parlez à votre agent IA d'une simple touche",
       "hotkey": "Raccourci",
-      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». {{agentName}} écrit le résultat là où se trouve votre curseur. Pas besoin de dire « Hey {{agentName}} » d'abord.",
+      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} modifie et remplace cette sélection ; sinon, il écrit le résultat là où se trouve votre curseur. Pas besoin de dire « Hey {{agentName}} » d'abord.",
       "test": "Essayer",
       "testInstruction": "Cliquez ci-dessous, appuyez sur {{hotkey}} et dites une commande",
       "testSetHotkey": "Définissez un raccourci ci-dessus pour l'essayer",
@@ -589,6 +589,15 @@
         "offline": "Vous êtes hors ligne. La transcription cloud nécessite une connexion Internet.",
         "dailyLimitReached": "Vous avez atteint votre limite de transcription du jour. Réessayez demain ou améliorez votre forfait.",
         "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez."
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "Modification de la sélection non appliquée",
+        "changed": "Le texte sélectionné ou l’application cible a changé pendant le traitement. Rien n’a été remplacé.",
+        "expired": "La modification a expiré. Sélectionnez de nouveau le texte et réessayez.",
+        "pasteFailed": "OpenWhispr a généré la modification, mais n’a pas pu remplacer le texte sélectionné.",
+        "unavailable": "OpenWhispr n’a pas pu lire la sélection en toute sécurité. Vérifiez les autorisations d’accessibilité ou d’automatisation.",
+        "tooLarge": "La sélection est trop grande. Sélectionnez au maximum 6 000 caractères.",
+        "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié."
       }
     },
     "clipboard": {
@@ -1344,7 +1353,7 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, l'IA exécute votre commande — rédiger du contenu, formater du texte ou répondre à des questions — au lieu de la transcrire littéralement.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, l'IA exécute votre commande. Si du texte est surligné, ce texte est envoyé au modèle d'agent vocal configuré et remplacé en toute sécurité par le résultat.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
@@ -1352,7 +1361,7 @@
       "title": "Agent vocal",
       "examples": {
         "formalEmail": "Hey {{agentName}}, rédige un e-mail formel sur le budget",
-        "professional": "Hey {{agentName}}, rends ça plus professionnel",
+        "professional": "Sélectionnez du texte, puis dites : Hey {{agentName}}, rends ça plus professionnel",
         "bulletPoints": "Hey {{agentName}}, convertis ça en liste à puces"
       }
     },
@@ -1499,7 +1508,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'agent vocal",
-        "description": "Dites ce que vous voulez — votre agent IA écrit le résultat, pas vos mots"
+        "description": "Dites ce que vous voulez — le texte surligné est modifié sur place ; sinon, votre agent écrit là où se trouve le curseur"
       },
       "translationHotkey": {
         "title": "Raccourci de Traduction",
@@ -2636,7 +2645,7 @@
   },
   "dictationAgent": {
     "enabled": "Activer l'agent vocal",
-    "enabledDescription": "Dictez des instructions à votre agent. Activez-le en disant « \"{{agentName}}\" ». Configurable ci-dessous.",
+    "enabledDescription": "Dictez des instructions à votre agent. Le texte surligné est envoyé au modèle configuré et modifié sur place. Activez-le en disant « \"{{agentName}}\" ».",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Utilisez l'agent géré par OpenWhispr, sans clé API.",

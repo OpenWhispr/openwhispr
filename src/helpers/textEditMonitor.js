@@ -50,6 +50,23 @@ const MACOS_AX_PRECEDING_CHAR_SCRIPT = (pid) =>
   `\treturn "OK:" & (character loc of theVal)\n` +
   `end tell`;
 
+// Read the exact current selection without touching the clipboard. Prefixes
+// distinguish an empty selection from an inaccessible target so selection
+// editing can fail closed when Accessibility cannot inspect the focused field.
+const MACOS_AX_SELECTED_TEXT_SCRIPT = (pid) =>
+  `tell application "System Events"\n` +
+  `\ttry\n` +
+  `\t\tset targetProc to first application process whose unix id is ${pid}\n` +
+  `\t\tset focAttr to value of attribute "AXFocusedUIElement" of targetProc\n` +
+  `\t\tif focAttr is missing value then return "UNAVAILABLE:"\n` +
+  `\t\tset selectedValue to value of attribute "AXSelectedText" of focAttr\n` +
+  `\t\tif selectedValue is missing value or selectedValue is "" then return "NONE:"\n` +
+  `\t\treturn "SELECTED:" & selectedValue\n` +
+  `\ton error\n` +
+  `\t\treturn "UNAVAILABLE:"\n` +
+  `\tend try\n` +
+  `end tell`;
+
 // AppleScript to read the focused text field value from a specific app by PID.
 // Using PID avoids the problem where the Electron overlay is "frontmost".
 // Tries AXValue first, then falls back to AXStringForRange for apps that
@@ -92,6 +109,7 @@ class TextEditMonitor extends EventEmitter {
    */
   captureTargetPid() {
     if (process.platform !== "darwin") return;
+    this.lastTargetPid = null;
     this._readFrontmostPid().then((pid) => {
       this.lastTargetPid = pid;
       debugLogger.debug("[TextEditMonitor] Captured target PID", { pid });
@@ -151,7 +169,11 @@ class TextEditMonitor extends EventEmitter {
    */
   async activateTargetPid() {
     if (process.platform !== "darwin" || !this.lastTargetPid) return false;
-    const pid = this.lastTargetPid;
+    return this.activatePid(this.lastTargetPid);
+  }
+
+  async activatePid(pid) {
+    if (process.platform !== "darwin" || !pid) return false;
     if ((await this._readFrontmostPid()) === pid) return true;
 
     await this._activateApp(pid);
@@ -164,6 +186,36 @@ class TextEditMonitor extends EventEmitter {
     }
     debugLogger.debug("[TextEditMonitor] Target did not become frontmost", { pid });
     return false;
+  }
+
+  getSelectedText(pid, timeoutMs = 1200) {
+    return new Promise((resolve) => {
+      if (process.platform !== "darwin" || !pid) {
+        resolve({ state: "unavailable" });
+        return;
+      }
+
+      execFile(
+        "osascript",
+        ["-e", MACOS_AX_SELECTED_TEXT_SCRIPT(pid)],
+        { timeout: timeoutMs },
+        (err, stdout) => {
+          if (err) {
+            resolve({ state: "unavailable" });
+            return;
+          }
+
+          const output = stdout.replace(/\n$/, "");
+          if (output === "NONE:") {
+            resolve({ state: "none" });
+          } else if (output.startsWith("SELECTED:")) {
+            resolve({ state: "selected", text: output.slice("SELECTED:".length) });
+          } else {
+            resolve({ state: "unavailable" });
+          }
+        }
+      );
+    });
   }
 
   /**
