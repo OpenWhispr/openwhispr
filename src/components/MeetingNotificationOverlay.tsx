@@ -8,6 +8,7 @@ interface NotificationData {
   title: string;
   body: string;
   event: any;
+  joinUrl?: string | null;
 }
 
 export default function MeetingNotificationOverlay() {
@@ -66,7 +67,7 @@ export default function MeetingNotificationOverlay() {
       <MeetingNotificationCard
         title={data?.title ?? "Meeting Detected"}
         body={data?.body ?? "Want to take notes?"}
-        startLabel="Start Recording"
+        startLabel={data?.joinUrl ? "Join & Start Recording" : "Start Recording"}
         onStart={() => respond("start")}
         onDismiss={() => respond("dismiss")}
         closeVisible={isHovered}

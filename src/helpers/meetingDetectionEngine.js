@@ -3,6 +3,29 @@ const debugLogger = require("./debugLogger");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 
+// Extract a joinable meeting URL from a calendar event: Google Meet's
+// hangout_link, otherwise a video (or any) entry point inside conference_data.
+// Returns null for events without a link (synthetic detections, manual meetings).
+function getMeetingJoinUrl(event) {
+  if (!event) return null;
+  if (event.hangout_link) return event.hangout_link;
+  if (event.conference_data) {
+    try {
+      const cd =
+        typeof event.conference_data === "string"
+          ? JSON.parse(event.conference_data)
+          : event.conference_data;
+      const entries = Array.isArray(cd?.entryPoints) ? cd.entryPoints : [];
+      const video = entries.find((e) => e?.entryPointType === "video" && e?.uri);
+      const any = entries.find((e) => e?.uri);
+      return (video || any)?.uri || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 // Google Calendar omits the attendees array entirely for guest-less events, so
 // a solo personal/focus block has no attendees. A real meeting has at least one
 // attendee who isn't you (the attendee list, when present, includes yourself).
@@ -168,6 +191,7 @@ class MeetingDetectionEngine {
         title,
         body,
         event,
+        joinUrl: getMeetingJoinUrl(event),
       });
     } else {
       debugLogger.info("Meeting notification suppressed by user preference", {}, "meeting");
@@ -233,6 +257,7 @@ class MeetingDetectionEngine {
         title,
         body,
         event,
+        joinUrl: getMeetingJoinUrl(event),
       });
     } else {
       debugLogger.info("Calendar reminder suppressed by user preference", {}, "meeting");
@@ -280,6 +305,14 @@ class MeetingDetectionEngine {
           if (updateResult?.success && updateResult?.note) {
             this.broadcastToWindows("note-updated", updateResult.note);
           }
+        }
+
+        // If the event carries a meeting link, join it (the CTA was labeled
+        // "Join & Start Recording").
+        const joinUrl = getMeetingJoinUrl(detection.event);
+        if (joinUrl) {
+          debugLogger.info("Opening meeting join link", { detectionId }, "meeting");
+          this.windowManager.openExternalUrl?.(joinUrl);
         }
 
         await this.windowManager.queueMeetingNoteNavigation({
