@@ -1427,7 +1427,10 @@
       },
       "meetingHotkey": {
         "title": "Горячая клавиша режима встречи",
-        "description": "Запустить режим встречи и закрепить панель сбоку экрана"
+        "description": "Запустить режим встречи и закрепить панель сбоку экрана",
+        "layoutLabel": "Open meeting mode in:",
+        "layoutSidePanel": "Боковая панель",
+        "layoutFullWidth": "Полная ширина"
       },
       "voiceAgentHotkey": {
         "title": "Горячая клавиша голосового агента",

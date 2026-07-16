@@ -1600,7 +1600,10 @@
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",
-        "description": "Start meeting mode and snap the panel to the side of the screen"
+        "description": "Start meeting mode and snap the panel to the side of the screen",
+        "layoutLabel": "Open meeting mode in:",
+        "layoutSidePanel": "Side panel",
+        "layoutFullWidth": "Full width"
       },
       "voiceAgentHotkey": {
         "title": "Voice Agent Hotkey",

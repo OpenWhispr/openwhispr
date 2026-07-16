@@ -1427,7 +1427,10 @@
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
-        "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo"
+        "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo",
+        "layoutLabel": "Open meeting mode in:",
+        "layoutSidePanel": "Pannello laterale",
+        "layoutFullWidth": "Larghezza completa"
       },
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'agente vocale",

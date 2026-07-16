@@ -1427,7 +1427,10 @@
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
-        "description": "ミーティングモードを開始し、パネルを画面の横に配置する"
+        "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
+        "layoutLabel": "Open meeting mode in:",
+        "layoutSidePanel": "サイドパネル",
+        "layoutFullWidth": "全幅"
       },
       "voiceAgentHotkey": {
         "title": "ボイスエージェントホットキー",

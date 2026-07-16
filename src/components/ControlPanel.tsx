@@ -326,10 +326,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         event: data.event,
       });
       initializeNotes(null, 50, data.folderId);
-      // Meeting mode always uses the side-panel layout, for every entry point
-      // (hotkey, the "Start Recording" notification CTA, and clicking an upcoming
-      // meeting).
-      window.electronAPI?.snapToMeetingMode?.();
+      // Snap to the side-panel layout for every meeting-mode entry point (hotkey,
+      // the "Start Recording" notification CTA, and clicking an upcoming meeting)
+      // when the user's layout preference is side-panel (Settings → Appearance).
+      if (useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel") {
+        window.electronAPI?.snapToMeetingMode?.();
+      }
     };
     drain();
     const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(drain);

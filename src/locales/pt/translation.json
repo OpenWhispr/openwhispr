@@ -1406,7 +1406,10 @@
       },
       "meetingHotkey": {
         "title": "Atalho modo reunião",
-        "description": "Iniciar modo reunião e posicionar o painel ao lado da tela"
+        "description": "Iniciar modo reunião e posicionar o painel ao lado da tela",
+        "layoutLabel": "Open meeting mode in:",
+        "layoutSidePanel": "Painel lateral",
+        "layoutFullWidth": "Largura total"
       },
       "voiceAgentHotkey": {
         "title": "Atalho do agente de voz",

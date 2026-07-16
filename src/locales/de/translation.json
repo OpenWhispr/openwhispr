@@ -1427,7 +1427,10 @@
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
-        "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben"
+        "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
+        "layoutLabel": "Open meeting mode in:",
+        "layoutSidePanel": "Seitenleiste",
+        "layoutFullWidth": "Volle Breite"
       },
       "voiceAgentHotkey": {
         "title": "Sprachagent-Hotkey",

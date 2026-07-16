@@ -1422,7 +1422,10 @@
       },
       "meetingHotkey": {
         "title": "會議模式快捷鍵",
-        "description": "啟動會議模式並將面板固定到螢幕側邊"
+        "description": "啟動會議模式並將面板固定到螢幕側邊",
+        "layoutLabel": "Open meeting mode in:",
+        "layoutSidePanel": "側邊欄",
+        "layoutFullWidth": "全寬"
       },
       "voiceAgentHotkey": {
         "title": "語音助手快捷鍵",
