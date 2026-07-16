@@ -544,6 +544,12 @@
         "title": "Modo de fallback",
         "description": "O Whisper local falhou. A API da OpenAI foi usada no lugar."
       },
+      "translationFallback": {
+        "unreachableTitle": "Tradução indisponível",
+        "unreachableDescription": "Seu ditado foi colado sem tradução. Verifique as configurações de tradução.",
+        "failedTitle": "Falha na tradução",
+        "failedDescription": "O texto original foi colado. Você pode tentar novamente pelo Histórico."
+      },
       "noAudio": {
         "title": "Nenhum áudio detectado",
         "description": "A gravação não contém áudio detectável. Tente novamente."

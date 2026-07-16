@@ -565,6 +565,12 @@
         "title": "Fallback Mode",
         "description": "Local Whisper failed. Used OpenAI API instead."
       },
+      "translationFallback": {
+        "unreachableTitle": "Translation unavailable",
+        "unreachableDescription": "Your dictation was pasted untranslated. Check the translation settings.",
+        "failedTitle": "Translation failed",
+        "failedDescription": "The original text was pasted. You can retry it from History."
+      },
       "noAudio": {
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."

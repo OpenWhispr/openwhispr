@@ -375,12 +375,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     onTranscriptionComplete,
     onPartialTranscript,
     onStreamingCommit,
+    onTranslationFallback,
   }) {
     this.onStateChange = onStateChange;
     this.onError = onError;
     this.onTranscriptionComplete = onTranscriptionComplete;
     this.onPartialTranscript = onPartialTranscript;
     this.onStreamingCommit = onStreamingCommit;
+    this.onTranslationFallback = onTranslationFallback;
+  }
+
+  // Fail-open: translation degraded/failed but raw text is still pasted. Surface why.
+  notifyTranslationFallback(reason) {
+    this.onTranslationFallback?.({ reason });
   }
 
   setSkipReasoning(skip) {
@@ -1389,30 +1396,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const runTranslate = async (currentText) =>
       this.processWithReasoningModel(currentText, route.model, agentName, route.config);
 
-    return executeTranslationChain({
-      text,
-      cleanupReachable: route.cleanupReachable,
-      cleanupIsCloud: cleanup.mode === "cloudReason",
-      runCleanup,
-      runTranslate,
-      shouldTranslate: shouldRunTranslateStep(
-        settings.translationSourceLanguage,
-        settings.translationTargetLanguage
-      ),
-      translateIsCloud: route.config?.provider === "openwhispr",
-      onCleanupError: (cleanupError) => {
-        const { level = "error", channel, extra } = cleanup.log || {};
-        logger[level](
-          "Cleanup step failed in translation chain, translating raw transcript",
-          { ...(extra || {}), error: cleanupError.message },
-          channel
-        );
-      },
-      onEmptyTranslate: () => {
-        const { channel } = cleanup.log || {};
-        logger.warn("Translation step returned empty text, keeping previous text", {}, channel);
-      },
-    });
+    try {
+      return await executeTranslationChain({
+        text,
+        cleanupReachable: route.cleanupReachable,
+        cleanupIsCloud: cleanup.mode === "cloudReason",
+        runCleanup,
+        runTranslate,
+        shouldTranslate: shouldRunTranslateStep(
+          settings.translationSourceLanguage,
+          settings.translationTargetLanguage
+        ),
+        translateIsCloud: route.config?.provider === "openwhispr",
+        onCleanupError: (cleanupError) => {
+          const { level = "error", channel, extra } = cleanup.log || {};
+          logger[level](
+            "Cleanup step failed in translation chain, translating raw transcript",
+            { ...(extra || {}), error: cleanupError.message },
+            channel
+          );
+        },
+        onEmptyTranslate: () => {
+          const { channel } = cleanup.log || {};
+          logger.warn("Translation step returned empty text, keeping previous text", {}, channel);
+          this.notifyTranslationFallback("failed");
+        },
+      });
+    } catch (translateError) {
+      // Translate step threw: raw text is still pasted by the caller. Surface the failure.
+      this.notifyTranslationFallback("failed");
+      throw translateError;
+    }
   }
 
   async processTranscription(text, source) {
@@ -1480,6 +1494,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this.voiceAgentRequested,
           this.translationRequested
         );
+        if (this.translationRequested && route.kind !== "translation") {
+          this.notifyTranslationFallback("unreachable");
+        }
         if (route.kind === "skip") return normalizedText;
 
         if (route.kind === "translation") {
@@ -1761,6 +1778,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.voiceAgentRequested,
         this.translationRequested
       );
+      if (this.translationRequested && route.kind !== "translation") {
+        this.notifyTranslationFallback("unreachable");
+      }
       const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
 
       try {
@@ -3270,6 +3290,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.voiceAgentRequested,
         this.translationRequested
       );
+      if (this.translationRequested && route.kind !== "translation") {
+        this.notifyTranslationFallback("unreachable");
+      }
       const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
 
       try {

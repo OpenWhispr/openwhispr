@@ -565,6 +565,12 @@
         "title": "Modo de respaldo",
         "description": "Whisper local falló. Se usó la API de OpenAI."
       },
+      "translationFallback": {
+        "unreachableTitle": "Traducción no disponible",
+        "unreachableDescription": "Tu dictado se pegó sin traducir. Revisa los ajustes de traducción.",
+        "failedTitle": "La traducción falló",
+        "failedDescription": "Se pegó el texto original. Puedes reintentarlo desde el Historial."
+      },
       "noAudio": {
         "title": "No se detectó audio",
         "description": "La grabación no contiene audio detectable. Inténtalo de nuevo."

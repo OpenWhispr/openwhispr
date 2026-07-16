@@ -565,6 +565,12 @@
         "title": "Mode de secours",
         "description": "Whisper local a échoué. L'API OpenAI a pris le relais."
       },
+      "translationFallback": {
+        "unreachableTitle": "Traduction indisponible",
+        "unreachableDescription": "Votre dictée a été collée sans traduction. Vérifiez les paramètres de traduction.",
+        "failedTitle": "Échec de la traduction",
+        "failedDescription": "Le texte original a été collé. Vous pouvez réessayer depuis l'Historique."
+      },
       "noAudio": {
         "title": "Aucun audio détecté",
         "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."
