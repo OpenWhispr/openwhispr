@@ -1,7 +1,52 @@
-const { spawnSync } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
+
+// Runs `cmd args` asynchronously and resolves with { status, stdout, stderr }.
+// Times out after `timeout` ms; on timeout, kills the child and resolves with
+// status: null. Never rejects — callers branch on status === 0.
+function spawnAsync(cmd, args, { timeout = 3000 } = {}) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    } catch (err) {
+      resolve({ status: null, stdout: "", stderr: String(err?.message || err) });
+      return;
+    }
+
+    const chunks = { stdout: [], stderr: [] };
+    let settled = false;
+    const settle = (status) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        status,
+        stdout: Buffer.concat(chunks.stdout).toString("utf8"),
+        stderr: Buffer.concat(chunks.stderr).toString("utf8"),
+      });
+    };
+
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // ignored
+      }
+      settle(null);
+    }, timeout);
+
+    child.stdout.on("data", (d) => chunks.stdout.push(d));
+    child.stderr.on("data", (d) => chunks.stderr.push(d));
+    child.on("error", (err) => {
+      chunks.stderr.push(Buffer.from(String(err?.message || err)));
+      settle(null);
+    });
+    child.on("close", (code) => settle(code));
+  });
+}
 
 class MediaPlayer {
   constructor() {
@@ -14,6 +59,9 @@ class MediaPlayer {
     this._pausedPlayers = []; // MPRIS players we paused (Linux)
     this._didPause = false; // Whether we sent a pause via toggle fallback
     this._pausedWinApps = []; // GSMTC app IDs we paused (Windows)
+    this._adapterChecked = false;
+    this._adapterPaths = null; // { perl, script, framework } once resolved
+    this._pausedViaAdapter = false; // macOS: whether we paused via the adapter
   }
 
   _resolveLinuxFastPaste() {
@@ -92,12 +140,56 @@ class MediaPlayer {
     return null;
   }
 
-  pauseMedia() {
+  // Resolves the vendored mediaremote-adapter Perl entry point and framework.
+  // MediaRemote.framework was closed to unprivileged Mach-O processes on
+  // macOS 15.4+; the only working state-aware path is to load our adapter
+  // framework via /usr/bin/perl, which is system-entitled to talk to it.
+  _resolveMediaRemoteAdapter() {
+    if (this._adapterChecked) return this._adapterPaths;
+    this._adapterChecked = true;
+
+    const perl = "/usr/bin/perl";
+    if (!fs.existsSync(perl)) return null;
+
+    const scriptCandidates = [];
+    const frameworkCandidates = [];
+
+    if (process.resourcesPath) {
+      scriptCandidates.push(path.join(process.resourcesPath, "bin", "mediaremote-adapter.pl"));
+      frameworkCandidates.push(
+        path.join(process.resourcesPath, "bin", "MediaRemoteAdapter.framework")
+      );
+    }
+
+    scriptCandidates.push(
+      path.join(
+        __dirname,
+        "..",
+        "..",
+        "resources",
+        "mediaremote-adapter",
+        "bin",
+        "mediaremote-adapter.pl"
+      )
+    );
+    frameworkCandidates.push(
+      path.join(__dirname, "..", "..", "resources", "bin", "MediaRemoteAdapter.framework")
+    );
+
+    const script = scriptCandidates.find((p) => fs.existsSync(p));
+    const framework = frameworkCandidates.find((p) => fs.existsSync(p));
+    if (!script || !framework) return null;
+
+    this._adapterPaths = { perl, script, framework };
+    return this._adapterPaths;
+  }
+
+  async pauseMedia() {
     try {
       if (process.platform === "linux") {
         return this._pauseLinux();
       } else if (process.platform === "darwin") {
-        return this._pauseMacOS();
+        return await this._pauseMacOS();
       } else if (process.platform === "win32") {
         return this._pauseWindows();
       }
@@ -107,12 +199,12 @@ class MediaPlayer {
     return false;
   }
 
-  resumeMedia() {
+  async resumeMedia() {
     try {
       if (process.platform === "linux") {
         return this._resumeLinux();
       } else if (process.platform === "darwin") {
-        return this._resumeMacOS();
+        return await this._resumeMacOS();
       } else if (process.platform === "win32") {
         return this._resumeWindows();
       }
@@ -122,12 +214,12 @@ class MediaPlayer {
     return false;
   }
 
-  toggleMedia() {
+  async toggleMedia() {
     try {
       if (process.platform === "linux") {
         return this._toggleLinux();
       } else if (process.platform === "darwin") {
-        return this._toggleMacOS();
+        return await this._toggleMacOS();
       } else if (process.platform === "win32") {
         return this._toggleWindows();
       }
@@ -332,87 +424,134 @@ class MediaPlayer {
     return toggled;
   }
 
-  // --- macOS: MediaRemote-aware pause/resume ---
+  // --- macOS: MediaRemote-aware pause/resume (async) ---
 
-  _pauseMacOS() {
+  async _runAdapter(args, timeout = 3000) {
+    const paths = this._resolveMediaRemoteAdapter();
+    if (!paths) return null;
+    return spawnAsync(paths.perl, [paths.script, paths.framework, ...args], {
+      timeout,
+    });
+  }
+
+  async _pauseMacOS() {
     this._didPause = false;
+    this._pausedViaAdapter = false;
 
-    // Try MediaRemote binary first (state-aware, no toggle)
-    const binary = this._resolveMacMediaRemote();
-    if (binary) {
-      const result = spawnSync(binary, ["--pause"], {
-        stdio: "pipe",
-        timeout: 3000,
-      });
-      if (result.status === 0) {
-        debugLogger.debug("Media paused via MediaRemote", {}, "media");
-        this._didPause = true;
-        return true;
+    // Primary path: vendored mediaremote-adapter via /usr/bin/perl. Works on
+    // macOS 15.4+ where the framework is closed to user processes.
+    const probe = await this._runAdapter(["get", "--no-artwork"]);
+    if (probe && probe.status === 0) {
+      const output = (probe.stdout || "").trim();
+      let playing = null;
+      if (output && output !== "null") {
+        try {
+          playing = !!JSON.parse(output).playing;
+        } catch {
+          playing = null;
+        }
+      } else if (output === "null") {
+        playing = false;
       }
-      // exit 1 = nothing was playing, don't fallback to toggle
-      const output = (result.stdout?.toString() || "").trim();
-      if (output === "NOT_PLAYING") return false;
+
+      if (playing === false) {
+        debugLogger.debug("Adapter reports no media playing", {}, "media");
+        return false;
+      }
+
+      if (playing === true) {
+        // 1 = kMRAPause
+        const pause = await this._runAdapter(["send", "1"]);
+        if (pause && pause.status === 0) {
+          debugLogger.debug("Media paused via adapter", {}, "media");
+          this._pausedViaAdapter = true;
+          this._didPause = true;
+          return true;
+        }
+        debugLogger.debug(
+          "Adapter send pause failed",
+          {
+            status: pause?.status,
+            stderr: (pause?.stderr || "").trim().slice(0, 200),
+          },
+          "media"
+        );
+      }
+    } else if (probe) {
+      debugLogger.debug(
+        "Adapter get failed, falling back to media key",
+        {
+          status: probe.status,
+          stderr: (probe.stderr || "").trim().slice(0, 200),
+        },
+        "media"
+      );
     }
 
-    // Fallback to media key toggle
-    debugLogger.debug("MediaRemote unavailable, falling back to osascript", {}, "media");
-    if (this._sendMacMediaKey()) {
+    // Fallback: post a real media-key CGEvent. We don't know whether anything
+    // is playing, so this can spuriously start playback — same toggle risk
+    // the binary-based path had pre-adapter.
+    if (await this._sendMacMediaKey()) {
       this._didPause = true;
       return true;
     }
     return false;
   }
 
-  _resumeMacOS() {
+  async _resumeMacOS() {
     if (!this._didPause) return false;
+    const usedAdapter = this._pausedViaAdapter;
     this._didPause = false;
+    this._pausedViaAdapter = false;
 
-    const binary = this._resolveMacMediaRemote();
-    if (binary) {
-      const result = spawnSync(binary, ["--play"], {
-        stdio: "pipe",
-        timeout: 3000,
-      });
-      if (result.status === 0) {
-        debugLogger.debug("Media resumed via MediaRemote", {}, "media");
+    if (usedAdapter) {
+      // 0 = kMRAPlay
+      const play = await this._runAdapter(["send", "0"]);
+      if (play && play.status === 0) {
+        debugLogger.debug("Media resumed via adapter", {}, "media");
         return true;
       }
+      debugLogger.debug(
+        "Adapter send play failed, falling back to media key",
+        {
+          status: play?.status,
+          stderr: (play?.stderr || "").trim().slice(0, 200),
+        },
+        "media"
+      );
     }
 
-    // Fallback to media key toggle
     return this._sendMacMediaKey();
   }
 
-  _sendMacMediaKey() {
-    const result = spawnSync(
-      "osascript",
-      ["-e", 'tell application "System Events" to key code 100'],
-      {
-        stdio: "pipe",
-        timeout: 3000,
-      }
-    );
+  // Posts a real NX_KEYTYPE_PLAY system-defined NSEvent via the bundled
+  // helper. Media apps only respond to that event class — synthetic F-key
+  // codes (osascript "key code") are not media keys and land in the focused
+  // app as plain keystrokes instead.
+  async _sendMacMediaKey() {
+    const binary = this._resolveMacMediaRemote();
+    if (!binary) return false;
+
+    const result = await spawnAsync(binary, ["--media-key-toggle"], {
+      timeout: 3000,
+    });
     if (result.status === 0) {
-      debugLogger.debug("Media key sent via osascript", {}, "media");
+      debugLogger.debug("Media key sent via CGEvent helper", {}, "media");
       return true;
     }
+    debugLogger.debug(
+      "CGEvent media-key helper failed",
+      {
+        status: result.status,
+        stderr: (result.stderr || "").trim().slice(0, 200),
+      },
+      "media"
+    );
     return false;
   }
 
-  _toggleMacOS() {
-    const result = spawnSync(
-      "osascript",
-      ["-e", 'tell application "System Events" to key code 100'],
-      {
-        stdio: "pipe",
-        timeout: 3000,
-      }
-    );
-    if (result.status === 0) {
-      debugLogger.debug("Media toggled via osascript", {}, "media");
-      return true;
-    }
-    return false;
+  async _toggleMacOS() {
+    return this._sendMacMediaKey();
   }
 
   // --- Windows: GSMTC-aware pause/resume ---

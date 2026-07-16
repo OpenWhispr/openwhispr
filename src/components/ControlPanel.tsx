@@ -99,9 +99,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number;
     event: any;
   } | null>(null);
-  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{ cuda: boolean; vulkan: boolean }>({
-    cuda: false,
-    vulkan: false,
+  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{
+    transcription: boolean;
+    intelligence: boolean;
+  }>({
+    transcription: false,
+    intelligence: false,
   });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
@@ -292,11 +295,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   useEffect(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
     const detect = async () => {
-      const results = { cuda: false, vulkan: false };
+      const results = { transcription: false, intelligence: false };
       if (useLocalWhisper && localTranscriptionProvider === "whisper") {
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu && !status.downloaded) results.cuda = true;
+          if (status?.gpuInfo.hasNvidiaGpu) {
+            if (!status.downloaded) results.transcription = true;
+          } else {
+            const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
+            if (vulkan?.vulkan.available && !vulkan.downloaded) results.transcription = true;
+          }
         } catch {}
       }
       if (useCleanupModel) {
@@ -305,7 +313,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             window.electronAPI?.detectVulkanGpu?.(),
             window.electronAPI?.getLlamaVulkanStatus?.(),
           ]);
-          if (gpu?.available && !vulkan?.downloaded) results.vulkan = true;
+          if (gpu?.available && !vulkan?.downloaded) results.intelligence = true;
         } catch {}
       }
       setGpuAccelAvailable(results);
@@ -375,10 +383,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [toast, t]);
 
   useEffect(() => {
-    syncService.syncAll().catch(console.error);
-  }, []);
-
-  useEffect(() => {
     fetchStreamingProviders();
   }, []);
 
@@ -422,7 +426,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             const result = await window.electronAPI.deleteTranscription(id);
             if (result.success) {
               removeFromStore(id);
-              syncService.syncAll().catch(console.error);
+              syncService.requestSyncAll("manual");
             } else {
               showAlertDialog({
                 title: t("controlPanel.history.couldNotDeleteTitle"),
@@ -451,7 +455,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
-            syncService.syncAll().catch(console.error);
+            syncService.requestSyncAll("manual");
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
               variant: "success",
@@ -511,6 +515,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           transcriptionMode: s.transcriptionMode,
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
+          remoteTranscriptionModel: s.remoteTranscriptionModel,
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;
@@ -840,7 +845,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 </div>
               </div>
             )}
-            {(gpuAccelAvailable.cuda || gpuAccelAvailable.vulkan) &&
+            {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
               activeView === "home" &&
               !gpuBannerDismissed && (
                 <div className="max-w-3xl mx-auto w-full mb-3">
@@ -863,7 +868,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                             className="h-7 text-xs"
                             onClick={() => {
                               setSettingsSection(
-                                gpuAccelAvailable.cuda ? "transcription" : "intelligence"
+                                gpuAccelAvailable.transcription ? "transcription" : "intelligence"
                               );
                               setShowSettings(true);
                             }}

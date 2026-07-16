@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
       "registrationFailed": "Não foi possível registrar \"{{hotkey}}\". Pode estar em uso por outro aplicativo.",
+      "updateFailedCheckFormat": "Não foi possível atualizar o atalho para \"{{hotkey}}\". Verifique se o formato é válido.",
       "trySuggestions": "Tente: {{suggestions}}",
       "slotConflict": "Este atalho já está sendo usado para {{slot}}."
     }
@@ -105,6 +106,7 @@
     "pttUnavailable": "O listener nativo de Push-to-Talk não está disponível"
   },
   "common": {
+    "retry": "Tentar novamente",
     "back": "Voltar",
     "next": "Avançar",
     "complete": "Concluir",
@@ -254,11 +256,6 @@
       "title": "Notas de reunião",
       "description": "Capture e resuma suas reuniões",
       "autoDetect": "O OpenWhispr detecta automaticamente quando você está em uma reunião e oferece iniciar notas — nada é gravado sem você.",
-      "notification": {
-        "title": "Reunião detectada",
-        "body": "Parece que você está em uma reunião. Quer fazer anotações?",
-        "cta": "Começar a gravar"
-      },
       "hotkeyLabel": "Atalho de reunião",
       "hotkeyHint": "Opcional — pressione-o em qualquer reunião para iniciar uma nota na hora."
     },
@@ -275,6 +272,7 @@
         "createAccount": "Crie sua conta Corti",
         "creditBadge": "US$ 50 de crédito grátis",
         "regionHint": "Escolha onde seu áudio é processado — EUA ou UE.",
+        "llmHint": "Os recursos de modelo de linguagem também serão executados nos modelos da Corti.",
         "useCorti": "Usar Corti",
         "skip": "Agora não",
         "step1": "Cadastre-se em corti.ai",
@@ -428,7 +426,13 @@
       "noModels": "Nenhum modelo retornado. Verifique a URL do endpoint.",
       "providerName": "Personalizado",
       "ownerLabel": "Proprietário: {{owner}}",
-      "unableToLoadModels": "Não foi possível carregar modelos do endpoint."
+      "unableToLoadModels": "Não foi possível carregar modelos do endpoint.",
+      "searchPlaceholder": "Pesquisar modelos…",
+      "selectedGroup": "Selecionado",
+      "otherGroup": "Outros",
+      "noSearchResults": "Nenhum modelo corresponde a \"{{query}}\"",
+      "selectModelHint": "Nenhum modelo selecionado ainda — escolha um na lista abaixo.",
+      "keyRequiredHint": "Uma chave API é necessária para a inferência — adicione uma para usar este provedor."
     },
     "getApiKey": "Obter chave API ->",
     "selectModel": "Selecionar modelo",
@@ -465,6 +469,10 @@
       "customModelId": "ID de modelo personalizado",
       "customModelPlaceholder": "Informe um ID de modelo ou nome de deployment",
       "suggestedModels": "Modelos sugeridos",
+      "browseModels": "Explorar todos os modelos",
+      "loadingModels": "Buscando modelos...",
+      "allModels": "Todos os modelos em {{region}}",
+      "modelListError": "Não foi possível carregar os modelos.",
       "bedrock": {
         "ssoHelp": "Usa sua configuração SSO do AWS CLI. Certifique-se de ter executado 'aws sso login'.",
         "keysHelp": "Informe suas chaves de acesso AWS IAM."
@@ -477,6 +485,14 @@
         "adcHelp": "Usa Application Default Credentials. Execute: gcloud auth application-default login",
         "apikeyHelp": "Chave API do Vertex AI Express Mode obtida no Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modelo não disponível",
+      "modelRetired": "A Tinfoil descontinuou {{from}}. Alterado para {{to}}.",
+      "refreshingModels": "A atualizar modelos…"
+    },
+    "corti": {
+      "euOnly": "Os modelos da Corti estão disponíveis apenas na região da UE."
     }
   },
   "transcription": {
@@ -501,8 +517,13 @@
     "corti": {
       "clientId": "ID do cliente",
       "clientSecret": "Segredo do cliente",
+      "apiKey": "Chave API",
       "environment": "Região de dados",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "O Tinfoil transmite com o Voxtral Mini 4B e processa em lote com o Voxtral Small 24B.",
+      "docsLink": "Ver a documentação"
     }
   },
   "hooks": {
@@ -520,6 +541,10 @@
       "noAudio": {
         "title": "Nenhum áudio detectado",
         "description": "A gravação não contém áudio detectável. Tente novamente."
+      },
+      "partialTranscription": {
+        "title": "Transcrição parcial",
+        "description": "Não foi possível transcrever parte da gravação."
       },
       "errorDescriptions": {
         "sessionExpired": "Sua sessão do OpenWhispr Cloud está indisponível. Entre novamente nas Configurações.",
@@ -707,6 +732,11 @@
       "welcomeBack": "Que bom ter você de volta",
       "welcomeBackName": "Que bom ter você de volta, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Entrar com SSO",
+      "emailRequired": "Insira seu e-mail corporativo para usar o SSO.",
+      "failed": "Falha no logon único. Tente novamente."
+    },
     "social": {
       "completeInBrowser": "Conclua o login no navegador",
       "continueWithApple": "Continuar com a Apple",
@@ -881,7 +911,9 @@
     "recording": "Gravando",
     "tryShortcut": "Tente Ctrl+Shift+K",
     "tryShortcutMac": "Tente ⌘⇧K",
-    "remove": "Remover atalho"
+    "remove": "Remover atalho",
+    "addAnother": "Adicionar outro atalho",
+    "duplicate": "Já adicionado"
   },
   "languageSelector": {
     "noLanguagesFound": "Nenhum idioma encontrado",
@@ -978,7 +1010,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Provedor",
       "run": "Executar teste",
-      "customEndpoint": "Endpoint personalizado"
+      "customEndpoint": "Endpoint personalizado",
+      "apiKeyMissing": "Chave API do {{provider}} não configurada. Adicione nas configurações de Modelos de IA."
     },
     "view": {
       "customPrompt": "Prompt personalizado",
@@ -1363,8 +1396,8 @@
         "linuxPttSetupDescription": "O seu utilizador precisa de acesso aos dispositivos de entrada do teclado.",
         "linuxPttSetupNote": "Depois de executar o comando, termine e reinicie a sessão.",
         "hyprlandConfigWriteWarningTitle": "Os atalhos do Hyprland não serão mantidos",
-        "hyprlandConfigWriteWarningDescription": "O OpenWhispr não consegue escrever em {{path}}, por isso os atalhos não sobreviverão a um recarregamento da configuração do Hyprland. Certifique-se de que o ficheiro existe e pode ser escrito.",
-        "hyprlandUnbindDescription": "No Hyprland, o OpenWhispr reserva o atalho selecionado. Qualquer associação existente do Hyprland que use a mesma combinação de teclas será removida quando o OpenWhispr registar o seu atalho."
+        "hyprlandConfigWriteWarningDescription": "O OpenWhispr não consegue escrever em {{path}}, por isso os atalhos não serão mantidos após recarregar a configuração do Hyprland. Verifique se o ficheiro existe e permite escrita.",
+        "hyprlandUnbindDescription": "No Hyprland, o OpenWhispr reserva o atalho selecionado. Qualquer atalho existente do Hyprland que use a mesma combinação de teclas será desvinculado quando o OpenWhispr registar o atalho."
       },
       "meetingHotkey": {
         "title": "Atalho modo reunião",
@@ -1815,10 +1848,13 @@
   },
   "models": {
     "learnMore": "Saiba mais",
+    "noneAvailable": "Nenhum modelo disponível",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilíngue rápido com detecção automática de idioma (25 idiomas)",
-        "parakeet_unified_en_0_6b": "ASR apenas em inglês com precisão de ponta (5,91% WER médio)"
+        "parakeet_unified_en_0_6b": "ASR apenas em inglês com precisão de ponta (5,91% WER médio)",
+        "nemotron_speech_streaming_en_0_6b": "ASR em inglês por streaming da NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "ASR multilíngue por streaming da NVIDIA Nemotron com detecção automática de idioma (15 idiomas)"
       },
       "whisper": {
         "tiny": "Mais rápido, qualidade inferior",
@@ -1838,7 +1874,8 @@
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
         "smallest_pulse": "Transcrição em nuvem multilíngue da Smallest AI",
-        "smallest_pulse_pro": "Somente inglês, maior precisão da Smallest AI"
+        "smallest_pulse_pro": "Somente inglês, maior precisão da Smallest AI",
+        "tinfoil_voxtral": "Transcrição verificavelmente privada"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",
@@ -1847,6 +1884,8 @@
         "openai_gpt_4_1": "Base sólida, contexto de 1M",
         "openai_gpt_4_1_mini": "Modelo GPT-4.1 menor",
         "openai_gpt_4_1_nano": "GPT-4.1 com menor latência",
+        "anthropic_claude_fable_5": "O modelo mais capaz da Anthropic, classe Mythos",
+        "anthropic_claude_sonnet_5": "Modelo agêntico rápido e capaz por menor custo",
         "anthropic_claude_sonnet_4_6": "Desempenho equilibrado",
         "anthropic_claude_sonnet_4_5": "Geração anterior do Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido com inteligência quase de ponta",
@@ -1865,17 +1904,33 @@
         "groq_compound": "Sistema compound da Groq, 450 T/seg",
         "groq_compound_mini": "Sistema compound rápido, 3x menor latência",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexto 256K",
+        "openai_gpt_5_6_sol": "GPT-5.6 principal para programação e pesquisa complexas",
+        "openai_gpt_5_6_terra": "GPT-5.6 equilibrado para o trabalho do dia a dia",
+        "openai_gpt_5_6_luna": "O GPT-5.6 mais rápido e econômico",
         "openai_gpt_5_5": "Modelo frontier para raciocínio complexo",
-        "anthropic_claude_opus_4_8": "Modelo Claude mais capaz",
+        "anthropic_claude_opus_4_8": "Poderoso modelo Opus voltado para honestidade e confiabilidade",
         "anthropic_claude_opus_4_7": "Modelo Opus potente",
         "anthropic_claude_opus_4_6": "Geração anterior do Opus, contexto de 1M",
-        "anthropic_claude_opus_4_5": "Modelo Opus mais antigo"
+        "anthropic_claude_opus_4_5": "Modelo Opus mais antigo",
+        "tinfoil_deepseek_v4_pro": "Raciocínio privado de contexto longo em enclaves seguros, contexto de 800K",
+        "tinfoil_glm_5_2": "Modelo privado de engenharia agêntica em enclaves seguros, contexto de 384K",
+        "tinfoil_kimi_k2_6": "Modelo privado de codificação de longo prazo e multimodal, contexto de 256K",
+        "tinfoil_gemma4_31b": "Modelo privado de raciocínio multilíngue com chamada de ferramentas, contexto de 256K",
+        "tinfoil_gpt_oss_120b": "Modelo privado de raciocínio de pesos abertos com uso de ferramentas, contexto de 131K",
+        "tinfoil_llama3_3_70b": "Modelo privado conversacional com chamada de ferramentas, contexto de 128K",
+        "corti_corti_s1_instant": "Modelo de saúde rápido, sem rastro de raciocínio",
+        "corti_corti_s1": "Modelo clínico mais capaz com raciocínio",
+        "corti_corti_s1_mini_instant": "Modelo de saúde compacto, o mais rápido e econômico",
+        "corti_corti_s1_mini": "Modelo clínico compacto com raciocínio pela metade do preço"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "O modelo Claude mais capaz. Ideal para as tarefas mais difíceis do Modo Agente.",
         "bedrock_claude_haiku_4_5": "Rápido e barato. Ótimo para limpar texto.",
-        "bedrock_claude_sonnet_4_6": "Equilibrado. Padrão recomendado para o Modo Agente.",
-        "bedrock_claude_opus_4_7": "Máxima inteligência. Para tarefas complexas do Modo Agente.",
-        "bedrock_nova_lite": "Opção mais barata. Nativo da AWS, ideal para alto volume.",
+        "bedrock_claude_sonnet_5": "Equilibrado. Padrão recomendado para o Modo Agente.",
+        "bedrock_claude_opus_4_8": "Máxima inteligência. Para tarefas complexas do Modo Agente.",
+        "bedrock_gpt_oss_120b": "Modelo aberto da OpenAI. Ótimo raciocínio a baixo custo.",
+        "bedrock_deepseek_v3_2": "Modelo de fronteira de pesos abertos. Ótimo custo-benefício para o Modo Agente.",
+        "bedrock_qwen3_next_80b": "Modelo aberto esparso. Rápido e multilíngue.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -1905,7 +1960,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Último multimodal do Google, raciocínio avançado",
         "gemma_gemma_4_e2b_it_q4_k_m": "Gemma 4 compacto do Google, rápido e eficiente",
         "gemma_gemma_3_12b_it_q4_k_m": "Modelo intermediário do Google, raciocínio sólido",
-        "gemma_gemma_3_1b_it_q4_k_m": "Modelo Google ultrarrápido, ideal para limpeza de ditados curtos"
+        "gemma_gemma_3_1b_it_q4_k_m": "Modelo Google ultrarrápido, ideal para limpeza de ditados curtos",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Modelo eficiente da Liquid AI, excelente em seguir instruções",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE da Liquid AI, alta qualidade com apenas 1,5B parâmetros ativos",
+        "liquidai_lfm2_2_6b_q4_k_m": "LFM2 equilibrado para limpeza de maior qualidade",
+        "liquidai_lfm2_5_350m_q8_0": "Modelo ultraleve para limpeza rápida de ditado",
+        "liquidai_lfm2_5_230m_q8_0": "Modelo minúsculo, limpeza instantânea em hardware modesto"
       },
       "diarization": {
         "segmentation": "Detecção de limites de fala para identificação de falantes",
@@ -2081,6 +2141,7 @@
       "transcribingProvider": "Transcrevendo via {{provider}}...",
       "cancelTranscription": "Cancelar transcrição",
       "transcriptionComplete": "Transcrição concluída",
+      "partialWarning": "Não foi possível transcrever parte do áudio.",
       "openNote": "Abrir nota",
       "uploadAnother": "Enviar outro",
       "retry": "Tentar novamente",
@@ -2108,7 +2169,40 @@
       "switchToCloudForLargeFiles": "Mude para o OpenWhispr Cloud para transcrever este arquivo.",
       "createAccount": "Criar conta",
       "upgrade": "Fazer upgrade",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "ou",
+      "urlPlaceholder": "Cole uma URL do YouTube ou de áudio",
+      "urlDownloading": "Baixando áudio...",
+      "urlResolving": "Resolvendo URL...",
+      "urlInvalid": "URL inválida. Cole um link do YouTube ou uma URL direta de arquivo de áudio.",
+      "urlVideoUnavailable": "Este vídeo não está disponível. Pode ser privado, removido ou bloqueado geograficamente.",
+      "urlPlaylistNotSupported": "Playlists não são suportadas. Cole a URL de um único vídeo.",
+      "urlContentTypeInvalid": "Esta URL não aponta para um arquivo de áudio ou vídeo.",
+      "urlDownloadFailed": "Falha no download. Verifique a URL e tente novamente.",
+      "urlCancelDownload": "Cancelar download",
+      "addToQueue": "Adicionar à fila",
+      "queueProgress": "{{completed}}/{{total}} concluídos",
+      "cancelAll": "Cancelar tudo",
+      "clearQueue": "Limpar",
+      "pasteUrls": "Colar URLs (uma por linha)",
+      "speakerDetection": "Detecção de locutores",
+      "speakerDetectionDescription": "Identificar diferentes locutores no áudio",
+      "numSpeakersPlaceholder": "Detecção automática",
+      "downloadingModels": "Baixando modelos...",
+      "openaiDiarizeNote": "Substitui seu modelo de transcrição por gpt-4o-transcribe-diarize, o único modelo OpenAI com detecção de falantes. Os custos podem diferir do modelo selecionado.",
+      "mistralDiarizeNote": "Detecção de falantes incluída sem custo adicional com Voxtral.",
+      "groqDiarizeNote": "A detecção de falantes não está disponível com Groq. A diarização local será usada.",
+      "batchCancelled": "Cancelado",
+      "batchTranscriptionFailed": "Falha na transcrição",
+      "batchSaveFailed": "Falha ao salvar a nota",
+      "batchUnknownError": "Erro desconhecido",
+      "removeFromQueue": "Remover da fila",
+      "diarizationRunsLocally": "A detecção de falantes é executada localmente no seu dispositivo.",
+      "urlSubmit": "Adicionar link",
+      "urlsSkipped": "Alguns links não puderam ser adicionados ({{n}})",
+      "queueFailed": "{{n}} com falha",
+      "urlFileTooLarge": "O arquivo é grande demais para baixar. O tamanho máximo é 500 MB.",
+      "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes."
     },
     "meeting": {
       "title": "Notas de reunião",
@@ -2155,6 +2249,7 @@
       },
       "errors": {
         "noModel": "Nenhum modelo de IA selecionado. Configure um nas Configurações.",
+        "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações.",
         "actionFailed": "A ação falhou"
       }
     },
@@ -2408,6 +2503,10 @@
       "hotkeyUnavailable": {
         "title": "Atalho indisponível",
         "description": "Não foi possível registrar o atalho selecionado. Escolha outro nas configurações."
+      },
+      "gpuFallback": {
+        "title": "Aceleração GPU indisponível",
+        "description": "A transcrição está usando a CPU. Você pode desativar a aceleração GPU nas Configurações."
       },
       "addedToDict": "{{words}} adicionado ao seu dicionário",
       "undo": "Desfazer",
@@ -2848,5 +2947,15 @@
       "successDescription": "Bienvenido a {{name}}.",
       "errorTitle": "No se pudo aceptar la invitación"
     }
+  },
+  "meetingNotification": {
+    "title": "Reunião detectada",
+    "body": {
+      "detected": "Parece que você está em uma reunião. Quer fazer anotações?",
+      "starting": "Sua reunião está começando. Quer fazer anotações?",
+      "underway": "Parece que sua reunião já está em andamento. Quer fazer anotações?"
+    },
+    "start": "Fazer anotações",
+    "join": "Entrar e transcrever"
   }
 }

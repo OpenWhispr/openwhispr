@@ -218,13 +218,15 @@ class WindowManager {
     let lastToggleTime = 0;
     const DEBOUNCE_MS = 150;
 
-    return async () => {
+    // globalShortcut registrations pass the hotkey that fired; native-shortcut
+    // backends invoke the callback bare (their slot holds only the primary).
+    return async (triggeredHotkey) => {
       if (this.hotkeyManager.isInListeningMode()) {
         return;
       }
 
       const activationMode = this.getActivationMode();
-      const currentHotkey = this.hotkeyManager.getCurrentHotkey?.();
+      const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
 
       if (
         process.platform === "darwin" &&
@@ -389,7 +391,7 @@ class WindowManager {
     return required;
   }
 
-  startWindowsPushToTalk() {
+  startWindowsPushToTalk(key) {
     if (this.winPushState?.active) {
       return;
     }
@@ -401,6 +403,7 @@ class WindowManager {
 
     this.winPushState = {
       active: true,
+      key,
       downTime,
       isRecording: false,
     };
@@ -417,8 +420,13 @@ class WindowManager {
     }, MIN_HOLD_DURATION_MS);
   }
 
-  handleWindowsPushKeyUp() {
+  // With several dictation hotkeys bound, only the key that started the push
+  // may stop it; called without a key to force-stop (resetWindowsPushState).
+  handleWindowsPushKeyUp(key) {
     if (!this.winPushState?.active) {
+      return;
+    }
+    if (key && this.winPushState.key && key !== this.winPushState.key) {
       return;
     }
 
@@ -481,6 +489,17 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("stop-dictation");
+      this._isDictatingToggle = false;
+      this.meetingDetectionEngine?.setUserRecording(false);
+    }
+  }
+
+  sendCancelDictation() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-hotkey-pressed");
       this._isDictatingToggle = false;
       this.meetingDetectionEngine?.setUserRecording(false);
     }
@@ -1159,6 +1178,9 @@ class WindowManager {
       ...NOTIFICATION_WINDOW_CONFIG,
       ...position,
     });
+
+    // Keep the prompt visible to the user but out of screen shares and recordings.
+    this.notificationWindow.setContentProtection(true);
 
     if (process.platform === "darwin") {
       this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });

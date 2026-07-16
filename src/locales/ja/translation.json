@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
+      "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
       "slotConflict": "このホットキーは既に{{slot}}で使用されています。"
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
   },
   "common": {
+    "retry": "再試行",
     "back": "戻る",
     "next": "次へ",
     "complete": "完了",
@@ -275,11 +277,6 @@
       "title": "会議メモ",
       "description": "会議を記録して要約します",
       "autoDetect": "OpenWhispr は会議中であることを自動的に検出し、メモの開始を提案します。あなたの操作なしに録音されることはありません。",
-      "notification": {
-        "title": "会議を検出しました",
-        "body": "会議中のようです。メモを取りますか？",
-        "cta": "録音を開始"
-      },
       "hotkeyLabel": "会議ホットキー",
       "hotkeyHint": "任意 — 会議中に押すとすぐにメモを開始できます。"
     },
@@ -296,6 +293,7 @@
         "createAccount": "Corti アカウントを作成",
         "creditBadge": "50ドルの無料クレジット",
         "regionHint": "音声の処理場所を選べます — 米国または EU。",
+        "llmHint": "言語モデル機能も Corti モデルで実行されます。",
         "useCorti": "Corti を使う",
         "skip": "後で",
         "step1": "corti.ai でアカウントを作成",
@@ -449,7 +447,13 @@
       "noModels": "モデルが見つかりません。エンドポイント URL を確認してください。",
       "providerName": "カスタム",
       "ownerLabel": "提供元: {{owner}}",
-      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。"
+      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。",
+      "searchPlaceholder": "モデルを検索…",
+      "selectedGroup": "選択中",
+      "otherGroup": "その他",
+      "noSearchResults": "「{{query}}」に一致するモデルはありません",
+      "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
+      "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -486,6 +490,10 @@
       "customModelId": "カスタムモデル ID",
       "customModelPlaceholder": "モデル ID またはデプロイメント名を入力",
       "suggestedModels": "推奨モデル",
+      "browseModels": "すべてのモデルを表示",
+      "loadingModels": "モデルを取得中...",
+      "allModels": "{{region}} のすべてのモデル",
+      "modelListError": "モデルを読み込めませんでした。",
       "bedrock": {
         "ssoHelp": "AWS CLI の SSO 設定を使用します。'aws sso login' を実行済みであることを確認してください。",
         "keysHelp": "AWS IAM のアクセスキーを入力してください。"
@@ -498,6 +506,14 @@
         "adcHelp": "Application Default Credentials を使用します。次を実行してください: gcloud auth application-default login",
         "apikeyHelp": "Google AI Studio で取得した Vertex AI Express Mode の API キー。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "モデルが利用できません",
+      "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
+      "refreshingModels": "モデルを更新しています…"
+    },
+    "corti": {
+      "euOnly": "Corti のモデルは EU リージョンでのみ利用できます。"
     }
   },
   "transcription": {
@@ -522,8 +538,13 @@
     "corti": {
       "clientId": "クライアントID",
       "clientSecret": "クライアントシークレット",
+      "apiKey": "API キー",
       "environment": "データリージョン",
       "tenant": "テナント"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
+      "docsLink": "ドキュメントを見る"
     }
   },
   "hooks": {
@@ -541,6 +562,10 @@
       "noAudio": {
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
+      },
+      "partialTranscription": {
+        "title": "部分的な文字起こし",
+        "description": "録音の一部を文字起こしできませんでした。"
       },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
@@ -728,6 +753,11 @@
       "welcomeBack": "おかえりなさい",
       "welcomeBackName": "おかえりなさい、{{name}} さん"
     },
+    "sso": {
+      "continueWithSSO": "SSO でサインイン",
+      "emailRequired": "SSO を使用するには勤務先のメールアドレスを入力してください。",
+      "failed": "シングルサインオンに失敗しました。もう一度お試しください。"
+    },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
       "continueWithApple": "Apple で続ける",
@@ -902,7 +932,9 @@
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
     "tryShortcutMac": "⌘⇧K をお試しください",
-    "remove": "ホットキーを削除"
+    "remove": "ホットキーを削除",
+    "addAnother": "ホットキーをもう1つ追加",
+    "duplicate": "すでに追加されています"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
@@ -999,7 +1031,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "プロバイダー",
       "run": "テスト実行",
-      "customEndpoint": "カスタムエンドポイント"
+      "customEndpoint": "カスタムエンドポイント",
+      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
@@ -1836,10 +1869,13 @@
   },
   "models": {
     "learnMore": "詳細を見る",
+    "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
-        "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）"
+        "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
+        "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron の英語ストリーミング ASR",
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron の多言語ストリーミング ASR、自動言語検出対応（15 言語）"
       },
       "whisper": {
         "tiny": "最速、品質は低め",
@@ -1859,7 +1895,8 @@
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
         "smallest_pulse": "Smallest AIによる多言語クラウド音声文字起こし",
-        "smallest_pulse_pro": "Smallest AIによる英語専用・最高精度文字起こし"
+        "smallest_pulse_pro": "Smallest AIによる英語専用・最高精度文字起こし",
+        "tinfoil_voxtral": "検証可能なプライベート文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -1868,6 +1905,8 @@
         "openai_gpt_4_1": "強力なベースライン、100 万トークンコンテキスト",
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
+        "anthropic_claude_fable_5": "Anthropic の最も高性能なモデル、Mythos クラス",
+        "anthropic_claude_sonnet_5": "低コストで高速かつ高性能なエージェントモデル",
         "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
         "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
@@ -1886,17 +1925,33 @@
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト",
+        "openai_gpt_5_6_sol": "複雑なコーディングと研究のためのフラッグシップ GPT-5.6",
+        "openai_gpt_5_6_terra": "日常業務向けのバランス型 GPT-5.6",
+        "openai_gpt_5_6_luna": "最速かつ最も低コストの GPT-5.6",
         "openai_gpt_5_5": "複雑な推論のためのフロンティアモデル",
-        "anthropic_claude_opus_4_8": "最も高性能な Claude モデル",
+        "anthropic_claude_opus_4_8": "誠実さと信頼性を重視した強力な Opus モデル",
         "anthropic_claude_opus_4_7": "高性能な Opus モデル",
         "anthropic_claude_opus_4_6": "前世代の Opus、100 万トークンコンテキスト",
-        "anthropic_claude_opus_4_5": "旧世代の Opus モデル"
+        "anthropic_claude_opus_4_5": "旧世代の Opus モデル",
+        "tinfoil_deepseek_v4_pro": "セキュアエンクレーブ内のプライベート長文脈推論、800K コンテキスト",
+        "tinfoil_glm_5_2": "セキュアエンクレーブ内のプライベート・エージェント型エンジニアリングモデル、384K コンテキスト",
+        "tinfoil_kimi_k2_6": "プライベートな長期コーディング・マルチモーダルモデル、256K コンテキスト",
+        "tinfoil_gemma4_31b": "ツール呼び出し対応のプライベート多言語推論モデル、256K コンテキスト",
+        "tinfoil_gpt_oss_120b": "ツール使用対応のプライベート・オープンウェイト推論モデル、131K コンテキスト",
+        "tinfoil_llama3_3_70b": "ツール呼び出し対応のプライベート会話モデル、128K コンテキスト",
+        "corti_corti_s1_instant": "高速なヘルスケアモデル、推論トレースなし",
+        "corti_corti_s1": "推論対応の最も高性能な臨床モデル",
+        "corti_corti_s1_mini_instant": "コンパクトなヘルスケアモデル、最速かつ最も低コスト",
+        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいエージェントモードのタスクに最適です。",
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
-        "bedrock_claude_sonnet_4_6": "バランス型。エージェントモードの既定モデルに最適です。",
-        "bedrock_claude_opus_4_7": "最高性能。複雑なエージェントモードのタスクに最適です。",
-        "bedrock_nova_lite": "最も安価。AWS ネイティブで大量処理に最適です。",
+        "bedrock_claude_sonnet_5": "バランス型。エージェントモードの既定モデルに最適です。",
+        "bedrock_claude_opus_4_8": "最高性能。複雑なエージェントモードのタスクに最適です。",
+        "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
+        "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。エージェントモードに最適。",
+        "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -1926,7 +1981,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Google の最新マルチモーダルモデル、高度な推論",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google のコンパクトな Gemma 4、高速で効率的",
         "gemma_gemma_3_12b_it_q4_k_m": "Google の中型モデル、強力な推論",
-        "gemma_gemma_3_1b_it_q4_k_m": "超高速 Google モデル、短い口述のクリーンアップに最適"
+        "gemma_gemma_3_1b_it_q4_k_m": "超高速 Google モデル、短い口述のクリーンアップに最適",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AIの高効率オンデバイスモデル、優れた指示追従性",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AIのMoE、わずか1.5Bのアクティブパラメータで高品質",
+        "liquidai_lfm2_2_6b_q4_k_m": "より高品質なクリーンアップ向けのバランス型LFM2",
+        "liquidai_lfm2_5_350m_q8_0": "高速な口述クリーンアップ向けの超軽量モデル",
+        "liquidai_lfm2_5_230m_q8_0": "小型モデル、控えめなハードウェアでも即座にクリーンアップ"
       },
       "diarization": {
         "segmentation": "話者分離のための発話区間検出",
@@ -2010,6 +2070,7 @@
       },
       "errors": {
         "noModel": "AIモデルが選択されていません。設定で構成してください。",
+        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。",
         "actionFailed": "アクションに失敗しました"
       }
     },
@@ -2064,6 +2125,7 @@
       "transcribingProvider": "{{provider}} で文字起こし中...",
       "cancelTranscription": "文字起こしをキャンセル",
       "transcriptionComplete": "文字起こし完了",
+      "partialWarning": "音声の一部を文字起こしできませんでした。",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
       "retry": "再試行",
@@ -2091,7 +2153,40 @@
       "switchToCloudForLargeFiles": "このファイルを文字起こしするには OpenWhispr Cloud に切り替えてください。",
       "createAccount": "アカウント作成",
       "upgrade": "アップグレード",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "または",
+      "urlPlaceholder": "YouTubeまたは音声URLを貼り付け",
+      "urlDownloading": "音声をダウンロード中...",
+      "urlResolving": "URLを解析中...",
+      "urlInvalid": "無効なURLです。YouTubeリンクまたは音声ファイルの直接URLを貼り付けてください。",
+      "urlVideoUnavailable": "この動画は利用できません。非公開、削除済み、または地域制限されている可能性があります。",
+      "urlPlaylistNotSupported": "プレイリストには対応していません。個別の動画URLを貼り付けてください。",
+      "urlContentTypeInvalid": "このURLは音声または動画ファイルを指していません。",
+      "urlDownloadFailed": "ダウンロードに失敗しました。URLを確認してもう一度お試しください。",
+      "urlCancelDownload": "ダウンロードをキャンセル",
+      "addToQueue": "キューに追加",
+      "queueProgress": "{{completed}}/{{total}} 完了",
+      "cancelAll": "すべてキャンセル",
+      "clearQueue": "クリア",
+      "pasteUrls": "URLを貼り付け（1行に1つ）",
+      "speakerDetection": "話者検出",
+      "speakerDetectionDescription": "音声内の異なる話者を識別",
+      "numSpeakersPlaceholder": "自動検出",
+      "downloadingModels": "モデルをダウンロード中...",
+      "openaiDiarizeNote": "話者検出をサポートする唯一のOpenAIモデルであるgpt-4o-transcribe-diarizeに切り替わります。選択したモデルとコストが異なる場合があります。",
+      "mistralDiarizeNote": "Voxtralでの話者検出は追加料金なしで利用できます。",
+      "groqDiarizeNote": "Groqでは話者検出を利用できません。代わりにローカルダイアライゼーションが使用されます。",
+      "batchCancelled": "キャンセル済み",
+      "batchTranscriptionFailed": "文字起こしに失敗しました",
+      "batchSaveFailed": "ノートの保存に失敗しました",
+      "batchUnknownError": "不明なエラー",
+      "removeFromQueue": "キューから削除",
+      "diarizationRunsLocally": "話者検出はお使いのデバイス上でローカルに実行されます。",
+      "urlSubmit": "リンクを追加",
+      "urlsSkipped": "追加できなかったリンクがあります（{{n}}件）",
+      "queueFailed": "{{n}}件失敗",
+      "urlFileTooLarge": "ファイルが大きすぎてダウンロードできません。最大サイズは500 MBです。",
+      "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。"
     },
     "meeting": {
       "title": "議事録",
@@ -2408,6 +2503,10 @@
       "hotkeyUnavailable": {
         "title": "ホットキーが使用できません",
         "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
+      },
+      "gpuFallback": {
+        "title": "GPU アクセラレーションを利用できません",
+        "description": "文字起こしは代わりに CPU を使用しています。設定で GPU アクセラレーションを無効にできます。"
       },
       "addedToDict": "{{words}} を辞書に追加しました",
       "undo": "元に戻す",
@@ -2848,5 +2947,15 @@
       "successDescription": "Bienvenido a {{name}}.",
       "errorTitle": "No se pudo aceptar la invitación"
     }
+  },
+  "meetingNotification": {
+    "title": "会議を検出しました",
+    "body": {
+      "detected": "会議中のようです。メモを取りますか？",
+      "starting": "まもなく会議が始まります。メモを取りますか？",
+      "underway": "会議はすでに進行中のようです。メモを取りますか？"
+    },
+    "start": "メモを取る",
+    "join": "参加して文字起こし"
   }
 }

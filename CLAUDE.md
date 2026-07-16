@@ -46,6 +46,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 - **windows-key-listener.c**: C source for Windows low-level keyboard hook (Push-to-Talk)
 - **windows-mic-listener.c**: C source for WASAPI mic session monitor (event-driven mic detection)
+- **windows-system-audio-helper.c**: C source for WASAPI process-loopback system audio capture (meeting transcription). Excludes OpenWhispr's own process tree, so it hears every app on every output device. Requires Windows 10 2004+; falls back to Chromium display-media loopback when unavailable. Outputs 24 kHz mono s16le PCM on stdout, line-delimited JSON events on stderr (same protocol as linux-system-audio-helper)
 - **macos-mic-listener.swift**: Swift source for CoreAudio mic property listener (event-driven mic detection)
 - **globe-listener.swift**: Swift source for macOS Globe/Fn key detection
 - **bin/**: Directory for compiled native binaries (whisper-cpp, nircmd, key/mic listeners)
@@ -69,16 +70,26 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Notifies renderer via IPC when hotkey registration fails
   - Integrates with GnomeShortcutManager for GNOME Wayland support
   - Integrates with HyprlandShortcutManager for Hyprland Wayland support
+  - Integrates with KDEShortcutManager for KDE Wayland support
 - **gnomeShortcut.js**: GNOME Wayland global shortcut integration
   - Uses D-Bus service to receive hotkey toggle commands
   - Registers shortcuts via gsettings (visible in GNOME Settings → Keyboard → Shortcuts)
   - Converts Electron hotkey format to GNOME keysym format
   - Only active on Linux + Wayland + GNOME desktop
+  - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
 - **hyprlandShortcut.js**: Hyprland Wayland global shortcut integration
   - Uses D-Bus service to receive hotkey toggle commands (same `com.openwhispr.App` service)
   - Registers shortcuts via `hyprctl keyword bind` (runtime keybinding)
   - Converts Electron hotkey format to Hyprland bind format (`MODS, key`)
   - Only active on Linux + Wayland + Hyprland (detected via `HYPRLAND_INSTANCE_SIGNATURE`)
+  - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
+- **kdeShortcut.js**: KDE Wayland global shortcut integration
+  - Uses D-Bus to communicate with KGlobalAccel for global hotkey registration
+  - Registers hotkeys via `setShortcut`/`doRegister` D-Bus calls on the KGlobalAccel interface
+  - Listens for `globalShortcutPressed` signals to trigger callbacks
+  - Converts Electron hotkey format to Qt key codes
+  - Only active on Linux + KDE desktop (detected via `XDG_CURRENT_DESKTOP`)
+  - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
 - **ipcHandlers.js**: Centralized IPC handler registration
 - **windowsKeyManager.js**: Windows Push-to-Talk support with native key listener
   - Spawns native `windows-key-listener.exe` binary for low-level keyboard hooks
@@ -168,6 +179,12 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **Available Models**:
   - `parakeet-tdt-0.6b-v3`: Multilingual (25 languages), ~680MB
   - `parakeet-unified-en-0.6b`: English-only, ~631MB, state-of-the-art EN accuracy (5.91% avg WER on Open ASR Leaderboard)
+  - `nemotron-speech-streaming-en-0.6b`: English-only, ~632MB, cache-aware streaming FastConformer (`"runtime": "online"` in the registry)
+  - `nemotron-3.5-asr-streaming-0.6b`: Multilingual (15 transcription-ready languages, auto detection), ~650MB, cache-aware streaming FastConformer (`"runtime": "online"`)
+
+- **Runtimes**: Models are `offline` (default) or `online` per their registry `runtime` field. Offline models use the bundled `sherpa-onnx-ws-{platform}-{arch}` (offline websocket server); online models use `sherpa-onnx-online-ws-{platform}-{arch}` (online websocket server). Both are downloaded by `scripts/download-sherpa-onnx.js`. The final transcription path still records-then-transcribes; audio is chunked over the websocket and partial/final JSON results are merged by `parakeetWsResult.js`.
+
+- **Live Transcription Preview**: When the preview toggle is on and an online-runtime model is selected, the preview uses a persistent websocket stream (`createOnlineStream` in `parakeetWsServer.js`): worklet PCM is fed as it is captured (`sendPcm16` converts to the float32 wire format inside the ws layer), and partial results update the preview window live (replacing text via `showTranscriptionPreview`). Offline models keep the 1.5s buffered-chunk path (appending via `appendTranscriptionPreview`). If the stream can't start, the preview falls back to the chunked path. Tests: `test/helpers/parakeetOnlineStream.test.js` (mock websocket server).
 
 - **Download URLs**: Models from sherpa-onnx ASR models release on GitHub
 
@@ -549,13 +566,21 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 - Linux: `pactl subscribe` — PulseAudio source-output events
 - All platforms: Graceful fallback to polling if native binary/command unavailable
 
+**Calendar Reminders** (scheduled meetings):
+
+- `GoogleCalendarManager` fires `meetingDetectionEngine.handleCalendarReminder(event)` 1 minute before the scheduled start (`MEETING_REMINDER_LEAD_MS`) — no native OS notifications; all meeting prompts use the in-app overlay so they survive Focus/DND and screen-share notification muting
+- Calendar-sourced prompts show a Join primary action when the event has a meeting link (`getMeetingJoinUrl` in `src/helpers/meetingJoinUrl.js`, shared with the renderer's Upcoming Meetings join button) — Join opens the link and starts the note
+
 **UX Rules**:
 
+- All prompts render in one always-on-top overlay window (`MeetingNotificationCard`), content-protected so it never appears in screen shares
+- Prompt copy is derived in the renderer from `{ variant, event, joinUrl }` (`meetingNotification.*` i18n keys); variants: `detected` (mic evidence), `starting` (calendar event not yet started), `underway` (event in progress)
+- Per-source notification prefs: `notifyCalendarReminders` gates calendar prompts, `notifyMeetingDetection` gates mic/process prompts
 - During recording (tap-to-talk or push-to-talk): ALL notifications suppressed
 - After recording: 2.5s cooldown before showing queued notifications
-- Multiple signals coalesced: process > audio priority, one notification shown
-- Calendar-aware: if imminent calendar event exists, notification shows event name
-- Active calendar meeting recording: all detections suppressed
+- Multiple signals coalesced: one overlay at a time; a newer prompt replaces the current one
+- Calendar-aware: if an ongoing or imminent calendar event exists, the prompt shows the event name and links the note to the event
+- Active meeting recording (meeting mode): all detections suppressed
 
 **Binary Distribution**:
 
@@ -748,7 +773,7 @@ const { t } = useTranslation();
   - Default fallback: `F8` when `Control+Super` cannot be registered
   - Push-to-talk unavailable (GNOME shortcuts only fire single toggle event)
   - Falls back to X11/globalShortcut if GNOME integration fails
-  - `dbus-next` npm package used for D-Bus communication
+  - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
 
 ## Code Style and Conventions
 

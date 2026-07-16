@@ -4,6 +4,7 @@ import { MeetingNotificationCard } from "../MeetingNotificationCard";
 import { HotkeyInput } from "../ui/HotkeyInput";
 import { useHotkeyRegistration } from "../../hooks/useHotkeyRegistration";
 import { validateHotkeyForSlot } from "../../utils/hotkeyValidation";
+import { parseHotkeyList, serializeHotkeyList } from "../../utils/hotkeys";
 
 interface MeetingSetupStepProps {
   meetingKey: string;
@@ -52,9 +53,9 @@ export default function MeetingSetupStep({
         <div className="relative overflow-hidden rounded-lg border border-border-subtle bg-gradient-to-br from-surface-2/50 via-surface-1 to-primary/5 px-4 pt-4 pb-9">
           <div className="pointer-events-none select-none">
             <MeetingNotificationCard
-              title={t("onboarding.meeting.notification.title")}
-              body={t("onboarding.meeting.notification.body")}
-              startLabel={t("onboarding.meeting.notification.cta")}
+              title={t("meetingNotification.title")}
+              body={t("meetingNotification.body.detected")}
+              startLabel={t("meetingNotification.start")}
               className="ml-auto w-full max-w-[300px] shadow-xl"
             />
           </div>
@@ -74,9 +75,12 @@ export default function MeetingSetupStep({
           </p>
         </div>
         <HotkeyInput
-          value={meetingKey}
+          value={parseHotkeyList(meetingKey)[0] ?? ""}
           onChange={async (newHotkey) => {
-            await registerMeetingHotkey(newHotkey);
+            // Edits the primary meeting hotkey; extra bindings are preserved.
+            await registerMeetingHotkey(
+              serializeHotkeyList([newHotkey, ...parseHotkeyList(meetingKey).slice(1)])
+            );
           }}
           disabled={isRegistering}
           validate={validateMeetingHotkey}

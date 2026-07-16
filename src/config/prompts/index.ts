@@ -27,6 +27,14 @@ export function getDefaultPromptText(kind: PromptKind, uiLanguage?: string): str
   return t(def.i18nKey, { defaultValue: def.fallback });
 }
 
+// The cleanup prompt tells the model its input arrives between <transcript>
+// tags; the trailing line re-anchors the output contract right after the
+// transcript, where models weight instructions most. Mirrors api/reason.ts
+// in openwhispr-api.
+export function wrapCleanupTranscript(text: string): string {
+  return `<transcript>\n${text}\n</transcript>\n\nOutput only the cleaned transcript.`;
+}
+
 export function appendDictionarySuffix(
   prompt: string,
   customDictionary?: string[],

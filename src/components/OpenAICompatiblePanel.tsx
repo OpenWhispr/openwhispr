@@ -4,8 +4,10 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
+import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
 import { buildApiUrl, normalizeBaseUrl } from "../config/constants";
 import { isSecureEndpoint } from "../utils/urlUtils";
+import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 
 interface ModelOption {
   value: string;
@@ -24,6 +26,11 @@ interface OpenAICompatiblePanelProps {
   defaultBaseUrl?: string;
   baseUrlPlaceholder?: string;
   helpExamples?: ReactNode;
+  // Hide the endpoint editor when the URL is fixed by the caller (e.g. OpenRouter).
+  lockedBaseUrl?: boolean;
+  // Providers whose /models is public but whose inference needs a key.
+  apiKeyRequired?: boolean;
+  getKeyUrl?: string;
 }
 
 export default function OpenAICompatiblePanel({
@@ -36,6 +43,9 @@ export default function OpenAICompatiblePanel({
   defaultBaseUrl,
   baseUrlPlaceholder = "https://api.openai.com/v1",
   helpExamples,
+  lockedBaseUrl = false,
+  apiKeyRequired = false,
+  getKeyUrl,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
   const [draftBase, setDraftBase] = useState(baseUrl);
@@ -92,10 +102,11 @@ export default function OpenAICompatiblePanel({
 
       pendingBaseRef.current = normalized;
 
+      // Keep the previous list visible while refreshing so the searchable list
+      // (and its query state) isn't unmounted mid-fetch.
       if (isMountedRef.current) {
         setModelsLoading(true);
         setModelsError(null);
-        setModelOptions([]);
       }
 
       const trimmedKey = apiKey?.trim();
@@ -141,27 +152,30 @@ export default function OpenAICompatiblePanel({
             ? payload.models
             : [];
 
+        // Coerce fields defensively: non-conformant endpoints may return
+        // numeric ids or object descriptions, which would crash the render.
         const mapped = (rawModels as Array<Record<string, unknown>>)
           .map((item) => {
-            const value = (item?.id || item?.name) as string | undefined;
-            if (!value) return null;
+            const rawValue = item?.id ?? item?.name;
+            if (rawValue === undefined || rawValue === null || rawValue === "") return null;
+            const value = String(rawValue);
             const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
-            return {
-              value,
-              label: (item?.id || item?.name || value) as string,
-              description:
-                (item?.description as string) ||
-                (ownedBy ? t("reasoning.custom.ownerLabel", { owner: ownedBy }) : undefined),
-              ownedBy,
-            } as ModelOption;
+            const description =
+              typeof item?.description === "string" && item.description
+                ? item.description
+                : ownedBy
+                  ? t("reasoning.custom.ownerLabel", { owner: ownedBy })
+                  : undefined;
+            return { value, label: value, description, ownedBy } as ModelOption;
           })
           .filter(Boolean) as ModelOption[];
 
         if (isMountedRef.current && latestBaseRef.current === normalized) {
           setModelOptions(mapped);
-          if (model && mapped.length > 0 && !mapped.some((m) => m.value === model)) {
-            setModel("");
-          }
+          // `/models` is a discovery aid, not an allowlist — keep the user's
+          // chosen id even if it's absent (it may still be valid, or belong to
+          // a provider they're switching away from). Invalid ids surface a
+          // clear API error at request time instead of being silently wiped.
           setModelsError(null);
           lastLoadedBaseRef.current = normalized;
         }
@@ -185,7 +199,7 @@ export default function OpenAICompatiblePanel({
         }
       }
     },
-    [baseUrl, apiKey, model, setModel, t]
+    [baseUrl, apiKey, t]
   );
 
   useEffect(() => {
@@ -239,32 +253,42 @@ export default function OpenAICompatiblePanel({
 
   return (
     <>
-      <div className="space-y-2">
-        <h4 className="font-medium text-foreground">{t("reasoning.custom.endpointTitle")}</h4>
-        <Input
-          value={draftBase}
-          onChange={(event) => setDraftBase(event.target.value)}
-          onBlur={handleBlur}
-          placeholder={baseUrlPlaceholder}
-          className="text-sm"
-        />
-        {helpExamples ?? (
-          <p className="text-xs text-muted-foreground">
-            {t("reasoning.custom.endpointExamples")}{" "}
-            <code className="text-primary">https://openrouter.ai/api/v1</code> (OpenRouter),{" "}
-            <code className="text-primary">https://api.together.xyz/v1</code> (Together).
-          </p>
-        )}
-      </div>
+      {!lockedBaseUrl && (
+        <div className="space-y-2">
+          <h4 className="font-medium text-foreground">{t("reasoning.custom.endpointTitle")}</h4>
+          <Input
+            value={draftBase}
+            onChange={(event) => setDraftBase(event.target.value)}
+            onBlur={handleBlur}
+            placeholder={baseUrlPlaceholder}
+            className="text-sm"
+          />
+          {helpExamples ?? (
+            <p className="text-xs text-muted-foreground">
+              {t("reasoning.custom.endpointExamples")}{" "}
+              <code className="text-primary">https://openrouter.ai/api/v1</code> (OpenRouter),{" "}
+              <code className="text-primary">https://api.together.xyz/v1</code> (Together).
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2 pt-3">
-        <h4 className="font-medium text-foreground">{t("reasoning.custom.apiKeyOptional")}</h4>
+        <div className="flex items-baseline justify-between">
+          <h4 className="font-medium text-foreground">
+            {t(apiKeyRequired ? "common.apiKey" : "reasoning.custom.apiKeyOptional")}
+          </h4>
+          {getKeyUrl && <GetApiKeyLink url={getKeyUrl} />}
+        </div>
         <ApiKeyInput
           apiKey={apiKey}
           setApiKey={setApiKey}
           label=""
-          helpText={t("reasoning.custom.apiKeyHelp")}
+          helpText={apiKeyRequired ? "" : t("reasoning.custom.apiKeyHelp")}
         />
+        {apiKeyRequired && !apiKey?.trim() && (
+          <p className="text-xs text-warning">{t("reasoning.custom.keyRequiredHint")}</p>
+        )}
       </div>
 
       <div className="space-y-2 pt-3">
@@ -315,9 +339,25 @@ export default function OpenAICompatiblePanel({
             {!modelsLoading && !modelsError && modelOptions.length === 0 && (
               <p className="text-xs text-warning">{t("reasoning.custom.noModels")}</p>
             )}
+            {!modelsLoading && displayedModels.length > 0 && !model && (
+              <p className="text-xs text-warning">{t("reasoning.custom.selectModelHint")}</p>
+            )}
           </>
         )}
-        <ModelCardList models={displayedModels} selectedModel={model} onModelSelect={setModel} />
+        {displayedModels.length > MODEL_SEARCH_THRESHOLD ? (
+          <SearchableModelList
+            models={displayedModels}
+            selectedModel={model}
+            onModelSelect={setModel}
+          />
+        ) : (
+          <ModelCardList
+            models={displayedModels}
+            selectedModel={model}
+            onModelSelect={setModel}
+            truncateDescription
+          />
+        )}
       </div>
     </>
   );

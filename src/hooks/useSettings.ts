@@ -22,6 +22,7 @@ export interface TranscriptionSettings {
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
   customDictionary: string[];
   snippets: Snippet[];
   assemblyAiStreaming: boolean;
@@ -42,6 +43,9 @@ export interface CleanupSettings {
 
 export interface HotkeySettings {
   dictationKey: string;
+  /** Hotkeys actually registered by the main process (may be a subset of
+   * dictationKey, e.g. primary-only on GNOME/KDE/Hyprland). Display-only. */
+  activeDictationKey: string | null;
   meetingKey: string;
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
@@ -56,6 +60,7 @@ export interface OnboardingSettings {
 export interface MicrophoneSettings {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
+  selectedMicDeviceLabel: string;
 }
 
 export interface ApiKeySettings {
@@ -66,8 +71,11 @@ export interface ApiKeySettings {
   xaiApiKey: string;
   smallestApiKey: string;
   mistralApiKey: string;
+  openrouterApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
+  cortiApiKey: string;
+  tinfoilApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -97,7 +105,8 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { setCustomDictionary, applyCustomDictionaryFromExternal } = store;
+  const { setCustomDictionary, applyCustomDictionaryFromExternal, applySnippetsFromExternal } =
+    store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -126,6 +135,16 @@ function useSettingsInternal() {
     });
     return unsubscribe;
   }, [applyCustomDictionaryFromExternal]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.electronAPI?.onSnippetsUpdated) return;
+    const unsubscribe = window.electronAPI.onSnippetsUpdated((snippets: Snippet[]) => {
+      if (Array.isArray(snippets)) {
+        applySnippetsFromExternal(snippets);
+      }
+    });
+    return unsubscribe;
+  }, [applySnippetsFromExternal]);
 
   // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
@@ -214,6 +233,7 @@ function useSettingsInternal() {
     transcriptionMode: store.transcriptionMode,
     remoteTranscriptionType: store.remoteTranscriptionType,
     remoteTranscriptionUrl: store.remoteTranscriptionUrl,
+    remoteTranscriptionModel: store.remoteTranscriptionModel,
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
@@ -234,6 +254,8 @@ function useSettingsInternal() {
     xaiApiKey: store.xaiApiKey,
     smallestApiKey: store.smallestApiKey,
     mistralApiKey: store.mistralApiKey,
+    openrouterApiKey: store.openrouterApiKey,
+    tinfoilApiKey: store.tinfoilApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,
@@ -258,6 +280,7 @@ function useSettingsInternal() {
     setTranscriptionMode: store.setTranscriptionMode,
     setRemoteTranscriptionType: store.setRemoteTranscriptionType,
     setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
+    setRemoteTranscriptionModel: store.setRemoteTranscriptionModel,
     setCleanupMode: store.setCleanupMode,
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
@@ -304,8 +327,9 @@ function useSettingsInternal() {
     setPanelStartPosition: store.setPanelStartPosition,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
+    selectedMicDeviceLabel: store.selectedMicDeviceLabel,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
-    setSelectedMicDeviceId: store.setSelectedMicDeviceId,
+    setSelectedMicDevice: store.setSelectedMicDevice,
     autoLearnCorrections,
     setAutoLearnCorrections,
     showTranscriptionPreview: store.showTranscriptionPreview,

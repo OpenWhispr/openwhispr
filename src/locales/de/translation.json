@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
+      "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
       "trySuggestions": "Versuchen Sie: {{suggestions}}",
       "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "Der native Push-to-Talk-Listener ist nicht verfügbar"
   },
   "common": {
+    "retry": "Erneut versuchen",
     "back": "Zurück",
     "next": "Weiter",
     "complete": "Fertig",
@@ -275,11 +277,6 @@
       "title": "Meeting-Notizen",
       "description": "Erfasse und fasse deine Meetings zusammen",
       "autoDetect": "OpenWhispr erkennt automatisch, wenn du in einem Meeting bist, und bietet an, Notizen zu starten — ohne dich wird nichts aufgenommen.",
-      "notification": {
-        "title": "Meeting erkannt",
-        "body": "Es klingt, als wärst du in einem Meeting. Notizen aufnehmen?",
-        "cta": "Aufnahme starten"
-      },
       "hotkeyLabel": "Meeting-Hotkey",
       "hotkeyHint": "Optional — drücke ihn in jedem Meeting, um sofort eine Notiz zu starten."
     },
@@ -296,6 +293,7 @@
         "createAccount": "Corti-Konto erstellen",
         "creditBadge": "50 $ Gratis-Guthaben",
         "regionHint": "Wähle, wo dein Audio verarbeitet wird — USA oder EU.",
+        "llmHint": "Sprachmodell-Funktionen laufen ebenfalls über die Corti-Modelle.",
         "useCorti": "Corti verwenden",
         "skip": "Jetzt nicht",
         "step1": "Registriere dich auf corti.ai",
@@ -449,7 +447,13 @@
       "noModels": "Keine Modelle zurückgegeben. Prüfen Sie die Endpoint-URL.",
       "providerName": "Benutzerdefiniert",
       "ownerLabel": "Anbieter: {{owner}}",
-      "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden."
+      "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden.",
+      "searchPlaceholder": "Modelle suchen…",
+      "selectedGroup": "Ausgewählt",
+      "otherGroup": "Sonstige",
+      "noSearchResults": "Keine Modelle für „{{query}}“",
+      "selectModelHint": "Noch kein Modell ausgewählt — wählen Sie eines aus der Liste unten.",
+      "keyRequiredHint": "Für die Inferenz ist ein API-Schlüssel erforderlich — fügen Sie einen hinzu, um diesen Anbieter zu nutzen."
     },
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
@@ -486,6 +490,10 @@
       "customModelId": "Eigene Modell-ID",
       "customModelPlaceholder": "Modell-ID oder Deployment-Name eingeben",
       "suggestedModels": "Empfohlene Modelle",
+      "browseModels": "Alle Modelle durchsuchen",
+      "loadingModels": "Modelle werden geladen...",
+      "allModels": "Alle Modelle in {{region}}",
+      "modelListError": "Modelle konnten nicht geladen werden.",
       "bedrock": {
         "ssoHelp": "Verwendet Ihre AWS-CLI-SSO-Konfiguration. Stellen Sie sicher, dass Sie 'aws sso login' ausgeführt haben.",
         "keysHelp": "Geben Sie Ihre AWS-IAM-Zugriffsschlüssel ein."
@@ -498,6 +506,14 @@
         "adcHelp": "Verwendet Application Default Credentials. Führen Sie aus: gcloud auth application-default login",
         "apikeyHelp": "API-Schlüssel für Vertex AI Express Mode aus Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modell nicht mehr verfügbar",
+      "modelRetired": "Tinfoil hat {{from}} eingestellt. Zu {{to}} gewechselt.",
+      "refreshingModels": "Modelle werden aktualisiert…"
+    },
+    "corti": {
+      "euOnly": "Corti-Modelle sind nur in der EU-Region verfügbar."
     }
   },
   "transcription": {
@@ -522,8 +538,13 @@
     "corti": {
       "clientId": "Client-ID",
       "clientSecret": "Client-Secret",
+      "apiKey": "API-Schlüssel",
       "environment": "Datenregion",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
+      "docsLink": "Zur Dokumentation"
     }
   },
   "hooks": {
@@ -541,6 +562,10 @@
       "noAudio": {
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
+      },
+      "partialTranscription": {
+        "title": "Unvollständige Transkription",
+        "description": "Ein Teil der Aufnahme konnte nicht transkribiert werden."
       },
       "errorDescriptions": {
         "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
@@ -727,6 +752,11 @@
       "welcomeBack": "Willkommen zurück",
       "welcomeBackName": "Willkommen zurück, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Mit SSO anmelden",
+      "emailRequired": "Geben Sie Ihre geschäftliche E-Mail-Adresse ein, um SSO zu verwenden.",
+      "failed": "Single Sign-on fehlgeschlagen. Bitte versuchen Sie es erneut."
+    },
     "social": {
       "completeInBrowser": "Anmeldung im Browser abschließen",
       "continueWithApple": "Weiter mit Apple",
@@ -902,7 +932,9 @@
     "recording": "Aufnahme",
     "tryShortcut": "Versuchen Sie Ctrl+Shift+K",
     "tryShortcutMac": "Versuchen Sie ⌘⇧K",
-    "remove": "Hotkey entfernen"
+    "remove": "Hotkey entfernen",
+    "addAnother": "Weiteren Hotkey hinzufügen",
+    "duplicate": "Bereits hinzugefügt"
   },
   "languageSelector": {
     "noLanguagesFound": "Keine Sprachen gefunden",
@@ -999,7 +1031,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Anbieter",
       "run": "Test ausführen",
-      "customEndpoint": "Benutzerdefinierter Endpoint"
+      "customEndpoint": "Benutzerdefinierter Endpoint",
+      "apiKeyMissing": "{{provider}} API-Schlüssel nicht konfiguriert. Fügen Sie ihn in den KI-Modelle-Einstellungen hinzu."
     },
     "view": {
       "customPrompt": "Benutzerdefinierter Prompt",
@@ -1383,9 +1416,9 @@
         "linuxPttSetupTitle": "Gedrückt halten zum Sprechen erfordert Einrichtung",
         "linuxPttSetupDescription": "Ihr Benutzer benötigt Zugriff auf die Tastatureingabegeräte.",
         "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an.",
-        "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen bleiben nicht bestehen",
-        "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben, daher überstehen Tastenkombinationen kein Neuladen der Hyprland-Konfiguration. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
-        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Bindung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
+        "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen werden nicht dauerhaft gespeichert",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben. Deshalb bleiben Tastenkombinationen nach einem Neuladen der Hyprland-Konfiguration nicht erhalten. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
+        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
@@ -1836,10 +1869,13 @@
   },
   "models": {
     "learnMore": "Mehr erfahren",
+    "noneAvailable": "Keine Modelle verfügbar",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Schnelle mehrsprachige ASR mit automatischer Spracherkennung (25 Sprachen)",
-        "parakeet_unified_en_0_6b": "Englisch-only ASR mit Spitzen-Genauigkeit (5,91% durchschnittliche WER)"
+        "parakeet_unified_en_0_6b": "Englisch-only ASR mit Spitzen-Genauigkeit (5,91% durchschnittliche WER)",
+        "nemotron_speech_streaming_en_0_6b": "Englische Streaming-ASR von NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "Mehrsprachige Streaming-ASR von NVIDIA Nemotron mit automatischer Spracherkennung (15 Sprachen)"
       },
       "whisper": {
         "tiny": "Am schnellsten, geringere Qualität",
@@ -1859,7 +1895,8 @@
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
         "smallest_pulse": "Mehrsprachige Cloud-Transkription von Smallest AI",
-        "smallest_pulse_pro": "Nur Englisch, höchste Genauigkeit von Smallest AI"
+        "smallest_pulse_pro": "Nur Englisch, höchste Genauigkeit von Smallest AI",
+        "tinfoil_voxtral": "Nachweisbar private Transkription"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
@@ -1868,6 +1905,8 @@
         "openai_gpt_4_1": "Starke Basis, 1M Kontext",
         "openai_gpt_4_1_mini": "Kleineres GPT-4.1-Modell",
         "openai_gpt_4_1_nano": "GPT-4.1 mit der niedrigsten Latenz",
+        "anthropic_claude_fable_5": "Leistungsstärkstes Modell von Anthropic, Mythos-Klasse",
+        "anthropic_claude_sonnet_5": "Schnelles, leistungsfähiges Agent-Modell zu geringeren Kosten",
         "anthropic_claude_sonnet_4_6": "Ausgewogene Leistung",
         "anthropic_claude_sonnet_4_5": "Vorherige Sonnet-Generation",
         "anthropic_claude_haiku_4_5": "Schnell mit nahezu Frontier-Intelligenz",
@@ -1886,17 +1925,33 @@
         "groq_compound": "Groqs Compound-System, 450 T/s",
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext",
+        "openai_gpt_5_6_sol": "Flaggschiff-GPT-5.6 für komplexes Coding und Forschung",
+        "openai_gpt_5_6_terra": "Ausgewogenes GPT-5.6 für die tägliche Arbeit",
+        "openai_gpt_5_6_luna": "Schnellstes und günstigstes GPT-5.6",
         "openai_gpt_5_5": "Frontier-Modell für komplexes Reasoning",
-        "anthropic_claude_opus_4_8": "Leistungsstärkstes Claude-Modell",
+        "anthropic_claude_opus_4_8": "Leistungsstarkes Opus-Modell für Ehrlichkeit und Zuverlässigkeit",
         "anthropic_claude_opus_4_7": "Leistungsstarkes Opus-Modell",
         "anthropic_claude_opus_4_6": "Vorherige Opus-Generation, 1M Kontext",
-        "anthropic_claude_opus_4_5": "Früheres Opus-Modell"
+        "anthropic_claude_opus_4_5": "Früheres Opus-Modell",
+        "tinfoil_deepseek_v4_pro": "Privates Long-Context-Reasoning in sicheren Enklaven, 800K Kontext",
+        "tinfoil_glm_5_2": "Privates agentisches Engineering-Modell in sicheren Enklaven, 384K Kontext",
+        "tinfoil_kimi_k2_6": "Privates Modell für langfristiges Coding und Multimodalität, 256K Kontext",
+        "tinfoil_gemma4_31b": "Privates mehrsprachiges Reasoning-Modell mit Tool-Aufrufen, 256K Kontext",
+        "tinfoil_gpt_oss_120b": "Privates Open-Weight-Reasoning-Modell mit Tool-Nutzung, 131K Kontext",
+        "tinfoil_llama3_3_70b": "Privates Konversationsmodell mit Tool-Aufrufen, 128K Kontext",
+        "corti_corti_s1_instant": "Schnelles Gesundheitsmodell, ohne Reasoning-Spur",
+        "corti_corti_s1": "Leistungsfähigstes klinisches Modell mit Reasoning",
+        "corti_corti_s1_mini_instant": "Kompaktes Gesundheitsmodell, am schnellsten und günstigsten",
+        "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "Leistungsstärkstes Claude-Modell. Ideal für die schwierigsten Agent-Modus-Aufgaben.",
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
-        "bedrock_claude_sonnet_4_6": "Ausgewogen. Empfohlener Standard für den Agent-Modus.",
-        "bedrock_claude_opus_4_7": "Höchste Intelligenz. Für komplexe Aufgaben im Agent-Modus.",
-        "bedrock_nova_lite": "Günstigste Option. Nativ in AWS, ideal für hohe Volumen.",
+        "bedrock_claude_sonnet_5": "Ausgewogen. Empfohlener Standard für den Agent-Modus.",
+        "bedrock_claude_opus_4_8": "Höchste Intelligenz. Für komplexe Aufgaben im Agent-Modus.",
+        "bedrock_gpt_oss_120b": "Offenes OpenAI-Modell. Starkes Reasoning zu geringen Kosten.",
+        "bedrock_deepseek_v3_2": "Offenes Frontier-Modell. Starker Wert für den Agent-Modus.",
+        "bedrock_qwen3_next_80b": "Sparsames offenes Modell. Schnell und mehrsprachig.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -1926,7 +1981,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Googles neuestes multimodales Modell, starkes Reasoning",
         "gemma_gemma_4_e2b_it_q4_k_m": "Kompaktes Gemma 4 von Google, schnell und effizient",
         "gemma_gemma_3_12b_it_q4_k_m": "Googles Mittelklasse-Modell, starkes Reasoning",
-        "gemma_gemma_3_1b_it_q4_k_m": "Ultraschnelles Google-Modell, ideal für kurze Diktat-Bereinigung"
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultraschnelles Google-Modell, ideal für kurze Diktat-Bereinigung",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Effizientes On-Device-Modell von Liquid AI, hervorragende Anweisungsbefolgung",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE von Liquid AI, hohe Qualität mit nur 1,5B aktiven Parametern",
+        "liquidai_lfm2_2_6b_q4_k_m": "Ausgewogenes LFM2 für hochwertigere Bereinigung",
+        "liquidai_lfm2_5_350m_q8_0": "Ultraleichtes Modell für schnelle Diktatbereinigung",
+        "liquidai_lfm2_5_230m_q8_0": "Winziges Modell, sofortige Bereinigung auf bescheidener Hardware"
       },
       "diarization": {
         "segmentation": "Sprachgrenzerkennung für die Sprecherzuordnung",
@@ -2081,6 +2141,7 @@
       "transcribingProvider": "Wird über {{provider}} transkribiert...",
       "cancelTranscription": "Transkription abbrechen",
       "transcriptionComplete": "Transkription abgeschlossen",
+      "partialWarning": "Ein Teil der Audiodatei konnte nicht transkribiert werden.",
       "openNote": "Notiz öffnen",
       "uploadAnother": "Weitere hochladen",
       "retry": "Erneut versuchen",
@@ -2108,7 +2169,40 @@
       "switchToCloudForLargeFiles": "Wechsle zu OpenWhispr Cloud, um diese Datei zu transkribieren.",
       "createAccount": "Konto erstellen",
       "upgrade": "Upgraden",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "oder",
+      "urlPlaceholder": "YouTube- oder Audio-URL einfügen",
+      "urlDownloading": "Audio wird heruntergeladen...",
+      "urlResolving": "URL wird aufgelöst...",
+      "urlInvalid": "Ungültige URL. Fügen Sie einen YouTube-Link oder eine direkte Audio-URL ein.",
+      "urlVideoUnavailable": "Dieses Video ist nicht verfügbar. Es ist möglicherweise privat, entfernt oder geografisch gesperrt.",
+      "urlPlaylistNotSupported": "Playlists werden nicht unterstützt. Fügen Sie die URL eines einzelnen Videos ein.",
+      "urlContentTypeInvalid": "Diese URL verweist nicht auf eine Audio- oder Videodatei.",
+      "urlDownloadFailed": "Download fehlgeschlagen. Überprüfen Sie die URL und versuchen Sie es erneut.",
+      "urlCancelDownload": "Download abbrechen",
+      "addToQueue": "Zur Warteschlange hinzufügen",
+      "queueProgress": "{{completed}}/{{total}} abgeschlossen",
+      "cancelAll": "Alle abbrechen",
+      "clearQueue": "Leeren",
+      "pasteUrls": "URLs einfügen (eine pro Zeile)",
+      "speakerDetection": "Sprechererkennung",
+      "speakerDetectionDescription": "Verschiedene Sprecher im Audio identifizieren",
+      "numSpeakersPlaceholder": "Automatisch erkennen",
+      "downloadingModels": "Modelle werden heruntergeladen...",
+      "openaiDiarizeNote": "Überschreibt Ihr Transkriptionsmodell mit gpt-4o-transcribe-diarize, dem einzigen OpenAI-Modell mit Sprechererkennung. Die Kosten können von Ihrem gewählten Modell abweichen.",
+      "mistralDiarizeNote": "Sprechererkennung ohne Zusatzkosten mit Voxtral enthalten.",
+      "groqDiarizeNote": "Sprechererkennung ist mit Groq nicht verfügbar. Stattdessen wird die lokale Diarisierung verwendet.",
+      "batchCancelled": "Abgebrochen",
+      "batchTranscriptionFailed": "Transkription fehlgeschlagen",
+      "batchSaveFailed": "Notiz konnte nicht gespeichert werden",
+      "batchUnknownError": "Unbekannter Fehler",
+      "removeFromQueue": "Aus Warteschlange entfernen",
+      "diarizationRunsLocally": "Die Sprechererkennung läuft lokal auf Ihrem Gerät.",
+      "urlSubmit": "Link hinzufügen",
+      "urlsSkipped": "Einige Links konnten nicht hinzugefügt werden ({{n}})",
+      "queueFailed": "{{n}} fehlgeschlagen",
+      "urlFileTooLarge": "Die Datei ist zu groß zum Herunterladen. Die maximale Größe beträgt 500 MB.",
+      "urlYoutubeBlocked": "YouTube blockiert Downloads aus Ihrem Netzwerk vorübergehend. Versuchen Sie es später erneut."
     },
     "meeting": {
       "title": "Besprechungsnotizen",
@@ -2155,6 +2249,7 @@
       },
       "errors": {
         "noModel": "Kein KI-Modell ausgewählt. Konfigurieren Sie eins in den Einstellungen.",
+        "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen.",
         "actionFailed": "Aktion fehlgeschlagen"
       }
     },
@@ -2408,6 +2503,10 @@
       "hotkeyUnavailable": {
         "title": "Tastenkombination nicht verfügbar",
         "description": "Die ausgewählte Tastenkombination konnte nicht registriert werden. Bitte wähle eine andere in den Einstellungen."
+      },
+      "gpuFallback": {
+        "title": "GPU-Beschleunigung nicht verfügbar",
+        "description": "Die Transkription verwendet stattdessen die CPU. Du kannst die GPU-Beschleunigung in den Einstellungen deaktivieren."
       },
       "addedToDict": "{{words}} zu deinem Wörterbuch hinzugefügt",
       "undo": "Rückgängig",
@@ -2848,5 +2947,15 @@
       "successDescription": "Willkommen bei {{name}}.",
       "errorTitle": "Einladung konnte nicht angenommen werden"
     }
+  },
+  "meetingNotification": {
+    "title": "Meeting erkannt",
+    "body": {
+      "detected": "Es klingt, als wärst du in einem Meeting. Notizen aufnehmen?",
+      "starting": "Dein Meeting beginnt gleich. Notizen aufnehmen?",
+      "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
+    },
+    "start": "Notizen aufnehmen",
+    "join": "Beitreten & transkribieren"
   }
 }

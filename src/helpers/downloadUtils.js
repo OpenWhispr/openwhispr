@@ -5,6 +5,7 @@ const { net } = require("electron");
 const { execFile } = require("child_process");
 const { pipeline } = require("stream");
 const debugLogger = require("./debugLogger");
+const { runSystemTar } = require("./systemTar");
 
 const USER_AGENT = "OpenWhispr/1.0";
 const PROGRESS_THROTTLE_MS = 100;
@@ -412,37 +413,45 @@ async function checkDiskSpace(directory, requiredBytes) {
   }
 }
 
-function extractZipWindows(zipPath, destDir) {
+async function extractZipWindows(zipPath, destDir) {
+  try {
+    await runSystemTar(zipPath, destDir);
+    return;
+  } catch (error) {
+    debugLogger.info("tar extraction failed, trying PowerShell", { error: error.message });
+  }
+
   return new Promise((resolve, reject) => {
-    execFile("tar", ["-xf", zipPath, "-C", destDir], (error) => {
-      if (error) {
-        debugLogger.info("tar extraction failed, trying PowerShell", { error: error.message });
-        execFile(
-          "powershell",
-          [
-            "-NoProfile",
-            "-Command",
-            `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`,
-          ],
-          (psError) => {
-            if (psError) reject(new Error(`Zip extraction failed: ${psError.message}`));
-            else resolve();
-          }
-        );
-      } else {
-        resolve();
+    execFile(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`,
+      ],
+      (psError) => {
+        if (psError) reject(new Error(`Zip extraction failed: ${psError.message}`));
+        else resolve();
       }
-    });
+    );
   });
+}
+
+async function extractTarGz(archivePath, destDir) {
+  try {
+    await runSystemTar(archivePath, destDir);
+    return;
+  } catch (error) {
+    debugLogger.info("system tar failed, using JS extraction", { error: error.message });
+  }
+
+  const tar = require("tar");
+  await tar.x({ file: archivePath, cwd: destDir });
 }
 
 function extractArchive(archivePath, destDir) {
   if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
-    return new Promise((resolve, reject) => {
-      execFile("tar", ["-xzf", archivePath, "-C", destDir], (err) => {
-        err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
-      });
-    });
+    return extractTarGz(archivePath, destDir);
   }
 
   if (process.platform === "win32") {

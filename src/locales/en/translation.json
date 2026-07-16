@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
+      "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
       "slotConflict": "This hotkey is already used for {{slot}}."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "Push-to-Talk native listener not available"
   },
   "common": {
+    "retry": "Retry",
     "back": "Back",
     "next": "Next",
     "complete": "Complete",
@@ -275,11 +277,6 @@
       "title": "Meeting notes",
       "description": "Capture and summarize your meetings",
       "autoDetect": "OpenWhispr automatically detects when you're in a meeting and offers to start notes — nothing is recorded without you.",
-      "notification": {
-        "title": "Meeting detected",
-        "body": "It sounds like you're in a meeting. Want to take notes?",
-        "cta": "Start Recording"
-      },
       "hotkeyLabel": "Meeting hotkey",
       "hotkeyHint": "Optional — press it in any meeting to start a note instantly."
     },
@@ -296,6 +293,7 @@
         "createAccount": "Create your Corti account",
         "creditBadge": "$50 free credit",
         "regionHint": "Choose where your audio is processed — US or EU.",
+        "llmHint": "Language model features will also run on Corti models.",
         "useCorti": "Use Corti",
         "skip": "Not now",
         "step1": "Sign up on corti.ai",
@@ -449,7 +447,13 @@
       "noModels": "No models returned. Check your endpoint URL.",
       "providerName": "Custom",
       "ownerLabel": "Owner: {{owner}}",
-      "unableToLoadModels": "Unable to load models from endpoint."
+      "unableToLoadModels": "Unable to load models from endpoint.",
+      "searchPlaceholder": "Search models…",
+      "selectedGroup": "Selected",
+      "otherGroup": "Other",
+      "noSearchResults": "No models match \"{{query}}\"",
+      "selectModelHint": "No model selected yet — choose one from the list below.",
+      "keyRequiredHint": "An API key is required for inference — add one to use this provider."
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
@@ -486,6 +490,10 @@
       "customModelId": "Custom Model ID",
       "customModelPlaceholder": "Enter model ID or deployment name",
       "suggestedModels": "Suggested Models",
+      "browseModels": "Browse all models",
+      "loadingModels": "Fetching models...",
+      "allModels": "All Models in {{region}}",
+      "modelListError": "Could not load models.",
       "bedrock": {
         "ssoHelp": "Uses your AWS CLI SSO configuration. Ensure you have run 'aws sso login'.",
         "keysHelp": "Enter your AWS IAM access keys."
@@ -498,6 +506,14 @@
         "adcHelp": "Uses Application Default Credentials. Run: gcloud auth application-default login",
         "apikeyHelp": "Vertex AI Express Mode API key from Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Model no longer available",
+      "modelRetired": "Tinfoil retired {{from}}. Switched to {{to}}.",
+      "refreshingModels": "Refreshing models…"
+    },
+    "corti": {
+      "euOnly": "Corti's models are only available in the EU region."
     }
   },
   "transcription": {
@@ -522,8 +538,13 @@
     "corti": {
       "clientId": "Client ID",
       "clientSecret": "Client Secret",
+      "apiKey": "API Key",
       "environment": "Data Region",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
+      "docsLink": "Read the docs"
     }
   },
   "hooks": {
@@ -541,6 +562,10 @@
       "noAudio": {
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
+      },
+      "partialTranscription": {
+        "title": "Partial Transcription",
+        "description": "Part of the recording couldn't be transcribed."
       },
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
@@ -726,6 +751,11 @@
       "ready": "Ready",
       "welcomeBack": "Welcome back",
       "welcomeBackName": "Welcome back, {{name}}"
+    },
+    "sso": {
+      "continueWithSSO": "Sign in with SSO",
+      "emailRequired": "Enter your work email to use SSO.",
+      "failed": "Single sign-on failed. Please try again."
     },
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
@@ -990,7 +1020,9 @@
     "recording": "Recording",
     "tryShortcut": "Try Ctrl+Shift+K",
     "tryShortcutMac": "Try ⌘⇧K",
-    "remove": "Remove hotkey"
+    "remove": "Remove hotkey",
+    "addAnother": "Add another hotkey",
+    "duplicate": "Already added"
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",
@@ -1087,7 +1119,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Provider",
       "run": "Run Test",
-      "customEndpoint": "Custom endpoint"
+      "customEndpoint": "Custom endpoint",
+      "apiKeyMissing": "{{provider}} API key not configured. Add it in AI Models settings."
     },
     "view": {
       "customPrompt": "Custom prompt",
@@ -1924,10 +1957,13 @@
   },
   "models": {
     "learnMore": "Learn more",
+    "noneAvailable": "No models available",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
-        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)"
+        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
+        "nemotron_speech_streaming_en_0_6b": "English streaming ASR from NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)"
       },
       "diarization": {
         "segmentation": "Speech boundary detection for speaker diarization",
@@ -1951,7 +1987,8 @@
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
         "smallest_pulse": "Multilingual cloud transcription by Smallest AI",
-        "smallest_pulse_pro": "English-only, highest-accuracy transcription by Smallest AI"
+        "smallest_pulse_pro": "English-only, highest-accuracy transcription by Smallest AI",
+        "tinfoil_voxtral": "Verifiably private transcription"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -1960,6 +1997,8 @@
         "openai_gpt_4_1": "Strong baseline, 1M context",
         "openai_gpt_4_1_mini": "Smaller GPT-4.1 model",
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
+        "anthropic_claude_fable_5": "Anthropic's most capable model, Mythos-class",
+        "anthropic_claude_sonnet_5": "Fast, capable agentic model at lower cost",
         "anthropic_claude_sonnet_4_6": "Balanced performance",
         "anthropic_claude_sonnet_4_5": "Previous Sonnet generation",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
@@ -1978,17 +2017,33 @@
         "groq_compound": "Groq's compound system, 450 T/sec",
         "groq_compound_mini": "Fast compound system, 3x lower latency",
         "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context",
+        "openai_gpt_5_6_sol": "Flagship GPT-5.6 for complex coding and research",
+        "openai_gpt_5_6_terra": "Balanced GPT-5.6 for everyday work",
+        "openai_gpt_5_6_luna": "Fastest, lowest-cost GPT-5.6",
         "openai_gpt_5_5": "Frontier model for complex reasoning",
-        "anthropic_claude_opus_4_8": "Most capable Claude model",
+        "anthropic_claude_opus_4_8": "Powerful Opus model tuned for honesty and reliability",
         "anthropic_claude_opus_4_7": "Powerful Opus model",
         "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_5": "Earlier Opus model",
+        "tinfoil_deepseek_v4_pro": "Private long-context reasoning in secure enclaves, 800K context",
+        "tinfoil_glm_5_2": "Private agentic engineering model in secure enclaves, 384K context",
+        "tinfoil_kimi_k2_6": "Private long-horizon coding and multimodal model, 256K context",
+        "tinfoil_gemma4_31b": "Private multilingual reasoning model with tool calling, 256K context",
+        "tinfoil_gpt_oss_120b": "Private open-weight reasoning model with tool use, 131K context",
+        "tinfoil_llama3_3_70b": "Private conversational model with tool calling, 128K context",
+        "corti_corti_s1_instant": "Fast healthcare model, no reasoning trace",
+        "corti_corti_s1": "Most capable clinical model with reasoning",
+        "corti_corti_s1_mini_instant": "Compact healthcare model, fastest and lowest cost",
+        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Agent Mode tasks.",
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
-        "bedrock_claude_sonnet_4_6": "Balanced workhorse. Best default for Agent Mode.",
-        "bedrock_claude_opus_4_7": "Max intelligence. Best for complex Agent Mode tasks.",
-        "bedrock_nova_lite": "Cheapest option. AWS-native, ideal for high volume.",
+        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Agent Mode.",
+        "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Agent Mode tasks.",
+        "bedrock_gpt_oss_120b": "Open-weight OpenAI model. Strong reasoning at low cost.",
+        "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Agent Mode.",
+        "bedrock_qwen3_next_80b": "Sparse open-weight model. Fast and multilingual.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -2018,7 +2073,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Google's latest multimodal, strong reasoning",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google's compact Gemma 4, fast and efficient",
         "gemma_gemma_3_12b_it_q4_k_m": "Google's mid-range model, strong reasoning",
-        "gemma_gemma_3_1b_it_q4_k_m": "Ultra-fast Google model, best for short dictation cleanup"
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultra-fast Google model, best for short dictation cleanup",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AI's efficient on-device model, excellent instruction following",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AI's MoE, high quality with only 1.5B active params",
+        "liquidai_lfm2_2_6b_q4_k_m": "Balanced LFM2 for higher quality cleanup",
+        "liquidai_lfm2_5_350m_q8_0": "Ultra-light model for fast dictation cleanup",
+        "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware"
       }
     }
   },
@@ -2280,6 +2340,7 @@
       "transcribingProvider": "Transcribing via {{provider}}...",
       "cancelTranscription": "Cancel transcription",
       "transcriptionComplete": "Transcription complete",
+      "partialWarning": "Part of the audio couldn't be transcribed.",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",
       "retry": "Retry",
@@ -2307,7 +2368,40 @@
       "switchToCloudForLargeFiles": "Switch to OpenWhispr Cloud to transcribe this file.",
       "createAccount": "Create Account",
       "upgrade": "Upgrade",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "or",
+      "urlPlaceholder": "Paste a YouTube or audio URL",
+      "urlDownloading": "Downloading audio...",
+      "urlResolving": "Resolving URL...",
+      "urlInvalid": "Not a valid URL. Paste a YouTube link or a direct audio file URL.",
+      "urlVideoUnavailable": "This video is unavailable. It may be private, removed, or geo-blocked.",
+      "urlPlaylistNotSupported": "Playlists are not supported. Paste a single video URL.",
+      "urlContentTypeInvalid": "This URL does not point to an audio or video file.",
+      "urlDownloadFailed": "Download failed. Check the URL and try again.",
+      "urlCancelDownload": "Cancel download",
+      "addToQueue": "Add to queue",
+      "queueProgress": "{{completed}}/{{total}} completed",
+      "cancelAll": "Cancel all",
+      "clearQueue": "Clear",
+      "pasteUrls": "Paste URLs (one per line)",
+      "speakerDetection": "Speaker detection",
+      "speakerDetectionDescription": "Identify different speakers in the audio",
+      "numSpeakersPlaceholder": "Auto-detect",
+      "downloadingModels": "Downloading models...",
+      "openaiDiarizeNote": "Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.",
+      "mistralDiarizeNote": "Speaker detection included at no extra cost with Voxtral.",
+      "groqDiarizeNote": "Speaker detection is not available with Groq. Local diarization will be used instead.",
+      "batchCancelled": "Cancelled",
+      "batchTranscriptionFailed": "Transcription failed",
+      "batchSaveFailed": "Failed to save note",
+      "batchUnknownError": "Unknown error",
+      "removeFromQueue": "Remove from queue",
+      "diarizationRunsLocally": "Speaker detection runs locally on your device.",
+      "urlSubmit": "Add link",
+      "urlsSkipped": "Some links couldn't be added ({{n}})",
+      "queueFailed": "{{n}} failed",
+      "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
+      "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while."
     },
     "meeting": {
       "title": "Meeting Notes",
@@ -2370,6 +2464,7 @@
       },
       "errors": {
         "noModel": "No AI model selected. Configure one in Settings.",
+        "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
         "actionFailed": "Action failed"
       }
     },
@@ -2544,6 +2639,10 @@
       "hotkeyUnavailable": {
         "title": "Hotkey unavailable",
         "description": "The selected hotkey could not be registered. Please choose a different one in settings."
+      },
+      "gpuFallback": {
+        "title": "GPU acceleration unavailable",
+        "description": "Transcription is using the CPU instead. You can disable GPU acceleration in Settings."
       },
       "addedToDict": "Added {{words}} to your dictionary",
       "undo": "Undo",
@@ -2848,5 +2947,15 @@
       "you": "You",
       "others": "Others"
     }
+  },
+  "meetingNotification": {
+    "title": "Meeting detected",
+    "body": {
+      "detected": "It sounds like you're in a meeting. Want to take notes?",
+      "starting": "Your meeting is starting. Want to take notes?",
+      "underway": "It sounds like your meeting is underway. Want to take notes?"
+    },
+    "start": "Take notes",
+    "join": "Join & transcribe"
   }
 }

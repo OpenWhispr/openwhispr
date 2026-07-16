@@ -198,7 +198,6 @@ export function HotkeyInput({
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
   const [isFnHeld, setIsFnHeld] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const lastCapturedHotkeyRef = useRef<string | null>(null);
   const keyDownTimeRef = useRef<number>(0);
   const warningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fnHeldRef = useRef(false);
@@ -286,7 +285,6 @@ export function HotkeyInput({
       }
 
       setValidationWarning(null);
-      lastCapturedHotkeyRef.current = hotkey;
       onChange(hotkey);
       setIsCapturing(false);
       setActiveModifiers(new Set());
@@ -427,8 +425,7 @@ export function HotkeyInput({
     setActiveModifiers(new Set());
     setValidationWarning(null);
     clearFnHeld();
-    window.electronAPI?.setHotkeyListeningMode?.(false, lastCapturedHotkeyRef.current);
-    lastCapturedHotkeyRef.current = null;
+    window.electronAPI?.setHotkeyListeningMode?.(false);
     onBlur?.();
   }, [onBlur, clearFnHeld]);
 
@@ -440,7 +437,7 @@ export function HotkeyInput({
 
   useEffect(() => {
     return () => {
-      window.electronAPI?.setHotkeyListeningMode?.(false, null);
+      window.electronAPI?.setHotkeyListeningMode?.(false);
       if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
     };
   }, []);
@@ -475,22 +472,25 @@ export function HotkeyInput({
   const isGlobe = isGlobeLikeHotkey(value);
   const hotkeyParts = value?.includes("+") ? displayValue.split("+") : [];
 
-  // mousedown is prevented so clicking never focuses the container and starts capture
+  // mousedown is prevented so clicking never focuses the container and starts
+  // capture; focus/key events are stopped so keyboard use doesn't either.
   const clearButton =
     onClear && value && !isCapturing && !disabled ? (
       <button
         type="button"
-        tabIndex={-1}
         aria-label={t("hotkeyInput.remove")}
         onMouseDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
         }}
+        onFocus={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        onKeyUp={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           onClear();
         }}
-        className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-muted-foreground/50 hover:text-destructive cursor-pointer"
+        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 transition-opacity duration-150 text-muted-foreground/50 hover:text-destructive cursor-pointer"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>

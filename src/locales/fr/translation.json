@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
+      "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
       "trySuggestions": "Essayez : {{suggestions}}",
       "slotConflict": "Ce raccourci est déjà utilisé pour {{slot}}."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "L'écouteur natif Push-to-Talk n'est pas disponible"
   },
   "common": {
+    "retry": "Réessayer",
     "back": "Retour",
     "next": "Suivant",
     "complete": "Terminer",
@@ -275,11 +277,6 @@
       "title": "Notes de réunion",
       "description": "Capturez et résumez vos réunions",
       "autoDetect": "OpenWhispr détecte automatiquement quand vous êtes en réunion et vous propose de démarrer des notes — rien n'est enregistré sans vous.",
-      "notification": {
-        "title": "Réunion détectée",
-        "body": "On dirait que vous êtes en réunion. Vous voulez prendre des notes ?",
-        "cta": "Démarrer l'enregistrement"
-      },
       "hotkeyLabel": "Raccourci réunion",
       "hotkeyHint": "Facultatif — appuyez dessus pendant une réunion pour démarrer une note instantanément."
     },
@@ -296,6 +293,7 @@
         "createAccount": "Créez votre compte Corti",
         "creditBadge": "50 $ de crédit offert",
         "regionHint": "Choisissez où votre audio est traité — États-Unis ou UE.",
+        "llmHint": "Les fonctionnalités de modèle de langage s'exécuteront aussi sur les modèles Corti.",
         "useCorti": "Utiliser Corti",
         "skip": "Pas maintenant",
         "step1": "Inscrivez-vous sur corti.ai",
@@ -449,7 +447,13 @@
       "noModels": "Aucun modèle renvoyé. Vérifiez l'URL du endpoint.",
       "providerName": "Personnalisé",
       "ownerLabel": "Propriétaire : {{owner}}",
-      "unableToLoadModels": "Impossible de charger les modèles depuis le endpoint."
+      "unableToLoadModels": "Impossible de charger les modèles depuis le endpoint.",
+      "searchPlaceholder": "Rechercher des modèles…",
+      "selectedGroup": "Sélectionné",
+      "otherGroup": "Autre",
+      "noSearchResults": "Aucun modèle ne correspond à « {{query}} »",
+      "selectModelHint": "Aucun modèle sélectionné — choisissez-en un dans la liste ci-dessous.",
+      "keyRequiredHint": "Une clé API est requise pour l'inférence — ajoutez-en une pour utiliser ce fournisseur."
     },
     "getApiKey": "Obtenir la clé API ->",
     "selectModel": "Sélectionner un modèle",
@@ -486,6 +490,10 @@
       "customModelId": "ID de modèle personnalisé",
       "customModelPlaceholder": "Saisissez un ID de modèle ou un nom de déploiement",
       "suggestedModels": "Modèles suggérés",
+      "browseModels": "Parcourir tous les modèles",
+      "loadingModels": "Récupération des modèles...",
+      "allModels": "Tous les modèles dans {{region}}",
+      "modelListError": "Impossible de charger les modèles.",
       "bedrock": {
         "ssoHelp": "Utilise votre configuration SSO d'AWS CLI. Assurez-vous d'avoir exécuté 'aws sso login'.",
         "keysHelp": "Saisissez vos clés d'accès AWS IAM."
@@ -498,6 +506,14 @@
         "adcHelp": "Utilise Application Default Credentials. Exécutez : gcloud auth application-default login",
         "apikeyHelp": "Clé API Vertex AI Express Mode obtenue depuis Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modèle non disponible",
+      "modelRetired": "Tinfoil a retiré {{from}}. Basculé vers {{to}}.",
+      "refreshingModels": "Actualisation des modèles…"
+    },
+    "corti": {
+      "euOnly": "Les modèles Corti ne sont disponibles que dans la région UE."
     }
   },
   "transcription": {
@@ -522,8 +538,13 @@
     "corti": {
       "clientId": "ID client",
       "clientSecret": "Secret client",
+      "apiKey": "Clé API",
       "environment": "Région des données",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil diffuse avec Voxtral Mini 4B et traite les lots avec Voxtral Small 24B.",
+      "docsLink": "Voir la documentation"
     }
   },
   "hooks": {
@@ -541,6 +562,10 @@
       "noAudio": {
         "title": "Aucun audio détecté",
         "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."
+      },
+      "partialTranscription": {
+        "title": "Transcription partielle",
+        "description": "Une partie de l'enregistrement n'a pas pu être transcrite."
       },
       "errorDescriptions": {
         "sessionExpired": "Votre session OpenWhispr Cloud est indisponible. Reconnectez-vous depuis Paramètres.",
@@ -726,6 +751,11 @@
       "ready": "Prêt",
       "welcomeBack": "Bon retour",
       "welcomeBackName": "Bon retour, {{name}}"
+    },
+    "sso": {
+      "continueWithSSO": "Se connecter avec le SSO",
+      "emailRequired": "Saisissez votre e-mail professionnel pour utiliser le SSO.",
+      "failed": "Échec de l’authentification unique. Veuillez réessayer."
     },
     "social": {
       "completeInBrowser": "Terminez la connexion dans votre navigateur",
@@ -950,7 +980,9 @@
     "recording": "Enregistrement",
     "tryShortcut": "Essayez Ctrl+Shift+K",
     "tryShortcutMac": "Essayez ⌘⇧K",
-    "remove": "Supprimer le raccourci"
+    "remove": "Supprimer le raccourci",
+    "addAnother": "Ajouter un autre raccourci",
+    "duplicate": "Déjà ajouté"
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",
@@ -1047,7 +1079,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Fournisseur",
       "run": "Lancer le test",
-      "customEndpoint": "Endpoint personnalisé"
+      "customEndpoint": "Endpoint personnalisé",
+      "apiKeyMissing": "Clé API {{provider}} non configurée. Ajoutez-la dans les paramètres Modèles IA."
     },
     "view": {
       "customPrompt": "Prompt personnalisé",
@@ -1432,8 +1465,8 @@
         "linuxPttSetupDescription": "Votre utilisateur a besoin d'accéder aux périphériques de saisie clavier.",
         "linuxPttSetupNote": "Après avoir exécuté la commande, déconnectez-vous et reconnectez-vous.",
         "hyprlandConfigWriteWarningTitle": "Les raccourcis Hyprland ne seront pas conservés",
-        "hyprlandConfigWriteWarningDescription": "OpenWhispr ne peut pas écrire dans {{path}} ; les raccourcis ne survivront donc pas à un rechargement de la configuration Hyprland. Assurez-vous que le fichier existe et qu'il est accessible en écriture.",
-        "hyprlandUnbindDescription": "Sur Hyprland, OpenWhispr réserve le raccourci sélectionné. Toute association Hyprland existante utilisant la même combinaison de touches sera supprimée lorsque OpenWhispr enregistrera son raccourci."
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr ne peut pas écrire dans {{path}} ; les raccourcis ne survivront donc pas à un rechargement de la configuration Hyprland. Vérifiez que le fichier existe et qu'il est accessible en écriture.",
+        "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr réserve le raccourci sélectionné. Tout raccourci Hyprland existant utilisant la même combinaison de touches sera supprimé quand OpenWhispr enregistrera son raccourci."
       },
       "meetingHotkey": {
         "title": "Raccourci mode réunion",
@@ -1884,10 +1917,13 @@
   },
   "models": {
     "learnMore": "En savoir plus",
+    "noneAvailable": "Aucun modèle disponible",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingue rapide avec détection automatique de langue (25 langues)",
-        "parakeet_unified_en_0_6b": "ASR anglais uniquement avec précision de pointe (5,91 % WER moyen)"
+        "parakeet_unified_en_0_6b": "ASR anglais uniquement avec précision de pointe (5,91 % WER moyen)",
+        "nemotron_speech_streaming_en_0_6b": "ASR anglais en streaming de NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "ASR multilingue en streaming de NVIDIA Nemotron avec détection automatique de langue (15 langues)"
       },
       "whisper": {
         "tiny": "Le plus rapide, qualité plus faible",
@@ -1907,7 +1943,8 @@
         "corti_transcribe": "Transcription médicale de qualité clinique",
         "xai_grok_stt": "Reconnaissance vocale haute précision par xAI",
         "smallest_pulse": "Transcription cloud multilingue par Smallest AI",
-        "smallest_pulse_pro": "Anglais uniquement, précision maximale par Smallest AI"
+        "smallest_pulse_pro": "Anglais uniquement, précision maximale par Smallest AI",
+        "tinfoil_voxtral": "Transcription vérifiablement privée"
       },
       "cloud": {
         "openai_gpt_5_2": "Modèle de raisonnement performant",
@@ -1916,6 +1953,8 @@
         "openai_gpt_4_1": "Base solide, contexte 1M",
         "openai_gpt_4_1_mini": "Modèle GPT-4.1 plus petit",
         "openai_gpt_4_1_nano": "GPT-4.1 à la latence la plus faible",
+        "anthropic_claude_fable_5": "Le modèle le plus performant d'Anthropic, classe Mythos",
+        "anthropic_claude_sonnet_5": "Modèle agentique rapide et performant à moindre coût",
         "anthropic_claude_sonnet_4_6": "Performances équilibrées",
         "anthropic_claude_sonnet_4_5": "Génération Sonnet précédente",
         "anthropic_claude_haiku_4_5": "Rapide avec une intelligence de pointe",
@@ -1934,17 +1973,33 @@
         "groq_compound": "Système compound de Groq, 450 T/s",
         "groq_compound_mini": "Système compound rapide, 3x latence réduite",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexte 256K",
+        "openai_gpt_5_6_sol": "GPT-5.6 phare pour le codage et la recherche complexes",
+        "openai_gpt_5_6_terra": "GPT-5.6 équilibré pour le travail quotidien",
+        "openai_gpt_5_6_luna": "Le GPT-5.6 le plus rapide et le plus économique",
         "openai_gpt_5_5": "Modèle frontier pour le raisonnement complexe",
-        "anthropic_claude_opus_4_8": "Modèle Claude le plus performant",
+        "anthropic_claude_opus_4_8": "Modèle Opus puissant axé sur l'honnêteté et la fiabilité",
         "anthropic_claude_opus_4_7": "Modèle Opus puissant",
         "anthropic_claude_opus_4_6": "Génération Opus précédente, contexte 1M",
-        "anthropic_claude_opus_4_5": "Modèle Opus antérieur"
+        "anthropic_claude_opus_4_5": "Modèle Opus antérieur",
+        "tinfoil_deepseek_v4_pro": "Raisonnement privé à long contexte dans des enclaves sécurisées, contexte 800K",
+        "tinfoil_glm_5_2": "Modèle privé d'ingénierie agentique dans des enclaves sécurisées, contexte 384K",
+        "tinfoil_kimi_k2_6": "Modèle privé de codage longue durée et multimodal, contexte 256K",
+        "tinfoil_gemma4_31b": "Modèle privé de raisonnement multilingue avec appel d'outils, contexte 256K",
+        "tinfoil_gpt_oss_120b": "Modèle privé de raisonnement à poids ouverts avec usage d'outils, contexte 131K",
+        "tinfoil_llama3_3_70b": "Modèle privé conversationnel avec appel d'outils, contexte 128K",
+        "corti_corti_s1_instant": "Modèle de santé rapide, sans trace de raisonnement",
+        "corti_corti_s1": "Modèle clinique le plus performant avec raisonnement",
+        "corti_corti_s1_mini_instant": "Modèle de santé compact, le plus rapide et le moins cher",
+        "corti_corti_s1_mini": "Modèle clinique compact avec raisonnement à moitié prix"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "Le modèle Claude le plus performant. Idéal pour les tâches les plus difficiles du Mode Agent.",
         "bedrock_claude_haiku_4_5": "Rapide et économique. Parfait pour nettoyer le texte.",
-        "bedrock_claude_sonnet_4_6": "Équilibré. Choix par défaut pour le Mode Agent.",
-        "bedrock_claude_opus_4_7": "Intelligence maximale. Pour les tâches complexes en Mode Agent.",
-        "bedrock_nova_lite": "Option la moins chère. Natif à AWS, idéal pour les gros volumes.",
+        "bedrock_claude_sonnet_5": "Équilibré. Choix par défaut pour le Mode Agent.",
+        "bedrock_claude_opus_4_8": "Intelligence maximale. Pour les tâches complexes en Mode Agent.",
+        "bedrock_gpt_oss_120b": "Modèle ouvert d'OpenAI. Raisonnement solide à faible coût.",
+        "bedrock_deepseek_v3_2": "Modèle frontière à poids ouverts. Excellent rapport qualité-prix en Mode Agent.",
+        "bedrock_qwen3_next_80b": "Modèle ouvert épars. Rapide et multilingue.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -1974,7 +2029,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Dernier multimodal de Google, raisonnement avancé",
         "gemma_gemma_4_e2b_it_q4_k_m": "Gemma 4 compact de Google, rapide et efficace",
         "gemma_gemma_3_12b_it_q4_k_m": "Modèle milieu de gamme de Google, raisonnement solide",
-        "gemma_gemma_3_1b_it_q4_k_m": "Modèle Google ultra-rapide, idéal pour le nettoyage de courtes dictées"
+        "gemma_gemma_3_1b_it_q4_k_m": "Modèle Google ultra-rapide, idéal pour le nettoyage de courtes dictées",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Modèle efficace de Liquid AI, excellent suivi des instructions",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE de Liquid AI, haute qualité avec seulement 1,5B de paramètres actifs",
+        "liquidai_lfm2_2_6b_q4_k_m": "LFM2 équilibré pour un nettoyage de meilleure qualité",
+        "liquidai_lfm2_5_350m_q8_0": "Modèle ultraléger pour un nettoyage rapide de la dictée",
+        "liquidai_lfm2_5_230m_q8_0": "Modèle minuscule, nettoyage instantané sur du matériel modeste"
       },
       "diarization": {
         "segmentation": "Détection des limites de parole pour l'identification des intervenants",
@@ -2192,6 +2252,7 @@
       "transcribingProvider": "Transcription via {{provider}}...",
       "cancelTranscription": "Annuler la transcription",
       "transcriptionComplete": "Transcription terminée",
+      "partialWarning": "Une partie de l'audio n'a pas pu être transcrite.",
       "openNote": "Ouvrir la note",
       "uploadAnother": "Téléverser un autre fichier",
       "retry": "Réessayer",
@@ -2219,7 +2280,40 @@
       "switchToCloudForLargeFiles": "Passez à OpenWhispr Cloud pour transcrire ce fichier.",
       "createAccount": "Créer un compte",
       "upgrade": "Mettre à niveau",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "ou",
+      "urlPlaceholder": "Collez une URL YouTube ou audio",
+      "urlDownloading": "Téléchargement de l'audio...",
+      "urlResolving": "Résolution de l'URL...",
+      "urlInvalid": "URL non valide. Collez un lien YouTube ou une URL directe de fichier audio.",
+      "urlVideoUnavailable": "Cette vidéo n'est pas disponible. Elle est peut-être privée, supprimée ou géo-bloquée.",
+      "urlPlaylistNotSupported": "Les playlists ne sont pas prises en charge. Collez l'URL d'une seule vidéo.",
+      "urlContentTypeInvalid": "Cette URL ne pointe pas vers un fichier audio ou vidéo.",
+      "urlDownloadFailed": "Échec du téléchargement. Vérifiez l'URL et réessayez.",
+      "urlCancelDownload": "Annuler le téléchargement",
+      "addToQueue": "Ajouter à la file",
+      "queueProgress": "{{completed}}/{{total}} terminés",
+      "cancelAll": "Tout annuler",
+      "clearQueue": "Effacer",
+      "pasteUrls": "Collez des URLs (une par ligne)",
+      "speakerDetection": "Détection des intervenants",
+      "speakerDetectionDescription": "Identifier les différents intervenants dans l'audio",
+      "numSpeakersPlaceholder": "Détection automatique",
+      "downloadingModels": "Téléchargement des modèles...",
+      "openaiDiarizeNote": "Remplace votre modèle de transcription par gpt-4o-transcribe-diarize, le seul modèle OpenAI avec détection des locuteurs. Les coûts peuvent différer de votre modèle sélectionné.",
+      "mistralDiarizeNote": "Détection des locuteurs incluse sans frais supplémentaires avec Voxtral.",
+      "groqDiarizeNote": "La détection des locuteurs n’est pas disponible avec Groq. La diarisation locale sera utilisée.",
+      "batchCancelled": "Annulé",
+      "batchTranscriptionFailed": "Échec de la transcription",
+      "batchSaveFailed": "Échec de l'enregistrement de la note",
+      "batchUnknownError": "Erreur inconnue",
+      "removeFromQueue": "Retirer de la file",
+      "diarizationRunsLocally": "La détection des locuteurs s'exécute localement sur votre appareil.",
+      "urlSubmit": "Ajouter le lien",
+      "urlsSkipped": "Certains liens n'ont pas pu être ajoutés ({{n}})",
+      "queueFailed": "{{n}} en échec",
+      "urlFileTooLarge": "Le fichier est trop volumineux pour être téléchargé. La taille maximale est de 500 Mo.",
+      "urlYoutubeBlocked": "YouTube bloque temporairement les téléchargements depuis votre réseau. Réessayez dans un moment."
     },
     "meeting": {
       "title": "Notes de réunion",
@@ -2282,6 +2376,7 @@
       },
       "errors": {
         "noModel": "Aucun modèle IA sélectionné. Configurez-en un dans les Paramètres.",
+        "noEndpoint": "Aucune URL de serveur auto-hébergé définie. Configurez-en une dans les Paramètres.",
         "actionFailed": "L'action a échoué"
       }
     },
@@ -2456,6 +2551,10 @@
       "hotkeyUnavailable": {
         "title": "Raccourci indisponible",
         "description": "Le raccourci sélectionné n’a pas pu être enregistré. Veuillez en choisir un autre dans les paramètres."
+      },
+      "gpuFallback": {
+        "title": "Accélération GPU indisponible",
+        "description": "La transcription utilise le CPU à la place. Vous pouvez désactiver l'accélération GPU dans les paramètres."
       },
       "addedToDict": "{{words}} ajouté à votre dictionnaire",
       "undo": "Annuler",
@@ -2848,5 +2947,15 @@
       "successDescription": "Bienvenue dans {{name}}.",
       "errorTitle": "Impossible d'accepter l'invitation"
     }
+  },
+  "meetingNotification": {
+    "title": "Réunion détectée",
+    "body": {
+      "detected": "On dirait que vous êtes en réunion. Vous voulez prendre des notes ?",
+      "starting": "Votre réunion va commencer. Vous voulez prendre des notes ?",
+      "underway": "On dirait que votre réunion est déjà en cours. Vous voulez prendre des notes ?"
+    },
+    "start": "Prendre des notes",
+    "join": "Rejoindre et transcrire"
   }
 }
