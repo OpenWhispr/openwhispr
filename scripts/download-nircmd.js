@@ -11,11 +11,26 @@
 
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const { downloadFile, extractZip } = require("./lib/download-utils");
 
 const NIRCMD_URL = "https://www.nirsoft.net/utils/nircmd-x64.zip";
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 const NIRCMD_PATH = path.join(BIN_DIR, "nircmd.exe");
+
+// Use PowerShell's Invoke-WebRequest which uses the Windows certificate store
+// (honours corporate proxy/CA certs that Node's https module doesn't see).
+async function downloadWithPowerShell(url, dest) {
+  const result = spawnSync(
+    "powershell",
+    ["-NoProfile", "-NonInteractive", "-Command",
+      `Invoke-WebRequest -Uri '${url}' -OutFile '${dest}' -UseBasicParsing`],
+    { stdio: "inherit", timeout: 60000 }
+  );
+  if (result.status !== 0) {
+    throw new Error(`PowerShell download failed (exit ${result.status})`);
+  }
+}
 
 async function main() {
   // Skip if not Windows and not building for all platforms
@@ -39,7 +54,16 @@ async function main() {
 
   try {
     console.log(`  Downloading from ${NIRCMD_URL}`);
-    await downloadFile(NIRCMD_URL, zipPath);
+
+    // Try Node https first; fall back to PowerShell (uses Windows cert store,
+    // works on corporate networks with SSL inspection).
+    try {
+      await downloadFile(NIRCMD_URL, zipPath);
+    } catch (nodeErr) {
+      console.log(`  Node https failed (${nodeErr.message}), retrying with PowerShell...`);
+      if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+      await downloadWithPowerShell(NIRCMD_URL, zipPath);
+    }
 
     console.log("  Extracting...");
     const extractDir = path.join(BIN_DIR, "temp-nircmd");
