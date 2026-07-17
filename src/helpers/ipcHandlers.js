@@ -455,6 +455,16 @@ class IPCHandlers {
         this.broadcastToWindows("gpu-fallback-notification", {});
       });
     }
+
+    // A GPU acceleration download keeps running when the settings picker
+    // unmounts; broadcast completion so a remounted picker can settle its
+    // rehydrated download UI (#1136).
+    this.whisperCudaManager?.on("download-settled", (result) => {
+      this.broadcastToWindows("cuda-download-complete", result);
+    });
+    this.whisperVulkanManager?.on("download-settled", (result) => {
+      this.broadcastToWindows("vulkan-whisper-download-complete", result);
+    });
   }
 
   _getWhisperVadSettings() {

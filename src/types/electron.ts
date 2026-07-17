@@ -829,6 +829,9 @@ declare global {
           percentage: number;
         }) => void
       ) => () => void;
+      onCudaDownloadComplete: (
+        callback: (data: { success: boolean; error?: string }) => void
+      ) => () => void;
       onCudaFallbackNotification: (callback: () => void) => () => void;
 
       // Vulkan GPU acceleration (whisper on AMD/Intel GPUs)
@@ -842,6 +845,9 @@ declare global {
           totalBytes: number;
           percentage: number;
         }) => void
+      ) => () => void;
+      onVulkanWhisperDownloadComplete: (
+        callback: (data: { success: boolean; error?: string }) => void
       ) => () => void;
       onGpuFallbackNotification: (callback: () => void) => () => void;
 

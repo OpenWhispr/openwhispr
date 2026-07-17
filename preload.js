@@ -269,6 +269,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "cuda-download-progress",
     (callback) => (_event, data) => callback(data)
   ),
+  onCudaDownloadComplete: registerListener(
+    "cuda-download-complete",
+    (callback) => (_event, data) => callback(data)
+  ),
   onCudaFallbackNotification: registerListener(
     "cuda-fallback-notification",
     (callback) => () => callback()
@@ -281,6 +285,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteVulkanWhisperBinary: () => ipcRenderer.invoke("delete-vulkan-whisper-binary"),
   onVulkanWhisperDownloadProgress: registerListener(
     "vulkan-whisper-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onVulkanWhisperDownloadComplete: registerListener(
+    "vulkan-whisper-download-complete",
     (callback) => (_event, data) => callback(data)
   ),
   onGpuFallbackNotification: registerListener(
