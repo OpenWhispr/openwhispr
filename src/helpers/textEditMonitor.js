@@ -111,6 +111,16 @@ class TextEditMonitor extends EventEmitter {
    * so it can be restored before the paste keystroke. Best-effort: if the binary
    * is missing or fails, we clear the handle and the paste falls back to whatever
    * is foreground at paste time (the pre-#859 behavior).
+   *
+   * We pass BOTH --detect-only and --print-foreground. A current binary checks
+   * --print-foreground first and prints "FOREGROUND <hwnd>". An OLD binary
+   * (shipped before #859, commonly cached from a separate release) does not know
+   * --print-foreground, but it does know --detect-only, so it takes its detect
+   * early-return and prints window-class info WITHOUT injecting a paste. Without
+   * --detect-only the old binary would ignore the unknown flag and fall through
+   * to Ctrl+V, pasting the clipboard at record start. The extra flag makes the
+   * old binary degrade to no capture (no FOREGROUND line -> null handle -> no
+   * restore) instead of pasting.
    */
   _captureWindowsForegroundWindow() {
     const binary = this._findFile("windows-fast-paste.exe");
@@ -120,7 +130,7 @@ class TextEditMonitor extends EventEmitter {
     }
     execFile(
       binary,
-      ["--print-foreground"],
+      ["--detect-only", "--print-foreground"],
       { timeout: 2000, windowsHide: true },
       (err, stdout) => {
         const match = err ? null : /FOREGROUND\s+(\d+)/.exec(stdout || "");
