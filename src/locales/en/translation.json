@@ -1629,6 +1629,8 @@
         "dictationSoundsDescription": "Play a tone when recording starts and stops",
         "pauseMedia": "Pause media",
         "pauseMediaDescription": "Automatically pause music when dictation starts",
+        "pauseMediaKeyFallback": "Also pause players Windows can't see",
+        "pauseMediaKeyFallbackDescription": "Send a play/pause media key when no Windows media session is found (for apps like Plexamp). Opt-in because the key is a blind toggle and may start playback if nothing is playing.",
         "title": "Sound Effects"
       },
       "notifications": {

@@ -1456,6 +1456,8 @@
         "dictationSoundsDescription": "Riproduci un tono quando la registrazione inizia e finisce",
         "pauseMedia": "Pausa multimedia",
         "pauseMediaDescription": "Metti automaticamente in pausa la musica quando inizia la dettatura",
+        "pauseMediaKeyFallback": "Metti in pausa anche i player che Windows non vede",
+        "pauseMediaKeyFallbackDescription": "Invia il tasto media play/pausa se non viene trovata alcuna sessione media di Windows (es. Plexamp). Opzionale perché il tasto è un toggle cieco e può avviare la riproduzione se non c'è nulla in riproduzione.",
         "title": "Effetti sonori"
       },
       "notifications": {

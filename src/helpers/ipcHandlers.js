@@ -3870,9 +3870,9 @@ class IPCHandlers {
       return mediaPlayer.toggleMedia();
     });
 
-    ipcMain.handle("pause-media-playback", () => {
+    ipcMain.handle("pause-media-playback", (_event, options) => {
       const mediaPlayer = require("./mediaPlayer");
-      return mediaPlayer.pauseMedia();
+      return mediaPlayer.pauseMedia(options || {});
     });
 
     ipcMain.handle("resume-media-playback", () => {

@@ -1451,6 +1451,8 @@
         "dictationSoundsDescription": "在录音开始和停止时播放提示音",
         "pauseMedia": "暂停媒体",
         "pauseMediaDescription": "开始听写时自动暂停音乐",
+        "pauseMediaKeyFallback": "一并暂停 Windows 看不到的播放器",
+        "pauseMediaKeyFallbackDescription": "找不到 Windows 媒体会话时改送播放/暂停媒体键（例如 Plexamp）。默认关闭，因为这是盲目切换，若当前没有在播放可能反而开始播放。",
         "title": "音效"
       },
       "notifications": {

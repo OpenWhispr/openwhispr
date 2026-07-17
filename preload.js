@@ -528,7 +528,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openAccessibilitySettings: () => ipcRenderer.invoke("open-accessibility-settings"),
   openSystemAudioSettings: () => ipcRenderer.invoke("open-system-audio-settings"),
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
-  pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
+  pauseMediaPlayback: (options) => ipcRenderer.invoke("pause-media-playback", options),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),

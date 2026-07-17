@@ -761,6 +761,8 @@ export default function SettingsPage({
     setAudioCuesEnabled,
     pauseMediaOnDictation,
     setPauseMediaOnDictation,
+    pauseMediaKeyFallback,
+    setPauseMediaKeyFallback,
     showTranscriptionPreview,
     setShowTranscriptionPreview,
     autoPasteEnabled,
@@ -2471,6 +2473,21 @@ export default function SettingsPage({
                     <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
                   </SettingsRow>
                 </SettingsPanelRow>
+                {pauseMediaOnDictation && platform === "win32" && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.soundEffects.pauseMediaKeyFallback")}
+                      description={t(
+                        "settingsPage.general.soundEffects.pauseMediaKeyFallbackDescription"
+                      )}
+                    >
+                      <Toggle
+                        checked={pauseMediaKeyFallback}
+                        onChange={setPauseMediaKeyFallback}
+                      />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 

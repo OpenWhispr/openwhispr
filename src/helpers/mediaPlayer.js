@@ -2,6 +2,7 @@ const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
+const { resolveWindowsPausePath } = require("./mediaPlayerPausePath");
 
 // Runs `cmd args` asynchronously and resolves with { status, stdout, stderr }.
 // Times out after `timeout` ms; on timeout, kills the child and resolves with
@@ -184,14 +185,14 @@ class MediaPlayer {
     return this._adapterPaths;
   }
 
-  async pauseMedia() {
+  async pauseMedia(options = {}) {
     try {
       if (process.platform === "linux") {
         return this._pauseLinux();
       } else if (process.platform === "darwin") {
         return await this._pauseMacOS();
       } else if (process.platform === "win32") {
-        return this._pauseWindows();
+        return this._pauseWindows(options);
       }
     } catch (err) {
       debugLogger.warn("Media pause failed", { error: err.message }, "media");
@@ -643,7 +644,7 @@ try {
     return result.status === 0;
   }
 
-  _pauseWindows() {
+  _pauseWindows({ mediaKeyFallback = false } = {}) {
     this._pausedWinApps = [];
     this._didPause = false;
 
@@ -654,32 +655,49 @@ try {
       { stdio: "pipe", timeout: 5000 }
     );
 
-    if (result.status === 0) {
-      const output = (result.stdout?.toString() || "").trim();
-      if (output === "GSMTC_FAIL") {
-        debugLogger.debug("GSMTC unavailable, falling back to media key", {}, "media");
-        return this._pauseWindowsFallback();
-      }
+    const output = (result.stdout?.toString() || "").trim();
+    const pausePath = resolveWindowsPausePath({
+      status: result.status,
+      output,
+      mediaKeyFallback,
+    });
+
+    if (pausePath === "gsmtc") {
       this._pausedWinApps = output.split("|").filter(Boolean);
-      if (this._pausedWinApps.length > 0) {
-        debugLogger.debug("Media paused via GSMTC", { apps: this._pausedWinApps }, "media");
-        return true;
-      }
-      debugLogger.debug("GSMTC found no playing sessions", {}, "media");
-      return false;
+      debugLogger.debug("Media paused via GSMTC", { apps: this._pausedWinApps }, "media");
+      return true;
     }
 
-    const stderr = (result.stderr?.toString() || "").trim();
+    if (pausePath === "fallback") {
+      if (result.status !== 0) {
+        const stderr = (result.stderr?.toString() || "").trim();
+        debugLogger.debug(
+          "GSMTC PowerShell failed, falling back to media key",
+          {
+            status: result.status,
+            signal: result.signal,
+            stderr: stderr ? stderr.slice(0, 200) : undefined,
+          },
+          "media"
+        );
+      } else if (output === "GSMTC_FAIL") {
+        debugLogger.debug("GSMTC unavailable, falling back to media key", {}, "media");
+      } else {
+        debugLogger.debug(
+          "GSMTC found no playing sessions, falling back to media key",
+          { mediaKeyFallback },
+          "media"
+        );
+      }
+      return this._pauseWindowsFallback();
+    }
+
     debugLogger.debug(
-      "GSMTC PowerShell failed, falling back to media key",
-      {
-        status: result.status,
-        signal: result.signal,
-        stderr: stderr ? stderr.slice(0, 200) : undefined,
-      },
+      "GSMTC found no playing sessions",
+      { mediaKeyFallback },
       "media"
     );
-    return this._pauseWindowsFallback();
+    return false;
   }
 
   _pauseWindowsFallback() {
