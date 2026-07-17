@@ -10,6 +10,7 @@ const { killProcess } = require("../utils/process");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
+const { findSystemBinary } = require("./systemBinaryPath");
 const sidecarPidFile = require("./sidecarPidFile");
 const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
 
@@ -270,39 +271,13 @@ class WhisperServerManager extends EventEmitter {
       debugLogger.debug("Bundled FFmpeg not available", { error: err.message });
     }
 
-    // Try system FFmpeg locations
-    const systemCandidates =
-      process.platform === "darwin"
-        ? ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-        : process.platform === "win32"
-          ? ["C:\\ffmpeg\\bin\\ffmpeg.exe"]
-          : ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
-
-    for (const candidate of systemCandidates) {
-      if (fs.existsSync(candidate)) {
-        this.cachedFFmpegPath = candidate;
-        return candidate;
-      }
-    }
-
-    const pathEnv = process.env.PATH || "";
-    const pathSep = process.platform === "win32" ? ";" : ":";
-    const pathDirs = pathEnv.split(pathSep).map((entry) => entry.replace(/^"|"$/g, ""));
-    const pathBinary = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
-
-    for (const dir of pathDirs) {
-      if (!dir) continue;
-      const candidate = path.join(dir, pathBinary);
-      if (!fs.existsSync(candidate)) continue;
-      if (process.platform !== "win32") {
-        try {
-          fs.accessSync(candidate, fs.constants.X_OK);
-        } catch {
-          continue;
-        }
-      }
-      this.cachedFFmpegPath = candidate;
-      return candidate;
+    // Fall back to a system FFmpeg. findSystemBinary probes the inherited PATH,
+    // the login-shell PATH, and known extra locations (Homebrew, Nix), so this
+    // works even when launchd/systemd started the app with a minimal PATH.
+    const systemFFmpeg = findSystemBinary("ffmpeg");
+    if (systemFFmpeg) {
+      this.cachedFFmpegPath = systemFFmpeg;
+      return systemFFmpeg;
     }
 
     debugLogger.debug("FFmpeg not found");

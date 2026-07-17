@@ -341,24 +341,19 @@ const AUTH_BRIDGE_HOST = "127.0.0.1";
 const AUTH_BRIDGE_PORT = parseAuthBridgePort();
 const AUTH_BRIDGE_PATH = "/oauth/callback";
 
-// Set up PATH for production builds to find system tools (whisper.cpp, ffmpeg)
+// Set up PATH for production builds to find system tools (whisper.cpp, ffmpeg,
+// and the ffprobe that yt-dlp shells out to). GUI apps on macOS/Linux are
+// launched by launchd/systemd with a minimal PATH that never sources the user's
+// shell profile, so tools installed by Homebrew or Nix are invisible. Rebuild
+// PATH from the real login-shell PATH plus known extra locations so child
+// processes inherit somewhere they can actually find these binaries.
 function setupProductionPath() {
-  if (process.platform === "darwin" && process.env.NODE_ENV !== "development") {
-    const commonPaths = [
-      "/usr/local/bin",
-      "/opt/homebrew/bin",
-      "/usr/bin",
-      "/bin",
-      "/usr/sbin",
-      "/sbin",
-    ];
+  if (process.platform === "win32" || process.env.NODE_ENV === "development") return;
 
-    const currentPath = process.env.PATH || "";
-    const pathsToAdd = commonPaths.filter((p) => !currentPath.includes(p));
-
-    if (pathsToAdd.length > 0) {
-      process.env.PATH = `${currentPath}:${pathsToAdd.join(":")}`;
-    }
+  const { buildAugmentedPath } = require("./src/helpers/systemBinaryPath");
+  const augmented = buildAugmentedPath();
+  if (augmented) {
+    process.env.PATH = augmented;
   }
 }
 
