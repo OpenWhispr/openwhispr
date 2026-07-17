@@ -40,7 +40,7 @@ import {
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
-import { shouldRunTranslateStep } from "../helpers/translationChain";
+import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
@@ -524,13 +524,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           let finalTranscription = result.transcription;
 
           // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
-          const routeKind =
-            result.transcription.route_kind ??
-            history.find((item) => item.id === id)?.route_kind ??
-            null;
-
           let handledTranslation = false;
-          if (routeKind === "translation") {
+          if (result.transcription.route_kind === "translation") {
             handledTranslation = true;
             try {
               const [
@@ -546,44 +541,35 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const agentName = localStorage.getItem("agentName") || null;
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
-                let text = rawText;
-                // Step 1: optional cleanup, soft-fail keeps the raw transcript.
-                if (route.cleanupReachable) {
-                  try {
-                    const cleaned = await ReasoningService.processText(
-                      rawText,
+                const { text } = await executeTranslationChain({
+                  text: rawText,
+                  cleanupReachable: route.cleanupReachable,
+                  runCleanup: (currentText: string) =>
+                    ReasoningService.processText(
+                      currentText,
                       getEffectiveCleanupModel(),
                       agentName,
                       route.cleanupConfig
-                    );
-                    if (cleaned) text = cleaned;
-                  } catch {
-                    // Cleanup failed — translate the raw transcript
-                  }
-                }
-                // Step 2: translate unless an explicit source equals the target language.
-                if (
-                  shouldRunTranslateStep(
+                    ),
+                  runTranslate: (currentText: string) =>
+                    ReasoningService.processText(currentText, route.model, agentName, route.config),
+                  shouldTranslate: shouldRunTranslateStep(
                     settings.translationSourceLanguage,
                     settings.translationTargetLanguage
-                  )
-                ) {
-                  const translated = await ReasoningService.processText(
-                    text,
-                    route.model,
-                    agentName,
-                    route.config
-                  );
-                  if (translated) {
-                    text = translated;
-                  } else {
+                  ),
+                  onCleanupError: (cleanupError: Error) =>
+                    logger.warn(
+                      "Cleanup step failed in translation chain, translating raw transcript",
+                      { error: cleanupError.message },
+                      "transcription"
+                    ),
+                  onEmptyTranslate: () =>
                     logger.warn(
                       "Translation step returned empty text, keeping previous text",
                       {},
                       "transcription"
-                    );
-                  }
-                }
+                    ),
+                });
                 if (text !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -658,7 +644,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         });
       }
     },
-    [toast, t, useCleanupModel, history]
+    [toast, t, useCleanupModel]
   );
 
   const toggleShowDiscarded = useCallback(() => {

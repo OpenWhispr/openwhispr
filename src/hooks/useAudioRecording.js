@@ -23,44 +23,46 @@ export const useAudioRecording = (toast, options = {}) => {
 
   const performStartRecording = useCallback(
     async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
-    if (startLockRef.current) return false;
-    startLockRef.current = true;
-    try {
-      if (!audioManagerRef.current) return false;
+      if (startLockRef.current) return false;
+      startLockRef.current = true;
+      try {
+        if (!audioManagerRef.current) return false;
 
-      const currentState = audioManagerRef.current.getState();
-      if (currentState.isRecording || currentState.isProcessing) return false;
+        const currentState = audioManagerRef.current.getState();
+        if (currentState.isRecording || currentState.isProcessing) return false;
 
-      audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
-      audioManagerRef.current.setTranslationRequested(translationRequested);
+        audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+        audioManagerRef.current.setTranslationRequested(translationRequested);
 
-      // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
-      if (!audioManagerRef.current.sttConfig) {
-        const config = await window.electronAPI.getSttConfig?.();
-        if (config?.success) {
-          audioManagerRef.current.setSttConfig(config);
+        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
+        if (!audioManagerRef.current.sttConfig) {
+          const config = await window.electronAPI.getSttConfig?.();
+          if (config?.success) {
+            audioManagerRef.current.setSttConfig(config);
+          }
         }
-      }
 
-      const didStart = audioManagerRef.current.shouldUseStreaming()
-        ? await audioManagerRef.current.startStreamingRecording()
-        : await audioManagerRef.current.startRecording();
+        const didStart = audioManagerRef.current.shouldUseStreaming()
+          ? await audioManagerRef.current.startStreamingRecording()
+          : await audioManagerRef.current.startRecording();
 
-      // A quick tap can end the recording inside the start call itself (deferred
-      // streaming stop) — don't pause media for a recording that already ended. See #1060.
-      if (didStart && audioManagerRef.current.getState().isRecording) {
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.pauseMediaPlayback?.();
+        // A quick tap can end the recording inside the start call itself (deferred
+        // streaming stop) — don't pause media for a recording that already ended. See #1060.
+        if (didStart && audioManagerRef.current.getState().isRecording) {
+          if (getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.pauseMediaPlayback?.();
+          }
+          window.electronAPI?.registerCancelHotkey?.("Escape");
+          void playStartCue();
         }
-        window.electronAPI?.registerCancelHotkey?.("Escape");
-        void playStartCue();
-      }
 
-      return didStart;
-    } finally {
-      startLockRef.current = false;
-    }
-  }, []);
+        return didStart;
+      } finally {
+        startLockRef.current = false;
+      }
+    },
+    []
+  );
 
   const performStopRecording = useCallback(async () => {
     if (stopLockRef.current) return false;
@@ -234,7 +236,10 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     });
 
-    const handleToggle = async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
+    const handleToggle = async ({
+      voiceAgentRequested = false,
+      translationRequested = false,
+    } = {}) => {
       if (!audioManagerRef.current) return;
       // Lazily warm the mic driver on first dictation use, not at launch. See #871.
       audioManagerRef.current.warmupMicDriver?.();

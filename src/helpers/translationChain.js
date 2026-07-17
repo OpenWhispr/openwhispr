@@ -28,7 +28,7 @@ export async function executeTranslationChain({
       const cleaned = await runCleanup(out);
       if (cleaned) out = cleaned;
       // Cloud cleanup counts as cloud reasoning once its call succeeds, even if it
-      // returned empty text (matches the original inline behavior).
+      // returned empty text.
       if (cleanupIsCloud) usedCloudReasoning = true;
     } catch (cleanupError) {
       if (onCleanupError) onCleanupError(cleanupError);

@@ -59,7 +59,11 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"current" | "edit" | "test">("current");
   const [testText, setTestText] = useState(() =>
-    t(kind === "translate" ? "promptStudio.defaultTestInputTranslate" : "promptStudio.defaultTestInput")
+    t(
+      kind === "translate"
+        ? "promptStudio.defaultTestInputTranslate"
+        : "promptStudio.defaultTestInput"
+    )
   );
   const [testResult, setTestResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -131,10 +135,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
           return;
         }
 
-        const isSelfHosted =
-          translationMode === "self-hosted" && !!translationRemoteUrl.trim();
-        const isCustom =
-          translationMode === "providers" && translationProvider.trim() === "custom";
+        const isSelfHosted = translationMode === "self-hosted" && !!translationRemoteUrl.trim();
+        const isCustom = translationMode === "providers" && translationProvider.trim() === "custom";
 
         if (!isCloudTranslation && !isSelfHosted && !translationModel.trim()) {
           setTestResult(t("promptStudio.test.noModelSelected"));

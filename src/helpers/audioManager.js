@@ -71,7 +71,13 @@ function translationChainReachable(settings) {
   });
 }
 
-function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested, translationRequested) {
+function resolveReasoningRoute(
+  text,
+  settings,
+  agentName,
+  voiceAgentRequested,
+  translationRequested
+) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
   const agentModel = settings.dictationAgentModel?.trim() || "";
@@ -107,7 +113,11 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested, t
   if (translationRequested && kind !== "translation") {
     logger.warn(
       "Translation requested but unreachable, falling back",
-      { kind, useDictationTranslation: settings.useDictationTranslation, hasTarget: !!settings.translationTargetLanguage?.trim() },
+      {
+        kind,
+        useDictationTranslation: settings.useDictationTranslation,
+        hasTarget: !!settings.translationTargetLanguage?.trim(),
+      },
       "transcription"
     );
   }

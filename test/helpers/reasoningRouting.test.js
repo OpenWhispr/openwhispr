@@ -20,16 +20,21 @@ test("openwhispr cloud mode maps to the openwhispr mode", async () => {
 
 test("fan-out routes provider, model and mode to all five scopes", async () => {
   const { buildReasoningScopePatches } = await load();
-  const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence, dictationTranslation } =
-    buildReasoningScopePatches(
-      {
-        useCleanupModel: true,
-        cleanupProvider: "corti",
-        cleanupModel: "corti-s1-instant",
-        cleanupCloudMode: "byok",
-      },
-      "providers"
-    );
+  const {
+    dictationCleanup,
+    noteFormatting,
+    dictationAgent,
+    chatIntelligence,
+    dictationTranslation,
+  } = buildReasoningScopePatches(
+    {
+      useCleanupModel: true,
+      cleanupProvider: "corti",
+      cleanupModel: "corti-s1-instant",
+      cleanupCloudMode: "byok",
+    },
+    "providers"
+  );
 
   assert.equal(dictationCleanup.cleanupProvider, "corti");
   assert.equal(dictationCleanup.cleanupModel, "corti-s1-instant");
@@ -45,8 +50,13 @@ test("fan-out routes provider, model and mode to all five scopes", async () => {
 
 test("fan-out with partial settings only mirrors the provided routing fields", async () => {
   const { buildReasoningScopePatches } = await load();
-  const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence, dictationTranslation } =
-    buildReasoningScopePatches({ useCleanupModel: true }, "openwhispr");
+  const {
+    dictationCleanup,
+    noteFormatting,
+    dictationAgent,
+    chatIntelligence,
+    dictationTranslation,
+  } = buildReasoningScopePatches({ useCleanupModel: true }, "openwhispr");
 
   assert.equal(dictationCleanup.useCleanupModel, true);
   assert.equal(dictationCleanup.cleanupMode, "openwhispr");

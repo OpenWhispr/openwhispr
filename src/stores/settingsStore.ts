@@ -151,6 +151,7 @@ const ARRAY_SETTINGS = new Set([
   "snippets",
   "gcalAccounts",
   "onboardingUseCases",
+  "translationTargets",
 ]);
 
 const NUMERIC_SETTINGS = new Set([
@@ -1239,7 +1240,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setTranslationSourceLanguage: createStringSetter("translationSourceLanguage"),
   setTranslationTargetLanguage: createStringSetter("translationTargetLanguage"),
   setTranslationTargets: (targets: string[]) => {
-    // Drop blanks, "auto", and duplicates while preserving order.
     const normalized = Array.from(
       new Set(targets.filter((v) => typeof v === "string" && v.trim() && v !== "auto"))
     );
@@ -1826,8 +1826,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       settings.cleanupCloudMode ?? s.cleanupCloudMode,
       settings.cleanupProvider ?? s.cleanupProvider
     );
-    const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence, dictationTranslation } =
-      buildReasoningScopePatches(settings, mode);
+    const {
+      dictationCleanup,
+      noteFormatting,
+      dictationAgent,
+      chatIntelligence,
+      dictationTranslation,
+    } = buildReasoningScopePatches(settings, mode);
     s.updateCleanupSettings(dictationCleanup);
     s.setCleanupMode(dictationCleanup.cleanupMode);
     // Each Settings tab selects on its own mode field, so set the mode for every

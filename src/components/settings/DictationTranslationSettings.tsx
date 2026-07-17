@@ -1,9 +1,6 @@
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  useSettingsStore,
-  MAX_TRANSLATION_TARGETS,
-} from "../../stores/settingsStore";
+import { useSettingsStore, MAX_TRANSLATION_TARGETS } from "../../stores/settingsStore";
 import registry from "../../config/languageRegistry.json";
 import { getLanguageLabel } from "../../utils/languageSupport";
 import { cn } from "../lib/utils";
@@ -116,7 +113,9 @@ export default function DictationTranslationSettings() {
                               <button
                                 type="button"
                                 onClick={() => removeTarget(target)}
-                                aria-label={t("dictationTranslation.removeTarget", { language: label })}
+                                aria-label={t("dictationTranslation.removeTarget", {
+                                  language: label,
+                                })}
                                 className="rounded-full p-0.5 hover:text-destructive"
                               >
                                 <X className="h-3 w-3" />
@@ -156,9 +155,7 @@ export default function DictationTranslationSettings() {
             <PromptStudio kind="translate" />
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            {t("dictationTranslation.hotkeyHint")}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("dictationTranslation.hotkeyHint")}</p>
         </>
       )}
     </div>
