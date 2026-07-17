@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
+const { buildNoteSearchQuery } = require("./noteSearch");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -201,6 +202,7 @@ class DatabaseManager {
         );
         seedFolder.run("Personal", 0);
         seedFolder.run("Meetings", 1);
+        seedFolder.run("Videos", 2);
       }
 
       try {
@@ -216,6 +218,23 @@ class DatabaseManager {
         this.db
           .prepare("UPDATE notes SET folder_id = ? WHERE folder_id IS NULL")
           .run(personalFolder.id);
+      }
+
+      // One-time seed (user_version 1): a pre-existing user-created "Videos"
+      // folder stays untouched (never promoted to default); URL downloads route
+      // to it by name. Guarded so a later delete/rename doesn't resurrect it as
+      // an undeletable default on the next launch.
+      if (this.db.pragma("user_version", { simple: true }) < 1) {
+        const videosFolder = this.db.prepare("SELECT id FROM folders WHERE name = 'Videos'").get();
+        if (!videosFolder) {
+          const maxOrder = this.db.prepare("SELECT MAX(sort_order) as m FROM folders").get();
+          this.db
+            .prepare(
+              "INSERT OR IGNORE INTO folders (name, is_default, sort_order) VALUES ('Videos', 1, ?)"
+            )
+            .run((maxOrder?.m ?? 1) + 1);
+        }
+        this.db.pragma("user_version = 1");
       }
 
       this.db.exec(`
@@ -2105,11 +2124,8 @@ class DatabaseManager {
   searchNotes(query, limit = 50) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const term = query
-        .trim()
-        .replace(/[^\w\s]/g, " ")
-        .trim();
-      if (!term) return [];
+      const ftsQuery = buildNoteSearchQuery(query);
+      if (!ftsQuery) return [];
       return this.db
         .prepare(
           `
@@ -2121,7 +2137,7 @@ class DatabaseManager {
         LIMIT ?
       `
         )
-        .all(term + "*", limit);
+        .all(ftsQuery, limit);
     } catch (error) {
       debugLogger.error("Error searching notes", { error: error.message }, "database");
       throw error;

@@ -277,11 +277,6 @@
       "title": "会議メモ",
       "description": "会議を記録して要約します",
       "autoDetect": "OpenWhispr は会議中であることを自動的に検出し、メモの開始を提案します。あなたの操作なしに録音されることはありません。",
-      "notification": {
-        "title": "会議を検出しました",
-        "body": "会議中のようです。メモを取りますか？",
-        "cta": "録音を開始"
-      },
       "hotkeyLabel": "会議ホットキー",
       "hotkeyHint": "任意 — 会議中に押すとすぐにメモを開始できます。"
     },
@@ -1895,7 +1890,9 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
-        "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）"
+        "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
+        "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron の英語ストリーミング ASR",
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron の多言語ストリーミング ASR、自動言語検出対応（15 言語）"
       },
       "whisper": {
         "tiny": "最速、品質は低め",
@@ -2088,6 +2085,7 @@
       },
       "errors": {
         "noModel": "AIモデルが選択されていません。設定で構成してください。",
+        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。",
         "actionFailed": "アクションに失敗しました"
       }
     },
@@ -2170,7 +2168,40 @@
       "switchToCloudForLargeFiles": "このファイルを文字起こしするには OpenWhispr Cloud に切り替えてください。",
       "createAccount": "アカウント作成",
       "upgrade": "アップグレード",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "または",
+      "urlPlaceholder": "YouTubeまたは音声URLを貼り付け",
+      "urlDownloading": "音声をダウンロード中...",
+      "urlResolving": "URLを解析中...",
+      "urlInvalid": "無効なURLです。YouTubeリンクまたは音声ファイルの直接URLを貼り付けてください。",
+      "urlVideoUnavailable": "この動画は利用できません。非公開、削除済み、または地域制限されている可能性があります。",
+      "urlPlaylistNotSupported": "プレイリストには対応していません。個別の動画URLを貼り付けてください。",
+      "urlContentTypeInvalid": "このURLは音声または動画ファイルを指していません。",
+      "urlDownloadFailed": "ダウンロードに失敗しました。URLを確認してもう一度お試しください。",
+      "urlCancelDownload": "ダウンロードをキャンセル",
+      "addToQueue": "キューに追加",
+      "queueProgress": "{{completed}}/{{total}} 完了",
+      "cancelAll": "すべてキャンセル",
+      "clearQueue": "クリア",
+      "pasteUrls": "URLを貼り付け（1行に1つ）",
+      "speakerDetection": "話者検出",
+      "speakerDetectionDescription": "音声内の異なる話者を識別",
+      "numSpeakersPlaceholder": "自動検出",
+      "downloadingModels": "モデルをダウンロード中...",
+      "openaiDiarizeNote": "話者検出をサポートする唯一のOpenAIモデルであるgpt-4o-transcribe-diarizeに切り替わります。選択したモデルとコストが異なる場合があります。",
+      "mistralDiarizeNote": "Voxtralでの話者検出は追加料金なしで利用できます。",
+      "groqDiarizeNote": "Groqでは話者検出を利用できません。代わりにローカルダイアライゼーションが使用されます。",
+      "batchCancelled": "キャンセル済み",
+      "batchTranscriptionFailed": "文字起こしに失敗しました",
+      "batchSaveFailed": "ノートの保存に失敗しました",
+      "batchUnknownError": "不明なエラー",
+      "removeFromQueue": "キューから削除",
+      "diarizationRunsLocally": "話者検出はお使いのデバイス上でローカルに実行されます。",
+      "urlSubmit": "リンクを追加",
+      "urlsSkipped": "追加できなかったリンクがあります（{{n}}件）",
+      "queueFailed": "{{n}}件失敗",
+      "urlFileTooLarge": "ファイルが大きすぎてダウンロードできません。最大サイズは500 MBです。",
+      "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。"
     },
     "meeting": {
       "title": "議事録",
@@ -2487,6 +2518,10 @@
       "hotkeyUnavailable": {
         "title": "ホットキーが使用できません",
         "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
+      },
+      "gpuFallback": {
+        "title": "GPU アクセラレーションを利用できません",
+        "description": "文字起こしは代わりに CPU を使用しています。設定で GPU アクセラレーションを無効にできます。"
       },
       "addedToDict": "{{words}} を辞書に追加しました",
       "undo": "元に戻す",
@@ -2949,5 +2984,15 @@
       "successDescription": "Bienvenido a {{name}}.",
       "errorTitle": "No se pudo aceptar la invitación"
     }
+  },
+  "meetingNotification": {
+    "title": "会議を検出しました",
+    "body": {
+      "detected": "会議中のようです。メモを取りますか？",
+      "starting": "まもなく会議が始まります。メモを取りますか？",
+      "underway": "会議はすでに進行中のようです。メモを取りますか？"
+    },
+    "start": "メモを取る",
+    "join": "参加して文字起こし"
   }
 }

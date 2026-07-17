@@ -30,7 +30,6 @@ import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
-import type { CudaWhisperStatus } from "../types/electron";
 import logger from "../utils/logger";
 
 interface LocalModel {
@@ -365,14 +364,15 @@ export default function TranscriptionModelPicker({
   const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
-  const [cudaStatus, setCudaStatus] = useState<CudaWhisperStatus | null>(null);
-  const [cudaDownloading, setCudaDownloading] = useState(false);
-  const [cudaProgress, setCudaProgress] = useState<DownloadProgress>({
+  const [gpuBackend, setGpuBackend] = useState<"cuda" | "vulkan" | null>(null);
+  const [gpuDownloaded, setGpuDownloaded] = useState(false);
+  const [gpuDownloading, setGpuDownloading] = useState(false);
+  const [gpuProgress, setGpuProgress] = useState<DownloadProgress>({
     downloadedBytes: 0,
     totalBytes: 0,
     percentage: 0,
   });
-  const [cudaDismissed, setCudaDismissed] = useState(false);
+  const [gpuDismissed, setGpuDismissed] = useState(false);
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -537,42 +537,58 @@ export default function TranscriptionModelPicker({
   useEffect(() => {
     if (!effectiveLocal || internalLocalProvider !== "whisper") return;
     if (getCachedPlatform() === "darwin") return;
-    window.electronAPI
-      ?.getCudaWhisperStatus?.()
-      ?.then(setCudaStatus)
-      .catch(() => {});
+    const detect = async () => {
+      try {
+        const cuda = await window.electronAPI?.getCudaWhisperStatus?.();
+        if (cuda?.gpuInfo.hasNvidiaGpu) {
+          setGpuBackend("cuda");
+          setGpuDownloaded(cuda.downloaded);
+          return;
+        }
+        const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
+        if (vulkan?.vulkan.available) {
+          setGpuBackend("vulkan");
+          setGpuDownloaded(vulkan.downloaded);
+        }
+      } catch {}
+    };
+    detect();
   }, [effectiveLocal, internalLocalProvider]);
 
   useEffect(() => {
-    if (!cudaDownloading) return;
-    const cleanup = window.electronAPI?.onCudaDownloadProgress?.((data) => {
-      setCudaProgress(data);
-    });
-    return cleanup;
-  }, [cudaDownloading]);
+    if (!gpuDownloading || !gpuBackend) return;
+    const subscribe =
+      gpuBackend === "cuda"
+        ? window.electronAPI?.onCudaDownloadProgress
+        : window.electronAPI?.onVulkanWhisperDownloadProgress;
+    return subscribe?.((data) => setGpuProgress(data));
+  }, [gpuDownloading, gpuBackend]);
 
-  const handleCudaDownload = async () => {
-    setCudaDownloading(true);
+  const handleGpuDownload = async () => {
+    setGpuDownloading(true);
     try {
-      const result = await window.electronAPI?.downloadCudaWhisperBinary?.();
-      if (result?.success) {
-        const status = await window.electronAPI?.getCudaWhisperStatus?.();
-        setCudaStatus(status || null);
-      }
+      const result =
+        gpuBackend === "cuda"
+          ? await window.electronAPI?.downloadCudaWhisperBinary?.()
+          : await window.electronAPI?.downloadVulkanWhisperBinary?.();
+      if (result?.success) setGpuDownloaded(true);
     } finally {
-      setCudaDownloading(false);
+      setGpuDownloading(false);
     }
   };
 
-  const handleCudaDelete = async () => {
-    await window.electronAPI?.deleteCudaWhisperBinary?.();
-    const status = await window.electronAPI?.getCudaWhisperStatus?.();
-    setCudaStatus(status || null);
+  const handleGpuDelete = async () => {
+    const result =
+      gpuBackend === "cuda"
+        ? await window.electronAPI?.deleteCudaWhisperBinary?.()
+        : await window.electronAPI?.deleteVulkanWhisperBinary?.();
+    if (result?.success) setGpuDownloaded(false);
   };
 
-  const handleCudaCancel = async () => {
-    await window.electronAPI?.cancelCudaWhisperDownload?.();
-    setCudaDownloading(false);
+  const handleGpuCancel = async () => {
+    if (gpuBackend === "cuda") await window.electronAPI?.cancelCudaWhisperDownload?.();
+    else await window.electronAPI?.cancelVulkanWhisperDownload?.();
+    setGpuDownloading(false);
   };
 
   const {
@@ -1057,34 +1073,33 @@ export default function TranscriptionModelPicker({
 
           {progressDisplay}
 
-          {cudaDownloading && internalLocalProvider === "whisper" && (
+          {gpuDownloading && internalLocalProvider === "whisper" && (
             <div>
-              <DownloadProgressBar modelName="GPU acceleration" progress={cudaProgress} />
+              <DownloadProgressBar modelName="GPU acceleration" progress={gpuProgress} />
               <div className="px-2.5 pb-1 flex justify-end">
                 <button
-                  onClick={handleCudaCancel}
+                  onClick={handleGpuCancel}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Cancel
+                  {t("gpu.cancel")}
                 </button>
               </div>
             </div>
           )}
 
           {internalLocalProvider === "whisper" &&
-            !cudaDismissed &&
-            !cudaDownloading &&
-            getCachedPlatform() !== "darwin" &&
-            cudaStatus?.gpuInfo.hasNvidiaGpu && (
+            !gpuDismissed &&
+            !gpuDownloading &&
+            gpuBackend && (
               <div className="rounded-md border border-border bg-surface-1 p-2.5">
-                {cudaStatus.downloaded ? (
+                {gpuDownloaded ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <Check size={13} className="text-success" />
                       <span className="text-xs font-medium text-foreground">{t("gpu.active")}</span>
                     </div>
                     <Button
-                      onClick={handleCudaDelete}
+                      onClick={handleGpuDelete}
                       size="sm"
                       variant="ghost"
                       className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
@@ -1101,7 +1116,7 @@ export default function TranscriptionModelPicker({
                       </p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Button
-                          onClick={handleCudaDownload}
+                          onClick={handleGpuDownload}
                           size="sm"
                           variant="default"
                           className="h-6 px-2.5 text-xs"
@@ -1109,7 +1124,7 @@ export default function TranscriptionModelPicker({
                           {t("gpu.enableButton")}
                         </Button>
                         <button
-                          onClick={() => setCudaDismissed(true)}
+                          onClick={() => setGpuDismissed(true)}
                           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
                           {t("gpu.dismiss")}

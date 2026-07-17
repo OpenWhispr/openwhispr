@@ -104,6 +104,7 @@
         "whisper-server-*",
         "llama-server-*",
         "sherpa-onnx-*",
+        "yt-dlp-*",
         "qdrant-*",
         "macos-audio-tap",
         "macos-globe-listener",
@@ -111,6 +112,7 @@
         "macos-mic-listener",
         "macos-text-monitor",
         "macos-media-remote",
+        "MediaRemoteAdapter.framework/**",
         "linux-fast-paste",
         "linux-system-audio-helper",
         "linux-text-monitor",
@@ -128,6 +130,14 @@
         "*.dll",
         "*.so*"
       ]
+    },
+    {
+      "from": "resources/mediaremote-adapter/bin/mediaremote-adapter.pl",
+      "to": "bin/mediaremote-adapter.pl"
+    },
+    {
+      "from": "resources/mediaremote-adapter/LICENSE",
+      "to": "bin/mediaremote-adapter.LICENSE"
     }
   ],
   "mac": {

@@ -1,19 +1,8 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
 import { getCloudModel, getLocalModel } from "../../models/ModelRegistry";
 
-// Strict OpenAI-compatible servers (Groq, LM Studio, vLLM, LocalAI) reject
-// unknown fields like `think` with "property 'think' is unsupported". Only
-// Ollama-native servers accept `think`; everyone else uses `reasoning_effort`.
-// The `lan` provider defaults to Ollama dialect, but legacy users who
-// configured Self-Hosted as "openai-compatible" still route through `lan`
-// — honor that flag so their backend doesn't reject the request.
-function usesOllamaDialect(providerKey: string): boolean {
-  if (providerKey === "local") return true;
-  if (providerKey !== "lan") return false;
-  if (typeof window === "undefined") return true;
-  return window.localStorage?.getItem("remoteReasoningType") !== "openai-compatible";
-}
-
+// `lan` always talks to an OpenAI-compat /v1 endpoint: the `reasoning` object
+// disables Ollama thinking; other backends drop it (flat reasoning_effort trips vLLM).
 function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
   if (providerKey === "gemini") {
     requestBody.reasoning_effort = "minimal";
@@ -27,8 +16,10 @@ function suppressThinking(requestBody: Record<string, unknown>, providerKey: str
     return;
   }
 
-  if (usesOllamaDialect(providerKey)) {
+  if (providerKey === "local") {
     requestBody.think = false;
+  } else if (providerKey === "lan") {
+    requestBody.reasoning = { effort: "none" };
   } else {
     requestBody.reasoning_effort = "none";
   }

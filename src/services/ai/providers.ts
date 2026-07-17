@@ -47,7 +47,8 @@ export async function getAIModel(
       // Corti's gateway is Chat Completions-compatible, not the OpenAI Responses API.
       return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE }).chat(model);
     case "custom":
-      return createOpenAI({ apiKey, baseURL })(model);
+      // Custom OpenAI-compatible servers implement Chat Completions, not the Responses API.
+      return createOpenAI({ apiKey, baseURL }).chat(model);
     case "openrouter":
       // OpenRouter implements Chat Completions, not the OpenAI Responses API.
       return createOpenAI({
@@ -56,7 +57,7 @@ export async function getAIModel(
         ...(opts?.disableThinking ? { fetch: withDisabledReasoning } : {}),
       }).chat(model);
     case "local":
-      return createOpenAI({ apiKey: "no-key", baseURL }).chat(model);
+      return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
   }

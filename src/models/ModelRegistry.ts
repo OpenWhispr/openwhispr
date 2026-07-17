@@ -99,6 +99,7 @@ export interface ParakeetModelInfo {
   sizeMb: number;
   language: string;
   supportedLanguages: string[];
+  runtime?: "offline" | "online";
   recommended?: boolean;
   downloadUrl: string;
   extractDir: string;

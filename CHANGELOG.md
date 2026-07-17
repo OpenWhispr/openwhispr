@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Parakeet installation no longer hangs behind an old PATH `tar` on Windows.** Model extraction now invokes Windows' built-in `tar.exe` directly and times out a stuck native extractor so the existing JavaScript fallback can finish the installation. The same hardened extraction path is used for diarization model setup and for CUDA whisper / Vulkan llama.cpp runtime archive extraction.
+
 ## [1.7.5] - 2026-07-10
 
 A model-breadth and reliability release on top of 1.7.4: the latest cloud reasoning models (OpenAI GPT-5.6 and Anthropic Claude Fable 5 / Sonnet 5), Corti as a private clinical reasoning provider with in-region routing that keeps transcribed medical text off third-party LLMs, Tinfoil confidential transcription extended to uploaded audio and every batch path, OpenRouter as a first-class LLM provider with a searchable model picker, enterprise Agent Mode chat with region-aware Bedrock and a live model catalog, multiple hotkeys per action, and a broad stack of meeting-notes, notes, transcription, and platform fixes.

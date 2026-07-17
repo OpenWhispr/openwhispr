@@ -277,11 +277,6 @@
       "title": "Notes de réunion",
       "description": "Capturez et résumez vos réunions",
       "autoDetect": "OpenWhispr détecte automatiquement quand vous êtes en réunion et vous propose de démarrer des notes — rien n'est enregistré sans vous.",
-      "notification": {
-        "title": "Réunion détectée",
-        "body": "On dirait que vous êtes en réunion. Vous voulez prendre des notes ?",
-        "cta": "Démarrer l'enregistrement"
-      },
       "hotkeyLabel": "Raccourci réunion",
       "hotkeyHint": "Facultatif — appuyez dessus pendant une réunion pour démarrer une note instantanément."
     },
@@ -1943,7 +1938,9 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingue rapide avec détection automatique de langue (25 langues)",
-        "parakeet_unified_en_0_6b": "ASR anglais uniquement avec précision de pointe (5,91 % WER moyen)"
+        "parakeet_unified_en_0_6b": "ASR anglais uniquement avec précision de pointe (5,91 % WER moyen)",
+        "nemotron_speech_streaming_en_0_6b": "ASR anglais en streaming de NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "ASR multilingue en streaming de NVIDIA Nemotron avec détection automatique de langue (15 langues)"
       },
       "whisper": {
         "tiny": "Le plus rapide, qualité plus faible",
@@ -2298,7 +2295,40 @@
       "switchToCloudForLargeFiles": "Passez à OpenWhispr Cloud pour transcrire ce fichier.",
       "createAccount": "Créer un compte",
       "upgrade": "Mettre à niveau",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "ou",
+      "urlPlaceholder": "Collez une URL YouTube ou audio",
+      "urlDownloading": "Téléchargement de l'audio...",
+      "urlResolving": "Résolution de l'URL...",
+      "urlInvalid": "URL non valide. Collez un lien YouTube ou une URL directe de fichier audio.",
+      "urlVideoUnavailable": "Cette vidéo n'est pas disponible. Elle est peut-être privée, supprimée ou géo-bloquée.",
+      "urlPlaylistNotSupported": "Les playlists ne sont pas prises en charge. Collez l'URL d'une seule vidéo.",
+      "urlContentTypeInvalid": "Cette URL ne pointe pas vers un fichier audio ou vidéo.",
+      "urlDownloadFailed": "Échec du téléchargement. Vérifiez l'URL et réessayez.",
+      "urlCancelDownload": "Annuler le téléchargement",
+      "addToQueue": "Ajouter à la file",
+      "queueProgress": "{{completed}}/{{total}} terminés",
+      "cancelAll": "Tout annuler",
+      "clearQueue": "Effacer",
+      "pasteUrls": "Collez des URLs (une par ligne)",
+      "speakerDetection": "Détection des intervenants",
+      "speakerDetectionDescription": "Identifier les différents intervenants dans l'audio",
+      "numSpeakersPlaceholder": "Détection automatique",
+      "downloadingModels": "Téléchargement des modèles...",
+      "openaiDiarizeNote": "Remplace votre modèle de transcription par gpt-4o-transcribe-diarize, le seul modèle OpenAI avec détection des locuteurs. Les coûts peuvent différer de votre modèle sélectionné.",
+      "mistralDiarizeNote": "Détection des locuteurs incluse sans frais supplémentaires avec Voxtral.",
+      "groqDiarizeNote": "La détection des locuteurs n’est pas disponible avec Groq. La diarisation locale sera utilisée.",
+      "batchCancelled": "Annulé",
+      "batchTranscriptionFailed": "Échec de la transcription",
+      "batchSaveFailed": "Échec de l'enregistrement de la note",
+      "batchUnknownError": "Erreur inconnue",
+      "removeFromQueue": "Retirer de la file",
+      "diarizationRunsLocally": "La détection des locuteurs s'exécute localement sur votre appareil.",
+      "urlSubmit": "Ajouter le lien",
+      "urlsSkipped": "Certains liens n'ont pas pu être ajoutés ({{n}})",
+      "queueFailed": "{{n}} en échec",
+      "urlFileTooLarge": "Le fichier est trop volumineux pour être téléchargé. La taille maximale est de 500 Mo.",
+      "urlYoutubeBlocked": "YouTube bloque temporairement les téléchargements depuis votre réseau. Réessayez dans un moment."
     },
     "meeting": {
       "title": "Notes de réunion",
@@ -2361,6 +2391,7 @@
       },
       "errors": {
         "noModel": "Aucun modèle IA sélectionné. Configurez-en un dans les Paramètres.",
+        "noEndpoint": "Aucune URL de serveur auto-hébergé définie. Configurez-en une dans les Paramètres.",
         "actionFailed": "L'action a échoué"
       }
     },
@@ -2535,6 +2566,10 @@
       "hotkeyUnavailable": {
         "title": "Raccourci indisponible",
         "description": "Le raccourci sélectionné n’a pas pu être enregistré. Veuillez en choisir un autre dans les paramètres."
+      },
+      "gpuFallback": {
+        "title": "Accélération GPU indisponible",
+        "description": "La transcription utilise le CPU à la place. Vous pouvez désactiver l'accélération GPU dans les paramètres."
       },
       "addedToDict": "{{words}} ajouté à votre dictionnaire",
       "undo": "Annuler",
@@ -2949,5 +2984,15 @@
       "successDescription": "Bienvenue dans {{name}}.",
       "errorTitle": "Impossible d'accepter l'invitation"
     }
+  },
+  "meetingNotification": {
+    "title": "Réunion détectée",
+    "body": {
+      "detected": "On dirait que vous êtes en réunion. Vous voulez prendre des notes ?",
+      "starting": "Votre réunion va commencer. Vous voulez prendre des notes ?",
+      "underway": "On dirait que votre réunion est déjà en cours. Vous voulez prendre des notes ?"
+    },
+    "start": "Prendre des notes",
+    "join": "Rejoindre et transcrire"
   }
 }

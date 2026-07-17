@@ -277,11 +277,6 @@
       "title": "Meeting notes",
       "description": "Capture and summarize your meetings",
       "autoDetect": "OpenWhispr automatically detects when you're in a meeting and offers to start notes — nothing is recorded without you.",
-      "notification": {
-        "title": "Meeting detected",
-        "body": "It sounds like you're in a meeting. Want to take notes?",
-        "cta": "Start Recording"
-      },
       "hotkeyLabel": "Meeting hotkey",
       "hotkeyHint": "Optional — press it in any meeting to start a note instantly."
     },
@@ -1983,7 +1978,9 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
-        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)"
+        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
+        "nemotron_speech_streaming_en_0_6b": "English streaming ASR from NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)"
       },
       "diarization": {
         "segmentation": "Speech boundary detection for speaker diarization",
@@ -2386,7 +2383,40 @@
       "switchToCloudForLargeFiles": "Switch to OpenWhispr Cloud to transcribe this file.",
       "createAccount": "Create Account",
       "upgrade": "Upgrade",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "or",
+      "urlPlaceholder": "Paste a YouTube or audio URL",
+      "urlDownloading": "Downloading audio...",
+      "urlResolving": "Resolving URL...",
+      "urlInvalid": "Not a valid URL. Paste a YouTube link or a direct audio file URL.",
+      "urlVideoUnavailable": "This video is unavailable. It may be private, removed, or geo-blocked.",
+      "urlPlaylistNotSupported": "Playlists are not supported. Paste a single video URL.",
+      "urlContentTypeInvalid": "This URL does not point to an audio or video file.",
+      "urlDownloadFailed": "Download failed. Check the URL and try again.",
+      "urlCancelDownload": "Cancel download",
+      "addToQueue": "Add to queue",
+      "queueProgress": "{{completed}}/{{total}} completed",
+      "cancelAll": "Cancel all",
+      "clearQueue": "Clear",
+      "pasteUrls": "Paste URLs (one per line)",
+      "speakerDetection": "Speaker detection",
+      "speakerDetectionDescription": "Identify different speakers in the audio",
+      "numSpeakersPlaceholder": "Auto-detect",
+      "downloadingModels": "Downloading models...",
+      "openaiDiarizeNote": "Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.",
+      "mistralDiarizeNote": "Speaker detection included at no extra cost with Voxtral.",
+      "groqDiarizeNote": "Speaker detection is not available with Groq. Local diarization will be used instead.",
+      "batchCancelled": "Cancelled",
+      "batchTranscriptionFailed": "Transcription failed",
+      "batchSaveFailed": "Failed to save note",
+      "batchUnknownError": "Unknown error",
+      "removeFromQueue": "Remove from queue",
+      "diarizationRunsLocally": "Speaker detection runs locally on your device.",
+      "urlSubmit": "Add link",
+      "urlsSkipped": "Some links couldn't be added ({{n}})",
+      "queueFailed": "{{n}} failed",
+      "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
+      "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while."
     },
     "meeting": {
       "title": "Meeting Notes",
@@ -2449,6 +2479,7 @@
       },
       "errors": {
         "noModel": "No AI model selected. Configure one in Settings.",
+        "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
         "actionFailed": "Action failed"
       }
     },
@@ -2623,6 +2654,10 @@
       "hotkeyUnavailable": {
         "title": "Hotkey unavailable",
         "description": "The selected hotkey could not be registered. Please choose a different one in settings."
+      },
+      "gpuFallback": {
+        "title": "GPU acceleration unavailable",
+        "description": "Transcription is using the CPU instead. You can disable GPU acceleration in Settings."
       },
       "addedToDict": "Added {{words}} to your dictionary",
       "undo": "Undo",
@@ -2949,5 +2984,15 @@
       "you": "You",
       "others": "Others"
     }
+  },
+  "meetingNotification": {
+    "title": "Meeting detected",
+    "body": {
+      "detected": "It sounds like you're in a meeting. Want to take notes?",
+      "starting": "Your meeting is starting. Want to take notes?",
+      "underway": "It sounds like your meeting is underway. Want to take notes?"
+    },
+    "start": "Take notes",
+    "join": "Join & transcribe"
   }
 }

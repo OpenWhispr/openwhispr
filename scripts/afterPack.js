@@ -41,7 +41,7 @@ function resolveResourcesDir(context) {
     : path.join(context.appOutDir, "resources");
 }
 
-function collectFiles(rootDir) {
+function collectFiles(rootDir, skipDirs = new Set()) {
   if (!fs.existsSync(rootDir)) {
     return [];
   }
@@ -57,6 +57,7 @@ function collectFiles(rootDir) {
       const fullPath = path.join(currentDir, entry.name);
 
       if (entry.isDirectory()) {
+        if (skipDirs.has(fullPath)) continue;
         queue.push(fullPath);
         continue;
       }
@@ -68,6 +69,31 @@ function collectFiles(rootDir) {
   }
 
   return files;
+}
+
+function collectFrameworks(rootDir) {
+  if (!fs.existsSync(rootDir)) return [];
+
+  const out = [];
+  const queue = [rootDir];
+
+  while (queue.length > 0) {
+    const currentDir = queue.pop();
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.name.endsWith(".framework")) {
+        out.push(fullPath);
+        // Don't descend into a framework — the bundle is signed as a unit.
+        continue;
+      }
+      queue.push(fullPath);
+    }
+  }
+
+  return out;
 }
 
 function isMachOBinary(filePath) {
@@ -89,19 +115,22 @@ function registerMacResourceBinariesForSigning(context) {
   }
 
   const resourcesDir = resolveResourcesDir(context);
-  const machOFiles = collectFiles(resourcesDir).filter(isMachOBinary);
+  const frameworks = collectFrameworks(resourcesDir);
+  const skipDirs = new Set(frameworks);
+  const machOFiles = collectFiles(resourcesDir, skipDirs).filter(isMachOBinary);
+  const toRegister = [...frameworks, ...machOFiles];
 
-  if (machOFiles.length === 0) {
+  if (toRegister.length === 0) {
     return;
   }
 
   const macConfig = context.packager.platformSpecificBuildOptions;
   const existingBinaries = Array.isArray(macConfig.binaries) ? macConfig.binaries : [];
 
-  macConfig.binaries = [...new Set([...existingBinaries, ...machOFiles])];
+  macConfig.binaries = [...new Set([...existingBinaries, ...toRegister])];
 
   console.log(
-    `  afterPack: registered ${machOFiles.length} Mach-O files under Contents/Resources for signing`
+    `  afterPack: registered ${frameworks.length} framework(s) and ${machOFiles.length} loose Mach-O file(s) under Contents/Resources for signing`
   );
 }
 

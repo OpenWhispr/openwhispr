@@ -124,6 +124,18 @@ export default function App() {
       });
     });
 
+    const showGpuFallbackToast = () => {
+      toast({
+        title: t("app.toasts.gpuFallback.title"),
+        description: t("app.toasts.gpuFallback.description"),
+        duration: 10000,
+      });
+    };
+    const unsubscribeCudaFallback =
+      window.electronAPI?.onCudaFallbackNotification?.(showGpuFallbackToast);
+    const unsubscribeGpuFallback =
+      window.electronAPI?.onGpuFallbackNotification?.(showGpuFallbackToast);
+
     const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
       if (words && words.length > 0) {
         const wordList = words.map((w) => `\u201c${w}\u201d`).join(", ");
@@ -160,6 +172,8 @@ export default function App() {
     return () => {
       unsubscribeFallback?.();
       unsubscribeFailed?.();
+      unsubscribeCudaFallback?.();
+      unsubscribeGpuFallback?.();
       unsubscribeCorrections?.();
     };
   }, [toast, dismiss, t]);

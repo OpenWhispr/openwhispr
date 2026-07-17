@@ -3,6 +3,7 @@ const fsPromises = require("fs").promises;
 const path = require("path");
 const { spawn } = require("child_process");
 const debugLogger = require("./debugLogger");
+const { runSystemTar } = require("./systemTar");
 const { downloadFile, createDownloadSignal, checkDiskSpace } = require("./downloadUtils");
 const { resolveBinaryPath, gracefulStopProcess } = require("../utils/serverUtils");
 const { getModelsDirForService } = require("./modelDirUtils");
@@ -16,7 +17,7 @@ const {
   buildMergedCandidates,
 } = require("./transcriptText");
 
-const DIARIZATION_TIMEOUT_MS = 300000; // 5 minutes
+const DIARIZATION_TIMEOUT_MS = 3600000; // 60 minutes
 const POST_MERGE_CONTEXT_WINDOW_MS = 6000;
 const POST_MERGE_CONTEXT_MERGE_LIMIT = 3;
 
@@ -60,7 +61,9 @@ const SILERO_VAD_ONNX = "silero_vad.onnx";
 
 class DiarizationManager {
   constructor() {
-    this._process = null;
+    // Meeting post-processing and upload/batch diarization can overlap, so
+    // track every live process, not a single slot.
+    this._processes = new Set();
     this.currentDownloadProcess = null;
     this.cachedBinaryPath = null;
   }
@@ -264,34 +267,7 @@ class DiarizationManager {
   }
 
   _runSystemTar(archivePath, destDir) {
-    return new Promise((resolve, reject) => {
-      // Use relative paths from archive dir as cwd so neither -f nor -C args
-      // contain Windows drive letter colons (GNU tar treats C: as remote host)
-      const cwd = path.dirname(archivePath);
-      const tarProcess = spawn(
-        "tar",
-        ["-xjf", path.basename(archivePath), "-C", path.relative(cwd, destDir)],
-        { stdio: ["ignore", "pipe", "pipe"], cwd }
-      );
-
-      let stderr = "";
-
-      tarProcess.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      tarProcess.on("close", (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`tar extraction failed with code ${code}: ${stderr}`));
-        }
-      });
-
-      tarProcess.on("error", (err) => {
-        reject(new Error(`Failed to start tar process: ${err.message}`));
-      });
-    });
+    return runSystemTar(archivePath, destDir);
   }
 
   async cancelDownload() {
@@ -352,13 +328,21 @@ class DiarizationManager {
         detached: process.platform !== "win32",
       });
 
-      this._process = proc;
+      this._processes.add(proc);
       sidecarPidFile.write("diarization", proc.pid);
+
+      // The single pid-file slot tracks whichever process is still alive; only
+      // the reaper consumes it, and the Set is the real shutdown source.
+      const untrack = () => {
+        this._processes.delete(proc);
+        const survivor = this._processes.values().next().value;
+        if (survivor) sidecarPidFile.write("diarization", survivor.pid);
+        else sidecarPidFile.clear("diarization");
+      };
 
       const timeout = setTimeout(() => {
         debugLogger.warn("Diarization timed out", { timeoutMs: DIARIZATION_TIMEOUT_MS });
         gracefulStopProcess(proc);
-        this._process = null;
         resolve([]);
       }, DIARIZATION_TIMEOUT_MS);
 
@@ -372,8 +356,7 @@ class DiarizationManager {
 
       proc.on("close", (code) => {
         clearTimeout(timeout);
-        this._process = null;
-        sidecarPidFile.clear("diarization");
+        untrack();
 
         if (code !== 0) {
           debugLogger.warn("Diarization process exited with error", {
@@ -391,8 +374,7 @@ class DiarizationManager {
 
       proc.on("error", (err) => {
         clearTimeout(timeout);
-        this._process = null;
-        sidecarPidFile.clear("diarization");
+        untrack();
         debugLogger.warn("Diarization process error", { error: err.message });
         resolve([]);
       });
@@ -517,9 +499,10 @@ class DiarizationManager {
     }
 
     const tempDir = getSafeTempDir();
-    const timestamp = Date.now();
-    const inputWavPath = path.join(tempDir, `ow-diarize-${timestamp}-input.wav`);
-    const wavPath = path.join(tempDir, `ow-diarize-${timestamp}.wav`);
+    // Random suffix: concurrent conversions (meeting + upload) must never collide.
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const inputWavPath = path.join(tempDir, `ow-diarize-${runId}-input.wav`);
+    const wavPath = path.join(tempDir, `ow-diarize-${runId}.wav`);
 
     // Stream: write 44-byte WAV header, then pipe raw PCM — avoids loading entire file into memory
     const header = this._createWavHeader(stat.size, inputSampleRate, 1);
@@ -591,10 +574,9 @@ class DiarizationManager {
   }
 
   async shutdown() {
-    if (this._process) {
-      await gracefulStopProcess(this._process);
-      this._process = null;
-    }
+    const procs = [...this._processes];
+    this._processes.clear();
+    await Promise.all(procs.map((p) => gracefulStopProcess(p)));
   }
 }
 

@@ -80,6 +80,7 @@ import {
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import NotesOnboarding from "./NotesOnboarding";
+import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 
 const FOLDER_INPUT_CLASS =
   "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
@@ -1017,9 +1018,15 @@ export default function PersonalNotesView({
                         isCloudMode,
                         modelId: effectiveModelId,
                         isMeetingNote,
-                        allowTitleGeneration:
-                          !editorNote.title.trim() ||
-                          editorNote.title === t("notes.list.untitledNote"),
+                        allowTitleGeneration: isRegenerableNoteTitle(
+                          editorNote.title,
+                          [
+                            t("notes.list.untitledNote"),
+                            t("notes.list.newNote"),
+                            t("notes.sidebar.newNote"),
+                          ],
+                          calendarEventName
+                        ),
                       }
                     );
                   }}

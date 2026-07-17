@@ -53,9 +53,9 @@ export default function MeetingSetupStep({
         <div className="relative overflow-hidden rounded-lg border border-border-subtle bg-gradient-to-br from-surface-2/50 via-surface-1 to-primary/5 px-4 pt-4 pb-9">
           <div className="pointer-events-none select-none">
             <MeetingNotificationCard
-              title={t("onboarding.meeting.notification.title")}
-              body={t("onboarding.meeting.notification.body")}
-              startLabel={t("onboarding.meeting.notification.cta")}
+              title={t("meetingNotification.title")}
+              body={t("meetingNotification.body.detected")}
+              startLabel={t("meetingNotification.start")}
               className="ml-auto w-full max-w-[300px] shadow-xl"
             />
           </div>
