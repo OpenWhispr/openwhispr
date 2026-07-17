@@ -384,6 +384,7 @@
       "showInFolderWindows": "Показать в Проводнике",
       "showInFolderLinux": "Показать в файловом менеджере",
       "retryTranscription": "Повторить расшифровку",
+      "retryTranslationMode": "Режим перевода",
       "retrying": "Повторная расшифровка…",
       "retrySuccess": "Расшифровка обновлена",
       "retryError": "Не удалось повторить расшифровку",
@@ -558,6 +559,12 @@
       "fallback": {
         "title": "Резервный режим",
         "description": "Локальный Whisper не сработал. Использован OpenAI API."
+      },
+      "translationFallback": {
+        "unreachableTitle": "Перевод недоступен",
+        "unreachableDescription": "Ваша диктовка вставлена без перевода. Проверьте настройки перевода.",
+        "failedTitle": "Не удалось выполнить перевод",
+        "failedDescription": "Вставлен исходный текст. Вы можете повторить попытку в Истории."
       },
       "noAudio": {
         "title": "Звук не обнаружен",
@@ -989,6 +996,7 @@
       "save": "Сохранить"
     },
     "defaultTestInput": "Привет, Whispr, какая сегодня погода?",
+    "defaultTestInputTranslate": "Сегодня прекрасная погода, хочешь прогуляться?",
     "dialogs": {
       "reset": {
         "description": "Промпт сброшен до значения по умолчанию.",
@@ -1013,6 +1021,8 @@
     },
     "test": {
       "addressHint": "Попробуйте обратиться к «{{agentName}}» для проверки режима инструкций",
+      "translateHint": "Текст будет переведён на {{language}}",
+      "translation": "Перевод",
       "aiModels": "ИИ-модели",
       "baseUrlMissing": "Базовый URL для {{provider}} не указан. Добавьте его в настройках ИИ-моделей.",
       "cleanup": "Очистка",
@@ -1032,7 +1042,9 @@
       "providerLabel": "Провайдер",
       "run": "Запустить тест",
       "customEndpoint": "Пользовательская конечная точка",
-      "apiKeyMissing": "API-ключ {{provider}} не настроен. Добавьте его в настройках ИИ-моделей."
+      "apiKeyMissing": "API-ключ {{provider}} не настроен. Добавьте его в настройках ИИ-моделей.",
+      "translationDisabled": "Включите перевод диктовки, чтобы протестировать этот промпт",
+      "noTargetLanguage": "Сначала выберите язык перевода"
     },
     "view": {
       "customPrompt": "Пользовательский промпт",
@@ -1431,6 +1443,10 @@
         "title": "Горячая клавиша голосового агента",
         "description": "Скажите, что нужно — ИИ-агент напечатает результат, а не ваши слова"
       },
+      "translationHotkey": {
+        "title": "Горячая клавиша перевода",
+        "description": "Диктуйте на любом языке — вставленный текст будет переведён"
+      },
       "microphone": {
         "description": "Выберите устройство ввода для диктовки",
         "title": "Микрофон"
@@ -1666,6 +1682,7 @@
       "tabs": {
         "dictationCleanup": "Очистка диктовки",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Перевод",
         "noteFormatting": "Форматирование заметок",
         "chatIntelligence": "Чат"
       }
@@ -2532,6 +2549,28 @@
       "startListening": "Начать запись",
       "hideForNow": "Скрыть"
     }
+  },
+  "dictationTranslation": {
+    "title": "Перевод диктовки",
+    "description": "Отдельная горячая клавиша, вставляющая вашу диктовку в переводе на другой язык",
+    "enabled": "Включить перевод диктовки",
+    "enabledDescription": "Диктовки, начатые горячей клавишей перевода, очищаются и затем переводятся перед вставкой",
+    "sourceLanguage": "Язык речи",
+    "sourceLanguageDescription": "Язык, на котором вы диктуете — «Автоматически» подходит и для смешанной речи",
+    "targetLanguage": "Перевести на",
+    "targetLanguageDescription": "Язык вставляемого текста",
+    "targetLanguageMissing": "Выберите целевой язык, чтобы активировать горячую клавишу перевода",
+    "selectLanguage": "Выберите язык…",
+    "prompt": {
+      "title": "Промпт перевода",
+      "description": "Настройте, как модель переводит вашу диктовку"
+    },
+    "hotkeyHint": "Задайте горячую клавишу в Настройки → Общие → Горячая клавиша перевода",
+    "targetsLabel": "Языки перевода",
+    "addTarget": "Добавить язык…",
+    "activeTarget": "Активный язык перевода",
+    "removeTarget": "Удалить {{language}}",
+    "maxTargets": "До {{max}} языков"
   },
   "dictationAgent": {
     "enabled": "Включить голосового агента",

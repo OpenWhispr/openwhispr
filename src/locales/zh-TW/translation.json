@@ -384,6 +384,7 @@
       "showInFolderWindows": "在檔案總管中顯示",
       "showInFolderLinux": "在檔案管理員中顯示",
       "retryTranscription": "重新轉錄",
+      "retryTranslationMode": "翻譯模式",
       "retrying": "正在重新轉錄…",
       "retrySuccess": "轉錄已更新",
       "retryError": "重新轉錄失敗",
@@ -558,6 +559,12 @@
       "fallback": {
         "title": "備援模式",
         "description": "本機 Whisper 失敗，已改用 OpenAI API。"
+      },
+      "translationFallback": {
+        "unreachableTitle": "翻譯無法使用",
+        "unreachableDescription": "你的口述內容已按原文貼上，未經翻譯。請檢查翻譯設定。",
+        "failedTitle": "翻譯失敗",
+        "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
       },
       "noAudio": {
         "title": "未偵測到音訊",
@@ -989,6 +996,7 @@
       "save": "儲存"
     },
     "defaultTestInput": "嘿 Whispr，今天天氣怎麼樣？",
+    "defaultTestInputTranslate": "今天天氣真好，要不要出去走走？",
     "dialogs": {
       "reset": {
         "description": "提示詞已重設為預設值。",
@@ -1013,6 +1021,8 @@
     },
     "test": {
       "addressHint": "試試對「{{agentName}}」說話以測試指令模式",
+      "translateHint": "文字將翻譯為{{language}}",
+      "translation": "翻譯",
       "aiModels": "AI 模型",
       "baseUrlMissing": "缺少 {{provider}} 的 URL。請在 AI 模型設定中新增。",
       "cleanup": "文字整理",
@@ -1032,7 +1042,9 @@
       "providerLabel": "供應商",
       "run": "執行測試",
       "customEndpoint": "自訂端點",
-      "apiKeyMissing": "未設定 {{provider}} API 金鑰。請在 AI 模型設定中新增。"
+      "apiKeyMissing": "未設定 {{provider}} API 金鑰。請在 AI 模型設定中新增。",
+      "translationDisabled": "啟用聽寫翻譯以測試此提示詞",
+      "noTargetLanguage": "請先選擇目標語言"
     },
     "view": {
       "customPrompt": "自訂提示詞",
@@ -1426,6 +1438,10 @@
         "title": "語音助手快捷鍵",
         "description": "說出你的需求，AI 助手會輸入結果，而不是你說的原話"
       },
+      "translationHotkey": {
+        "title": "翻譯快捷鍵",
+        "description": "用任何語言聽寫——貼上的文字會自動翻譯"
+      },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",
         "title": "麥克風"
@@ -1661,6 +1677,7 @@
       "tabs": {
         "dictationCleanup": "聽寫清理",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "翻譯",
         "noteFormatting": "筆記格式化",
         "chatIntelligence": "聊天"
       }
@@ -2523,6 +2540,28 @@
       "startListening": "開始錄音",
       "hideForNow": "暫時隱藏"
     }
+  },
+  "dictationTranslation": {
+    "title": "聽寫翻譯",
+    "description": "專用快捷鍵，將你的聽寫翻譯成另一種語言後貼上",
+    "enabled": "啟用聽寫翻譯",
+    "enabledDescription": "透過翻譯快捷鍵開始的聽寫會先整理再翻譯，然後貼上",
+    "sourceLanguage": "口說語言",
+    "sourceLanguageDescription": "你聽寫時使用的語言——自動偵測也能處理混合語言聽寫",
+    "targetLanguage": "翻譯為",
+    "targetLanguageDescription": "貼上文字的語言",
+    "targetLanguageMissing": "請選擇目標語言以啟用翻譯快捷鍵",
+    "selectLanguage": "選擇語言…",
+    "prompt": {
+      "title": "翻譯提示詞",
+      "description": "自訂模型翻譯聽寫內容的方式"
+    },
+    "hotkeyHint": "在 設定 → 一般 → 翻譯快捷鍵 中設定快捷鍵",
+    "targetsLabel": "目標語言",
+    "addTarget": "新增語言…",
+    "activeTarget": "目前目標語言",
+    "removeTarget": "移除{{language}}",
+    "maxTargets": "最多 {{max}} 種語言"
   },
   "dictationAgent": {
     "enabled": "啟用語音代理",

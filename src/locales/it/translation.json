@@ -384,6 +384,7 @@
       "showInFolderWindows": "Mostra in Esplora file",
       "showInFolderLinux": "Mostra nel gestore file",
       "retryTranscription": "Ritrascrivi",
+      "retryTranslationMode": "Modalità Traduzione",
       "retrying": "Ritrascrizione in corso…",
       "retrySuccess": "Trascrizione aggiornata",
       "retryError": "Ritrascrizione non riuscita",
@@ -558,6 +559,12 @@
       "fallback": {
         "title": "Modalità fallback",
         "description": "Whisper locale non riuscito. Utilizzata l'API OpenAI."
+      },
+      "translationFallback": {
+        "unreachableTitle": "Traduzione non disponibile",
+        "unreachableDescription": "La dettatura è stata incollata senza traduzione. Controlla le impostazioni di traduzione.",
+        "failedTitle": "Traduzione non riuscita",
+        "failedDescription": "È stato incollato il testo originale. Puoi riprovare dalla History."
       },
       "noAudio": {
         "title": "Nessun audio rilevato",
@@ -989,6 +996,7 @@
       "save": "Salva"
     },
     "defaultTestInput": "Ehi Whispr, che tempo fa oggi?",
+    "defaultTestInputTranslate": "Che bella giornata oggi, ti va di fare due passi?",
     "dialogs": {
       "reset": {
         "description": "Il prompt è stato reimpostato al valore predefinito.",
@@ -1013,6 +1021,8 @@
     },
     "test": {
       "addressHint": "Prova a rivolgerti a \"{{agentName}}\" per testare la modalità istruzione",
+      "translateHint": "Il testo verrà tradotto in {{language}}",
+      "translation": "Traduzione",
       "aiModels": "Modelli IA",
       "baseUrlMissing": "URL base di {{provider}} mancante. Aggiungilo nelle impostazioni Modelli IA.",
       "cleanup": "Correzione",
@@ -1032,7 +1042,9 @@
       "providerLabel": "Provider",
       "run": "Esegui test",
       "customEndpoint": "Endpoint personalizzato",
-      "apiKeyMissing": "Chiave API di {{provider}} non configurata. Aggiungila nelle impostazioni Modelli IA."
+      "apiKeyMissing": "Chiave API di {{provider}} non configurata. Aggiungila nelle impostazioni Modelli IA.",
+      "translationDisabled": "Attiva la traduzione della dettatura per testare questo prompt",
+      "noTargetLanguage": "Scegli prima una lingua di destinazione"
     },
     "view": {
       "customPrompt": "Prompt personalizzato",
@@ -1431,6 +1443,10 @@
         "title": "Scorciatoia dell'agente vocale",
         "description": "Di' cosa ti serve — il tuo agente IA scrive il risultato, non le tue parole"
       },
+      "translationHotkey": {
+        "title": "Hotkey Traduzione",
+        "description": "Detta in qualsiasi lingua: il testo incollato esce tradotto"
+      },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
         "title": "Microfono"
@@ -1666,6 +1682,7 @@
       "tabs": {
         "dictationCleanup": "Pulizia della dettatura",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Traduzione",
         "noteFormatting": "Formattazione note",
         "chatIntelligence": "Chat"
       }
@@ -2528,6 +2545,28 @@
       "startListening": "Inizia ad ascoltare",
       "hideForNow": "Nascondi per ora"
     }
+  },
+  "dictationTranslation": {
+    "title": "Traduzione Dettatura",
+    "description": "Una hotkey dedicata che incolla la dettatura tradotta in un'altra lingua",
+    "enabled": "Abilita Traduzione Dettatura",
+    "enabledDescription": "Le dettature avviate con la hotkey di traduzione vengono ripulite e poi tradotte prima di essere incollate",
+    "sourceLanguage": "Lingua parlata",
+    "sourceLanguageDescription": "La lingua in cui detti: Automatico gestisce anche dettature miste",
+    "targetLanguage": "Traduci in",
+    "targetLanguageDescription": "La lingua del testo incollato",
+    "targetLanguageMissing": "Scegli una lingua di destinazione per attivare la hotkey di traduzione",
+    "selectLanguage": "Seleziona lingua…",
+    "prompt": {
+      "title": "Prompt di Traduzione",
+      "description": "Personalizza come il modello traduce la tua dettatura"
+    },
+    "hotkeyHint": "Imposta la hotkey in Impostazioni → Generali → Hotkey Traduzione",
+    "targetsLabel": "Lingue di destinazione",
+    "addTarget": "Aggiungi lingua…",
+    "activeTarget": "Lingua di destinazione attiva",
+    "removeTarget": "Rimuovi {{language}}",
+    "maxTargets": "Fino a {{max}} lingue"
   },
   "dictationAgent": {
     "enabled": "Attiva agente vocale",

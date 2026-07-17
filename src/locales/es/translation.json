@@ -393,6 +393,7 @@
       "showInFolderWindows": "Mostrar en Explorador",
       "showInFolderLinux": "Mostrar en gestor de archivos",
       "retryTranscription": "Volver a transcribir",
+      "retryTranslationMode": "Modo Traducción",
       "retrying": "Transcribiendo de nuevo…",
       "retrySuccess": "Transcripción actualizada",
       "retryError": "Error al volver a transcribir",
@@ -558,6 +559,12 @@
       "fallback": {
         "title": "Modo de respaldo",
         "description": "Whisper local falló. Se usó la API de OpenAI."
+      },
+      "translationFallback": {
+        "unreachableTitle": "Traducción no disponible",
+        "unreachableDescription": "Tu dictado se pegó sin traducir. Revisa los ajustes de traducción.",
+        "failedTitle": "La traducción falló",
+        "failedDescription": "Se pegó el texto original. Puedes reintentarlo desde el Historial."
       },
       "noAudio": {
         "title": "No se detectó audio",
@@ -1037,6 +1044,7 @@
       "save": "Guardar"
     },
     "defaultTestInput": "Hola Whispr, ¿cómo está el clima hoy?",
+    "defaultTestInputTranslate": "Hace un día precioso hoy, ¿te apetece dar un paseo?",
     "dialogs": {
       "reset": {
         "description": "El prompt ha sido restablecido al valor predeterminado.",
@@ -1061,6 +1069,8 @@
     },
     "test": {
       "addressHint": "Intenta dirigirte a \"{{agentName}}\" para probar el modo de instrucción",
+      "translateHint": "El texto se traducirá al {{language}}",
+      "translation": "Traducción",
       "aiModels": "Modelos de IA",
       "baseUrlMissing": "Falta la URL base de {{provider}}. Agrégala en la configuración de Modelos de IA.",
       "cleanup": "Corrección",
@@ -1080,7 +1090,9 @@
       "providerLabel": "Proveedor",
       "run": "Ejecutar prueba",
       "customEndpoint": "Endpoint personalizado",
-      "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA."
+      "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA.",
+      "translationDisabled": "Activa la traducción de dictado para probar este prompt",
+      "noTargetLanguage": "Elige primero un idioma de destino"
     },
     "view": {
       "customPrompt": "Prompt personalizado",
@@ -1479,6 +1491,10 @@
         "title": "Atajo del agente de voz",
         "description": "Di lo que necesitas y tu agente de IA escribe el resultado, no tus palabras"
       },
+      "translationHotkey": {
+        "title": "Atajo de Traducción",
+        "description": "Dicta en cualquier idioma: el texto pegado sale traducido"
+      },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
         "title": "Micrófono"
@@ -1714,6 +1730,7 @@
       "tabs": {
         "dictationCleanup": "Limpieza de dictado",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Traducción",
         "noteFormatting": "Formato de notas",
         "chatIntelligence": "Chat"
       }
@@ -2576,6 +2593,28 @@
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora"
     }
+  },
+  "dictationTranslation": {
+    "title": "Traducción de Dictado",
+    "description": "Un atajo dedicado que pega tu dictado traducido a otro idioma",
+    "enabled": "Activar Traducción de Dictado",
+    "enabledDescription": "Los dictados iniciados con el atajo de traducción se limpian y luego se traducen antes de pegarse",
+    "sourceLanguage": "Idioma hablado",
+    "sourceLanguageDescription": "El idioma en el que dictas: Automático también gestiona dictados mixtos",
+    "targetLanguage": "Traducir a",
+    "targetLanguageDescription": "El idioma del texto pegado",
+    "targetLanguageMissing": "Elige un idioma de destino para activar el atajo de traducción",
+    "selectLanguage": "Seleccionar idioma…",
+    "prompt": {
+      "title": "Prompt de Traducción",
+      "description": "Personaliza cómo el modelo traduce tu dictado"
+    },
+    "hotkeyHint": "Configura el atajo en Ajustes → General → Atajo de Traducción",
+    "targetsLabel": "Idiomas de destino",
+    "addTarget": "Añadir idioma…",
+    "activeTarget": "Idioma de destino activo",
+    "removeTarget": "Quitar {{language}}",
+    "maxTargets": "Hasta {{max}} idiomas"
   },
   "dictationAgent": {
     "enabled": "Activar agente de voz",

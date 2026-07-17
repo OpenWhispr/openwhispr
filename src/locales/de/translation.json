@@ -384,6 +384,7 @@
       "showInFolderWindows": "Im Explorer anzeigen",
       "showInFolderLinux": "Im Dateimanager anzeigen",
       "retryTranscription": "Erneut transkribieren",
+      "retryTranslationMode": "Übersetzungsmodus",
       "retrying": "Wird erneut transkribiert…",
       "retrySuccess": "Transkription aktualisiert",
       "retryError": "Erneute Transkription fehlgeschlagen",
@@ -558,6 +559,12 @@
       "fallback": {
         "title": "Fallback-Modus",
         "description": "Lokales Whisper ist fehlgeschlagen. Stattdessen wurde die OpenAI API verwendet."
+      },
+      "translationFallback": {
+        "unreachableTitle": "Übersetzung nicht verfügbar",
+        "unreachableDescription": "Dein Diktat wurde unübersetzt eingefügt. Überprüfe die Übersetzungseinstellungen.",
+        "failedTitle": "Übersetzung fehlgeschlagen",
+        "failedDescription": "Der Originaltext wurde eingefügt. Du kannst es im Verlauf erneut versuchen."
       },
       "noAudio": {
         "title": "Kein Audio erkannt",
@@ -989,6 +996,7 @@
       "save": "Speichern"
     },
     "defaultTestInput": "Hey Whispr, wie ist das Wetter heute?",
+    "defaultTestInputTranslate": "Das Wetter ist heute wunderschön, hast du Lust auf einen Spaziergang?",
     "dialogs": {
       "reset": {
         "description": "Der Prompt wurde auf den Standardwert zurückgesetzt.",
@@ -1013,6 +1021,8 @@
     },
     "test": {
       "addressHint": "Versuchen Sie, '{{agentName}}' anzusprechen, um den Anweisungsmodus zu testen",
+      "translateHint": "Der Text wird in {{language}} übersetzt",
+      "translation": "Übersetzung",
       "aiModels": "KI-Modelle",
       "baseUrlMissing": "{{provider}} Basis-URL fehlt. Fügen Sie sie in den KI-Modelle-Einstellungen hinzu.",
       "cleanup": "Textbereinigung",
@@ -1032,7 +1042,9 @@
       "providerLabel": "Anbieter",
       "run": "Test ausführen",
       "customEndpoint": "Benutzerdefinierter Endpoint",
-      "apiKeyMissing": "{{provider}} API-Schlüssel nicht konfiguriert. Fügen Sie ihn in den KI-Modelle-Einstellungen hinzu."
+      "apiKeyMissing": "{{provider}} API-Schlüssel nicht konfiguriert. Fügen Sie ihn in den KI-Modelle-Einstellungen hinzu.",
+      "translationDisabled": "Aktiviere die Diktatübersetzung, um diesen Prompt zu testen",
+      "noTargetLanguage": "Wähle zuerst eine Zielsprache"
     },
     "view": {
       "customPrompt": "Benutzerdefinierter Prompt",
@@ -1431,6 +1443,10 @@
         "title": "Sprachagent-Hotkey",
         "description": "Sagen Sie, was Sie brauchen — Ihr KI-Agent schreibt das Ergebnis, nicht Ihre Worte"
       },
+      "translationHotkey": {
+        "title": "Übersetzungs-Hotkey",
+        "description": "Diktiere in beliebiger Sprache — der eingefügte Text kommt übersetzt heraus"
+      },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
         "title": "Mikrofon"
@@ -1666,6 +1682,7 @@
       "tabs": {
         "dictationCleanup": "Diktat-Bereinigung",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Übersetzung",
         "noteFormatting": "Notizformatierung",
         "chatIntelligence": "Chat"
       }
@@ -2528,6 +2545,28 @@
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden"
     }
+  },
+  "dictationTranslation": {
+    "title": "Diktat-Übersetzung",
+    "description": "Ein eigener Hotkey, der dein Diktat übersetzt in eine andere Sprache einfügt",
+    "enabled": "Diktat-Übersetzung aktivieren",
+    "enabledDescription": "Mit dem Übersetzungs-Hotkey gestartete Diktate werden bereinigt und dann übersetzt, bevor sie eingefügt werden",
+    "sourceLanguage": "Gesprochene Sprache",
+    "sourceLanguageDescription": "Die Sprache, in der du diktierst — Automatisch funktioniert auch bei gemischten Diktaten",
+    "targetLanguage": "Übersetzen nach",
+    "targetLanguageDescription": "Die Sprache des eingefügten Textes",
+    "targetLanguageMissing": "Wähle eine Zielsprache, um den Übersetzungs-Hotkey zu aktivieren",
+    "selectLanguage": "Sprache auswählen…",
+    "prompt": {
+      "title": "Übersetzungs-Prompt",
+      "description": "Passe an, wie das Modell dein Diktat übersetzt"
+    },
+    "hotkeyHint": "Lege den Hotkey unter Einstellungen → Allgemein → Übersetzungs-Hotkey fest",
+    "targetsLabel": "Zielsprachen",
+    "addTarget": "Sprache hinzufügen…",
+    "activeTarget": "Aktive Zielsprache",
+    "removeTarget": "{{language}} entfernen",
+    "maxTargets": "Bis zu {{max}} Sprachen"
   },
   "dictationAgent": {
     "enabled": "Voice Agent aktivieren",

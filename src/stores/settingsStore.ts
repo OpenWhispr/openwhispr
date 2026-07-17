@@ -114,6 +114,8 @@ const BOOLEAN_SETTINGS = new Set([
   "autoGenerateNoteTitle",
   "useCleanupModel",
   "useDictationAgent",
+  "useDictationTranslation",
+  "translationDisableThinking",
   "preferBuiltInMic",
   "cloudBackupEnabled",
   "telemetryEnabled",
@@ -149,6 +151,7 @@ const ARRAY_SETTINGS = new Set([
   "snippets",
   "gcalAccounts",
   "onboardingUseCases",
+  "translationTargets",
 ]);
 
 const NUMERIC_SETTINGS = new Set([
@@ -472,6 +475,19 @@ export interface SettingsState
   noteFormattingRemoteUrl: string;
   noteFormattingCustomApiKey: string;
 
+  translationMode: InferenceMode;
+  translationProvider: string;
+  translationModel: string;
+  translationCloudMode: string;
+  translationCloudBaseUrl: string;
+  translationRemoteUrl: string;
+  translationCustomApiKey: string;
+  translationDisableThinking: boolean;
+  useDictationTranslation: boolean;
+  translationSourceLanguage: string;
+  translationTargetLanguage: string;
+  translationTargets: string[];
+
   dictationAgentMode: InferenceMode;
   dictationAgentProvider: string;
   dictationAgentModel: string;
@@ -532,6 +548,19 @@ export interface SettingsState
   setNoteFormattingCloudBaseUrl: (value: string) => void;
   setNoteFormattingRemoteUrl: (url: string) => void;
   setNoteFormattingCustomApiKey: (key: string) => void;
+
+  setTranslationMode: (mode: InferenceMode) => void;
+  setTranslationProvider: (value: string) => void;
+  setTranslationModel: (value: string) => void;
+  setTranslationCloudMode: (value: string) => void;
+  setTranslationCloudBaseUrl: (value: string) => void;
+  setTranslationRemoteUrl: (value: string) => void;
+  setTranslationCustomApiKey: (value: string) => void;
+  setTranslationDisableThinking: (value: boolean) => void;
+  setUseDictationTranslation: (value: boolean) => void;
+  setTranslationSourceLanguage: (value: string) => void;
+  setTranslationTargetLanguage: (value: string) => void;
+  setTranslationTargets: (targets: string[]) => void;
 
   setCleanupDisableThinking: (value: boolean) => void;
   setDictationAgentDisableThinking: (value: boolean) => void;
@@ -617,6 +646,8 @@ export interface SettingsState
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
   setVoiceAgentKey: (key: string) => Promise<boolean>;
+  translationKey: string;
+  setTranslationKey: (key: string) => Promise<boolean>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -700,7 +731,7 @@ function createBooleanSetter(key: string) {
 // being persisted. Rolls back to the previous key if registration fails.
 // Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
-  key: "chatAgentKey" | "voiceAgentKey",
+  key: "chatAgentKey" | "voiceAgentKey" | "translationKey",
   label: string,
   getRegisterFn: () =>
     ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
@@ -867,6 +898,8 @@ function createSecretSetter(
   };
 }
 
+export const MAX_TRANSLATION_TARGETS = 5;
+
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
   useLocalWhisper: readBoolean("useLocalWhisper", false),
@@ -944,6 +977,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   activeDictationKey: null,
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
+  translationKey: readString("translationKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
@@ -1113,6 +1147,36 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   noteFormattingRemoteUrl: readString("noteFormattingRemoteUrl", ""),
   noteFormattingCustomApiKey: readString("noteFormattingCustomApiKey", ""),
 
+  translationMode: (() => {
+    const v = readString("translationMode", "openwhispr");
+    if (
+      v === "openwhispr" ||
+      v === "providers" ||
+      v === "local" ||
+      v === "self-hosted" ||
+      v === "enterprise"
+    )
+      return v;
+    return "openwhispr" as InferenceMode;
+  })(),
+  translationProvider: readString("translationProvider", ""),
+  translationModel: readString("translationModel", ""),
+  translationCloudMode: readString("translationCloudMode", "openwhispr"),
+  translationCloudBaseUrl: readString("translationCloudBaseUrl", ""),
+  translationRemoteUrl: readString("translationRemoteUrl", ""),
+  translationCustomApiKey: readString("translationCustomApiKey", ""),
+  translationDisableThinking: readBoolean("translationDisableThinking", true),
+  useDictationTranslation: readBoolean("useDictationTranslation", false),
+  translationSourceLanguage: readString("translationSourceLanguage", "auto"),
+  translationTargetLanguage: readString("translationTargetLanguage", ""),
+  translationTargets: (() => {
+    // Seed from the saved array; otherwise from the single active target if set.
+    const stored = isBrowser ? localStorage.getItem("translationTargets") : null;
+    if (stored !== null) return readStringArray("translationTargets", []);
+    const active = readString("translationTargetLanguage", "");
+    return active ? [active] : [];
+  })(),
+
   setTranscriptionMode: createStringSetter("transcriptionMode") as (mode: InferenceMode) => void,
   setRemoteTranscriptionType: createStringSetter("remoteTranscriptionType") as (
     type: SelfHostedType
@@ -1163,6 +1227,25 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNoteFormattingCloudBaseUrl: createStringSetter("noteFormattingCloudBaseUrl"),
   setNoteFormattingRemoteUrl: createStringSetter("noteFormattingRemoteUrl"),
   setNoteFormattingCustomApiKey: createStringSetter("noteFormattingCustomApiKey"),
+
+  setTranslationMode: createStringSetter("translationMode") as (mode: InferenceMode) => void,
+  setTranslationProvider: createStringSetter("translationProvider"),
+  setTranslationModel: createStringSetter("translationModel"),
+  setTranslationCloudMode: createStringSetter("translationCloudMode"),
+  setTranslationCloudBaseUrl: createStringSetter("translationCloudBaseUrl"),
+  setTranslationRemoteUrl: createStringSetter("translationRemoteUrl"),
+  setTranslationCustomApiKey: createStringSetter("translationCustomApiKey"),
+  setTranslationDisableThinking: createBooleanSetter("translationDisableThinking"),
+  setUseDictationTranslation: createBooleanSetter("useDictationTranslation"),
+  setTranslationSourceLanguage: createStringSetter("translationSourceLanguage"),
+  setTranslationTargetLanguage: createStringSetter("translationTargetLanguage"),
+  setTranslationTargets: (targets: string[]) => {
+    const normalized = Array.from(
+      new Set(targets.filter((v) => typeof v === "string" && v.trim() && v !== "auto"))
+    );
+    if (isBrowser) localStorage.setItem("translationTargets", JSON.stringify(normalized));
+    set({ translationTargets: normalized });
+  },
 
   chatAgentModel: readString("chatAgentModel", "openai/gpt-oss-120b"),
   chatAgentProvider: readString("chatAgentProvider", "groq"),
@@ -1447,6 +1530,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "voiceAgentKey",
     "voice agent hotkey",
     () => window.electronAPI?.updateVoiceAgentHotkey
+  ),
+  setTranslationKey: createRegisteredHotkeySetter(
+    "translationKey",
+    "translation hotkey",
+    () => window.electronAPI?.updateTranslationHotkey
   ),
 
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
@@ -1738,8 +1826,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       settings.cleanupCloudMode ?? s.cleanupCloudMode,
       settings.cleanupProvider ?? s.cleanupProvider
     );
-    const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence } =
-      buildReasoningScopePatches(settings, mode);
+    const {
+      dictationCleanup,
+      noteFormatting,
+      dictationAgent,
+      chatIntelligence,
+      dictationTranslation,
+    } = buildReasoningScopePatches(settings, mode);
     s.updateCleanupSettings(dictationCleanup);
     s.setCleanupMode(dictationCleanup.cleanupMode);
     // Each Settings tab selects on its own mode field, so set the mode for every
@@ -1760,6 +1853,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (chatIntelligence.cloudMode !== undefined)
       s.setChatAgentCloudMode(chatIntelligence.cloudMode);
     s.setChatAgentMode(mode);
+    if (dictationTranslation.provider !== undefined)
+      s.setTranslationProvider(dictationTranslation.provider);
+    if (dictationTranslation.model !== undefined) s.setTranslationModel(dictationTranslation.model);
+    if (dictationTranslation.cloudMode !== undefined)
+      s.setTranslationCloudMode(dictationTranslation.cloudMode);
+    s.setTranslationMode(mode);
   },
 
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {
@@ -1808,6 +1907,11 @@ export const selectIsCloudDictationAgentMode = (state: SettingsState) =>
   state.isSignedIn &&
   state.dictationAgentMode === "openwhispr" &&
   state.dictationAgentCloudMode === "openwhispr";
+
+export const selectIsCloudTranslationMode = (state: SettingsState) =>
+  state.isSignedIn &&
+  state.translationMode === "openwhispr" &&
+  state.translationCloudMode === "openwhispr";
 
 export const selectIsCloudNoteFormattingMode = (state: SettingsState) => {
   const cfg = selectResolvedNoteFormatting(state);
@@ -2000,6 +2104,10 @@ export function isCloudDictationAgentMode() {
   return selectIsCloudDictationAgentMode(useSettingsStore.getState());
 }
 
+export function isCloudTranslationMode() {
+  return selectIsCloudTranslationMode(useSettingsStore.getState());
+}
+
 // --- Initialization ---
 
 let hasInitialized = false;
@@ -2158,6 +2266,20 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync voice agent hotkey on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync translation hotkey from main process
+    try {
+      const envKey = await window.electronAPI.getTranslationKey?.();
+      if (envKey && envKey !== state.translationKey) {
+        createStringSetter("translationKey")(envKey);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync translation hotkey on startup",
         { error: (err as Error).message },
         "settings"
       );

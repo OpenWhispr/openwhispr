@@ -22,6 +22,7 @@ interface LanguageSelectorProps {
   onChange: (value: string) => void;
   options?: LanguageOption[];
   className?: string;
+  placeholder?: string;
 }
 
 export default function LanguageSelector({
@@ -29,6 +30,7 @@ export default function LanguageSelector({
   onChange,
   options,
   className = "",
+  placeholder,
 }: LanguageSelectorProps) {
   const { t } = useTranslation();
   const items = options ?? REGISTRY_OPTIONS;
@@ -75,10 +77,18 @@ export default function LanguageSelector({
       // fixed positioning is relative to that ancestor, not the viewport.
       const offsetX = target === document.body ? 0 : target.getBoundingClientRect().left;
       const offsetY = target === document.body ? 0 : target.getBoundingClientRect().top;
+      const menuWidth = Math.max(triggerRect.width, 240);
+      const containerRight =
+        (target === document.body ? window.innerWidth : target.getBoundingClientRect().right) -
+        offsetX;
+      let left = triggerRect.left - offsetX;
+      if (left + menuWidth > containerRight - 8) {
+        left = Math.max(8, triggerRect.right - offsetX - menuWidth);
+      }
       setDropdownPosition({
         top: triggerRect.bottom + 4 - offsetY,
-        left: triggerRect.left - offsetX,
-        width: triggerRect.width,
+        left,
+        width: menuWidth,
       });
       requestAnimationFrame(() => {
         searchInputRef.current?.focus();
@@ -146,6 +156,8 @@ export default function LanguageSelector({
     }
   };
 
+  const selected = items.find((l) => l.value === value);
+
   return (
     <div className={`relative ${className}`} ref={setContainerNode}>
       {/* Trigger button - premium, tight, tactile macOS-style */}
@@ -170,11 +182,9 @@ export default function LanguageSelector({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className="truncate text-foreground">
-          <span className="mr-1.5">
-            {items.find((l) => l.value === value)?.flag ?? "\uD83C\uDF10"}
-          </span>
-          {items.find((l) => l.value === value)?.label ?? value}
+        <span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>
+          <span className="mr-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
+          {selected?.label ?? (value || placeholder || "")}
         </span>
         <ChevronDown
           className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-[color,transform] duration-200 ${

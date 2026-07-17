@@ -78,6 +78,12 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      // Records the dictation intent (e.g. "translation") so retry/recover re-runs the same route.
+      try {
+        this.db.exec("ALTER TABLE transcriptions ADD COLUMN route_kind TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS custom_dictionary (
@@ -658,6 +664,7 @@ class DatabaseManager {
       status = "completed",
       errorMessage = null,
       errorCode = null,
+      routeKind = null,
       clientTranscriptionId = randomUUID(),
     } = {}
   ) {
@@ -666,7 +673,7 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       const stmt = this.db.prepare(
-        "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, client_transcription_id) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, route_kind, client_transcription_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
       );
       const result = stmt.run(
         text,
@@ -674,6 +681,7 @@ class DatabaseManager {
         status,
         errorMessage,
         errorCode,
+        routeKind,
         clientTranscriptionId
       );
 

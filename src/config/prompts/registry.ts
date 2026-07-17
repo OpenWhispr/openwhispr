@@ -14,6 +14,10 @@ export const PROMPT_KINDS = {
     i18nKey: "fullPrompt" as const,
     fallback: enPrompts.fullPrompt,
   },
+  translate: {
+    i18nKey: "translatePrompt" as const,
+    fallback: enPrompts.translatePrompt,
+  },
   chatAgent: {
     i18nKey: null,
     fallback: DEFAULT_CHAT_AGENT_PROMPT,

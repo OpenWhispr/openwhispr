@@ -8391,6 +8391,39 @@ class IPCHandlers {
       return this.environmentManager.getVoiceAgentKey?.() || "";
     });
 
+    ipcMain.handle("update-translation-hotkey", async (_event, hotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const translationCallback = this.windowManager._translationHotkeyCallback;
+      if (!translationCallback) {
+        return { success: false, message: "Translation hotkey callback not initialized" };
+      }
+
+      if (!hotkey) {
+        hotkeyManager.unregisterSlot("translation");
+        this.environmentManager.saveTranslationKey?.("");
+        this.windowManager.reconcileNativeKeyListeners();
+        return { success: true, message: "Translation hotkey cleared" };
+      }
+
+      const result = await hotkeyManager.registerSlot("translation", hotkey, translationCallback, {
+        atomic: true,
+      });
+      this.windowManager.reconcileNativeKeyListeners();
+      if (result.success) {
+        this.environmentManager.saveTranslationKey?.(hotkey);
+        return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
+      }
+
+      return {
+        success: false,
+        message: result.error || `Failed to update translation hotkey to: ${hotkey}`,
+      };
+    });
+
+    ipcMain.handle("get-translation-key", async () => {
+      return this.environmentManager.getTranslationKey?.() || "";
+    });
+
     ipcMain.handle("get-agent-key", async () => {
       return this.environmentManager.getAgentKey?.() || "";
     });

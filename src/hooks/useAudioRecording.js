@@ -21,44 +21,48 @@ export const useAudioRecording = (toast, options = {}) => {
   const wasRecordingRef = useRef(false);
   const { onToggle } = options;
 
-  const performStartRecording = useCallback(async ({ voiceAgentRequested = false } = {}) => {
-    if (startLockRef.current) return false;
-    startLockRef.current = true;
-    try {
-      if (!audioManagerRef.current) return false;
+  const performStartRecording = useCallback(
+    async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
+      if (startLockRef.current) return false;
+      startLockRef.current = true;
+      try {
+        if (!audioManagerRef.current) return false;
 
-      const currentState = audioManagerRef.current.getState();
-      if (currentState.isRecording || currentState.isProcessing) return false;
+        const currentState = audioManagerRef.current.getState();
+        if (currentState.isRecording || currentState.isProcessing) return false;
 
-      audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+        audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+        audioManagerRef.current.setTranslationRequested(translationRequested);
 
-      // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
-      if (!audioManagerRef.current.sttConfig) {
-        const config = await window.electronAPI.getSttConfig?.();
-        if (config?.success) {
-          audioManagerRef.current.setSttConfig(config);
+        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
+        if (!audioManagerRef.current.sttConfig) {
+          const config = await window.electronAPI.getSttConfig?.();
+          if (config?.success) {
+            audioManagerRef.current.setSttConfig(config);
+          }
         }
-      }
 
-      const didStart = audioManagerRef.current.shouldUseStreaming()
-        ? await audioManagerRef.current.startStreamingRecording()
-        : await audioManagerRef.current.startRecording();
+        const didStart = audioManagerRef.current.shouldUseStreaming()
+          ? await audioManagerRef.current.startStreamingRecording()
+          : await audioManagerRef.current.startRecording();
 
-      // A quick tap can end the recording inside the start call itself (deferred
-      // streaming stop) — don't pause media for a recording that already ended. See #1060.
-      if (didStart && audioManagerRef.current.getState().isRecording) {
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.pauseMediaPlayback?.();
+        // A quick tap can end the recording inside the start call itself (deferred
+        // streaming stop) — don't pause media for a recording that already ended. See #1060.
+        if (didStart && audioManagerRef.current.getState().isRecording) {
+          if (getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.pauseMediaPlayback?.();
+          }
+          window.electronAPI?.registerCancelHotkey?.("Escape");
+          void playStartCue();
         }
-        window.electronAPI?.registerCancelHotkey?.("Escape");
-        void playStartCue();
-      }
 
-      return didStart;
-    } finally {
-      startLockRef.current = false;
-    }
-  }, []);
+        return didStart;
+      } finally {
+        startLockRef.current = false;
+      }
+    },
+    []
+  );
 
   const performStopRecording = useCallback(async () => {
     if (stopLockRef.current) return false;
@@ -206,6 +210,20 @@ export const useAudioRecording = (toast, options = {}) => {
           }
         }
       },
+      onTranslationFallback: ({ reason }) => {
+        // Fail-open: the raw text was still pasted; the toast removes the silence.
+        toast({
+          title:
+            reason === "unreachable"
+              ? t("hooks.audioRecording.translationFallback.unreachableTitle")
+              : t("hooks.audioRecording.translationFallback.failedTitle"),
+          description:
+            reason === "unreachable"
+              ? t("hooks.audioRecording.translationFallback.unreachableDescription")
+              : t("hooks.audioRecording.translationFallback.failedDescription"),
+          variant: "default",
+        });
+      },
     });
 
     audioManagerRef.current.setContext("dictation");
@@ -218,14 +236,17 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     });
 
-    const handleToggle = async ({ voiceAgentRequested = false } = {}) => {
+    const handleToggle = async ({
+      voiceAgentRequested = false,
+      translationRequested = false,
+    } = {}) => {
       if (!audioManagerRef.current) return;
       // Lazily warm the mic driver on first dictation use, not at launch. See #871.
       audioManagerRef.current.warmupMicDriver?.();
       const currentState = audioManagerRef.current.getState();
 
       if (!currentState.isRecording && !currentState.isProcessing) {
-        await performStartRecording({ voiceAgentRequested });
+        await performStartRecording({ voiceAgentRequested, translationRequested });
       } else if (currentState.isRecording) {
         await performStopRecording();
       }
@@ -247,6 +268,11 @@ export const useAudioRecording = (toast, options = {}) => {
 
     const disposeVoiceAgentToggle = window.electronAPI.onToggleVoiceAgent?.(() => {
       handleToggle({ voiceAgentRequested: true });
+      onToggle?.();
+    });
+
+    const disposeTranslationToggle = window.electronAPI.onToggleTranslation?.(() => {
+      handleToggle({ translationRequested: true });
       onToggle?.();
     });
 
@@ -277,6 +303,7 @@ export const useAudioRecording = (toast, options = {}) => {
     return () => {
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
+      disposeTranslationToggle?.();
       disposeStart?.();
       disposeStop?.();
       disposeNoAudio?.();

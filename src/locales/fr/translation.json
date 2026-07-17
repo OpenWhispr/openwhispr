@@ -384,6 +384,7 @@
       "showInFolderWindows": "Afficher dans l'Explorateur",
       "showInFolderLinux": "Afficher dans le gestionnaire de fichiers",
       "retryTranscription": "Retranscrire",
+      "retryTranslationMode": "Mode Traduction",
       "retrying": "Retranscription en cours…",
       "retrySuccess": "Transcription mise à jour",
       "retryError": "Échec de la retranscription",
@@ -558,6 +559,12 @@
       "fallback": {
         "title": "Mode de secours",
         "description": "Whisper local a échoué. L'API OpenAI a pris le relais."
+      },
+      "translationFallback": {
+        "unreachableTitle": "Traduction indisponible",
+        "unreachableDescription": "Votre dictée a été collée sans traduction. Vérifiez les paramètres de traduction.",
+        "failedTitle": "Échec de la traduction",
+        "failedDescription": "Le texte original a été collé. Vous pouvez réessayer depuis l'Historique."
       },
       "noAudio": {
         "title": "Aucun audio détecté",
@@ -1037,6 +1044,7 @@
       "save": "Enregistrer"
     },
     "defaultTestInput": "Hey Whispr, quel temps fait-il aujourd'hui ?",
+    "defaultTestInputTranslate": "Il fait très beau aujourd'hui, ça te dit d'aller te promener ?",
     "dialogs": {
       "reset": {
         "description": "Le prompt a été réinitialisé à la valeur par défaut.",
@@ -1061,6 +1069,8 @@
     },
     "test": {
       "addressHint": "Essayez d'interpeller « {{agentName}} » pour tester le mode instruction",
+      "translateHint": "Le texte sera traduit en {{language}}",
+      "translation": "Traduction",
       "aiModels": "Modèles IA",
       "baseUrlMissing": "URL de base {{provider}} manquante. Ajoutez-la dans les paramètres Modèles IA.",
       "cleanup": "Correction",
@@ -1080,7 +1090,9 @@
       "providerLabel": "Fournisseur",
       "run": "Lancer le test",
       "customEndpoint": "Endpoint personnalisé",
-      "apiKeyMissing": "Clé API {{provider}} non configurée. Ajoutez-la dans les paramètres Modèles IA."
+      "apiKeyMissing": "Clé API {{provider}} non configurée. Ajoutez-la dans les paramètres Modèles IA.",
+      "translationDisabled": "Activez la traduction de dictée pour tester ce prompt",
+      "noTargetLanguage": "Choisissez d’abord une langue cible"
     },
     "view": {
       "customPrompt": "Prompt personnalisé",
@@ -1479,6 +1491,10 @@
         "title": "Raccourci de l'agent vocal",
         "description": "Dites ce que vous voulez — votre agent IA écrit le résultat, pas vos mots"
       },
+      "translationHotkey": {
+        "title": "Raccourci de Traduction",
+        "description": "Dictez dans n'importe quelle langue : le texte collé ressort traduit"
+      },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
         "title": "Microphone"
@@ -1714,6 +1730,7 @@
       "tabs": {
         "dictationCleanup": "Nettoyage de la dictée",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Traduction",
         "noteFormatting": "Mise en forme des notes",
         "chatIntelligence": "Chat"
       }
@@ -2576,6 +2593,28 @@
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant"
     }
+  },
+  "dictationTranslation": {
+    "title": "Traduction de Dictée",
+    "description": "Un raccourci dédié qui colle votre dictée traduite dans une autre langue",
+    "enabled": "Activer la Traduction de Dictée",
+    "enabledDescription": "Les dictées lancées avec le raccourci de traduction sont nettoyées puis traduites avant d'être collées",
+    "sourceLanguage": "Langue parlée",
+    "sourceLanguageDescription": "La langue dans laquelle vous dictez : Automatique gère aussi les dictées mixtes",
+    "targetLanguage": "Traduire vers",
+    "targetLanguageDescription": "La langue du texte collé",
+    "targetLanguageMissing": "Choisissez une langue cible pour activer le raccourci de traduction",
+    "selectLanguage": "Sélectionner la langue…",
+    "prompt": {
+      "title": "Prompt de Traduction",
+      "description": "Personnalisez la façon dont le modèle traduit votre dictée"
+    },
+    "hotkeyHint": "Définissez le raccourci dans Réglages → Général → Raccourci de Traduction",
+    "targetsLabel": "Langues cibles",
+    "addTarget": "Ajouter une langue…",
+    "activeTarget": "Langue cible active",
+    "removeTarget": "Supprimer {{language}}",
+    "maxTargets": "Jusqu’à {{max}} langues"
   },
   "dictationAgent": {
     "enabled": "Activer l'agent vocal",

@@ -92,3 +92,19 @@ test("_findSlotConflict detects a hotkey already bound to another slot's list", 
   // Re-checking a slot against its own hotkey is not a conflict.
   assert.equal(mgr._findSlotConflict("dictation", "GLOBE"), null);
 });
+
+test("translation slot conflicts are detected and it is never push-enabled", () => {
+  const mgr = makeManager({
+    dictation: "F8",
+    translation: "Control+Shift+T",
+  });
+  // Cross-slot conflict: reusing the translation hotkey on another slot.
+  const conflict = mgr._findSlotConflict("agent", "Control+Shift+T");
+  assert.equal(conflict?.reason, "slot_conflict");
+  assert.equal(conflict?.conflictSlot, "translation");
+  // Push mode only push-enables the dictation slot, never translation.
+  assert.deepEqual(mgr.getNativeListenerKeys("push"), ["F8"]);
+  // Modifier-only translation hotkeys go through the native listener in tap mode.
+  const mgr2 = makeManager({ translation: "Control+Alt" });
+  assert.deepEqual(mgr2.getNativeListenerKeys("tap"), ["Control+Alt"]);
+});

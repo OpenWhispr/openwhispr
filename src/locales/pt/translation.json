@@ -363,6 +363,7 @@
       "showInFolderWindows": "Mostrar no Explorador",
       "showInFolderLinux": "Mostrar no gerenciador de arquivos",
       "retryTranscription": "Retranscrever",
+      "retryTranslationMode": "Modo de Tradução",
       "retrying": "Retranscrevendo…",
       "retrySuccess": "Transcrição atualizada",
       "retryError": "Falha ao retranscrever",
@@ -537,6 +538,12 @@
       "fallback": {
         "title": "Modo de fallback",
         "description": "O Whisper local falhou. A API da OpenAI foi usada no lugar."
+      },
+      "translationFallback": {
+        "unreachableTitle": "Tradução indisponível",
+        "unreachableDescription": "Seu ditado foi colado sem tradução. Verifique as configurações de tradução.",
+        "failedTitle": "Falha na tradução",
+        "failedDescription": "O texto original foi colado. Você pode tentar novamente pelo Histórico."
       },
       "noAudio": {
         "title": "Nenhum áudio detectado",
@@ -968,6 +975,7 @@
       "save": "Salvar"
     },
     "defaultTestInput": "Ei Whispr, como está o tempo hoje?",
+    "defaultTestInputTranslate": "O tempo está lindo hoje, quer dar um passeio?",
     "dialogs": {
       "reset": {
         "description": "O prompt foi redefinido para o valor padrão.",
@@ -992,6 +1000,8 @@
     },
     "test": {
       "addressHint": "Tente chamar \"{{agentName}}\" para testar o modo de instrução",
+      "translateHint": "O texto será traduzido para {{language}}",
+      "translation": "Tradução",
       "aiModels": "Modelos de IA",
       "baseUrlMissing": "URL base do {{provider}} ausente. Adicione nas configurações de Modelos de IA.",
       "cleanup": "Limpeza",
@@ -1011,7 +1021,9 @@
       "providerLabel": "Provedor",
       "run": "Executar teste",
       "customEndpoint": "Endpoint personalizado",
-      "apiKeyMissing": "Chave API do {{provider}} não configurada. Adicione nas configurações de Modelos de IA."
+      "apiKeyMissing": "Chave API do {{provider}} não configurada. Adicione nas configurações de Modelos de IA.",
+      "translationDisabled": "Ative a tradução de ditado para testar este prompt",
+      "noTargetLanguage": "Escolha primeiro um idioma de destino"
     },
     "view": {
       "customPrompt": "Prompt personalizado",
@@ -1410,6 +1422,10 @@
         "title": "Atalho do agente de voz",
         "description": "Diga o que você precisa — seu agente de IA escreve o resultado, não suas palavras"
       },
+      "translationHotkey": {
+        "title": "Atalho de Tradução",
+        "description": "Dite em qualquer idioma: o texto colado sai traduzido"
+      },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
         "title": "Microfone"
@@ -1645,6 +1661,7 @@
       "tabs": {
         "dictationCleanup": "Limpeza do ditado",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Tradução",
         "noteFormatting": "Formatação de notas",
         "chatIntelligence": "Chat"
       }
@@ -2528,6 +2545,28 @@
       "startListening": "Começar a ouvir",
       "hideForNow": "Ocultar por agora"
     }
+  },
+  "dictationTranslation": {
+    "title": "Tradução de Ditado",
+    "description": "Um atalho dedicado que cola seu ditado traduzido para outro idioma",
+    "enabled": "Ativar Tradução de Ditado",
+    "enabledDescription": "Ditados iniciados com o atalho de tradução são limpos e depois traduzidos antes de serem colados",
+    "sourceLanguage": "Idioma falado",
+    "sourceLanguageDescription": "O idioma em que você dita: Automático também lida com ditados mistos",
+    "targetLanguage": "Traduzir para",
+    "targetLanguageDescription": "O idioma do texto colado",
+    "targetLanguageMissing": "Escolha um idioma de destino para ativar o atalho de tradução",
+    "selectLanguage": "Selecionar idioma…",
+    "prompt": {
+      "title": "Prompt de Tradução",
+      "description": "Personalize como o modelo traduz seu ditado"
+    },
+    "hotkeyHint": "Defina o atalho em Configurações → Geral → Atalho de Tradução",
+    "targetsLabel": "Idiomas de destino",
+    "addTarget": "Adicionar idioma…",
+    "activeTarget": "Idioma de destino ativo",
+    "removeTarget": "Remover {{language}}",
+    "maxTargets": "Até {{max}} idiomas"
   },
   "dictationAgent": {
     "enabled": "Ativar agente de voz",

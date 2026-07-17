@@ -384,6 +384,7 @@
       "showInFolderWindows": "エクスプローラーで表示",
       "showInFolderLinux": "ファイルマネージャーで表示",
       "retryTranscription": "再文字起こし",
+      "retryTranslationMode": "翻訳モード",
       "retrying": "再文字起こし中…",
       "retrySuccess": "文字起こしが更新されました",
       "retryError": "再文字起こしに失敗しました",
@@ -558,6 +559,12 @@
       "fallback": {
         "title": "フォールバックモード",
         "description": "ローカル Whisper が失敗しました。代わりに OpenAI API を使用しました。"
+      },
+      "translationFallback": {
+        "unreachableTitle": "翻訳を利用できません",
+        "unreachableDescription": "口述内容は翻訳されずに貼り付けられました。翻訳設定を確認してください。",
+        "failedTitle": "翻訳に失敗しました",
+        "failedDescription": "元のテキストが貼り付けられました。履歴から再試行できます。"
       },
       "noAudio": {
         "title": "音声が検出されませんでした",
@@ -989,6 +996,7 @@
       "save": "保存"
     },
     "defaultTestInput": "ねぇ Whispr、今日の天気はどう？",
+    "defaultTestInputTranslate": "今日はいい天気ですね、散歩に行きませんか？",
     "dialogs": {
       "reset": {
         "description": "プロンプトをデフォルト値にリセットしました。",
@@ -1013,6 +1021,8 @@
     },
     "test": {
       "addressHint": "「{{agentName}}」と呼びかけて指示モードをテストしてみてください",
+      "translateHint": "テキストは{{language}}に翻訳されます",
+      "translation": "翻訳",
       "aiModels": "AI モデル",
       "baseUrlMissing": "{{provider}} のベース URL が未設定です。AI モデル設定で追加してください。",
       "cleanup": "クリーンアップ",
@@ -1032,7 +1042,9 @@
       "providerLabel": "プロバイダー",
       "run": "テスト実行",
       "customEndpoint": "カスタムエンドポイント",
-      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。"
+      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。",
+      "translationDisabled": "このプロンプトをテストするには音声入力翻訳を有効にしてください",
+      "noTargetLanguage": "先に翻訳先の言語を選択してください"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
@@ -1431,6 +1443,10 @@
         "title": "ボイスエージェントホットキー",
         "description": "話しかけるだけで、AIエージェントが言葉そのままではなく結果を入力します"
       },
+      "translationHotkey": {
+        "title": "翻訳ホットキー",
+        "description": "どの言語で話しても、貼り付けられるテキストは翻訳済みになります"
+      },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
         "title": "マイク"
@@ -1666,6 +1682,7 @@
       "tabs": {
         "dictationCleanup": "ディクテーションのクリーンアップ",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "翻訳",
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャット"
       }
@@ -2528,6 +2545,28 @@
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示"
     }
+  },
+  "dictationTranslation": {
+    "title": "音声入力翻訳",
+    "description": "専用ホットキーで、音声入力を別の言語に翻訳して貼り付けます",
+    "enabled": "音声入力翻訳を有効にする",
+    "enabledDescription": "翻訳ホットキーで開始した音声入力は、整形されてから翻訳されて貼り付けられます",
+    "sourceLanguage": "話す言語",
+    "sourceLanguageDescription": "音声入力する言語。自動検出は複数言語が混在する場合にも対応します",
+    "targetLanguage": "翻訳先",
+    "targetLanguageDescription": "貼り付けられるテキストの言語",
+    "targetLanguageMissing": "翻訳ホットキーを有効にするには翻訳先の言語を選択してください",
+    "selectLanguage": "言語を選択…",
+    "prompt": {
+      "title": "翻訳プロンプト",
+      "description": "モデルによる音声入力の翻訳方法をカスタマイズします"
+    },
+    "hotkeyHint": "ホットキーは 設定 → 一般 → 翻訳ホットキー で設定できます",
+    "targetsLabel": "翻訳先の言語",
+    "addTarget": "言語を追加…",
+    "activeTarget": "使用中の翻訳先言語",
+    "removeTarget": "{{language}}を削除",
+    "maxTargets": "最大{{max}}言語"
   },
   "dictationAgent": {
     "enabled": "音声エージェントを有効にする",
