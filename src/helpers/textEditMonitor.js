@@ -82,20 +82,53 @@ class TextEditMonitor extends EventEmitter {
     this._lastValue = null;
     this._stdoutBuffer = "";
     this.lastTargetPid = null;
+    this.lastForegroundWindow = null;
   }
 
   /**
-   * macOS: capture the active app's PID via NSWorkspace before the overlay steals focus.
+   * Capture the active target before the overlay/transcription can steal focus.
    * Must be called at hotkey press time, BEFORE showDictationPanel()/mainWindow.show().
-   * NSWorkspace.frontmostApplication correctly identifies the key window owner,
-   * ignoring panel-type windows like the OpenWhispr overlay.
+   * macOS: the frontmost app's PID via NSWorkspace (re-activated by PID before paste).
+   * Windows: the foreground window handle via windows-fast-paste (restored before
+   * paste, issue #859). NSWorkspace.frontmostApplication and GetForegroundWindow
+   * both ignore the focusable:false OpenWhispr overlay, so they name the real target.
    */
   captureTargetPid() {
-    if (process.platform !== "darwin") return;
-    this._readFrontmostPid().then((pid) => {
-      this.lastTargetPid = pid;
-      debugLogger.debug("[TextEditMonitor] Captured target PID", { pid });
-    });
+    if (process.platform === "darwin") {
+      this._readFrontmostPid().then((pid) => {
+        this.lastTargetPid = pid;
+        debugLogger.debug("[TextEditMonitor] Captured target PID", { pid });
+      });
+      return;
+    }
+    if (process.platform === "win32") {
+      this._captureWindowsForegroundWindow();
+    }
+  }
+
+  /**
+   * Windows: read the current foreground window handle via the fast-paste helper
+   * so it can be restored before the paste keystroke. Best-effort: if the binary
+   * is missing or fails, we clear the handle and the paste falls back to whatever
+   * is foreground at paste time (the pre-#859 behavior).
+   */
+  _captureWindowsForegroundWindow() {
+    const binary = this._findFile("windows-fast-paste.exe");
+    if (!binary) {
+      this.lastForegroundWindow = null;
+      return;
+    }
+    execFile(
+      binary,
+      ["--print-foreground"],
+      { timeout: 2000, windowsHide: true },
+      (err, stdout) => {
+        const match = err ? null : /FOREGROUND\s+(\d+)/.exec(stdout || "");
+        const handle = match && match[1] !== "0" ? match[1] : null;
+        this.lastForegroundWindow = handle;
+        debugLogger.debug("[TextEditMonitor] Captured foreground window", { handle });
+      }
+    );
   }
 
   /**

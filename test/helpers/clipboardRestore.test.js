@@ -198,6 +198,45 @@ test("pasteText waits for prior clipboard restoration before starting the next p
   assert.deepEqual(events, ["start:first", "end:first", "start:second", "end:second"]);
 });
 
+test("pasteWithFastPaste restores the captured target window before pasting (#859)", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager._restoreClipboardAfterDelay = () => Promise.resolve();
+
+  const result = await manager.pasteWithFastPaste(
+    "/tmp/windows-fast-paste.exe",
+    { type: "text", data: "previous clipboard" },
+    { expectedClipboardText: "dictated text", targetWindow: "12345" }
+  );
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "/tmp/windows-fast-paste.exe");
+  assert.deepEqual(spawnCalls[0].args, ["--restore-window", "12345"]);
+});
+
+test("pasteWithFastPaste sends no window arg when nothing was captured", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager._restoreClipboardAfterDelay = () => Promise.resolve();
+
+  const result = await manager.pasteWithFastPaste(
+    "/tmp/windows-fast-paste.exe",
+    { type: "text", data: "previous clipboard" },
+    { expectedClipboardText: "dictated text" }
+  );
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.deepEqual(spawnCalls[0].args, []);
+});
+
 test("pasteMacOS restores clipboard after the short macOS delay on successful fast paste", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
