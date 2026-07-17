@@ -61,6 +61,23 @@ const RESTORE_DELAYS = {
   linux_kde_wayland: 1200,
 };
 
+// Long Unicode payloads need more clipboard settle time before SendInput Ctrl+V
+// on Windows. Without this, windows-fast-paste.exe can report PASTE_OK while the
+// focused app still sees the previous clipboard (#829).
+function windowsPasteSettleMs(textLength) {
+  const len = Number.isFinite(textLength) ? textLength : 0;
+  if (len <= 150) return PASTE_DELAYS.win32_fast;
+  if (len <= 400) return 80;
+  return 120;
+}
+
+function windowsRestoreDelayMs(textLength) {
+  const len = Number.isFinite(textLength) ? textLength : 0;
+  if (len <= 150) return RESTORE_DELAYS.win32_nircmd;
+  if (len <= 400) return 800;
+  return 1000;
+}
+
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
     return Promise.reject(new Error("Invalid webContents for clipboard write"));
@@ -771,6 +788,10 @@ class ClipboardManager {
       }
       this.safeLog("📋 Text copied to clipboard:", text.substring(0, 50) + "...");
 
+      if (platform === "win32") {
+        await this._ensureClipboardText(text);
+      }
+
       let pasteResult = { restoreComplete: Promise.resolve() };
 
       if (platform === "darwin") {
@@ -978,23 +999,67 @@ class ClipboardManager {
     });
   }
 
+  async _ensureClipboardText(text, { attempts = 8, gapMs = 15 } = {}) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        if (clipboard.readText() === text) return true;
+      } catch {
+        // Clipboard can briefly throw while another process owns it.
+      }
+      if (i + 1 >= attempts) break;
+      try {
+        clipboard.writeText(text);
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, gapMs));
+    }
+    try {
+      return clipboard.readText() === text;
+    } catch {
+      return false;
+    }
+  }
+
+  _windowsTextLength(options = {}) {
+    return typeof options.expectedClipboardText === "string"
+      ? options.expectedClipboardText.length
+      : 0;
+  }
+
   async pasteWindows(originalClipboard, options = {}) {
+    const textLength = this._windowsTextLength(options);
+    const pasteDelayMs = windowsPasteSettleMs(textLength);
+    const restoreDelayMs = windowsRestoreDelayMs(textLength);
+    const winOptions = { ...options, pasteDelayMs, restoreDelayMs };
+
     const fastPastePath = this.resolveWindowsFastPasteBinary();
 
     if (fastPastePath) {
-      return this.pasteWithFastPaste(fastPastePath, originalClipboard, options);
+      return this.pasteWithFastPaste(fastPastePath, originalClipboard, winOptions);
     }
 
-    return this.pasteWithNircmdOrPowerShell(originalClipboard, options);
+    return this.pasteWithNircmdOrPowerShell(originalClipboard, winOptions);
   }
 
   async pasteWithFastPaste(fastPastePath, originalClipboard, options = {}) {
+    const pasteDelayMs =
+      typeof options.pasteDelayMs === "number"
+        ? options.pasteDelayMs
+        : windowsPasteSettleMs(this._windowsTextLength(options));
+    const restoreDelayMs =
+      typeof options.restoreDelayMs === "number"
+        ? options.restoreDelayMs
+        : windowsRestoreDelayMs(this._windowsTextLength(options));
+
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         let hasTimedOut = false;
         const startTime = Date.now();
 
-        this.safeLog("⚡ Windows fast-paste starting");
+        this.safeLog("⚡ Windows fast-paste starting", {
+          pasteDelayMs,
+          restoreDelayMs,
+          textLength: this._windowsTextLength(options),
+        });
 
         const pasteProcess = spawn(fastPastePath, [], {
           stdio: ["ignore", "pipe", "pipe"],
@@ -1027,7 +1092,7 @@ class ClipboardManager {
             if (originalClipboard != null) {
               resolve({
                 restoreComplete: this._restoreClipboardAfterDelay(originalClipboard, {
-                  delayMs: RESTORE_DELAYS.win32_nircmd,
+                  delayMs: restoreDelayMs,
                   expectedText: options.expectedClipboardText,
                 }),
               });
@@ -1062,7 +1127,7 @@ class ClipboardManager {
           pasteProcess.removeAllListeners();
           this.pasteWithNircmdOrPowerShell(originalClipboard, options).then(resolve).catch(reject);
         }, 2000);
-      }, PASTE_DELAYS.win32_fast);
+      }, pasteDelayMs);
     });
   }
 
@@ -1076,8 +1141,14 @@ class ClipboardManager {
 
   async pasteWithNircmd(nircmdPath, originalClipboard, options = {}) {
     return new Promise((resolve, reject) => {
-      const pasteDelay = PASTE_DELAYS.win32_nircmd;
-      const restoreDelay = RESTORE_DELAYS.win32_nircmd;
+      const pasteDelay =
+        typeof options.pasteDelayMs === "number"
+          ? Math.max(options.pasteDelayMs, PASTE_DELAYS.win32_nircmd)
+          : PASTE_DELAYS.win32_nircmd;
+      const restoreDelay =
+        typeof options.restoreDelayMs === "number"
+          ? options.restoreDelayMs
+          : RESTORE_DELAYS.win32_nircmd;
 
       setTimeout(() => {
         let hasTimedOut = false;
@@ -1148,8 +1219,14 @@ class ClipboardManager {
 
   async pasteWithPowerShell(originalClipboard, options = {}) {
     return new Promise((resolve, reject) => {
-      const pasteDelay = PASTE_DELAYS.win32_pwsh;
-      const restoreDelay = RESTORE_DELAYS.win32_pwsh;
+      const pasteDelay =
+        typeof options.pasteDelayMs === "number"
+          ? Math.max(options.pasteDelayMs, PASTE_DELAYS.win32_pwsh)
+          : PASTE_DELAYS.win32_pwsh;
+      const restoreDelay =
+        typeof options.restoreDelayMs === "number"
+          ? options.restoreDelayMs
+          : RESTORE_DELAYS.win32_pwsh;
 
       setTimeout(() => {
         let hasTimedOut = false;
@@ -2163,5 +2240,8 @@ Would you like to open System Settings now?`;
     };
   }
 }
+
+ClipboardManager.windowsPasteSettleMs = windowsPasteSettleMs;
+ClipboardManager.windowsRestoreDelayMs = windowsRestoreDelayMs;
 
 module.exports = ClipboardManager;
