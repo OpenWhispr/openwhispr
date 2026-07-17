@@ -6,7 +6,12 @@
       "uiLabel": "Язык интерфейса",
       "uiDescription": "Выберите язык интерфейса OpenWhispr",
       "transcriptionLabel": "Язык транскрипции",
-      "transcriptionDescription": "Выберите язык, на котором вы говорите, для более точной транскрипции"
+      "transcriptionDescription": "Выберите язык, на котором вы говорите, для более точной транскрипции",
+      "chineseScriptLabel": "Китайская письменность (автоопределение)",
+      "chineseScriptDescription": "Когда обнаружен китайский, преобразовать транскрипт в упрощенные или традиционные иероглифы. На слух китайский одинаков; Whisper возвращает только одну письменность.",
+      "chineseScriptAsTranscribed": "Оставить как распознано",
+      "chineseScriptSimplified": "Упрощенный (简体)",
+      "chineseScriptTraditional": "Традиционный (繁體)"
     },
     "noteFiles": {
       "title": "Сохранять заметки как файлы",

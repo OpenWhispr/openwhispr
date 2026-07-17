@@ -6,7 +6,12 @@
       "uiLabel": "介面語言",
       "uiDescription": "選擇 OpenWhispr 介面使用的語言",
       "transcriptionLabel": "轉錄語言",
-      "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度"
+      "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度",
+      "chineseScriptLabel": "中文書寫（自動偵測）",
+      "chineseScriptDescription": "偵測到中文時，將轉寫結果轉換為簡體或繁體。口語聽起來一樣；Whisper 只會輸出一種字體。",
+      "chineseScriptAsTranscribed": "保持轉寫原樣",
+      "chineseScriptSimplified": "簡體",
+      "chineseScriptTraditional": "繁體"
     },
     "noteFiles": {
       "title": "將筆記儲存為檔案",
@@ -1216,7 +1221,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
-          "features": ["無限會議錄製", "代理模式", "與您的資料對話", "優先支援"],
+          "features": [
+            "無限會議錄製",
+            "代理模式",
+            "與您的資料對話",
+            "優先支援"
+          ],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
         },
