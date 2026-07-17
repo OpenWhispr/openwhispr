@@ -1,6 +1,7 @@
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
 const { createHash } = require("crypto");
+const { EventEmitter } = require("events");
 const path = require("path");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
@@ -42,8 +43,13 @@ function sha256File(filePath) {
 // assetPattern regex; optional libPattern for companion libs). Archives are
 // sha256-verified against expectedDigests, falling back to the digest the
 // GitHub API reports.
-class GpuBinaryManager {
+//
+// Emits "download-settled" with { success, error? } once a started download
+// finishes (install, failure, or cancel). The duplicate-download guard does
+// not emit: the original download is still running.
+class GpuBinaryManager extends EventEmitter {
   constructor(config) {
+    super();
     this.config = config;
     this._binDir = null;
     this._downloadSignal = null;
@@ -140,6 +146,7 @@ class GpuBinaryManager {
     const tempDir = getSafeTempDir();
     let archivePath = null;
     let extractDir = null;
+    let settledResult = null;
 
     try {
       await fsPromises.mkdir(this.binDir, { recursive: true });
@@ -193,7 +200,11 @@ class GpuBinaryManager {
       }
 
       debugLogger.info(`${this.config.name} binary installed`, { version, path: outputPath });
+      settledResult = { success: true };
       return { version };
+    } catch (error) {
+      settledResult = { success: false, error: error.message };
+      throw error;
     } finally {
       this._downloading = false;
       this._downloadSignal = null;
@@ -201,6 +212,7 @@ class GpuBinaryManager {
       if (extractDir) {
         await fsPromises.rm(extractDir, { recursive: true, force: true }).catch(() => {});
       }
+      this.emit("download-settled", settledResult);
     }
   }
 

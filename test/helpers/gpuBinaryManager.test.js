@@ -321,6 +321,47 @@ test("delete: removes binary + matching libs only; whisper Vulkan leaves shared 
   assert.deepEqual(llamaResult, { success: true, deletedCount: 1 });
 });
 
+test("settled event: emitted with success after install and with the error after a failure", async () => {
+  state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
+  state.extractedFiles = { "whisper-server-linux-x64-cuda": "binary" };
+
+  const manager = new WhisperCudaManager();
+  const settled = [];
+  manager.on("download-settled", (result) => settled.push(result));
+
+  await manager.download();
+  assert.deepEqual(settled, [{ success: true }]);
+
+  state.extractImpl = async () => {
+    throw new Error("Extraction failed: corrupt");
+  };
+  await assert.rejects(() => manager.download(), { message: /Extraction failed/ });
+  assert.deepEqual(settled[1], { success: false, error: "Extraction failed: corrupt" });
+  assert.equal(manager.isDownloading(), false, "state already reset when the event fires");
+});
+
+test("settled event: the duplicate-download guard does not emit", async () => {
+  state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
+  state.extractedFiles = { "whisper-server-linux-x64-cuda": "binary" };
+  let releaseDownload;
+  const gate = new Promise((resolve) => (releaseDownload = resolve));
+  state.downloadImpl = async (_url, dest) => {
+    await gate;
+    fs.writeFileSync(dest, state.archiveContent);
+  };
+
+  const manager = new WhisperCudaManager();
+  const settled = [];
+  manager.on("download-settled", (result) => settled.push(result));
+
+  const first = manager.download();
+  await assert.rejects(() => manager.download(), { message: "Download already in progress" });
+  assert.equal(settled.length, 0, "rejected duplicate must not look like a settled download");
+  releaseDownload();
+  await first;
+  assert.deepEqual(settled, [{ success: true }]);
+});
+
 test("getStatus reflects supported/downloaded/downloading", async () => {
   const manager = new WhisperVulkanManager();
   assert.deepEqual(manager.getStatus(), {
