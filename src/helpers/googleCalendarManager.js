@@ -1,9 +1,9 @@
-const https = require("https");
-const { Notification, BrowserWindow } = require("electron");
+const { net, BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
+const MEETING_REMINDER_LEAD_MS = 60 * 1000;
 
 class GoogleCalendarManager {
   constructor(databaseManager, windowManager) {
@@ -19,13 +19,15 @@ class GoogleCalendarManager {
     this.SYNC_INTERVAL_MS = 2 * 60 * 1000;
     this._consecutiveFailures = 0;
     this._lastFocusSync = 0;
+    this.primaryOnly = true;
   }
 
   start() {
     this._loadAccounts();
     if (this.accounts.size === 0) return;
 
-    this.syncEvents()
+    this.fetchCalendars()
+      .then(() => this.syncEvents())
       .then(() => {
         this.scheduleNextMeeting();
         this._consecutiveFailures = 0;
@@ -134,6 +136,7 @@ class GoogleCalendarManager {
           summary: item.summary,
           description: item.description || null,
           background_color: item.backgroundColor || null,
+          is_primary: item.primary === true,
         }));
         this.databaseManager.saveGoogleCalendars(calendars, email);
         allCalendars.push(...calendars);
@@ -142,6 +145,8 @@ class GoogleCalendarManager {
       }
     }
 
+    this.databaseManager.applyPrimaryOnlyToSelection(this.primaryOnly);
+    this.databaseManager.removeEventsFromDeselectedCalendars();
     return allCalendars;
   }
 
@@ -267,7 +272,7 @@ class GoogleCalendarManager {
     const next = upcoming.find((e) => !this.notifiedMeetings.has(e.id));
     if (!next) return;
 
-    const delay = new Date(next.start_time).getTime() - Date.now();
+    const delay = new Date(next.start_time).getTime() - MEETING_REMINDER_LEAD_MS - Date.now();
     if (delay <= 0) {
       this.onMeetingStart(next);
       return;
@@ -292,16 +297,8 @@ class GoogleCalendarManager {
     this.activeMeeting = event;
     this.notifiedMeetings.add(event.id);
 
-    const notif = new Notification({
-      title: event.summary || "Meeting",
-      body: "Meeting starting now",
-    });
-    notif.on("click", () => {
-      this.broadcastToWindows("gcal-start-recording", { event });
-    });
-    notif.show();
-
-    this.broadcastToWindows("gcal-meeting-starting", { event });
+    debugLogger.info("Calendar meeting reminder due", { summary: event.summary }, "gcal");
+    this.meetingDetectionEngine?.handleCalendarReminder(event);
 
     if (this.meetingEndTimer) {
       clearTimeout(this.meetingEndTimer);
@@ -317,7 +314,7 @@ class GoogleCalendarManager {
   }
 
   onMeetingEnd() {
-    this.broadcastToWindows("gcal-meeting-ended", { event: this.activeMeeting });
+    debugLogger.info("Calendar meeting ended", { summary: this.activeMeeting?.summary }, "gcal");
     this.activeMeeting = null;
     if (this.meetingEndTimer) {
       clearTimeout(this.meetingEndTimer);
@@ -377,6 +374,18 @@ class GoogleCalendarManager {
     await this.syncEvents();
     this._consecutiveFailures = 0;
     this.scheduleNextMeeting();
+  }
+
+  async setPrimaryOnly(value) {
+    if (this.primaryOnly === value) return;
+    this.primaryOnly = value;
+    if (!this.isConnected()) return;
+
+    await this.fetchCalendars();
+    this.notifiedMeetings.clear();
+    await this.syncEvents();
+    this.scheduleNextMeeting();
+    this.broadcastToWindows("gcal-events-synced", {});
   }
 
   async getUpcomingEvents(windowMinutes) {
@@ -456,44 +465,26 @@ class GoogleCalendarManager {
   async _apiGet(path, accountEmail = null) {
     const accessToken = await this.oauth.getValidAccessToken(accountEmail);
     const urlString = path.startsWith("http") ? path : `${CALENDAR_API_BASE}${path}`;
-    const url = new URL(urlString);
 
-    return new Promise((resolve, reject) => {
-      const req = https.request(
-        {
-          hostname: url.hostname,
-          port: 443,
-          path: url.pathname + url.search,
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
-        (res) => {
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
-            try {
-              const parsed = JSON.parse(data);
-              if (res.statusCode >= 400) {
-                const err = new Error(parsed.error?.message || `API error ${res.statusCode}`);
-                err.statusCode = res.statusCode;
-                reject(err);
-                return;
-              }
-              resolve(parsed);
-            } catch (e) {
-              reject(new Error(`Invalid JSON response: ${data.slice(0, 200)}`));
-            }
-          });
-        }
-      );
-      req.on("error", reject);
-      req.setTimeout(10000, () => {
-        req.destroy(new Error("Request timed out after 10s"));
-      });
-      req.end();
+    const response = await net.fetch(urlString, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(10000),
+      useSessionCookies: false,
     });
+    const text = await response.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
+    }
+    if (response.status >= 400) {
+      const err = new Error(parsed.error?.message || `API error ${response.status}`);
+      err.statusCode = response.status;
+      throw err;
+    }
+    return parsed;
   }
 }
 

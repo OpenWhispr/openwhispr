@@ -5,6 +5,7 @@ const { net } = require("electron");
 const { execFile } = require("child_process");
 const { pipeline } = require("stream");
 const debugLogger = require("./debugLogger");
+const { runSystemTar } = require("./systemTar");
 
 const USER_AGENT = "OpenWhispr/1.0";
 const PROGRESS_THROTTLE_MS = 100;
@@ -234,6 +235,22 @@ function downloadAttempt(url, tempPath, options) {
   });
 }
 
+async function fetchJson(url, options = {}) {
+  const headers = { "User-Agent": USER_AGENT, ...(options.headers || {}) };
+  const response = await net.fetch(url, {
+    method: "GET",
+    headers,
+    useSessionCookies: false,
+  });
+  if (!response.ok) {
+    const err = new Error(`HTTP ${response.status} fetching ${url}`);
+    err.isHttpError = true;
+    err.statusCode = response.status;
+    throw err;
+  }
+  return response.json();
+}
+
 async function downloadFile(url, destPath, options = {}) {
   const { onProgress, maxRetries = DEFAULT_MAX_RETRIES, signal, expectedSize = 0 } = options;
 
@@ -396,37 +413,45 @@ async function checkDiskSpace(directory, requiredBytes) {
   }
 }
 
-function extractZipWindows(zipPath, destDir) {
+async function extractZipWindows(zipPath, destDir) {
+  try {
+    await runSystemTar(zipPath, destDir);
+    return;
+  } catch (error) {
+    debugLogger.info("tar extraction failed, trying PowerShell", { error: error.message });
+  }
+
   return new Promise((resolve, reject) => {
-    execFile("tar", ["-xf", zipPath, "-C", destDir], (error) => {
-      if (error) {
-        debugLogger.info("tar extraction failed, trying PowerShell", { error: error.message });
-        execFile(
-          "powershell",
-          [
-            "-NoProfile",
-            "-Command",
-            `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`,
-          ],
-          (psError) => {
-            if (psError) reject(new Error(`Zip extraction failed: ${psError.message}`));
-            else resolve();
-          }
-        );
-      } else {
-        resolve();
+    execFile(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`,
+      ],
+      (psError) => {
+        if (psError) reject(new Error(`Zip extraction failed: ${psError.message}`));
+        else resolve();
       }
-    });
+    );
   });
+}
+
+async function extractTarGz(archivePath, destDir) {
+  try {
+    await runSystemTar(archivePath, destDir);
+    return;
+  } catch (error) {
+    debugLogger.info("system tar failed, using JS extraction", { error: error.message });
+  }
+
+  const tar = require("tar");
+  await tar.x({ file: archivePath, cwd: destDir });
 }
 
 function extractArchive(archivePath, destDir) {
   if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
-    return new Promise((resolve, reject) => {
-      execFile("tar", ["-xzf", archivePath, "-C", destDir], (err) => {
-        err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
-      });
-    });
+    return extractTarGz(archivePath, destDir);
   }
 
   if (process.platform === "win32") {
@@ -435,7 +460,15 @@ function extractArchive(archivePath, destDir) {
 
   return new Promise((resolve, reject) => {
     execFile("unzip", ["-o", archivePath, "-d", destDir], (err) => {
-      err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
+      if (!err) return resolve();
+      debugLogger.info("system unzip failed, using JS extraction", { error: err.message });
+      const unzipper = require("unzipper");
+      fs.createReadStream(archivePath)
+        .pipe(unzipper.Extract({ path: destDir }))
+        .on("close", resolve)
+        .on("error", (extractErr) =>
+          reject(new Error(`Zip extraction failed: ${extractErr.message}`))
+        );
     });
   });
 }
@@ -472,6 +505,7 @@ async function findFiles(dir, pattern, maxDepth = 5, depth = 0) {
 
 module.exports = {
   downloadFile,
+  fetchJson,
   createDownloadSignal,
   validateFileSize,
   cleanupStaleDownloads,

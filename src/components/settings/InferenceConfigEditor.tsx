@@ -25,7 +25,11 @@ import {
 function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
   switch (mode) {
     case "providers":
-      return modelRegistry.getCloudProviders().some((p) => p.id === provider);
+      return (
+        provider === "custom" ||
+        provider === "openrouter" ||
+        modelRegistry.getCloudProviders().some((p) => p.id === provider)
+      );
     case "local":
       return modelRegistry.getAllProviders().some((p) => p.id === provider);
     case "enterprise":
@@ -40,6 +44,7 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   noteFormatting: "settingsPage.aiModels.modes",
   dictationAgent: "dictationAgent.modes",
   chatIntelligence: "agentMode.settings.modes",
+  dictationTranslation: "settingsPage.aiModels.modes",
 };
 
 function startCloudOnboarding() {
@@ -152,7 +157,9 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
   const showThinkingToggle =
     config.mode === "self-hosted" ||
     (config.mode === "providers" &&
-      (config.provider === "custom" || !!getCloudModel(config.model)?.supportsThinking)) ||
+      (config.provider === "custom" ||
+        config.provider === "openrouter" ||
+        !!getCloudModel(config.model)?.supportsThinking)) ||
     (config.mode === "local" && !!getLocalModel(config.model)?.supportsThinking);
 
   return (

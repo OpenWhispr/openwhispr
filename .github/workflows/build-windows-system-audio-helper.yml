@@ -1,0 +1,85 @@
+name: Build Windows System Audio Helper
+
+on:
+  push:
+    paths:
+      - 'resources/windows-system-audio-helper.c'
+      - '.github/workflows/build-windows-system-audio-helper.yml'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Compile Windows System Audio Helper
+        run: |
+          cl /O2 /nologo resources/windows-system-audio-helper.c /Fe:windows-system-audio-helper.exe ole32.lib mmdevapi.lib
+        shell: cmd
+
+      - name: Verify binary
+        run: |
+          if (Test-Path "windows-system-audio-helper.exe") {
+            Write-Host "Binary built successfully"
+            Get-Item "windows-system-audio-helper.exe" | Select-Object Name, Length
+          } else {
+            Write-Error "Binary not found"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Smoke test probe
+        run: |
+          $output = & .\windows-system-audio-helper.exe probe
+          Write-Host "Probe output: $output"
+          if ($output -notmatch '"ok":') {
+            Write-Error "Probe did not return JSON"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Create zip archive
+        run: |
+          Compress-Archive -Path windows-system-audio-helper.exe -DestinationPath windows-system-audio-helper-win32-x64.zip
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-system-audio-helper
+          path: windows-system-audio-helper-win32-x64.zip
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-system-audio-helper-v${{ inputs.version || '1.0.0' }}
+          name: Windows System Audio Helper v${{ inputs.version || '1.0.0' }}
+          body: |
+            Prebuilt Windows system audio helper binary for meeting transcription.
+
+            Captures system audio via WASAPI process loopback (exclude mode),
+            hearing every application on every output device while excluding
+            OpenWhispr's own audio. Requires Windows 10 2004 or later; older
+            systems automatically fall back to Chromium display-media loopback.
+          files: windows-system-audio-helper-win32-x64.zip
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

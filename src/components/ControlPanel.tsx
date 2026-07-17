@@ -14,6 +14,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useUsage } from "../hooks/useUsage";
 import {
   useTranscriptions,
+  useShowDiscarded,
   initializeTranscriptions,
   removeTranscription as removeFromStore,
   updateTranscription as updateInStore,
@@ -39,13 +40,17 @@ import {
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
+import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
-import AcceptInvitationModal, {
+import logger from "../utils/logger";
+import AcceptInvitationModal from "./AcceptInvitationModal";
+import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
-} from "./AcceptInvitationModal";
+} from "../utils/pendingInvitationToken";
+import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
 
@@ -58,22 +63,30 @@ const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
 const ChatView = React.lazy(() => import("./chat/ChatView"));
 const CommandSearch = React.lazy(() => import("./CommandSearch"));
 
-export default function ControlPanel() {
+interface ControlPanelProps {
+  /** Open the settings modal at this section on mount (e.g. after onboarding). */
+  initialSettingsSection?: string;
+}
+
+export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
   const { t } = useTranslation();
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
-  const [settingsSection, setSettingsSection] = useState<string | undefined>();
+  const [settingsSection, setSettingsSection] = useState<string | undefined>(
+    initialSettingsSection
+  );
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
   const isMeetingMode = useIsMeetingMode();
@@ -88,9 +101,12 @@ export default function ControlPanel() {
     folderId: number;
     event: any;
   } | null>(null);
-  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{ cuda: boolean; vulkan: boolean }>({
-    cuda: false,
-    vulkan: false,
+  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{
+    transcription: boolean;
+    intelligence: boolean;
+  }>({
+    transcription: false,
+    intelligence: false,
   });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
@@ -129,11 +145,11 @@ export default function ControlPanel() {
     hideAlertDialog,
   } = useDialogs();
 
-  useEffect(() => {
-    (async () => {
+  const loadTranscriptions = useCallback(
+    async (includeDiscarded?: boolean) => {
       try {
         setIsLoading(true);
-        await initializeTranscriptions();
+        await initializeTranscriptions(undefined, includeDiscarded);
       } catch {
         showAlertDialog({
           title: t("controlPanel.history.couldNotLoadTitle"),
@@ -142,8 +158,13 @@ export default function ControlPanel() {
       } finally {
         setIsLoading(false);
       }
-    })();
-  }, [showAlertDialog, t]);
+    },
+    [showAlertDialog, t]
+  );
+
+  useEffect(() => {
+    loadTranscriptions();
+  }, [loadTranscriptions]);
 
   useEffect(() => {
     const { noteFilesEnabled, noteFilesPath } = useSettingsStore.getState();
@@ -244,6 +265,7 @@ export default function ControlPanel() {
   }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
 
   useEffect(() => {
+    if (!WORKSPACES_ENABLED) return;
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);
     });
@@ -251,7 +273,7 @@ export default function ControlPanel() {
   }, []);
 
   useEffect(() => {
-    if (!authLoaded || !isSignedIn) return;
+    if (!WORKSPACES_ENABLED || !authLoaded || !isSignedIn) return;
     const pending = consumePendingInvitationToken();
     if (pending) {
       setInvitationToken(pending);
@@ -275,11 +297,16 @@ export default function ControlPanel() {
   useEffect(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
     const detect = async () => {
-      const results = { cuda: false, vulkan: false };
+      const results = { transcription: false, intelligence: false };
       if (useLocalWhisper && localTranscriptionProvider === "whisper") {
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu && !status.downloaded) results.cuda = true;
+          if (status?.gpuInfo.hasNvidiaGpu) {
+            if (!status.downloaded) results.transcription = true;
+          } else {
+            const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
+            if (vulkan?.vulkan.available && !vulkan.downloaded) results.transcription = true;
+          }
         } catch {}
       }
       if (useCleanupModel) {
@@ -288,7 +315,7 @@ export default function ControlPanel() {
             window.electronAPI?.detectVulkanGpu?.(),
             window.electronAPI?.getLlamaVulkanStatus?.(),
           ]);
-          if (gpu?.available && !vulkan?.downloaded) results.vulkan = true;
+          if (gpu?.available && !vulkan?.downloaded) results.intelligence = true;
         } catch {}
       }
       setGpuAccelAvailable(results);
@@ -297,7 +324,9 @@ export default function ControlPanel() {
   }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, gpuBannerDismissed]);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onNavigateToMeetingNote?.((data) => {
+    const drain = async () => {
+      const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
+      if (!data) return;
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -313,7 +342,9 @@ export default function ControlPanel() {
       ) {
         window.electronAPI?.snapToMeetingMode?.();
       }
-    });
+    };
+    drain();
+    const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(drain);
     return () => cleanup?.();
   }, []);
 
@@ -352,10 +383,6 @@ export default function ControlPanel() {
     });
     return () => cleanup?.();
   }, [toast, t]);
-
-  useEffect(() => {
-    syncService.syncAll().catch(console.error);
-  }, []);
 
   useEffect(() => {
     fetchStreamingProviders();
@@ -401,7 +428,7 @@ export default function ControlPanel() {
             const result = await window.electronAPI.deleteTranscription(id);
             if (result.success) {
               removeFromStore(id);
-              syncService.syncAll().catch(console.error);
+              syncService.requestSyncAll("manual");
             } else {
               showAlertDialog({
                 title: t("controlPanel.history.couldNotDeleteTitle"),
@@ -430,7 +457,7 @@ export default function ControlPanel() {
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
-            syncService.syncAll().catch(console.error);
+            syncService.requestSyncAll("manual");
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
               variant: "success",
@@ -474,7 +501,7 @@ export default function ControlPanel() {
   );
 
   const retryTranscription = useCallback(
-    async (id: number) => {
+    async (id: number, options?: { isRecover?: boolean }) => {
       try {
         const s = useSettingsStore.getState();
         const result = await window.electronAPI.retryTranscription(id, {
@@ -490,13 +517,80 @@ export default function ControlPanel() {
           transcriptionMode: s.transcriptionMode,
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
+          remoteTranscriptionModel: s.remoteTranscriptionModel,
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;
           let finalTranscription = result.transcription;
 
+          // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
+          let handledTranslation = false;
+          if (result.transcription.route_kind === "translation") {
+            handledTranslation = true;
+            try {
+              const [
+                { default: ReasoningService },
+                { resolveReasoningRoute },
+                { getEffectiveCleanupModel },
+              ] = await Promise.all([
+                import("../services/ReasoningService"),
+                import("../helpers/audioManager"),
+                import("../stores/settingsStore"),
+              ]);
+              const settings = useSettingsStore.getState();
+              const agentName = localStorage.getItem("agentName") || null;
+              const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
+              if (route.kind === "translation") {
+                const { text } = await executeTranslationChain({
+                  text: rawText,
+                  cleanupReachable: route.cleanupReachable,
+                  runCleanup: (currentText: string) =>
+                    ReasoningService.processText(
+                      currentText,
+                      getEffectiveCleanupModel(),
+                      agentName,
+                      route.cleanupConfig
+                    ),
+                  runTranslate: (currentText: string) =>
+                    ReasoningService.processText(currentText, route.model, agentName, route.config),
+                  shouldTranslate: shouldRunTranslateStep(
+                    settings.translationSourceLanguage,
+                    settings.translationTargetLanguage
+                  ),
+                  onCleanupError: (cleanupError: Error) =>
+                    logger.warn(
+                      "Cleanup step failed in translation chain, translating raw transcript",
+                      { error: cleanupError.message },
+                      "transcription"
+                    ),
+                  onEmptyTranslate: () =>
+                    logger.warn(
+                      "Translation step returned empty text, keeping previous text",
+                      {},
+                      "transcription"
+                    ),
+                });
+                if (text !== rawText) {
+                  const updated = await window.electronAPI.updateTranscriptionText(
+                    id,
+                    text,
+                    rawText
+                  );
+                  if (updated.success && updated.transcription) {
+                    finalTranscription = updated.transcription;
+                  }
+                }
+              } else {
+                // Translation disabled/unreachable since recording — fall through to cleanup.
+                handledTranslation = false;
+              }
+            } catch {
+              // Reasoning failed — keep the raw STT result
+            }
+          }
+
           // Apply AI reasoning if enabled
-          if (useCleanupModel) {
+          if (!handledTranslation && useCleanupModel) {
             try {
               const [
                 { default: ReasoningService },
@@ -529,7 +623,13 @@ export default function ControlPanel() {
           }
 
           updateInStore(finalTranscription);
-          toast({ title: t("controlPanel.history.retrySuccess") });
+          toast({
+            title: t(
+              options?.isRecover
+                ? "controlPanel.history.discarded.recovered"
+                : "controlPanel.history.retrySuccess"
+            ),
+          });
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
@@ -546,6 +646,10 @@ export default function ControlPanel() {
     },
     [toast, t, useCleanupModel]
   );
+
+  const toggleShowDiscarded = useCallback(() => {
+    loadTranscriptions(!showDiscarded);
+  }, [loadTranscriptions, showDiscarded]);
 
   const handleUpdateClick = async () => {
     if (updateStatus.updateDownloaded) {
@@ -674,14 +778,16 @@ export default function ControlPanel() {
         </Suspense>
       )}
 
-      <AcceptInvitationModal
-        token={invitationToken}
-        onClose={() => setInvitationToken(null)}
-        isSignedIn={isSignedIn}
-        onSignIn={() => {
-          setInvitationToken(null);
-        }}
-      />
+      {WORKSPACES_ENABLED && (
+        <AcceptInvitationModal
+          token={invitationToken}
+          onClose={() => setInvitationToken(null)}
+          isSignedIn={isSignedIn}
+          onSignIn={() => {
+            setInvitationToken(null);
+          }}
+        />
+      )}
 
       {showSearch && (
         <Suspense fallback={null}>
@@ -807,7 +913,7 @@ export default function ControlPanel() {
                 </div>
               </div>
             )}
-            {(gpuAccelAvailable.cuda || gpuAccelAvailable.vulkan) &&
+            {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
               activeView === "home" &&
               !gpuBannerDismissed && (
                 <div className="max-w-3xl mx-auto w-full mb-3">
@@ -830,7 +936,7 @@ export default function ControlPanel() {
                             className="h-7 text-xs"
                             onClick={() => {
                               setSettingsSection(
-                                gpuAccelAvailable.cuda ? "transcription" : "intelligence"
+                                gpuAccelAvailable.transcription ? "transcription" : "intelligence"
                               );
                               setShowSettings(true);
                             }}
@@ -867,6 +973,8 @@ export default function ControlPanel() {
                 clearAllTranscriptions={clearAllTranscriptions}
                 onShowAudioInFolder={showAudioInFolder}
                 onRetryTranscription={retryTranscription}
+                showDiscarded={showDiscarded}
+                onToggleDiscarded={toggleShowDiscarded}
                 onOpenSettings={(section) => {
                   setSettingsSection(section);
                   setShowSettings(true);

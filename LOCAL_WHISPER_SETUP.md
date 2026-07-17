@@ -14,13 +14,13 @@ The first transcription will download the model automatically.
 
 ## Model Selection
 
-| Model  | Size   | Speed    | Quality | RAM    | Best For              |
-|--------|--------|----------|---------|--------|-----------------------|
-| tiny   | 75MB   | Fastest  | Basic   | ~1GB   | Quick notes           |
-| base   | 142MB  | Fast     | Good    | ~1GB   | **Recommended**       |
-| small  | 466MB  | Medium   | Better  | ~2GB   | Professional use      |
-| medium | 1.5GB  | Slow     | High    | ~5GB   | High accuracy         |
-| large  | 3GB    | Slowest  | Best    | ~10GB  | Maximum quality       |
+| Model  | Size  | Speed   | Quality | RAM   | Best For         |
+| ------ | ----- | ------- | ------- | ----- | ---------------- |
+| tiny   | 75MB  | Fastest | Basic   | ~1GB  | Quick notes      |
+| base   | 142MB | Fast    | Good    | ~1GB  | **Recommended**  |
+| small  | 466MB | Medium  | Better  | ~2GB  | Professional use |
+| medium | 1.5GB | Slow    | High    | ~5GB  | High accuracy    |
+| large  | 3GB   | Slowest | Best    | ~10GB | Maximum quality  |
 
 ## How It Works
 
@@ -52,13 +52,14 @@ npm run download:whisper-cpp:all
 
 ## File Locations
 
-| Data              | macOS                                        | Windows                              | Linux                           |
-|-------------------|----------------------------------------------|--------------------------------------|---------------------------------|
-| Models            | `~/.cache/openwhispr/whisper-models/`        | `%USERPROFILE%\.cache\openwhispr\whisper-models\` | `~/.cache/openwhispr/whisper-models/` |
+| Data   | macOS                                 | Windows                                           | Linux                                 |
+| ------ | ------------------------------------- | ------------------------------------------------- | ------------------------------------- |
+| Models | `~/.cache/openwhispr/whisper-models/` | `%USERPROFILE%\.cache\openwhispr\whisper-models\` | `~/.cache/openwhispr/whisper-models/` |
 
 ## Troubleshooting
 
 ### "Not Found" Status
+
 1. Click **Recheck Installation** in Control Panel
 2. Restart the app
 3. If bundled binary fails, install via package manager:
@@ -66,18 +67,20 @@ npm run download:whisper-cpp:all
    - Linux: Build from source at https://github.com/ggml-org/whisper.cpp
 
 ### Transcription Fails
+
 1. Verify microphone permissions
 2. Try a smaller model (tiny/base)
 3. Check disk space for model downloads
 
 ### Slow Performance
+
 1. Use smaller models (tiny or base)
 2. Close resource-intensive apps
 3. Consider using cloud mode for large files
 
 ## Privacy Comparison
 
-| Mode  | Audio Leaves Device | Internet Required | Cost      |
-|-------|---------------------|-------------------|-----------|
-| Local | No                  | Only for model download | Free |
-| Cloud | Yes (to OpenAI)     | Yes               | API usage |
+| Mode  | Audio Leaves Device | Internet Required       | Cost      |
+| ----- | ------------------- | ----------------------- | --------- |
+| Local | No                  | Only for model download | Free      |
+| Cloud | Yes (to OpenAI)     | Yes                     | API usage |

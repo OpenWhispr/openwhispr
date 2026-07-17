@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check } from "lucide-react";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
@@ -24,11 +25,11 @@ import {
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
 import { useSettingsStore } from "../stores/settingsStore";
-import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
-import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
+import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
+import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
+import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
-import type { CudaWhisperStatus } from "../types/electron";
 import logger from "../utils/logger";
 
 interface LocalModel {
@@ -201,11 +202,81 @@ interface TranscriptionModelPickerProps {
 const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq" },
+  { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
+  { id: "corti", name: "Corti" },
+  { id: "tinfoil", name: "Tinfoil" },
   { id: "custom", name: "Custom" },
 ];
 
+interface ProviderCredentialField {
+  key:
+    | "openaiApiKey"
+    | "groqApiKey"
+    | "xaiApiKey"
+    | "mistralApiKey"
+    | "cortiClientId"
+    | "cortiClientSecret"
+    | "cortiEnvironment"
+    | "cortiTenant"
+    | "tinfoilApiKey";
+  input: "secret" | "text" | "select";
+  labelKey?: string;
+  placeholder?: string;
+  options?: Array<{ value: string; label: string }>;
+}
+
+const PROVIDER_CREDENTIALS: Record<
+  string,
+  { consoleUrl: string; fields: ProviderCredentialField[] }
+> = {
+  openai: {
+    consoleUrl: "https://platform.openai.com/api-keys",
+    fields: [{ key: "openaiApiKey", input: "secret" }],
+  },
+  groq: {
+    consoleUrl: "https://console.groq.com/keys",
+    fields: [{ key: "groqApiKey", input: "secret" }],
+  },
+  xai: {
+    consoleUrl: "https://console.x.ai",
+    fields: [{ key: "xaiApiKey", input: "secret" }],
+  },
+  mistral: {
+    consoleUrl: "https://console.mistral.ai/api-keys",
+    fields: [{ key: "mistralApiKey", input: "secret" }],
+  },
+  corti: {
+    consoleUrl: "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr",
+    fields: [
+      { key: "cortiClientId", input: "secret", labelKey: "transcription.corti.clientId" },
+      { key: "cortiClientSecret", input: "secret", labelKey: "transcription.corti.clientSecret" },
+      {
+        key: "cortiEnvironment",
+        input: "select",
+        labelKey: "transcription.corti.environment",
+        options: [
+          { value: "us", label: "US" },
+          { value: "eu", label: "EU" },
+        ],
+      },
+      {
+        key: "cortiTenant",
+        input: "text",
+        labelKey: "transcription.corti.tenant",
+        placeholder: "base",
+      },
+    ],
+  },
+  tinfoil: {
+    consoleUrl: "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr",
+    fields: [{ key: "tinfoilApiKey", input: "secret" }],
+  },
+};
+
 const VALID_CLOUD_PROVIDER_IDS = CLOUD_PROVIDER_TABS.map((p) => p.id);
+
+const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
   { id: "whisper", name: "OpenAI" },
@@ -271,8 +342,20 @@ export default function TranscriptionModelPicker({
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
+  const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const cortiClientId = useSettingsStore((s) => s.cortiClientId);
+  const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
+  const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+  const setCortiClientSecret = useSettingsStore((s) => s.setCortiClientSecret);
+  const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
+  const setCortiEnvironment = useSettingsStore((s) => s.setCortiEnvironment);
+  const cortiTenant = useSettingsStore((s) => s.cortiTenant);
+  const setCortiTenant = useSettingsStore((s) => s.setCortiTenant);
+  const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
+  const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
@@ -281,14 +364,15 @@ export default function TranscriptionModelPicker({
   const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
-  const [cudaStatus, setCudaStatus] = useState<CudaWhisperStatus | null>(null);
-  const [cudaDownloading, setCudaDownloading] = useState(false);
-  const [cudaProgress, setCudaProgress] = useState<DownloadProgress>({
+  const [gpuBackend, setGpuBackend] = useState<"cuda" | "vulkan" | null>(null);
+  const [gpuDownloaded, setGpuDownloaded] = useState(false);
+  const [gpuDownloading, setGpuDownloading] = useState(false);
+  const [gpuProgress, setGpuProgress] = useState<DownloadProgress>({
     downloadedBytes: 0,
     totalBytes: 0,
     percentage: 0,
   });
-  const [cudaDismissed, setCudaDismissed] = useState(false);
+  const [gpuDismissed, setGpuDismissed] = useState(false);
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -453,42 +537,58 @@ export default function TranscriptionModelPicker({
   useEffect(() => {
     if (!effectiveLocal || internalLocalProvider !== "whisper") return;
     if (getCachedPlatform() === "darwin") return;
-    window.electronAPI
-      ?.getCudaWhisperStatus?.()
-      ?.then(setCudaStatus)
-      .catch(() => {});
+    const detect = async () => {
+      try {
+        const cuda = await window.electronAPI?.getCudaWhisperStatus?.();
+        if (cuda?.gpuInfo.hasNvidiaGpu) {
+          setGpuBackend("cuda");
+          setGpuDownloaded(cuda.downloaded);
+          return;
+        }
+        const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
+        if (vulkan?.vulkan.available) {
+          setGpuBackend("vulkan");
+          setGpuDownloaded(vulkan.downloaded);
+        }
+      } catch {}
+    };
+    detect();
   }, [effectiveLocal, internalLocalProvider]);
 
   useEffect(() => {
-    if (!cudaDownloading) return;
-    const cleanup = window.electronAPI?.onCudaDownloadProgress?.((data) => {
-      setCudaProgress(data);
-    });
-    return cleanup;
-  }, [cudaDownloading]);
+    if (!gpuDownloading || !gpuBackend) return;
+    const subscribe =
+      gpuBackend === "cuda"
+        ? window.electronAPI?.onCudaDownloadProgress
+        : window.electronAPI?.onVulkanWhisperDownloadProgress;
+    return subscribe?.((data) => setGpuProgress(data));
+  }, [gpuDownloading, gpuBackend]);
 
-  const handleCudaDownload = async () => {
-    setCudaDownloading(true);
+  const handleGpuDownload = async () => {
+    setGpuDownloading(true);
     try {
-      const result = await window.electronAPI?.downloadCudaWhisperBinary?.();
-      if (result?.success) {
-        const status = await window.electronAPI?.getCudaWhisperStatus?.();
-        setCudaStatus(status || null);
-      }
+      const result =
+        gpuBackend === "cuda"
+          ? await window.electronAPI?.downloadCudaWhisperBinary?.()
+          : await window.electronAPI?.downloadVulkanWhisperBinary?.();
+      if (result?.success) setGpuDownloaded(true);
     } finally {
-      setCudaDownloading(false);
+      setGpuDownloading(false);
     }
   };
 
-  const handleCudaDelete = async () => {
-    await window.electronAPI?.deleteCudaWhisperBinary?.();
-    const status = await window.electronAPI?.getCudaWhisperStatus?.();
-    setCudaStatus(status || null);
+  const handleGpuDelete = async () => {
+    const result =
+      gpuBackend === "cuda"
+        ? await window.electronAPI?.deleteCudaWhisperBinary?.()
+        : await window.electronAPI?.deleteVulkanWhisperBinary?.();
+    if (result?.success) setGpuDownloaded(false);
   };
 
-  const handleCudaCancel = async () => {
-    await window.electronAPI?.cancelCudaWhisperDownload?.();
-    setCudaDownloading(false);
+  const handleGpuCancel = async () => {
+    if (gpuBackend === "cuda") await window.electronAPI?.cancelCudaWhisperDownload?.();
+    else await window.electronAPI?.cancelVulkanWhisperDownload?.();
+    setGpuDownloading(false);
   };
 
   const {
@@ -630,16 +730,42 @@ export default function TranscriptionModelPicker({
     [cloudProviders, selectedCloudProvider]
   );
 
+  const providerCredentials =
+    PROVIDER_CREDENTIALS[selectedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
+  const credentialValues: Record<ProviderCredentialField["key"], string> = {
+    openaiApiKey,
+    groqApiKey,
+    xaiApiKey,
+    mistralApiKey,
+    cortiClientId,
+    cortiClientSecret,
+    cortiEnvironment,
+    cortiTenant,
+    tinfoilApiKey,
+  };
+  const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
+    openaiApiKey: setOpenaiApiKey,
+    groqApiKey: setGroqApiKey,
+    xaiApiKey: setXaiApiKey,
+    mistralApiKey: setMistralApiKey,
+    cortiClientId: setCortiClientId,
+    cortiClientSecret: setCortiClientSecret,
+    cortiEnvironment: setCortiEnvironment,
+    cortiTenant: setCortiTenant,
+    tinfoilApiKey: setTinfoilApiKey,
+  };
+
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
+    const { icon, invertInDark } = getRemoteProviderIcon(selectedCloudProvider);
     return currentCloudProvider.models.map((m) => ({
       value: m.id,
       label: m.name,
       description: m.descriptionKey
         ? t(m.descriptionKey, { defaultValue: m.description })
         : m.description,
-      icon: getProviderIcon(selectedCloudProvider),
-      invertInDark: isMonochromeProvider(selectedCloudProvider),
+      icon,
+      invertInDark,
     }));
   }, [currentCloudProvider, selectedCloudProvider, t]);
 
@@ -819,7 +945,7 @@ export default function TranscriptionModelPicker({
             selectedId={selectedCloudProvider}
             onSelect={handleCloudProviderChange}
             colorScheme="purple"
-            scrollable
+            wrap
           />
 
           <div>
@@ -856,43 +982,60 @@ export default function TranscriptionModelPicker({
                     className="h-8 text-sm"
                   />
                 </div>
+
+                {/azure\.com/i.test(cloudTranscriptionBaseUrl || "") && (
+                  <p className="text-xs text-muted-foreground">{t("transcription.azureHint")}</p>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-foreground">
-                      {t("common.apiKey")}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={createExternalLinkHandler(
-                        {
-                          groq: "https://console.groq.com/keys",
-                          mistral: "https://console.mistral.ai/api-keys",
-                          openai: "https://platform.openai.com/api-keys",
-                        }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
+                {providerCredentials.fields.map((field, index) => (
+                  <div key={field.key} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-foreground">
+                        {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
+                      </label>
+                      {index === 0 && (
+                        <GetApiKeyLink
+                          url={providerCredentials.consoleUrl}
+                          labelKey="transcription.getKey"
+                          className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                        />
                       )}
-                      className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
-                    >
-                      {t("transcription.getKey")}
-                    </button>
+                    </div>
+                    {field.input === "secret" ? (
+                      <ApiKeyInput
+                        apiKey={credentialValues[field.key]}
+                        setApiKey={credentialSetters[field.key]}
+                        label=""
+                        helpText=""
+                      />
+                    ) : field.input === "select" ? (
+                      <Select
+                        value={credentialValues[field.key]}
+                        onValueChange={credentialSetters[field.key]}
+                      >
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {field.options?.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={credentialValues[field.key]}
+                        onChange={(e) => credentialSetters[field.key](e.target.value)}
+                        placeholder={field.placeholder}
+                        className="h-8 text-sm"
+                      />
+                    )}
                   </div>
-                  <ApiKeyInput
-                    apiKey={
-                      { groq: groqApiKey, mistral: mistralApiKey, openai: openaiApiKey }[
-                        selectedCloudProvider
-                      ] || openaiApiKey
-                    }
-                    setApiKey={
-                      { groq: setGroqApiKey, mistral: setMistralApiKey, openai: setOpenaiApiKey }[
-                        selectedCloudProvider
-                      ] || setOpenaiApiKey
-                    }
-                    label=""
-                    helpText=""
-                  />
-                </div>
+                ))}
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">{t("common.model")}</label>
@@ -902,6 +1045,18 @@ export default function TranscriptionModelPicker({
                     onModelSelect={onCloudModelSelect}
                     colorScheme="purple"
                   />
+                  {selectedCloudProvider === "tinfoil" && (
+                    <p className="text-xs text-muted-foreground/70">
+                      {t("transcription.tinfoil.transportNote")}{" "}
+                      <a
+                        href={TINFOIL_AUDIO_DOCS_URL}
+                        onClick={createExternalLinkHandler(TINFOIL_AUDIO_DOCS_URL)}
+                        className="text-primary/70 hover:text-primary transition-colors"
+                      >
+                        {t("transcription.tinfoil.docsLink")}
+                      </a>
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -918,34 +1073,33 @@ export default function TranscriptionModelPicker({
 
           {progressDisplay}
 
-          {cudaDownloading && internalLocalProvider === "whisper" && (
+          {gpuDownloading && internalLocalProvider === "whisper" && (
             <div>
-              <DownloadProgressBar modelName="GPU acceleration" progress={cudaProgress} />
+              <DownloadProgressBar modelName="GPU acceleration" progress={gpuProgress} />
               <div className="px-2.5 pb-1 flex justify-end">
                 <button
-                  onClick={handleCudaCancel}
+                  onClick={handleGpuCancel}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Cancel
+                  {t("gpu.cancel")}
                 </button>
               </div>
             </div>
           )}
 
           {internalLocalProvider === "whisper" &&
-            !cudaDismissed &&
-            !cudaDownloading &&
-            getCachedPlatform() !== "darwin" &&
-            cudaStatus?.gpuInfo.hasNvidiaGpu && (
+            !gpuDismissed &&
+            !gpuDownloading &&
+            gpuBackend && (
               <div className="rounded-md border border-border bg-surface-1 p-2.5">
-                {cudaStatus.downloaded ? (
+                {gpuDownloaded ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <Check size={13} className="text-success" />
                       <span className="text-xs font-medium text-foreground">{t("gpu.active")}</span>
                     </div>
                     <Button
-                      onClick={handleCudaDelete}
+                      onClick={handleGpuDelete}
                       size="sm"
                       variant="ghost"
                       className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
@@ -962,7 +1116,7 @@ export default function TranscriptionModelPicker({
                       </p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Button
-                          onClick={handleCudaDownload}
+                          onClick={handleGpuDownload}
                           size="sm"
                           variant="default"
                           className="h-6 px-2.5 text-xs"
@@ -970,7 +1124,7 @@ export default function TranscriptionModelPicker({
                           {t("gpu.enableButton")}
                         </Button>
                         <button
-                          onClick={() => setCudaDismissed(true)}
+                          onClick={() => setGpuDismissed(true)}
                           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
                           {t("gpu.dismiss")}

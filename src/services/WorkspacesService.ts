@@ -33,9 +33,7 @@ async function remove(workspaceId: string): Promise<void> {
 }
 
 async function listMembers(workspaceId: string): Promise<WorkspaceMember[]> {
-  const res = await cloudGet<DataWrap<WorkspaceMember[]>>(
-    `/api/workspaces/${workspaceId}/members`
-  );
+  const res = await cloudGet<DataWrap<WorkspaceMember[]>>(`/api/workspaces/${workspaceId}/members`);
   return res.data;
 }
 

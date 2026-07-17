@@ -11,6 +11,7 @@ export interface ResolvePromptOptions {
   uiLanguage?: string;
   language?: string;
   customDictionary?: string[];
+  targetLanguageLabel?: string;
 }
 
 export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): string {
@@ -25,6 +26,14 @@ export function getDefaultPromptText(kind: PromptKind, uiLanguage?: string): str
   const locale = normalizeUiLanguage(uiLanguage || "en");
   const t = i18n.getFixedT(locale, "prompts");
   return t(def.i18nKey, { defaultValue: def.fallback });
+}
+
+// The cleanup prompt tells the model its input arrives between <transcript>
+// tags; the trailing line re-anchors the output contract right after the
+// transcript, where models weight instructions most. Mirrors api/reason.ts
+// in openwhispr-api.
+export function wrapCleanupTranscript(text: string): string {
+  return `<transcript>\n${text}\n</transcript>\n\nOutput only the cleaned transcript.`;
 }
 
 export function appendDictionarySuffix(
@@ -43,6 +52,10 @@ export function appendDictionarySuffix(
 function applySubstitutions(template: string, opts: ResolvePromptOptions): string {
   const name = opts.agentName?.trim() || "Assistant";
   let prompt = template.replace(/\{\{agentName\}\}/g, name);
+
+  if (opts.targetLanguageLabel) {
+    prompt = prompt.replace(/\{\{targetLanguage\}\}/g, opts.targetLanguageLabel);
+  }
 
   const langInstruction = getLanguageInstruction(opts.language);
   if (langInstruction) prompt += "\n\n" + langInstruction;

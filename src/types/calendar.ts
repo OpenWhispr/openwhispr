@@ -4,6 +4,7 @@ export interface GoogleCalendar {
   description: string | null;
   background_color: string | null;
   is_selected: number;
+  is_primary: number;
   sync_token: string | null;
 }
 
@@ -34,17 +35,6 @@ export interface CalendarConnectionStatus {
 export interface MeetingDetectionPreferences {
   processDetection: boolean;
   audioDetection: boolean;
-}
-
-export interface MeetingDetection {
-  detectionId: string;
-  source: "calendar" | "process" | "audio";
-  data: {
-    appName?: string;
-    durationMs?: number;
-    detectedAt: number;
-  };
-  imminentEvent?: CalendarEvent | null;
 }
 
 export interface CalendarAttendee {

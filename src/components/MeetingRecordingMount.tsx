@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useToast } from "./ui/useToast";
 import {
   getMicAnalyser,
   primeMeetingWorklet,
@@ -9,11 +11,23 @@ const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
 
 export default function MeetingRecordingMount(): null {
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
+  const error = useMeetingRecordingStore((s) => s.error);
 
   useEffect(() => {
     primeMeetingWorklet();
   }, []);
+
+  useEffect(() => {
+    if (!error) return;
+    toast({
+      title: t("notes.meeting.title"),
+      description: error,
+      variant: "destructive",
+    });
+  }, [error, toast, t]);
 
   useEffect(() => {
     if (!isRecording) return;

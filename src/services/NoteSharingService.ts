@@ -1,9 +1,5 @@
 import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
-import type {
-  NoteShareInvitation,
-  ShareSettings,
-  ShareVisibility,
-} from "../types/electron";
+import type { NoteShareInvitation, ShareSettings, ShareVisibility } from "../types/electron";
 
 export interface ShareStateResponse {
   share: ShareSettings;
@@ -63,9 +59,7 @@ async function inviteEmails(
 }
 
 async function revokeInvite(cloudNoteId: string, invitationId: string): Promise<void> {
-  await cloudDelete(
-    sharePath(cloudNoteId, `/invitations/${encodeURIComponent(invitationId)}`)
-  );
+  await cloudDelete(sharePath(cloudNoteId, `/invitations/${encodeURIComponent(invitationId)}`));
 }
 
 async function resendInvite(

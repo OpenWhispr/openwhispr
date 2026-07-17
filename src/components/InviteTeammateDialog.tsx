@@ -98,9 +98,7 @@ export default function InviteTeammateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {t("workspaces.invite.title", { workspace: workspaceName })}
-          </DialogTitle>
+          <DialogTitle>{t("workspaces.invite.title", { workspace: workspaceName })}</DialogTitle>
           <DialogDescription>{t("workspaces.invite.description")}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
