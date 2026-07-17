@@ -138,14 +138,8 @@ function registerMacResourceBinariesForSigning(context) {
 // onnxruntime-node binary stripping
 // ---------------------------------------------------------------------------
 
-function stripOnnxruntimeBinaries(context) {
-  const platform = context.electronPlatformName; // darwin | linux | win32
-  const archName = Arch[context.arch]; // x64 | arm64 | ia32 | universal
-
-  // Resolve the resources directory inside the packed output
-  const resourcesDir = resolveResourcesDir(context);
-
-  const onnxBinDir = path.join(
+function getOnnxNapiBinDir(resourcesDir) {
+  return path.join(
     resourcesDir,
     "app.asar.unpacked",
     "node_modules",
@@ -153,11 +147,43 @@ function stripOnnxruntimeBinaries(context) {
     "bin",
     "napi-v6"
   );
+}
 
-  if (!fs.existsSync(onnxBinDir)) return;
-
+function getOnnxKeepArchs(archName) {
   // For universal macOS builds keep both arm64 and x64 under darwin/
-  const keepArchs = archName === "universal" ? ["arm64", "x64"] : [archName];
+  return archName === "universal" ? ["arm64", "x64"] : [archName];
+}
+
+function assertOnnxruntimeBindings(onnxBinDir, platform, keepArchs) {
+  if (!fs.existsSync(onnxBinDir)) {
+    throw new Error(
+      `afterPack: missing ${onnxBinDir} - onnxruntime-node was not unpacked from app.asar (asarUnpack/packaging failure); speaker identification and local embeddings cannot load`
+    );
+  }
+
+  for (const arch of keepArchs) {
+    const bindingPath = path.join(onnxBinDir, platform, arch, "onnxruntime_binding.node");
+    if (!fs.existsSync(bindingPath)) {
+      throw new Error(
+        `afterPack: missing ${bindingPath} - onnxruntime-node has no prebuilt binding for ${platform}/${arch}. ` +
+          `darwin/x64 requires onnxruntime-node 1.23.x (last upstream release that ships it; see #1186)`
+      );
+    }
+  }
+}
+
+function stripOnnxruntimeBinaries(context) {
+  const platform = context.electronPlatformName; // darwin | linux | win32
+  const archName = Arch[context.arch]; // x64 | arm64 | ia32 | universal
+
+  // Resolve the resources directory inside the packed output
+  const resourcesDir = resolveResourcesDir(context);
+  const onnxBinDir = getOnnxNapiBinDir(resourcesDir);
+  const keepArchs = getOnnxKeepArchs(archName);
+
+  if (!fs.existsSync(onnxBinDir)) {
+    assertOnnxruntimeBindings(onnxBinDir, platform, keepArchs);
+  }
 
   const platformDirs = fs.readdirSync(onnxBinDir);
   let totalRemoved = 0;
@@ -167,13 +193,13 @@ function stripOnnxruntimeBinaries(context) {
     if (!fs.statSync(fullPath).isDirectory()) continue;
 
     if (dir !== platform) {
-      // Wrong platform — remove entirely
+      // Wrong platform - remove entirely
       fs.rmSync(fullPath, { recursive: true, force: true });
       totalRemoved++;
       continue;
     }
 
-    // Right platform — strip non-target architectures
+    // Right platform - strip non-target architectures
     const archDirs = fs.readdirSync(fullPath);
     for (const arch of archDirs) {
       const archPath = path.join(fullPath, arch);
@@ -190,7 +216,13 @@ function stripOnnxruntimeBinaries(context) {
       `  afterPack: stripped ${totalRemoved} non-target onnxruntime-node directories (keeping ${platform}/${keepArchs.join(",")})`
     );
   }
+
+  assertOnnxruntimeBindings(onnxBinDir, platform, keepArchs);
 }
+
+exports.getOnnxNapiBinDir = getOnnxNapiBinDir;
+exports.getOnnxKeepArchs = getOnnxKeepArchs;
+exports.assertOnnxruntimeBindings = assertOnnxruntimeBindings;
 
 // ---------------------------------------------------------------------------
 // Linux XWayland wrapper

@@ -2,6 +2,7 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const speakerEmbeddings = require("./speakerEmbeddings");
 const { MAX_EMBEDDING_SECONDS } = speakerEmbeddings;
+const { getOnnxruntime, isOnnxruntimeAvailable } = require("./onnxruntimeLoad");
 const { downsample24kTo16k, pcm16ToFloat32 } = require("../utils/audioUtils");
 const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
 
@@ -148,7 +149,11 @@ class LiveSpeakerIdentifier {
   }
 
   isAvailable() {
-    return this._diarizationManager?.isVadModelDownloaded() && speakerEmbeddings.isAvailable();
+    return (
+      this._diarizationManager?.isVadModelDownloaded() &&
+      speakerEmbeddings.isAvailable() &&
+      isOnnxruntimeAvailable()
+    );
   }
 
   getTransientState() {
@@ -192,6 +197,7 @@ class LiveSpeakerIdentifier {
       debugLogger.warn("Live speaker identifier unavailable", {
         vadModelPath: this._diarizationManager?.getVadModelPath(),
         embeddingModelAvailable: speakerEmbeddings.isAvailable(),
+        onnxruntimeAvailable: isOnnxruntimeAvailable(),
       });
       return false;
     }
@@ -359,7 +365,10 @@ class LiveSpeakerIdentifier {
       return;
     }
 
-    const ort = require("onnxruntime-node");
+    const ort = getOnnxruntime();
+    if (!ort) {
+      return;
+    }
     this.session = await ort.InferenceSession.create(vadModelPath);
     this.vadStateInputs = (this.session.inputNames || []).filter((name) => /state|h|c/i.test(name));
     this.vadStateOutputs = (this.session.outputNames || []).filter((name) =>
@@ -464,7 +473,10 @@ class LiveSpeakerIdentifier {
   async _getVadProbability(window) {
     if (!this.session) return 0;
 
-    const ort = require("onnxruntime-node");
+    const ort = getOnnxruntime();
+    if (!ort) {
+      return 0;
+    }
     const feeds = {};
     const audioInputName = (this.session.inputNames || []).find(
       (name) => !this.vadStateInputs.includes(name) && !/sr|sample.?rate/i.test(name)
