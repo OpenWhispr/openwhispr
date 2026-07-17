@@ -5,7 +5,7 @@ import { Input } from "./ui/input";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
-import { buildApiUrl, normalizeBaseUrl } from "../config/constants";
+import { buildModelsUrl, normalizeBaseUrl } from "../config/constants";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 
@@ -134,7 +134,7 @@ export default function OpenAICompatiblePanel({
           headers.Authorization = `Bearer ${effectiveKey}`;
         }
 
-        const modelsUrl = buildApiUrl(normalized, "/models");
+        const modelsUrl = buildModelsUrl(normalized);
         const response = await fetch(modelsUrl, { method: "GET", headers });
 
         if (!response.ok) {
@@ -249,7 +249,7 @@ export default function OpenAICompatiblePanel({
   }, [applyBase, isDraftDirty, trimmedDraft, loadRemoteModels]);
 
   const displayedModels = isDraftDirty ? [] : modelOptions;
-  const queryUrl = hasBase ? `${normalizedBase}/models` : `${baseUrlPlaceholder}/models`;
+  const queryUrl = buildModelsUrl(hasBase ? normalizedBase : baseUrlPlaceholder);
 
   return (
     <>

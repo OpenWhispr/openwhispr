@@ -43,6 +43,13 @@ export const ensureV1Suffix = (base: string): string => {
   return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
 };
 
+// The OpenAI-compatible model list lives at `<base>/v1/models`. A user who
+// enters just the server root (e.g. LM Studio's `http://127.0.0.1:1234`) needs
+// the `/v1` added, while an explicit `/v1` or `/api/v1` must be kept as-is.
+// Mirrors ensureV1Suffix so discovery targets the same endpoint inference does.
+export const buildModelsUrl = (base: string): string =>
+  buildApiUrl(ensureV1Suffix(base), "/models");
+
 const env = (typeof import.meta !== "undefined" && (import.meta as any).env) || {};
 
 const computeBaseUrl = (candidates: Array<string | undefined>, fallback: string): string => {
