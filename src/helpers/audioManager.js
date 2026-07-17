@@ -27,6 +27,8 @@ import {
   isCloudTranslationMode,
 } from "../stores/settingsStore";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
+import { getSttPosture } from "../stores/sttPostureStore";
+import { resolveCloudOnlyFailureMessageKey } from "./sttPosture";
 import {
   getBatchTranscriptionModel,
   getTranscriptionProvider,
@@ -1326,11 +1328,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       if (error.message !== "No audio detected") {
+        const cloudOnlyMessageKey = resolveCloudOnlyFailureMessageKey(getSttPosture());
         this.onError?.({
-          title: "Transcription Error",
-          description: `Transcription failed: ${error.message}`,
-          code: error.code,
-          messageKey: error.messageKey,
+          title: cloudOnlyMessageKey
+            ? "hooks.audioRecording.cloudOnlyFailure.title"
+            : "Transcription Error",
+          description: cloudOnlyMessageKey
+            ? undefined
+            : `Transcription failed: ${error.message}`,
+          code: cloudOnlyMessageKey ? error.code || "CLOUD_ONLY_FAILURE" : error.code,
+          messageKey: cloudOnlyMessageKey || error.messageKey,
         });
 
         // Save failed transcription with audio so the user can retry later
@@ -3609,8 +3616,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         errorDescription =
           "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.";
       } else if (error.code === "NETWORK_ERROR") {
-        errorTitle = "streaming.errors.cloudUnreachable.title";
-        errorDescription = error.messageKey || "streaming.errors.cloudUnreachable.generic";
+        const cloudOnlyMessageKey = resolveCloudOnlyFailureMessageKey(getSttPosture());
+        if (cloudOnlyMessageKey) {
+          errorTitle = "hooks.audioRecording.cloudOnlyFailure.title";
+          errorDescription = cloudOnlyMessageKey;
+          error.messageKey = cloudOnlyMessageKey;
+        } else {
+          errorTitle = "streaming.errors.cloudUnreachable.title";
+          errorDescription = error.messageKey || "streaming.errors.cloudUnreachable.generic";
+        }
       } else if (error.name === "MicUnusableError") {
         errorTitle = "Microphone Muted";
         errorDescription =

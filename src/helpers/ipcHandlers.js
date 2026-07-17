@@ -3516,6 +3516,12 @@ class IPCHandlers {
       return this.environmentManager.saveAllKeysToEnvFile();
     });
 
+    ipcMain.handle("sync-stt-posture", async (_event, payload) => {
+      const posture = typeof payload?.posture === "string" ? payload.posture : "unknown";
+      this.getTrayManager?.()?.setSttPosture?.(posture);
+      return { success: true, posture };
+    });
+
     ipcMain.handle("sync-startup-preferences", async (event, prefs) => {
       const setVars = {};
       const clearVars = [];

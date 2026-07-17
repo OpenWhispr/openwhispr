@@ -829,6 +829,7 @@ declare global {
         dictationAgentProvider: string;
         dictationAgentModel?: string;
       }) => Promise<void>;
+      syncSttPosture: (payload: { posture: string }) => Promise<{ success: boolean; posture: string }>;
 
       // Clipboard operations
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;

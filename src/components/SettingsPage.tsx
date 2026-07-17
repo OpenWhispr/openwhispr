@@ -45,6 +45,7 @@ import PasteToolsInfo from "./ui/PasteToolsInfo";
 import NixOsPasteInfo from "./ui/NixOsPasteInfo";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 import SelfHostedPanel from "./SelfHostedPanel";
+import { useSttPostureStore } from "../stores/sttPostureStore";
 import {
   ConfirmDialog,
   AlertDialog,
@@ -258,6 +259,8 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const sttPosture = useSttPostureStore((s) => s.posture);
+  const showCloudOnlyBadge = sttPosture === "cloud-only";
 
   const transcriptionModes: InferenceModeOption[] = [
     {
@@ -366,6 +369,14 @@ function TranscriptionSection({
 
   return (
     <div className="space-y-4">
+      {showCloudOnlyBadge && (
+        <div className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+          <Badge variant="outline">{t("settingsPage.transcription.cloudOnlyBadge")}</Badge>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("settingsPage.transcription.cloudOnlyHint")}
+          </p>
+        </div>
+      )}
       <InferenceModeSelector
         modes={transcriptionModes}
         activeMode={transcriptionMode}

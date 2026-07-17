@@ -8,7 +8,12 @@ type RecordingError = {
 };
 
 export function getRecordingErrorTitle(error: RecordingError, t: TFunction): string {
-  if (error.code === "NETWORK_ERROR") return t(error.title);
+  if (error.code === "NETWORK_ERROR" || error.code === "CLOUD_ONLY_FAILURE") {
+    return t(error.title);
+  }
+  if (error.title === "hooks.audioRecording.cloudOnlyFailure.title") {
+    return t(error.title);
+  }
   if (error.code === "AUTH_EXPIRED" || error.code === "AUTH_REQUIRED") {
     return t("hooks.audioRecording.errorTitles.sessionExpired");
   }

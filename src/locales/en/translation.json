@@ -35,7 +35,8 @@
     "openControlPanel": "Open Control Panel",
     "hideControlPanel": "Hide Control Panel",
     "quit": "Quit OpenWhispr",
-    "tooltip": "OpenWhispr - Voice Dictation"
+    "tooltip": "OpenWhispr - Voice Dictation",
+    "tooltipCloudOnly": "OpenWhispr - Cloud only"
   },
   "menu": {
     "appLabel": "OpenWhispr",
@@ -583,6 +584,10 @@
       "partialTranscription": {
         "title": "Partial Transcription",
         "description": "Part of the recording couldn't be transcribed."
+      },
+      "cloudOnlyFailure": {
+        "title": "Cloud provider unreachable",
+        "description": "Cloud provider unreachable — add a local model as fallback in Settings → Models."
       },
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
@@ -1891,6 +1896,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
       "title": "Speech to Text",
+      "cloudOnlyBadge": "Cloud only",
+      "cloudOnlyHint": "No local model downloaded. Dictation depends on your cloud provider.",
       "toasts": {
         "switchedCloud": {
           "description": "Transcription will use OpenWhispr's cloud service.",
