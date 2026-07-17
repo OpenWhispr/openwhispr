@@ -75,7 +75,9 @@ export const reacquireIfDead = async (stream, getFreshConstraints, logger, fallb
     current = retryStream;
   } catch (error) {
     logger.warn(
-      "Microphone re-acquire failed, using original stream",
+      fallback
+        ? "Microphone re-acquire failed, trying the default mic"
+        : "Microphone re-acquire failed, using original stream",
       { error: error.message },
       "audio"
     );

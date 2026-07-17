@@ -562,7 +562,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       }
 
-      // The device was already proven silent this session; don't pin it again.
       if (resolvedDeviceId === this.rejectedMicDeviceId) {
         logger.debug(
           "Skipping selected microphone (delivered no audio)",
@@ -615,6 +614,44 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Recovers a dead/muted capture: retries the same device, then hops to the OS default,
+  // remembering a silent pinned device for the session. Throws MicUnusableError when no
+  // input delivers audio. See #1152.
+  async acquireHealthyMicStream(rawStream, constraints) {
+    const pinnedMicDeviceId = constraints.audio?.deviceId?.exact ?? null;
+    let fallbackMicUnusable = false;
+    // Keep verifying after a rejection too, otherwise a muted default records silence unnoticed.
+    const verifyMic = pinnedMicDeviceId !== null || this.rejectedMicDeviceId !== null;
+    const stream = await reacquireIfDead(
+      rawStream,
+      () => {
+        this.cachedMicDeviceId = null;
+        return this.getAudioConstraints();
+      },
+      logger,
+      verifyMic
+        ? {
+            getConstraints: () => this.getAudioConstraints(true),
+            onDeviceRejected: () => {
+              if (pinnedMicDeviceId) this.rejectedMicDeviceId = pinnedMicDeviceId;
+            },
+            onFallbackUnusable: () => {
+              fallbackMicUnusable = true;
+            },
+          }
+        : null
+    );
+
+    if (fallbackMicUnusable) {
+      stream.getTracks().forEach((track) => track.stop());
+      const micError = new Error("No microphone is delivering audio");
+      micError.name = "MicUnusableError";
+      throw micError;
+    }
+
+    return stream;
+  }
+
   async startRecording(forceDefaultMic = false) {
     try {
       if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") {
@@ -622,36 +659,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       const constraints = await this.getAudioConstraints(forceDefaultMic);
-      const pinnedMicDeviceId = constraints.audio?.deviceId?.exact ?? null;
-      let fallbackMicUnusable = false;
-      // Keep verifying after a rejection too, otherwise a muted default records silence unnoticed.
-      const verifyMic = pinnedMicDeviceId !== null || this.rejectedMicDeviceId !== null;
-      const micStream = await reacquireIfDead(
+      const micStream = await this.acquireHealthyMicStream(
         await navigator.mediaDevices.getUserMedia(constraints),
-        () => {
-          this.cachedMicDeviceId = null;
-          return this.getAudioConstraints();
-        },
-        logger,
-        verifyMic
-          ? {
-              getConstraints: () => this.getAudioConstraints(true),
-              onDeviceRejected: () => {
-                if (pinnedMicDeviceId) this.rejectedMicDeviceId = pinnedMicDeviceId;
-              },
-              onFallbackUnusable: () => {
-                fallbackMicUnusable = true;
-              },
-            }
-          : null
+        constraints
       );
-
-      if (fallbackMicUnusable) {
-        micStream.getTracks().forEach((track) => track.stop());
-        const micError = new Error("No microphone is delivering audio");
-        micError.name = "MicUnusableError";
-        throw micError;
-      }
 
       const audioTrack = micStream.getAudioTracks()[0];
 
@@ -3011,42 +3022,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const t0 = performance.now();
       const constraints = await this.getAudioConstraints(forceDefaultMic);
-      const pinnedMicDeviceId = constraints.audio?.deviceId?.exact ?? null;
-      let fallbackMicUnusable = false;
-      // Keep verifying after a rejection too, otherwise a muted default records silence unnoticed.
-      const verifyMic = pinnedMicDeviceId !== null || this.rejectedMicDeviceId !== null;
       const tConstraints = performance.now();
 
       // 1. Get mic stream (can take 10-15s on cold macOS mic driver)
       const rawStream = await navigator.mediaDevices.getUserMedia(constraints);
       const tMedia = performance.now();
 
-      const stream = await reacquireIfDead(
-        rawStream,
-        () => {
-          this.cachedMicDeviceId = null;
-          return this.getAudioConstraints();
-        },
-        logger,
-        verifyMic
-          ? {
-              getConstraints: () => this.getAudioConstraints(true),
-              onDeviceRejected: () => {
-                if (pinnedMicDeviceId) this.rejectedMicDeviceId = pinnedMicDeviceId;
-              },
-              onFallbackUnusable: () => {
-                fallbackMicUnusable = true;
-              },
-            }
-          : null
-      );
-
-      if (fallbackMicUnusable) {
-        stream.getTracks().forEach((track) => track.stop());
-        const micError = new Error("No microphone is delivering audio");
-        micError.name = "MicUnusableError";
-        throw micError;
-      }
+      const stream = await this.acquireHealthyMicStream(rawStream, constraints);
 
       const audioTrack = stream.getAudioTracks()[0];
 
