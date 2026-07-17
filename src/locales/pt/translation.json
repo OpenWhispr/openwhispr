@@ -6,7 +6,12 @@
       "uiLabel": "Idioma da interface",
       "uiDescription": "Escolha o idioma usado na interface do OpenWhispr",
       "transcriptionLabel": "Idioma de transcrição",
-      "transcriptionDescription": "Escolha o idioma que você fala para maior precisão"
+      "transcriptionDescription": "Escolha o idioma que você fala para maior precisão",
+      "chineseScriptLabel": "Escrita chinesa (deteccao automatica)",
+      "chineseScriptDescription": "Quando o chines for detectado, converter a transcricão para caracteres simplificados ou tradicionais. O chines falado soa igual; o Whisper so devolve uma escrita.",
+      "chineseScriptAsTranscribed": "Manter como transcrito",
+      "chineseScriptSimplified": "Simplificado (简体)",
+      "chineseScriptTraditional": "Tradicional (繁體)"
     },
     "noteFiles": {
       "title": "Salvar notas como arquivos",

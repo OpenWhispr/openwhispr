@@ -6,7 +6,12 @@
       "uiLabel": "インターフェース言語",
       "uiDescription": "OpenWhispr のインターフェースで使用する言語を選択",
       "transcriptionLabel": "文字起こし言語",
-      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択"
+      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択",
+      "chineseScriptLabel": "中国語の字体（自動検出時）",
+      "chineseScriptDescription": "中国語が検出されたとき、文字起こしを簡体字または繁体字に変換します。話し言葉は同じでも、Whisperはどちらか一方の字体だけを返します。",
+      "chineseScriptAsTranscribed": "文字起こしのまま",
+      "chineseScriptSimplified": "簡体字 (简体)",
+      "chineseScriptTraditional": "繁体字 (繁體)"
     },
     "noteFiles": {
       "title": "ノートをファイルとして保存",
