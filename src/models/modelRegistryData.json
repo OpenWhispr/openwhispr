@@ -608,6 +608,30 @@
           "supportsTemperature": true
         }
       ]
+    },
+    {
+      "id": "cerebras",
+      "name": "Cerebras",
+      "models": [
+        {
+          "id": "gemma-4-31b",
+          "name": "Gemma 4 31B",
+          "description": "Ultra-fast Cerebras inference, strong for dictation cleanup",
+          "descriptionKey": "models.descriptions.cloud.cerebras_gemma_4_31b",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsThinking": true
+        },
+        {
+          "id": "gpt-oss-120b",
+          "name": "GPT-OSS 120B",
+          "description": "Production open-weight model on Cerebras, ~3000 T/sec",
+          "descriptionKey": "models.descriptions.cloud.cerebras_gpt_oss_120b",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsThinking": true
+        }
+      ]
     }
   ],
   "enterpriseProviders": [

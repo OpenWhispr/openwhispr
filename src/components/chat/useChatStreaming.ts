@@ -111,6 +111,7 @@ export function useChatStreaming({
           "tinfoil",
           "openrouter",
           "corti",
+          "cerebras",
         ].includes(settings.chatAgentProvider);
       const localModelCanUseTool =
         isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;

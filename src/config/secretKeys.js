@@ -64,6 +64,13 @@ const BYOK_API_KEYS = [
     save: "saveCortiKey",
     storeKey: "cortiApiKey",
   },
+  {
+    base: "cerebras",
+    env: "CEREBRAS_API_KEY",
+    get: "getCerebrasKey",
+    save: "saveCerebrasKey",
+    storeKey: "cerebrasApiKey",
+  },
 ];
 
 module.exports = { BYOK_API_KEYS };

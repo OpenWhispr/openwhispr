@@ -86,7 +86,15 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
+      | "openai"
+      | "anthropic"
+      | "gemini"
+      | "groq"
+      | "tinfoil"
+      | "custom"
+      | "openrouter"
+      | "corti"
+      | "cerebras"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -127,6 +135,7 @@ class ReasoningService extends BaseReasoningService {
           openrouter: () => window.electronAPI.getOpenrouterKey(),
           tinfoil: () => window.electronAPI.getTinfoilKey?.(),
           corti: () => window.electronAPI.getCortiKey?.(),
+          cerebras: () => window.electronAPI.getCerebrasKey?.(),
         };
         apiKey = (await keyGetters[provider]()) ?? undefined;
 
@@ -409,7 +418,15 @@ class ReasoningService extends BaseReasoningService {
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
       const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom" | "openrouter" | "corti";
+        | "openai"
+        | "groq"
+        | "gemini"
+        | "anthropic"
+        | "tinfoil"
+        | "custom"
+        | "openrouter"
+        | "corti"
+        | "cerebras";
       const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
 
@@ -419,6 +436,9 @@ class ReasoningService extends BaseReasoningService {
           break;
         case "corti":
           endpoint = buildApiUrl(API_ENDPOINTS.CORTI_MODELS_BASE, "/chat/completions");
+          break;
+        case "cerebras":
+          endpoint = buildApiUrl(API_ENDPOINTS.CEREBRAS_BASE, "/chat/completions");
           break;
         case "gemini":
           endpoint = buildApiUrl(API_ENDPOINTS.GEMINI, "/openai/chat/completions");
@@ -633,7 +653,15 @@ class ReasoningService extends BaseReasoningService {
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
       const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom" | "openrouter" | "corti";
+        | "openai"
+        | "groq"
+        | "gemini"
+        | "anthropic"
+        | "tinfoil"
+        | "custom"
+        | "openrouter"
+        | "corti"
+        | "cerebras";
       const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
       baseURL =
@@ -956,6 +984,7 @@ class ReasoningService extends BaseReasoningService {
       const openrouterKey = await window.electronAPI?.getOpenrouterKey?.();
       const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
       const cortiKey = await window.electronAPI?.getCortiKey?.();
+      const cerebrasKey = await window.electronAPI?.getCerebrasKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
 
       logger.logReasoning("API_KEY_CHECK", {
@@ -966,6 +995,7 @@ class ReasoningService extends BaseReasoningService {
         hasOpenrouter: !!openrouterKey,
         hasTinfoil: !!tinfoilKey,
         hasCorti: !!cortiKey,
+        hasCerebras: !!cerebrasKey,
         hasLocal: !!localAvailable,
       });
 
@@ -977,6 +1007,7 @@ class ReasoningService extends BaseReasoningService {
         openrouterKey ||
         tinfoilKey ||
         cortiKey ||
+        cerebrasKey ||
         localAvailable
       );
     } catch (error) {
@@ -1000,6 +1031,7 @@ class ReasoningService extends BaseReasoningService {
       | "custom"
       | "openrouter"
       | "corti"
+      | "cerebras"
   ): void {
     if (provider) {
       if (provider !== "custom") {

@@ -46,6 +46,9 @@ export async function getAIModel(
     case "corti":
       // Corti's gateway is Chat Completions-compatible, not the OpenAI Responses API.
       return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE }).chat(model);
+    case "cerebras":
+      // Cerebras exposes an OpenAI-compatible Chat Completions API.
+      return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CEREBRAS_BASE }).chat(model);
     case "custom":
       // Custom OpenAI-compatible servers implement Chat Completions, not the Responses API.
       return createOpenAI({ apiKey, baseURL }).chat(model);

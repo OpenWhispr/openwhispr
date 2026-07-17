@@ -1957,7 +1957,9 @@
         "corti_corti_s1_instant": "Быстрая медицинская модель, без цепочки рассуждений",
         "corti_corti_s1": "Самая мощная клиническая модель с рассуждением",
         "corti_corti_s1_mini_instant": "Компактная медицинская модель, самая быстрая и дешёвая",
-        "corti_corti_s1_mini": "Компактная клиническая модель с рассуждением за полцены"
+        "corti_corti_s1_mini": "Компактная клиническая модель с рассуждением за полцены",
+        "cerebras_gemma_4_31b": "Ultra-fast Cerebras inference, strong for dictation cleanup",
+        "cerebras_gpt_oss_120b": "Production open-weight model on Cerebras, ~3000 T/sec"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Самая мощная модель Claude. Лучше всего для самых сложных задач режима агента.",

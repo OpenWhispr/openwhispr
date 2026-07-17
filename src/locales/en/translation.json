@@ -2049,7 +2049,9 @@
         "corti_corti_s1_instant": "Fast healthcare model, no reasoning trace",
         "corti_corti_s1": "Most capable clinical model with reasoning",
         "corti_corti_s1_mini_instant": "Compact healthcare model, fastest and lowest cost",
-        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price"
+        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price",
+        "cerebras_gemma_4_31b": "Ultra-fast Cerebras inference, strong for dictation cleanup",
+        "cerebras_gpt_oss_120b": "Production open-weight model on Cerebras, ~3000 T/sec"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Agent Mode tasks.",
