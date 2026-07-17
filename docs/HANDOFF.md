@@ -1,54 +1,59 @@
 # OpenWhispr Fork — Handoff
 
-_Last updated: 2026-07-16. Pick-up doc for continuing work on the futuregerald/openwhispr fork._
+_Updated 2026-07-17. Pick-up doc for the futuregerald/openwhispr fork. Full narrative in [`DECISIONS-LOG.md`](DECISIONS-LOG.md)._
 
 ## Current state
 
-- **Branch/commit:** `main` @ `41bc813e` (PR #5 merged). Version **1.8.0**.
-- **PRs #1–#5 all merged.** No open PRs. Full history + rationale in [`DECISIONS-LOG.md`](DECISIONS-LOG.md).
-- The fork is a **fully local, private meeting transcriber**: on-device Parakeet transcription by default, FluidAudio (ANE) / sherpa-onnx N-speaker diarization, local-only onboarding (no signup), telemetry off, cloud/account UI removed, and an opt-in auto-start-recording feature.
+- **`main` @ `1a65e740`**, version **1.8.0**. **PRs #1–#9 all merged. No open PRs.**
+- The fork is a fully local, private meeting transcriber: on-device **Parakeet TDT** transcription by default, **FluidAudio (ANE)** / sherpa-onnx **N-speaker diarization**, local-only onboarding (no signup), telemetry off, cloud/account UI removed, opt-in **auto-start/stop recording**, and a hardened build.
+
+## Merged PRs (recent first)
+- **#9** diarization quality: FluidAudio → **offline** mode + **auto-detect speaker count** (max-speakers bound instead of a forced count). Fixes remote speakers collapsing into one.
+- **#8** build hardening: `verify:binaries` fails the build if a critical sidecar (e.g. llama-server) is missing.
+- **#7** dev: `npm run dev` now auto-fetches llama-server/whisper-cpp/diarization models.
+- **#6** auto-stop fix: our own recording holds the mic, so end-detection uses **camera release** (video) / **meeting-URL poll** (audio-only) + a 4h cap.
+- **#5** opt-in **auto-start** recording: native `macos-call-detector` (camera/mic device-in-use) + AppleScript meeting-URL filter + engine wiring.
+- #1–#4: FluidAudio backend + local-only onboarding + telemetry-off + unsigned builds; Parakeet default; local+self-hosted-only STT + removed account/plans/billing/Pro; version 1.8.0.
 
 ## Repo / environment
-
-- Local clone: `~/Documents/dev/openwhispr`. Remotes: `origin` = fork (push here), `upstream` = OpenWhispr/openwhispr (pull updates only).
-- FluidAudio source (for rebuilding its CLI): `~/Documents/dev/FluidAudio` (pinned v0.15.5).
-- Toolchain: macOS 26, Apple Silicon, Swift 6.2 (CommandLineTools), Node ≥24, ffmpeg. No full Xcode.
+- Local clone: `~/Documents/dev/openwhispr`. `origin` = fork (push here), `upstream` = OpenWhispr/openwhispr (pull only). FluidAudio src for rebuilds: `~/Documents/dev/FluidAudio` (pinned v0.15.5).
+- **Workflow policy: open PRs and LEAVE THEM OPEN for review — do NOT auto-merge.** Gerald merges.
 
 ## Run / build
-
 ```bash
-npm install
-npm run setup:fluidaudio   # optional (macOS): build the FluidAudio ANE diarization engine
-npm run dev                # dev run (predev compiles native helpers + downloads binaries)
-npm run build:mac:arm64    # production .dmg + .zip in dist/ (unsigned; recipients: xattr -dr com.apple.quarantine)
+npm install && npm run setup:fluidaudio && npm run dev   # dev
+npm run build:mac:arm64                                   # → dist/OpenWhispr-1.8.0-arm64.dmg (unsigned)
+# recipients: xattr -dr com.apple.quarantine "/Applications/OpenWhispr.app"
 ```
-- Typecheck: `cd src && npx tsc --noEmit`. Renderer build: `npm run build:renderer`.
-- **Workflow policy:** open PRs and **leave them open for review** — do not auto-merge unless told.
+Typecheck: `cd src && npx tsc --noEmit`. A freshly rebuilt working `.dmg` exists at `dist/OpenWhispr-1.8.0-arm64.dmg` (now includes llama-server; the earlier installed build was missing it due to a build-time download failure — #8 now guards that).
 
-## Where things live (key files)
+## Where data/audio lives (important — confusing)
+- **Production userData: `~/Library/Application Support/open-whispr`** (lowercase, uses package `name`, NOT "OpenWhispr"). Dev build: `OpenWhispr-development`.
+- **DB:** `open-whispr/transcriptions.db` (better-sqlite3). Notes (meetings) in `notes` table, transcript = JSON in `notes.transcript`. Dictations in `transcriptions` table (`has_audio`).
+- **Dictation audio:** saved as `.webm` in `open-whispr/audio/`. **Meeting audio is NOT saved** (see PR 2).
 
-- **Diarization engine dispatch:** `src/helpers/diarization.js` (`getDiarizationEngine`, `_diarizeFluidAudio`, `_diarizeSherpa`). FluidAudio setup: `scripts/setup-fluidaudio.js`.
-- **Transcription defaults / all settings:** `src/stores/settingsStore.ts`. Settings UI: `src/components/SettingsPage.tsx`, `src/components/settings/{MeetingSettings,UploadSettings}.tsx`, picker `src/components/TranscriptionModelPicker.tsx`.
-- **Onboarding:** `src/components/OnboardingFlow.tsx`. Auth (neutered): `src/lib/auth.ts`.
-- **Meeting detection + auto-start:** `src/helpers/meetingDetectionEngine.js`, `callStateDetector.js`, `browserMeetingUrlChecker.js`, native `resources/macos-call-detector.swift` (built by `scripts/build-macos-call-detector.js`). Speaker profiles: `src/helpers/{liveSpeakerIdentifier,speakerEmbeddings}.js`, `database.js`.
-- **Build config:** `package.json` (`compile:native`, `prebuild:mac`), `electron-builder.json` (bundle filters, `identity:null`/`notarize:false`).
+## Meeting pipeline facts
+- Recording captures **mic + system as separate streams** (`meetingRecordingStore.ts`); the **system channel only** is written to a temp PCM (16-bit mono 24 kHz) for diarization (`ipcHandlers.js` ~6207–6215) and **deleted** after (`_startOrSkipDiarization` ~9075, unlink ~9269). Mic PCM is not persisted.
+- **Diarization is already POST-CALL**, system-channel only. Engine dispatch in `src/helpers/diarization.js`. After #9: FluidAudio offline + auto-count. A **live** speaker identifier (`liveSpeakerIdentifier.js`, CAM++ cosine ≥ 0.65) labels in real time during the call.
+- Common audio sink: `dispatchMeetingAudioBuffer` (`ipcHandlers.js` ~5261); stop/cleanup ~5743 and ~4685; `meeting-transcription-send` IPC ~6345.
 
-## Immediate next steps (pick up here)
+## NEXT UP — PR 2 (the main pending work)
+**Meeting-audio saving + whisper large-v3 re-pass.** Deferred from #9 because it touches the delicate recording lifecycle and deserves care. Decisions already made:
+1. **Save meeting audio** as **separate mic + system Opus tracks (~24–32 kbps mono)** via the bundled ffmpeg (`ffmpegUtils`, `getFFmpegPath`), into `open-whispr/audio/` (or attached to the note), **gated on `dataRetentionEnabled`** (settingsStore, default true). Separate tracks so diarization can re-run cleanly and "you"=mic is trivial. Hook: system PCM temp file already exists — add mic PCM capture and, on stop, encode both to Opus + reference the note **before** deleting the PCM. Mirror how dictation gates/saves audio (`save-transcription-audio` IPC ~952, `has_audio`).
+2. **Whisper large-v3 post-call re-pass** (NOT WhisperX — CTranslate2 has no Metal so it's CPU-slow on Mac, ~6–20 min/30-min call; whisper.cpp large-v3 uses Metal, ~2–5 min, no Python). Run whisper-server large-v3 (`src/helpers/whisper.js`/`whisperServer.js`; ~3 GB `ggml-large-v3` download) on the saved audio, then re-run diarization + `mergeWithTranscript` and rewrite `notes.transcript`. Expose as an on-demand "Re-transcribe (high quality)" action and/or automatic post-call.
 
-1. **TEST auto-start on a real call** (PR #5, unverified). `npm run dev` → Settings → General → enable "Auto-start recording in meetings" → join a real Google Meet (approve the one-time macOS Automation prompt) → confirm a note is created + recording starts ~seconds after joining, and stops when you leave. Sanity: leave a Meet *landing page* open with no call → must NOT start. If it misbehaves, likely spots: `callStateDetector` debounce timing, the URL regexes in `browserMeetingUrlChecker.js`, or CoreMediaIO camera-in-use behavior on this macOS version.
-2. **Version bump → 1.9.0** for the auto-start feature (add CHANGELOG entry). Not yet done.
-3. **Decide on MCP card removal** — `src/components/McpIntegrationCard.tsx` in `IntegrationsView.tsx`. It's a dead hosted-cloud feature (empty API URL). Offered but never confirmed; remove if wanted.
-
-## Backlog / known gaps
-
-- Diarization **accuracy** not validated on real multi-party audio (synthetic TTS is a poor proxy).
-- Full **`.dmg` build** not run end-to-end (should bundle FluidAudio via `prebuild:mac`).
-- Call-detector has **no per-app attribution** (CoreMediaIO limitation) — URL filter compensates; log-stream parsing could add it.
-- **Google Calendar** won't work in the fork without your own `GOOGLE_CALENDAR_CLIENT_ID`/`SECRET` in `.env` (+ optional local OAuth callback to avoid the openwhispr.com redirect).
-- Possible future: browser-based Zoom/Teams already covered by URL patterns; native app attribution; a *local* MCP server over the SQLite notes DB (the shipped one is remote/hosted).
+## Open findings / risks to chase
+- **Low capture gain:** saved dictation audio measured **mean −40 to −50 dB** (normal speech ~−20 to −30). If real meetings are that quiet, it wrecks diarization + STT — verify on a real call and consider a normalization/gain stage before diarization. **Verify this before over-tuning engines.**
+- **Auto-start/stop unverified on a real call.** Likely-too-strict gate: `_handleCallActive` requires the URL check to return `matched` OR `denied`; if the AppleScript **times out** (Automation prompt pending) it returns neither → auto-start is blocked. Consider: auto-start on device-in-use whenever the URL check can't run, only skipping when it *reliably* finds no meeting tab. First check the "Auto-start recording in meetings" toggle is even ON (Settings → General, default off) and Automation permission granted.
+- Diarization real quality only judgeable on a genuine multi-party recording — which needs PR 2's audio saving to re-run/tune.
+- Fable subagent model was returning **529 Overloaded** repeatedly on 2026-07-16 — retry for planning, or plan directly with Opus.
 
 ## Gotchas
+- Existing installs keep persisted localStorage; default changes apply to fresh installs. Reset dev profile: `rm -rf ~/Library/"Application Support"/OpenWhispr-development`.
+- `resources/bin/` is gitignored (binaries built/downloaded, not committed). FluidAudio auto-selects only if its binary is present.
 
-- **Existing installs keep persisted localStorage** — default changes (local-only, Parakeet, auto-start) apply to fresh installs; existing profiles keep prior settings. Reset dev profile: `rm -rf ~/Library/"Application Support"/OpenWhispr-development`.
-- `resources/bin/` is gitignored — native binaries/models are built/downloaded, not committed.
-- FluidAudio auto-selects only if its binary is present (`npm run setup:fluidaudio`); else sherpa-onnx.
+---
+
+## Resume prompt (paste into a fresh session)
+
+> I'm continuing work on my OpenWhispr fork at `~/Documents/dev/openwhispr` (a fully local, private meeting transcriber; remotes: origin=my fork futuregerald/openwhispr, upstream=OpenWhispr/openwhispr). Read `docs/HANDOFF.md` and `docs/DECISIONS-LOG.md` first for full context. `main` is at v1.8.0 with PRs #1–#9 merged. **Policy: open PRs and leave them open for me to review — never auto-merge.** Use a Fable subagent to plan non-trivial work and Opus to execute; investigate the real code before editing. **Next task: PR 2 — save meeting audio (separate mic + system Opus tracks, retention-gated, via bundled ffmpeg) AND add a whisper.cpp large-v3 post-call re-transcription pass that rewrites the note transcript and re-runs diarization** (NOT WhisperX — it's CPU-slow on Mac). Before over-tuning: verify the real meeting capture gain isn't too low (saved test audio was −40 to −50 dB). Also still open: verify/​fix auto-start/stop on a real call (the URL-gate may be too strict when macOS Automation permission isn't granted), and decide on removing the dead MCP settings card. Start by reading the handoff, then have Fable plan PR 2.
