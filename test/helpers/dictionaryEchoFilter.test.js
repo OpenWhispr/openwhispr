@@ -116,3 +116,29 @@ test("does not flag completely unrelated text", async () => {
     false
   );
 });
+
+test("truncateDictionaryPrompt prefers a comma boundary under maxChars", async () => {
+  const { truncateDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const full = "Alpha, Bravo, Charlie, Delta, Echo, Foxtrot";
+  assert.equal(truncateDictionaryPrompt(full, 20), "Alpha, Bravo");
+  assert.equal(truncateDictionaryPrompt(full, 1000), full);
+  assert.equal(truncateDictionaryPrompt(null, 10), null);
+});
+
+test("echo filter matches the truncated prompt that Groq actually receives", async () => {
+  const { matchesDictionaryPrompt, truncateDictionaryPrompt } = await import(
+    "../../src/utils/dictionaryEchoFilter.js"
+  );
+  // Large dict: enough unique terms that truncation drops a trailing chunk (>890 chars).
+  const words = Array.from({ length: 200 }, (_, i) => `DictionaryTerm${i}`);
+  const full = words.join(", ");
+  assert.ok(full.length > 890, `expected long dict, got length ${full.length}`);
+  const sent = truncateDictionaryPrompt(full, 890);
+  assert.ok(sent.length <= 890);
+  assert.notEqual(sent, full);
+
+  // Whisper often echoes the prompt that was sent, not the full dictionary.
+  assert.equal(matchesDictionaryPrompt(sent, sent), true);
+  // Comparing that echo against the full dict can miss (usage ratio drops).
+  assert.equal(matchesDictionaryPrompt(sent, full), false);
+});

@@ -5,6 +5,14 @@ const normalize = (s) =>
     .replace(/\s+/g, " ")
     .trim();
 
+/** Truncate a dictionary prompt to maxChars, preferring a comma boundary. */
+export function truncateDictionaryPrompt(prompt, maxChars) {
+  if (!prompt || prompt.length <= maxChars) return prompt;
+  const truncated = prompt.slice(0, maxChars);
+  const lastComma = truncated.lastIndexOf(",");
+  return lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+}
+
 export function matchesDictionaryPrompt(text, dictionaryPrompt) {
   if (!text || !dictionaryPrompt) return false;
 
