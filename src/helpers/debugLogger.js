@@ -31,6 +31,12 @@ const readArgLogLevel = () => {
   return null;
 };
 
+// True when the user explicitly asked for a log level (CLI arg or env). We treat
+// that as opt-in to console output even in packaged builds, so the app stays
+// debuggable from a terminal on demand.
+const hasExplicitLogLevel = () =>
+  readArgLogLevel() != null || Boolean(process.env.OPENWHISPR_LOG_LEVEL || process.env.LOG_LEVEL);
+
 class DebugLogger {
   constructor() {
     this.logLevel = this.resolveLogLevel();
@@ -40,6 +46,7 @@ class DebugLogger {
     this.logStream = null;
     this.fileLoggingEnabled = false;
     this.fileLoggingPending = this.debugMode; // Track if we need to initialize file logging later
+    this.consoleLoggingEnabled = this.resolveConsoleLogging();
 
     // IMPORTANT: Do NOT call initializeFileLogging() here!
     // It uses app.getPath() which is unsafe before app.whenReady().
@@ -110,8 +117,29 @@ class DebugLogger {
     return "info";
   }
 
+  // Decide whether logs may go to the console (stdout/stderr). Packaged builds
+  // must not: when the app is launched from a terminal, or spawned by one (a
+  // shell, VS Code, Claude Code), the main process inherits that console's stdio
+  // and every log line pollutes it. Users read that noise as dictation text
+  // typed into the focused window (#1075) or as CLI-session spam (#1058). File
+  // logging is unaffected. Dev builds keep console output, and an explicit
+  // --log-level or OPENWHISPR_LOG_LEVEL opts a packaged build back in for
+  // on-demand debugging.
+  resolveConsoleLogging() {
+    if (hasExplicitLogLevel()) return true;
+    try {
+      if (app && typeof app.isPackaged === "boolean") {
+        return !app.isPackaged;
+      }
+    } catch {}
+    // app state unavailable (unit tests, very early boot): mirror the dev signals
+    // main.js uses so development console output is never accidentally silenced.
+    return process.env.NODE_ENV === "development" || Boolean(process.defaultApp);
+  }
+
   refreshLogLevel() {
     const nextLevel = this.resolveLogLevel();
+    this.consoleLoggingEnabled = this.resolveConsoleLogging();
     if (nextLevel === this.logLevel) return;
 
     this.logLevel = nextLevel;
@@ -191,18 +219,20 @@ class DebugLogger {
     const metaText = this.formatMeta(meta);
     const logLine = metaText ? `${baseLine} ${metaText}\n` : `${baseLine}\n`;
 
-    const consoleFn =
-      normalized === "error" || normalized === "fatal"
-        ? console.error
-        : normalized === "warn"
-          ? console.warn
-          : console.log;
+    if (this.consoleLoggingEnabled) {
+      const consoleFn =
+        normalized === "error" || normalized === "fatal"
+          ? console.error
+          : normalized === "warn"
+            ? console.warn
+            : console.log;
 
-    if (meta !== undefined) {
-      // Pass the prefix as a %s arg, not as a format string. See CodeQL js/tainted-format-string.
-      consoleFn("%s", `${levelTag}${scopeTag}${sourceTag} ${message}`, meta);
-    } else {
-      consoleFn(`${levelTag}${scopeTag}${sourceTag} ${message}`);
+      if (meta !== undefined) {
+        // Pass the prefix as a %s arg, not as a format string. See CodeQL js/tainted-format-string.
+        consoleFn("%s", `${levelTag}${scopeTag}${sourceTag} ${message}`, meta);
+      } else {
+        consoleFn(`${levelTag}${scopeTag}${sourceTag} ${message}`);
+      }
     }
 
     if (this.logStream) {
