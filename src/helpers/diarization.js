@@ -371,6 +371,9 @@ class DiarizationManager {
     // string inputs from internal callers; the IPC path also sanitizes upstream.
     const rawNum = Number(options.numSpeakers);
     const numSpeakers = Number.isInteger(rawNum) && rawNum > 0 ? rawNum : -1;
+    // Preferred over an exact count: auto-detect the speaker count up to this bound.
+    const rawMax = Number(options.maxSpeakers);
+    const maxSpeakers = Number.isInteger(rawMax) && rawMax > 0 ? rawMax : -1;
 
     const binaryPath = this.getFluidAudioBinaryPath();
     if (!binaryPath) {
@@ -383,12 +386,15 @@ class DiarizationManager {
       return [];
     }
 
+    // Default to OFFLINE mode: this is a post-call, whole-recording pass, where
+    // VBx offline clustering gets speaker count/boundaries more reliably than the
+    // real-time streaming path. Set OPENWHISPR_FLUIDAUDIO_MODE=streaming to override.
     const mode =
-      String(process.env[FLUIDAUDIO_MODE_ENV] || "streaming")
+      String(process.env[FLUIDAUDIO_MODE_ENV] || "offline")
         .toLowerCase()
-        .trim() === "offline"
-        ? "offline"
-        : "streaming";
+        .trim() === "streaming"
+        ? "streaming"
+        : "offline";
 
     const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const outJson = path.join(getSafeTempDir(), `ow-fluidaudio-${runId}.json`);
@@ -400,14 +406,25 @@ class DiarizationManager {
     // its own tuned default rather than over-splitting speakers.
     const args = ["process", wavPath, "--mode", mode, "--output", outJson];
     if (numSpeakers > 0) {
+      // Exact speaker count requested (rare).
       if (mode === "streaming") {
         args.push("--num-clusters", String(numSpeakers));
       } else {
         args.push("--min-speakers", String(numSpeakers), "--max-speakers", String(numSpeakers));
       }
+    } else if (maxSpeakers > 0 && mode === "offline") {
+      // Preferred: auto-detect the count up to a sane upper bound, instead of
+      // forcing a noisy exact count (which over/under-splits speakers).
+      args.push("--max-speakers", String(maxSpeakers));
     }
 
-    debugLogger.info("Starting FluidAudio diarization", { binaryPath, mode, numSpeakers, wavPath });
+    debugLogger.info("Starting FluidAudio diarization", {
+      binaryPath,
+      mode,
+      numSpeakers,
+      maxSpeakers,
+      wavPath,
+    });
 
     return new Promise((resolve) => {
       let stderr = "";

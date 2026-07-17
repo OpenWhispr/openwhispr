@@ -9126,9 +9126,15 @@ class IPCHandlers {
           noteId,
           observedSpeakerIds,
         });
+        // Fork: don't force an exact speaker count from the noisy live identifier —
+        // pass the expectation as an upper BOUND and let the engine auto-detect the
+        // real count below it. Forcing an exact count over/under-split speakers
+        // (e.g. collapsing several remote people into one). capSpeakerClusters
+        // below is the post-hoc safety net.
+        const maxBound = numSpeakers > 0 ? numSpeakers : undefined;
         let diarizationSegments = await this.diarizationManager.diarize(
           tmpWav,
-          numSpeakers > 0 ? { numSpeakers } : {}
+          maxBound ? { maxSpeakers: maxBound } : {}
         );
         if (cap != null) {
           diarizationSegments = this.diarizationManager.capSpeakerClusters(
