@@ -872,6 +872,78 @@ test("downloadDirect rejects with DOWNLOAD_CANCELLED on mid-stream abort and cle
   assert.deepEqual(listOwUrlTempFiles(), before, "cancelled download must remove its temp file");
 });
 
+test("downloadDirect defers a cancelled download's rejection until the write stream closed", async () => {
+  const before = listOwUrlTempFiles();
+  const ac = new AbortController();
+  const order = [];
+  let releaseOpen;
+  const openGate = new Promise((r) => (releaseOpen = r));
+  let onAborted;
+  const aborted = new Promise((r) => (onAborted = r));
+  const realCreate = fs.createWriteStream;
+
+  // Hold the stream's async open past cancellation: the window where cleanup
+  // used to unlink before the file existed, orphaning it.
+  fs.createWriteStream = (p, opts) => {
+    const ws = realCreate(p, {
+      ...opts,
+      fs: {
+        open: (...args) => {
+          const cb = args[args.length - 1];
+          openGate.then(() => fs.open(...args.slice(0, -1), cb));
+        },
+        write: fs.write.bind(fs),
+        writev: fs.writev.bind(fs),
+        close: fs.close.bind(fs),
+      },
+    });
+    ws.once("close", () => order.push("close"));
+    return ws;
+  };
+
+  try {
+    await withFakeHttps(
+      (parsed, options) =>
+        options.method === "HEAD"
+          ? { response: makeDirectResponse({ statusCode: 405 }) }
+          : {
+              response: makeDirectResponse({ headers: { "content-type": "audio/mpeg" } }),
+              after: (response) => {
+                response.emit("data", { length: 1024 });
+                ac.abort();
+                onAborted();
+              },
+            },
+      async () => {
+        let settled = null;
+        const done = downloader
+          .download("https://93.184.216.34/file.mp3", null, ac.signal)
+          .then(
+            () => (settled = "resolved"),
+            (err) => {
+              order.push("rejected");
+              settled = err;
+            }
+          );
+
+        await aborted;
+        for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+        assert.equal(settled, null, "cancel must not settle while the open is still pending");
+
+        releaseOpen();
+        await done;
+        assert.equal(settled.code, "DOWNLOAD_CANCELLED");
+        assert.deepEqual(order, ["close", "rejected"]);
+      }
+    );
+  } finally {
+    fs.createWriteStream = realCreate;
+    releaseOpen();
+  }
+
+  assert.deepEqual(listOwUrlTempFiles(), before, "a late open must not orphan a temp file");
+});
+
 // --- selectYtDlpOutput: finished-file selection + transient cleanup ---
 
 function mkSelectDir() {

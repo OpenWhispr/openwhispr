@@ -1064,20 +1064,37 @@ function streamToFile(
       bail(Object.assign(new Error("Download stalled"), { code: "DOWNLOAD_FAILED" }));
     });
 
-    const cleanupFile = () => {
-      fileStream.destroy();
-      try {
-        fs.unlinkSync(tempPath);
-      } catch {}
-    };
+    // destroy() returns before the stream's async open finishes, so unlinking
+    // right away can race a pending open into recreating the file. Wait for 'close'.
+    const cleanupFile = () =>
+      new Promise((done) => {
+        const unlink = () =>
+          fs.unlink(tempPath, (e) => {
+            try {
+              if (e && e.code !== "ENOENT") {
+                debugLogger.warn("Failed to remove partial download", {
+                  tempPath,
+                  error: e.message,
+                });
+              }
+            } finally {
+              done();
+            }
+          });
+        if (fileStream.closed) {
+          unlink();
+          return;
+        }
+        fileStream.once("close", unlink);
+        fileStream.destroy();
+      });
 
     const bail = (err) => {
       if (settled) return;
       settled = true;
       stall.clear();
       if (abortSignal) abortSignal.removeEventListener("abort", onAbort);
-      cleanupFile();
-      reject(err);
+      cleanupFile().then(() => reject(err));
     };
 
     // React to cancel even while stalled (no data events arriving).
@@ -1132,9 +1149,10 @@ function streamToFile(
         const sizeBytes = fs.statSync(tempPath).size;
         resolve(sizeBytes);
       } catch {
-        cleanupFile();
-        reject(
-          Object.assign(new Error("Download produced no output"), { code: "DOWNLOAD_FAILED" })
+        cleanupFile().then(() =>
+          reject(
+            Object.assign(new Error("Download produced no output"), { code: "DOWNLOAD_FAILED" })
+          )
         );
       }
     });
