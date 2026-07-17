@@ -544,15 +544,16 @@ export default function TranscriptionModelPicker({
     [cloudProviders, onCloudProviderSelect, onCloudModelSelect, setCloudTranscriptionBaseUrl]
   );
 
-  const handleLocalProviderChange = useCallback(
-    (providerId: string) => {
-      const tab = LOCAL_PROVIDER_TABS.find((t) => t.id === providerId);
-      if (tab?.disabled) return;
-      setInternalLocalProvider(providerId);
-      onLocalProviderSelect?.(providerId);
-    },
-    [onLocalProviderSelect]
-  );
+  const handleLocalProviderChange = useCallback((providerId: string) => {
+    const tab = LOCAL_PROVIDER_TABS.find((t) => t.id === providerId);
+    if (tab?.disabled) return;
+    // Switching this tab only changes which model list is browsed here — it must
+    // NOT commit the active transcription provider. That only happens when the
+    // user clicks "Activate" on a specific model (handleWhisperModelSelect /
+    // handleParakeetModelSelect below), otherwise merely glancing at the NVIDIA
+    // tab would silently make NVIDIA the active provider.
+    setInternalLocalProvider(providerId);
+  }, []);
 
   const handleWhisperModelSelect = useCallback(
     (modelId: string) => {
