@@ -303,6 +303,11 @@ class AudioManager {
       this.rejectedMicDeviceId = null;
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
+    // Stable MediaStreamDestination graph for mid-session mic swaps (#1059).
+    this._activeMicStream = null;
+    this._captureAudioContext = null;
+    this._captureSource = null;
+    this._captureDestination = null;
     this.cachedTranscriptionEndpoint = null;
     this.cachedEndpointProvider = null;
     this.cachedEndpointBaseUrl = null;
@@ -773,37 +778,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
 
-      try {
-        this._silenceCtx = new AudioContext();
-        if (this._silenceCtx.state === "suspended") {
-          // Not awaited — resume() can hang when the output device is wedged.
-          this._silenceCtx.resume().catch(() => {});
-        }
-        this._silenceAnalyser = this._silenceCtx.createAnalyser();
-        this._silenceAnalyser.fftSize = 2048;
-        this._silenceSource = this._silenceCtx.createMediaStreamSource(micStream);
-        this._silenceSource.connect(this._silenceAnalyser);
-        this._localSpeechGateState = createLocalSpeechGateState();
-        const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
-        this._silenceInterval = setInterval(() => {
-          // A stalled context reads flat silence; recording no windows fails the gate open.
-          if (this._silenceCtx?.state !== "running") return;
-          this._silenceAnalyser.getByteTimeDomainData(dataArray);
-          let sum = 0;
-          let peak = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            const v = (dataArray[i] - 128) / 128;
-            sum += v * v;
-            const abs = Math.abs(v);
-            if (abs > peak) peak = abs;
-          }
-          const rms = Math.sqrt(sum / dataArray.length);
-          recordLocalSpeechWindow(this._localSpeechGateState, rms, peak);
-        }, 100);
-      } catch (e) {
-        logger.warn("Audio level gate setup failed, skipping", { error: e.message }, "audio");
-        this._localSpeechGateState = null;
-      }
+      // Record through a stable MediaStreamDestination so MediaRecorder keeps one
+      // WebM container when the physical mic is swapped mid-session (#1059).
+      this.setupCapturePipeline(micStream);
+      this.setupSpeechGate(micStream);
 
       this.audioChunks = [];
       this._batchSegments = [];
@@ -811,7 +789,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._cancelRequestedDuringMicRecovery = false;
       this._receivedAudioData = false;
       this.recordingStartTime = Date.now();
-      this.createBatchRecorder(micStream);
+      this.createBatchRecorder(this._captureDestination.stream);
       this.isRecording = true;
       this.onStateChange?.({
         isRecording: true,
@@ -903,8 +881,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  createBatchRecorder(micStream) {
-    const recorder = new MediaRecorder(micStream);
+  createBatchRecorder(destinationStream) {
+    const recorder = new MediaRecorder(destinationStream);
     const segmentChunks = [];
     this.mediaRecorder = recorder;
     this.audioChunks = segmentChunks;
@@ -921,23 +899,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const segment = new Blob(segmentChunks, { type: recorder.mimeType || "audio/webm" });
       segmentChunks.length = 0;
       const rotating = this._rotatingBatchRecorder === recorder;
-      // The recorder also stops on its own when its mic track dies (the stream
-      // goes inactive). While recovery is armed, treat that like a rotation:
-      // bank the segment and keep the recording alive for the replacement mic.
-      if (rotating || this.micRecovery.started) {
+      // Destination-backed recorders do not auto-stop when the physical mic dies.
+      // Keep the legacy rotation handshake for any explicit rotate callers.
+      if (rotating) {
         if (segment.size > 0) this._batchSegments.push(segment);
-        micStream.getTracks().forEach((track) => track.stop());
-        if (rotating) {
-          this._rotatingBatchRecorder = null;
-          this._rotationResolve?.();
-          this._rotationResolve = null;
-        } else {
-          void this.micRecovery.recover("recorder-stopped");
-        }
+        this._rotatingBatchRecorder = null;
+        this._rotationResolve?.();
+        this._rotationResolve = null;
         return;
       }
 
-      micStream.getTracks().forEach((track) => track.stop());
+      this.teardownCapturePipeline();
       await this.finalizeBatchRecording(segment);
     };
 
@@ -1017,35 +989,48 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
-  async replaceBatchMic(replacement) {
+  async replaceBatchMic(replacement, previous) {
     try {
-      const recorder = this.mediaRecorder;
-      if (!recorder) throw new Error("Batch recorder is no longer active");
-      // An auto-stopped recorder (mic track died) already banked its segment in
-      // onstop; only a live recorder needs the explicit rotation handshake.
-      if (recorder.state === "recording") {
-        await new Promise((resolve) => {
-          this._rotatingBatchRecorder = recorder;
-          this._rotationResolve = resolve;
-          recorder.stop();
-        });
+      if (!this._captureDestination || !this._captureAudioContext) {
+        throw new Error("Capture pipeline is no longer active");
       }
-      if (!this.isRecording) throw new Error("Recording stopped during microphone recovery");
+      if (!this.isRecording) throw new Error("Recording is no longer active");
 
-      this._silenceSource?.disconnect();
-      if (this._silenceCtx && this._silenceAnalyser) {
-        this._silenceSource = this._silenceCtx.createMediaStreamSource(replacement);
-        this._silenceSource.connect(this._silenceAnalyser);
+      // Swap the physical mic into the stable destination graph without restarting
+      // MediaRecorder (avoids broken WebM containers across reconnects) (#1059).
+      const previousStream = previous || this._activeMicStream;
+      this.teardownSpeechGate();
+      try {
+        this._captureSource?.disconnect();
+      } catch {
+        // Ignore disconnect races while swapping sources.
       }
+
+      if (previousStream && previousStream !== replacement) {
+        previousStream.getTracks().forEach((track) => track.stop());
+      }
+
+      this._activeMicStream = replacement;
+      this._captureSource = this._captureAudioContext.createMediaStreamSource(replacement);
+      this._captureSource.connect(this._captureDestination);
+      this.bindActiveMicTrack(replacement);
+      this.setupSpeechGate(replacement);
+
       this._previewSource?.disconnect();
       if (this._previewAudioContext && this._previewProcessor) {
         this._previewSource = this._previewAudioContext.createMediaStreamSource(replacement);
         this._previewSource.connect(this._previewProcessor);
       }
-      this.createBatchRecorder(replacement);
+
+      logger.info(
+        "Microphone reconnected mid-recording via capture pipeline",
+        {
+          label: replacement.getAudioTracks?.()[0]?.label,
+          deviceId: replacement.getAudioTracks?.()[0]?.getSettings?.()?.deviceId?.slice(0, 20) + "...",
+        },
+        "audio"
+      );
     } finally {
-      // Honor a stop/cancel that arrived mid-rotation even when the swap failed —
-      // dropping it would leave an unstoppable recording (isRecording stuck true).
       const cancelRequested = this._cancelRequestedDuringMicRecovery;
       const stopRequested = this._stopRequestedDuringMicRecovery;
       this._cancelRequestedDuringMicRecovery = false;
@@ -1085,6 +1070,80 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._silenceSource = null;
   }
 
+  setupCapturePipeline(micStream) {
+    this._activeMicStream = micStream;
+    this._captureAudioContext = new AudioContext();
+    if (this._captureAudioContext.state === "suspended") {
+      // Not awaited - resume() can hang when the output device is wedged.
+      this._captureAudioContext.resume().catch(() => {});
+    }
+    this._captureDestination = this._captureAudioContext.createMediaStreamDestination();
+    this._captureSource = this._captureAudioContext.createMediaStreamSource(micStream);
+    this._captureSource.connect(this._captureDestination);
+    this.bindActiveMicTrack(micStream);
+  }
+
+  bindActiveMicTrack(micStream) {
+    this._activeMicStream = micStream;
+  }
+
+  unbindActiveMicTrack() {
+    // ActiveMicRecoveryController owns track-ended listeners; this only clears our handle.
+    this._activeMicStream = null;
+  }
+
+  teardownCapturePipeline() {
+    try {
+      this._captureSource?.disconnect();
+    } catch {
+      // Ignore disconnect races during stop/cancel.
+    }
+    this._captureSource = null;
+    this._captureDestination = null;
+    if (this._activeMicStream) {
+      this._activeMicStream.getTracks().forEach((track) => track.stop());
+      this._activeMicStream = null;
+    }
+    if (this._captureAudioContext && this._captureAudioContext.state !== "closed") {
+      this._captureAudioContext.close().catch(() => {});
+    }
+    this._captureAudioContext = null;
+  }
+
+  setupSpeechGate(micStream) {
+    try {
+      this._silenceCtx = new AudioContext();
+      if (this._silenceCtx.state === "suspended") {
+        // Not awaited - resume() can hang when the output device is wedged.
+        this._silenceCtx.resume().catch(() => {});
+      }
+      this._silenceAnalyser = this._silenceCtx.createAnalyser();
+      this._silenceAnalyser.fftSize = 2048;
+      this._silenceSource = this._silenceCtx.createMediaStreamSource(micStream);
+      this._silenceSource.connect(this._silenceAnalyser);
+      this._localSpeechGateState = createLocalSpeechGateState();
+      const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
+      this._silenceInterval = setInterval(() => {
+        // A stalled context reads flat silence; recording no windows fails the gate open.
+        if (this._silenceCtx?.state !== "running") return;
+        this._silenceAnalyser.getByteTimeDomainData(dataArray);
+        let sum = 0;
+        let peak = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const v = (dataArray[i] - 128) / 128;
+          sum += v * v;
+          const abs = Math.abs(v);
+          if (abs > peak) peak = abs;
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
+        recordLocalSpeechWindow(this._localSpeechGateState, rms, peak);
+      }, 100);
+    } catch (e) {
+      logger.warn("Audio level gate setup failed, skipping", { error: e.message }, "audio");
+      this._localSpeechGateState = null;
+    }
+  }
+
   cancelRecording() {
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
@@ -1095,7 +1154,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const recorder = this.mediaRecorder;
       const discarded = this.takeDiscardedBatchSnapshot();
       this.mediaRecorder.onstop = () => {
-        recorder.stream?.getTracks().forEach((track) => track.stop());
+        this.teardownSpeechGate();
+        this.teardownCapturePipeline();
         this.persistDiscardedBatchRecording(discarded);
       };
 
@@ -1105,11 +1165,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.resetDiscardedBatchRecordingState();
 
       recorder.stop();
-
-      if (recorder.stream) {
-        recorder.stream.getTracks().forEach((track) => track.stop());
-      }
-
       return true;
     }
     if (this.isRecording && !this.isStreaming) {
