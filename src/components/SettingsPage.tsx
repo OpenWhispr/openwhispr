@@ -57,6 +57,8 @@ import {
 } from "./ui/dialog";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
+import { useLocalColdStartStore } from "../stores/localColdStartStore";
+import { resolveLocalColdStartBadgeKeys } from "../helpers/localColdStart.js";
 import { useDialogs } from "../hooks/useDialogs";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
@@ -258,6 +260,8 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const coldStartHint = useLocalColdStartStore((s) => s.hint);
+  const coldStartBadgeKeys = resolveLocalColdStartBadgeKeys(coldStartHint);
 
   const transcriptionModes: InferenceModeOption[] = [
     {
@@ -366,6 +370,14 @@ function TranscriptionSection({
 
   return (
     <div className="space-y-4">
+      {coldStartBadgeKeys && transcriptionMode === "local" && (
+        <div className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+          <Badge variant="outline">{t(coldStartBadgeKeys.badge)}</Badge>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t(coldStartBadgeKeys.hint)}
+          </p>
+        </div>
+      )}
       <InferenceModeSelector
         modes={transcriptionModes}
         activeMode={transcriptionMode}

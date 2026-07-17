@@ -34,7 +34,9 @@
     },
     "openControlPanel": "Open Control Panel",
     "quit": "Quit OpenWhispr",
-    "tooltip": "OpenWhispr - Voice Dictation"
+    "tooltip": "OpenWhispr - Voice Dictation",
+    "tooltipLocalColdStart": "OpenWhispr - Local model: cold start on first use",
+    "tooltipLocalNoGpu": "OpenWhispr - No GPU detected, first transcription may be slower"
   },
   "menu": {
     "appLabel": "OpenWhispr",
@@ -1880,6 +1882,10 @@
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
+      "coldStartBadge": "Cold start",
+      "coldStartHint": "Local model pre-warm was skipped or is still loading. The first transcription may take a few seconds.",
+      "noGpuBadge": "No GPU detected",
+      "noGpuHint": "No GPU acceleration detected. The first transcription may be slower on CPU.",
       "title": "Speech to Text",
       "toasts": {
         "switchedCloud": {

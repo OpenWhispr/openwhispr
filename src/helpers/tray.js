@@ -11,6 +11,13 @@ class TrayManager {
     this.controlPanelWindow = null;
     this.windowManager = null;
     this.attachedControlPanels = new WeakSet();
+    this.localColdStartHint = null;
+  }
+
+  setLocalColdStartHint(hint) {
+    this.localColdStartHint =
+      hint === "cold-start" || hint === "no-gpu" ? hint : null;
+    this.updateTrayMenu?.();
   }
 
   setWindows(mainWindow, controlPanelWindow) {
@@ -266,7 +273,13 @@ class TrayManager {
     if (!this.tray) return;
 
     const contextMenu = Menu.buildFromTemplate(this.buildContextMenuTemplate());
-    this.tray.setToolTip(i18nMain.t("tray.tooltip"));
+    const tooltipKey =
+      this.localColdStartHint === "cold-start"
+        ? "tray.tooltipLocalColdStart"
+        : this.localColdStartHint === "no-gpu"
+          ? "tray.tooltipLocalNoGpu"
+          : "tray.tooltip";
+    this.tray.setToolTip(i18nMain.t(tooltipKey));
     this.tray.setContextMenu(contextMenu);
   }
 
