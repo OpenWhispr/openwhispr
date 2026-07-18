@@ -5,6 +5,7 @@ const { getModelsDirForService } = require("./modelDirUtils");
 const {
   getFFmpegPath,
   isWavFormat,
+  parseWavFormat,
   convertToWav,
   wavToFloat32Samples,
   computeFloat32RMS,
@@ -16,7 +17,9 @@ const { getModelRuntime, REQUIRED_MODEL_FILES } = require("./parakeetModelInfo")
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // float32
 const MAX_SEGMENT_SECONDS = 15;
-const MAX_SEGMENT_BYTES = MAX_SEGMENT_SECONDS * SAMPLE_RATE * BYTES_PER_SAMPLE;
+// Cache-aware streaming models take arbitrarily long audio in one stream; the
+// bound only caps memory when transcribing very long files.
+const ONLINE_MAX_SEGMENT_SECONDS = 600;
 const SILENCE_RMS_THRESHOLD = 0.001;
 
 class ParakeetServerManager {
@@ -48,8 +51,13 @@ class ParakeetServerManager {
   }
 
   async _ensureWav(audioBuffer) {
-    const isWav = isWavFormat(audioBuffer);
-    if (isWav) return { wavBuffer: audioBuffer, filesToCleanup: [] };
+    if (isWavFormat(audioBuffer)) {
+      const format = parseWavFormat(audioBuffer);
+      if (format?.sampleRate === SAMPLE_RATE && format?.channels === 1) {
+        return { wavBuffer: audioBuffer, filesToCleanup: [] };
+      }
+      debugLogger.debug("WAV input needs resampling", { format });
+    }
 
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
@@ -90,9 +98,9 @@ class ParakeetServerManager {
 
     const { wavBuffer, filesToCleanup } = await this._ensureWav(audioBuffer);
     try {
-      if (!this.wsServer.ready || this.wsServer.modelName !== modelName) {
-        await this.wsServer.start(modelName, modelDir, getModelRuntime(modelName));
-      }
+      const runtime = getModelRuntime(modelName);
+      // Awaiting unconditionally also covers a startup's warm-up completion.
+      await this.wsServer.start(modelName, modelDir, runtime);
 
       const samples = wavToFloat32Samples(wavBuffer);
       const durationSeconds = samples.length / BYTES_PER_SAMPLE / SAMPLE_RATE;
@@ -103,7 +111,11 @@ class ParakeetServerManager {
         return { text: "", elapsed: 0 };
       }
 
-      if (samples.length <= MAX_SEGMENT_BYTES) {
+      const maxSegmentSeconds =
+        runtime === "online" ? ONLINE_MAX_SEGMENT_SECONDS : MAX_SEGMENT_SECONDS;
+      const maxSegmentBytes = maxSegmentSeconds * SAMPLE_RATE * BYTES_PER_SAMPLE;
+
+      if (samples.length <= maxSegmentBytes) {
         const result = await this.wsServer.transcribe(samples, SAMPLE_RATE);
         if (!result.text?.trim()) {
           debugLogger.warn("Parakeet returned empty text for non-silent audio", {
@@ -117,28 +129,33 @@ class ParakeetServerManager {
 
       debugLogger.debug("Parakeet segmenting long audio", {
         durationSeconds,
-        segmentCount: Math.ceil(samples.length / MAX_SEGMENT_BYTES),
+        segmentCount: Math.ceil(samples.length / maxSegmentBytes),
       });
 
       const texts = [];
       let totalElapsed = 0;
+      let truncated = false;
 
-      for (let offset = 0; offset < samples.length; offset += MAX_SEGMENT_BYTES) {
-        const end = Math.min(offset + MAX_SEGMENT_BYTES, samples.length);
+      for (let offset = 0; offset < samples.length; offset += maxSegmentBytes) {
+        const end = Math.min(offset + maxSegmentBytes, samples.length);
         const segment = samples.subarray(offset, end);
         const result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
         totalElapsed += result.elapsed || 0;
+        if (result.truncated) truncated = true;
         if (result.text) {
           texts.push(result.text);
         } else {
           debugLogger.warn("Parakeet segment returned empty text", {
-            segmentIndex: offset / MAX_SEGMENT_BYTES,
+            segmentIndex: offset / maxSegmentBytes,
             segmentDuration: segment.length / BYTES_PER_SAMPLE / SAMPLE_RATE,
           });
         }
       }
 
-      return { text: texts.join(" "), elapsed: totalElapsed };
+      const text = texts.join(" ");
+      return truncated
+        ? { text, elapsed: totalElapsed, truncated }
+        : { text, elapsed: totalElapsed };
     } finally {
       this._cleanupFiles(filesToCleanup);
     }

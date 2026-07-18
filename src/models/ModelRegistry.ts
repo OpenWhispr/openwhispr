@@ -489,6 +489,10 @@ export function getParakeetModelInfo(modelId: string): ParakeetModelInfo | undef
   return modelData.parakeetModels[modelId];
 }
 
+export function isOnlineParakeetModel(modelId: string): boolean {
+  return modelData.parakeetModels[modelId]?.runtime === "online";
+}
+
 export const PARAKEET_MODEL_INFO = modelData.parakeetModels;
 
 export function getWhisperModelConfig(modelId: string): WhisperModelConfig | null {

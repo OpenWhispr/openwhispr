@@ -26,7 +26,11 @@ import {
   isCloudTranslationMode,
 } from "../stores/settingsStore";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
-import { getBatchTranscriptionModel, getTranscriptionProvider } from "../models/ModelRegistry";
+import {
+  getBatchTranscriptionModel,
+  getTranscriptionProvider,
+  isOnlineParakeetModel,
+} from "../models/ModelRegistry";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -330,6 +334,8 @@ class AudioManager {
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
     this._localSpeechGateState = null;
+    this._streamingCommitActive = false;
+    this._previewFlushResolve = null;
   }
 
   getWorkletBlobUrl() {
@@ -350,6 +356,7 @@ class PCMStreamingProcessor extends AudioWorkletProcessor {
           this._buffer = new Int16Array(BUFFER_SIZE);
           this._offset = 0;
         }
+        this.port.postMessage("flushed");
         this._stopped = true;
       }
     };
@@ -731,7 +738,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.mediaRecorder.onstop = async () => {
         this.teardownSpeechGate();
 
-        this.cleanupPreview({ showCleanup: this.shouldShowPreviewCleanupState() });
+        const previewStopPromise = this.cleanupPreview({
+          showCleanup: this.shouldShowPreviewCleanupState(),
+        });
 
         this.isRecording = false;
         this.isProcessing = true;
@@ -778,7 +787,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           return;
         }
 
-        await this.processAudio(audioBlob, { durationSeconds });
+        // Non-commit sessions stop concurrently with the decode below.
+        const previewStop = this._streamingCommitActive ? await previewStopPromise : null;
+        this._streamingCommitActive = false;
+
+        await this.processAudio(audioBlob, {
+          durationSeconds,
+          ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
+        });
 
         micStream.getTracks().forEach((track) => track.stop());
       };
@@ -794,7 +810,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         whisperModel,
         parakeetModel,
       } = getSettings();
-      if (showTranscriptionPreview && useLocalWhisper) {
+      const isNvidia = localTranscriptionProvider === "nvidia";
+      // Online models stream+commit during capture, so PCM runs even with preview off.
+      const streamingCommit = useLocalWhisper && isNvidia && isOnlineParakeetModel(parakeetModel);
+      this._streamingCommitActive = false;
+      if (useLocalWhisper && (showTranscriptionPreview || streamingCommit)) {
         try {
           this._previewAudioContext = new AudioContext({ sampleRate: 16000 });
           this._previewSource = this._previewAudioContext.createMediaStreamSource(micStream);
@@ -805,14 +825,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "pcm-streaming-processor"
           );
           this._previewProcessor.port.onmessage = (event) => {
+            if (event.data === "flushed") {
+              this._previewFlushResolve?.();
+              return;
+            }
             window.electronAPI?.sendDictationPreviewAudio?.(event.data);
           };
           this._previewSource.connect(this._previewProcessor);
 
-          const provider = localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
-          const model = provider === "nvidia" ? parakeetModel : whisperModel;
+          const provider = isNvidia ? "nvidia" : "whisper";
+          const model = isNvidia ? parakeetModel : whisperModel;
           const language = getBaseLanguageCode(getSettings().preferredLanguage);
-          window.electronAPI?.startDictationPreview?.({ provider, model, language });
+          window.electronAPI?.startDictationPreview?.({
+            provider,
+            model,
+            language,
+            display: showTranscriptionPreview,
+          });
+          this._streamingCommitActive = streamingCommit;
         } catch (e) {
           logger.warn("Preview worklet setup failed", { error: e.message }, "audio");
         }
@@ -1158,32 +1188,43 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const timings = {};
 
     try {
-      const arrayBuffer = await audioBlob.arrayBuffer();
+      let result;
+      if (typeof metadata.streamedText === "string") {
+        const streamedText = metadata.streamedText.trim();
+        if (!streamedText) {
+          throw new Error("No audio detected");
+        }
+        logger.debug("Parakeet using committed streaming transcript", { model }, "performance");
+        timings.transcriptionProcessingDurationMs = 0;
+        result = { success: true, text: streamedText };
+      } else {
+        const arrayBuffer = await audioBlob.arrayBuffer();
 
-      logger.debug(
-        "Parakeet transcription starting",
-        {
-          audioFormat: audioBlob.type,
-          audioSizeBytes: audioBlob.size,
-          model,
-        },
-        "performance"
-      );
+        logger.debug(
+          "Parakeet transcription starting",
+          {
+            audioFormat: audioBlob.type,
+            audioSizeBytes: audioBlob.size,
+            model,
+          },
+          "performance"
+        );
 
-      const transcriptionStart = performance.now();
-      const result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, { model });
-      timings.transcriptionProcessingDurationMs = Math.round(
-        performance.now() - transcriptionStart
-      );
+        const transcriptionStart = performance.now();
+        result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, { model });
+        timings.transcriptionProcessingDurationMs = Math.round(
+          performance.now() - transcriptionStart
+        );
 
-      logger.debug(
-        "Parakeet transcription complete",
-        {
-          transcriptionProcessingDurationMs: timings.transcriptionProcessingDurationMs,
-          success: result.success,
-        },
-        "performance"
-      );
+        logger.debug(
+          "Parakeet transcription complete",
+          {
+            transcriptionProcessingDurationMs: timings.transcriptionProcessingDurationMs,
+            success: result.success,
+          },
+          "performance"
+        );
+      }
 
       if (result.success && result.text) {
         const rawText = result.text;
@@ -1198,6 +1239,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             rawText,
             source: "local-parakeet",
             timings,
+            ...(result.warning ? { warning: result.warning } : {}),
           };
         } else {
           throw new Error("No text transcribed");
@@ -3655,27 +3697,39 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
   }
 
-  cleanupPreview(options = {}) {
+  async cleanupPreview(options = {}) {
     const { dismiss = false, showCleanup = false } = options;
 
-    if (this._previewProcessor) {
-      this._previewProcessor.port.postMessage("stop");
-      this._previewProcessor.disconnect();
-      this._previewProcessor = null;
+    // Claim the session's nodes synchronously so a recording started during the
+    // flush await can never have its fresh nodes torn down by this cleanup.
+    const processor = this._previewProcessor;
+    const source = this._previewSource;
+    const audioContext = this._previewAudioContext;
+    this._previewProcessor = null;
+    this._previewSource = null;
+    this._previewAudioContext = null;
+
+    if (processor) {
+      // Wait for the worklet to flush its partial buffer so the final PCM
+      // chunk reaches the stream before it is finished.
+      let resolveFlush;
+      const flushed = new Promise((resolve) => {
+        resolveFlush = resolve;
+        setTimeout(resolve, 150);
+      });
+      this._previewFlushResolve = resolveFlush;
+      processor.port.postMessage("stop");
+      await flushed;
+      if (this._previewFlushResolve === resolveFlush) this._previewFlushResolve = null;
+      processor.disconnect();
     }
-    if (this._previewSource) {
-      this._previewSource.disconnect();
-      this._previewSource = null;
-    }
-    if (this._previewAudioContext) {
-      this._previewAudioContext.close().catch(() => {});
-      this._previewAudioContext = null;
-    }
+    source?.disconnect();
+    audioContext?.close().catch(() => {});
     if (dismiss) {
       window.electronAPI?.dismissDictationPreview?.();
-      return;
+      return null;
     }
-    window.electronAPI?.stopDictationPreview?.({ showCleanup });
+    return (await window.electronAPI?.stopDictationPreview?.({ showCleanup })) || null;
   }
 
   cleanupStreamingAudio() {

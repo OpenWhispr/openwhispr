@@ -2365,9 +2365,13 @@ class IPCHandlers {
 
     ipcMain.handle("parakeet-server-start", async (event, modelName) => {
       const result = await this.parakeetManager.startServer(modelName);
-      process.env.LOCAL_TRANSCRIPTION_PROVIDER = "nvidia";
-      process.env.PARAKEET_MODEL = modelName;
-      await this.environmentManager.saveAllKeysToEnvFile();
+      // Persisting a provider that failed to start would wedge every launch
+      // into a failing pre-warm.
+      if (result.success) {
+        process.env.LOCAL_TRANSCRIPTION_PROVIDER = "nvidia";
+        process.env.PARAKEET_MODEL = modelName;
+        await this.environmentManager.saveAllKeysToEnvFile();
+      }
       return result;
     });
 
@@ -5835,6 +5839,8 @@ class IPCHandlers {
     let dictationPreviewChunkCount = 0;
     // Online-runtime models stream here instead of the 1.5s chunked path.
     let dictationPreviewStream = null;
+    // false = headless streaming session (commit-only, no preview window).
+    let dictationPreviewDisplay = true;
     // Bumped on every reset so async preview work can detect a stale session.
     let dictationPreviewGen = 0;
 
@@ -5857,9 +5863,18 @@ class IPCHandlers {
       dictationPreviewProvider = null;
       dictationPreviewModel = null;
       dictationPreviewLanguage = null;
+      dictationPreviewDisplay = true;
+    };
+
+    const startDictationPreviewTimer = () => {
+      if (!dictationPreviewTimer) {
+        dictationPreviewTimer = setInterval(() => transcribeDictationPreviewChunk(), 1500);
+      }
     };
 
     const transcribeDictationPreviewChunk = async () => {
+      // The chunked path only feeds the preview window.
+      if (!dictationPreviewDisplay) return;
       if (dictationPreviewTranscribing) return;
       if (!dictationPreviewBuffer.length) return;
 
@@ -6540,48 +6555,69 @@ class IPCHandlers {
       return { success: true, text: result.text || "" };
     });
 
-    ipcMain.handle("start-dictation-preview", async (_event, { provider, model, language }) => {
-      resetDictationPreviewState();
-      const gen = dictationPreviewGen;
-      dictationPreviewMode = true;
-      dictationPreviewSessionActive = true;
-      dictationPreviewProvider = provider;
-      dictationPreviewModel = model;
-      dictationPreviewLanguage = language || null;
-      dictationPreviewChunkCount = 0;
-      this.windowManager.showTranscriptionPreview("");
+    ipcMain.handle(
+      "start-dictation-preview",
+      async (_event, { provider, model, language, display = true }) => {
+        resetDictationPreviewState();
+        const gen = dictationPreviewGen;
+        dictationPreviewMode = true;
+        dictationPreviewSessionActive = true;
+        dictationPreviewProvider = provider;
+        dictationPreviewModel = model;
+        dictationPreviewLanguage = language || null;
+        dictationPreviewDisplay = display;
+        dictationPreviewChunkCount = 0;
+        if (display) this.windowManager.showTranscriptionPreview("");
 
-      if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
-        try {
-          const stream = await this.parakeetManager.createOnlineStream(model, {
-            onUpdate: (text) => {
-              if (gen === dictationPreviewGen && text) {
-                this.windowManager.showTranscriptionPreview(text);
-              }
-            },
-          });
-          if (gen !== dictationPreviewGen) {
-            stream.abort();
+        if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
+          try {
+            const stream = await this.parakeetManager.createOnlineStream(model, {
+              onUpdate: (text) => {
+                if (gen === dictationPreviewGen && text && dictationPreviewDisplay) {
+                  this.windowManager.showTranscriptionPreview(text);
+                }
+              },
+              onError: (error) => {
+                if (gen !== dictationPreviewGen || dictationPreviewStream !== stream) return;
+                // Keep the preview alive on the chunked path; the final
+                // transcript falls back to decoding the full recording.
+                debugLogger.warn("Online preview stream failed mid-session, falling back", {
+                  model,
+                  error: error.message,
+                });
+                dictationPreviewStream = null;
+                if (dictationPreviewDisplay) startDictationPreviewTimer();
+              },
+            });
+            if (gen !== dictationPreviewGen) {
+              stream.abort();
+              return { success: true };
+            }
+            dictationPreviewStream = stream;
+            for (const chunk of dictationPreviewBuffer) {
+              stream.sendPcm16(chunk);
+            }
+            dictationPreviewBuffer = [];
             return { success: true };
+          } catch (error) {
+            debugLogger.warn("Online preview stream unavailable, falling back to chunked preview", {
+              model,
+              error: error.message,
+            });
           }
-          dictationPreviewStream = stream;
-          for (const chunk of dictationPreviewBuffer) {
-            stream.sendPcm16(chunk);
-          }
-          dictationPreviewBuffer = [];
-          return { success: true };
-        } catch (error) {
-          debugLogger.warn("Online preview stream unavailable, falling back to chunked preview", {
-            model,
-            error: error.message,
-          });
         }
-      }
 
-      if (gen !== dictationPreviewGen) return { success: true };
-      dictationPreviewTimer = setInterval(() => transcribeDictationPreviewChunk(), 1500);
-      return { success: true };
-    });
+        if (gen !== dictationPreviewGen) return { success: true };
+        if (!display) {
+          // A headless session exists only to feed the online stream; without
+          // one, buffered PCM would just accumulate with no consumer.
+          resetDictationPreviewState();
+          return { success: true };
+        }
+        startDictationPreviewTimer();
+        return { success: true };
+      }
+    );
 
     ipcMain.on("dictation-preview-audio", (_event, audioBuffer) => {
       if (!dictationPreviewMode) return;
@@ -6635,26 +6671,38 @@ class IPCHandlers {
 
     ipcMain.handle("stop-dictation-preview", async (_event, options = {}) => {
       if (!dictationPreviewMode && !dictationPreviewSessionActive) {
-        return { success: true };
+        return { success: true, streamed: false, text: "" };
       }
       clearInterval(dictationPreviewTimer);
       dictationPreviewTimer = null;
+      const display = dictationPreviewDisplay;
+      let streamed = false;
+      let streamedText = "";
       if (dictationPreviewStream) {
         const stream = dictationPreviewStream;
         dictationPreviewStream = null;
-        const { text } = await stream.finish().catch(() => ({ text: "" }));
-        if (text && dictationPreviewSessionActive) {
-          this.windowManager.showTranscriptionPreview(text);
+        const gen = dictationPreviewGen;
+        const result = await stream.finish().catch(() => null);
+        if (gen !== dictationPreviewGen) {
+          return { success: true, streamed: false, text: "" };
+        }
+        if (result) {
+          streamedText = result.text || "";
+          // Only a clean flush is trustworthy as the final transcript.
+          streamed = !result.truncated;
+        }
+        if (streamedText && display && dictationPreviewSessionActive) {
+          this.windowManager.showTranscriptionPreview(streamedText);
         }
       } else {
         await transcribeDictationPreviewChunk();
       }
-      resetDictationPreviewState({ preserveSession: true });
-      if (!dictationPreviewSessionActive) {
-        return { success: true };
+      resetDictationPreviewState({ preserveSession: display });
+      if (!display || !dictationPreviewSessionActive) {
+        return { success: true, streamed, text: streamedText };
       }
       this.windowManager.holdTranscriptionPreview(options);
-      return { success: true };
+      return { success: true, streamed, text: streamedText };
     });
 
     ipcMain.handle("update-transcription-text", async (_event, id, text, rawText) => {

@@ -182,9 +182,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - `nemotron-speech-streaming-en-0.6b`: English-only, ~632MB, cache-aware streaming FastConformer (`"runtime": "online"` in the registry)
   - `nemotron-3.5-asr-streaming-0.6b`: Multilingual (15 transcription-ready languages, auto detection), ~650MB, cache-aware streaming FastConformer (`"runtime": "online"`)
 
-- **Runtimes**: Models are `offline` (default) or `online` per their registry `runtime` field. Offline models use the bundled `sherpa-onnx-ws-{platform}-{arch}` (offline websocket server); online models use `sherpa-onnx-online-ws-{platform}-{arch}` (online websocket server). Both are downloaded by `scripts/download-sherpa-onnx.js`. The final transcription path still records-then-transcribes; audio is chunked over the websocket and partial/final JSON results are merged by `parakeetWsResult.js`.
+- **Runtimes**: Models are `offline` (default) or `online` per their registry `runtime` field. Offline models use the bundled `sherpa-onnx-ws-{platform}-{arch}` (offline websocket server); online models use `sherpa-onnx-online-ws-{platform}-{arch}` (online websocket server). Both are downloaded by `scripts/download-sherpa-onnx.js`. Partial/final JSON results are merged by `parakeetWsResult.js`.
 
-- **Live Transcription Preview**: When the preview toggle is on and an online-runtime model is selected, the preview uses a persistent websocket stream (`createOnlineStream` in `parakeetWsServer.js`): worklet PCM is fed as it is captured (`sendPcm16` converts to the float32 wire format inside the ws layer), and partial results update the preview window live (replacing text via `showTranscriptionPreview`). Offline models keep the 1.5s buffered-chunk path (appending via `appendTranscriptionPreview`). If the stream can't start, the preview falls back to the chunked path. Tests: `test/helpers/parakeetOnlineStream.test.js` (mock websocket server).
+- **Streaming Commit (online models)**: For online-runtime models, dictation streams worklet PCM to a persistent websocket stream during capture (regardless of the preview toggle) and commits the flushed text at stop as the final transcript — no second decode of the recording. The stop flush is truncation-aware (`finish()` extends its deadline while results keep arriving and flags `truncated`); anything but a clean flush falls back to the record-then-transcribe path (`transcribe-local-parakeet`), which for online models decodes the whole recording over a single stream (no 15s segmentation; segments only bound memory for very long files).
+
+- **Live Transcription Preview**: When the preview toggle is on and an online-runtime model is selected, the preview shares the streaming-commit websocket: partial results update the preview window live (replacing text via `showTranscriptionPreview`). Offline models keep the 1.5s buffered-chunk path (appending via `appendTranscriptionPreview`). If the stream can't start or dies mid-dictation, the preview falls back to the chunked path and the final transcript falls back to the full decode. Tests: `test/helpers/parakeetOnlineStream.test.js` (mock websocket server).
 
 - **Download URLs**: Models from sherpa-onnx ASR models release on GitHub
 
@@ -406,11 +408,12 @@ The app can open OS-level settings for microphone permissions, sound input selec
 - `open-accessibility-settings`: Opens accessibility privacy settings (macOS only)
 
 **Platform-specific URLs**:
-| Platform | Microphone Privacy | Sound Input | Accessibility |
-|----------|-------------------|-------------|---------------|
-| macOS | `x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone` | `x-apple.systempreferences:com.apple.preference.sound?input` | `x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility` |
-| Windows | `ms-settings:privacy-microphone` | `ms-settings:sound` | N/A |
-| Linux | Manual (no URL scheme) | Manual (e.g., pavucontrol) | N/A |
+
+| Platform | Microphone Privacy                                                           | Sound Input                                                  | Accessibility                                                                   |
+| -------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| macOS    | `x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone` | `x-apple.systempreferences:com.apple.preference.sound?input` | `x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility` |
+| Windows  | `ms-settings:privacy-microphone`                                             | `ms-settings:sound`                                          | N/A                                                                             |
+| Linux    | Manual (no URL scheme)                                                       | Manual (e.g., pavucontrol)                                   | N/A                                                                             |
 
 **UI Component** (`MicPermissionWarning.tsx`):
 

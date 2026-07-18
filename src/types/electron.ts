@@ -1968,8 +1968,11 @@ declare global {
         provider: string;
         model: string;
         language?: string;
+        display?: boolean;
       }) => Promise<{ success: boolean }>;
-      stopDictationPreview?: (opts?: { showCleanup?: boolean }) => Promise<{ success: boolean }>;
+      stopDictationPreview?: (opts?: {
+        showCleanup?: boolean;
+      }) => Promise<{ success: boolean; streamed?: boolean; text?: string }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
       hideDictationPreview?: () => Promise<{ success: boolean }>;

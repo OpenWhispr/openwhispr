@@ -8,7 +8,8 @@ const GRACEFUL_STOP_TIMEOUT_MS = 5000;
 function tryBind(port, host) {
   return new Promise((resolve) => {
     const s = net.createServer();
-    s.once("error", () => resolve(false));
+    // A host whose address family is absent (e.g. IPv6 disabled) can't conflict on the port.
+    s.once("error", (err) => resolve(err.code === "EADDRNOTAVAIL" || err.code === "EAFNOSUPPORT"));
     s.once("listening", () => s.close(() => resolve(true)));
     s.listen(port, host);
   });

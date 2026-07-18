@@ -20,7 +20,11 @@ const STARTUP_TIMEOUT_MS = 60000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const TRANSCRIPTION_TIMEOUT_MS = 300000;
 const ONLINE_CHUNK_BYTES = 8000 * 4;
-const ONLINE_FINISH_TIMEOUT_MS = 10000;
+const FLOAT32_BYTES_PER_SECOND = 16000 * 4;
+// After "Done" is sent, give up only after this long without any result message.
+const ONLINE_FINISH_IDLE_TIMEOUT_MS = 10000;
+// Must cover the model's 560ms chunk so the flush decodes the final words.
+const ONLINE_END_TAIL_PADDING_S = 0.6;
 
 class ParakeetWsServer {
   constructor() {
@@ -31,6 +35,7 @@ class ParakeetWsServer {
     this.modelDir = null;
     this.modelRuntime = "offline";
     this.startupPromise = null;
+    this.startingModelName = null;
     this.healthCheckInterval = null;
     this.cachedBinaryPaths = {};
   }
@@ -57,16 +62,25 @@ class ParakeetWsServer {
   }
 
   async start(modelName, modelDir, runtime = "offline") {
-    if (this.startupPromise) return this.startupPromise;
-    if (this.ready && this.modelName === modelName) return;
-    if (this.process) await this.stop();
-
-    this.startupPromise = this._doStart(modelName, modelDir, runtime);
-    try {
-      await this.startupPromise;
-    } finally {
-      this.startupPromise = null;
+    // Serialize with any in-flight startup; join it only when it's for the same model.
+    while (this.startupPromise) {
+      if (this.startingModelName === modelName) return this.startupPromise;
+      await this.startupPromise.catch(() => {});
     }
+    if (this.ready && this.modelName === modelName) return;
+
+    this.startingModelName = modelName;
+    // Assigned before any await so concurrent callers can never double-spawn.
+    this.startupPromise = (async () => {
+      try {
+        if (this.process) await this.stop();
+        await this._doStart(modelName, modelDir, runtime);
+      } finally {
+        this.startupPromise = null;
+        this.startingModelName = null;
+      }
+    })();
+    return this.startupPromise;
   }
 
   async _doStart(modelName, modelDir, runtime) {
@@ -87,19 +101,31 @@ class ParakeetWsServer {
       `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
       `--port=${this.port}`,
       ...(runtime === "online"
-        ? [`--num-work-threads=${threads}`, "--warm-up=0"]
+        ? [
+            // --num-threads is ONNX intra-op parallelism for the single dictation
+            // stream; --num-work-threads only spreads across concurrent streams.
+            `--num-threads=${threads}`,
+            "--num-work-threads=2",
+            // Default 10ms decode-loop tick adds idle time to faster-than-realtime decode.
+            "--loop-interval-ms=2",
+            `--end-tail-padding=${ONLINE_END_TAIL_PADDING_S}`,
+            // Nonzero --warm-up aborts startup for non-zipformer2 models; _warmUp()
+            // covers it app-side.
+            "--warm-up=0",
+          ]
         : [`--num-threads=${threads}`]),
     ];
 
     debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, runtime, args });
 
-    this.process = spawn(wsBinary, args, {
+    const child = spawn(wsBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
       cwd: getSafeTempDir(),
       detached: process.platform !== "win32",
     });
-    sidecarPidFile.write("parakeet", this.process.pid);
+    this.process = child;
+    sidecarPidFile.write("parakeet", child.pid);
 
     let stderrBuffer = "";
     let exitCode = null;
@@ -108,11 +134,11 @@ class ParakeetWsServer {
       readyResolve = resolve;
     });
 
-    this.process.stdout.on("data", (data) => {
+    child.stdout.on("data", (data) => {
       debugLogger.debug("parakeet-ws stdout", { data: data.toString().trim() });
     });
 
-    this.process.stderr.on("data", (data) => {
+    child.stderr.on("data", (data) => {
       stderrBuffer += data.toString();
       debugLogger.debug("parakeet-ws stderr", { data: data.toString().trim() });
       if (data.toString().includes("Listening on:")) {
@@ -120,19 +146,22 @@ class ParakeetWsServer {
       }
     });
 
-    this.process.on("error", (error) => {
+    child.on("error", (error) => {
       debugLogger.error("parakeet-ws process error", { error: error.message });
-      this.ready = false;
+      if (this.process === child) this.ready = false;
       readyResolve(false);
     });
 
-    this.process.on("close", (code) => {
+    child.on("close", (code) => {
       exitCode = code;
       debugLogger.debug("parakeet-ws process exited", { code });
-      this.ready = false;
-      this.process = null;
-      this.stopHealthCheck();
-      sidecarPidFile.clear("parakeet");
+      // A superseded child must not clobber the state of its replacement.
+      if (this.process === child) {
+        this.ready = false;
+        this.process = null;
+        this.stopHealthCheck();
+        sidecarPidFile.clear("parakeet");
+      }
       readyResolve(false);
     });
 
@@ -273,6 +302,13 @@ class ParakeetWsServer {
         clearTimeout(timeout);
         const elapsed = Date.now() - startTime;
 
+        // The offline server always sends one result message (even for silence),
+        // so closing without one means the server died or was stopped mid-request.
+        if (!result) {
+          reject(new Error("parakeet-ws connection closed before transcription completed"));
+          return;
+        }
+
         debugLogger.debug("parakeet-ws transcription completed", {
           elapsed,
           code,
@@ -309,12 +345,19 @@ class ParakeetWsServer {
       stream.sendFloat32(samplesBuffer.subarray(offset, offset + ONLINE_CHUNK_BYTES));
     }
 
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      stream.abort();
-    }, TRANSCRIPTION_TIMEOUT_MS);
+    // Blasted audio drains faster than real time but not instantly; scale both
+    // the hard cap and the quiet-period allowance with the audio length.
+    const audioSeconds = samplesBuffer.length / FLOAT32_BYTES_PER_SECOND;
+    const timeout = setTimeout(
+      () => {
+        timedOut = true;
+        stream.abort();
+      },
+      Math.max(TRANSCRIPTION_TIMEOUT_MS, audioSeconds * 2000)
+    );
     try {
-      const { text } = await stream.finish();
+      const idleTimeoutMs = Math.max(ONLINE_FINISH_IDLE_TIMEOUT_MS, audioSeconds * 500);
+      const { text, truncated } = await stream.finish({ idleTimeoutMs });
       if (timedOut) throw new Error("parakeet-ws transcription timed out");
       if (streamError) {
         throw new Error(`parakeet-ws transcription failed: ${streamError.message}`);
@@ -323,10 +366,11 @@ class ParakeetWsServer {
       const elapsed = Date.now() - startTime;
       debugLogger.debug("parakeet-ws streaming transcription completed", {
         elapsed,
+        truncated,
         resultLength: text.length,
         resultPreview: text.slice(0, 200),
       });
-      return { text, elapsed };
+      return truncated ? { text, elapsed, truncated } : { text, elapsed };
     } finally {
       clearTimeout(timeout);
     }
@@ -343,15 +387,45 @@ class ParakeetWsServer {
     const results = createOnlineAccumulator();
     const pendingChunks = [];
     let finishResolve = null;
+    let finishPromise = null;
+    let idleTimeoutMs = ONLINE_FINISH_IDLE_TIMEOUT_MS;
+    let idleTimer = null;
     let closed = false;
+    let aborted = false;
+    let serverDone = false;
+    let truncated = false;
     let lastEmitted = "";
 
     const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
 
+    const clearIdleTimer = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+
     const settle = () => {
       if (closed) return;
       closed = true;
-      if (finishResolve) finishResolve({ text: results.text() });
+      clearIdleTimer();
+      if (finishResolve) finishResolve({ text: results.text(), truncated });
+    };
+
+    // Backstop for a server that goes quiet after "Done": while results keep
+    // arriving the deadline keeps extending; only true silence is a truncation.
+    const armIdleTimer = () => {
+      clearIdleTimer();
+      idleTimer = setTimeout(() => {
+        if (closed) return;
+        truncated = true;
+        debugLogger.warn("parakeet-ws online finish timed out; result may be truncated");
+        try {
+          ws.close();
+        } catch {}
+        settle();
+      }, idleTimeoutMs);
+      idleTimer.unref?.();
     };
 
     const sendFloat32 = (float32Samples) => {
@@ -377,7 +451,9 @@ class ParakeetWsServer {
 
     ws.on("message", (data) => {
       const message = data.toString();
+      if (finishResolve) armIdleTimer();
       if (message === "Done!") {
+        serverDone = true;
         ws.close();
         return;
       }
@@ -388,10 +464,17 @@ class ParakeetWsServer {
       }
     });
 
-    ws.on("close", () => settle());
+    ws.on("close", () => {
+      if (!serverDone && !aborted && !closed) {
+        truncated = true;
+        onError?.(new Error("connection closed before transcription completed"));
+      }
+      settle();
+    });
 
     ws.on("error", (error) => {
       debugLogger.warn("parakeet-ws online stream error", { error: error.message });
+      if (!serverDone && !aborted) truncated = true;
       onError?.(error);
       settle();
     });
@@ -399,25 +482,22 @@ class ParakeetWsServer {
     return {
       sendFloat32,
       sendPcm16: (pcmBuffer) => sendFloat32(pcm16ToFloat32(pcmBuffer)),
-      finish: () =>
-        new Promise((resolve) => {
+      finish: (options = {}) => {
+        if (finishPromise) return finishPromise;
+        if (options.idleTimeoutMs) idleTimeoutMs = options.idleTimeoutMs;
+        finishPromise = new Promise((resolve) => {
           if (closed) {
-            resolve({ text: results.text() });
+            resolve({ text: results.text(), truncated });
             return;
           }
           finishResolve = resolve;
           if (ws.readyState === WebSocket.OPEN) ws.send("Done");
-          // Backstop in case the server never acknowledges with "Done!".
-          setTimeout(() => {
-            if (!closed) {
-              try {
-                ws.close();
-              } catch {}
-              settle();
-            }
-          }, ONLINE_FINISH_TIMEOUT_MS).unref?.();
-        }),
+          armIdleTimer();
+        });
+        return finishPromise;
+      },
       abort: () => {
+        aborted = true;
         try {
           ws.close();
         } catch {}
@@ -454,8 +534,9 @@ class ParakeetWsServer {
     return {
       available: this.hasAnyWsBinary(),
       running: this.ready && this.process !== null,
+      starting: this.startupPromise !== null,
       port: this.port,
-      modelName: this.modelName,
+      modelName: this.modelName || this.startingModelName,
     };
   }
 }

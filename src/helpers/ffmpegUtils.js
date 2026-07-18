@@ -184,6 +184,28 @@ function convertToWav(inputPath, outputPath, options = {}) {
   });
 }
 
+function parseWavFormat(wavBuffer) {
+  if (!isWavFormat(wavBuffer)) return null;
+
+  let offset = 12; // Skip RIFF header (4) + size (4) + WAVE (4)
+  while (offset < wavBuffer.length - 8) {
+    const chunkId = wavBuffer.toString("ascii", offset, offset + 4);
+    const chunkSize = wavBuffer.readUInt32LE(offset + 4);
+
+    if (chunkId === "fmt ") {
+      return {
+        channels: wavBuffer.readUInt16LE(offset + 10),
+        sampleRate: wavBuffer.readUInt32LE(offset + 12),
+        bitsPerSample: wavBuffer.readUInt16LE(offset + 22),
+      };
+    }
+
+    offset += 8 + chunkSize;
+  }
+
+  return null;
+}
+
 function wavToFloat32Samples(wavBuffer) {
   if (!isWavFormat(wavBuffer)) {
     throw new Error("Buffer is not a valid WAV file");
@@ -331,6 +353,7 @@ function clearCache() {
 module.exports = {
   getFFmpegPath,
   isWavFormat,
+  parseWavFormat,
   convertToWav,
   splitAudioFile,
   wavToFloat32Samples,

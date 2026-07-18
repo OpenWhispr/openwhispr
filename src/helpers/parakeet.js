@@ -267,7 +267,10 @@ class ParakeetManager {
       return { success: false, message: "No audio detected" };
     }
 
-    return { success: true, text };
+    // Surfaced by the renderer as a partial-transcription warning toast.
+    return output.truncated
+      ? { success: true, text, warning: "truncated" }
+      : { success: true, text };
   }
 
   async downloadParakeetModel(modelName, progressCallback = null) {
@@ -299,12 +302,15 @@ class ParakeetManager {
       let archiveReady = false;
       try {
         const stats = await fsPromises.stat(archivePath);
-        if (stats.size > 0) {
+        // A visibly truncated leftover would just fail extraction forever.
+        if (stats.size >= modelConfig.size * 0.9) {
           archiveReady = true;
           debugLogger.info("Reusing existing archive from previous attempt", {
             archivePath,
             size: stats.size,
           });
+        } else if (stats.size > 0) {
+          await fsPromises.unlink(archivePath).catch(() => {});
         }
       } catch {}
 
@@ -342,6 +348,8 @@ class ParakeetManager {
             error: extractError.message,
           });
           if (attempt >= MAX_EXTRACT_RETRIES) {
+            // The archive is the prime suspect; drop it so the next attempt re-downloads.
+            await fsPromises.unlink(archivePath).catch(() => {});
             const err = new Error(`Model installation failed: ${extractError.message}`);
             err.code = "EXTRACTION_FAILED";
             throw err;
@@ -354,7 +362,14 @@ class ParakeetManager {
         progressCallback({ type: "complete", model: modelName, percentage: 100 });
       }
 
-      if (this.serverManager.isAvailable(getModelRuntime(modelName))) {
+      // Pre-warm the downloaded model, but never hijack a server that is already
+      // serving (or starting) another model — e.g. mid-dictation.
+      const serverStatus = this.serverManager.getServerStatus();
+      if (
+        this.serverManager.isAvailable(getModelRuntime(modelName)) &&
+        !serverStatus.running &&
+        !serverStatus.starting
+      ) {
         this.serverManager.startServer(modelName).catch((err) => {
           debugLogger.warn("Post-download server pre-warm failed (non-fatal)", {
             error: err.message,
