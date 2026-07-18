@@ -5,7 +5,7 @@ import { Input } from "./ui/input";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
-import { buildApiUrl, normalizeBaseUrl } from "../config/constants";
+import { buildApiUrl, getModelListBaseCandidates, normalizeBaseUrl } from "../config/constants";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 
@@ -111,6 +111,7 @@ export default function OpenAICompatiblePanel({
 
       const trimmedKey = apiKey?.trim();
       const effectiveKey = trimmedKey && trimmedKey.length > 0 ? trimmedKey : undefined;
+      let activeBase = normalized;
 
       try {
         if (!normalized.includes("://")) {
@@ -134,50 +135,79 @@ export default function OpenAICompatiblePanel({
           headers.Authorization = `Bearer ${effectiveKey}`;
         }
 
-        const modelsUrl = buildApiUrl(normalized, "/models");
-        const response = await fetch(modelsUrl, { method: "GET", headers });
+        const fetchModelOptions = async (base: string): Promise<ModelOption[]> => {
+          const response = await fetch(buildApiUrl(base, "/models"), { method: "GET", headers });
 
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => "");
-          const summary = errorText
-            ? `${response.status} ${errorText.slice(0, 200)}`
-            : `${response.status} ${response.statusText}`;
-          throw new Error(summary.trim());
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => "");
+            const summary = errorText
+              ? `${response.status} ${errorText.slice(0, 200)}`
+              : `${response.status} ${response.statusText}`;
+            throw new Error(summary.trim());
+          }
+
+          const payload = await response.json().catch(() => ({}));
+          const rawModels = Array.isArray(payload?.data)
+            ? payload.data
+            : Array.isArray(payload?.models)
+              ? payload.models
+              : [];
+
+          // Coerce fields defensively: non-conformant endpoints may return
+          // numeric ids or object descriptions, which would crash the render.
+          return (rawModels as Array<Record<string, unknown>>)
+            .map((item) => {
+              const rawValue = item?.id ?? item?.name;
+              if (rawValue === undefined || rawValue === null || rawValue === "") return null;
+              const value = String(rawValue);
+              const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
+              const description =
+                typeof item?.description === "string" && item.description
+                  ? item.description
+                  : ownedBy
+                    ? t("reasoning.custom.ownerLabel", { owner: ownedBy })
+                    : undefined;
+              return { value, label: value, description, ownedBy } as ModelOption;
+            })
+            .filter(Boolean) as ModelOption[];
+        };
+
+        // When the entered base yields no models, fall back through sibling
+        // bases and adopt the working one so inference targets it too.
+        const candidates = lockedBaseUrl ? [normalized] : getModelListBaseCandidates(normalized);
+        let mapped: ModelOption[] = [];
+        let resolvedBase = normalized;
+        let primaryError: Error | null = null;
+
+        for (const candidate of candidates) {
+          try {
+            const options = await fetchModelOptions(candidate);
+            if (options.length > 0) {
+              mapped = options;
+              resolvedBase = candidate;
+              break;
+            }
+          } catch (error) {
+            if (candidate === normalized) primaryError = error as Error;
+          }
         }
 
-        const payload = await response.json().catch(() => ({}));
-        const rawModels = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload?.models)
-            ? payload.models
-            : [];
-
-        // Coerce fields defensively: non-conformant endpoints may return
-        // numeric ids or object descriptions, which would crash the render.
-        const mapped = (rawModels as Array<Record<string, unknown>>)
-          .map((item) => {
-            const rawValue = item?.id ?? item?.name;
-            if (rawValue === undefined || rawValue === null || rawValue === "") return null;
-            const value = String(rawValue);
-            const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
-            const description =
-              typeof item?.description === "string" && item.description
-                ? item.description
-                : ownedBy
-                  ? t("reasoning.custom.ownerLabel", { owner: ownedBy })
-                  : undefined;
-            return { value, label: value, description, ownedBy } as ModelOption;
-          })
-          .filter(Boolean) as ModelOption[];
+        if (mapped.length === 0 && primaryError) throw primaryError;
 
         if (isMountedRef.current && latestBaseRef.current === normalized) {
+          if (resolvedBase !== normalized) {
+            activeBase = resolvedBase;
+            latestBaseRef.current = resolvedBase;
+            setDraftBase(resolvedBase);
+            setBaseUrl(resolvedBase);
+          }
           setModelOptions(mapped);
           // `/models` is a discovery aid, not an allowlist — keep the user's
           // chosen id even if it's absent (it may still be valid, or belong to
           // a provider they're switching away from). Invalid ids surface a
           // clear API error at request time instead of being silently wiped.
           setModelsError(null);
-          lastLoadedBaseRef.current = normalized;
+          lastLoadedBaseRef.current = resolvedBase;
         }
       } catch (error) {
         if (isMountedRef.current && latestBaseRef.current === normalized) {
@@ -194,12 +224,12 @@ export default function OpenAICompatiblePanel({
         if (pendingBaseRef.current === normalized) {
           pendingBaseRef.current = null;
         }
-        if (isMountedRef.current && latestBaseRef.current === normalized) {
+        if (isMountedRef.current && latestBaseRef.current === activeBase) {
           setModelsLoading(false);
         }
       }
     },
-    [baseUrl, apiKey, t]
+    [baseUrl, apiKey, lockedBaseUrl, setBaseUrl, t]
   );
 
   useEffect(() => {
