@@ -43,6 +43,19 @@ export const ensureV1Suffix = (base: string): string => {
   return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
 };
 
+// Ordered bases to try when listing models from an OpenAI-compatible server.
+// Self-hosted servers (LM Studio, Ollama, vLLM) serve the API under /v1 even
+// when users enter the bare origin, and LM Studio's native REST base
+// (/api/v1 or /api/v0) has its OpenAI-compatible sibling at /v1.
+export const getModelListBaseCandidates = (base: string): string[] => {
+  const normalized = normalizeBaseUrl(base);
+  if (!normalized) return [];
+  const nativeApiMatch = normalized.match(/^(.+?)\/api\/v[01]$/i);
+  if (nativeApiMatch) return [normalized, `${nativeApiMatch[1]}/v1`];
+  const withV1 = ensureV1Suffix(normalized);
+  return withV1 === normalized ? [normalized] : [normalized, withV1];
+};
+
 const env = (typeof import.meta !== "undefined" && (import.meta as any).env) || {};
 
 const computeBaseUrl = (candidates: Array<string | undefined>, fallback: string): string => {
