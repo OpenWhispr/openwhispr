@@ -176,13 +176,63 @@ test("extractArchive falls back to PowerShell when Windows tar rejects a zip arc
     assert.deepEqual(systemTarCalls, [[archivePath, destDir]]);
     assert.deepEqual(execCalls, [
       {
-        command: "powershell",
+        command: "powershell.exe",
         args: [
           "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
           "-Command",
-          "Expand-Archive -Force -Path 'C:\\cache\\binary.zip' -DestinationPath 'C:\\cache\\extract'",
+          "Expand-Archive -Force -LiteralPath 'C:\\cache\\binary.zip' -DestinationPath 'C:\\cache\\extract'",
         ],
       },
+    ]);
+  } finally {
+    cp.execFile = originalExecFile;
+    Object.defineProperty(process, "platform", originalPlatform);
+    delete require.cache[downloadUtilsPath];
+  }
+});
+
+test("escapePowerShellSingleQuoted doubles apostrophes for Expand-Archive paths", () => {
+  delete require.cache[downloadUtilsPath];
+  const { escapePowerShellSingleQuoted } = freshRequire();
+  assert.equal(
+    escapePowerShellSingleQuoted("C:\\Users\\O'Brien\\cache\\binary.zip"),
+    "C:\\Users\\O''Brien\\cache\\binary.zip"
+  );
+});
+
+test("extractArchive PowerShell fallback quotes apostrophe paths safely", async () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  const originalExecFile = cp.execFile;
+  const execCalls = [];
+
+  Object.defineProperty(process, "platform", { value: "win32" });
+  cp.execFile = (command, args, callback) => {
+    execCalls.push({ command, args });
+    callback(null);
+  };
+
+  const archivePath = "C:\\Users\\O'Brien\\cache\\binary.zip";
+  const destDir = "C:\\Users\\O'Brien\\cache\\extract";
+  const { extractArchive } = freshRequire({
+    runSystemTar: async () => {
+      throw new Error("tar extraction timed out");
+    },
+  });
+
+  try {
+    await extractArchive(archivePath, destDir);
+    assert.equal(execCalls.length, 1);
+    assert.equal(execCalls[0].command, "powershell.exe");
+    assert.deepEqual(execCalls[0].args, [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      "Expand-Archive -Force -LiteralPath 'C:\\Users\\O''Brien\\cache\\binary.zip' -DestinationPath 'C:\\Users\\O''Brien\\cache\\extract'",
     ]);
   } finally {
     cp.execFile = originalExecFile;
