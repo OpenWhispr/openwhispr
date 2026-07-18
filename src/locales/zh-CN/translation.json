@@ -2682,6 +2682,19 @@
       "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
       "openSettings": "打开系统设置"
     },
+    "appleCalendar": {
+      "title": "Apple 日历",
+      "optional": "可选",
+      "description": "从 Calendar.app 读取会议 — iCloud、Google、Exchange 和 Outlook 一站式接入。",
+      "connect": "连接 Apple 日历",
+      "connected": "已连接",
+      "disconnect": "断开",
+      "disconnectConfirm": "断开 Apple 日历？",
+      "disconnectDescription": "将不再从 Apple 日历记录会议笔记。",
+      "permissionDenied": "需要日历访问权限",
+      "permissionDeniedDescription": "OpenWhispr 需要日历访问权限来检测会议。请在系统设置的「隐私与安全性」→「日历」中启用 OpenWhispr。",
+      "openSettings": "打开系统设置"
+    },
     "sections": {
       "calendar": "日历",
       "api": "API",

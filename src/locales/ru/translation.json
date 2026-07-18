@@ -2691,6 +2691,19 @@
       "systemAudioDescription": "Для транскрипции встреч OpenWhispr нужно разрешение «Системное аудио» для записи звука других участников. Мы никогда не записываем ваш экран. Вы будете перенаправлены в Системные настройки для включения.",
       "openSettings": "Открыть Системные настройки"
     },
+    "appleCalendar": {
+      "title": "Календарь Apple",
+      "optional": "Необязательно",
+      "description": "Читайте встречи из Calendar.app — iCloud, Google, Exchange и Outlook в одном месте.",
+      "connect": "Подключить Календарь Apple",
+      "connected": "Подключено",
+      "disconnect": "Отключить",
+      "disconnectConfirm": "Отключить Календарь Apple?",
+      "disconnectDescription": "Заметки встреч больше не будут записываться из вашего Календаря Apple.",
+      "permissionDenied": "Требуется доступ к календарю",
+      "permissionDeniedDescription": "OpenWhispr нужен доступ к календарю для обнаружения встреч. Включите OpenWhispr в Системных настройках: Конфиденциальность и безопасность → Календари.",
+      "openSettings": "Открыть Системные настройки"
+    },
     "sections": {
       "calendar": "Календарь",
       "api": "API",

@@ -2687,6 +2687,19 @@
       "systemAudioDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
       "openSettings": "システム設定を開く"
     },
+    "appleCalendar": {
+      "title": "Apple カレンダー",
+      "optional": "任意",
+      "description": "Calendar.app から会議を読み取ります — iCloud、Google、Exchange、Outlook をまとめて。",
+      "connect": "Apple カレンダーを接続",
+      "connected": "接続済み",
+      "disconnect": "切断",
+      "disconnectConfirm": "Apple カレンダーを切断しますか？",
+      "disconnectDescription": "Apple カレンダーからの会議メモは記録されなくなります。",
+      "permissionDenied": "カレンダーへのアクセスが必要です",
+      "permissionDeniedDescription": "会議を検出するには、OpenWhispr にカレンダーへのアクセスが必要です。システム設定の「プライバシーとセキュリティ」→「カレンダー」で OpenWhispr を有効にしてください。",
+      "openSettings": "システム設定を開く"
+    },
     "sections": {
       "calendar": "カレンダー",
       "api": "API",

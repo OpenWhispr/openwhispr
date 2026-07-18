@@ -939,6 +939,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
 
+  // Apple Calendar (macOS EventKit)
+  acalConnect: () => ipcRenderer.invoke("acal-connect"),
+  acalDisconnect: () => ipcRenderer.invoke("acal-disconnect"),
+  acalGetConnectionStatus: () => ipcRenderer.invoke("acal-get-connection-status"),
+  openCalendarPrivacySettings: () => ipcRenderer.invoke("open-calendar-privacy-settings"),
+
   // Contacts
   searchContacts: (query) => ipcRenderer.invoke("search-contacts", query),
   upsertContact: (contact) => ipcRenderer.invoke("upsert-contact", contact),
@@ -951,6 +957,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onGcalEventsSynced: registerListener(
     "gcal-events-synced",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Apple Calendar event listeners
+  onAcalConnectionChanged: registerListener(
+    "acal-connection-changed",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onAcalEventsSynced: registerListener(
+    "acal-events-synced",
     (callback) => (_event, data) => callback(data)
   ),
 

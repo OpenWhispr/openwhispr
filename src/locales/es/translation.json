@@ -2735,6 +2735,19 @@
       "systemAudioDescription": "Para transcribir reuniones, OpenWhispr necesita el permiso de Audio del Sistema para capturar el audio de otros participantes. Nunca grabamos tu pantalla. Serás dirigido a Ajustes del Sistema para activarlo.",
       "openSettings": "Abrir Ajustes del Sistema"
     },
+    "appleCalendar": {
+      "title": "Calendario de Apple",
+      "optional": "Opcional",
+      "description": "Lee reuniones de Calendar.app — iCloud, Google, Exchange y Outlook en un solo lugar.",
+      "connect": "Conectar Calendario de Apple",
+      "connected": "Conectado",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "¿Desconectar el Calendario de Apple?",
+      "disconnectDescription": "Ya no se grabarán notas de reuniones de tu Calendario de Apple.",
+      "permissionDenied": "Se requiere acceso al calendario",
+      "permissionDeniedDescription": "OpenWhispr necesita acceso al calendario para detectar reuniones. Activa OpenWhispr en Ajustes del Sistema, en Privacidad y seguridad → Calendarios.",
+      "openSettings": "Abrir Ajustes del Sistema"
+    },
     "sections": {
       "calendar": "Calendario",
       "api": "API",

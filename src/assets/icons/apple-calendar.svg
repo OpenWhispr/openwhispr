@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <clipPath id="tile">
+      <rect x="14" y="14" width="172" height="172" rx="38"/>
+    </clipPath>
+  </defs>
+  <rect x="14" y="14" width="172" height="172" rx="38" fill="#FFFFFF" stroke="#E5E5EA" stroke-width="4"/>
+  <rect x="14" y="14" width="172" height="54" clip-path="url(#tile)" fill="#FF3B30"/>
+  <text x="100" y="53" text-anchor="middle" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="600" letter-spacing="3" fill="#FFFFFF">TUE</text>
+  <text x="100" y="156" text-anchor="middle" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="92" font-weight="300" fill="#1C1C1E">17</text>
+</svg>

@@ -407,6 +407,7 @@ class IPCHandlers {
     this.whisperCudaManager = managers.whisperCudaManager;
     this.whisperVulkanManager = managers.whisperVulkanManager;
     this.googleCalendarManager = managers.googleCalendarManager;
+    this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
@@ -3824,6 +3825,7 @@ class IPCHandlers {
           "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
         systemAudio:
           "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+        calendars: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
       },
       win32: {
         microphone: "ms-settings:privacy-microphone",
@@ -3864,6 +3866,7 @@ class IPCHandlers {
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
+    ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
 
     ipcMain.handle("toggle-media-playback", () => {
       const mediaPlayer = require("./mediaPlayer");
@@ -8555,6 +8558,33 @@ class IPCHandlers {
         return { success: true, event };
       } catch (error) {
         return { success: false, event: null };
+      }
+    });
+
+    // Apple Calendar (macOS EventKit)
+    ipcMain.handle("acal-connect", async () => {
+      try {
+        return await this.appleCalendarManager.connect();
+      } catch (error) {
+        debugLogger.error("Apple Calendar connect failed", { error: error.message }, "acal");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("acal-disconnect", async () => {
+      try {
+        return this.appleCalendarManager.disconnect();
+      } catch (error) {
+        debugLogger.error("Apple Calendar disconnect failed", { error: error.message }, "acal");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("acal-get-connection-status", async () => {
+      try {
+        return this.appleCalendarManager.getConnectionStatus();
+      } catch (error) {
+        return { connected: false, sourceNames: [] };
       }
     });
 

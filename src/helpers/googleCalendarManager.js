@@ -3,19 +3,15 @@ const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
-const MEETING_REMINDER_LEAD_MS = 60 * 1000;
 
 class GoogleCalendarManager {
-  constructor(databaseManager, windowManager) {
+  constructor(databaseManager, windowManager, reminderScheduler) {
     this.databaseManager = databaseManager;
     this.windowManager = windowManager;
+    this.reminderScheduler = reminderScheduler;
     this.oauth = new GoogleCalendarOAuth(databaseManager);
     this.accounts = new Map();
     this.syncInterval = null;
-    this.nextMeetingTimer = null;
-    this.meetingEndTimer = null;
-    this.activeMeeting = null;
-    this.notifiedMeetings = new Set();
     this.SYNC_INTERVAL_MS = 2 * 60 * 1000;
     this._consecutiveFailures = 0;
     this._lastFocusSync = 0;
@@ -29,7 +25,7 @@ class GoogleCalendarManager {
     this.fetchCalendars()
       .then(() => this.syncEvents())
       .then(() => {
-        this.scheduleNextMeeting();
+        this.reminderScheduler.scheduleNextMeeting();
         this._consecutiveFailures = 0;
       })
       .catch((err) =>
@@ -44,15 +40,6 @@ class GoogleCalendarManager {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
     }
-    if (this.nextMeetingTimer) {
-      clearTimeout(this.nextMeetingTimer);
-      this.nextMeetingTimer = null;
-    }
-    if (this.meetingEndTimer) {
-      clearTimeout(this.meetingEndTimer);
-      this.meetingEndTimer = null;
-    }
-    this.activeMeeting = null;
   }
 
   isConnected() {
@@ -70,7 +57,8 @@ class GoogleCalendarManager {
 
     if (this.accounts.size === 0) {
       this.stop();
-      this.notifiedMeetings.clear();
+      this.reminderScheduler.reset();
+      this.reminderScheduler.scheduleNextMeeting();
     }
   }
 
@@ -81,7 +69,7 @@ class GoogleCalendarManager {
     await this.fetchCalendars(result.email);
     await this.syncEvents();
     this._consecutiveFailures = 0;
-    this.scheduleNextMeeting();
+    this.reminderScheduler.scheduleNextMeeting();
     this._startSyncInterval();
     this._broadcastAccountsChanged();
 
@@ -104,8 +92,9 @@ class GoogleCalendarManager {
     } else {
       this.stop();
       this.accounts.clear();
-      this.databaseManager.clearCalendarData();
-      this.notifiedMeetings.clear();
+      this.databaseManager.clearGoogleCalendarData();
+      this.reminderScheduler.reset();
+      this.reminderScheduler.scheduleNextMeeting();
       this._broadcastAccountsChanged();
     }
   }
@@ -167,7 +156,7 @@ class GoogleCalendarManager {
     }
 
     this.broadcastToWindows("gcal-events-synced", {});
-    this.scheduleNextMeeting();
+    this.reminderScheduler.scheduleNextMeeting();
   }
 
   async _syncCalendar(calendar) {
@@ -223,6 +212,7 @@ class GoogleCalendarManager {
       toUpsert.push({
         id: item.id,
         calendar_id: calendar.id,
+        provider: "google",
         summary: item.summary || null,
         start_time: item.start?.dateTime || item.start?.date,
         end_time: item.end?.dateTime || item.end?.date,
@@ -262,74 +252,7 @@ class GoogleCalendarManager {
     if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
   }
 
-  scheduleNextMeeting() {
-    if (this.nextMeetingTimer) {
-      clearTimeout(this.nextMeetingTimer);
-      this.nextMeetingTimer = null;
-    }
-
-    const upcoming = this.databaseManager.getUpcomingEvents(1440);
-    const next = upcoming.find((e) => !this.notifiedMeetings.has(e.id));
-    if (!next) return;
-
-    const delay = new Date(next.start_time).getTime() - MEETING_REMINDER_LEAD_MS - Date.now();
-    if (delay <= 0) {
-      this.onMeetingStart(next);
-      return;
-    }
-
-    this.nextMeetingTimer = setTimeout(() => {
-      this.onMeetingStart(next);
-    }, delay);
-  }
-
-  onMeetingStart(event) {
-    const events = this.databaseManager.getActiveEvents();
-    const stillExists =
-      events.some((e) => e.id === event.id) ||
-      this.databaseManager.getUpcomingEvents(1).some((e) => e.id === event.id);
-
-    if (!stillExists) {
-      this.scheduleNextMeeting();
-      return;
-    }
-
-    this.activeMeeting = event;
-    this.notifiedMeetings.add(event.id);
-
-    debugLogger.info("Calendar meeting reminder due", { summary: event.summary }, "gcal");
-    this.meetingDetectionEngine?.handleCalendarReminder(event);
-
-    if (this.meetingEndTimer) {
-      clearTimeout(this.meetingEndTimer);
-    }
-    const endDelay = new Date(event.end_time).getTime() - Date.now();
-    if (endDelay > 0) {
-      this.meetingEndTimer = setTimeout(() => {
-        this.onMeetingEnd();
-      }, endDelay);
-    }
-
-    this.scheduleNextMeeting();
-  }
-
-  onMeetingEnd() {
-    debugLogger.info("Calendar meeting ended", { summary: this.activeMeeting?.summary }, "gcal");
-    this.activeMeeting = null;
-    if (this.meetingEndTimer) {
-      clearTimeout(this.meetingEndTimer);
-      this.meetingEndTimer = null;
-    }
-    this.scheduleNextMeeting();
-  }
-
   onWakeFromSleep() {
-    const activeEvents = this.databaseManager.getActiveEvents();
-    if (activeEvents.length > 0 && !this.activeMeeting) {
-      this.onMeetingStart(activeEvents[0]);
-    }
-    this.scheduleNextMeeting();
-
     this.syncEvents()
       .then(() => {
         this._consecutiveFailures = 0;
@@ -346,7 +269,7 @@ class GoogleCalendarManager {
 
     this.syncEvents()
       .then(() => {
-        this.scheduleNextMeeting();
+        this.reminderScheduler.scheduleNextMeeting();
         if (this._consecutiveFailures > 0) {
           this._consecutiveFailures = 0;
           this._restartSyncInterval();
@@ -357,14 +280,6 @@ class GoogleCalendarManager {
       );
   }
 
-  getActiveMeetingState() {
-    return {
-      activeMeeting: this.activeMeeting,
-      activeEvents: this.databaseManager.getActiveEvents(),
-      upcomingEvents: this.databaseManager.getUpcomingEvents(15),
-    };
-  }
-
   getCalendars() {
     return this.databaseManager.getGoogleCalendars();
   }
@@ -373,7 +288,7 @@ class GoogleCalendarManager {
     this.databaseManager.updateCalendarSelection(calendarId, isSelected);
     await this.syncEvents();
     this._consecutiveFailures = 0;
-    this.scheduleNextMeeting();
+    this.reminderScheduler.scheduleNextMeeting();
   }
 
   async setPrimaryOnly(value) {
@@ -382,9 +297,9 @@ class GoogleCalendarManager {
     if (!this.isConnected()) return;
 
     await this.fetchCalendars();
-    this.notifiedMeetings.clear();
+    this.reminderScheduler.reset();
     await this.syncEvents();
-    this.scheduleNextMeeting();
+    this.reminderScheduler.scheduleNextMeeting();
     this.broadcastToWindows("gcal-events-synced", {});
   }
 
@@ -426,7 +341,7 @@ class GoogleCalendarManager {
     this.syncInterval = setInterval(() => {
       this.syncEvents()
         .then(() => {
-          this.scheduleNextMeeting();
+          this.reminderScheduler.scheduleNextMeeting();
           if (this._consecutiveFailures > 0) {
             this._consecutiveFailures = 0;
             this._restartSyncInterval();
