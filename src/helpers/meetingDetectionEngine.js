@@ -25,13 +25,13 @@ function placeholderEvent(calendarId) {
 
 class MeetingDetectionEngine {
   constructor(
-    googleCalendarManager,
+    reminderScheduler,
     meetingProcessDetector,
     audioActivityDetector,
     windowManager,
     databaseManager
   ) {
-    this.googleCalendarManager = googleCalendarManager;
+    this.reminderScheduler = reminderScheduler;
     this.meetingProcessDetector = meetingProcessDetector;
     this.audioActivityDetector = audioActivityDetector;
     this.windowManager = windowManager;
@@ -124,8 +124,7 @@ class MeetingDetectionEngine {
   // activeMeeting only means the event's scheduled window is open — actual meeting
   // recordings are tracked by _meetingModeActive.
   _findCalendarEvent() {
-    const calendarState = this.googleCalendarManager?.getActiveMeetingState?.();
-    if (!calendarState) return null;
+    const calendarState = this.reminderScheduler.getActiveMeetingState();
     if (calendarState.activeMeeting) return calendarState.activeMeeting;
 
     const now = Date.now();
