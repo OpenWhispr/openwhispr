@@ -2120,10 +2120,10 @@ class IPCHandlers {
                 { from: oldUuid, to: uuid },
                 "gpu"
               );
-              const modelPath = modelManager.serverManager.modelPath;
+              const modelId = modelManager.currentServerModelId;
               await modelManager.serverManager.stop();
-              if (modelPath) {
-                await modelManager.serverManager.start(modelPath);
+              if (modelId) {
+                await modelManager.prewarmServer(modelId);
               }
             }
           }
@@ -3661,7 +3661,7 @@ class IPCHandlers {
 
         const modelPath = require("path").join(modelManager.modelsDir, modelInfo.model.fileName);
 
-        await modelManager.serverManager.start(modelPath, { threads: 4 });
+        await modelManager.serverManager.start(modelPath, modelManager.serverOptions(modelInfo));
         modelManager.currentServerModelId = modelId;
 
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});

@@ -15,6 +15,11 @@ const debugLogger = require("./debugLogger");
 
 const MIN_FILE_SIZE = 1_000_000; // 1MB minimum for valid model files
 
+// Bounds the KV cache — registry contextLength is the full trained context
+// (128K+), which can exceed total RAM (#1203). Uniform for all start paths:
+// start() won't restart a ready server when only options change.
+const SERVER_CONTEXT_SIZE = 16384;
+
 function getLocalProviders() {
   return modelRegistryData.localProviders || [];
 }
@@ -165,6 +170,17 @@ class ModelManager {
       }
     }
     return null;
+  }
+
+  serverOptions(modelInfo) {
+    return {
+      contextSize: Math.min(
+        SERVER_CONTEXT_SIZE,
+        modelInfo.model.contextLength || SERVER_CONTEXT_SIZE
+      ),
+      threads: 4,
+      gpuLayers: 99,
+    };
   }
 
   async downloadModel(modelId, onProgress) {
@@ -366,11 +382,7 @@ class ModelManager {
         serverReady: this.serverManager.ready,
       });
 
-      await this.serverManager.start(modelPath, {
-        contextSize: options.contextSize || modelInfo.model.contextLength || 4096,
-        threads: options.threads || 4,
-        gpuLayers: 99,
-      });
+      await this.serverManager.start(modelPath, this.serverOptions(modelInfo));
       this.currentServerModelId = modelId;
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
@@ -440,11 +452,7 @@ class ModelManager {
     if (!this.serverManager.isAvailable()) return false;
 
     try {
-      await this.serverManager.start(modelPath, {
-        contextSize: modelInfo.model.contextLength || 4096,
-        threads: 4,
-        gpuLayers: 99,
-      });
+      await this.serverManager.start(modelPath, this.serverOptions(modelInfo));
       this.currentServerModelId = modelId;
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;

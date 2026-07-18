@@ -19,6 +19,7 @@ const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_CONTEXT_SIZE = 4096;
 
 class LlamaServerManager {
   constructor() {
@@ -137,11 +138,15 @@ class LlamaServerManager {
       String(this.port),
       "--threads",
       String(options.threads || 4),
+      // Unset, this defaults to the model's full trained context (128K+),
+      // whose KV cache can exceed total RAM with --fit disabled. See #1203.
+      "--ctx-size",
+      String(options.contextSize || DEFAULT_CONTEXT_SIZE),
       "--jinja",
     ];
 
     if (process.platform === "darwin") {
-      const args = [...baseArgs, "--n-gpu-layers", "99"];
+      const args = [...baseArgs, "--n-gpu-layers", String(options.gpuLayers ?? 99)];
       await this._startWithBinary(
         binaryPaths.default,
         args,
@@ -163,7 +168,7 @@ class LlamaServerManager {
   }
 
   async _startWithGpuFallback(binaryPaths, baseArgs, options) {
-    const gpuArgs = [...baseArgs, "--n-gpu-layers", "99"];
+    const gpuArgs = [...baseArgs, "--n-gpu-layers", String(options.gpuLayers ?? 99)];
     const cpuArgs = baseArgs;
 
     if (binaryPaths.vulkan) {
