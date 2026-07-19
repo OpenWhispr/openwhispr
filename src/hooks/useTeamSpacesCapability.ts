@@ -1,4 +1,9 @@
+import { useSyncExternalStore } from "react";
 import { useSpaces } from "../stores/noteStore";
+import {
+  readTeamSpacesCapability,
+  subscribeTeamSpacesCapability,
+} from "../lib/teamSpacesCapability";
 
 /** Dev override forcing the TEAM SPACES section on without a server probe. */
 function hasTeamSpacesDevOverride(): boolean {
@@ -12,9 +17,8 @@ function hasTeamSpacesDevOverride(): boolean {
  */
 export function useTeamSpacesCapability(): boolean {
   const spaces = useSpaces();
+  const capability = useSyncExternalStore(subscribeTeamSpacesCapability, readTeamSpacesCapability);
   return (
-    hasTeamSpacesDevOverride() ||
-    localStorage.getItem("teamSpacesCapability") === "true" ||
-    spaces.some((space) => space.kind === "team")
+    hasTeamSpacesDevOverride() || capability || spaces.some((space) => space.kind === "team")
   );
 }

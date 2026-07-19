@@ -13,6 +13,7 @@ import { TranscriptionsService } from "./TranscriptionsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError } from "./cloudApi.js";
+import { notifyTeamSpacesCapabilityChanged } from "../lib/teamSpacesCapability";
 
 function isHttpStatus(err: unknown, status: number): boolean {
   return err instanceof CloudApiError && err.status === status;
@@ -151,8 +152,10 @@ class SyncService {
   }
 
   private cacheTeamSpacesCapability(available: boolean): void {
+    const changed = localStorage.getItem("teamSpacesCapability") !== String(available);
     localStorage.setItem("teamSpacesCapability", String(available));
     localStorage.setItem("teamSpacesCapability.probedAt", new Date().toISOString());
+    if (changed) notifyTeamSpacesCapabilityChanged();
   }
 
   // Sign-out leaves no team content behind: purge every team space locally and
@@ -176,11 +179,18 @@ class SyncService {
     }
     localStorage.removeItem("teamSpacesCapability");
     localStorage.removeItem("teamSpacesCapability.probedAt");
+    notifyTeamSpacesCapabilityChanged();
     localStorage.removeItem("lastSyncedAt.notes.team");
     localStorage.removeItem("lastSyncedAt.folders.team");
     // The guard protected any pass still in flight during the purge; drop it
     // so the next account (possibly a member of the same teams) starts clean.
     localStorage.removeItem(PURGED_TEAM_GUARD_KEY);
+    // Both keep local numeric/account-scoped ids that collide across
+    // accounts: the workspace selection and the tree's expanded containers.
+    // The purge loop above has completed, so nothing re-reads them before the
+    // sign-out reload; the next account starts from defaults.
+    localStorage.removeItem("activeWorkspaceId");
+    localStorage.removeItem("notesTree.expanded");
   }
 
   // lastSyncedAt is written only when a syncAll() pass completes, and
