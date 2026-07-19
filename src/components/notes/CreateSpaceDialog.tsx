@@ -1,19 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, Search } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
-import { cn } from "../lib/utils";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
-import { TeamsService } from "../../services/TeamsService";
-import { syncService } from "../../services/SyncService.js";
+import MemberPickList from "../MemberPickList";
+import { createTeamSpace } from "../../services/teamSpaceActions";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
-import { loadSpaces, revealContainer, setActiveContext } from "../../stores/noteStore";
+import { revealContainer, setActiveContext } from "../../stores/noteStore";
 import type { WorkspaceMember } from "../../types/electron";
 
 interface CreateSpaceDialogProps {
@@ -25,13 +24,16 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { workspaces, active, loaded } = useWorkspace();
+  const { workspaces, active, loaded, refresh } = useWorkspace();
+  const workspacesError = useWorkspaceStore((s) => s.error);
+  const workspacesLoading = useWorkspaceStore((s) => s.loading);
   const roster = useWorkspaceStore((s) => s.members);
   const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [membersError, setMembersError] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const showSpinner = useDelayedFlag(isCreating);
 
@@ -39,11 +41,25 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
   // create spaces in (owner/admin) — kept deliberately simple for v1.
   const workspace =
     active ?? workspaces.find((w) => w.role === "owner" || w.role === "admin") ?? null;
-  const needsWorkspace = open && loaded && !workspace;
+  // A failed workspace fetch gets a retry state, never the create funnel.
+  const needsWorkspace = open && loaded && !workspace && !workspacesError;
+  const workspacesFailed = loaded && !workspace && workspacesError;
+
+  const loadMembers = useCallback(
+    async (workspaceId: string) => {
+      setMembersError(false);
+      try {
+        await refreshMembers(workspaceId);
+      } catch {
+        setMembersError(true);
+      }
+    },
+    [refreshMembers]
+  );
 
   useEffect(() => {
-    if (open && workspace) void refreshMembers(workspace.id);
-  }, [open, workspace, refreshMembers]);
+    if (open && workspace) void loadMembers(workspace.id);
+  }, [open, workspace, loadMembers]);
 
   const candidates = useMemo(
     () => roster.filter((m) => m.user_id !== user?.id),
@@ -91,34 +107,25 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
     if (!trimmed || isCreating || !workspace) return;
     setIsCreating(true);
     try {
-      const team = await TeamsService.create(workspace.id, {
-        name: trimmed,
-        emoji: emoji.trim() || null,
-      });
-      let added = 0;
-      let memberError: string | null = null;
-      for (const userId of selectedIds) {
-        try {
-          await TeamsService.addMember(team.id, userId);
-          added += 1;
-        } catch (err) {
-          memberError = err instanceof Error ? err.message : t("common.unknownError");
-        }
+      const memberIds = [...selectedIds];
+      const { space, failedMembers } = await createTeamSpace(
+        workspace.id,
+        { name: trimmed, emoji: emoji.trim() || null },
+        memberIds
+      );
+      if (failedMembers > 0) {
+        toast({
+          title: t("notes.spaces.members.addFailed", {
+            failed: failedMembers,
+            total: memberIds.length,
+          }),
+          variant: "destructive",
+        });
       }
-      if (memberError) {
-        toast({ title: t("common.error"), description: memberError, variant: "destructive" });
-      }
-      const space = await window.electronAPI.upsertSpaceFromCloud?.({
-        ...team,
-        my_role: "admin",
-        member_count: added,
-      });
       if (space) {
-        await loadSpaces();
         revealContainer(space.id, null);
         setActiveContext(space.id, null);
       }
-      syncService.requestSyncAll("manual");
       handleOpenChange(false);
     } catch (err) {
       toast({
@@ -141,97 +148,108 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
             <DialogTitle>{t("notes.spaces.createTitle")}</DialogTitle>
           </DialogHeader>
 
-          <div className="flex gap-3">
-            <div className="space-y-1.5 w-14 shrink-0">
-              <label className="text-xs font-medium text-foreground/50">
-                {t("notes.spaces.emojiLabel")}
-              </label>
-              <Input
-                value={emoji}
-                onChange={(e) => setEmoji(e.target.value)}
-                maxLength={4}
-                className="text-center"
-              />
+          {workspacesFailed ? (
+            <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground">
+                  {t("settingsPage.workspace.loadError.title")}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {t("settingsPage.workspace.loadError.description")}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void refresh()}
+                disabled={workspacesLoading}
+                className="shrink-0"
+              >
+                {workspacesLoading && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                {t("settingsPage.workspace.loadError.retry")}
+              </Button>
             </div>
-            <div className="space-y-1.5 flex-1">
-              <label className="text-xs font-medium text-foreground/50">
-                {t("notes.spaces.nameLabel")}
-              </label>
-              <Input
-                value={name}
-                autoFocus
-                maxLength={80}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreate();
-                }}
-              />
-            </div>
-          </div>
-
-          {candidates.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground/50">
-                {t("notes.spaces.members.addPeople")}
-              </label>
-              <div className="rounded border border-border/70 dark:border-border-subtle/50 overflow-hidden">
-                <div className="relative border-b border-border/40 dark:border-border-subtle/40">
-                  <Search
-                    size={11}
-                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/25 pointer-events-none"
-                  />
-                  <input
-                    value={memberSearch}
-                    onChange={(e) => setMemberSearch(e.target.value)}
-                    placeholder={t("notes.spaces.members.searchPlaceholder")}
-                    className="w-full h-8 pl-7 pr-2 bg-transparent text-xs text-foreground placeholder:text-foreground/25 outline-none"
+          ) : (
+            <>
+              <div className="flex gap-3">
+                <div className="space-y-1.5 w-14 shrink-0">
+                  <label className="text-xs font-medium text-foreground/50">
+                    {t("notes.spaces.emojiLabel")}
+                  </label>
+                  <Input
+                    value={emoji}
+                    onChange={(e) => setEmoji(e.target.value)}
+                    maxLength={4}
+                    className="text-center"
                   />
                 </div>
-                <div className="max-h-36 overflow-y-auto p-1">
-                  {filteredCandidates.map((member) => {
-                    const isSelected = selectedIds.has(member.user_id);
-                    return (
-                      <button
-                        key={member.user_id}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => toggleMember(member)}
-                        className={cn(
-                          "flex items-center gap-2 w-full px-2 h-8 rounded-md text-left",
-                          "transition-colors duration-150 outline-none",
-                          "hover:bg-foreground/4 dark:hover:bg-white/4",
-                          "focus-visible:ring-1 focus-visible:ring-ring/30"
-                        )}
-                      >
-                        <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold flex items-center justify-center shrink-0">
-                          {(member.name || member.email).slice(0, 2).toUpperCase()}
-                        </span>
-                        <span className="text-xs text-foreground truncate flex-1">
-                          {member.name || member.email}
-                        </span>
-                        {isSelected && <Check size={11} className="text-primary shrink-0" />}
-                      </button>
-                    );
-                  })}
-                  {filteredCandidates.length === 0 && (
-                    <p className="text-xs text-foreground/25 text-center py-2">
-                      {t("notes.context.noResults")}
-                    </p>
-                  )}
+                <div className="space-y-1.5 flex-1">
+                  <label className="text-xs font-medium text-foreground/50">
+                    {t("notes.spaces.nameLabel")}
+                  </label>
+                  <Input
+                    value={name}
+                    autoFocus
+                    maxLength={80}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleCreate();
+                    }}
+                  />
                 </div>
               </div>
-            </div>
-          )}
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={isCreating}>
-              {t("notes.upload.cancel")}
-            </Button>
-            <Button onClick={handleCreate} disabled={!name.trim() || isCreating || !workspace}>
-              {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {t("notes.spaces.create")}
-            </Button>
-          </DialogFooter>
+              {membersError && candidates.length === 0 ? (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground/50">
+                    {t("notes.spaces.members.addPeople")}
+                  </label>
+                  <div className="rounded border border-border/70 dark:border-border-subtle/50 px-3 py-2.5 flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {t("settingsPage.workspace.members.loadError")}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (workspace) void loadMembers(workspace.id);
+                      }}
+                      className="h-6 px-2 text-xs shrink-0"
+                    >
+                      {t("settingsPage.workspace.loadError.retry")}
+                    </Button>
+                  </div>
+                </div>
+              ) : candidates.length > 0 ? (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground/50">
+                    {t("notes.spaces.members.addPeople")}
+                  </label>
+                  <MemberPickList
+                    members={filteredCandidates}
+                    search={memberSearch}
+                    onSearchChange={setMemberSearch}
+                    onSelect={toggleMember}
+                    selectedIds={selectedIds}
+                  />
+                </div>
+              ) : null}
+
+              <DialogFooter>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleOpenChange(false)}
+                  disabled={isCreating}
+                >
+                  {t("notes.upload.cancel")}
+                </Button>
+                <Button onClick={handleCreate} disabled={!name.trim() || isCreating || !workspace}>
+                  {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                  {t("notes.spaces.create")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>

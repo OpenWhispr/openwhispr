@@ -20,7 +20,6 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -43,13 +42,17 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { canManageSpace } from "../../lib/spacePermissions";
-import { TeamsService } from "../../services/TeamsService";
 import { NoteSharingService } from "../../services/NoteSharingService";
-import { markTeamSpacePurged } from "../../services/SyncService";
+import {
+  deleteTeamSpace,
+  leaveTeamSpace,
+  renameTeamSpace,
+} from "../../services/teamSpaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import { formatRelativeTime } from "../../utils/dateFormatting";
 import CreateSpaceDialog from "./CreateSpaceDialog";
+import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import SpaceMembersDialog from "./SpaceMembersDialog";
 import type { FolderItem, NoteItem, SpaceItem } from "../../types/electron";
 import {
@@ -73,8 +76,6 @@ import {
   renameFolder,
   deleteFolder,
   moveFolderToSpace,
-  updateSpaceMeta,
-  purgeSpace,
   getNoteFromStore,
   getFoldersValue,
   getSpacesValue,
@@ -1039,7 +1040,7 @@ export default function SpacesTree({
   const isTreeLoading = useIsTreeLoading();
   const teamCapability = useTeamSpacesCapability();
   const { isSignedIn, user } = useAuth();
-  const { workspaces } = useWorkspace();
+  const { workspaces, loaded: workspacesLoaded } = useWorkspace();
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
 
   const [creatingFolderSpaceId, setCreatingFolderSpaceId] = useState<number | null>(null);
@@ -1052,8 +1053,8 @@ export default function SpacesTree({
   const [spaceRenameFocus, setSpaceRenameFocus] = useState<"name" | "emoji">("name");
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [membersSpaceId, setMembersSpaceId] = useState<number | null>(null);
+  const [membersOpen, setMembersOpen] = useState(false);
   const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<SpaceItem | null>(null);
-  const [deleteNameInput, setDeleteNameInput] = useState("");
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const undoToastIdRef = useRef<string | null>(null);
@@ -1063,6 +1064,14 @@ export default function SpacesTree({
   const privateSpaces = useMemo(() => spaces.filter((s) => s.kind === "private"), [spaces]);
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
   const visibleSpaces = teamCapability ? spaces : privateSpaces;
+
+  // Team creation needs workspace owner/admin (the server 403s members); a
+  // user with no workspace yet goes through the create-workspace funnel.
+  const canCreateTeamSpace =
+    isSignedIn &&
+    workspacesLoaded &&
+    (workspaces.length === 0 ||
+      workspaces.some((w) => w.role === "owner" || w.role === "admin"));
 
   // Local-only spaces (no cloud team) stay fully manageable; cloud spaces
   // follow space/workspace roles. Cosmetic — the server enforces.
@@ -1378,36 +1387,15 @@ export default function SpacesTree({
   };
 
   const requestDeleteSpace = (space: SpaceItem) => {
-    setDeleteNameInput("");
     setDeleteSpaceTarget(space);
   };
 
-  const closeDeleteSpaceDialog = () => {
-    setDeleteSpaceTarget(null);
-    setDeleteNameInput("");
-  };
-
   const performDeleteSpace = async (space: SpaceItem) => {
-    if (space.cloud_team_id) {
-      try {
-        // Server archives the team; teammates purge on their next spaces pass.
-        await TeamsService.remove(space.cloud_team_id);
-      } catch (err) {
-        toast({
-          title: t("notes.spaces.couldNotDelete"),
-          description: err instanceof Error ? err.message : t("common.unknownError"),
-          variant: "destructive",
-        });
-        return;
-      }
-      // Park the team id so an in-flight pull can't resurrect purged rows.
-      markTeamSpacePurged(space.cloud_team_id);
-    }
-    const result = await purgeSpace(space.id);
-    if (!result.success && result.error) {
+    const result = await deleteTeamSpace(space);
+    if (!result.success) {
       toast({
         title: t("notes.spaces.couldNotDelete"),
-        description: result.error,
+        description: result.error ?? t("common.unknownError"),
         variant: "destructive",
       });
       return;
@@ -1417,7 +1405,6 @@ export default function SpacesTree({
 
   const requestLeaveSpace = (space: SpaceItem) => {
     if (!space.cloud_team_id || !user?.id) return;
-    const teamId = space.cloud_team_id;
     const userId = user.id;
     showConfirmDialog({
       title: t("notes.spaces.members.leaveConfirm", { space: space.name }),
@@ -1426,17 +1413,9 @@ export default function SpacesTree({
       variant: "destructive",
       onConfirm: async () => {
         try {
-          // The member DELETE succeeds even when no roster row exists, so an
-          // implicit workspace owner/admin "leave" would purge locally only to
-          // resurrect on the next pass — never purge for a server no-op.
-          const roster = await TeamsService.listMembers(teamId);
-          if (hasImplicitSpaceAccess(space) || !roster.some((m) => m.user_id === userId)) {
+          if ((await leaveTeamSpace(space, userId)) === "implicit") {
             toast({ title: t("notes.spaces.members.implicitAdminCannotLeave") });
-            return;
           }
-          await TeamsService.removeMember(teamId, userId);
-          markTeamSpacePurged(teamId);
-          await purgeSpace(space.id);
         } catch (err) {
           // Server rejected the leave — surface its message.
           toast({
@@ -1586,26 +1565,11 @@ export default function SpacesTree({
     setRenamingSpaceId(null);
     if (!space || !name) return;
     if (name === space.name && emoji === (space.emoji ?? null)) return;
-    // Optimistic local rename; the server call below reverts it on rejection.
-    const result = await updateSpaceMeta(spaceId, { name, emoji });
+    const result = await renameTeamSpace(space, { name, emoji });
     if (!result.success) {
-      if (result.error) {
-        toast({
-          title: t("notes.spaces.couldNotRename"),
-          description: result.error,
-          variant: "destructive",
-        });
-      }
-      return;
-    }
-    if (!space.cloud_team_id) return;
-    try {
-      await TeamsService.update(space.cloud_team_id, { name, emoji });
-    } catch (err) {
-      await updateSpaceMeta(spaceId, { name: space.name, emoji: space.emoji ?? null });
       toast({
         title: t("notes.spaces.couldNotRename"),
-        description: err instanceof Error ? err.message : t("common.unknownError"),
+        description: result.error ?? t("common.unknownError"),
         variant: "destructive",
       });
     }
@@ -1776,7 +1740,10 @@ export default function SpacesTree({
             onActivate={() => activateRow({ type: "space", key: spaceKey, space })}
             onToggle={() => toggleContainerExpanded(spaceKey)}
             onNewFolder={() => startCreateFolder(space)}
-            onMembers={() => setMembersSpaceId(space.id)}
+            onMembers={() => {
+              setMembersSpaceId(space.id);
+              setMembersOpen(true);
+            }}
             onRename={(focus) => startRenameSpace(space, focus)}
             onLeave={() => requestLeaveSpace(space)}
             onDelete={() => requestDeleteSpace(space)}
@@ -1859,7 +1826,7 @@ export default function SpacesTree({
               label={t("notes.spaces.teamSpaces")}
               className="mt-3"
               action={
-                isSignedIn ? (
+                canCreateTeamSpace ? (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1877,6 +1844,24 @@ export default function SpacesTree({
               }
             />
             {teamSpaces.map(renderSpace)}
+            {teamSpaces.length === 0 &&
+              (canCreateTeamSpace ? (
+                <div className="pl-[18px] pr-2 py-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCreateSpace(true)}
+                    className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
+                  >
+                    <Plus size={11} />
+                    {t("notes.spaces.newSpace")}
+                  </Button>
+                </div>
+              ) : (
+                <p className="pl-[18px] pr-2 py-1 text-xs text-foreground/40 leading-relaxed">
+                  {t("notes.spaces.emptyTeamHint")}
+                </p>
+              ))}
           </div>
         )}
       </div>
@@ -1884,55 +1869,14 @@ export default function SpacesTree({
       <CreateSpaceDialog open={showCreateSpace} onOpenChange={setShowCreateSpace} />
 
       {membersSpace && (
-        <SpaceMembersDialog
-          space={membersSpace}
-          open
-          onOpenChange={(open) => !open && setMembersSpaceId(null)}
-        />
+        <SpaceMembersDialog space={membersSpace} open={membersOpen} onOpenChange={setMembersOpen} />
       )}
 
-      <ConfirmDialog
-        open={deleteSpaceTarget != null}
-        onOpenChange={(open) => !open && closeDeleteSpaceDialog()}
-        title={t("notes.spaces.deleteConfirmTitle")}
-        description={
-          deleteSpaceTarget
-            ? t(
-                deleteSpaceTarget.cloud_team_id
-                  ? "notes.spaces.deleteConfirmTeamDescription"
-                  : "notes.spaces.deleteConfirmDescription",
-                { space: deleteSpaceTarget.name }
-              )
-            : undefined
-        }
-        confirmText={t("notes.spaces.deleteSpace")}
-        variant="destructive"
-        confirmDisabled={deleteNameInput.trim() !== deleteSpaceTarget?.name}
-        onConfirm={() => {
-          if (deleteSpaceTarget) void performDeleteSpace(deleteSpaceTarget);
-        }}
-      >
-        {deleteSpaceTarget && (
-          <div className="space-y-1.5">
-            <label htmlFor="delete-space-name" className="text-xs font-medium text-foreground/50">
-              {t("notes.spaces.deleteTypeName", { space: deleteSpaceTarget.name })}
-            </label>
-            <Input
-              id="delete-space-name"
-              autoFocus
-              value={deleteNameInput}
-              onChange={(e) => setDeleteNameInput(e.target.value)}
-              placeholder={deleteSpaceTarget.name}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && deleteNameInput.trim() === deleteSpaceTarget.name) {
-                  void performDeleteSpace(deleteSpaceTarget);
-                  closeDeleteSpaceDialog();
-                }
-              }}
-            />
-          </div>
-        )}
-      </ConfirmDialog>
+      <DeleteSpaceDialog
+        space={deleteSpaceTarget}
+        onClose={() => setDeleteSpaceTarget(null)}
+        onConfirm={(space) => void performDeleteSpace(space)}
+      />
 
       <ConfirmDialog
         open={confirmDialog.open}

@@ -17,11 +17,13 @@ function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
 }
 
-async function addTeamMembers(teamId: string, userIds: string[]): Promise<number> {
+async function settleAddMembers(teamId: string, userIds: string[]): Promise<unknown[]> {
   const results = await Promise.allSettled(
     userIds.map((userId) => TeamsService.addMember(teamId, userId))
   );
-  return results.filter((r) => r.status === "rejected").length;
+  return results
+    .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+    .map((r) => r.reason);
 }
 
 /** Refetch the roster and mirror its size into the local space row (narrow update). */
@@ -38,7 +40,7 @@ export async function createTeamSpace(
   memberIds: string[] = []
 ): Promise<{ space: SpaceItem | null; failedMembers: number }> {
   const team = await TeamsService.create(workspaceId, input);
-  const failedMembers = memberIds.length > 0 ? await addTeamMembers(team.id, memberIds) : 0;
+  const failedMembers = (await settleAddMembers(team.id, memberIds)).length;
   // The creator accesses the team implicitly; member_count mirrors the
   // server's explicit-roster count.
   const space =
@@ -124,11 +126,11 @@ export async function setMemberRole(
 export async function addMembers(
   space: SpaceItem,
   userIds: string[]
-): Promise<{ roster: TeamMember[]; failed: number }> {
+): Promise<{ roster: TeamMember[]; failures: unknown[] }> {
   const teamId = requireTeamId(space);
-  const failed = await addTeamMembers(teamId, userIds);
+  const failures = await settleAddMembers(teamId, userIds);
   const roster = await syncRoster(space, teamId);
-  return { roster, failed };
+  return { roster, failures };
 }
 
 export async function removeMember(space: SpaceItem, userId: string): Promise<TeamMember[]> {
