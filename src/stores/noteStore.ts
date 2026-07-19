@@ -35,7 +35,6 @@ interface NoteState {
   expandedContainers: Set<string>;
   activeContext: ActiveContext | null;
   activeNoteId: number | null;
-  activeFolderId: number | null;
   isTreeLoading: boolean;
   migration: { total: number; done: number } | null;
   shareByCloudId: Map<string, NoteShareCacheEntry>;
@@ -73,7 +72,6 @@ const useNoteStore = create<NoteState>()(() => ({
   expandedContainers: readExpandedContainers(),
   activeContext: null,
   activeNoteId: null,
-  activeFolderId: null,
   isTreeLoading: true,
   migration: null,
   shareByCloudId: new Map<string, NoteShareCacheEntry>(),
@@ -85,6 +83,12 @@ const DEFAULT_LIMIT = 50;
 let currentLimit = DEFAULT_LIMIT;
 let loadGeneration = 0;
 let treeLoadGeneration = 0;
+let spacesLoadGeneration = 0;
+let foldersLoadGeneration = 0;
+// Folder navigation requested before the tree is initialized (folders not
+// loaded yet). Consumed once by initializeNotesTree; while the tree is
+// mounted, the active folder always lives in activeContext.
+let pendingFolderPreset: number | null = null;
 
 export function folderContainerKey(folderId: number): string {
   return `f:${folderId}`;
@@ -252,7 +256,6 @@ function ensureIpcListeners() {
         // The active folder vanished under us — degrade to its space root.
         fallbackContext = { spaceId: state.activeContext.spaceId, folderId: null };
         extra.activeContext = fallbackContext;
-        extra.activeFolderId = null;
         extra.notes = notesByContainer[contextContainerKey(fallbackContext)] ?? [];
       }
       useNoteStore.setState({ notesByContainer, ...extra });
@@ -293,6 +296,18 @@ function ensureIpcListeners() {
     }
   }
 
+  // Space rows written by a sync pull or a membership mutation (teammate
+  // renames, member_count/my_role changes, newly accepted teams) — refresh a
+  // mounted sidebar without a remount.
+  if (window.electronAPI?.onSpaceSynced) {
+    const dispose = window.electronAPI.onSpaceSynced((space) => {
+      if (space) void loadSpaces();
+    });
+    if (typeof dispose === "function") {
+      disposers.push(dispose);
+    }
+  }
+
   hasBoundIpcListeners = true;
 
   window.addEventListener("beforeunload", () => {
@@ -301,16 +316,21 @@ function ensureIpcListeners() {
 }
 
 export async function loadSpaces(): Promise<SpaceItem[]> {
+  const gen = ++spacesLoadGeneration;
   const items = (await window.electronAPI?.getSpaces?.()) ?? [];
+  // Discard stale responses when a newer load resolved first.
+  if (gen !== spacesLoadGeneration) return items;
   useNoteStore.setState({ spaces: items });
   return items;
 }
 
 export async function loadFolders(): Promise<FolderItem[]> {
+  const gen = ++foldersLoadGeneration;
   const [items, counts] = await Promise.all([
     window.electronAPI.getFolders(),
     window.electronAPI.getFolderNoteCounts(),
   ]);
+  if (gen !== foldersLoadGeneration) return items;
   const folderCounts: Record<number, number> = {};
   const spaceRootCounts: Record<number, number> = {};
   counts.forEach((c) => {
@@ -365,7 +385,6 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
   const key = folderId != null ? folderContainerKey(folderId) : spaceContainerKey(spaceId);
   useNoteStore.setState({
     activeContext: { spaceId, folderId },
-    activeFolderId: folderId,
     notes: state.notesByContainer[key] ?? [],
   });
   void ensureContainerLoaded(key);
@@ -373,9 +392,9 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
 
 /**
  * Loads spaces, folders and counts, resolves the initial active context
- * (honoring a pre-set activeFolderId or activeContext, e.g. navigating from
- * search), loads the active container and auto-selects its first note when
- * none is pre-set.
+ * (honoring a pending folder preset or a prior activeContext, e.g. navigating
+ * from search), loads the active container and auto-selects its first note
+ * when none is pre-set.
  */
 export async function initializeNotesTree(): Promise<void> {
   const gen = ++treeLoadGeneration;
@@ -385,7 +404,8 @@ export async function initializeNotesTree(): Promise<void> {
     const [spaces, folders] = await Promise.all([loadSpaces(), loadFolders()]);
     if (gen !== treeLoadGeneration) return;
 
-    const presetFolderId = getActiveFolderIdValue();
+    const presetFolderId = pendingFolderPreset;
+    pendingFolderPreset = null;
     const presetFolder =
       presetFolderId != null ? folders.find((f) => f.id === presetFolderId) : undefined;
     const preset = useNoteStore.getState().activeContext;
@@ -409,7 +429,7 @@ export async function initializeNotesTree(): Promise<void> {
     if (!context) return;
 
     revealContainer(context.spaceId, context.folderId);
-    useNoteStore.setState({ activeContext: context, activeFolderId: context.folderId });
+    useNoteStore.setState({ activeContext: context });
     const notes = await loadContainerNotes(contextContainerKey(context));
     if (gen !== treeLoadGeneration) return;
     // Containers restored as expanded from a previous session must load their
@@ -581,7 +601,6 @@ function handleSpacePurged(spaceId: number): void {
       const fallbackFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
       fallbackContext = { spaceId: privateSpace.id, folderId: fallbackFolder?.id ?? null };
       extra.activeContext = fallbackContext;
-      extra.activeFolderId = fallbackContext.folderId;
       extra.notes = notesByContainer[contextContainerKey(fallbackContext)] ?? [];
     }
   }
@@ -717,17 +736,17 @@ export function navigateToContainer(spaceId: number, folderId: number | null): v
 }
 
 export function setActiveFolderId(id: number | null): void {
-  const state = useNoteStore.getState();
-  const folder = id != null ? state.folders.find((f) => f.id === id) : undefined;
+  const folder =
+    id != null ? useNoteStore.getState().folders.find((f) => f.id === id) : undefined;
   if (folder) {
+    pendingFolderPreset = null;
     setActiveContext(folder.space_id, folder.id);
     revealContainer(folder.space_id, folder.id);
     return;
   }
-  // Folders not loaded yet (or id cleared): keep as a preset that
-  // initializeNotesTree resolves on mount.
-  if (state.activeFolderId === id) return;
-  useNoteStore.setState({ activeFolderId: id });
+  // Folder unknown (tree not initialized yet) or id cleared: park it for
+  // initializeNotesTree to resolve once on mount.
+  pendingFolderPreset = id;
 }
 
 export function getActiveNoteIdValue(): number | null {
@@ -739,7 +758,7 @@ export function getNoteFromStore(id: number): NoteItem | null {
 }
 
 export function getActiveFolderIdValue(): number | null {
-  return useNoteStore.getState().activeFolderId;
+  return useNoteStore.getState().activeContext?.folderId ?? null;
 }
 
 /** Live (non-hook) reads for deferred callbacks like undo toasts. */
@@ -792,7 +811,7 @@ export function useActiveNoteId(): number | null {
 }
 
 export function useActiveFolderId(): number | null {
-  return useNoteStore((state) => state.activeFolderId);
+  return useNoteStore((state) => state.activeContext?.folderId ?? null);
 }
 
 export function useActiveNote(): NoteItem | null {
