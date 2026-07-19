@@ -2004,6 +2004,8 @@
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
+        "smallest_pulse": "Multilingual cloud transcription by Smallest AI",
+        "smallest_pulse_pro": "English-only, highest-accuracy transcription by Smallest AI",
         "tinfoil_voxtral": "Verifiably private transcription"
       },
       "cloud": {

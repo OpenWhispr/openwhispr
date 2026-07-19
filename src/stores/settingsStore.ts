@@ -598,6 +598,7 @@ export interface SettingsState
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
   setXaiApiKey: (key: string) => void;
+  setSmallestApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
   setOpenrouterApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
@@ -797,6 +798,7 @@ const SECRET_IPC_SAVERS = {
   gemini: "saveGeminiKey",
   groq: "saveGroqKey",
   xai: "saveXaiKey",
+  smallest: "saveSmallestKey",
   mistral: "saveMistralKey",
   openrouter: "saveOpenrouterKey",
   cortiClientId: "saveCortiClientId",
@@ -839,6 +841,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "geminiApiKey",
   "groqApiKey",
   "xaiApiKey",
+  "smallestApiKey",
   "mistralApiKey",
   "openrouterApiKey",
   "cortiClientId",
@@ -948,6 +951,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   geminiApiKey: "",
   groqApiKey: "",
   xaiApiKey: "",
+  smallestApiKey: "",
   mistralApiKey: "",
   openrouterApiKey: "",
   cortiClientId: "",
@@ -1410,6 +1414,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setGeminiApiKey: createSecretSetter("geminiApiKey", "gemini", "gemini"),
   setGroqApiKey: createSecretSetter("groqApiKey", "groq", "groq"),
   setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
+  setSmallestApiKey: createSecretSetter("smallestApiKey", "smallest"),
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
   setCortiClientId: (key: string) => {
@@ -1868,6 +1873,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
+    if (keys.smallestApiKey !== undefined) s.setSmallestApiKey(keys.smallestApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.openrouterApiKey !== undefined) s.setOpenrouterApiKey(keys.openrouterApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
@@ -2128,6 +2134,7 @@ export async function initializeSettings(): Promise<void> {
         gemini,
         groq,
         xai,
+        smallest,
         mistral,
         openrouter,
         cortiClientId,
@@ -2147,6 +2154,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getGeminiKey?.(),
         window.electronAPI.getGroqKey?.(),
         window.electronAPI.getXaiKey?.(),
+        window.electronAPI.getSmallestKey?.(),
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getOpenrouterKey?.(),
         window.electronAPI.getCortiClientId?.(),
@@ -2168,6 +2176,7 @@ export async function initializeSettings(): Promise<void> {
         geminiApiKey: gemini || "",
         groqApiKey: groq || "",
         xaiApiKey: xai || "",
+        smallestApiKey: smallest || "",
         mistralApiKey: mistral || "",
         openrouterApiKey: openrouter || "",
         cortiClientId: cortiClientId || "",

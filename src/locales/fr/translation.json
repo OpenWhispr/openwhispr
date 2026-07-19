@@ -1960,6 +1960,8 @@
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
         "corti_transcribe": "Transcription médicale de qualité clinique",
         "xai_grok_stt": "Reconnaissance vocale haute précision par xAI",
+        "smallest_pulse": "Transcription cloud multilingue par Smallest AI",
+        "smallest_pulse_pro": "Anglais uniquement, précision maximale par Smallest AI",
         "tinfoil_voxtral": "Transcription vérifiablement privée"
       },
       "cloud": {

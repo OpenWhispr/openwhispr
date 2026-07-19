@@ -37,6 +37,13 @@ const BYOK_API_KEYS = [
   },
   { base: "xai", env: "XAI_API_KEY", get: "getXaiKey", save: "saveXaiKey", storeKey: "xaiApiKey" },
   {
+    base: "smallest",
+    env: "SMALLEST_API_KEY",
+    get: "getSmallestKey",
+    save: "saveSmallestKey",
+    storeKey: "smallestApiKey",
+  },
+  {
     base: "mistral",
     env: "MISTRAL_API_KEY",
     get: "getMistralKey",

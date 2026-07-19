@@ -10,6 +10,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "gemini", get: "getGeminiKey", save: "saveGeminiKey" },
   { base: "groq", get: "getGroqKey", save: "saveGroqKey" },
   { base: "xai", get: "getXaiKey", save: "saveXaiKey" },
+  { base: "smallest", get: "getSmallestKey", save: "saveSmallestKey" },
   { base: "mistral", get: "getMistralKey", save: "saveMistralKey" },
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
@@ -404,8 +405,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveUiLanguage: (language) => ipcRenderer.invoke("save-ui-language", language),
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
-  // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
+  // xAI / Smallest / Mistral transcription proxies (keys handled by the manifest bridge)
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+  proxySmallestTranscription: (data) => ipcRenderer.invoke("proxy-smallest-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
   // Corti API

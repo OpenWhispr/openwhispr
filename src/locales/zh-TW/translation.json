@@ -1907,6 +1907,8 @@
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "corti_transcribe": "臨床級醫療轉錄",
         "xai_grok_stt": "xAI 高精度語音辨識",
+        "smallest_pulse": "Smallest AI 多語言雲端轉錄",
+        "smallest_pulse_pro": "Smallest AI 僅限英語、最高精度轉錄",
         "tinfoil_voxtral": "可驗證的私密轉錄"
       },
       "cloud": {

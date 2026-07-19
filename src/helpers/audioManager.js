@@ -194,6 +194,7 @@ const PLACEHOLDER_KEYS = {
   openai: "your_openai_api_key_here",
   groq: "your_groq_api_key_here",
   xai: "your_xai_api_key_here",
+  smallest: "your_smallest_api_key_here",
   mistral: "your_mistral_api_key_here",
 };
 
@@ -1385,6 +1386,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "smallest") {
+      apiKey = s.smallestApiKey;
+      if (!isValidApiKey(apiKey, "smallest")) {
+        apiKey = await window.electronAPI.getSmallestKey?.();
+      }
+      if (!isValidApiKey(apiKey, "smallest")) {
+        const err = new Error(
+          "Smallest AI API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else {
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -2264,6 +2277,36 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw new Error("No text transcribed - xAI response was empty");
       }
 
+      // Smallest AI Pulse needs mono WAV + raw bytes — proxy through main process to downmix.
+      // No custom dictionary: the Smallest AI STT API has no prompt/keyterm parameter.
+      if (provider === "smallest" && window.electronAPI?.proxySmallestTranscription) {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const proxyData = {
+          audioBuffer,
+          model,
+          language: language !== "auto" ? language : undefined,
+        };
+
+        const result = await window.electronAPI.proxySmallestTranscription(proxyData);
+        const proxyText = result?.text;
+
+        if (proxyText && proxyText.trim().length > 0) {
+          if (this.isDictionaryEcho(proxyText)) {
+            throw new Error("No audio detected");
+          }
+          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+          const rawText = proxyText;
+          const reasoningStart = performance.now();
+          const text = await this.processTranscription(proxyText, "smallest");
+          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+          const source = (await this.isReasoningAvailable()) ? "smallest-reasoned" : "smallest";
+          return { success: true, text, rawText, source, timings };
+        }
+
+        throw new Error("No text transcribed - Smallest AI response was empty");
+      }
+
       // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through main process
       if (provider === "corti" && window.electronAPI?.proxyCortiTranscription) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
@@ -2539,6 +2582,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const isOpenAIModel = trimmedModel.startsWith("gpt-4o") || trimmedModel === "whisper-1";
         const isMistralModel = trimmedModel.startsWith("voxtral-");
         const isCortiModel = trimmedModel.startsWith("corti-");
+        const isSmallestModel = trimmedModel === "pulse" || trimmedModel === "pulse-pro";
 
         if (provider === "groq" && isGroqModel) {
           return trimmedModel;
@@ -2552,12 +2596,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (provider === "corti" && isCortiModel) {
           return trimmedModel;
         }
+        if (provider === "smallest" && isSmallestModel) {
+          return trimmedModel;
+        }
         // Model doesn't match provider - fall through to default
       }
 
       // Return provider-appropriate default
       if (provider === "groq") return "whisper-large-v3-turbo";
       if (provider === "xai") return "grok-stt";
+      if (provider === "smallest") return "pulse";
       if (provider === "mistral") return "voxtral-mini-latest";
       if (provider === "corti") return "corti-transcribe";
       return "gpt-4o-mini-transcribe";
@@ -2631,6 +2679,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         base = API_ENDPOINTS.GROQ_BASE;
       } else if (currentProvider === "xai") {
         base = API_ENDPOINTS.XAI_BASE;
+      } else if (currentProvider === "smallest") {
+        base = API_ENDPOINTS.SMALLEST_BASE;
       } else if (currentProvider === "mistral") {
         base = API_ENDPOINTS.MISTRAL_BASE;
       } else {

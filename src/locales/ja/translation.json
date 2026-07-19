@@ -1912,6 +1912,8 @@
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
+        "smallest_pulse": "Smallest AIによる多言語クラウド音声文字起こし",
+        "smallest_pulse_pro": "Smallest AIによる英語専用・最高精度文字起こし",
         "tinfoil_voxtral": "検証可能なプライベート文字起こし"
       },
       "cloud": {
