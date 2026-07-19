@@ -5903,8 +5903,18 @@ class IPCHandlers {
     let dictationPreviewStream = null;
     // false = headless streaming session (commit-only, no preview window).
     let dictationPreviewDisplay = true;
+    let dictationPreviewNotch = false;
+    // Notch-only session: output goes solely to the notch, never the floating window.
+    let dictationPreviewOnlyNotch = false;
     // Bumped on every reset so async preview work can detect a stale session.
     let dictationPreviewGen = 0;
+
+    // Notch-only sessions must never spawn the floating preview window: deliver
+    // only when the notch window is live, otherwise drop the update.
+    const deliverPreview = (onlyNotch, method, ...args) => {
+      if (onlyNotch && !this.windowManager.isNotchPopupExpandedActive()) return;
+      this.windowManager[method](...args);
+    };
 
     const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
       dictationPreviewGen++;
@@ -5926,6 +5936,8 @@ class IPCHandlers {
       dictationPreviewModel = null;
       dictationPreviewLanguage = null;
       dictationPreviewDisplay = true;
+      dictationPreviewNotch = false;
+      dictationPreviewOnlyNotch = false;
     };
 
     const startDictationPreviewTimer = () => {
@@ -5939,7 +5951,17 @@ class IPCHandlers {
       if (!dictationPreviewDisplay) return;
       if (dictationPreviewTranscribing) return;
       if (!dictationPreviewBuffer.length) return;
+      // Notch-only session whose window is truly gone (not just not-yet-created): stop decoding.
+      if (
+        dictationPreviewOnlyNotch &&
+        !this.windowManager.isNotchPopupExpandedActive() &&
+        !this.windowManager.isNotchPopupPossible()
+      ) {
+        resetDictationPreviewState();
+        return;
+      }
 
+      const gen = dictationPreviewGen;
       dictationPreviewTranscribing = true;
       try {
         const pcm = Buffer.concat(dictationPreviewBuffer);
@@ -5975,8 +5997,9 @@ class IPCHandlers {
           });
         }
 
+        if (gen !== dictationPreviewGen) return; // session reset during decode
         if (result?.success && result.text?.trim()) {
-          this.windowManager.appendTranscriptionPreview(result.text.trim());
+          deliverPreview(dictationPreviewOnlyNotch, "appendTranscriptionPreview", result.text.trim());
         } else if (result && !result.success) {
           debugLogger.warn("Dictation preview chunk returned failure", {
             error: result.error || result.message,
@@ -6044,20 +6067,23 @@ class IPCHandlers {
     };
 
     const setupDictationCallbacks = (streaming, event) => {
+      // Expanded notch consumes realtime partials even when the floating preview is off.
+      const previewTarget = () =>
+        this._dictationPreviewEnabled || this.windowManager?.isNotchPopupExpandedActive();
       streaming.onPartialTranscript = (text) => {
         event.sender.send("dictation-realtime-partial", text);
-        if (this._dictationPreviewEnabled && text) {
+        if (previewTarget() && text) {
           this.windowManager.showTranscriptionPreview(text);
         }
       };
       streaming.onFinalTranscript = (text) => event.sender.send("dictation-realtime-final", text);
       streaming.onError = (err) => {
         event.sender.send("dictation-realtime-error", err.message);
-        if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
+        if (previewTarget()) this.windowManager.hideTranscriptionPreview();
       };
       streaming.onSessionEnd = (data) => {
         event.sender.send("dictation-realtime-session-end", data || {});
-        if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
+        if (previewTarget()) this.windowManager.hideTranscriptionPreview();
       };
     };
 
@@ -6619,7 +6645,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "start-dictation-preview",
-      async (_event, { provider, model, language, display = true }) => {
+      async (_event, { provider, model, language, display = true, notchExpanded = false }) => {
         resetDictationPreviewState();
         const gen = dictationPreviewGen;
         dictationPreviewMode = true;
@@ -6627,16 +6653,22 @@ class IPCHandlers {
         dictationPreviewProvider = provider;
         dictationPreviewModel = model;
         dictationPreviewLanguage = language || null;
-        dictationPreviewDisplay = display;
+        dictationPreviewNotch = !!notchExpanded;
+        // Notch expanded needs chunks even when the floating preview is off.
+        dictationPreviewDisplay = display || dictationPreviewNotch;
+        dictationPreviewOnlyNotch = dictationPreviewNotch && !display;
         dictationPreviewChunkCount = 0;
-        if (display) this.windowManager.showTranscriptionPreview("");
+        // Skip the floating placeholder when the notch will render its own (window may not exist yet — gate on possible, not liveness).
+        if (display && !(dictationPreviewNotch && this.windowManager.isNotchPopupPossible())) {
+          this.windowManager.showTranscriptionPreview("");
+        }
 
         if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
           try {
             const stream = await this.parakeetManager.createOnlineStream(model, {
               onUpdate: (text) => {
                 if (gen === dictationPreviewGen && text && dictationPreviewDisplay) {
-                  this.windowManager.showTranscriptionPreview(text);
+                  deliverPreview(dictationPreviewOnlyNotch, "showTranscriptionPreview", text);
                 }
               },
               onError: (error) => {
@@ -6671,10 +6703,13 @@ class IPCHandlers {
 
         if (gen !== dictationPreviewGen) return { success: true };
         if (!display) {
-          // A headless session exists only to feed the online stream; without
-          // one, buffered PCM would just accumulate with no consumer.
-          resetDictationPreviewState();
-          return { success: true };
+          // Without a floating window, chunks have a consumer only when this is a
+          // notch-only session and a notch popup is possible (the window is created
+          // milliseconds later by the notch phase handler — gate on possible, not liveness).
+          if (!dictationPreviewNotch || !this.windowManager.isNotchPopupPossible()) {
+            resetDictationPreviewState();
+            return { success: true };
+          }
         }
         startDictationPreviewTimer();
         return { success: true };
@@ -6740,6 +6775,7 @@ class IPCHandlers {
       const display = dictationPreviewDisplay;
       // Missing flag defaults to trusted so non-streaming callers never regress.
       const rendererFlushOk = options.flushed !== false;
+      const onlyNotch = dictationPreviewOnlyNotch;
       let streamed = false;
       let streamedText = "";
       if (dictationPreviewStream) {
@@ -6756,7 +6792,7 @@ class IPCHandlers {
           streamed = !result.truncated && rendererFlushOk;
         }
         if (streamedText && display && dictationPreviewSessionActive) {
-          this.windowManager.showTranscriptionPreview(streamedText);
+          deliverPreview(onlyNotch, "showTranscriptionPreview", streamedText);
         }
       } else {
         await transcribeDictationPreviewChunk();
@@ -6765,7 +6801,7 @@ class IPCHandlers {
       if (!display || !dictationPreviewSessionActive) {
         return { success: true, streamed, text: streamedText };
       }
-      this.windowManager.holdTranscriptionPreview(options);
+      deliverPreview(onlyNotch, "holdTranscriptionPreview", options);
       return { success: true, streamed, text: streamedText };
     });
 
@@ -8816,6 +8852,18 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-notification-ready", async () => {
       this.windowManager?.showNotificationWindow();
+    });
+
+    ipcMain.handle("notch-popup-ready", async () => {
+      this.windowManager?.showNotchPopupWindow();
+    });
+
+    ipcMain.handle("get-notch-popup-state", async () => {
+      return this.windowManager?.getNotchPopupPendingState() ?? null;
+    });
+
+    ipcMain.handle("set-notch-popup-interactivity", (_event, interactive) => {
+      this.windowManager?.setNotchPopupInteractivity(Boolean(interactive));
     });
 
     ipcMain.handle("get-update-notification-data", async () => {

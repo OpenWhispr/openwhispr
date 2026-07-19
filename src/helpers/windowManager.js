@@ -15,9 +15,20 @@ const {
   NOTIFICATION_WINDOW_CONFIG,
   TRANSCRIPTION_PREVIEW_CONFIG,
   TRANSCRIPTION_PREVIEW_SIZE_LIMITS,
+  NOTCH_POPUP_CONFIG,
+  NOTCH_POPUP_SIZES,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
+const {
+  resolveNotchPopup,
+  findInternalDisplay,
+  displayHasNotch,
+  computeMenuBarHeight,
+  estimatedNotchWidth,
+  LEFT_WING_WIDTH,
+  RIGHT_WING_WIDTH,
+} = require("./notchDisplay");
 
 class WindowManager {
   constructor() {
@@ -49,6 +60,21 @@ class WindowManager {
     this._isDictatingToggle = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
+    this.notchPopupWindow = null;
+    this._notchPopupEnabled = false;
+    this._notchPopupExpanded = false;
+    this._notchPopupPanelSize = "small";
+    this._notchSessionHasFeed = true; // per-session: false expands to compact (no live text)
+    this._notchPopupCreateFailed = false; // BrowserWindow ctor threw; stop gating decodes on it
+    this._notchPopupReadyFallback = null;
+    this._notchPopupPendingState = null;
+    this._notchPopupIdleTimer = null;
+    this._notchPopupIdleToken = null;
+    this._notchPopupIntendedBounds = null;
+    this._notchPopupPostShowTimer = null;
+    this._notchDisplayHandlersBound = false;
+    this._pillWasVisibleBeforeNotch = false;
+    this._onNotchDisplayChange = () => this._recheckNotchDisplay();
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -277,7 +303,9 @@ class WindowManager {
     const downTime = Date.now();
 
     if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
-    this.showDictationPanel();
+    if (!this._shouldSuppressPillForNotch()) {
+      this.showDictationPanel();
+    }
 
     const safetyTimeoutId = setTimeout(() => {
       if (this.macCompoundPushState?.active) {
@@ -455,7 +483,10 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.showDictationPanel();
+      // Skip the pill when the notch popup is live, or both show at once.
+      if (!this._shouldSuppressPillForNotch()) {
+        this.showDictationPanel();
+      }
       this.mainWindow.webContents.send(channel);
       this._isDictatingToggle = !this._isDictatingToggle;
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
@@ -486,7 +517,9 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.showDictationPanel();
+      if (!this._shouldSuppressPillForNotch()) {
+        this.showDictationPanel();
+      }
       this.mainWindow.webContents.send("start-dictation");
       this.meetingDetectionEngine?.setUserRecording(true);
     }
@@ -846,6 +879,11 @@ class WindowManager {
   }
 
   async showTranscriptionPreview(text) {
+    if (this.isNotchPopupExpandedActive()) {
+      this.notchPopupWindow.webContents.send("preview-text", text);
+      return;
+    }
+
     await this.ensureTranscriptionPreviewWindow();
 
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
@@ -868,11 +906,21 @@ class WindowManager {
   }
 
   appendTranscriptionPreview(text) {
+    if (this.isNotchPopupExpandedActive()) {
+      this.notchPopupWindow.webContents.send("preview-append", text);
+      return;
+    }
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
     this.transcriptionPreviewWindow.webContents.send("preview-append", text);
   }
 
   holdTranscriptionPreview(options = {}) {
+    if (this.isNotchPopupExpandedActive()) {
+      this.notchPopupWindow.webContents.send("preview-hold", {
+        showCleanup: !!options.showCleanup,
+      });
+      return;
+    }
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
     this.transcriptionPreviewWindow.webContents.send("preview-hold", {
       showCleanup: !!options.showCleanup,
@@ -880,6 +928,10 @@ class WindowManager {
   }
 
   completeTranscriptionPreview(text) {
+    if (this.isNotchPopupExpandedActive()) {
+      this.notchPopupWindow.webContents.send("preview-result", { text });
+      return;
+    }
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
     this.transcriptionPreviewWindow.webContents.send("preview-result", { text });
     this.transcriptionPreviewWindow.showInactive();
@@ -887,8 +939,17 @@ class WindowManager {
   }
 
   hideTranscriptionPreview() {
-    if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
+    if (this.isNotchPopupExpandedActive()) {
+      this.notchPopupWindow.webContents.send("preview-hide");
+      // Also retract any floating preview created before the notch appeared.
+      this._hideFloatingTranscriptionPreview();
+      return;
+    }
+    this._hideFloatingTranscriptionPreview();
+  }
 
+  _hideFloatingTranscriptionPreview() {
+    if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
     this.transcriptionPreviewWindow.webContents.send("preview-hide");
     setTimeout(() => {
       if (this.transcriptionPreviewWindow && !this.transcriptionPreviewWindow.isDestroyed()) {
@@ -1263,6 +1324,407 @@ class WindowManager {
       this.notificationWindow.close();
     }
     this.notificationWindow = null;
+  }
+
+  setNotchPopupSettings(enabled, expanded, panelSize) {
+    const prevExpanded = this._notchPopupExpanded;
+    const prevPanelSize = this._notchPopupPanelSize;
+    this._notchPopupEnabled = Boolean(enabled);
+    this._notchPopupExpanded = Boolean(expanded);
+    if (panelSize !== undefined) this._notchPopupPanelSize = panelSize === "large" ? "large" : "small";
+    // Re-enabling the feature clears a prior construction failure so decodes gate again.
+    if (this._notchPopupEnabled) this._notchPopupCreateFailed = false;
+    // If the popup is disabled mid-session, retract it and restore the pill.
+    if (!this._notchPopupEnabled && this.notchPopupWindow) {
+      this.hideNotchPopup();
+      return;
+    }
+    // Expanded or panel size changed while the popup is live: resize and re-sync the renderer.
+    if (this._notchPopupExpanded !== prevExpanded || this._notchPopupPanelSize !== prevPanelSize) {
+      this._syncNotchExpansion("expanded-toggle");
+    }
+  }
+
+  // Reapply bounds (and optionally push state) so a live popup matches the effective expansion.
+  _syncNotchExpansion(context, push = true) {
+    if (!this.notchPopupWindow || this.notchPopupWindow.isDestroyed()) return;
+    const internal = findInternalDisplay(screen.getAllDisplays());
+    if (!internal) return;
+    const effExpanded = this._effectiveNotchExpanded();
+    const position = WindowPositionUtil.getNotchPopupPosition(internal);
+    this._notchPopupIntendedBounds = position;
+    this._applyNotchBounds(this.notchPopupWindow, position, context);
+    if (push && this._notchPopupPendingState) {
+      this._notchPopupPendingState.expanded = effExpanded;
+      this._notchPopupPendingState.panelHeight = this._notchPanelHeight();
+      this.notchPopupWindow.webContents.send("notch-popup-state", this._notchPopupPendingState);
+    }
+  }
+
+  _notchPanelHeight() {
+    return (
+      NOTCH_POPUP_SIZES.panelHeights[this._notchPopupPanelSize] ??
+      NOTCH_POPUP_SIZES.panelHeights.small
+    );
+  }
+
+  isNotchPopupExpandedActive() {
+    return Boolean(
+      this._effectiveNotchExpanded() &&
+        this.notchPopupWindow &&
+        !this.notchPopupWindow.isDestroyed()
+    );
+  }
+
+  // Expansion is session-scoped: a feedless session (e.g. cloud) stays compact even if the user enabled expanded.
+  _effectiveNotchExpanded() {
+    return this._notchPopupExpanded && this._notchSessionHasFeed;
+  }
+
+  // True while a live notch popup should stand in for the pill (window liveness).
+  _shouldSuppressPillForNotch() {
+    return Boolean(this.notchPopupWindow && !this.notchPopupWindow.isDestroyed());
+  }
+
+  // Cheap start-time check: a notch popup is possible (enabled + notch display present)
+  // even before the window exists. Gate session start on this, not window liveness.
+  isNotchPopupPossible() {
+    return (
+      process.platform === "darwin" &&
+      this._notchPopupEnabled &&
+      !this._notchPopupCreateFailed &&
+      resolveNotchPopup(screen.getAllDisplays(), { width: 0, height: 0 }) !== null
+    );
+  }
+
+  getNotchPopupPendingState() {
+    return this._notchPopupPendingState;
+  }
+
+  _bindNotchDisplayHandlers() {
+    if (this._notchDisplayHandlersBound) return;
+    screen.on("display-added", this._onNotchDisplayChange);
+    screen.on("display-removed", this._onNotchDisplayChange);
+    screen.on("display-metrics-changed", this._onNotchDisplayChange);
+    this._notchDisplayHandlersBound = true;
+  }
+
+  _unbindNotchDisplayHandlers() {
+    if (!this._notchDisplayHandlersBound) return;
+    screen.removeListener("display-added", this._onNotchDisplayChange);
+    screen.removeListener("display-removed", this._onNotchDisplayChange);
+    screen.removeListener("display-metrics-changed", this._onNotchDisplayChange);
+    this._notchDisplayHandlersBound = false;
+  }
+
+  // setBounds after raising the level occupies the menu bar strip macOS clamps out.
+  _applyNotchBounds(win, bounds, context) {
+    if (!win || win.isDestroyed()) return;
+    win.setBounds(bounds);
+    const actual = win.getBounds();
+    const matched =
+      actual.x === bounds.x &&
+      actual.y === bounds.y &&
+      actual.width === bounds.width &&
+      actual.height === bounds.height;
+    debugLogger.info(
+      "Notch popup bounds applied",
+      { context, intended: bounds, actual, matched },
+      "notch"
+    );
+  }
+
+  _recheckNotchDisplay() {
+    if (!this.notchPopupWindow || this.notchPopupWindow.isDestroyed()) return;
+    const internal = findInternalDisplay(screen.getAllDisplays());
+    if (!internal || !displayHasNotch(internal)) {
+      // Notch display gone mid-dictation (e.g. clamshell); fall back to the pill.
+      this.hideNotchPopup();
+      return;
+    }
+    const position = WindowPositionUtil.getNotchPopupPosition(internal);
+    // Cache the new geometry, else later reasserts snap back to stale bounds.
+    this._notchPopupIntendedBounds = position;
+    // Re-raise before re-clamping so it stays on the menu bar strip.
+    this.notchPopupWindow.setAlwaysOnTop(true, "screen-saver");
+    this._applyNotchBounds(this.notchPopupWindow, position, "display-metrics");
+    // Menu bar height / notch width may have changed with the display; re-sync.
+    if (this._notchPopupPendingState) {
+      this._notchPopupPendingState = {
+        ...this._notchPopupPendingState,
+        menuBarHeight: computeMenuBarHeight(internal),
+        notchSpacerWidth: estimatedNotchWidth(internal),
+        panelHeight: this._notchPanelHeight(),
+      };
+      this.notchPopupWindow.webContents.send(
+        "notch-popup-state",
+        this._notchPopupPendingState
+      );
+    }
+  }
+
+  async showNotchPopup() {
+    if (process.platform !== "darwin") return false;
+    if (!this._notchPopupEnabled) return false;
+
+    const size = {
+      width: NOTCH_POPUP_CONFIG.width,
+      height: NOTCH_POPUP_CONFIG.height,
+    };
+    const resolved = resolveNotchPopup(screen.getAllDisplays(), {
+      width: size.width,
+      height: size.height,
+    });
+    if (!resolved) return false; // no notch display, fall back to the pill
+
+    const position = WindowPositionUtil.getNotchPopupPosition(resolved.display);
+    // Cached so the post-show reassert sites reapply without recomputing.
+    this._notchPopupIntendedBounds = position;
+
+    if (this.notchPopupWindow && !this.notchPopupWindow.isDestroyed()) {
+      this._applyNotchBounds(this.notchPopupWindow, position, "reuse");
+      this.notchPopupWindow.showInactive();
+      this._reassertNotchBoundsAfterShow("post-show-reuse");
+      return true;
+    }
+
+    try {
+      this.notchPopupWindow = new BrowserWindow({ ...NOTCH_POPUP_CONFIG, ...position });
+      this._notchPopupCreateFailed = false;
+    } catch (error) {
+      debugLogger.warn("Notch popup window creation failed", { error: error.message }, "notch");
+      this.notchPopupWindow = null;
+      // Prevent the chunk gate from decoding-until-stop while creation stays broken.
+      this._notchPopupCreateFailed = true;
+      return false;
+    }
+
+    // Never appears in screen shares; sits above third party notch apps.
+    this.notchPopupWindow.setContentProtection(true);
+    this.notchPopupWindow.setAlwaysOnTop(true, "screen-saver");
+    this.notchPopupWindow.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true,
+    });
+    this.notchPopupWindow.setFullScreenable(false);
+    // Click-through by default; the renderer flips it while hovering a wing.
+    this.notchPopupWindow.setIgnoreMouseEvents(true, { forward: true });
+    // Reassert now the level is raised; the constructor clamped it below the menu bar.
+    this._applyNotchBounds(this.notchPopupWindow, position, "create");
+
+    const win = this.notchPopupWindow;
+    win.on("closed", () => {
+      if (this.notchPopupWindow !== win) return;
+      this.notchPopupWindow = null;
+      if (this._notchPopupReadyFallback) {
+        clearTimeout(this._notchPopupReadyFallback);
+        this._notchPopupReadyFallback = null;
+      }
+      if (this._notchPopupPostShowTimer) {
+        clearTimeout(this._notchPopupPostShowTimer);
+        this._notchPopupPostShowTimer = null;
+      }
+      this._notchPopupIntendedBounds = null;
+      this._unbindNotchDisplayHandlers();
+      // Restore the pill on any external close (idempotent — consumes the flag).
+      this._restorePillAfterNotch();
+    });
+
+    this._bindNotchDisplayHandlers();
+
+    if (process.env.NODE_ENV === "development") {
+      await DevServerManager.waitForDevServer();
+      await this.notchPopupWindow.loadURL(`${DevServerManager.DEV_SERVER_URL}?notch-popup=true`);
+    } else {
+      const fileInfo = DevServerManager.getAppFilePath(false);
+      await this.notchPopupWindow.loadFile(fileInfo.path, {
+        query: { ...fileInfo.query, "notch-popup": "true" },
+      });
+    }
+
+    // Best-effort reveal: if the renderer never signals ready within 3s, show anyway.
+    this._notchPopupReadyFallback = setTimeout(() => {
+      this._notchPopupReadyFallback = null;
+      if (this.notchPopupWindow && !this.notchPopupWindow.isDestroyed()) {
+        debugLogger.warn("Notch popup renderer did not signal ready, force-showing", {}, "notch");
+        this.notchPopupWindow.showInactive();
+        this._reassertNotchBoundsAfterShow("post-show-fallback");
+      }
+    }, 3000);
+
+    return true;
+  }
+
+  showNotchPopupWindow() {
+    if (this._notchPopupReadyFallback) {
+      clearTimeout(this._notchPopupReadyFallback);
+      this._notchPopupReadyFallback = null;
+    }
+    if (this.notchPopupWindow && !this.notchPopupWindow.isDestroyed()) {
+      this.notchPopupWindow.showInactive();
+      this._reassertNotchBoundsAfterShow("post-show-ready");
+      // Replay the last known state so a freshly-ready renderer is in sync.
+      if (this._notchPopupPendingState) {
+        this.notchPopupWindow.webContents.send("notch-popup-state", this._notchPopupPendingState);
+      }
+    }
+  }
+
+  // macOS re-clamps the frame at show time, so reassert bounds after showInactive().
+  _reassertNotchBoundsAfterShow(context) {
+    const win = this.notchPopupWindow;
+    if (!win || win.isDestroyed()) return;
+    const bounds = this._notchPopupIntendedBounds;
+    if (!bounds) return;
+    this._applyNotchBounds(win, bounds, context);
+    if (this._notchPopupPostShowTimer) {
+      clearTimeout(this._notchPopupPostShowTimer);
+      this._notchPopupPostShowTimer = null;
+    }
+    this._notchPopupPostShowTimer = setTimeout(() => {
+      this._notchPopupPostShowTimer = null;
+      const current = this.notchPopupWindow;
+      if (!current || current.isDestroyed()) return;
+      debugLogger.info(
+        "Notch popup post-show bounds",
+        { context, actual: current.getBounds() },
+        "notch"
+      );
+    }, 300);
+  }
+
+  hideNotchPopup() {
+    if (this._notchPopupReadyFallback) {
+      clearTimeout(this._notchPopupReadyFallback);
+      this._notchPopupReadyFallback = null;
+    }
+    if (this._notchPopupIdleTimer) {
+      clearTimeout(this._notchPopupIdleTimer);
+      this._notchPopupIdleTimer = null;
+    }
+    if (this._notchPopupPostShowTimer) {
+      clearTimeout(this._notchPopupPostShowTimer);
+      this._notchPopupPostShowTimer = null;
+    }
+    this._notchPopupIntendedBounds = null;
+    this._notchPopupIdleToken = null;
+    this._notchPopupPendingState = null;
+    this._unbindNotchDisplayHandlers();
+    if (this.notchPopupWindow && !this.notchPopupWindow.isDestroyed()) {
+      this.notchPopupWindow.close();
+    }
+    this.notchPopupWindow = null;
+    // Every teardown path restores the pill (idempotent — consumes the flag).
+    this._restorePillAfterNotch();
+  }
+
+  setNotchPopupInteractivity(interactive) {
+    if (!this.notchPopupWindow || this.notchPopupWindow.isDestroyed()) return;
+    if (interactive) {
+      this.notchPopupWindow.setIgnoreMouseEvents(false);
+    } else {
+      this.notchPopupWindow.setIgnoreMouseEvents(true, { forward: true });
+    }
+  }
+
+  _restorePillAfterNotch() {
+    // Restore the pill only if it was visible before the popup replaced it.
+    if (this._pillWasVisibleBeforeNotch && !this._floatingIconAutoHide) {
+      this.showDictationPanel();
+    }
+    this._pillWasVisibleBeforeNotch = false;
+  }
+
+  async handleNotchRecordingPhase(phase, { hasTranscriptFeed = true } = {}) {
+    if (process.platform !== "darwin" || !this._notchPopupEnabled) return;
+
+    if (phase === "idle") {
+      const win = this.notchPopupWindow;
+      if (win && !win.isDestroyed()) {
+        // Push idle so the renderer can retract the wings before we hide.
+        const idleState = {
+          phase: "idle",
+          expanded: this._effectiveNotchExpanded(),
+          elapsedResetToken: this._notchPopupPendingState?.elapsedResetToken ?? Date.now(),
+          menuBarHeight: this._notchPopupPendingState?.menuBarHeight ?? 0,
+          notchSpacerWidth: this._notchPopupPendingState?.notchSpacerWidth ?? 0,
+          leftWingWidth: this._notchPopupPendingState?.leftWingWidth ?? LEFT_WING_WIDTH,
+          rightWingWidth: this._notchPopupPendingState?.rightWingWidth ?? RIGHT_WING_WIDTH,
+          panelHeight: this._notchPanelHeight(),
+        };
+        this._notchPopupPendingState = idleState;
+        win.webContents.send("notch-popup-state", idleState);
+        const token = Symbol("notch-idle");
+        this._notchPopupIdleToken = token;
+        if (this._notchPopupIdleTimer) clearTimeout(this._notchPopupIdleTimer);
+        this._notchPopupIdleTimer = setTimeout(() => {
+          this._notchPopupIdleTimer = null;
+          // Skip if a new session started during the exit window.
+          if (this._notchPopupIdleToken !== token) return;
+          this.hideNotchPopup();
+        }, 200);
+      } else {
+        this._restorePillAfterNotch();
+      }
+      return;
+    }
+
+    // A non-idle phase supersedes any pending idle retract.
+    const hadPendingIdle =
+      this._notchPopupIdleTimer != null ||
+      this._notchPopupPendingState?.phase === "idle";
+    this._notchPopupIdleToken = null;
+    if (this._notchPopupIdleTimer) {
+      clearTimeout(this._notchPopupIdleTimer);
+      this._notchPopupIdleTimer = null;
+    }
+
+    const internal = findInternalDisplay(screen.getAllDisplays());
+    const menuBarHeight = internal ? computeMenuBarHeight(internal) : 0;
+    const notchSpacerWidth = internal ? estimatedNotchWidth(internal) : 0;
+
+    const isNewSession = !this.notchPopupWindow;
+    // Feed is session-scoped: latch on session start (a retract-window restart is a new session).
+    if (isNewSession || hadPendingIdle) {
+      this._notchSessionHasFeed = Boolean(hasTranscriptFeed);
+      if (!isNewSession) this._syncNotchExpansion("session-restart", false);
+    } else if (hasTranscriptFeed && !this._notchSessionHasFeed) {
+      // Streaming state can commit a beat after recording starts; upgrade and resize.
+      this._notchSessionHasFeed = true;
+      this._syncNotchExpansion("feed-upgrade", false);
+    }
+    // Restart within the retract window resets the timer, so mint a fresh token.
+    const token =
+      isNewSession || hadPendingIdle
+        ? Date.now()
+        : this._notchPopupPendingState?.elapsedResetToken ?? Date.now();
+    this._notchPopupPendingState = {
+      phase,
+      expanded: this._effectiveNotchExpanded(),
+      elapsedResetToken: token,
+      menuBarHeight,
+      notchSpacerWidth,
+      leftWingWidth: LEFT_WING_WIDTH,
+      rightWingWidth: RIGHT_WING_WIDTH,
+      panelHeight: this._notchPanelHeight(),
+    };
+
+    if (isNewSession) {
+      const shown = await this.showNotchPopup();
+      if (!shown) {
+        // No notch display or creation failed. Best-effort: keep the pill.
+        this._notchPopupPendingState = null;
+        return;
+      }
+      this._pillWasVisibleBeforeNotch = this.isDictationPanelVisible();
+      if (this._pillWasVisibleBeforeNotch) {
+        this.hideDictationPanel();
+      }
+    }
+
+    if (this.notchPopupWindow && !this.notchPopupWindow.isDestroyed()) {
+      this.notchPopupWindow.webContents.send("notch-popup-state", this._notchPopupPendingState);
+    }
   }
 
   async showUpdateNotification(info) {

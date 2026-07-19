@@ -3017,5 +3017,26 @@
     },
     "start": "メモを取る",
     "join": "参加して文字起こし"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "ノッチ口述ポップアップ",
+      "description": "口述中にノッチからポップアップを展開します。ノッチのないディスプレイではフローティングピルに戻ります。"
+    },
+    "expanded": {
+      "label": "ノッチのライブ文字起こし",
+      "description": "口述中にノッチのウィングの下にライブ文字起こしパネルを表示します。"
+    },
+    "panelSize": {
+      "label": "ライブ文字起こしの高さ",
+      "description": "ノッチ下のライブ文字起こしパネルの高さ。",
+      "small": "小",
+      "large": "大"
+    },
+    "streamingHint": "滑らかなライブテキストにはストリーミング文字起こしモデルが必要です（例: Parakeet online）。",
+    "liveTranscript": "ライブ文字起こし",
+    "stopAria": "口述を停止",
+    "openControlPanelAria": "コントロールパネルを開く",
+    "listening": "聞き取り中"
   }
 }

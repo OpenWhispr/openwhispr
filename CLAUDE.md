@@ -126,6 +126,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **qdrantManager.js**: Qdrant vector DB sidecar process lifecycle (spawn, health check, shutdown)
 - **localEmbeddings.js**: Local text embedding via ONNX Runtime + all-MiniLM-L6-v2 (384-dim vectors)
 - **vectorIndex.js**: Qdrant collection management — upsert, delete, search, batch reindex
+- **notchDisplay.js**: Pure geometry helpers for the macOS notch popup (notch detection via menu bar inset heuristic, notch width estimate, popup bounds) — no Electron imports so `node --test` can require it
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
 - **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app.
@@ -135,6 +136,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 - **App.jsx**: Main dictation interface with recording states
 - **ControlPanel.tsx**: Settings, history, model management UI
+- **NotchPopupOverlay.tsx**: macOS notch-anchored dictation popup (timer wing, mic button wing, optional expanded teleprompter transcript)
 - **OnboardingFlow.tsx**: 8-step first-time setup wizard
 - **PostMigrationOnboarding.tsx**: One-time modal for users returning from the pre-Gizmo bundle ID; reuses `PermissionsSection` to walk through re-granting Microphone, Accessibility, and System Audio. Triggered by `postMigrationDetector.js` (see Helper Modules)
 - **SettingsPage.tsx**: Comprehensive settings interface
@@ -312,6 +314,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 - `LOCAL_TRANSCRIPTION_PROVIDER`: Transcription engine (`nvidia` for Parakeet)
 - `PARAKEET_MODEL`: Selected Parakeet model name (e.g., `parakeet-tdt-0.6b-v3`)
+- `NOTCH_POPUP_ENABLED` / `NOTCH_POPUP_EXPANDED`: macOS notch dictation popup toggles (mirrored in localStorage as `notchPopupEnabled` / `notchPopupExpanded`)
 
 ### 6. Language Support
 
@@ -625,6 +628,32 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 - Requires the dictation agent to be enabled (Settings → AI Models) for the agent route to apply
 
 **Tests**: `test/helpers/dictationRouting.test.js` (run with `node --test`)
+
+### 18. Notch Dictation Popup (macOS)
+
+Optional Dynamic Island-style popup that anchors dictation UI to the physical notch instead of the floating pill. Darwin-only, off by default.
+
+**Behavior**:
+
+- On dictation start, black wings split out from the notch: elapsed timer (left), mic button (right — click stops, right-click opens Control Panel)
+- Expanded mode adds a live teleprompter transcript below the notch, fed by streaming partials (online Parakeet models) or the 1.5s chunked preview path (`notchExpanded` flag on `start-dictation-preview` forces chunks even with the preview toggle off)
+- Falls back to the classic pill on displays without a notch, on non-mac platforms, or on any failure — never blocks dictation
+
+**Architecture**:
+
+- `notchDisplay.js`: pure geometry — notch detected via menu bar inset heuristic (≥30px), notch width estimated from logical display width (ratio 0.1323, clamped 180–264px), bounds center the notch spacer (wings are asymmetric)
+- `windowConfig.js`: `NOTCH_POPUP_CONFIG` — frameless transparent panel at screen-saver level, created at expanded height so the split animation never resizes, `enableLargerThanScreen` to escape menu bar pinning
+- `windowManager.js`: lifecycle (`setNotchPopupSettings`, `handleNotchRecordingPhase`, `showNotchPopupWindow`); when expanded mode is active, all `*TranscriptionPreview` methods reroute to the notch window; content-protected so it never appears in screen shares
+- `NotchPopupOverlay.tsx`: renderer UI (OLED-black, sub-300ms transform/opacity motion, reduced-motion fallbacks)
+
+**IPC**:
+
+- Renderer → main: `notch-popup-settings-changed`, `notch-popup-recording-changed` (phase: idle/recording/processing), `notch-popup-action` (stop / open-control-panel), `notch-popup-ready`, `get-notch-popup-state`, `set-notch-popup-interactivity`
+- Main → renderer: `notch-popup-state`, plus the shared `preview-*` channels in expanded mode
+
+**Settings**: Settings → General → Floating Icon panel (darwin-only rows) — popup toggle and expanded transcript toggle (with streaming-model hint when the selected model isn't an online model). Persisted to `.env` as `NOTCH_POPUP_ENABLED` / `NOTCH_POPUP_EXPANDED` and localStorage as `notchPopupEnabled` / `notchPopupExpanded`.
+
+**Tests**: `test/helpers/notchDisplay.test.js` (run with `node --test`)
 
 ## Development Guidelines
 

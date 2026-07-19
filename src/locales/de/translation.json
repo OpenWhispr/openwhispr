@@ -3017,5 +3017,26 @@
     },
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "Notch-Diktier-Popup",
+      "description": "Blendet während des Diktierens ein Popup aus der Notch aus. Auf Displays ohne Notch wird auf die schwebende Pille zurückgegriffen."
+    },
+    "expanded": {
+      "label": "Live-Transkript in der Notch",
+      "description": "Zeigt beim Diktieren ein Live-Transkript-Panel unter den Notch-Flügeln an."
+    },
+    "panelSize": {
+      "label": "Höhe des Live-Transkripts",
+      "description": "Höhe des Live-Transkript-Panels unter der Notch.",
+      "small": "Klein",
+      "large": "Groß"
+    },
+    "streamingHint": "Für flüssigen Live-Text ist ein Streaming-Transkriptionsmodell erforderlich (zum Beispiel Parakeet online).",
+    "liveTranscript": "Live-Transkript",
+    "stopAria": "Diktat stoppen",
+    "openControlPanelAria": "Bedienfeld öffnen",
+    "listening": "Höre zu"
   }
 }

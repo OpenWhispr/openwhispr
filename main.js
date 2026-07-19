@@ -505,6 +505,11 @@ function initializeDeferredManagers() {
         detail: detailLines.join("\n\n"),
       });
     });
+
+    // Measure exact notch geometry natively; heuristic stays as the fallback.
+    try {
+      require("./src/helpers/notchProbe").init();
+    } catch {}
   }
 
   googleCalendarManager.start();
@@ -905,6 +910,14 @@ async function startApp() {
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
+  if (typeof windowManager.setNotchPopupSettings === "function") {
+    windowManager.setNotchPopupSettings(
+      environmentManager.getNotchPopupEnabled(),
+      environmentManager.getNotchPopupExpanded(),
+      environmentManager.getNotchPopupPanelSize()
+    );
+  }
+
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     windowManager.setActivationModeCache(mode);
     environmentManager.saveActivationMode(mode);
@@ -916,6 +929,38 @@ async function startApp() {
     // Relay to the floating icon window so it can react immediately
     if (windowManager.mainWindow && !windowManager.mainWindow.isDestroyed()) {
       windowManager.mainWindow.webContents.send("floating-icon-auto-hide-changed", enabled);
+    }
+  });
+
+  ipcMain.on("notch-popup-settings-changed", (_event, payload) => {
+    const enabled = Boolean(payload?.enabled);
+    const expanded = Boolean(payload?.expanded);
+    const panelSize = payload?.panelSize === "large" ? "large" : "small";
+    environmentManager.saveNotchPopupEnabled(enabled);
+    environmentManager.saveNotchPopupExpanded(expanded);
+    environmentManager.saveNotchPopupPanelSize(panelSize);
+    environmentManager.saveAllKeysToEnvFile().catch(() => {});
+    if (typeof windowManager.setNotchPopupSettings === "function") {
+      windowManager.setNotchPopupSettings(enabled, expanded, panelSize);
+    }
+  });
+
+  ipcMain.on("notch-popup-recording-changed", (_event, payload) => {
+    const phase =
+      payload?.phase === "recording" || payload?.phase === "processing" ? payload.phase : "idle";
+    // Absent flag defaults to true (backward-compatible with older renderers).
+    const hasTranscriptFeed = payload?.hasTranscriptFeed !== false;
+    windowManager.handleNotchRecordingPhase(phase, { hasTranscriptFeed }).catch((err) => {
+      if (debugLogger)
+        debugLogger.error("Failed to handle notch recording phase", { phase, error: err?.message });
+    });
+  });
+
+  ipcMain.on("notch-popup-action", (_event, action) => {
+    if (action === "stop") {
+      windowManager.sendStopDictation();
+    } else if (action === "open-control-panel") {
+      windowManager.createControlPanelWindow();
     }
   });
 
@@ -1208,7 +1253,9 @@ async function startApp() {
               debugLogger?.debug("[Globe] Ignored — cooldown active");
               return;
             }
-            windowManager.showDictationPanel();
+            if (!windowManager._shouldSuppressPillForNotch()) {
+              windowManager.showDictationPanel();
+            }
             const pressTime = now;
             globeKeyDownTime = pressTime;
             globeKeyIsRecording = false;
@@ -1328,7 +1375,9 @@ async function startApp() {
         if (rightModActiveKey && rightModActiveKey !== modifier) return;
         const now = Date.now();
         if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
-        windowManager.showDictationPanel();
+        if (!windowManager._shouldSuppressPillForNotch()) {
+          windowManager.showDictationPanel();
+        }
         const pressTime = now;
         rightModActiveKey = modifier;
         rightModDownTime = pressTime;
@@ -1414,7 +1463,9 @@ async function startApp() {
         if (mouseButtonActiveButton && mouseButtonActiveButton !== button) return;
         const now = Date.now();
         if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
-        windowManager.showDictationPanel();
+        if (!windowManager._shouldSuppressPillForNotch()) {
+          windowManager.showDictationPanel();
+        }
         const pressTime = now;
         mouseButtonActiveButton = button;
         mouseButtonDownTime = pressTime;

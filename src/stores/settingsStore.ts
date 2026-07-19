@@ -144,6 +144,8 @@ const BOOLEAN_SETTINGS = new Set([
   "notifyCalendarReminders",
   "notifyUpdates",
   "gcalPrimaryOnly",
+  "notchPopupEnabled",
+  "notchPopupExpanded",
 ]);
 
 const ARRAY_SETTINGS = new Set([
@@ -412,6 +414,9 @@ export interface SettingsState
   pauseMediaOnDictation: boolean;
   floatingIconAutoHide: boolean;
   startMinimized: boolean;
+  notchPopupEnabled: boolean;
+  notchPopupExpanded: boolean;
+  notchPopupPanelSize: "small" | "large";
   gcalAccounts: GoogleCalendarAccount[];
   gcalConnected: boolean;
   gcalEmail: string;
@@ -666,6 +671,9 @@ export interface SettingsState
   setPauseMediaOnDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
+  setNotchPopupEnabled: (value: boolean) => void;
+  setNotchPopupExpanded: (value: boolean) => void;
+  setNotchPopupPanelSize: (value: "small" | "large") => void;
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
   setNotificationsEnabled: (value: boolean) => void;
   setNotifyMeetingDetection: (value: boolean) => void;
@@ -1010,6 +1018,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   startMinimized: readBoolean("startMinimized", false),
+  notchPopupEnabled: readBoolean("notchPopupEnabled", false),
+  notchPopupExpanded: readBoolean("notchPopupExpanded", false),
+  notchPopupPanelSize: (() => {
+    const v = readString("notchPopupPanelSize", "small");
+    return v === "large" ? "large" : "small";
+  })(),
   notificationsEnabled: readBoolean("notificationsEnabled", true),
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
@@ -1607,6 +1621,45 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ startMinimized: enabled });
     if (isBrowser) {
       window.electronAPI?.notifyStartMinimizedChanged?.(enabled);
+    }
+  },
+
+  setNotchPopupEnabled: (value: boolean) => {
+    if (get().notchPopupEnabled === value) return;
+    if (isBrowser) localStorage.setItem("notchPopupEnabled", String(value));
+    set({ notchPopupEnabled: value });
+    if (isBrowser) {
+      window.electronAPI?.notifyNotchPopupSettingsChanged?.({
+        enabled: value,
+        expanded: get().notchPopupExpanded,
+        panelSize: get().notchPopupPanelSize,
+      });
+    }
+  },
+
+  setNotchPopupExpanded: (value: boolean) => {
+    if (get().notchPopupExpanded === value) return;
+    if (isBrowser) localStorage.setItem("notchPopupExpanded", String(value));
+    set({ notchPopupExpanded: value });
+    if (isBrowser) {
+      window.electronAPI?.notifyNotchPopupSettingsChanged?.({
+        enabled: get().notchPopupEnabled,
+        expanded: value,
+        panelSize: get().notchPopupPanelSize,
+      });
+    }
+  },
+
+  setNotchPopupPanelSize: (value: "small" | "large") => {
+    if (get().notchPopupPanelSize === value) return;
+    if (isBrowser) localStorage.setItem("notchPopupPanelSize", value);
+    set({ notchPopupPanelSize: value });
+    if (isBrowser) {
+      window.electronAPI?.notifyNotchPopupSettingsChanged?.({
+        enabled: get().notchPopupEnabled,
+        expanded: get().notchPopupExpanded,
+        panelSize: value,
+      });
     }
   },
 
