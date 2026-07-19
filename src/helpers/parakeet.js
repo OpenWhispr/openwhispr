@@ -13,8 +13,13 @@ const {
 const ParakeetServerManager = require("./parakeetServer");
 const { getModelsDirForService } = require("./modelDirUtils");
 const { getModelRuntime, REQUIRED_MODEL_FILES } = require("./parakeetModelInfo");
+const { mergeSpeakerTurns, buildSpeakerLabels } = require("./mergeSpeakerTurns");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
+
+const SAMPLE_RATE = 16000;
+const BYTES_PER_SAMPLE = 4; // float32
+const MAX_TURN_SECONDS = 60;
 
 function getParakeetModelConfig(modelName) {
   const modelInfo = modelRegistryData.parakeetModels[modelName];
@@ -190,15 +195,9 @@ class ParakeetManager {
     return this.serverManager.getServerStatus();
   }
 
-  async transcribeLocalParakeet(audioBlob, options = {}) {
-    debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
-      options,
-      audioBlobType: audioBlob?.constructor?.name,
-      audioBlobSize: audioBlob?.byteLength || audioBlob?.size || 0,
-      serverAvailable: this.serverManager.isAvailable(),
-    });
-
-    const model = options.model || "parakeet-tdt-0.6b-v3";
+  // Validates server/model availability and normalizes the incoming blob into a
+  // Buffer. Shared by transcribeLocalParakeet and its diarization variant.
+  _prepareTranscription(audioBlob, model) {
     const runtime = getModelRuntime(model);
     const serverAvailable = this.serverManager.isAvailable(runtime);
 
@@ -234,6 +233,20 @@ class ParakeetManager {
       throw new Error("Audio buffer is empty - no audio data received");
     }
 
+    return audioBuffer;
+  }
+
+  async transcribeLocalParakeet(audioBlob, options = {}) {
+    debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
+      options,
+      audioBlobType: audioBlob?.constructor?.name,
+      audioBlobSize: audioBlob?.byteLength || audioBlob?.size || 0,
+      serverAvailable: this.serverManager.isAvailable(),
+    });
+
+    const model = options.model || "parakeet-tdt-0.6b-v3";
+    const audioBuffer = this._prepareTranscription(audioBlob, model);
+
     debugLogger.logSTTPipeline("transcribeLocalParakeet - processing", {
       bufferSize: audioBuffer.length,
       model,
@@ -249,6 +262,79 @@ class ParakeetManager {
     });
 
     return this.parseParakeetResult(result);
+  }
+
+  // Diarizes the audio first, then transcribes per speaker turn instead of per
+  // fixed-size chunk, producing a speaker-labeled transcript. Falls back to the
+  // plain (non-diarized) transcription if diarization finds no speaker segments
+  // (e.g. models unavailable, or a single continuous speaker).
+  async transcribeLocalParakeetWithDiarization(audioBlob, options = {}, diarizationManager) {
+    const model = options.model || "parakeet-tdt-0.6b-v3";
+    const audioBuffer = this._prepareTranscription(audioBlob, model);
+
+    debugLogger.logSTTPipeline("transcribeLocalParakeetWithDiarization - start", {
+      bufferSize: audioBuffer.length,
+      model,
+    });
+
+    const { samples, wavPath, filesToCleanup } =
+      await this.serverManager.prepareAudioForDiarization(audioBuffer);
+
+    try {
+      const startTime = Date.now();
+      const numSpeakers = options.numSpeakers || -1;
+      const diarizationSegments = await diarizationManager.diarize(
+        wavPath,
+        numSpeakers > 0 ? { numSpeakers } : {}
+      );
+
+      if (!diarizationSegments.length) {
+        debugLogger.warn(
+          "transcribeLocalParakeetWithDiarization - no speaker segments found, falling back to plain transcription"
+        );
+        const result = await this.serverManager.transcribeSamples(samples, { modelName: model });
+        return this.parseParakeetResult(result);
+      }
+
+      const turns = mergeSpeakerTurns(diarizationSegments, {
+        maxGapSec: 1.5,
+        maxTurnSec: MAX_TURN_SECONDS,
+      });
+      const speakerLabels = buildSpeakerLabels(turns, options.speakerLabelPrefix || "Speaker");
+
+      const lines = [];
+      const segments = [];
+
+      for (const turn of turns) {
+        const startByte = Math.max(0, Math.floor(turn.start * SAMPLE_RATE) * BYTES_PER_SAMPLE);
+        const endByte = Math.min(samples.length, Math.ceil(turn.end * SAMPLE_RATE) * BYTES_PER_SAMPLE);
+        if (endByte <= startByte) continue;
+
+        const slice = samples.subarray(startByte, endByte);
+        const result = await this.serverManager.transcribeSamples(slice, { modelName: model });
+        const text = result.text?.trim();
+        if (!text) continue;
+
+        const label = speakerLabels.get(turn.speaker) || turn.speaker;
+        lines.push(`${label}: ${text}`);
+        segments.push({ speaker: label, start: turn.start, end: turn.end, text });
+      }
+
+      const elapsed = Date.now() - startTime;
+      debugLogger.logSTTPipeline("transcribeLocalParakeetWithDiarization - completed", {
+        elapsed,
+        turnCount: turns.length,
+        speakerCount: speakerLabels.size,
+      });
+
+      if (!lines.length) {
+        return { success: false, message: "No audio detected" };
+      }
+
+      return { success: true, text: lines.join("\n\n"), segments };
+    } finally {
+      this.serverManager._cleanupFiles(filesToCleanup);
+    }
   }
 
   parseParakeetResult(output) {

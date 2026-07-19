@@ -174,8 +174,10 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
+    useCleanupModel,
     cleanupMode,
     localModel,
+    useDictationAgent,
     dictationAgentMode,
     dictationAgentModel,
   } = store;
@@ -187,17 +189,24 @@ function useSettingsInternal() {
     // Local cleanup uses the shared Local Model (localModel); cleanupModel stays empty and
     // the resolved provider is the model family (e.g. "qwen"), never "local" — so key the
     // local-cleanup pre-warm off cleanupMode, not the provider. Mirrors getEffectiveCleanupModel().
+    // useCleanupModel gates all of it: when "Enable Text Cleanup" is off, no cleanup model should
+    // ever be pre-warmed or kept loaded, regardless of the last-selected mode/model.
     window.electronAPI
       .syncStartupPreferences({
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
+        useCleanupModel,
         cleanupMode,
-        cleanupModel: cleanupMode === "local" ? localModel || undefined : undefined,
+        cleanupModel:
+          useCleanupModel && cleanupMode === "local" ? localModel || undefined : undefined,
+        useDictationAgent,
         dictationAgentMode,
         // Local dictation agent also uses the shared Local Model (dictationAgentModel stays
-        // empty); gate on the mode, same as cleanup above.
-        dictationAgentModel: dictationAgentMode === "local" ? localModel || undefined : undefined,
+        // empty); gate on the mode, same as cleanup above. useDictationAgent (the agent's own
+        // enable toggle) gates it too: a disabled agent must never pre-warm or keep a model loaded.
+        dictationAgentModel:
+          useDictationAgent && dictationAgentMode === "local" ? localModel || undefined : undefined,
       })
       .catch((err) =>
         logger.warn(
@@ -211,8 +220,10 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
+    useCleanupModel,
     cleanupMode,
     localModel,
+    useDictationAgent,
     dictationAgentMode,
     dictationAgentModel,
   ]);

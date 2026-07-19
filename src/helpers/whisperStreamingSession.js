@@ -40,10 +40,17 @@ const DEFAULTS = Object.freeze({
   // Enter-speech RMS floor (0..1). A frame counts as voiced when its RMS clears
   // max(energyThreshold, noiseFloor * NOISE_FLOOR_FACTOR), so a noisy mic raises
   // the bar adaptively instead of latching on to steady background hum.
-  energyThreshold: 0.012,
+  // Kept low deliberately: this is an absolute floor, not scaled to the user's
+  // configured mic gain, and it only ever matters in quiet rooms — in noisy ones
+  // the adaptive noiseFloor * noiseFloorFactor term dominates regardless. Too high
+  // a floor means real speech that the authoritative (non-VAD-gated) offline pass
+  // transcribes just fine never even registers as "voiced" here, so the live
+  // preview shows nothing; the rare frame that does cross a high floor is often
+  // a truncated fragment (plosive/mic pop) that transcribes as garbage.
+  energyThreshold: 0.006,
   // Segments whose overall RMS is below this are dropped without an inference —
   // guards against a VAD blip transcribing near-silence into a hallucination.
-  minSegmentRms: 0.006,
+  minSegmentRms: 0.003,
   noiseFloorFactor: 3,
   noiseFloorAlpha: 0.05,
   // Adaptive-merge caps: how many times a low-quality utterance may be deferred
@@ -116,6 +123,13 @@ class WhisperVadStreamingSession {
     this._mergeCount = 0;
     this._committedMs = 0; // total audio duration behind committed text
     this._lowQualityMs = 0; // committed audio duration still judged low confidence
+    // Total duration of audio ever pushed in, regardless of whether the VAD ever
+    // judged it "voiced". lowQualityRatio alone only scores what WAS committed —
+    // if the VAD misses most of a long utterance but transcribes the one snippet
+    // it does catch with high confidence, that ratio reads as perfect even though
+    // most of the recording was silently dropped. Comparing committedMs against
+    // this total is what actually catches that under-coverage case.
+    this._totalInputMs = 0;
     this._aborted = false;
     this._finishing = false;
     this._hadError = false;
@@ -156,6 +170,7 @@ class WhisperVadStreamingSession {
   }
 
   _processFrame(buf, byteOffset) {
+    this._totalInputMs += this._frameMs;
     const rms = computeRms(buf, byteOffset, this._frameSamples);
     const bar = Math.max(this._energyThreshold, this._noiseFloor * this._noiseFloorFactor);
     const voiced = rms >= bar;
@@ -362,10 +377,17 @@ class WhisperVadStreamingSession {
       quality: {
         committedMs: this._committedMs,
         lowQualityMs: this._lowQualityMs,
+        totalInputMs: this._totalInputMs,
         // Fraction (0..1) of committed audio duration that stayed low confidence
         // even after any merging. High => the stream is globally poor; callers
         // should prefer a full offline re-transcription over this transcript.
         lowQualityRatio: this._committedMs > 0 ? this._lowQualityMs / this._committedMs : 0,
+        // Fraction (0..1) of the whole session's audio that ended up committed.
+        // Low => the VAD missed most of the recording (never entered STATE_SPEECH,
+        // or flushed segments too quiet to clear minSegmentRms), even if the sliver
+        // it did catch transcribed with perfect confidence. Callers should treat
+        // this the same as low confidence: prefer the authoritative offline pass.
+        coverageRatio: this._totalInputMs > 0 ? this._committedMs / this._totalInputMs : 0,
       },
     };
   }

@@ -357,17 +357,20 @@ class LlamaServerManager {
 
     const requestBody = {
       messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens ?? 512,
+      // Coerce with Number(): llama-server's JSON schema requires these as numbers
+      // and rejects the whole request with a 400 if any arrives as a string (e.g.
+      // a stale/corrupted settingsStore value surviving a hot-reload).
+      temperature: Number(options.temperature ?? 0.7),
+      max_tokens: Number(options.max_tokens ?? 512),
       stream: false,
     };
 
     // llama.cpp's OpenAI-compatible endpoint accepts these sampling extensions.
     // Only send the ones the caller provided so llama.cpp defaults apply otherwise.
-    if (options.topP != null) requestBody.top_p = options.topP;
-    if (options.topK != null) requestBody.top_k = options.topK;
-    if (options.minP != null) requestBody.min_p = options.minP;
-    if (options.repeatPenalty != null) requestBody.repeat_penalty = options.repeatPenalty;
+    if (options.topP != null) requestBody.top_p = Number(options.topP);
+    if (options.topK != null) requestBody.top_k = Number(options.topK);
+    if (options.minP != null) requestBody.min_p = Number(options.minP);
+    if (options.repeatPenalty != null) requestBody.repeat_penalty = Number(options.repeatPenalty);
 
     // Without this, Qwen chat templates leave `message.content` empty and
     // route output into `reasoning_content`. Non-Qwen templates ignore it.

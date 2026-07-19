@@ -2391,7 +2391,9 @@
       "switchToCloudForLargeFiles": "Switch to EktosWhispr Cloud to transcribe this file.",
       "createAccount": "Create Account",
       "upgrade": "Upgrade",
-      "switchToCloud": "EktosWhispr Cloud"
+      "switchToCloud": "EktosWhispr Cloud",
+      "identifySpeakers": "Identify speakers",
+      "identifySpeakersHint": "Labels each speaker in the transcript. Adds processing time."
     },
     "meeting": {
       "title": "Meeting Notes",

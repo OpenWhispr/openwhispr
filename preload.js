@@ -643,6 +643,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Start minimized
   notifyStartMinimizedChanged: (enabled) => ipcRenderer.send("start-minimized-changed", enabled),
+  getStartMinimized: () => ipcRenderer.invoke("get-start-minimized"),
 
   // Open control panel window from renderer
   openControlPanel: () => ipcRenderer.send("open-control-panel"),

@@ -14,6 +14,7 @@ import {
 } from "../ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { Toggle } from "../ui/toggle";
 import type { FolderItem } from "../../types/electron";
 import { findDefaultFolder, MEETINGS_FOLDER_NAME } from "./shared";
 
@@ -77,6 +78,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [newFolderName, setNewFolderName] = useState("");
 
   const [providerReady, setProviderReady] = useState<boolean | null>(null);
+  const [identifySpeakers, setIdentifySpeakers] = useState(false);
+  const [diarizationAvailable, setDiarizationAvailable] = useState<boolean | null>(null);
 
 
   const usage = useUsage();
@@ -134,6 +137,16 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       const personal = findDefaultFolder(f);
       if (personal) setSelectedFolderId(String(personal.id));
     });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.electronAPI.getDiarizationModelStatus?.().then((status) => {
+      if (!cancelled) setDiarizationAvailable(!!(status?.available && status?.modelsDownloaded));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -311,6 +324,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           model: localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel,
           ...(uploadLanguage && { language: uploadLanguage }),
           ...(initialPrompt && { initialPrompt }),
+          ...(localTranscriptionProvider === "nvidia" &&
+            identifySpeakers && { diarize: true }),
         });
       } else {
         res = await window.electronAPI.transcribeAudioFileByok!({
@@ -445,6 +460,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               isProUser={!!isProUser}
               onUpgrade={() => usage?.openCheckout()}
               onSwitchToCloud={switchToCloud}
+              showDiarizationOption={
+                useLocalWhisper && localTranscriptionProvider === "nvidia" && diarizationAvailable === true
+              }
+              identifySpeakers={identifySpeakers}
+              setIdentifySpeakers={setIdentifySpeakers}
             />
           )}
 
@@ -681,6 +701,9 @@ interface SelectedViewProps {
   isProUser: boolean;
   onUpgrade: () => void;
   onSwitchToCloud: () => void;
+  showDiarizationOption: boolean;
+  identifySpeakers: boolean;
+  setIdentifySpeakers: (value: boolean) => void;
 }
 
 function SelectedView({
@@ -693,6 +716,9 @@ function SelectedView({
   isProUser,
   onUpgrade,
   onSwitchToCloud,
+  showDiarizationOption,
+  identifySpeakers,
+  setIdentifySpeakers,
 }: SelectedViewProps) {
   const canTranscribe = !byokTooLarge;
 
@@ -716,6 +742,20 @@ function SelectedView({
           </button>
         </div>
       </div>
+
+      {showDiarizationOption && (
+        <div className="rounded-lg border border-foreground/8 dark:border-white/6 bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm px-3 py-2.5 mb-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-foreground/60 font-medium">
+              {t("notes.upload.identifySpeakers")}
+            </p>
+            <p className="text-xs text-foreground/25 mt-0.5">
+              {t("notes.upload.identifySpeakersHint")}
+            </p>
+          </div>
+          <Toggle checked={identifySpeakers} onChange={setIdentifySpeakers} />
+        </div>
+      )}
 
       {/* BYOK file too large — shared explanation */}
       {byokTooLarge && (

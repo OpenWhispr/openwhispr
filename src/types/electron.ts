@@ -758,8 +758,10 @@ declare global {
         useLocalWhisper: boolean;
         localTranscriptionProvider: LocalTranscriptionProvider;
         model?: string;
+        useCleanupModel: boolean;
         cleanupMode: string;
         cleanupModel?: string;
+        useDictationAgent: boolean;
         dictationAgentMode: string;
         dictationAgentModel?: string;
       }) => Promise<void>;
@@ -1181,6 +1183,7 @@ declare global {
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
+      getStartMinimized?: () => Promise<boolean>;
       notifyPanelStartPositionChanged?: (position: string) => void;
 
       // Auto-start at login

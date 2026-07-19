@@ -2192,7 +2192,9 @@
       "switchToCloudForLargeFiles": "Mude para o EktosWhispr Cloud para transcrever este arquivo.",
       "createAccount": "Criar conta",
       "upgrade": "Fazer upgrade",
-      "switchToCloud": "EktosWhispr Cloud"
+      "switchToCloud": "EktosWhispr Cloud",
+      "identifySpeakers": "Identificar interlocutores",
+      "identifySpeakersHint": "Rotula cada interlocutor na transcrição. Aumenta o tempo de processamento."
     },
     "meeting": {
       "title": "Notas de reunião",

@@ -2164,6 +2164,29 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
+    // Reflect the authoritative persisted "start minimized" flag. The main
+    // process reads START_MINIMIZED from its .env at launch to decide whether to
+    // open the control panel; the renderer's localStorage copy can drift from it
+    // (e.g. after a data reset or a stale .env), which left the toggle showing OFF
+    // while the app still launched to the tray only. Hydrate from the main process
+    // so the toggle mirrors real startup behavior and toggling it always persists.
+    try {
+      const envStartMinimized = await window.electronAPI.getStartMinimized?.();
+      if (
+        typeof envStartMinimized === "boolean" &&
+        envStartMinimized !== state.startMinimized
+      ) {
+        localStorage.setItem("startMinimized", String(envStartMinimized));
+        useSettingsStore.setState({ startMinimized: envStartMinimized });
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync start-minimized from main process",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
     // Sync dictation key from main process.
     // localStorage holds the user's preferred hotkey. Only populate from .env
     // when localStorage is empty (fresh install / cleared data).

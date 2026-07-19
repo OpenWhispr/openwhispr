@@ -1904,6 +1904,15 @@ class IPCHandlers {
       try {
         const audioBuffer = fs.readFileSync(filePath);
         if (options.provider === "nvidia") {
+          if (options.diarize && this.diarizationManager?.isAvailable()) {
+            const speakerLabelPrefix =
+              this.environmentManager.getUiLanguage() === "pt" ? "Falante" : "Speaker";
+            return await this.parakeetManager.transcribeLocalParakeetWithDiarization(
+              audioBuffer,
+              { ...options, speakerLabelPrefix },
+              this.diarizationManager
+            );
+          }
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
           return result;
         }
@@ -3582,6 +3591,13 @@ class IPCHandlers {
       return this.environmentManager.saveActivationMode(mode);
     });
 
+    // The renderer's localStorage copy of this flag can drift from the value the
+    // main process actually reads at launch; expose the authoritative value so the
+    // settings toggle can hydrate from it and reflect real startup behavior.
+    ipcMain.handle("get-start-minimized", async () => {
+      return this.environmentManager.getStartMinimized();
+    });
+
     ipcMain.handle("get-ui-language", async () => {
       return this.environmentManager.getUiLanguage();
     });
@@ -3649,11 +3665,16 @@ class IPCHandlers {
       // prefs.cleanupModel); its resolved provider is the model family, never "local", so gate on
       // the mode. TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL clears once the
       // read fallback is removed (~2 releases after this lands).
-      if (prefs.cleanupMode === "local" && prefs.cleanupModel) {
+      // useCleanupModel (the "Enable Text Cleanup" toggle) gates all of it: disabling it must
+      // clear the pre-warm vars and stop the llama-server below, even if cleanupMode is still
+      // "local" from before — the model should never sit loaded in memory while cleanup is off.
+      const cleanupUsesLocal =
+        !!prefs.useCleanupModel && prefs.cleanupMode === "local" && !!prefs.cleanupModel;
+      if (cleanupUsesLocal) {
         setVars.CLEANUP_PROVIDER = "local";
         setVars.LOCAL_CLEANUP_MODEL = prefs.cleanupModel;
         clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
-      } else if (prefs.cleanupMode && prefs.cleanupMode !== "local") {
+      } else if (!prefs.useCleanupModel || (prefs.cleanupMode && prefs.cleanupMode !== "local")) {
         clearVars.push(
           "CLEANUP_PROVIDER",
           "LOCAL_CLEANUP_MODEL",
@@ -3664,26 +3685,26 @@ class IPCHandlers {
 
       // Same as cleanup: local dictation agent resolves to the shared localModel (the renderer
       // sends it as prefs.dictationAgentModel) and its provider is the model family, so gate on mode.
+      // useDictationAgent (the agent's own enable toggle) gates all of it too: a disabled agent must
+      // clear the pre-warm vars and let the llama-server stop below, even if dictationAgentMode is
+      // still "local" from before — the model should never sit loaded in memory while the agent is off.
       const dictationAgentLocal =
-        prefs.dictationAgentMode === "local" && prefs.dictationAgentModel;
+        !!prefs.useDictationAgent && prefs.dictationAgentMode === "local" && !!prefs.dictationAgentModel;
       if (dictationAgentLocal) {
         setVars.DICTATION_AGENT_PROVIDER = "local";
         setVars.LOCAL_DICTATION_AGENT_MODEL = prefs.dictationAgentModel;
-      } else if (prefs.dictationAgentMode && prefs.dictationAgentMode !== "local") {
+      } else if (!prefs.useDictationAgent || (prefs.dictationAgentMode && prefs.dictationAgentMode !== "local")) {
         clearVars.push("DICTATION_AGENT_PROVIDER", "LOCAL_DICTATION_AGENT_MODEL");
       }
 
       // Stop the local llama-server only when neither cleanup nor dictation-agent
       // still need a local model. Otherwise the still-active scope would lose
-      // its server on the next provider switch of the other scope.
-      const cleanupNeedsLocal = setVars.CLEANUP_PROVIDER === "local";
+      // its server on the next provider switch of the other scope. This also covers
+      // "Enable Text Cleanup" being turned off outright (cleanupUsesLocal false even
+      // though cleanupMode is still "local") — the model must not stay loaded while
+      // cleanup itself is disabled.
       const dictationAgentNeedsLocal = setVars.DICTATION_AGENT_PROVIDER === "local";
-      if (
-        prefs.cleanupMode &&
-        prefs.cleanupMode !== "local" &&
-        !cleanupNeedsLocal &&
-        !dictationAgentNeedsLocal
-      ) {
+      if (!cleanupUsesLocal && !dictationAgentNeedsLocal) {
         const modelManager = require("./modelManagerBridge").default;
         modelManager.stopServer().catch((err) => {
           debugLogger.error("Failed to stop llama-server on provider switch", {
@@ -6271,6 +6292,14 @@ class IPCHandlers {
     // stayed low confidence, discard the streamed transcript and re-transcribe the
     // whole clip offline with full context instead.
     const MAX_STREAM_LOW_QUALITY_RATIO = 0.5;
+    // Second, independent gate: lowQualityRatio only scores what the VAD actually
+    // committed. If the VAD missed most of the recording (never triggered, or
+    // flushed segments too quiet to clear minSegmentRms) but transcribed the one
+    // sliver it did catch with perfect confidence, lowQualityRatio reads as 0 even
+    // though most of what the user said never reached whisper at all. Requiring a
+    // minimum fraction of the session's total audio to have been committed catches
+    // that under-coverage case and falls back to the authoritative offline pass.
+    const MIN_STREAM_COVERAGE_RATIO = 0.4;
 
     let dictationPreviewMode = false;
     let dictationPreviewBuffer = [];     // Nvidia startup temp buffer only
@@ -6521,8 +6550,21 @@ class IPCHandlers {
         // a timer as a volatile partial so continuous speech still shows text
         // before the first pause. Cost is bounded to one utterance, never the
         // whole accumulated clip.
+        // The streaming session's endpointing is a crude RMS/energy detector, not
+        // the neural Silero model these min-silence/min-speech values were tuned
+        // for. Silero can tell a genuine pause from a brief unvoiced consonant or
+        // breath; energy-only detection can't, so reusing Silero's short default
+        // silence window chops real speech into 1-2 word fragments — many too
+        // quiet to clear minSegmentRms and so silently dropped, which reads as the
+        // preview losing text or "freezing" after the first couple of words. Floor
+        // it higher for endpoint stability; still respect a longer user setting.
+        const sileroVadConfig = this._resolveWhisperVadOptions("dictation")?.vadConfig;
+        const energyVadConfig = {
+          ...sileroVadConfig,
+          minSilenceDurationMs: Math.max(sileroVadConfig?.minSilenceDurationMs || 0, 500),
+        };
         dictationPreviewWhisperSession = createWhisperVadStreamingSession({
-          vadConfig: this._resolveWhisperVadOptions("dictation")?.vadConfig,
+          vadConfig: energyVadConfig,
           transcribe: transcribeWhisperPreviewSegment,
           // A silence boundary is only a hint: if an utterance transcribes with
           // low confidence, hold its audio and re-transcribe it merged with the
@@ -6632,12 +6674,16 @@ class IPCHandlers {
       // whole clip. Empty string when there is no live stream (renderer falls back).
       let streamingText = "";
       if (dictationPreviewStream) {
+        // Capture and clear the shared reference BEFORE awaiting the flush delay
+        // below — otherwise a concurrent reset (dismiss/hide/new start racing in
+        // during the 120ms wait) can null it out from under us and crash this
+        // handler with "Cannot read properties of null (reading 'finish')".
+        const stream = dictationPreviewStream;
+        dictationPreviewStream = null;
         // Let the last preview audio chunk — flushed by the renderer worklet on
         // "stop" — reach dictation-preview-audio before we finalize, so the final
         // word isn't dropped. Mirrors the flush wait in cleanupStreamingAudio().
         await new Promise((resolve) => setTimeout(resolve, 120));
-        const stream = dictationPreviewStream;
-        dictationPreviewStream = null;
         const { text, finalized } = await stream
           .finish()
           .catch(() => ({ text: "", finalized: false }));
@@ -6659,12 +6705,14 @@ class IPCHandlers {
         // authoritative offline transcription instead.
         streamingText = finalized ? filtered : "";
       } else if (dictationPreviewWhisperSession) {
+        // Capture and clear the shared reference BEFORE awaiting the flush delay
+        // below — see the matching comment in the streaming-provider branch above.
+        const session = dictationPreviewWhisperSession;
+        dictationPreviewWhisperSession = null;
         // Whisper VAD session: let the renderer worklet's final flushed chunk
         // land, then close the open utterance and drain the last inference so the
         // committed transcript is complete.
         await new Promise((resolve) => setTimeout(resolve, 120));
-        const session = dictationPreviewWhisperSession;
-        dictationPreviewWhisperSession = null;
         const { text, finalized, quality } = await session.finish().catch((error) => {
           debugLogger.debug("Whisper streaming preview finalize failed", {
             error: error.message,
@@ -6684,13 +6732,20 @@ class IPCHandlers {
         // full context (the authoritative fallback).
         const lowQualityRatio = quality?.lowQualityRatio ?? 0;
         const qualityTooLow = lowQualityRatio > MAX_STREAM_LOW_QUALITY_RATIO;
-        streamingText = finalized && !qualityTooLow ? finalText : "";
+        // coverageRatio is only meaningful once some audio was actually pushed in;
+        // treat a session with no tracked input (e.g. an old caller/test without
+        // the field) as fully covered rather than penalizing it.
+        const coverageRatio = quality?.totalInputMs ? (quality?.coverageRatio ?? 1) : 1;
+        const coverageTooLow = coverageRatio < MIN_STREAM_COVERAGE_RATIO;
+        streamingText = finalized && !qualityTooLow && !coverageTooLow ? finalText : "";
         debugLogger.debug("Whisper streaming finalize", {
           finalized,
+          coverageRatio: Number(coverageRatio.toFixed(2)),
+          coverageTooLow,
           textLength: finalText.length,
           lowQualityRatio: Number(lowQualityRatio.toFixed(2)),
           qualityTooLow,
-          fastPath: finalized && !qualityTooLow && finalText.length > 0,
+          fastPath: finalized && !qualityTooLow && !coverageTooLow && finalText.length > 0,
         });
       }
       // Parakeet (offline, non-streaming): skip that extra pass — it shares a single
