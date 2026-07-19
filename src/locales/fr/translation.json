@@ -1323,6 +1323,53 @@
         "successDescription": "Votre compte et toutes les données ont été supprimés. L'application va maintenant se recharger.",
         "failedTitle": "Échec de la suppression",
         "failedDescription": "Une erreur s'est produite lors de la suppression de votre compte. Vos données locales ont peut-être été partiellement supprimées. Veuillez réessayer."
+      },
+      "profile": {
+        "name": {
+          "label": "Nom affiché",
+          "placeholder": "Votre nom",
+          "save": "Enregistrer",
+          "saving": "Enregistrement...",
+          "saved": "Nom affiché mis à jour",
+          "error": "Impossible de mettre à jour votre nom"
+        },
+        "email": {
+          "label": "E-mail",
+          "change": "Modifier",
+          "dialogTitle": "Modifier l'e-mail",
+          "dialogDescription": "Saisissez la nouvelle adresse e-mail de votre compte.",
+          "newLabel": "Nouvel e-mail",
+          "newPlaceholder": "vous@exemple.com",
+          "submit": "Envoyer le lien de confirmation",
+          "sending": "Envoi...",
+          "cancel": "Annuler",
+          "sentTitle": "Vérifiez votre boîte de réception",
+          "sentDescription": "Nous avons envoyé un lien de confirmation à votre adresse e-mail actuelle. Le changement prend effet une fois que vous l'avez confirmé.",
+          "close": "Fermer"
+        },
+        "password": {
+          "label": "Mot de passe",
+          "description": "Modifiez le mot de passe que vous utilisez pour vous connecter.",
+          "change": "Changer le mot de passe",
+          "dialogTitle": "Changer le mot de passe",
+          "dialogDescription": "Saisissez votre mot de passe actuel et choisissez-en un nouveau.",
+          "currentLabel": "Mot de passe actuel",
+          "newLabel": "Nouveau mot de passe",
+          "confirmLabel": "Confirmer le nouveau mot de passe",
+          "minLength": "Le mot de passe doit contenir au moins 8 caractères",
+          "mismatch": "Les mots de passe ne correspondent pas",
+          "revokeOthers": "Déconnecter les autres appareils",
+          "submit": "Mettre à jour le mot de passe",
+          "saving": "Mise à jour...",
+          "cancel": "Annuler",
+          "saved": "Mot de passe mis à jour"
+        },
+        "errors": {
+          "invalidPassword": "Votre mot de passe actuel est incorrect.",
+          "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères.",
+          "passwordTooLong": "Le mot de passe est trop long.",          "noPassword": "Aucun mot de passe n'est défini pour ce compte.",
+          "generic": "Une erreur est survenue. Veuillez réessayer."
+        }
       }
     },
     "agentConfig": {

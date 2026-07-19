@@ -1275,6 +1275,53 @@
         "successDescription": "アカウントとすべてのデータが削除されました。アプリが再読み込みされます。",
         "failedTitle": "削除に失敗しました",
         "failedDescription": "アカウントの削除中にエラーが発生しました。ローカルデータが部分的に削除された可能性があります。もう一度お試しください。"
+      },
+      "profile": {
+        "name": {
+          "label": "表示名",
+          "placeholder": "お名前",
+          "save": "保存",
+          "saving": "保存中...",
+          "saved": "表示名を更新しました",
+          "error": "名前を更新できませんでした"
+        },
+        "email": {
+          "label": "メールアドレス",
+          "change": "変更",
+          "dialogTitle": "メールアドレスを変更",
+          "dialogDescription": "アカウントの新しいメールアドレスを入力してください。",
+          "newLabel": "新しいメールアドレス",
+          "newPlaceholder": "you@example.com",
+          "submit": "確認リンクを送信",
+          "sending": "送信中...",
+          "cancel": "キャンセル",
+          "sentTitle": "受信トレイを確認してください",
+          "sentDescription": "現在のメールアドレスに確認リンクを送信しました。確認が完了すると変更が適用されます。",
+          "close": "閉じる"
+        },
+        "password": {
+          "label": "パスワード",
+          "description": "サインインに使用するパスワードを変更します。",
+          "change": "パスワードを変更",
+          "dialogTitle": "パスワードを変更",
+          "dialogDescription": "現在のパスワードを入力し、新しいパスワードを設定してください。",
+          "currentLabel": "現在のパスワード",
+          "newLabel": "新しいパスワード",
+          "confirmLabel": "新しいパスワード（確認）",
+          "minLength": "パスワードは 8 文字以上にしてください",
+          "mismatch": "パスワードが一致しません",
+          "revokeOthers": "他のデバイスでサインアウト",
+          "submit": "パスワードを更新",
+          "saving": "更新中...",
+          "cancel": "キャンセル",
+          "saved": "パスワードを更新しました"
+        },
+        "errors": {
+          "invalidPassword": "現在のパスワードが正しくありません。",
+          "passwordTooShort": "パスワードは 8 文字以上にしてください。",
+          "passwordTooLong": "パスワードが長すぎます。",          "noPassword": "このアカウントにはパスワードが設定されていません。",
+          "generic": "問題が発生しました。もう一度お試しください。"
+        }
       }
     },
     "agentConfig": {

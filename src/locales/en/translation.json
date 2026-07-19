@@ -1448,6 +1448,53 @@
         "successDescription": "Your account and all data have been deleted. The app will now reload.",
         "failedTitle": "Deletion Failed",
         "failedDescription": "Something went wrong deleting your account. Your local data may have been partially removed. Please try again."
+      },
+      "profile": {
+        "name": {
+          "label": "Display name",
+          "placeholder": "Your name",
+          "save": "Save",
+          "saving": "Saving...",
+          "saved": "Display name updated",
+          "error": "Couldn't update your name"
+        },
+        "email": {
+          "label": "Email",
+          "change": "Change",
+          "dialogTitle": "Change email",
+          "dialogDescription": "Enter the new email address for your account.",
+          "newLabel": "New email",
+          "newPlaceholder": "you@example.com",
+          "submit": "Send confirmation link",
+          "sending": "Sending...",
+          "cancel": "Cancel",
+          "sentTitle": "Check your inbox",
+          "sentDescription": "We sent a confirmation link to your current email address. The change takes effect once you confirm it.",
+          "close": "Close"
+        },
+        "password": {
+          "label": "Password",
+          "description": "Change the password you use to sign in.",
+          "change": "Change password",
+          "dialogTitle": "Change password",
+          "dialogDescription": "Enter your current password and choose a new one.",
+          "currentLabel": "Current password",
+          "newLabel": "New password",
+          "confirmLabel": "Confirm new password",
+          "minLength": "Password must be at least 8 characters",
+          "mismatch": "Passwords don't match",
+          "revokeOthers": "Sign out other devices",
+          "submit": "Update password",
+          "saving": "Updating...",
+          "cancel": "Cancel",
+          "saved": "Password updated"
+        },
+        "errors": {
+          "invalidPassword": "Your current password is incorrect.",
+          "passwordTooShort": "Password must be at least 8 characters.",
+          "passwordTooLong": "Password is too long.",          "noPassword": "No password is set for this account.",
+          "generic": "Something went wrong. Please try again."
+        }
       }
     },
     "agentConfig": {

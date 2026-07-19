@@ -1275,6 +1275,53 @@
         "successDescription": "Il tuo account e tutti i dati sono stati eliminati. L'app si ricaricherà ora.",
         "failedTitle": "Eliminazione fallita",
         "failedDescription": "Qualcosa è andato storto durante l'eliminazione del tuo account. I tuoi dati locali potrebbero essere stati parzialmente rimossi. Riprova."
+      },
+      "profile": {
+        "name": {
+          "label": "Nome visualizzato",
+          "placeholder": "Il tuo nome",
+          "save": "Salva",
+          "saving": "Salvataggio...",
+          "saved": "Nome visualizzato aggiornato",
+          "error": "Impossibile aggiornare il tuo nome"
+        },
+        "email": {
+          "label": "E-mail",
+          "change": "Modifica",
+          "dialogTitle": "Modifica e-mail",
+          "dialogDescription": "Inserisci il nuovo indirizzo e-mail per il tuo account.",
+          "newLabel": "Nuova e-mail",
+          "newPlaceholder": "tu@esempio.com",
+          "submit": "Invia link di conferma",
+          "sending": "Invio...",
+          "cancel": "Annulla",
+          "sentTitle": "Controlla la tua posta in arrivo",
+          "sentDescription": "Abbiamo inviato un link di conferma al tuo indirizzo email attuale. La modifica avrà effetto una volta confermata.",
+          "close": "Chiudi"
+        },
+        "password": {
+          "label": "Password",
+          "description": "Modifica la password che usi per accedere.",
+          "change": "Cambia password",
+          "dialogTitle": "Cambia password",
+          "dialogDescription": "Inserisci la tua password attuale e scegline una nuova.",
+          "currentLabel": "Password attuale",
+          "newLabel": "Nuova password",
+          "confirmLabel": "Conferma nuova password",
+          "minLength": "La password deve essere di almeno 8 caratteri",
+          "mismatch": "Le password non coincidono",
+          "revokeOthers": "Disconnetti gli altri dispositivi",
+          "submit": "Aggiorna password",
+          "saving": "Aggiornamento...",
+          "cancel": "Annulla",
+          "saved": "Password aggiornata"
+        },
+        "errors": {
+          "invalidPassword": "La tua password attuale non è corretta.",
+          "passwordTooShort": "La password deve essere di almeno 8 caratteri.",
+          "passwordTooLong": "La password è troppo lunga.",          "noPassword": "Nessuna password è impostata per questo account.",
+          "generic": "Qualcosa è andato storto. Riprova."
+        }
       }
     },
     "agentConfig": {
