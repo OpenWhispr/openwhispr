@@ -72,6 +72,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
+import { isOnlineParakeetModel } from "../models/ModelRegistry";
 import { formatHotkeyLabel } from "../utils/hotkeys";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -769,6 +770,10 @@ export default function SettingsPage({
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
     setFloatingIconAutoHide,
+    notchPopupEnabled,
+    setNotchPopupEnabled,
+    notchPopupExpanded,
+    setNotchPopupExpanded,
     startMinimized,
     setStartMinimized,
     panelStartPosition,
@@ -1068,6 +1073,14 @@ export default function SettingsPage({
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
+
+  const notchUseLocalWhisper = useSettingsStore((s) => s.useLocalWhisper);
+  const notchLocalProvider = useSettingsStore((s) => s.localTranscriptionProvider);
+  const notchParakeetModel = useSettingsStore((s) => s.parakeetModel);
+  const notchModelIsStreaming =
+    notchUseLocalWhisper &&
+    notchLocalProvider === "nvidia" &&
+    isOnlineParakeetModel(notchParakeetModel);
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
@@ -2656,6 +2669,37 @@ export default function SettingsPage({
                     </select>
                   </SettingsRow>
                 </SettingsPanelRow>
+                {platform === "darwin" && (
+                  <>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("notchPopup.enabled.label")}
+                        description={t("notchPopup.enabled.description")}
+                      >
+                        <Toggle
+                          checked={notchPopupEnabled}
+                          onChange={setNotchPopupEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("notchPopup.expanded.label")}
+                        description={
+                          notchModelIsStreaming
+                            ? t("notchPopup.expanded.description")
+                            : `${t("notchPopup.expanded.description")} ${t("notchPopup.streamingHint")}`
+                        }
+                      >
+                        <Toggle
+                          checked={notchPopupExpanded}
+                          onChange={setNotchPopupExpanded}
+                          disabled={!notchPopupEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </>
+                )}
               </SettingsPanel>
             </div>
 

@@ -2995,5 +2995,19 @@
     },
     "start": "开始记录",
     "join": "加入并转录"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "刘海口述弹窗",
+      "description": "口述时从刘海处展开弹窗。在没有刘海的显示器上回退为悬浮胶囊。"
+    },
+    "expanded": {
+      "label": "刘海中的实时转录",
+      "description": "口述时在刘海两翼下方显示实时转录面板。"
+    },
+    "streamingHint": "流畅的实时文本需要流式转录模型（例如 Parakeet online）。",
+    "stopAria": "停止口述",
+    "openControlPanelAria": "打开控制面板",
+    "listening": "正在聆听"
   }
 }

@@ -3000,5 +3000,19 @@
     },
     "start": "Prendre des notes",
     "join": "Rejoindre et transcrire"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "Popup de dictée dans l'encoche",
+      "description": "Fait sortir un popup de l'encoche pendant la dictée. Revient à la pastille flottante sur les écrans sans encoche."
+    },
+    "expanded": {
+      "label": "Transcription en direct dans l'encoche",
+      "description": "Affiche un panneau de transcription en direct sous les ailes de l'encoche pendant que vous dictez."
+    },
+    "streamingHint": "Un texte en direct fluide nécessite un modèle de transcription en streaming (par exemple Parakeet online).",
+    "stopAria": "Arrêter la dictée",
+    "openControlPanelAria": "Ouvrir le panneau de contrôle",
+    "listening": "À l'écoute"
   }
 }

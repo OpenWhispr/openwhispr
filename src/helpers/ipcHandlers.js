@@ -5841,6 +5841,7 @@ class IPCHandlers {
     let dictationPreviewStream = null;
     // false = headless streaming session (commit-only, no preview window).
     let dictationPreviewDisplay = true;
+    let dictationPreviewNotch = false;
     // Bumped on every reset so async preview work can detect a stale session.
     let dictationPreviewGen = 0;
 
@@ -5864,6 +5865,7 @@ class IPCHandlers {
       dictationPreviewModel = null;
       dictationPreviewLanguage = null;
       dictationPreviewDisplay = true;
+      dictationPreviewNotch = false;
     };
 
     const startDictationPreviewTimer = () => {
@@ -6557,7 +6559,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "start-dictation-preview",
-      async (_event, { provider, model, language, display = true }) => {
+      async (_event, { provider, model, language, display = true, notchExpanded = false }) => {
         resetDictationPreviewState();
         const gen = dictationPreviewGen;
         dictationPreviewMode = true;
@@ -6565,8 +6567,11 @@ class IPCHandlers {
         dictationPreviewProvider = provider;
         dictationPreviewModel = model;
         dictationPreviewLanguage = language || null;
-        dictationPreviewDisplay = display;
+        dictationPreviewNotch = !!notchExpanded;
+        // Notch expanded needs chunks even when the floating preview is off.
+        dictationPreviewDisplay = display || dictationPreviewNotch;
         dictationPreviewChunkCount = 0;
+        // Only the floating preview shows the placeholder; the notch renders its own.
         if (display) this.windowManager.showTranscriptionPreview("");
 
         if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
@@ -8749,6 +8754,18 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-notification-ready", async () => {
       this.windowManager?.showNotificationWindow();
+    });
+
+    ipcMain.handle("notch-popup-ready", async () => {
+      this.windowManager?.showNotchPopupWindow();
+    });
+
+    ipcMain.handle("get-notch-popup-state", async () => {
+      return this.windowManager?.getNotchPopupPendingState() ?? null;
+    });
+
+    ipcMain.handle("set-notch-popup-interactivity", (_event, interactive) => {
+      this.windowManager?.setNotchPopupInteractivity(Boolean(interactive));
     });
 
     ipcMain.handle("get-update-notification-data", async () => {
