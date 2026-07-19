@@ -38,8 +38,13 @@ interface Props {
 export default function WorkspaceSection({ initialSubTab }: Props) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
-  const { workspaces, activeWorkspaceId, setActiveWorkspaceId, loaded, loading, error, refresh } =
-    useWorkspaceStore();
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
+  const loaded = useWorkspaceStore((s) => s.loaded);
+  const loading = useWorkspaceStore((s) => s.loading);
+  const error = useWorkspaceStore((s) => s.error);
+  const refresh = useWorkspaceStore((s) => s.refresh);
   const [storedTab, setStoredTab] = useLocalStorage<string>(
     "settings.workspaceTab",
     SUB_TABS.includes(initialSubTab as WorkspaceTab) ? (initialSubTab as WorkspaceTab) : "members"
@@ -50,6 +55,14 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
   }, [isSignedIn, loaded, refresh]);
+
+  // The localStorage default only seeds the very first mount; external
+  // navigation (e.g. straight to billing) must land on every use.
+  useEffect(() => {
+    if (initialSubTab && SUB_TABS.includes(initialSubTab as WorkspaceTab)) {
+      setStoredTab(initialSubTab);
+    }
+  }, [initialSubTab, setStoredTab]);
 
   if (!isSignedIn) return null;
 
