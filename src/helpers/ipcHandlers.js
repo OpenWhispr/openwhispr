@@ -1697,9 +1697,15 @@ class IPCHandlers {
       }
       return result;
     });
-    ipcMain.handle("db-set-space-sync-status", (_, id, status) =>
-      this.databaseManager.setSpaceSyncStatus(id, status)
-    );
+    ipcMain.handle("db-set-space-sync-status", (_, id, status) => {
+      const result = this.databaseManager.setSpaceSyncStatus(id, status);
+      if (result?.success) {
+        // Live skeleton toggling: the tree keys pending/synced off this flag.
+        const space = this.databaseManager.db.prepare("SELECT * FROM spaces WHERE id = ?").get(id);
+        if (space) setImmediate(() => this.broadcastToWindows("space-synced", space));
+      }
+      return result;
+    });
 
     // Conversations sync
     ipcMain.handle("db-get-pending-conversations", () =>
