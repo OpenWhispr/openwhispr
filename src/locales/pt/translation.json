@@ -2687,6 +2687,19 @@
       "systemAudioDescription": "Para transcrever reuniões, o OpenWhispr precisa da permissão de Áudio do Sistema para capturar o áudio dos outros participantes. Nunca gravamos a sua tela. Você será levado às Configurações do Sistema para ativá-la.",
       "openSettings": "Abrir Configurações do Sistema"
     },
+    "microsoftCalendar": {
+      "title": "Microsoft Calendar",
+      "optional": "Opcional",
+      "description": "Leia reuniões do seu calendário do Outlook ou Microsoft 365.",
+      "connect": "Conectar Microsoft Calendar",
+      "connected": "Conectado",
+      "addAnother": "Adicionar outro calendário",
+      "primaryOnly": "Sincronizar apenas o calendário principal",
+      "primaryOnlyDescription": "Ignorar eventos de calendários compartilhados com você.",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "Desconectar {{email}}?",
+      "disconnectDescription": "As notas de reunião não serão mais gravadas deste calendário."
+    },
     "appleCalendar": {
       "title": "Calendário da Apple",
       "optional": "Opcional",

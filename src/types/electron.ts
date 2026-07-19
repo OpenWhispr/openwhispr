@@ -1892,6 +1892,17 @@ declare global {
       onGcalConnectionChanged?: (callback: (data: any) => void) => () => void;
       onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
+      // Microsoft Calendar
+      mcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      mcalDisconnect?: (email?: string) => Promise<{ success: boolean; error?: string }>;
+      mcalGetConnectionStatus?: () => Promise<{
+        connected: boolean;
+        accounts: Array<{ email: string }>;
+      }>;
+      mcalSetPrimaryOnly?: (value: boolean) => Promise<{ success: boolean; error?: string }>;
+      onMcalConnectionChanged?: (callback: (data: any) => void) => () => void;
+      onMcalEventsSynced?: (callback: (data: any) => void) => () => void;
+
       // Apple Calendar (macOS EventKit)
       acalConnect?: () => Promise<{ success: boolean; reason?: string; error?: string }>;
       acalDisconnect?: () => Promise<{ success: boolean; error?: string }>;

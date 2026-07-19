@@ -281,6 +281,7 @@ const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
+const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
 const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
 const CalendarReminderScheduler = require("./src/helpers/calendarReminderScheduler");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
@@ -314,6 +315,7 @@ let textEditMonitor = null;
 let whisperCudaManager = null;
 let whisperVulkanManager = null;
 let googleCalendarManager = null;
+let microsoftCalendarManager = null;
 let appleCalendarManager = null;
 let calendarReminderScheduler = null;
 let meetingDetectionEngine = null;
@@ -407,6 +409,11 @@ function initializeCoreManagers() {
     windowManager,
     calendarReminderScheduler
   );
+  microsoftCalendarManager = new MicrosoftCalendarManager(
+    databaseManager,
+    windowManager,
+    calendarReminderScheduler
+  );
   appleCalendarManager = new AppleCalendarManager(
     databaseManager,
     windowManager,
@@ -454,6 +461,7 @@ function initializeCoreManagers() {
     whisperCudaManager,
     whisperVulkanManager,
     googleCalendarManager,
+    microsoftCalendarManager,
     appleCalendarManager,
     meetingDetectionEngine,
     audioTapManager,
@@ -519,6 +527,7 @@ function initializeDeferredManagers() {
   }
 
   googleCalendarManager.start();
+  microsoftCalendarManager.start();
   appleCalendarManager.start();
   meetingDetectionEngine.start();
 }
@@ -984,6 +993,7 @@ async function startApp() {
 
   app.on("browser-window-focus", () => {
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();
+    if (microsoftCalendarManager) microsoftCalendarManager.syncOnFocus();
     if (appleCalendarManager) appleCalendarManager.syncOnFocus();
   });
 
@@ -993,6 +1003,7 @@ async function startApp() {
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
     }
+    if (microsoftCalendarManager) microsoftCalendarManager.onWakeFromSleep();
     if (appleCalendarManager) appleCalendarManager.onWakeFromSleep();
     // Sleep evicts the local GPU model from VRAM; reload it once the driver settles. See #766.
     if (wakeRewarmTimer) clearTimeout(wakeRewarmTimer);
@@ -1719,6 +1730,7 @@ function performSyncTeardown() {
   if (linuxKeyManager) linuxKeyManager.stop();
   if (meetingDetectionEngine) meetingDetectionEngine.stop();
   if (googleCalendarManager) googleCalendarManager.stop();
+  if (microsoftCalendarManager) microsoftCalendarManager.stop();
   if (appleCalendarManager) appleCalendarManager.stop();
   if (calendarReminderScheduler) calendarReminderScheduler.stop();
   if (audioTapManager) audioTapManager.stop().catch(() => {});

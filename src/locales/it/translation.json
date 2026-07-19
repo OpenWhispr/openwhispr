@@ -2687,6 +2687,19 @@
       "systemAudioDescription": "Per trascrivere le riunioni, OpenWhispr necessita dell'autorizzazione Audio di Sistema per catturare l'audio degli altri partecipanti. Non registriamo mai il tuo schermo. Verrai reindirizzato alle Impostazioni di Sistema per attivarla.",
       "openSettings": "Apri Impostazioni di Sistema"
     },
+    "microsoftCalendar": {
+      "title": "Microsoft Calendar",
+      "optional": "Opzionale",
+      "description": "Leggi le riunioni dal tuo calendario Outlook o Microsoft 365.",
+      "connect": "Collega Microsoft Calendar",
+      "connected": "Connesso",
+      "addAnother": "Aggiungi un altro calendario",
+      "primaryOnly": "Sincronizza solo il calendario principale",
+      "primaryOnlyDescription": "Ignora gli eventi dei calendari condivisi con te.",
+      "disconnect": "Disconnetti",
+      "disconnectConfirm": "Disconnettere {{email}}?",
+      "disconnectDescription": "Le note delle riunioni non saranno più registrate da questo calendario."
+    },
     "appleCalendar": {
       "title": "Calendario Apple",
       "optional": "Opzionale",

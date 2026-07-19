@@ -16,10 +16,12 @@ import {
 import { useSettingsStore } from "../stores/settingsStore";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
+import type { CalendarAccount } from "../types/calendar";
 import ApiKeysSection from "./ApiKeysSection";
 import CliIntegrationCard from "./CliIntegrationCard";
 import McpIntegrationCard from "./McpIntegrationCard";
 import googleCalendarIcon from "../assets/icons/google-calendar.svg";
+import microsoftCalendarIcon from "../assets/icons/microsoft-calendar.svg";
 import appleCalendarIcon from "../assets/icons/apple-calendar.svg";
 
 const API_DOCS_URL = "https://docs.openwhispr.com/api/overview";
@@ -37,6 +39,124 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+interface ProviderRowProps {
+  icon: string;
+  i18nKey: string;
+  connected: boolean;
+  isConnecting: boolean;
+  onConnect: () => void;
+}
+
+function ProviderRow({ icon, i18nKey, connected, isConnecting, onConnect }: ProviderRowProps) {
+  const { t } = useTranslation();
+  return (
+    <SettingsPanelRow>
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/5 flex items-center justify-center shrink-0">
+          <img src={icon} alt="" className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-semibold text-foreground">{t(`${i18nKey}.title`)}</p>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+              {t(`${i18nKey}.optional`)}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
+            {t(`${i18nKey}.description`)}
+          </p>
+        </div>
+        {connected ? (
+          <Badge variant="success" className="shrink-0">
+            {t(`${i18nKey}.connected`)}
+          </Badge>
+        ) : (
+          <Button size="sm" onClick={onConnect} disabled={isConnecting} className="shrink-0">
+            {isConnecting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              t(`${i18nKey}.connect`)
+            )}
+          </Button>
+        )}
+      </div>
+    </SettingsPanelRow>
+  );
+}
+
+interface CalendarAccountRowsProps {
+  i18nKey: string;
+  accounts: CalendarAccount[];
+  disconnectingEmail: string | null;
+  onUnlink: (email: string) => void;
+  primaryOnly: boolean;
+  onPrimaryOnlyChange: (value: boolean) => void;
+  isConnecting: boolean;
+  onAddAnother: () => void;
+}
+
+function CalendarAccountRows({
+  i18nKey,
+  accounts,
+  disconnectingEmail,
+  onUnlink,
+  primaryOnly,
+  onPrimaryOnlyChange,
+  isConnecting,
+  onAddAnother,
+}: CalendarAccountRowsProps) {
+  const { t } = useTranslation();
+  if (accounts.length === 0) return null;
+  return (
+    <>
+      {accounts.map((account) => (
+        <SettingsPanelRow key={account.email}>
+          <div className="group flex items-center gap-3 pl-12">
+            <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+            <span className="text-xs text-muted-foreground truncate flex-1">{account.email}</span>
+            <button
+              onClick={() => onUnlink(account.email)}
+              disabled={disconnectingEmail === account.email}
+              className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all disabled:opacity-50"
+              aria-label={t(`${i18nKey}.disconnect`)}
+            >
+              {disconnectingEmail === account.email ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Unlink className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+        </SettingsPanelRow>
+      ))}
+
+      <SettingsPanelRow>
+        <SettingsRow
+          label={t(`${i18nKey}.primaryOnly`)}
+          description={t(`${i18nKey}.primaryOnlyDescription`)}
+        >
+          <Toggle checked={primaryOnly} onChange={onPrimaryOnlyChange} />
+        </SettingsRow>
+      </SettingsPanelRow>
+
+      <SettingsPanelRow>
+        <button
+          onClick={onAddAnother}
+          disabled={isConnecting}
+          className="flex items-center gap-2 pl-12 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+        >
+          {isConnecting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Plus className="h-3.5 w-3.5" />
+          )}
+          {t(`${i18nKey}.addAnother`)}
+        </button>
+      </SettingsPanelRow>
+    </>
+  );
+}
+
 export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsViewProps) {
   const { t } = useTranslation();
   const {
@@ -44,12 +164,19 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
     setGcalAccounts,
     gcalPrimaryOnly,
     setGcalPrimaryOnly,
+    mcalAccounts,
+    setMcalAccounts,
+    mcalPrimaryOnly,
+    setMcalPrimaryOnly,
     appleCalendarConnected,
     setAppleCalendarConnected,
   } = useSettingsStore();
   const [isConnecting, setIsConnecting] = useState(false);
   const [disconnectingEmail, setDisconnectingEmail] = useState<string | null>(null);
   const [confirmDisconnectEmail, setConfirmDisconnectEmail] = useState<string | null>(null);
+  const [isMsConnecting, setIsMsConnecting] = useState(false);
+  const [msDisconnectingEmail, setMsDisconnectingEmail] = useState<string | null>(null);
+  const [confirmMsDisconnectEmail, setConfirmMsDisconnectEmail] = useState<string | null>(null);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [isAppleConnecting, setIsAppleConnecting] = useState(false);
   const [appleSourceNames, setAppleSourceNames] = useState<string[]>([]);
@@ -77,6 +204,22 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
       setIsConnecting(false);
     }
   }, [setGcalAccounts]);
+
+  const startMicrosoftOAuth = useCallback(async () => {
+    setIsMsConnecting(true);
+    try {
+      const result = await window.electronAPI?.mcalStartOAuth?.();
+      if (result?.success && result.email) {
+        const current = useSettingsStore.getState().mcalAccounts;
+        setMcalAccounts([
+          ...current.filter((a) => a.email !== result.email),
+          { email: result.email },
+        ]);
+      }
+    } finally {
+      setIsMsConnecting(false);
+    }
+  }, [setMcalAccounts]);
 
   const connectAppleCalendar = useCallback(async () => {
     setIsAppleConnecting(true);
@@ -111,6 +254,11 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
     [withSystemAudioGate, startOAuth]
   );
 
+  const handleMicrosoftConnect = useCallback(
+    () => withSystemAudioGate(startMicrosoftOAuth),
+    [withSystemAudioGate, startMicrosoftOAuth]
+  );
+
   const handleAppleConnect = useCallback(
     () => withSystemAudioGate(connectAppleCalendar),
     [withSystemAudioGate, connectAppleCalendar]
@@ -136,6 +284,20 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
     [setGcalAccounts]
   );
 
+  const handleMicrosoftDisconnect = useCallback(
+    async (email: string) => {
+      setMsDisconnectingEmail(email);
+      try {
+        await window.electronAPI?.mcalDisconnect?.(email);
+        const current = useSettingsStore.getState().mcalAccounts;
+        setMcalAccounts(current.filter((a) => a.email !== email));
+      } finally {
+        setMsDisconnectingEmail(null);
+      }
+    },
+    [setMcalAccounts]
+  );
+
   useEffect(() => {
     const unsub = window.electronAPI?.onGcalConnectionChanged?.(
       (data: {
@@ -156,6 +318,15 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
     );
     return () => unsub?.();
   }, [setGcalAccounts]);
+
+  useEffect(() => {
+    const unsub = window.electronAPI?.onMcalConnectionChanged?.(
+      (data: { accounts?: Array<{ email: string }> }) => {
+        if (data.accounts) setMcalAccounts(data.accounts);
+      }
+    );
+    return () => unsub?.();
+  }, [setMcalAccounts]);
 
   useEffect(() => {
     if (!isMac) return;
@@ -182,137 +353,50 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
       <div>
         <SectionLabel>{t("integrations.sections.calendar")}</SectionLabel>
         <SettingsPanel>
-          <SettingsPanelRow>
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/5 flex items-center justify-center shrink-0">
-                <img src={googleCalendarIcon} alt="" className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-semibold text-foreground">
-                    {t("integrations.googleCalendar.title")}
-                  </p>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-                    {t("integrations.googleCalendar.optional")}
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-                  {t("integrations.googleCalendar.description")}
-                </p>
-              </div>
-              {!hasAccounts && (
-                <Button
-                  size="sm"
-                  onClick={handleConnect}
-                  disabled={isConnecting}
-                  className="shrink-0"
-                >
-                  {isConnecting ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    t("integrations.googleCalendar.connect")
-                  )}
-                </Button>
-              )}
-              {hasAccounts && (
-                <Badge variant="success" className="shrink-0">
-                  {t("integrations.googleCalendar.connected")}
-                </Badge>
-              )}
-            </div>
-          </SettingsPanelRow>
+          <ProviderRow
+            icon={googleCalendarIcon}
+            i18nKey="integrations.googleCalendar"
+            connected={hasAccounts}
+            isConnecting={isConnecting}
+            onConnect={handleConnect}
+          />
+          <CalendarAccountRows
+            i18nKey="integrations.googleCalendar"
+            accounts={gcalAccounts}
+            disconnectingEmail={disconnectingEmail}
+            onUnlink={setConfirmDisconnectEmail}
+            primaryOnly={gcalPrimaryOnly}
+            onPrimaryOnlyChange={setGcalPrimaryOnly}
+            isConnecting={isConnecting}
+            onAddAnother={handleConnect}
+          />
 
-          {hasAccounts &&
-            gcalAccounts.map((account) => (
-              <SettingsPanelRow key={account.email}>
-                <div className="group flex items-center gap-3 pl-12">
-                  <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-                  <span className="text-xs text-muted-foreground truncate flex-1">
-                    {account.email}
-                  </span>
-                  <button
-                    onClick={() => setConfirmDisconnectEmail(account.email)}
-                    disabled={disconnectingEmail === account.email}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all disabled:opacity-50"
-                    aria-label={t("integrations.googleCalendar.disconnect")}
-                  >
-                    {disconnectingEmail === account.email ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Unlink className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </div>
-              </SettingsPanelRow>
-            ))}
-
-          {hasAccounts && (
-            <SettingsPanelRow>
-              <SettingsRow
-                label={t("integrations.googleCalendar.primaryOnly")}
-                description={t("integrations.googleCalendar.primaryOnlyDescription")}
-              >
-                <Toggle checked={gcalPrimaryOnly} onChange={setGcalPrimaryOnly} />
-              </SettingsRow>
-            </SettingsPanelRow>
-          )}
-
-          {hasAccounts && (
-            <SettingsPanelRow>
-              <button
-                onClick={handleConnect}
-                disabled={isConnecting}
-                className="flex items-center gap-2 pl-12 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
-              >
-                {isConnecting ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Plus className="h-3.5 w-3.5" />
-                )}
-                {t("integrations.googleCalendar.addAnother")}
-              </button>
-            </SettingsPanelRow>
-          )}
+          <ProviderRow
+            icon={microsoftCalendarIcon}
+            i18nKey="integrations.microsoftCalendar"
+            connected={mcalAccounts.length > 0}
+            isConnecting={isMsConnecting}
+            onConnect={handleMicrosoftConnect}
+          />
+          <CalendarAccountRows
+            i18nKey="integrations.microsoftCalendar"
+            accounts={mcalAccounts}
+            disconnectingEmail={msDisconnectingEmail}
+            onUnlink={setConfirmMsDisconnectEmail}
+            primaryOnly={mcalPrimaryOnly}
+            onPrimaryOnlyChange={setMcalPrimaryOnly}
+            isConnecting={isMsConnecting}
+            onAddAnother={handleMicrosoftConnect}
+          />
 
           {isMac && (
-            <SettingsPanelRow>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/5 flex items-center justify-center shrink-0">
-                  <img src={appleCalendarIcon} alt="" className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("integrations.appleCalendar.title")}
-                    </p>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-                      {t("integrations.appleCalendar.optional")}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-                    {t("integrations.appleCalendar.description")}
-                  </p>
-                </div>
-                {appleCalendarConnected ? (
-                  <Badge variant="success" className="shrink-0">
-                    {t("integrations.appleCalendar.connected")}
-                  </Badge>
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={handleAppleConnect}
-                    disabled={isAppleConnecting}
-                    className="shrink-0"
-                  >
-                    {isAppleConnecting ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      t("integrations.appleCalendar.connect")
-                    )}
-                  </Button>
-                )}
-              </div>
-            </SettingsPanelRow>
+            <ProviderRow
+              icon={appleCalendarIcon}
+              i18nKey="integrations.appleCalendar"
+              connected={appleCalendarConnected}
+              isConnecting={isAppleConnecting}
+              onConnect={handleAppleConnect}
+            />
           )}
 
           {isMac && appleCalendarConnected && (
@@ -429,6 +513,22 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         variant="destructive"
         onConfirm={() => {
           if (confirmDisconnectEmail) handleDisconnect(confirmDisconnectEmail);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmMsDisconnectEmail}
+        onOpenChange={(open) => {
+          if (!open) setConfirmMsDisconnectEmail(null);
+        }}
+        title={t("integrations.microsoftCalendar.disconnectConfirm", {
+          email: confirmMsDisconnectEmail,
+        })}
+        description={t("integrations.microsoftCalendar.disconnectDescription")}
+        confirmText={t("integrations.microsoftCalendar.disconnect")}
+        variant="destructive"
+        onConfirm={() => {
+          if (confirmMsDisconnectEmail) handleMicrosoftDisconnect(confirmMsDisconnectEmail);
         }}
       />
 

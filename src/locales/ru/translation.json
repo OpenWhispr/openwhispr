@@ -2691,6 +2691,19 @@
       "systemAudioDescription": "Для транскрипции встреч OpenWhispr нужно разрешение «Системное аудио» для записи звука других участников. Мы никогда не записываем ваш экран. Вы будете перенаправлены в Системные настройки для включения.",
       "openSettings": "Открыть Системные настройки"
     },
+    "microsoftCalendar": {
+      "title": "Microsoft Calendar",
+      "optional": "Необязательно",
+      "description": "Читайте встречи из календаря Outlook или Microsoft 365.",
+      "connect": "Подключить Microsoft Calendar",
+      "connected": "Подключено",
+      "addAnother": "Добавить ещё один календарь",
+      "primaryOnly": "Синхронизировать только основной календарь",
+      "primaryOnlyDescription": "Игнорировать события из календарей, к которым вам открыли доступ.",
+      "disconnect": "Отключить",
+      "disconnectConfirm": "Отключить {{email}}?",
+      "disconnectDescription": "Заметки встреч больше не будут записываться из этого календаря."
+    },
     "appleCalendar": {
       "title": "Календарь Apple",
       "optional": "Необязательно",

@@ -2823,6 +2823,19 @@
       "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
       "openSettings": "Open System Settings"
     },
+    "microsoftCalendar": {
+      "title": "Microsoft Calendar",
+      "optional": "Optional",
+      "description": "Read meetings from your Outlook or Microsoft 365 calendar.",
+      "connect": "Connect Microsoft Calendar",
+      "connected": "Connected",
+      "addAnother": "Add another calendar",
+      "primaryOnly": "Sync primary calendar only",
+      "primaryOnlyDescription": "Ignore events from calendars shared with you.",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect {{email}}?",
+      "disconnectDescription": "Meeting notes will no longer be recorded from this calendar."
+    },
     "appleCalendar": {
       "title": "Apple Calendar",
       "optional": "Optional",
