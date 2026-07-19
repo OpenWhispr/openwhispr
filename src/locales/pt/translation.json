@@ -2147,7 +2147,7 @@
       "title": "Enviar áudio",
       "using": "Usando {{model}}",
       "dropOrBrowse": "Arraste um arquivo de áudio ou clique para procurar",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "Solte para enviar",
       "transcribe": "Transcrever",
       "cancel": "Cancelar",

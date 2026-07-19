@@ -2195,7 +2195,7 @@
       "title": "Subir audio",
       "using": "Usando {{model}}",
       "dropOrBrowse": "Arrastra un archivo de audio o haz clic para explorar",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "Suelta para subir",
       "transcribe": "Transcribir",
       "cancel": "Cancelar",

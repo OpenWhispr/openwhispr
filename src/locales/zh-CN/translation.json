@@ -2142,7 +2142,7 @@
       "title": "上传音频",
       "using": "使用 {{model}}",
       "dropOrBrowse": "拖放音频文件或点击浏览",
-      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC",
+      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC、Opus",
       "dropToUpload": "拖放以上传",
       "transcribe": "转录",
       "cancel": "取消",

@@ -124,6 +124,7 @@ const AUDIO_MIME_TYPES = {
   oga: "audio/ogg",
   flac: "audio/flac",
   aac: "audio/aac",
+  opus: "audio/ogg",
 };
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
@@ -1705,7 +1706,7 @@ class IPCHandlers {
         filters: [
           {
             name: "Audio Files",
-            extensions: ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac"],
+            extensions: ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac", "opus"],
           },
         ],
       });

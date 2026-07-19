@@ -2260,7 +2260,7 @@
       "title": "Téléverser un fichier audio",
       "using": "Utilisation de {{model}}",
       "dropOrBrowse": "Déposez un fichier audio ou cliquez pour parcourir",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "Déposez pour téléverser",
       "transcribe": "Transcrire",
       "cancel": "Annuler",

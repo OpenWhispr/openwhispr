@@ -2131,7 +2131,7 @@
       "title": "音声をアップロード",
       "using": "{{model}} を使用中",
       "dropOrBrowse": "音声ファイルをドロップまたはクリックして選択",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "ドロップしてアップロード",
       "transcribe": "文字起こし",
       "cancel": "キャンセル",
