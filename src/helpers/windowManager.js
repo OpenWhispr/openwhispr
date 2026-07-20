@@ -631,10 +631,9 @@ class WindowManager {
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
       const appUrl = DevServerManager.getAppUrl(true);
-      const controlPanelUrl = appUrl.startsWith("http") ? appUrl : `file://${appUrl}`;
 
       if (
-        url.startsWith(controlPanelUrl) ||
+        (appUrl && url.startsWith(appUrl)) ||
         url.startsWith("file://") ||
         url.startsWith("devtools://")
       ) {
