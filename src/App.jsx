@@ -93,6 +93,7 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
+  const notchPopupEnabled = useSettingsStore((s) => s.notchPopupEnabled);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
@@ -249,6 +250,13 @@ export default function App() {
     prevAutoHideRef.current = floatingIconAutoHide;
     return () => clearTimeout(hideTimeout);
   }, [isRecording, isProcessing, floatingIconAutoHide, toastCount]);
+
+  useEffect(() => {
+    if (window.electronAPI?.getPlatform?.() !== "darwin") return;
+    if (!notchPopupEnabled) return;
+    const phase = isRecording ? "recording" : isProcessing ? "processing" : "idle";
+    window.electronAPI?.notifyNotchPopupRecordingChanged?.({ phase });
+  }, [isRecording, isProcessing, notchPopupEnabled]);
 
   const handleClose = () => {
     window.electronAPI.hideWindow();

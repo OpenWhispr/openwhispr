@@ -756,6 +756,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, enabled) => callback(enabled)
   ),
 
+  // Notch dictation popup (macOS)
+  notifyNotchPopupSettingsChanged: (payload) =>
+    ipcRenderer.send("notch-popup-settings-changed", payload),
+  notchPopupReady: () => ipcRenderer.invoke("notch-popup-ready"),
+  getNotchPopupState: () => ipcRenderer.invoke("get-notch-popup-state"),
+  setNotchPopupInteractivity: (interactive) =>
+    ipcRenderer.invoke("set-notch-popup-interactivity", interactive),
+  onNotchPopupState: registerListener(
+    "notch-popup-state",
+    (callback) => (_event, state) => callback(state)
+  ),
+  notifyNotchPopupRecordingChanged: (payload) =>
+    ipcRenderer.send("notch-popup-recording-changed", payload),
+  notchPopupAction: (action) => ipcRenderer.send("notch-popup-action", action),
+
   // Panel start position
   notifyPanelStartPositionChanged: (position) =>
     ipcRenderer.send("panel-start-position-changed", position),

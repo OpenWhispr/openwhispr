@@ -3001,5 +3001,19 @@
     },
     "start": "Fazer anotações",
     "join": "Entrar e transcrever"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "Popup de ditado no notch",
+      "description": "Expande um popup a partir do notch durante o ditado. Volta para a pílula flutuante em telas sem notch."
+    },
+    "expanded": {
+      "label": "Transcrição ao vivo no notch",
+      "description": "Mostra um painel de transcrição ao vivo abaixo das asas do notch enquanto você dita."
+    },
+    "streamingHint": "Texto ao vivo fluido requer um modelo de transcrição em streaming (por exemplo Parakeet online).",
+    "stopAria": "Parar ditado",
+    "openControlPanelAria": "Abrir painel de controle",
+    "listening": "Ouvindo"
   }
 }

@@ -824,6 +824,13 @@ async function startApp() {
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
+  if (typeof windowManager.setNotchPopupSettings === "function") {
+    windowManager.setNotchPopupSettings(
+      environmentManager.getNotchPopupEnabled(),
+      environmentManager.getNotchPopupExpanded()
+    );
+  }
+
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     windowManager.setActivationModeCache(mode);
     environmentManager.saveActivationMode(mode);
@@ -835,6 +842,30 @@ async function startApp() {
     // Relay to the floating icon window so it can react immediately
     if (windowManager.mainWindow && !windowManager.mainWindow.isDestroyed()) {
       windowManager.mainWindow.webContents.send("floating-icon-auto-hide-changed", enabled);
+    }
+  });
+
+  ipcMain.on("notch-popup-settings-changed", (_event, payload) => {
+    const enabled = Boolean(payload?.enabled);
+    const expanded = Boolean(payload?.expanded);
+    environmentManager.saveNotchPopupEnabled(enabled);
+    environmentManager.saveNotchPopupExpanded(expanded);
+    if (typeof windowManager.setNotchPopupSettings === "function") {
+      windowManager.setNotchPopupSettings(enabled, expanded);
+    }
+  });
+
+  ipcMain.on("notch-popup-recording-changed", (_event, payload) => {
+    const phase =
+      payload?.phase === "recording" || payload?.phase === "processing" ? payload.phase : "idle";
+    windowManager.handleNotchRecordingPhase(phase).catch(() => {});
+  });
+
+  ipcMain.on("notch-popup-action", (_event, action) => {
+    if (action === "stop") {
+      windowManager.sendStopDictation();
+    } else if (action === "open-control-panel") {
+      windowManager.createControlPanelWindow();
     }
   });
 

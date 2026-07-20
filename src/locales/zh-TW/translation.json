@@ -3001,5 +3001,19 @@
     },
     "start": "開始記錄",
     "join": "加入並轉錄"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "瀏海口述彈窗",
+      "description": "口述時從瀏海處展開彈窗。在沒有瀏海的顯示器上回退為懸浮膠囊。"
+    },
+    "expanded": {
+      "label": "瀏海中的即時轉錄",
+      "description": "口述時在瀏海兩翼下方顯示即時轉錄面板。"
+    },
+    "streamingHint": "流暢的即時文字需要串流轉錄模型（例如 Parakeet online）。",
+    "stopAria": "停止口述",
+    "openControlPanelAria": "開啟控制面板",
+    "listening": "正在聆聽"
   }
 }

@@ -3001,5 +3001,19 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "Ventana emergente de dictado en el notch",
+      "description": "Despliega una ventana emergente desde el notch durante el dictado. Vuelve a la píldora flotante en pantallas sin notch."
+    },
+    "expanded": {
+      "label": "Transcripción en vivo en el notch",
+      "description": "Muestra un panel de transcripción en vivo bajo las alas del notch mientras dictas."
+    },
+    "streamingHint": "El texto en vivo fluido requiere un modelo de transcripción en streaming (por ejemplo Parakeet online).",
+    "stopAria": "Detener dictado",
+    "openControlPanelAria": "Abrir panel de control",
+    "listening": "Escuchando"
   }
 }

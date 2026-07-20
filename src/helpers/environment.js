@@ -465,6 +465,26 @@ class EnvironmentManager {
     return result;
   }
 
+  getNotchPopupEnabled() {
+    return this._getKey("NOTCH_POPUP_ENABLED") === "true";
+  }
+
+  saveNotchPopupEnabled(enabled) {
+    const result = this._saveKey("NOTCH_POPUP_ENABLED", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getNotchPopupExpanded() {
+    return this._getKey("NOTCH_POPUP_EXPANDED") === "true";
+  }
+
+  saveNotchPopupExpanded(enabled) {
+    const result = this._saveKey("NOTCH_POPUP_EXPANDED", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
   getStartMinimized() {
     return this._getKey("START_MINIMIZED") === "true";
   }

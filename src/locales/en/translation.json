@@ -3001,5 +3001,19 @@
     },
     "start": "Take notes",
     "join": "Join & transcribe"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "Notch dictation popup",
+      "description": "Split a popup out from the notch during dictation. Falls back to the floating pill on displays without a notch."
+    },
+    "expanded": {
+      "label": "Live transcript in the notch",
+      "description": "Show a live transcript panel below the notch wings while you dictate."
+    },
+    "streamingHint": "Smooth live text needs a streaming transcription model (for example Parakeet online).",
+    "stopAria": "Stop dictation",
+    "openControlPanelAria": "Open Control Panel",
+    "listening": "Listening"
   }
 }

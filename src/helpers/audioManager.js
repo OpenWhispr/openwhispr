@@ -336,6 +336,7 @@ class AudioManager {
     this._localSpeechGateState = null;
     this._streamingCommitActive = false;
     this._previewFlushResolve = null;
+    this._platform = window.electronAPI?.getPlatform?.() ?? "darwin";
   }
 
   getWorkletBlobUrl() {
@@ -809,12 +810,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         localTranscriptionProvider,
         whisperModel,
         parakeetModel,
+        notchPopupEnabled,
+        notchPopupExpanded,
       } = getSettings();
       const isNvidia = localTranscriptionProvider === "nvidia";
       // Online models stream+commit during capture, so PCM runs even with preview off.
       const streamingCommit = useLocalWhisper && isNvidia && isOnlineParakeetModel(parakeetModel);
+      // Expanded notch mode needs the chunked feed even when the preview toggle is off.
+      const notchExpandedFeed =
+        typeof navigator !== "undefined" &&
+        this._platform === "darwin" &&
+        notchPopupEnabled &&
+        notchPopupExpanded;
       this._streamingCommitActive = false;
-      if (useLocalWhisper && (showTranscriptionPreview || streamingCommit)) {
+      if (useLocalWhisper && (showTranscriptionPreview || streamingCommit || notchExpandedFeed)) {
         try {
           this._previewAudioContext = new AudioContext({ sampleRate: 16000 });
           this._previewSource = this._previewAudioContext.createMediaStreamSource(micStream);
@@ -841,6 +850,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             model,
             language,
             display: showTranscriptionPreview,
+            notchExpanded: notchExpandedFeed,
           });
           this._streamingCommitActive = streamingCommit;
         } catch (e) {

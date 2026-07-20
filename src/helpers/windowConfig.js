@@ -1,4 +1,10 @@
 const path = require("path");
+const {
+  computeNotchPopupBounds,
+  LEFT_WING_WIDTH,
+  RIGHT_WING_WIDTH,
+  MAX_NOTCH_WIDTH,
+} = require("./notchDisplay");
 
 const isGnomeWayland =
   process.platform === "linux" &&
@@ -151,6 +157,38 @@ const TRANSCRIPTION_PREVIEW_CONFIG = {
   type: FLOATING_OVERLAY_TYPE,
 };
 
+// Sized for the widest possible notch so setBounds never has to grow it.
+const NOTCH_POPUP_SIZES = {
+  width: LEFT_WING_WIDTH + MAX_NOTCH_WIDTH + RIGHT_WING_WIDTH,
+  compactHeight: 60,
+  expandedHeight: 280,
+};
+
+// Created at expanded height so the split animation never resizes the window.
+const NOTCH_POPUP_CONFIG = {
+  width: NOTCH_POPUP_SIZES.width,
+  height: NOTCH_POPUP_SIZES.expandedHeight,
+  frame: false,
+  transparent: true,
+  alwaysOnTop: true,
+  skipTaskbar: true,
+  resizable: false,
+  focusable: false,
+  hasShadow: false,
+  show: false,
+  acceptsFirstMouse: true,
+  // macOS pins windows below the menu bar unless this is set.
+  enableLargerThanScreen: true,
+  type: "panel",
+  webPreferences: {
+    preload: path.join(__dirname, "..", "..", "preload.js"),
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+  },
+  visibleOnAllWorkspaces: true,
+};
+
 class WindowPositionUtil {
   static getMainWindowPosition(display, customSize = null, position = "bottom-right") {
     const { width, height } = customSize || WINDOW_SIZES.BASE;
@@ -180,6 +218,11 @@ class WindowPositionUtil {
     const x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
     const y = Math.max(0, workArea.y + MARGIN);
     return { x, y, width, height };
+  }
+
+  static getNotchPopupPosition(display, expanded) {
+    const height = expanded ? NOTCH_POPUP_SIZES.expandedHeight : NOTCH_POPUP_SIZES.compactHeight;
+    return computeNotchPopupBounds(display, height);
   }
 
   static getTranscriptionPreviewPosition(display, mainWindowBounds, size = {}) {
@@ -265,6 +308,8 @@ module.exports = {
   NOTIFICATION_WINDOW_CONFIG,
   TRANSCRIPTION_PREVIEW_CONFIG,
   TRANSCRIPTION_PREVIEW_SIZE_LIMITS,
+  NOTCH_POPUP_SIZES,
+  NOTCH_POPUP_CONFIG,
   WINDOW_SIZES,
   WindowPositionUtil,
 };
