@@ -16,7 +16,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Run tests
+        run: npm test
+        env:
+          # keeps require("electron") from throwing when postinstall was skipped
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp
+
   build-linux:
+    needs: tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,6 +122,7 @@ jobs:
           retention-days: 7
 
   build-windows:
+    needs: tests
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -214,6 +231,7 @@ jobs:
           retention-days: 7
 
   build-macos:
+    needs: tests
     runs-on: macos-latest
     strategy:
       fail-fast: false

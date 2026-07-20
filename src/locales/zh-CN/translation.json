@@ -33,6 +33,7 @@
       "hide": "隐藏听写面板"
     },
     "openControlPanel": "打开控制面板",
+    "hideControlPanel": "隐藏控制面板",
     "quit": "退出 OpenWhispr",
     "tooltip": "OpenWhispr - 语音听写"
   },
@@ -1216,7 +1217,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -2299,7 +2305,7 @@
       "title": "上传音频",
       "using": "使用 {{model}}",
       "dropOrBrowse": "拖放音频文件或点击浏览",
-      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC",
+      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC、Opus",
       "dropToUpload": "拖放以上传",
       "transcribe": "转录",
       "cancel": "取消",

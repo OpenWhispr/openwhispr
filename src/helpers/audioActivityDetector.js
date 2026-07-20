@@ -262,6 +262,7 @@ class AudioActivityDetector extends EventEmitter {
       // stdin must be "pipe" — the Windows binary monitors stdin for parent death
       const child = spawn(binaryPath, ["--exclude-pid", String(process.pid)], {
         stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
       });
       this._listenerProcess = child;
 

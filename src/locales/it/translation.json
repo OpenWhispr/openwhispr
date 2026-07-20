@@ -33,6 +33,7 @@
       "hide": "Nascondi pannello dettatura"
     },
     "openControlPanel": "Apri pannello di controllo",
+    "hideControlPanel": "Nascondi pannello di controllo",
     "quit": "Esci da OpenWhispr",
     "tooltip": "OpenWhispr - Dettatura vocale"
   },
@@ -2304,7 +2305,7 @@
       "title": "Carica audio",
       "using": "Utilizzando {{model}}",
       "dropOrBrowse": "Trascina un file audio o clicca per sfogliare",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "Rilascia per caricare",
       "transcribe": "Trascrivi",
       "cancel": "Annulla",

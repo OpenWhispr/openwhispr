@@ -33,6 +33,7 @@
       "hide": "Ocultar painel de ditado"
     },
     "openControlPanel": "Abrir painel de controle",
+    "hideControlPanel": "Ocultar painel de controle",
     "quit": "Sair do OpenWhispr",
     "tooltip": "OpenWhispr - Ditado por voz"
   },
@@ -2304,7 +2305,7 @@
       "title": "Enviar áudio",
       "using": "Usando {{model}}",
       "dropOrBrowse": "Arraste um arquivo de áudio ou clique para procurar",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "Solte para enviar",
       "transcribe": "Transcrever",
       "cancel": "Cancelar",

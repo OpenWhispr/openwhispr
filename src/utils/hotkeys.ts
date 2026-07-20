@@ -3,7 +3,7 @@
  * Supports both single keys and compound hotkeys (e.g., "CommandOrControl+Shift+K").
  */
 
-import { getPlatform, type Platform } from "./platform";
+import { getPlatform, type Platform } from "./platform.ts";
 
 export function isGlobeLikeHotkey(hotkey: string): boolean {
   return hotkey === "GLOBE" || hotkey === "Fn";

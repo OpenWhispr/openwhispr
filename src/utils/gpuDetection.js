@@ -14,7 +14,7 @@ function detectNvidiaGpu() {
     execFile(
       "nvidia-smi",
       ["--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"],
-      { timeout: 5000 },
+      { timeout: 5000, windowsHide: true },
       (error, stdout) => {
         if (error || !stdout) {
           cachedGpuInfo = { hasNvidiaGpu: false };
@@ -58,7 +58,7 @@ function listNvidiaGpus() {
     execFile(
       "nvidia-smi",
       ["--query-gpu=index,uuid,name,memory.total", "--format=csv,noheader,nounits"],
-      { timeout: 5000 },
+      { timeout: 5000, windowsHide: true },
       (error, stdout) => {
         if (error || !stdout) {
           cachedGpuList = [];

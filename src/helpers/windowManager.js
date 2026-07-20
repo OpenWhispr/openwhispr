@@ -5,6 +5,7 @@ const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
+const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { DEV_SERVER_PORT } = DevServerManager;
 const {
@@ -622,6 +623,7 @@ class WindowManager {
         this.controlPanelWindow.show();
       }
       this.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
       return;
     }
 
@@ -662,6 +664,7 @@ class WindowManager {
       if (!this.controlPanelWindow.isVisible()) {
         this.controlPanelWindow.show();
         this.controlPanelWindow.focus();
+        dockManager.setControlPanelVisible(true);
       }
     }, 10000);
 
@@ -671,11 +674,9 @@ class WindowManager {
 
     this.controlPanelWindow.once("ready-to-show", () => {
       clearVisibilityTimer();
-      if (process.platform === "darwin" && app.dock) {
-        app.dock.show();
-      }
       this.controlPanelWindow.show();
       this.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
     });
 
     this.controlPanelWindow.on("close", (event) => {
@@ -688,6 +689,7 @@ class WindowManager {
     this.controlPanelWindow.on("closed", () => {
       clearVisibilityTimer();
       this.controlPanelWindow = null;
+      dockManager.setControlPanelVisible(false);
     });
 
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
@@ -710,6 +712,7 @@ class WindowManager {
         if (!this.controlPanelWindow.isVisible()) {
           this.controlPanelWindow.show();
           this.controlPanelWindow.focus();
+          dockManager.setControlPanelVisible(true);
         }
       }
     );
@@ -1095,10 +1098,7 @@ class WindowManager {
     }
 
     this.controlPanelWindow.hide();
-
-    if (process.platform === "darwin" && app.dock) {
-      app.dock.hide();
-    }
+    dockManager.setControlPanelVisible(false);
   }
 
   hideDictationPanel() {

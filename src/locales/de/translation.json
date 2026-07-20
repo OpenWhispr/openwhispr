@@ -33,6 +33,7 @@
       "hide": "Diktierfeld ausblenden"
     },
     "openControlPanel": "Kontrollzentrum öffnen",
+    "hideControlPanel": "Kontrollzentrum ausblenden",
     "quit": "OpenWhispr beenden",
     "tooltip": "OpenWhispr – Sprachdiktat"
   },
@@ -2512,7 +2513,7 @@
       "title": "Audio hochladen",
       "using": "Verwendet {{model}}",
       "dropOrBrowse": "Audiodatei ablegen oder klicken zum Durchsuchen",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "Zum Hochladen ablegen",
       "transcribe": "Transkribieren",
       "cancel": "Abbrechen",
