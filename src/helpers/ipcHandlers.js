@@ -6425,6 +6425,28 @@ class IPCHandlers {
           this.activeMeetingSpeakerConfig = null;
           resetMeetingLocalState();
 
+          // --- Audio retention: copy system PCM before diarization deletes it ---
+          const saveAudio = options?.saveAudio !== false;
+          let systemPcmCopy = null;
+          if (saveAudio && diarizationPcmPath && noteIdSnapshot) {
+            const copyPath = diarizationPcmPath + `.save-${Date.now()}.pcm`;
+            try {
+              fs.copyFileSync(diarizationPcmPath, copyPath);
+              systemPcmCopy = copyPath;
+            } catch (err) {
+              debugLogger.warn("Could not copy system PCM for audio save", { error: err.message }, "meeting");
+            }
+          }
+
+          // Fire-and-forget audio retention (non-blocking, parallel with diarization)
+          if (saveAudio && noteIdSnapshot) {
+            this._saveMeetingAudio(noteIdSnapshot, micPcmPath, systemPcmCopy)
+              .catch(err => debugLogger.warn("Meeting audio save failed", { error: err.message }, "meeting"));
+          } else {
+            if (micPcmPath) { try { fs.unlinkSync(micPcmPath); } catch (_) {} }
+            if (systemPcmCopy) { try { fs.unlinkSync(systemPcmCopy); } catch (_) {} }
+          }
+
           // Fire-and-forget background diarization (or notify skip)
           this._startOrSkipDiarization(
             diarizationSessionId,
@@ -6450,6 +6472,28 @@ class IPCHandlers {
         const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
         const noteIdSnapshot = meetingNoteId;
         this.activeMeetingSpeakerConfig = null;
+
+        // --- Audio retention: copy system PCM before diarization deletes it ---
+        const saveAudio = options?.saveAudio !== false;
+        let systemPcmCopy = null;
+        if (saveAudio && diarizationPcmPath && noteIdSnapshot) {
+          const copyPath = diarizationPcmPath + `.save-${Date.now()}.pcm`;
+          try {
+            fs.copyFileSync(diarizationPcmPath, copyPath);
+            systemPcmCopy = copyPath;
+          } catch (err) {
+            debugLogger.warn("Could not copy system PCM for audio save", { error: err.message }, "meeting");
+          }
+        }
+
+        // Fire-and-forget audio retention (non-blocking, parallel with diarization)
+        if (saveAudio && noteIdSnapshot) {
+          this._saveMeetingAudio(noteIdSnapshot, micPcmPath, systemPcmCopy)
+            .catch(err => debugLogger.warn("Meeting audio save failed", { error: err.message }, "meeting"));
+        } else {
+          if (micPcmPath) { try { fs.unlinkSync(micPcmPath); } catch (_) {} }
+          if (systemPcmCopy) { try { fs.unlinkSync(systemPcmCopy); } catch (_) {} }
+        }
 
         // Fire-and-forget background diarization (or notify skip)
         this._startOrSkipDiarization(
