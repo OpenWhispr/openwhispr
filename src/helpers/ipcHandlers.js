@@ -5159,6 +5159,8 @@ class IPCHandlers {
     let meetingDiarizationPath = null;
     let meetingDiarizationStartedAt = null;
     let meetingDiarizationSegments = [];
+    let meetingMicPcmStream = null;
+    let meetingMicPcmPath = null;
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
     let meetingLiveSpeakerStartedAt = null;
@@ -5748,6 +5750,14 @@ class IPCHandlers {
         fs.unlink(meetingDiarizationPath, () => {});
         meetingDiarizationPath = null;
       }
+      if (meetingMicPcmStream) {
+        meetingMicPcmStream.end();
+        meetingMicPcmStream = null;
+      }
+      if (meetingMicPcmPath) {
+        fs.unlink(meetingMicPcmPath, () => {});
+        meetingMicPcmPath = null;
+      }
       meetingDiarizationStartedAt = null;
       meetingDiarizationSegments = [];
       meetingLocalWin = null;
@@ -6209,11 +6219,33 @@ class IPCHandlers {
           meetingDiarizationStartedAt = receivedAt;
         }
         meetingDiarizationStream.write(outboundBuffer);
+
+        // Diagnostic: measure system audio level (sample every 100 chunks)
+        if (meetingSendCounts.system % 100 === 0 && meetingSendCounts.system > 0) {
+          const samples = new Int16Array(outboundBuffer.buffer, outboundBuffer.byteOffset, outboundBuffer.length >> 1);
+          let sumSq = 0;
+          for (let i = 0; i < samples.length; i++) {
+            const n = samples[i] / 0x7fff;
+            sumSq += n * n;
+          }
+          const rms = Math.sqrt(sumSq / samples.length);
+          const dbfs = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+          debugLogger.debug("System audio level", { dbfs: dbfs.toFixed(1), chunks: meetingSendCounts.system }, "meeting-gain");
+        }
+
         dispatchMeetingAudioBuffer(outboundBuffer, "system");
         return;
       }
 
       if (source === "mic") {
+        // Accumulate raw mic PCM for audio retention
+        if (!meetingMicPcmStream) {
+          const os = require("os");
+          meetingMicPcmPath = path.join(os.tmpdir(), `ow-mic-raw-${Date.now()}.pcm`);
+          meetingMicPcmStream = fs.createWriteStream(meetingMicPcmPath);
+        }
+        meetingMicPcmStream.write(outboundBuffer);
+
         if (processMeetingMicWithAec(outboundBuffer)) {
           return;
         }
