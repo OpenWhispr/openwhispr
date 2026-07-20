@@ -977,6 +977,25 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("get-note-audio-paths", async (_event, noteId) => {
+      const note = this.databaseManager.getNote(noteId);
+      return {
+        micPath: note?.mic_audio_path || null,
+        systemPath: note?.system_audio_path || null,
+      };
+    });
+
+    ipcMain.handle("delete-note-audio", async (_event, noteId) => {
+      const note = this.databaseManager.getNote(noteId);
+      for (const p of [note?.mic_audio_path, note?.system_audio_path]) {
+        if (p && fs.existsSync(p)) {
+          try { fs.unlinkSync(p); } catch (_) {}
+        }
+      }
+      this.databaseManager.updateNote(noteId, { mic_audio_path: null, system_audio_path: null });
+      return { success: true };
+    });
+
     ipcMain.handle("get-audio-buffer", async (event, id) => {
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       return buffer ? buffer.buffer : null;

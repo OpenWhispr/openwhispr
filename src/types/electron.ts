@@ -63,6 +63,8 @@ export interface NoteItem {
   client_note_id: string;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  mic_audio_path?: string | null;
+  system_audio_path?: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
 }
@@ -554,6 +556,8 @@ declare global {
       deleteTranscriptionAudio: (id: number) => Promise<{ success: boolean }>;
       getAudioStorageUsage: () => Promise<{ fileCount: number; totalBytes: number }>;
       deleteAllAudio: () => Promise<{ deleted: number }>;
+      getNoteAudioPaths?: (noteId: number) => Promise<{ micPath: string | null; systemPath: string | null }>;
+      deleteNoteAudio?: (noteId: number) => Promise<{ success: boolean }>;
       retryTranscription: (
         id: number,
         settings?: {
