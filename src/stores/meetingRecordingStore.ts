@@ -2,7 +2,10 @@ import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import { reconcileSavedMicSelection } from "../helpers/micSelectionRecovery";
+import {
+  followsSystemDefaultMic,
+  reconcileSavedMicSelection,
+} from "../helpers/micSelectionRecovery";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
@@ -1116,9 +1119,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
       micRecovery = new ActiveMicRecoveryController({
         mediaDevices: navigator.mediaDevices,
         acquire: async () => {
-          // Reacquire with the user's configured mic policy (built-in preference
-          // or pinned device — it may have only blipped); fall back to the
-          // system default only when that acquisition fails.
           try {
             return await navigator.mediaDevices.getUserMedia(await getMeetingMicConstraints());
           } catch {
@@ -1147,12 +1147,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
           logger.info("Meeting microphone capture recovered", {}, "meeting");
         },
       });
-      const { preferBuiltInMic, selectedMicDeviceId } = getSettings();
       await micRecovery.start(micStream, {
-        // "default" is Chromium's follow-the-OS-default pseudo-device, not a pin
-        // (getMeetingMicConstraints treats it the same way).
-        followDefault:
-          !preferBuiltInMic && (!selectedMicDeviceId || selectedMicDeviceId === "default"),
+        followDefault: followsSystemDefaultMic(getSettings()),
       });
     }
 

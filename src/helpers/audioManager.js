@@ -16,7 +16,7 @@ import {
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
-import { reconcileSavedMicSelection } from "./micSelectionRecovery";
+import { followsSystemDefaultMic, reconcileSavedMicSelection } from "./micSelectionRecovery";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
@@ -349,8 +349,6 @@ class AudioManager {
     this.micRecovery = new ActiveMicRecoveryController({
       mediaDevices: navigator.mediaDevices,
       acquire: async () => {
-        // Prefer the user's configured mic — it may have only blipped (e.g. a
-        // Bluetooth mute); fall back to the system default when it's truly gone.
         try {
           const constraints = await this.getAudioConstraints();
           return await navigator.mediaDevices.getUserMedia(constraints);
@@ -455,20 +453,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
-  followsSystemDefaultMic() {
-    const settings = getSettings();
-    // Chromium's "default" pseudo-device is a follow-the-OS-default selection, not a pin.
-    return (
-      !settings.preferBuiltInMic &&
-      (!settings.selectedMicDeviceId || settings.selectedMicDeviceId === "default")
-    );
-  }
-
   async beginMicRecovery(stream) {
     // A stop/cancel can land during the awaits between recorder start and this
     // call; never arm recovery for a recording that already ended.
     if (!this.isRecording) return;
-    await this.micRecovery.start(stream, { followDefault: this.followsSystemDefaultMic() });
+    await this.micRecovery.start(stream, {
+      followDefault: followsSystemDefaultMic(getSettings()),
+    });
   }
 
   async replaceActiveMic(replacement, previous) {
@@ -482,8 +473,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async mergeRecordedSegments(segments) {
     // Header-only segments carry no audio frames and crash FFmpeg's concat (#871).
-    // Returns null (not an empty Blob) when nothing usable remains so callers'
-    // truthiness checks behave like the pre-recovery code.
     const usable = segments.filter((segment) => segment && !isEmptyRecording(segment.size));
     if (usable.length === 0) return null;
     if (usable.length === 1) return usable[0];
@@ -1003,6 +992,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       receivedAudioData: this._receivedAudioData,
     });
     if (!recordingCheck.usable) {
+      logger.info(
+        "Dropping degenerate recording before transcription",
+        {
+          blobSize: audioBlob.size,
+          reason: recordingCheck.reason,
+          receivedAudioData: this._receivedAudioData,
+        },
+        "audio"
+      );
       this.isProcessing = false;
       this._localSpeechGateState = null;
       this.onStateChange?.({ isRecording: false, isProcessing: false });
@@ -1101,10 +1099,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.persistDiscardedBatchRecording(discarded);
       };
 
-      // Detach this recording from manager state before requesting the final
-      // MediaRecorder dataavailable/onstop events. Those events are async, so
-      // keeping the old recorder here would prevent a new recording from
-      // starting and let its late callback observe the next recording's state.
+      // Detach from manager state before recorder.stop(): its final
+      // dataavailable/onstop land async and must not block or observe the
+      // next recording.
       this.resetDiscardedBatchRecordingState();
 
       recorder.stop();
@@ -3310,7 +3307,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       recorder.ondataavailable = (event) => {
         if (event.data?.size > 0) chunks.push(event.data);
       };
-      recorder._openWhisprChunks = chunks;
       recorder.start(RECORDING_TIMESLICE_MS);
       this.streamingFallbackRecorder = recorder;
       this.streamingFallbackChunks = chunks;
@@ -3325,8 +3321,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async finishStreamingFallbackSegment() {
     const recorder = this.streamingFallbackRecorder;
     if (!recorder) return null;
-    const collect = () =>
-      new Blob(recorder._openWhisprChunks || [], { type: recorder.mimeType || "audio/webm" });
+    const chunks = this.streamingFallbackChunks;
+    const collect = () => new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
     let blob;
     if (recorder.state === "recording") {
       blob = await new Promise((resolve) => {
