@@ -47,3 +47,9 @@ export async function executeTranslationChain({
 
   return { text: out, usedCloudReasoning };
 }
+
+// Keep the chain result only when it produced text; an empty/missing result
+// preserves the input so a dictation is never overwritten with nothing.
+export function resolveTranslatedText(previousText, chainResult) {
+  return chainResult?.text ? chainResult.text : previousText;
+}

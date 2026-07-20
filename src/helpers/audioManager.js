@@ -37,7 +37,11 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
 import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
-import { executeTranslationChain, shouldRunTranslateStep } from "./translationChain";
+import {
+  executeTranslationChain,
+  resolveTranslatedText,
+  shouldRunTranslateStep,
+} from "./translationChain";
 import { detectAgentName } from "../config/agentDetection";
 import {
   resolveDictationRouteKind,
@@ -2020,7 +2024,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                     log: { level: "error", channel: "transcription" },
                   },
           });
-          processedText = chainResult.text;
+          processedText = resolveTranslatedText(processedText, chainResult);
         }
       } catch (reasonError) {
         logger.error(
@@ -3562,7 +3566,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                     log: { level: "error", channel: "streaming" },
                   },
           });
-          finalText = chainResult.text;
+          finalText = resolveTranslatedText(finalText, chainResult);
           usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;
         }
       } catch (reasonError) {

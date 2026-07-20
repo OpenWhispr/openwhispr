@@ -274,3 +274,32 @@ test("shouldRunTranslateStep matrix", async () => {
   assert.equal(shouldRunTranslateStep("", "en"), true);
   assert.equal(shouldRunTranslateStep(undefined, "it"), true);
 });
+
+// Guard used at the batch/cloud call site (processedText): an empty chain result
+// must leave the transcription intact; a real result replaces it.
+test("resolveTranslatedText: empty chain result keeps processedText", async () => {
+  const { resolveTranslatedText } = await load();
+
+  assert.equal(resolveTranslatedText("raw dictation", { text: "" }), "raw dictation");
+  assert.equal(resolveTranslatedText("raw dictation", { text: null }), "raw dictation");
+  assert.equal(resolveTranslatedText("raw dictation", {}), "raw dictation");
+});
+
+test("resolveTranslatedText: non-empty chain result replaces processedText", async () => {
+  const { resolveTranslatedText } = await load();
+
+  assert.equal(resolveTranslatedText("raw dictation", { text: "translated" }), "translated");
+});
+
+// Guard used at the streaming call site (finalText): same preservation semantics.
+test("resolveTranslatedText: empty chain result keeps finalText", async () => {
+  const { resolveTranslatedText } = await load();
+
+  assert.equal(resolveTranslatedText("streamed text", { text: "" }), "streamed text");
+});
+
+test("resolveTranslatedText: non-empty chain result replaces finalText", async () => {
+  const { resolveTranslatedText } = await load();
+
+  assert.equal(resolveTranslatedText("streamed text", { text: "traducido" }), "traducido");
+});
