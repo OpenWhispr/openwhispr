@@ -103,7 +103,7 @@ export const useAudioRecording = (toast, options = {}) => {
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
         if (isRecording) {
           // Arm once per recording; mic-recovery restarts re-emit isRecording, so keep the existing timer.
-          // Auto-stop at the max recording limit; performStopRecording re-checks state, so a late fire is harmless.
+          // performStopRecording re-checks state, so a late fire is harmless.
           if (!maxDurationDisarmRef.current) {
             maxDurationDisarmRef.current = armMaxRecordingDurationTimer(
               getSettings().maxRecordingDurationSec,
