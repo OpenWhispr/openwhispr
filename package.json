@@ -23,7 +23,6 @@
     "compile:native": "npm run compile:globe && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:linuxkeys && npm run compile:winpaste && npm run compile:linux-paste && npm run compile:linux-system-audio && npm run compile:text-monitor && npm run compile:media-remote && npm run compile:mediaremote-adapter && npm run compile:mic-listener && npm run compile:audio-tap",
     "prestart": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
     "start": "electron .",
-    "predev": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
     "dev": "concurrently -k -r \"npm:dev:renderer\" \"npm:dev:main\"",
     "predev:main": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
     "dev:main": "cross-env NODE_ENV=development node scripts/run-electron.js --dev",

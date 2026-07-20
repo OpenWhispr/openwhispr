@@ -18,7 +18,12 @@ const STARTUP_POLL_INTERVAL_MS = 100;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 
-const STORAGE_DIR = path.join(os.homedir(), ".cache", "openwhispr", "qdrant-data");
+const STORAGE_DIR = path.join(
+  os.homedir(),
+  ".cache",
+  "openwhispr",
+  process.env.NODE_ENV === "development" ? "qdrant-data-dev" : "qdrant-data"
+);
 
 class QdrantManager {
   constructor() {
@@ -98,10 +103,14 @@ class QdrantManager {
     sidecarPidFile.write("qdrant", this.process.pid);
 
     let stderrBuffer = "";
+    let lastErrorLine = "";
     let exitCode = null;
 
     this.process.stdout.on("data", (data) => {
-      debugLogger.debug("qdrant stdout", { data: data.toString().trim() });
+      const text = data.toString();
+      debugLogger.debug("qdrant stdout", { data: text.trim() });
+      const errorLine = text.split("\n").findLast((line) => line.includes(" ERROR "));
+      if (errorLine) lastErrorLine = errorLine.trim();
     });
 
     this.process.stderr.on("data", (data) => {
@@ -123,7 +132,7 @@ class QdrantManager {
       sidecarPidFile.clear("qdrant");
     });
 
-    await this._waitForReady(() => ({ stderr: stderrBuffer, exitCode }));
+    await this._waitForReady(() => ({ stderr: stderrBuffer, lastErrorLine, exitCode }));
     this._startHealthCheck();
 
     debugLogger.info("qdrant started successfully", { port: this.port });
@@ -136,9 +145,13 @@ class QdrantManager {
     while (Date.now() - startTime < STARTUP_TIMEOUT_MS) {
       if (!this.process || this.process.killed) {
         const info = getProcessInfo ? getProcessInfo() : {};
-        const stderr = info.stderr ? info.stderr.trim().slice(0, 200) : "";
-        const details = stderr || (info.exitCode !== null ? `exit code: ${info.exitCode}` : "");
-        throw new Error(`qdrant process died during startup${details ? `: ${details}` : ""}`);
+        const details =
+          info.lastErrorLine ||
+          (info.stderr ? info.stderr.trim() : "") ||
+          (info.exitCode !== null ? `exit code: ${info.exitCode}` : "");
+        throw new Error(
+          `qdrant process died during startup${details ? `: ${details.slice(0, 400)}` : ""}`
+        );
       }
 
       pollCount++;
