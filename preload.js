@@ -71,6 +71,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
   getNoteAudioPaths: (noteId) => ipcRenderer.invoke("get-note-audio-paths", noteId),
   deleteNoteAudio: (noteId) => ipcRenderer.invoke("delete-note-audio", noteId),
+  retranscribeMeetingNote: (noteId, options) => ipcRenderer.invoke("retranscribe-meeting-note", noteId, options),
+  checkWhisperModelDownloaded: (model) => ipcRenderer.invoke("check-whisper-model-downloaded", model),
   retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
   updateTranscriptionText: (id, text, rawText) =>
     ipcRenderer.invoke("update-transcription-text", id, text, rawText),

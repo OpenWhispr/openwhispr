@@ -996,6 +996,82 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("retranscribe-meeting-note", async (event, noteId, options = {}) => {
+      const { BrowserWindow } = require("electron");
+      const note = this.databaseManager.getNote(noteId);
+      if (!note) return { success: false, error: "Note not found" };
+
+      const audioPath = note.system_audio_path || note.mic_audio_path;
+      if (!audioPath || !fs.existsSync(audioPath)) {
+        return { success: false, error: "No saved audio found for this note" };
+      }
+
+      try {
+        const audioBuffer = fs.readFileSync(audioPath);
+        const model = options.model || "large";
+
+        const transcriptionResult = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
+          model,
+          language: options.language || null,
+        });
+
+        const rawText = transcriptionResult?.text || "";
+        if (!rawText.trim()) {
+          return { success: false, error: "Re-transcription produced empty output" };
+        }
+
+        // Re-run diarization if system audio available
+        let finalTranscript = rawText;
+        const systemPath = note.system_audio_path;
+        if (systemPath && fs.existsSync(systemPath) && this.diarizationManager) {
+          try {
+            const { convertToWav } = require("./ffmpegUtils");
+            const tmpWav = systemPath.replace(/\.opus$/, `-retranscribe-${Date.now()}.wav`);
+            await convertToWav(systemPath, tmpWav, { sampleRate: 16000, channels: 1 });
+
+            const diarResult = await this.diarizationManager.diarize(tmpWav, {});
+            if (diarResult?.segments?.length) {
+              const whisperSegments = (transcriptionResult.segments || []).map((seg, i) => ({
+                id: `retranscribe-${i}`,
+                text: seg.text,
+                source: "system",
+                timestamp: (seg.start || 0) * 1000,
+              }));
+              const enriched = this.diarizationManager.mergeWithTranscript(whisperSegments, diarResult.segments);
+              if (enriched?.length) {
+                finalTranscript = JSON.stringify(enriched);
+              }
+            }
+            try { fs.unlinkSync(tmpWav); } catch (_) {}
+          } catch (diarErr) {
+            debugLogger.warn("Re-transcription diarization failed, using raw text", { error: diarErr.message }, "meeting");
+          }
+        }
+
+        this.databaseManager.updateNote(noteId, { transcript: finalTranscript });
+        const updatedNote = this.databaseManager.getNote(noteId);
+
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("note-updated", updatedNote);
+        }
+
+        return { success: true, noteId };
+      } catch (err) {
+        debugLogger.error("Re-transcription failed", { error: err.message, noteId }, "meeting");
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle("check-whisper-model-downloaded", async (_event, modelName) => {
+      try {
+        const modelPath = this.whisperManager.getModelPath(modelName);
+        return { downloaded: fs.existsSync(modelPath), modelPath };
+      } catch {
+        return { downloaded: false };
+      }
+    });
+
     ipcMain.handle("get-audio-buffer", async (event, id) => {
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       return buffer ? buffer.buffer : null;
