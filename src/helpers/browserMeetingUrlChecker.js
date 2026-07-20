@@ -53,6 +53,7 @@ async function checkForActiveMeetingUrl() {
   if (process.platform !== "darwin") return { matched: false };
   if (automationDenied) return { matched: false, denied: true };
 
+  let anyBrowserResponded = false;
   for (const app of BROWSERS) {
     const res = await runOsascript(tabsScript(app));
     if (res.denied) {
@@ -65,6 +66,7 @@ async function checkForActiveMeetingUrl() {
       return { matched: false, denied: true };
     }
     if (!res.ok || !res.output.trim()) continue;
+    anyBrowserResponded = true;
     // osascript renders a list of URLs comma-separated (may include nested windows).
     const urls = res.output
       .split(",")
@@ -76,7 +78,10 @@ async function checkForActiveMeetingUrl() {
       }
     }
   }
-  return { matched: false };
+  // No match — but was it a confident "no meeting" or an inconclusive failure?
+  return anyBrowserResponded
+    ? { matched: false }
+    : { matched: false, unavailable: true };
 }
 
 module.exports = { checkForActiveMeetingUrl, MEETING_URL_PATTERNS };
