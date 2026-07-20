@@ -2113,6 +2113,13 @@
       "noFolder": "无文件夹",
       "participants": "参与者"
     },
+    "retranscribe": {
+      "label": "重新转录（高质量）",
+      "inProgress": "正在重新转录...",
+      "success": "已使用高质量模型更新转录",
+      "failed": "重新转录失败：{{error}}",
+      "downloadNeeded": "正在下载 large-v3 模型（约 3 GB）。下载完成后请重试。"
+    },
     "participants": {
       "attendee": "位参会者",
       "attendees": "位参会者",

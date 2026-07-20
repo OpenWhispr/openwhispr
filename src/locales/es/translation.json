@@ -2166,6 +2166,13 @@
       "noFolder": "Sin carpeta",
       "participants": "Participantes"
     },
+    "retranscribe": {
+      "label": "Retranscribir (alta calidad)",
+      "inProgress": "Retranscribiendo...",
+      "success": "Transcripción actualizada con modelo de alta calidad",
+      "failed": "Error en la retranscripción: {{error}}",
+      "downloadNeeded": "Descargando modelo large-v3 (~3 GB). Inténtalo de nuevo cuando finalice la descarga."
+    },
     "participants": {
       "attendee": "asistente",
       "attendees": "asistentes",

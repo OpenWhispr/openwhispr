@@ -2118,6 +2118,13 @@
       "noFolder": "Nessuna cartella",
       "participants": "Partecipanti"
     },
+    "retranscribe": {
+      "label": "Ritrascrivere (alta qualità)",
+      "inProgress": "Ritrascrizione in corso...",
+      "success": "Trascrizione aggiornata con modello di alta qualità",
+      "failed": "Ritrascrizione fallita: {{error}}",
+      "downloadNeeded": "Download del modello large-v3 (~3 GB). Riprova dopo il completamento del download."
+    },
     "participants": {
       "attendee": "partecipante",
       "attendees": "partecipanti",

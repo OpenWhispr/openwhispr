@@ -2118,6 +2118,13 @@
       "noFolder": "Kein Ordner",
       "participants": "Teilnehmer"
     },
+    "retranscribe": {
+      "label": "Erneut transkribieren (hohe Qualität)",
+      "inProgress": "Wird erneut transkribiert...",
+      "success": "Transkription mit hochwertigem Modell aktualisiert",
+      "failed": "Erneute Transkription fehlgeschlagen: {{error}}",
+      "downloadNeeded": "Lade large-v3-Modell herunter (~3 GB). Versuchen Sie es nach dem Download erneut."
+    },
     "participants": {
       "attendee": "Teilnehmer",
       "attendees": "Teilnehmer",

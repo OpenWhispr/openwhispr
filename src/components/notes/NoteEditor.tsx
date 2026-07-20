@@ -14,7 +14,9 @@ import {
   Plus,
   Check,
   Share2,
+  RotateCcw,
 } from "lucide-react";
+import { useToast } from "../ui/useToast";
 import ShareNoteDialog from "./ShareNoteDialog";
 import { useShareCacheEntry } from "../../stores/noteStore";
 import { SHARING_ENABLED } from "../../lib/features";
@@ -145,6 +147,7 @@ export default function NoteEditor({
   onCreateFolderAndMove,
 }: NoteEditorProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [folderSearch, setFolderSearch] = useState("");
@@ -152,6 +155,28 @@ export default function NoteEditor({
   const [newFolderName, setNewFolderName] = useState("");
   const [isDiarizing, setIsDiarizing] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [retranscribing, setRetranscribing] = useState(false);
+
+  const handleRetranscribe = useCallback(async () => {
+    const modelCheck = await window.electronAPI?.checkWhisperModelDownloaded?.("large");
+    if (!modelCheck?.downloaded) {
+      toast({ title: t("notes.retranscribe.downloadNeeded"), variant: "default" });
+      await window.electronAPI?.downloadWhisperModel?.("large");
+      return;
+    }
+
+    setRetranscribing(true);
+    try {
+      const result = await window.electronAPI?.retranscribeMeetingNote?.(note.id, { model: "large" });
+      if (!result?.success) {
+        toast({ title: t("notes.retranscribe.failed", { error: result?.error }), variant: "destructive" });
+      } else {
+        toast({ title: t("notes.retranscribe.success") });
+      }
+    } finally {
+      setRetranscribing(false);
+    }
+  }, [note.id, t, toast]);
   const shareCache = useShareCacheEntry(note.cloud_id);
   const isShared = (shareCache?.share.visibility ?? "private") !== "private";
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
@@ -810,6 +835,25 @@ export default function NoteEditor({
                   />
                 </button>
               )}
+              {note.note_type === "meeting" &&
+                !isRecording &&
+                (note.system_audio_path || note.mic_audio_path) && (
+                  <button
+                    className="shrink-0 h-6 flex items-center gap-1 px-1.5 rounded-md bg-foreground/4 dark:bg-white/5 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:bg-foreground/8 dark:hover:text-foreground/60 dark:hover:bg-white/8 transition-colors duration-150 text-[11px] disabled:opacity-40 disabled:pointer-events-none"
+                    onClick={handleRetranscribe}
+                    disabled={retranscribing}
+                    title={t("notes.retranscribe.label")}
+                  >
+                    {retranscribing ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <RotateCcw size={11} />
+                    )}
+                    {retranscribing
+                      ? t("notes.retranscribe.inProgress")
+                      : t("notes.retranscribe.label")}
+                  </button>
+                )}
               {(onExportNote || onExportTranscript) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

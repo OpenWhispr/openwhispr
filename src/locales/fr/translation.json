@@ -2229,6 +2229,13 @@
       "noFolder": "Aucun dossier",
       "participants": "Participants"
     },
+    "retranscribe": {
+      "label": "Retranscrire (haute qualité)",
+      "inProgress": "Retranscription en cours...",
+      "success": "Transcription mise à jour avec le modèle haute qualité",
+      "failed": "Échec de la retranscription : {{error}}",
+      "downloadNeeded": "Téléchargement du modèle large-v3 (~3 Go). Réessayez une fois le téléchargement terminé."
+    },
     "participants": {
       "attendee": "participant",
       "attendees": "participants",

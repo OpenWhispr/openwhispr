@@ -2024,6 +2024,13 @@
       "saving": "保存中",
       "startWriting": "書き始める..."
     },
+    "retranscribe": {
+      "label": "再文字起こし（高品質）",
+      "inProgress": "再文字起こし中...",
+      "success": "高品質モデルで文字起こしを更新しました",
+      "failed": "再文字起こしに失敗しました: {{error}}",
+      "downloadNeeded": "large-v3 モデルをダウンロード中（約 3 GB）。ダウンロード完了後に再試行してください。"
+    },
     "participants": {
       "attendee": "名の参加者",
       "attendees": "名の参加者",

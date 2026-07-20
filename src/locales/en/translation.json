@@ -2317,6 +2317,13 @@
       "noFolder": "No folder",
       "participants": "Participants"
     },
+    "retranscribe": {
+      "label": "Re-transcribe (high quality)",
+      "inProgress": "Re-transcribing...",
+      "success": "Transcript updated with high-quality model",
+      "failed": "Re-transcription failed: {{error}}",
+      "downloadNeeded": "Downloading large-v3 model (~3 GB). Try again after download completes."
+    },
     "participants": {
       "attendee": "attendee",
       "attendees": "attendees",
