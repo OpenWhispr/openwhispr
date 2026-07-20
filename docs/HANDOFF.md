@@ -1,11 +1,12 @@
 # OpenWhispr Fork — Handoff
 
-_Updated 2026-07-17. Pick-up doc for the futuregerald/openwhispr fork. Full narrative in [`DECISIONS-LOG.md`](DECISIONS-LOG.md)._
+_Updated 2026-07-20. Pick-up doc for the futuregerald/openwhispr fork. Full narrative in [`DECISIONS-LOG.md`](DECISIONS-LOG.md)._
 
 ## Current state
 
-- **`main` @ `1a65e740`**, version **1.8.0**. **PRs #1–#9 all merged. No open PRs.**
+- **`main` @ `a5a84fda`**, version **1.8.0**. **PRs #1–#9 all merged. No open PRs.**
 - The fork is a fully local, private meeting transcriber: on-device **Parakeet TDT** transcription by default, **FluidAudio (ANE)** / sherpa-onnx **N-speaker diarization**, local-only onboarding (no signup), telemetry off, cloud/account UI removed, opt-in **auto-start/stop recording**, and a hardened build.
+- **PR 2 plan is written and ready to execute** at `docs/plans/2026-07-17-meeting-audio-and-retranscription.md`. Plan file is untracked (not yet committed). 18 tasks across 6 feature areas.
 
 ## Merged PRs (recent first)
 - **#9** diarization quality: FluidAudio → **offline** mode + **auto-detect speaker count** (max-speakers bound instead of a forced count). Fixes remote speakers collapsing into one.
@@ -37,23 +38,42 @@ Typecheck: `cd src && npx tsc --noEmit`. A freshly rebuilt working `.dmg` exists
 - **Diarization is already POST-CALL**, system-channel only. Engine dispatch in `src/helpers/diarization.js`. After #9: FluidAudio offline + auto-count. A **live** speaker identifier (`liveSpeakerIdentifier.js`, CAM++ cosine ≥ 0.65) labels in real time during the call.
 - Common audio sink: `dispatchMeetingAudioBuffer` (`ipcHandlers.js` ~5261); stop/cleanup ~5743 and ~4685; `meeting-transcription-send` IPC ~6345.
 
-## NEXT UP — PR 2 (the main pending work)
-**Meeting-audio saving + whisper large-v3 re-pass.** Deferred from #9 because it touches the delicate recording lifecycle and deserves care. Decisions already made:
-1. **Save meeting audio** as **separate mic + system Opus tracks (~24–32 kbps mono)** via the bundled ffmpeg (`ffmpegUtils`, `getFFmpegPath`), into `open-whispr/audio/` (or attached to the note), **gated on `dataRetentionEnabled`** (settingsStore, default true). Separate tracks so diarization can re-run cleanly and "you"=mic is trivial. Hook: system PCM temp file already exists — add mic PCM capture and, on stop, encode both to Opus + reference the note **before** deleting the PCM. Mirror how dictation gates/saves audio (`save-transcription-audio` IPC ~952, `has_audio`).
-2. **Whisper large-v3 post-call re-pass** (NOT WhisperX — CTranslate2 has no Metal so it's CPU-slow on Mac, ~6–20 min/30-min call; whisper.cpp large-v3 uses Metal, ~2–5 min, no Python). Run whisper-server large-v3 (`src/helpers/whisper.js`/`whisperServer.js`; ~3 GB `ggml-large-v3` download) on the saved audio, then re-run diarization + `mergeWithTranscript` and rewrite `notes.transcript`. Expose as an on-demand "Re-transcribe (high quality)" action and/or automatic post-call.
+## PR 2 — Plan ready, execution pending
+
+**Plan file:** `docs/plans/2026-07-17-meeting-audio-and-retranscription.md`
+**Execution mode:** Subagent-driven development (Opus subagents per task batch, review between batches).
+
+### 6 feature areas (18 tasks total):
+
+1. **Meeting audio saving** (Tasks 1.1–1.9): DB migration (`mic_audio_path`/`system_audio_path` on `notes`), `encodePcmToOpus` ffmpeg helper, mic PCM write stream in recording pipeline, `_saveMeetingAudio` class method, renderer passes `saveAudio` flag via IPC, wire into stop flow with system PCM copy, note audio IPC handlers.
+2. **Whisper large-v3 re-transcription** (Tasks 2.1–2.3): `retranscribe-meeting-note` IPC handler (reads saved Opus, feeds whisper-server large-v3, re-runs diarization, overwrites transcript), model download check, "Re-transcribe (high quality)" UI button.
+3. **Capture gain diagnostic** (Task 3.1): RMS level logging at system PCM write point. If dBFS < −40, add loudnorm in follow-up.
+4. **Auto-start URL-gate fix** (Tasks 4.1–4.3): `browserMeetingUrlChecker.js` now distinguishes timeout from "no meeting" via `unavailable` flag; `_handleCallActive` trusts device signal when URL check is unavailable.
+5. **MCP card removal** (Task 5.1): Remove dead `McpIntegrationCard` import/usage from `IntegrationsView.tsx`.
+6. **Version bump** (Task 6.1): 1.8.0 → 1.9.0 + CHANGELOG.
+
+### Key code facts verified during planning:
+- Main process has **no** `_getSettings()` — renderer must pass `saveAudio: dataRetentionEnabled` through `meeting-transcription-stop` IPC (update 4 files: ipcHandlers.js, preload.js, types/electron.ts, meetingRecordingStore.ts)
+- `_startOrSkipDiarization` deletes `rawPcmPath` in its `finally` block (line 9274) — must `fs.copyFileSync` before passing to both diarization and audio encoding
+- `checkForActiveMeetingUrl` returns `{ matched: false }` identically for timeout AND "no meeting found" — this is the auto-start bug root cause
+- `ipcHandlers.js` is 9300+ lines — all line numbers are approximate, re-verify before each edit
 
 ## Open findings / risks to chase
-- **Low capture gain:** saved dictation audio measured **mean −40 to −50 dB** (normal speech ~−20 to −30). If real meetings are that quiet, it wrecks diarization + STT — verify on a real call and consider a normalization/gain stage before diarization. **Verify this before over-tuning engines.**
-- **Auto-start/stop unverified on a real call.** Likely-too-strict gate: `_handleCallActive` requires the URL check to return `matched` OR `denied`; if the AppleScript **times out** (Automation prompt pending) it returns neither → auto-start is blocked. Consider: auto-start on device-in-use whenever the URL check can't run, only skipping when it *reliably* finds no meeting tab. First check the "Auto-start recording in meetings" toggle is even ON (Settings → General, default off) and Automation permission granted.
+- **Low capture gain:** saved dictation audio measured **mean −40 to −50 dB** (normal speech ~−20 to −30). Verify on a real call (Task 3.1 adds diagnostic logging).
+- **Auto-start/stop unverified on a real call.** Tasks 4.1–4.3 fix the URL-gate bug; still need a real Google Meet call to confirm.
 - Diarization real quality only judgeable on a genuine multi-party recording — which needs PR 2's audio saving to re-run/tune.
-- Fable subagent model was returning **529 Overloaded** repeatedly on 2026-07-16 — retry for planning, or plan directly with Opus.
 
 ## Gotchas
 - Existing installs keep persisted localStorage; default changes apply to fresh installs. Reset dev profile: `rm -rf ~/Library/"Application Support"/OpenWhispr-development`.
 - `resources/bin/` is gitignored (binaries built/downloaded, not committed). FluidAudio auto-selects only if its binary is present.
+- `package-lock.json` has a stale diff (unrelated) — ignore or reset before committing PR 2 work.
 
 ---
 
 ## Resume prompt (paste into a fresh session)
 
-> I'm continuing work on my OpenWhispr fork at `~/Documents/dev/openwhispr` (a fully local, private meeting transcriber; remotes: origin=my fork futuregerald/openwhispr, upstream=OpenWhispr/openwhispr). Read `docs/HANDOFF.md` and `docs/DECISIONS-LOG.md` first for full context. `main` is at v1.8.0 with PRs #1–#9 merged. **Policy: open PRs and leave them open for me to review — never auto-merge.** Use a Fable subagent to plan non-trivial work and Opus to execute; investigate the real code before editing. **Next task: PR 2 — save meeting audio (separate mic + system Opus tracks, retention-gated, via bundled ffmpeg) AND add a whisper.cpp large-v3 post-call re-transcription pass that rewrites the note transcript and re-runs diarization** (NOT WhisperX — it's CPU-slow on Mac). Before over-tuning: verify the real meeting capture gain isn't too low (saved test audio was −40 to −50 dB). Also still open: verify/​fix auto-start/stop on a real call (the URL-gate may be too strict when macOS Automation permission isn't granted), and decide on removing the dead MCP settings card. Start by reading the handoff, then have Fable plan PR 2.
+> I'm continuing work on my OpenWhispr fork at `~/Documents/dev/openwhispr` (a fully local, private meeting transcriber; remotes: origin = my fork futuregerald/openwhispr, upstream = OpenWhispr/openwhispr). Read `docs/HANDOFF.md` first for full context. `main` is at v1.8.0 with PRs #1–#9 merged, no open PRs. **Policy: open PRs and leave them open for me to review — never auto-merge.**
+>
+> **The PR 2 implementation plan is already written** at `docs/plans/2026-07-17-meeting-audio-and-retranscription.md` — read it. It has 18 tasks across 6 feature areas: (1) save meeting audio as separate mic + system Opus tracks (retention-gated), (2) whisper.cpp large-v3 post-call re-transcription, (3) capture gain diagnostic, (4) auto-start URL-gate fix, (5) MCP card removal, (6) v1.9.0 version bump.
+>
+> **Execute the plan now using subagent-driven development.** Create a feature branch from main, commit the plan file first, then dispatch Opus subagents per task batch (the plan has a dependency graph and recommended parallel batches at the bottom). Review between batches. `ipcHandlers.js` is 9300+ lines — always re-verify line numbers before editing. After all tasks: open a PR and leave it open for me. Do not wait for my input between batches unless you hit a blocking issue.
