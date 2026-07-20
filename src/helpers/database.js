@@ -495,6 +495,16 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN mic_audio_path TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN system_audio_path TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       // Sync columns for folders
       try {
@@ -1500,6 +1510,8 @@ class DatabaseManager {
         "deleted_at",
         "client_note_id",
         "cloud_id",
+        "mic_audio_path",
+        "system_audio_path",
       ];
       const fields = [];
       const values = [];
