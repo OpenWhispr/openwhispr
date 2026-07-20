@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-20
+
+### Added
+- **Meeting audio saving:** After a call ends, mic and system audio are encoded to separate Opus files (~32 kbps mono) in `userData/audio/`. Gated on Settings > Privacy > "Save audio recordings" (`dataRetentionEnabled`). Paths stored in `notes.mic_audio_path` / `notes.system_audio_path`.
+- **High-quality re-transcription:** "Re-transcribe (high quality)" button on meeting notes runs a post-call whisper.cpp large-v3 pass (Metal-accelerated) + diarization re-run, replacing the live transcript. Requires ~3 GB large-v3 model download.
+- System audio RMS level diagnostic logging (`meeting-gain` debug tag).
+
+### Fixed
+- Auto-start recording no longer silently fails when macOS Automation permission is pending or denied. The URL check now distinguishes "timeout/error" from "no meeting found" — device-in-use signal is trusted when the check can't run.
+
+### Removed
+- Dead MCP integration settings card (cloud feature, non-functional in fork).
+
 ## [1.8.0] - 2026-07-15
 
 Fork release (futuregerald/openwhispr) — a fully local, private meeting transcriber. Real N-speaker diarization, on-device by default, with nothing sent off-device unless you opt in.
