@@ -9110,6 +9110,55 @@ class IPCHandlers {
     return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
   }
 
+  /**
+   * Encode PCM tracks to Opus and store in userData/audio/.
+   * Returns { micPath, systemPath } or null if nothing to save.
+   */
+  async _saveMeetingAudio(noteId, micPcmPath, systemPcmPath) {
+    const { encodePcmToOpus } = require("./ffmpegUtils");
+    const fs = require("fs");
+    const path = require("path");
+    const audioDir = this.audioStorageManager.audioDir;
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+
+    const saved = { micPath: null, systemPath: null };
+
+    const encode = async (pcmPath, track) => {
+      if (!pcmPath || !fs.existsSync(pcmPath)) return null;
+      const outFile = path.join(audioDir, `OpenWhispr-meeting-${noteId}-${stamp}-${track}.opus`);
+      try {
+        await encodePcmToOpus(pcmPath, outFile, { sampleRate: 24000, bitrate: 32 });
+        return outFile;
+      } catch (err) {
+        debugLogger.warn(`Meeting ${track} audio encode failed`, { error: err.message }, "meeting");
+        return null;
+      } finally {
+        try { fs.unlinkSync(pcmPath); } catch (_) {}
+      }
+    };
+
+    [saved.micPath, saved.systemPath] = await Promise.all([
+      encode(micPcmPath, "mic"),
+      encode(systemPcmPath, "system"),
+    ]);
+
+    if ((saved.micPath || saved.systemPath) && noteId) {
+      try {
+        const updates = {};
+        if (saved.micPath) updates.mic_audio_path = saved.micPath;
+        if (saved.systemPath) updates.system_audio_path = saved.systemPath;
+        this.databaseManager.updateNote(noteId, updates);
+      } catch (err) {
+        debugLogger.warn("Failed to update note audio paths", { error: err.message }, "meeting");
+      }
+    }
+
+    return saved;
+  }
+
   _startOrSkipDiarization(
     sessionId,
     rawPcmPath,
