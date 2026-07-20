@@ -4685,14 +4685,20 @@ class IPCHandlers {
       const diarizationPcmPath = meetingDiarizationPath;
       const diarizationSegments = meetingDiarizationSegments;
       const diarizationStartedAt = meetingDiarizationStartedAt;
+      const micPcmPath = meetingMicPcmPath;
+      meetingMicPcmPath = null; // Clear so resetMeetingLocalState doesn't double-unlink
       if (meetingDiarizationStream) {
         await new Promise((resolve) => meetingDiarizationStream.end(resolve));
         meetingDiarizationStream = null;
       }
+      if (meetingMicPcmStream) {
+        await new Promise((resolve) => meetingMicPcmStream.end(resolve));
+        meetingMicPcmStream = null;
+      }
       meetingDiarizationPath = null;
       meetingDiarizationStartedAt = null;
       meetingDiarizationSegments = [];
-      return { diarizationPcmPath, diarizationSegments, diarizationStartedAt };
+      return { diarizationPcmPath, diarizationSegments, diarizationStartedAt, micPcmPath };
     };
 
     const attachMeetingStreamingHandlers = (streaming, win, source) => {
@@ -6410,7 +6416,7 @@ class IPCHandlers {
             debugLogger.error("Local meeting final transcription failed", { error: err.message });
           }
           flushPendingMicFinals(true);
-          const { diarizationPcmPath, diarizationSegments, diarizationStartedAt } =
+          const { diarizationPcmPath, diarizationSegments, diarizationStartedAt, micPcmPath } =
             await captureMeetingDiarizationState();
           const transcript =
             buildOrderedTranscriptText(diarizationSegments) || meetingLocalTranscript;
@@ -6435,7 +6441,7 @@ class IPCHandlers {
         }
 
         const results = await disconnectMeetingStreaming({ flushPending: true });
-        const { diarizationPcmPath, diarizationSegments, diarizationStartedAt } =
+        const { diarizationPcmPath, diarizationSegments, diarizationStartedAt, micPcmPath } =
           await captureMeetingDiarizationState();
         const transcript =
           buildOrderedTranscriptText(diarizationSegments) ||
