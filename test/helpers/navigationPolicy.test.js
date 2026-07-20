@@ -6,7 +6,6 @@ const load = () => import("../../src/helpers/navigationPolicy.js");
 test("production navigation to the app's own file:// content is internal", async () => {
   const { isInternalNavigation } = await load();
 
-  // appUrl is null in production (loadFile() is used, not loadURL()).
   assert.equal(
     isInternalNavigation("file:///Applications/OpenWhispr.app/Contents/Resources/app.asar/src/dist/index.html", null),
     true
@@ -26,10 +25,6 @@ test("devtools navigation is always internal", async () => {
 test("an external link in production is not internal", async () => {
   const { isInternalNavigation } = await load();
 
-  // Regression guard: appUrl is null in production, and this must not throw —
-  // a throw here used to skip event.preventDefault() entirely, letting the
-  // control panel window navigate straight to the external page with no way
-  // back (e.g. the changelog link in Settings -> System -> Software Updates).
   assert.equal(isInternalNavigation("https://github.com/OpenWhispr/openwhispr/releases", null), false);
 });
 
