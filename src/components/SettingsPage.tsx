@@ -103,7 +103,6 @@ import { formatBytes } from "../utils/formatBytes";
 import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
-import { WORKSPACES_ENABLED } from "../lib/features";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
@@ -1404,6 +1403,9 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
+      // Team content is membership-scoped, not account data: drop it locally
+      // before the session ends (never blocks sign-out).
+      await syncService.purgeTeamSpacesForSignOut();
       await signOut();
       window.location.reload();
     } catch (error) {
@@ -2387,7 +2389,7 @@ export default function SettingsPage({
         );
 
       case "workspace":
-        return WORKSPACES_ENABLED ? <WorkspaceSection initialSubTab={initialSubTab} /> : null;
+        return <WorkspaceSection initialSubTab={initialSubTab} />;
 
       case "general":
         return (

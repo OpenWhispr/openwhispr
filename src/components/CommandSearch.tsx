@@ -1,10 +1,27 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Search, FileText, Mic, Folder, Users, Upload, MessageSquare } from "lucide-react";
+import {
+  Search,
+  FileText,
+  Mic,
+  Folder,
+  Lock,
+  Users,
+  Upload,
+  MessageSquare,
+  ChevronDown,
+} from "lucide-react";
 import { cn } from "./lib/utils";
-import type { NoteItem, FolderItem, TranscriptionItem } from "../types/electron.js";
-import { normalizeDbDate } from "../utils/dateFormatting";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "./ui/dropdown-menu";
+import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../types/electron.js";
+import { formatRelativeTime } from "../utils/dateFormatting";
 
 interface ConversationResult {
   id: number;
@@ -13,37 +30,30 @@ interface ConversationResult {
   updated_at: string;
 }
 
+interface JumpTarget {
+  key: string;
+  spaceId: number;
+  folderId: number | null;
+  label: string;
+  space: SpaceItem | undefined;
+}
+
 export interface CommandSearchProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode?: "all" | "conversations";
   transcriptions?: TranscriptionItem[];
-  onNoteSelect?: (noteId: number, folderId: number | null) => void;
+  onNoteSelect?: (noteId: number, folderId: number | null, spaceId?: number) => void;
+  onContainerSelect?: (spaceId: number, folderId: number | null) => void;
   onTranscriptSelect?: (transcriptId: number) => void;
   onConversationSelect?: (conversationId: number) => void;
 }
 
 type FlatItem =
+  | { kind: "container"; target: JumpTarget }
   | { kind: "note"; note: NoteItem }
   | { kind: "transcript"; transcript: TranscriptionItem }
   | { kind: "conversation"; conversation: ConversationResult };
-
-function relativeTime(
-  dateStr: string,
-  t: (key: string, opts?: Record<string, unknown>) => string
-): string {
-  const date = normalizeDbDate(dateStr);
-  if (Number.isNaN(date.getTime())) return "";
-  const diff = Date.now() - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (minutes < 1) return t("notes.list.timeNow");
-  if (minutes < 60) return t("notes.list.minutesAgo", { count: minutes });
-  if (hours < 24) return t("notes.list.hoursAgo", { count: hours });
-  if (days < 7) return t("notes.list.daysAgo", { count: days });
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
 
 function stripMarkdownPreview(text: string): string {
   return text
@@ -60,6 +70,7 @@ export default function CommandSearch({
   mode = "all",
   transcriptions = [],
   onNoteSelect,
+  onContainerSelect,
   onTranscriptSelect,
   onConversationSelect,
 }: CommandSearchProps) {
@@ -67,6 +78,8 @@ export default function CommandSearch({
   const [query, setQuery] = useState("");
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
+  const [spaces, setSpaces] = useState<SpaceItem[]>([]);
+  const [scopeSpaceId, setScopeSpaceId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -84,11 +97,16 @@ export default function CommandSearch({
       .getFolders()
       .then(setFolders)
       .catch(() => {});
+    window.electronAPI
+      .getSpaces?.()
+      .then((items) => setSpaces(items ?? []))
+      .catch(() => {});
   }, [isConversationsMode]);
 
   if (open && !prevOpen) {
     setPrevOpen(open);
     setQuery("");
+    setScopeSpaceId(null);
     setSelectedIndex(0);
   } else if (open !== prevOpen) {
     setPrevOpen(open);
@@ -163,7 +181,7 @@ export default function CommandSearch({
       }
       searchTimerRef.current = setTimeout(async () => {
         try {
-          const results = await window.electronAPI.searchNotes(query);
+          const results = await window.electronAPI.searchNotes(query, undefined, scopeSpaceId);
           setNotes(results);
         } catch {
           /* keep current */
@@ -174,7 +192,7 @@ export default function CommandSearch({
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [query, isConversationsMode]);
+  }, [query, isConversationsMode, scopeSpaceId]);
 
   if (notes !== prevNotes || query !== prevQuery) {
     setPrevNotes(notes);
@@ -183,29 +201,64 @@ export default function CommandSearch({
   }
 
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
+  const spaceMap = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
+  const scopeSpace = scopeSpaceId != null ? spaceMap.get(scopeSpaceId) : undefined;
 
-  const noteGroups = useMemo(() => {
-    const groups = new Map<number | null, NoteItem[]>();
-    for (const note of notes) {
-      const fid = note.folder_id ?? null;
-      if (!groups.has(fid)) groups.set(fid, []);
-      groups.get(fid)!.push(note);
+  // Scoping re-filters the visible list immediately, so the keyboard
+  // highlight must restart from the top.
+  const selectScope = useCallback((spaceId: number | null) => {
+    setScopeSpaceId(spaceId);
+    setSelectedIndex(0);
+  }, []);
+
+  // The search leg scopes at the DB; this also covers browsed (empty-query)
+  // results and stale in-flight results after a scope switch.
+  const scopedNotes = useMemo(
+    () => (scopeSpaceId == null ? notes : notes.filter((n) => n.space_id === scopeSpaceId)),
+    [notes, scopeSpaceId]
+  );
+
+  const spaceLabel = useCallback(
+    (space: SpaceItem) =>
+      space.kind === "private"
+        ? t("notes.spaces.personal")
+        : `${space.emoji ? `${space.emoji} ` : ""}${space.name}`,
+    [t]
+  );
+
+  const noteBreadcrumb = useCallback(
+    (note: NoteItem) => {
+      const space = spaceMap.get(note.space_id);
+      const folder = note.folder_id != null ? folderMap.get(note.folder_id) : undefined;
+      if (!space) return folder?.name ?? "";
+      return folder ? `${spaceLabel(space)} / ${folder.name}` : spaceLabel(space);
+    },
+    [spaceMap, folderMap, spaceLabel]
+  );
+
+  const jumpTargets = useMemo<JumpTarget[]>(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || isConversationsMode) return [];
+    const targets: JumpTarget[] = [];
+    for (const space of spaces) {
+      const label = spaceLabel(space);
+      if (label.toLowerCase().includes(q)) {
+        targets.push({ key: `s:${space.id}`, spaceId: space.id, folderId: null, label, space });
+      }
     }
-    return [...groups.entries()]
-      .sort(([a], [b]) => {
-        if (a === null) return -1;
-        if (b === null) return 1;
-        const fa = folderMap.get(a);
-        const fb = folderMap.get(b);
-        if (fa?.is_default) return -1;
-        if (fb?.is_default) return 1;
-        return (fa?.sort_order ?? 0) - (fb?.sort_order ?? 0);
-      })
-      .map(([fid, items]) => ({
-        folder: fid !== null ? (folderMap.get(fid) ?? null) : null,
-        items,
-      }));
-  }, [notes, folderMap]);
+    for (const folder of folders) {
+      if (folder.name.toLowerCase().includes(q)) {
+        targets.push({
+          key: `f:${folder.id}`,
+          spaceId: folder.space_id,
+          folderId: folder.id,
+          label: folder.name,
+          space: spaceMap.get(folder.space_id),
+        });
+      }
+    }
+    return targets.slice(0, 5);
+  }, [query, spaces, folders, spaceMap, spaceLabel, isConversationsMode]);
 
   const filteredTranscripts = useMemo(() => {
     const slice = query.trim()
@@ -219,21 +272,22 @@ export default function CommandSearch({
       return conversations.map((c) => ({ kind: "conversation" as const, conversation: c }));
     }
     const items: FlatItem[] = [];
-    for (const group of noteGroups) {
-      for (const note of group.items) items.push({ kind: "note", note });
-    }
+    for (const target of jumpTargets) items.push({ kind: "container", target });
+    for (const note of scopedNotes) items.push({ kind: "note", note });
     for (const transcript of filteredTranscripts) items.push({ kind: "transcript", transcript });
     return items;
-  }, [noteGroups, filteredTranscripts, conversations, isConversationsMode]);
+  }, [jumpTargets, scopedNotes, filteredTranscripts, conversations, isConversationsMode]);
 
   const selectItem = useCallback(
     (item: FlatItem) => {
-      if (item.kind === "note") onNoteSelect?.(item.note.id, item.note.folder_id ?? null);
+      if (item.kind === "container") onContainerSelect?.(item.target.spaceId, item.target.folderId);
+      else if (item.kind === "note")
+        onNoteSelect?.(item.note.id, item.note.folder_id ?? null, item.note.space_id);
       else if (item.kind === "transcript") onTranscriptSelect?.(item.transcript.id);
       else if (item.kind === "conversation") onConversationSelect?.(item.conversation.id);
       onOpenChange(false);
     },
-    [onNoteSelect, onTranscriptSelect, onConversationSelect, onOpenChange]
+    [onNoteSelect, onContainerSelect, onTranscriptSelect, onConversationSelect, onOpenChange]
   );
 
   const handleKeyDown = useCallback(
@@ -286,6 +340,42 @@ export default function CommandSearch({
           {/* Search input */}
           <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-border/40">
             <Search size={14} className="shrink-0 text-muted-foreground/50" />
+            {!isConversationsMode && spaces.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-1 shrink-0 rounded-md border border-border/50 bg-muted/40",
+                      "px-1.5 py-0.5 text-[11px] transition-colors outline-none",
+                      scopeSpace ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span className="truncate max-w-32">
+                      {scopeSpace ? spaceLabel(scopeSpace) : t("commandSearch.allSpaces")}
+                    </span>
+                    <ChevronDown size={11} className="shrink-0 text-muted-foreground/50" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  onCloseAutoFocus={(e) => {
+                    e.preventDefault();
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <DropdownMenuItem onSelect={() => selectScope(null)}>
+                    {t("commandSearch.allSpaces")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {spaces.map((space) => (
+                    <DropdownMenuItem key={space.id} onSelect={() => selectScope(space.id)}>
+                      {spaceLabel(space)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <input
               ref={inputRef}
               value={query}
@@ -355,44 +445,66 @@ export default function CommandSearch({
                     )}
                   </div>
                   <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-                    {relativeTime(conv.updated_at, t)}
+                    {formatRelativeTime(conv.updated_at, t)}
                   </span>
                 </button>
               ))
             ) : (
               <>
-                {noteGroups.length > 0 && (
+                {jumpTargets.length > 0 && (
                   <div>
-                    {noteGroups.map((group) => {
-                      const label = group.folder?.name ?? t("commandSearch.sections.notes");
-                      const Icon = group.folder ? Folder : FileText;
+                    <SectionHeader
+                      icon={<Folder size={11} />}
+                      label={t("commandSearch.sections.jumpTo")}
+                    />
+                    {jumpTargets.map((target) => {
+                      const idx = flatItems.findIndex(
+                        (fi) => fi.kind === "container" && fi.target.key === target.key
+                      );
                       return (
-                        <div key={group.folder?.id ?? "null-folder"}>
-                          <SectionHeader icon={<Icon size={11} />} label={label} />
-                          {group.items.map((note) => {
-                            const idx = flatItems.findIndex(
-                              (fi) => fi.kind === "note" && fi.note.id === note.id
-                            );
-                            return (
-                              <NoteRow
-                                key={note.id}
-                                note={note}
-                                idx={idx}
-                                isSelected={selectedIndex === idx}
-                                onSelect={() => selectItem({ kind: "note", note })}
-                                onHover={() => setSelectedIndex(idx)}
-                                t={t}
-                              />
-                            );
-                          })}
-                        </div>
+                        <ContainerRow
+                          key={target.key}
+                          target={target}
+                          showSpaceHint={target.folderId != null && spaces.length > 1}
+                          spaceLabel={spaceLabel}
+                          idx={idx}
+                          isSelected={selectedIndex === idx}
+                          onSelect={() => selectItem({ kind: "container", target })}
+                          onHover={() => setSelectedIndex(idx)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
+                {scopedNotes.length > 0 && (
+                  <div className={jumpTargets.length > 0 ? "mt-0.5" : ""}>
+                    <SectionHeader
+                      icon={<FileText size={11} />}
+                      label={t("commandSearch.sections.notes")}
+                    />
+                    {scopedNotes.map((note) => {
+                      const idx = flatItems.findIndex(
+                        (fi) => fi.kind === "note" && fi.note.id === note.id
+                      );
+                      return (
+                        <NoteRow
+                          key={note.id}
+                          note={note}
+                          breadcrumb={noteBreadcrumb(note)}
+                          idx={idx}
+                          isSelected={selectedIndex === idx}
+                          onSelect={() => selectItem({ kind: "note", note })}
+                          onHover={() => setSelectedIndex(idx)}
+                          t={t}
+                        />
                       );
                     })}
                   </div>
                 )}
 
                 {filteredTranscripts.length > 0 && (
-                  <div className={noteGroups.length > 0 ? "mt-0.5" : ""}>
+                  <div className={jumpTargets.length > 0 || scopedNotes.length > 0 ? "mt-0.5" : ""}>
                     <SectionHeader
                       icon={<Mic size={11} />}
                       label={t("commandSearch.sections.transcripts")}
@@ -442,8 +554,65 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
   );
 }
 
+function ContainerRow({
+  target,
+  showSpaceHint,
+  spaceLabel,
+  idx,
+  isSelected,
+  onSelect,
+  onHover,
+}: {
+  target: JumpTarget;
+  showSpaceHint: boolean;
+  spaceLabel: (space: SpaceItem) => string;
+  idx: number;
+  isSelected: boolean;
+  onSelect: () => void;
+  onHover: () => void;
+}) {
+  const { space } = target;
+  const iconClass = cn(
+    "shrink-0 transition-colors",
+    isSelected ? "text-primary" : "text-muted-foreground/40"
+  );
+  return (
+    <button
+      type="button"
+      data-idx={idx}
+      onClick={onSelect}
+      onMouseEnter={onHover}
+      className={cn(
+        "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left transition-colors duration-100 outline-none",
+        isSelected
+          ? "bg-primary/8 dark:bg-primary/10"
+          : "hover:bg-foreground/4 dark:hover:bg-white/4"
+      )}
+    >
+      {target.folderId != null ? (
+        <Folder size={13} className={iconClass} />
+      ) : space?.kind === "private" ? (
+        <Lock size={13} className={iconClass} />
+      ) : space?.emoji ? (
+        <span className="text-[13px] leading-none shrink-0" aria-hidden="true">
+          {space.emoji}
+        </span>
+      ) : (
+        <Users size={13} className={iconClass} />
+      )}
+      <p className="flex-1 text-xs font-medium text-foreground truncate min-w-0">{target.label}</p>
+      {showSpaceHint && space && (
+        <span className="text-[10px] text-muted-foreground/45 truncate shrink-0 max-w-32">
+          {spaceLabel(space)}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function NoteRow({
   note,
+  breadcrumb,
   idx,
   isSelected,
   onSelect,
@@ -451,6 +620,7 @@ function NoteRow({
   t,
 }: {
   note: NoteItem;
+  breadcrumb: string;
   idx: number;
   isSelected: boolean;
   onSelect: () => void;
@@ -489,12 +659,16 @@ function NoteRow({
         >
           {note.title || t("notes.list.untitled")}
         </p>
-        {preview && (
-          <p className="text-[11px] text-muted-foreground/55 truncate mt-px">{preview}</p>
+        {(breadcrumb || preview) && (
+          <p className="text-[10px] truncate mt-px">
+            {breadcrumb && <span className="text-muted-foreground/45">{breadcrumb}</span>}
+            {breadcrumb && preview && <span className="text-muted-foreground/35"> · </span>}
+            {preview && <span className="text-muted-foreground/55">{preview}</span>}
+          </p>
         )}
       </div>
       <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-        {relativeTime(note.updated_at, t)}
+        {formatRelativeTime(note.updated_at, t)}
       </span>
     </button>
   );
@@ -537,7 +711,7 @@ function TranscriptRow({
       />
       <p className="flex-1 text-xs text-foreground/75 truncate min-w-0">{transcript.text}</p>
       <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-        {relativeTime(transcript.created_at, t)}
+        {formatRelativeTime(transcript.created_at, t)}
       </span>
     </button>
   );

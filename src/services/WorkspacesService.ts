@@ -1,9 +1,5 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import { cloudGet, cloudPost, cloudPatch, cloudDelete, type DataWrap } from "./cloudApi.js";
 import type { Workspace, WorkspaceMember } from "../types/electron";
-
-interface DataWrap<T> {
-  data: T;
-}
 
 async function list(): Promise<Workspace[]> {
   const res = await cloudGet<DataWrap<Workspace[]>>("/api/workspaces");
@@ -12,11 +8,6 @@ async function list(): Promise<Workspace[]> {
 
 async function create(name: string): Promise<Workspace> {
   const res = await cloudPost<DataWrap<Workspace>>("/api/workspaces", { name });
-  return res.data;
-}
-
-async function get(workspaceId: string): Promise<Workspace> {
-  const res = await cloudGet<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}`);
   return res.data;
 }
 
@@ -82,7 +73,6 @@ async function previewSeats(
 export const WorkspacesService = {
   list,
   create,
-  get,
   update,
   remove,
   listMembers,

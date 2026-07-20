@@ -30,12 +30,12 @@ class VectorIndex {
     }
   }
 
-  async upsertNote(noteId, text) {
+  async upsertNote(noteId, text, payload = {}) {
     if (!this.client) return;
     try {
       const vector = await localEmbeddings.embedText(text);
       await this.client.upsert(this.collectionName, {
-        points: [{ id: noteId, vector: Array.from(vector), payload: {} }],
+        points: [{ id: noteId, vector: Array.from(vector), payload }],
       });
     } catch (err) {
       debugLogger.debug("Vector index upsert failed", { noteId, error: err.message });
@@ -51,13 +51,27 @@ class VectorIndex {
     }
   }
 
-  async search(queryText, limit = 5) {
+  async deleteBySpace(spaceId) {
+    if (!this.client) return false;
+    try {
+      await this.client.delete(this.collectionName, {
+        filter: { must: [{ key: "space_id", match: { value: spaceId } }] },
+      });
+      return true;
+    } catch (err) {
+      debugLogger.debug("Vector index space delete failed", { spaceId, error: err.message });
+      return false;
+    }
+  }
+
+  async search(queryText, limit = 5, filter) {
     if (!this.client) return [];
     try {
       const vector = await localEmbeddings.embedText(queryText);
       const results = await this.client.search(this.collectionName, {
         vector: Array.from(vector),
         limit,
+        ...(filter ? { filter } : {}),
       });
       return results.map((r) => ({ noteId: r.id, score: r.score }));
     } catch (err) {
@@ -67,8 +81,9 @@ class VectorIndex {
   }
 
   async reindexAll(notes, onProgress) {
-    if (!this.client) return;
+    if (!this.client) return { failed: notes.length };
     const BATCH_SIZE = 50;
+    let failed = 0;
     for (let i = 0; i < notes.length; i += BATCH_SIZE) {
       const batch = notes.slice(i, i + BATCH_SIZE);
       const texts = batch.map((n) =>
@@ -79,14 +94,16 @@ class VectorIndex {
         const points = batch.map((n, j) => ({
           id: n.id,
           vector: Array.from(vectors[j]),
-          payload: {},
+          payload: { space_id: n.space_id },
         }));
         await this.client.upsert(this.collectionName, { points });
       } catch (err) {
+        failed += batch.length;
         debugLogger.debug("Vector reindex batch failed", { offset: i, error: err.message });
       }
       if (onProgress) onProgress(Math.min(i + BATCH_SIZE, notes.length), notes.length);
     }
+    return { failed };
   }
 
   async ensureConversationChunksCollection() {

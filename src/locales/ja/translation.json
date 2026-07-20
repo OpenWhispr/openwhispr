@@ -152,16 +152,16 @@
     "tap": "タップ",
     "close": "閉じる",
     "dismiss": "閉じる",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "create": "Crear",
-    "delete": "Eliminar",
-    "actions": "Acciones",
-    "error": "Algo salió mal",
-    "unknownError": "Ocurrió un error desconocido",
-    "copy": "Copiar",
-    "copied": "Copiado",
-    "done": "Listo",
+    "save": "保存",
+    "saving": "保存中…",
+    "create": "作成",
+    "delete": "削除",
+    "actions": "操作",
+    "error": "問題が発生しました",
+    "unknownError": "不明なエラーが発生しました",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "done": "完了",
     "skip": "スキップ"
   },
   "onboarding": {
@@ -385,7 +385,6 @@
       "showInFolderWindows": "エクスプローラーで表示",
       "showInFolderLinux": "ファイルマネージャーで表示",
       "retryTranscription": "再文字起こし",
-      "retryTranslationMode": "翻訳モード",
       "retrying": "再文字起こし中…",
       "retrySuccess": "文字起こしが更新されました",
       "retryError": "再文字起こしに失敗しました",
@@ -400,7 +399,8 @@
         "recordingWithDuration": "破棄した録音 · {{duration}}",
         "recover": "復元",
         "recovered": "復元しました"
-      }
+      },
+      "retryTranslationMode": "翻訳モード"
     },
     "cloudMigration": {
       "title": "OpenWhispr Cloud へようこそ",
@@ -561,12 +561,6 @@
         "title": "フォールバックモード",
         "description": "ローカル Whisper が失敗しました。代わりに OpenAI API を使用しました。"
       },
-      "translationFallback": {
-        "unreachableTitle": "翻訳を利用できません",
-        "unreachableDescription": "口述内容は翻訳されずに貼り付けられました。翻訳設定を確認してください。",
-        "failedTitle": "翻訳に失敗しました",
-        "failedDescription": "元のテキストが貼り付けられました。履歴から再試行できます。"
-      },
       "noAudio": {
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
@@ -580,6 +574,12 @@
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
         "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。"
+      },
+      "translationFallback": {
+        "unreachableTitle": "翻訳を利用できません",
+        "unreachableDescription": "口述内容は翻訳されずに貼り付けられました。翻訳設定を確認してください。",
+        "failedTitle": "翻訳に失敗しました",
+        "failedDescription": "元のテキストが貼り付けられました。履歴から再試行できます。"
       }
     },
     "clipboard": {
@@ -997,7 +997,6 @@
       "save": "保存"
     },
     "defaultTestInput": "ねぇ Whispr、今日の天気はどう？",
-    "defaultTestInputTranslate": "今日はいい天気ですね、散歩に行きませんか？",
     "dialogs": {
       "reset": {
         "description": "プロンプトをデフォルト値にリセットしました。",
@@ -1022,8 +1021,6 @@
     },
     "test": {
       "addressHint": "「{{agentName}}」と呼びかけて指示モードをテストしてみてください",
-      "translateHint": "テキストは{{language}}に翻訳されます",
-      "translation": "翻訳",
       "aiModels": "AI モデル",
       "baseUrlMissing": "{{provider}} のベース URL が未設定です。AI モデル設定で追加してください。",
       "cleanup": "クリーンアップ",
@@ -1044,6 +1041,8 @@
       "run": "テスト実行",
       "customEndpoint": "カスタムエンドポイント",
       "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。",
+      "translateHint": "テキストは{{language}}に翻訳されます",
+      "translation": "翻訳",
       "translationDisabled": "このプロンプトをテストするには音声入力翻訳を有効にしてください",
       "noTargetLanguage": "先に翻訳先の言語を選択してください"
     },
@@ -1051,7 +1050,8 @@
       "customPrompt": "カスタムプロンプト",
       "defaultPrompt": "デフォルトプロンプト",
       "modified": "変更済み"
-    }
+    },
+    "defaultTestInputTranslate": "今日はいい天気ですね、散歩に行きませんか？"
   },
   "settingsModal": {
     "groups": {
@@ -1094,8 +1094,8 @@
         "label": "システム"
       },
       "workspace": {
-        "label": "Espacio de trabajo",
-        "description": "Miembros, equipos, facturación y claves API"
+        "description": "メンバー、請求、API キー",
+        "label": "ワークスペース"
       }
     },
     "title": "設定"
@@ -1444,10 +1444,6 @@
         "title": "ボイスエージェントホットキー",
         "description": "話しかけるだけで、AIエージェントが言葉そのままではなく結果を入力します"
       },
-      "translationHotkey": {
-        "title": "翻訳ホットキー",
-        "description": "どの言語で話しても、貼り付けられるテキストは翻訳済みになります"
-      },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
         "title": "マイク"
@@ -1611,6 +1607,10 @@
         "title": "アップデート",
         "versionPlaceholder": "—",
         "whatsNew": "v{{version}} の新機能"
+      },
+      "translationHotkey": {
+        "title": "翻訳ホットキー",
+        "description": "どの言語で話しても、貼り付けられるテキストは翻訳済みになります"
       }
     },
     "permissions": {
@@ -1683,9 +1683,9 @@
       "tabs": {
         "dictationCleanup": "ディクテーションのクリーンアップ",
         "dictationAgent": "Voice Agent",
-        "dictationTranslation": "翻訳",
         "noteFormatting": "ノートのフォーマット",
-        "chatIntelligence": "チャット"
+        "chatIntelligence": "チャット",
+        "dictationTranslation": "翻訳"
       }
     },
     "noteFormatting": {
@@ -1800,88 +1800,173 @@
       "apiKeyOptional": "API キー（任意）"
     },
     "workspace": {
-      "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "title": "ワークスペース",
+      "description": "チームメイトとのコラボレーション、ノートの共有、請求の管理を一括で行えます。",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
-        "create": "Crear espacio de trabajo"
+        "title": "最初のワークスペースを作成",
+        "description": "ワークスペースでは、チームメイトとのコラボレーションやノートの共有ができます。",
+        "create": "ワークスペースを作成"
+      },
+      "loadError": {
+        "title": "ワークスペースを読み込めませんでした",
+        "description": "接続を確認して、もう一度お試しください。",
+        "retry": "再試行"
       },
       "tab": {
-        "general": "General",
-        "members": "Miembros",
-        "teams": "Equipos",
-        "billing": "Facturación",
-        "developer": "Desarrollador"
+        "general": "一般",
+        "members": "メンバー",
+        "teams": "チーム",
+        "billing": "請求",
+        "developer": "開発者"
       },
       "role": {
-        "owner": "Propietario",
-        "admin": "Administrador",
-        "member": "Miembro"
+        "owner": "オーナー",
+        "admin": "管理者",
+        "member": "メンバー"
       },
       "general": {
-        "nameLabel": "Nombre del espacio de trabajo",
-        "slugLabel": "Slug",
-        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
-        "saved": "Espacio de trabajo actualizado",
-        "dangerTitle": "Eliminar espacio de trabajo",
-        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
-        "delete": "Eliminar espacio de trabajo",
-        "confirmTitle": "¿Eliminar {{name}}?",
-        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+        "nameLabel": "ワークスペース名",
+        "slugLabel": "短縮名",
+        "slugHint": "URL や招待リンクに使用されます。小文字の英字、数字、ハイフンのみ使用できます。",
+        "slugInvalid": "小文字の英字、数字、ハイフンのみ使用できます。",
+        "saved": "ワークスペースを更新しました",
+        "dangerTitle": "ワークスペースを削除",
+        "dangerDescription": "共有されているノート、フォルダ、連携がすべて削除されます。この操作は取り消せません。",
+        "delete": "ワークスペースを削除",
+        "confirmTitle": "{{name}} を削除しますか？",
+        "confirmDescription": "サブスクリプションがキャンセルされ、ワークスペースのすべてのデータが完全に削除されます。",
+        "deleting": "削除中…",
+        "deleted": "ワークスペースを削除しました",
+        "leaveTitle": "ワークスペースから退出",
+        "leaveDescription": "このワークスペースと共有ノートにアクセスできなくなります。",
+        "leave": "ワークスペースから退出",
+        "leaving": "退出中…",
+        "leaveConfirm": {
+          "title": "{{name}} から退出しますか？",
+          "description": "すぐにアクセスできなくなります。管理者が再度招待できます。"
+        },
+        "left": "{{name}} から退出しました"
       },
       "members": {
-        "title": "Miembros",
-        "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
-        "roleUpdated": "Rol actualizado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
-        "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo"
-      },
-      "invites": {
-        "title": "Invitaciones pendientes",
-        "resend": "Reenviar",
-        "revoke": "Revocar",
-        "resent": "Invitación reenviada"
+        "title": "メンバー",
+        "description": "{{seats}} シート中 {{count}} シートを使用中。",
+        "invite": "招待",
+        "empty": "まだメンバーがいません。",
+        "loadError": "メンバーを読み込めませんでした。",
+        "roleUpdated": "役割を更新しました",
+        "promote": "管理者にする",
+        "demote": "メンバーにする",
+        "transferOwnership": "オーナー権限を譲渡",
+        "remove": "ワークスペースから削除",
+        "removeConfirm": {
+          "title": "このメンバーを削除しますか？",
+          "description": "{{name}} はすぐに {{workspace}} にアクセスできなくなります。"
+        },
+        "transferConfirm": {
+          "title": "オーナー権限を譲渡しますか？",
+          "description": "{{name}} が {{workspace}} のオーナーになります。あなたの役割は管理者に変わり、元に戻せるのは新しいオーナーのみです。"
+        }
       },
       "teams": {
-        "title": "Equipos",
-        "description": "Agrupa miembros para compartir con alcance limitado.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
-        "descriptionLabel": "Descripción",
-        "memberCount": "{{count}} miembros"
+        "title": "チーム",
+        "description": "メンバーをグループ化して共有範囲を絞ります。",
+        "new": "新しいチーム",
+        "empty": "チームはまだありません。",
+        "createFirst": "最初のチームを作成",
+        "createTitle": "チームを作成",
+        "nameLabel": "チーム名",
+        "memberCount_one": "{{count}}人のメンバー",
+        "memberCount_other": "{{count}}人のメンバー"
+      },
+      "invites": {
+        "title": "保留中の招待",
+        "expiresIn_one": "有効期限まであと{{count}}日",
+        "expiresIn_other": "有効期限まであと{{count}}日",
+        "expired": "期限切れ",
+        "loadError": "招待を読み込めませんでした。",
+        "resend": "再送信",
+        "resending": "再送信中…",
+        "revoke": "取り消す",
+        "resent": "招待を再送信しました",
+        "revokeFailed": "招待を取り消せませんでした",
+        "revokeConfirm": {
+          "title": "この招待を取り消しますか？",
+          "description": "{{email}} への招待リンクが無効になります。"
+        }
       },
       "billing": {
-        "title": "Facturación",
-        "description": "Plan, asientos y pago.",
-        "plan": "Plan",
-        "seats": "Asientos",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción"
+        "title": "請求",
+        "description": "プラン、シート、支払い。",
+        "plan": "プラン",
+        "seats": "シート",
+        "ownerOnly": "サブスクリプションを管理できるのはワークスペースのオーナーのみです。",
+        "nextInvoice": "次回の請求",
+        "manageStripe": "Stripe で管理",
+        "opening": "開いています…",
+        "startSubscription": "サブスクリプションを開始",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "Free"
+        },
+        "status": {
+          "active": "有効",
+          "trialing": "トライアル中",
+          "past_due": "支払い期限超過",
+          "canceled": "キャンセル済み",
+          "incomplete": "未完了",
+          "unpaid": "未払い"
+        }
       },
       "developer": {
-        "title": "Claves API",
-        "description": "Acceso programático limitado a este espacio de trabajo.",
-        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
-        "new": "Nueva clave",
-        "create": "Crear clave",
-        "createTitle": "Crear clave API",
-        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
-        "nameLabel": "Nombre de la clave",
-        "namePlaceholder": "Integración de producción",
-        "revoke": "Revocar clave",
-        "lastUsed": "Último uso {{date}}",
-        "neverUsed": "Nunca utilizada",
-        "keyCreatedTitle": "Clave API creada",
-        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
+        "title": "API キー",
+        "description": "このワークスペースに限定されたプログラムからのアクセス。",
+        "empty": "まだ API キーがありません。このワークスペースと連携するには作成してください。",
+        "loadError": "APIキーを読み込めませんでした。",
+        "new": "新規キー",
+        "create": "キーを作成",
+        "createTitle": "API キーを作成",
+        "createDescription": "このキーに必要な権限を選択してください。いつでも取り消せます。",
+        "nameLabel": "キー名",
+        "namePlaceholder": "本番環境の連携",
+        "revoke": "キーを取り消す",
+        "lastUsed": "最終使用: {{date}}",
+        "neverUsed": "未使用",
+        "keyCreatedTitle": "API キーを作成しました",
+        "keyCreatedDescription": "このキーを今すぐコピーしてください。後で再表示することはできません。",
+        "revokeConfirm": {
+          "title": "このキーを取り消しますか？",
+          "description": "{{name}} はすぐに使用できなくなります。このキーを使用している連携は失敗するようになります。"
+        },
+        "scopes": {
+          "notes": {
+            "title": "ノート",
+            "read": "ノートの読み取り",
+            "write": "ノートの書き込み"
+          },
+          "folders": {
+            "title": "フォルダ",
+            "read": "フォルダの読み取り",
+            "write": "フォルダの書き込み"
+          },
+          "transcriptions": {
+            "title": "文字起こし",
+            "read": "文字起こしの読み取り"
+          },
+          "members": {
+            "title": "メンバー",
+            "read": "メンバーの読み取り",
+            "write": "メンバーの管理"
+          },
+          "billing": {
+            "title": "請求",
+            "read": "請求の読み取り"
+          },
+          "full": {
+            "title": "フルアクセス",
+            "admin": "ワークスペース管理者"
+          }
+        }
       }
     }
   },
@@ -2016,6 +2101,77 @@
       "searchNotes": "ノートを検索",
       "actions": "アクション"
     },
+    "spaces": {
+      "privateSpaces": "プライベートスペース",
+      "teamSpaces": "チームスペース",
+      "personal": "個人",
+      "privateTooltip": "パーソナルスペースはあなただけが見られます",
+      "newSpace": "新しいスペース",
+      "createTitle": "スペースを作成",
+      "nameLabel": "名前",
+      "emojiLabel": "絵文字",
+      "create": "作成",
+      "couldNotCreate": "スペースを作成できませんでした",
+      "rename": "名前を変更",
+      "changeEmoji": "絵文字を変更",
+      "couldNotRename": "スペースの名前を変更できませんでした",
+      "deleteSpace": "スペースを削除",
+      "deleteConfirmTitle": "スペースを削除しますか？",
+      "deleteConfirmDescription": "{{space}}とそのすべてのフォルダとノートがこのデバイスから完全に削除されます。",
+      "deleteConfirmTeamDescription": "{{space}} が全員に対して削除されます。メンバーはそのすべてのフォルダとノートにアクセスできなくなります。",
+      "deleteTypeName": "確認のため {{space}} と入力してください",
+      "couldNotDelete": "スペースを削除できませんでした",
+      "deleted": "{{space}} を削除しました",
+      "moveTo": "移動",
+      "moveToSpace": "スペースに移動…",
+      "searchSpaces": "スペースを検索...",
+      "noSpacesFound": "スペースが見つかりません",
+      "spaceRoot": "スペースのルート",
+      "moveConfirm": "移動",
+      "confirmMoveInTitle": "{{space}}に移動しますか？",
+      "confirmMoveIn": "{{space}}の全員がこのノートを表示・編集できるようになります。",
+      "confirmMoveInFolder": "{{space}}の全員がこのフォルダとそのノートを表示・編集できるようになります。",
+      "confirmMoveInShared": "公開リンクは無効になります。",
+      "confirmMoveOutTitle": "{{space}}から移動しますか？",
+      "confirmMoveOut": "{{space}}のメンバーはこのノートにアクセスできなくなります。",
+      "confirmMoveOutFolder": "{{space}}のメンバーはこのフォルダとそのノートにアクセスできなくなります。",
+      "moved": "「{{title}}」を{{target}}に移動しました",
+      "couldNotMove": "フォルダを移動できませんでした",
+      "couldNotMoveNote": "ノートを移動できませんでした",
+      "shareRevokeFailed": "公開リンクを無効にできませんでした",
+      "folderNameTaken": "「{{name}}」を移動できませんでした。同じ名前のフォルダが既に存在します",
+      "undo": "元に戻す",
+      "emptySpace": "まだノートがありません。ここのノートは{{space}}の全員に表示されます。",
+      "emptyTeamHint": "共有されたスペースはここに表示されます。",
+      "noteCount_one": "{{count}} 件のノート",
+      "noteCount_other": "{{count}} 件のノート",
+      "accessRevoked": "{{space}} へのアクセス権がなくなりました",
+      "movedToPersonal": "{{space}} へのアクセス権がなくなったため、「{{title}}」は個人スペースに移動されました",
+      "conflictBanner": "このノートには新しいバージョンがあります。",
+      "conflictRefresh": "更新",
+      "conflictKeep": "編集を続ける",
+      "editedBy": "{{name}} が編集 · {{time}}",
+      "members": {
+        "menu": "メンバー…",
+        "title": "{{space}} のメンバー",
+        "addPeople": "メンバーを追加",
+        "addFailed": "{{total}}人中{{failed}}人を追加できませんでした",
+        "searchPlaceholder": "メンバーを検索…",
+        "roleAdmin": "管理者",
+        "roleMember": "メンバー",
+        "remove": "削除",
+        "removeConfirm": "{{name}} を {{space}} から削除しますか？",
+        "removeConfirmDescription": "このスペースのすべてのノートにアクセスできなくなります。",
+        "leave": "スペースから退出",
+        "leaveConfirm": "{{space}} から退出しますか？",
+        "leaveConfirmDescription": "このスペースのすべてのノートにアクセスできなくなります。",
+        "implicitAdminCannotLeave": "ワークスペースのオーナーと管理者はすべてのチームスペースにアクセスできるため、退出できません。",
+        "inviteFooter": "{{email}} をワークスペースに招待…",
+        "empty": "まだ誰も追加されていません"
+      },
+      "invitedTo_one": "{{count}} 件のチームスペースに参加します",
+      "invitedTo_other": "{{count}} 件のチームスペースに参加します"
+    },
     "editor": {
       "transcribe": "文字起こし",
       "staleIndicator": "強化後にコンテンツが変更されました",
@@ -2086,8 +2242,8 @@
       },
       "errors": {
         "noModel": "AIモデルが選択されていません。設定で構成してください。",
-        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。",
-        "actionFailed": "アクションに失敗しました"
+        "actionFailed": "アクションに失敗しました",
+        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。"
       }
     },
     "empty": {
@@ -2123,6 +2279,7 @@
       "newNote": "新規ノート",
       "untitled": "無題",
       "untitledNote": "無題のノート",
+      "shared": "共有中",
       "timeNow": "たった今",
       "minutesAgo": "{{count}}分前",
       "hoursAgo": "{{count}}時間前",
@@ -2430,8 +2587,6 @@
     "defaultUser": "ユーザー",
     "notSignedIn": "未サインイン",
     "chat": "チャット",
-    "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo",
     "collapse": "サイドバーを折りたたむ",
     "expand": "サイドバーを展開"
   },
@@ -2522,6 +2677,12 @@
         "title": "ホットキーが使用できません",
         "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
       },
+      "addedToDict": "{{words}} を辞書に追加しました",
+      "undo": "元に戻す",
+      "accessibilityMissing": {
+        "title": "アクセシビリティの許可が必要です",
+        "description": "OpenWhispr がホットキーの検出とテキストの貼り付けを行うには、アクセシビリティの許可が必要です。コントロールパネルで有効にしてください。"
+      },
       "gpuFallback": {
         "title": "GPU アクセラレーションを利用できません",
         "description": "文字起こしは代わりに CPU を使用しています。設定で GPU アクセラレーションを無効にできます。"
@@ -2529,12 +2690,6 @@
       "cleanupFailed": {
         "title": "クリーンアップに失敗しました",
         "description": "ディクテーションは AI クリーンアップなしで貼り付けられました。"
-      },
-      "addedToDict": "{{words}} を辞書に追加しました",
-      "undo": "元に戻す",
-      "accessibilityMissing": {
-        "title": "アクセシビリティの許可が必要です",
-        "description": "OpenWhispr がホットキーの検出とテキストの貼り付けを行うには、アクセシビリティの許可が必要です。コントロールパネルで有効にしてください。"
       }
     },
     "mic": {
@@ -2552,28 +2707,6 @@
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示"
     }
-  },
-  "dictationTranslation": {
-    "title": "音声入力翻訳",
-    "description": "専用ホットキーで、音声入力を別の言語に翻訳して貼り付けます",
-    "enabled": "音声入力翻訳を有効にする",
-    "enabledDescription": "翻訳ホットキーで開始した音声入力は、整形されてから翻訳されて貼り付けられます",
-    "sourceLanguage": "話す言語",
-    "sourceLanguageDescription": "音声入力する言語。自動検出は複数言語が混在する場合にも対応します",
-    "targetLanguage": "翻訳先",
-    "targetLanguageDescription": "貼り付けられるテキストの言語",
-    "targetLanguageMissing": "翻訳ホットキーを有効にするには翻訳先の言語を選択してください",
-    "selectLanguage": "言語を選択…",
-    "prompt": {
-      "title": "翻訳プロンプト",
-      "description": "モデルによる音声入力の翻訳方法をカスタマイズします"
-    },
-    "hotkeyHint": "ホットキーは 設定 → 一般 → 翻訳ホットキー で設定できます",
-    "targetsLabel": "翻訳先の言語",
-    "addTarget": "言語を追加…",
-    "activeTarget": "使用中の翻訳先言語",
-    "removeTarget": "{{language}}を削除",
-    "maxTargets": "最大{{max}}言語"
   },
   "dictationAgent": {
     "enabled": "音声エージェントを有効にする",
@@ -2816,9 +2949,11 @@
       "button": "共有",
       "dialog": {
         "title": "ノートを共有",
+        "description": "メールで招待するか、このノートへのリンクを共有します。",
         "searchPlaceholder": "メールアドレスでメンバーを追加",
         "emailLabel": "受信者のメールアドレス",
         "shareButton": "共有",
+        "createLink": "リンクを作成",
         "copyLink": "リンクをコピー",
         "copied": "コピーしました",
         "owner": "オーナー",
@@ -2827,9 +2962,14 @@
         "resend": "招待を再送信",
         "revoke": "削除",
         "invitationActions": "招待の操作",
-        "permissionRequired": "共有設定を変更できるのはノートのオーナーのみです。",
+        "resendSent": "招待を送信しました",
+        "resendThrottled": "招待を送信したばかりです。1分ほど待ってからお試しください。",
+        "syncPrompt": "共有すると、このノートのコピーが OpenWhispr クラウドに保存されます。",
+        "syncAndShare": "ノートを同期",
         "visibility": {
           "label": "公開範囲",
+          "private": "非公開",
+          "privateOption": "非公開 — 自分のみ",
           "link": "リンクを持つ全員",
           "domain": "{{domain}} の全員（リンクを持つ人）",
           "invited": "招待された人のみ"
@@ -2838,19 +2978,27 @@
           "invalidEmail": "有効なメールアドレスを入力してください",
           "alreadyInvited": "{{email}} はすでに招待されています",
           "inviteFailed": "招待を送信できませんでした。もう一度お試しください。",
-          "linkUnavailable": "リンクをコピーするには生成またはローテーションしてください"
+          "visibilityFailed": "共有設定を更新できませんでした。もう一度お試しください。",
+          "copyFailed": "リンクをコピーできませんでした。もう一度お試しください。",
+          "revokeFailed": "招待を削除できませんでした。もう一度お試しください。",
+          "resendFailed": "招待を再送信できませんでした。もう一度お試しください。",
+          "syncFailed": "このノートを同期できませんでした。もう一度お試しください。",
+          "loadFailed": "共有設定を読み込めませんでした",
+          "retry": "再試行"
         }
       }
     }
   },
   "commandSearch": {
+    "allSpaces": "すべてのスペース",
     "title": "検索",
     "description": "ノートと文字起こしを検索",
     "shortPlaceholder": "検索",
     "placeholder": "ノートと文字起こしを検索…",
     "sections": {
       "notes": "ノート",
-      "transcripts": "文字起こし"
+      "transcripts": "文字起こし",
+      "jumpTo": "移動"
     },
     "noResults": "結果なし",
     "emptyState": "入力して検索",
@@ -2946,51 +3094,82 @@
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
-      "workspaces": "Espacios de trabajo",
-      "empty": "Aún no hay espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "workspaces": "ワークスペース",
+      "create": "ワークスペースを作成…"
     },
     "create": {
-      "title": "Crear espacio de trabajo",
-      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
-      "nameLabel": "Nombre del espacio de trabajo",
+      "title": "ワークスペースを作成",
+      "description": "ワークスペースでは、コラボレーション、ノートの共有、請求の管理を一括で行えます。",
+      "nameLabel": "ワークスペース名",
       "namePlaceholder": "Acme Corp",
-      "submit": "Crear espacio de trabajo",
-      "submitting": "Creando…",
-      "errorTitle": "No se pudo crear el espacio de trabajo"
+      "submit": "ワークスペースを作成",
+      "submitting": "作成中…",
+      "errorTitle": "ワークスペースを作成できませんでした"
     },
     "created": {
-      "title": "Espacio de trabajo creado",
-      "description": "Ahora eres el propietario de {{name}}."
+      "title": "ワークスペースを作成しました",
+      "description": "{{name}} のオーナーになりました。"
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "roleLabel": "Rol",
-      "teamsLabel": "Agregar a equipos",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "title": "{{workspace}} に招待",
+      "description": "メールアドレスでチームメイトを追加します。参加用のリンクが送信されます。",
+      "emailLabel": "メールアドレス",
+      "emailPlaceholder": "teammate@example.com",
+      "roleLabel": "役割",
+      "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
+      "seatLimit": "{{seats}} シートすべてが使用中です。",
+      "askOwner": "{{seats}} シートすべてが使用中です。シートの追加はワークスペースのオーナーにご依頼ください。",
+      "manageSeats": "シートを管理",
+      "submit": "招待を送信",
+      "submitting": "送信中…",
+      "sentTitle": "招待を送信しました",
+      "sentDescription": "{{email}} に招待を送信しました。",
+      "errorTitle": "招待を送信できませんでした",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "管理者",
+        "member": "メンバー"
+      },
+      "roleDescription": {
+        "admin": "メンバーと請求を管理できます",
+        "member": "ワークスペースを利用できます"
       }
     },
     "accept": {
-      "title": "Unirse al espacio de trabajo",
-      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
-      "loading": "Cargando invitación…",
-      "accept": "Aceptar invitación",
-      "accepting": "Aceptando…",
-      "signInToAccept": "Inicia sesión para aceptar",
-      "successTitle": "Te uniste",
-      "successDescription": "Bienvenido a {{name}}.",
-      "errorTitle": "No se pudo aceptar la invitación"
+      "title": "ワークスペースに参加",
+      "description": "{{inviter}} さんから、{{workspace}} に{{role}}として参加するよう招待されています。",
+      "loading": "招待を読み込み中…",
+      "accept": "招待を承諾",
+      "accepting": "承諾中…",
+      "signInToAccept": "サインインして承諾",
+      "switchAccount": "アカウントを切り替える",
+      "successTitle": "参加しました",
+      "successDescription": "{{name}} のメンバーになりました。設定 → ワークスペースで管理できます。",
+      "errorTitle": "招待を承諾できませんでした",
+      "sentTo": "{{email}} に送信された招待です",
+      "wrongAccount": "この招待は {{email}} 宛てに送信されました。現在 {{current}} でサインインしています。"
     }
+  },
+  "dictationTranslation": {
+    "title": "音声入力翻訳",
+    "description": "専用ホットキーで、音声入力を別の言語に翻訳して貼り付けます",
+    "enabled": "音声入力翻訳を有効にする",
+    "enabledDescription": "翻訳ホットキーで開始した音声入力は、整形されてから翻訳されて貼り付けられます",
+    "sourceLanguage": "話す言語",
+    "sourceLanguageDescription": "音声入力する言語。自動検出は複数言語が混在する場合にも対応します",
+    "targetLanguage": "翻訳先",
+    "targetLanguageDescription": "貼り付けられるテキストの言語",
+    "targetLanguageMissing": "翻訳ホットキーを有効にするには翻訳先の言語を選択してください",
+    "selectLanguage": "言語を選択…",
+    "prompt": {
+      "title": "翻訳プロンプト",
+      "description": "モデルによる音声入力の翻訳方法をカスタマイズします"
+    },
+    "hotkeyHint": "ホットキーは 設定 → 一般 → 翻訳ホットキー で設定できます",
+    "targetsLabel": "翻訳先の言語",
+    "addTarget": "言語を追加…",
+    "activeTarget": "使用中の翻訳先言語",
+    "removeTarget": "{{language}}を削除",
+    "maxTargets": "最大{{max}}言語"
   },
   "meetingNotification": {
     "title": "会議を検出しました",

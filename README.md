@@ -47,6 +47,7 @@ OpenWhispr turns your voice into text, notes, and actions from your desktop. Pre
 - **Meeting transcription** — auto-detect Zoom, Teams, and FaceTime calls with live speaker diarization, voice fingerprinting, and Google Calendar integration
 - **Local speaker diarization** — on-device speaker labelling with voice fingerprint recognition across meetings, no cloud required
 - **Notes** — create, organize, and search notes with folders, semantic search, cloud sync, and AI actions
+- **Team spaces & sharing** — share notes on the web with link, domain, or invite-only visibility, and collaborate in team spaces with roles, invitations, and server-enforced membership
 - **Audio import** — transcribe existing audio and video: drag in files, batch-upload, or paste a YouTube/audio URL, with optional speaker detection
 - **Local or cloud — your choice** — all core features (transcription, AI reasoning, speaker diarization, semantic search) work with local models or cloud providers — including GPU-accelerated local Whisper on Metal, CUDA, and Vulkan (AMD/Intel)
 - **Public API & MCP** — manage notes and transcriptions programmatically or connect your AI assistant via the [MCP server](https://docs.openwhispr.com/integrations/mcp)

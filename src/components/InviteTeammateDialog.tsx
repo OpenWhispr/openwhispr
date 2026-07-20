@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,10 +14,11 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { cn } from "./lib/utils";
 import { useWorkspaceStore } from "../stores/workspaceStore";
+import { useDelayedFlag } from "../hooks/useDelayedFlag";
 import { InvitationsService } from "../services/InvitationsService";
-import { TeamsService } from "../services/TeamsService";
+import { CloudApiError } from "../services/cloudApi";
+import { WorkspacesService } from "../services/WorkspacesService";
 import { useToast } from "./ui/useToast";
-import type { Team } from "../types/electron";
 
 interface Props {
   open: boolean;
@@ -24,6 +26,11 @@ interface Props {
   workspaceId: string;
   workspaceName: string;
   onInvited?: () => void;
+  onNavigateToBilling?: () => void;
+  cancelLabel?: string;
+  /** Team spaces the invitee joins on accept (threaded into the invitation). */
+  teamIds?: string[];
+  initialEmail?: string;
 }
 
 export default function InviteTeammateDialog({
@@ -32,63 +39,84 @@ export default function InviteTeammateDialog({
   workspaceId,
   workspaceName,
   onInvited,
+  onNavigateToBilling,
+  cancelLabel,
+  teamIds,
+  initialEmail,
 }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "member">("member");
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [selectedTeams, setSelectedTeams] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
-  const refreshTeams = useWorkspaceStore((s) => s.refreshTeams);
+  const showSpinner = useDelayedFlag(submitting);
+  const [seatsUsed, setSeatsUsed] = useState<number | null>(null);
+  const [seatLimitSeats, setSeatLimitSeats] = useState<number | null>(null);
+  const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
+  const seats = workspace?.seats ?? null;
+  const isOwner = workspace?.role === "owner";
 
   useEffect(() => {
     if (!open) return;
-    TeamsService.list(workspaceId)
-      .then(setTeams)
-      .catch(() => setTeams([]));
+    let cancelled = false;
+    WorkspacesService.previewSeats(workspaceId, 1)
+      .then((preview) => {
+        if (!cancelled) setSeatsUsed(preview.next_quantity - 1);
+      })
+      .catch(async () => {
+        // No subscription yet — fall back to the member count so the seat
+        // line always renders.
+        try {
+          const members = await WorkspacesService.listMembers(workspaceId);
+          if (!cancelled) setSeatsUsed(members.length);
+        } catch {
+          if (!cancelled) setSeatsUsed(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, workspaceId]);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      if (initialEmail) setEmail(initialEmail);
+    } else {
       setEmail("");
       setRole("member");
-      setSelectedTeams(new Set());
+      setSeatsUsed(null);
+      setSeatLimitSeats(null);
     }
-  }, [open]);
-
-  function toggleTeam(id: string) {
-    setSelectedTeams((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  }, [open, initialEmail]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
     setSubmitting(true);
+    setSeatLimitSeats(null);
     try {
       await InvitationsService.send(workspaceId, {
         email: email.trim().toLowerCase(),
         role,
-        team_ids: Array.from(selectedTeams),
+        ...(teamIds && teamIds.length > 0 ? { team_ids: teamIds } : {}),
       });
       toast({
         title: t("workspaces.invite.sentTitle"),
         description: t("workspaces.invite.sentDescription", { email }),
       });
-      void refreshTeams(workspaceId);
       onInvited?.();
       onOpenChange(false);
     } catch (error) {
-      toast({
-        title: t("workspaces.invite.errorTitle"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
+      if (error instanceof CloudApiError && error.code === "seat_limit_reached") {
+        const details = error.details as { seats?: number } | undefined;
+        setSeatLimitSeats(details?.seats ?? seats ?? 0);
+      } else {
+        toast({
+          title: t("workspaces.invite.errorTitle"),
+          description: error instanceof Error ? error.message : t("common.unknownError"),
+          variant: "destructive",
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -100,6 +128,11 @@ export default function InviteTeammateDialog({
         <DialogHeader>
           <DialogTitle>{t("workspaces.invite.title", { workspace: workspaceName })}</DialogTitle>
           <DialogDescription>{t("workspaces.invite.description")}</DialogDescription>
+          {seatsUsed !== null && seats !== null && (
+            <p className="text-xs text-muted-foreground">
+              {t("workspaces.invite.seatUsage", { used: seatsUsed, seats })}
+            </p>
+          )}
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
@@ -112,7 +145,7 @@ export default function InviteTeammateDialog({
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="teammate@example.com"
+              placeholder={t("workspaces.invite.emailPlaceholder")}
               required
             />
           </div>
@@ -124,45 +157,53 @@ export default function InviteTeammateDialog({
                 <button
                   key={r}
                   type="button"
+                  aria-pressed={role === r}
                   onClick={() => setRole(r)}
                   className={cn(
-                    "flex-1 h-9 px-3 rounded-md border text-xs font-medium transition-colors",
+                    "flex-1 px-3 py-2 rounded-md border text-left transition-colors",
                     "outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
                     role === r
-                      ? "border-primary/40 bg-primary/8 text-foreground"
-                      : "border-border/60 text-muted-foreground hover:bg-foreground/4 hover:text-foreground"
+                      ? "border-primary/40 bg-primary/8"
+                      : "border-border/60 hover:bg-foreground/4"
                   )}
                 >
-                  {t(`workspaces.invite.role.${r}`)}
+                  <span
+                    className={cn(
+                      "block text-xs font-medium",
+                      role === r ? "text-foreground" : "text-muted-foreground"
+                    )}
+                  >
+                    {t(`workspaces.invite.role.${r}`)}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground mt-0.5">
+                    {t(`workspaces.invite.roleDescription.${r}`)}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
 
-          {teams.length > 0 && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">{t("workspaces.invite.teamsLabel")}</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {teams.map((team) => {
-                  const checked = selectedTeams.has(team.id);
-                  return (
-                    <button
-                      key={team.id}
-                      type="button"
-                      onClick={() => toggleTeam(team.id)}
-                      className={cn(
-                        "h-7 px-2.5 rounded-md border text-xs transition-colors outline-none",
-                        "focus-visible:ring-1 focus-visible:ring-primary/30",
-                        checked
-                          ? "border-primary/40 bg-primary/8 text-foreground"
-                          : "border-border/60 text-muted-foreground hover:bg-foreground/4 hover:text-foreground"
-                      )}
-                    >
-                      {team.name}
-                    </button>
-                  );
-                })}
-              </div>
+          {seatLimitSeats !== null && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 flex items-center justify-between gap-3">
+              <p className="text-xs text-destructive">
+                {isOwner
+                  ? t("workspaces.invite.seatLimit", { seats: seatLimitSeats })
+                  : t("workspaces.invite.askOwner", { seats: seatLimitSeats })}
+              </p>
+              {isOwner && onNavigateToBilling && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onNavigateToBilling();
+                  }}
+                >
+                  {t("workspaces.invite.manageSeats")}
+                </Button>
+              )}
             </div>
           )}
 
@@ -173,9 +214,10 @@ export default function InviteTeammateDialog({
               onClick={() => onOpenChange(false)}
               disabled={submitting}
             >
-              {t("common.cancel")}
+              {cancelLabel ?? t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!email.trim() || submitting}>
+              {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               {submitting ? t("workspaces.invite.submitting") : t("workspaces.invite.submit")}
             </Button>
           </DialogFooter>

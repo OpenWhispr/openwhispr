@@ -385,7 +385,6 @@
       "showInFolderWindows": "在资源管理器中显示",
       "showInFolderLinux": "在文件管理器中显示",
       "retryTranscription": "重新转录",
-      "retryTranslationMode": "翻译模式",
       "retrying": "正在重新转录…",
       "retrySuccess": "转录已更新",
       "retryError": "重新转录失败",
@@ -400,7 +399,8 @@
         "recordingWithDuration": "已放弃的录音 · {{duration}}",
         "recover": "恢复",
         "recovered": "已恢复"
-      }
+      },
+      "retryTranslationMode": "翻译模式"
     },
     "cloudMigration": {
       "title": "欢迎使用 OpenWhispr 云端",
@@ -561,12 +561,6 @@
         "title": "回退模式",
         "description": "本地 Whisper 失败，已改用 OpenAI API。"
       },
-      "translationFallback": {
-        "unreachableTitle": "翻译不可用",
-        "unreachableDescription": "你的口述内容已按原文粘贴，未经翻译。请检查翻译设置。",
-        "failedTitle": "翻译失败",
-        "failedDescription": "已粘贴原始文本。你可以在历史记录中重试。"
-      },
       "noAudio": {
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"
@@ -580,6 +574,12 @@
         "offline": "你目前离线。云端转录需要互联网连接。",
         "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
         "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。"
+      },
+      "translationFallback": {
+        "unreachableTitle": "翻译不可用",
+        "unreachableDescription": "你的口述内容已按原文粘贴，未经翻译。请检查翻译设置。",
+        "failedTitle": "翻译失败",
+        "failedDescription": "已粘贴原始文本。你可以在历史记录中重试。"
       }
     },
     "clipboard": {
@@ -997,7 +997,6 @@
       "save": "保存"
     },
     "defaultTestInput": "你好 Whispr，今天天气怎么样？",
-    "defaultTestInputTranslate": "今天天气真好，要不要出去走走？",
     "dialogs": {
       "reset": {
         "description": "提示词已重置为默认值。",
@@ -1022,8 +1021,6 @@
     },
     "test": {
       "addressHint": "试试说“{{agentName}}”来测试指令模式",
-      "translateHint": "文本将翻译为{{language}}",
-      "translation": "翻译",
       "aiModels": "AI 模型",
       "baseUrlMissing": "{{provider}} 的 URL 缺失，请在 AI 模型设置中添加。",
       "cleanup": "文本整理",
@@ -1044,6 +1041,8 @@
       "run": "运行测试",
       "customEndpoint": "自定义端点",
       "apiKeyMissing": "未配置 {{provider}} API 密钥，请在 AI 模型设置中添加。",
+      "translateHint": "文本将翻译为{{language}}",
+      "translation": "翻译",
       "translationDisabled": "启用听写翻译以测试此提示词",
       "noTargetLanguage": "请先选择目标语言"
     },
@@ -1051,7 +1050,8 @@
       "customPrompt": "自定义提示词",
       "defaultPrompt": "默认提示词",
       "modified": "已修改"
-    }
+    },
+    "defaultTestInputTranslate": "今天天气真好，要不要出去走走？"
   },
   "settingsModal": {
     "groups": {
@@ -1094,8 +1094,8 @@
         "label": "系统"
       },
       "workspace": {
-        "label": "Espacio de trabajo",
-        "description": "Miembros, equipos, facturación y claves API"
+        "description": "成员、账单和 API 密钥",
+        "label": "工作区"
       }
     },
     "title": "设置"
@@ -1217,12 +1217,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": [
-            "无限会议录制",
-            "代理模式",
-            "与您的数据对话",
-            "优先支持"
-          ],
+          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1444,10 +1439,6 @@
         "title": "语音助手快捷键",
         "description": "说出你的需求，AI 助手会输入结果，而不是你说的原话"
       },
-      "translationHotkey": {
-        "title": "翻译快捷键",
-        "description": "用任何语言听写——粘贴的文本会自动翻译"
-      },
       "microphone": {
         "description": "选择用于听写的输入设备",
         "title": "麦克风"
@@ -1611,6 +1602,10 @@
         "title": "更新",
         "versionPlaceholder": "—",
         "whatsNew": "v{{version}} 更新内容"
+      },
+      "translationHotkey": {
+        "title": "翻译快捷键",
+        "description": "用任何语言听写——粘贴的文本会自动翻译"
       }
     },
     "permissions": {
@@ -1683,9 +1678,9 @@
       "tabs": {
         "dictationCleanup": "听写清理",
         "dictationAgent": "Voice Agent",
-        "dictationTranslation": "翻译",
         "noteFormatting": "笔记格式化",
-        "chatIntelligence": "聊天"
+        "chatIntelligence": "聊天",
+        "dictationTranslation": "翻译"
       }
     },
     "noteFormatting": {
@@ -1800,88 +1795,173 @@
       "apiKeyOptional": "API Key（可选）"
     },
     "workspace": {
-      "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "title": "工作区",
+      "description": "在一处与同事协作、共享笔记并管理账单。",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
-        "create": "Crear espacio de trabajo"
+        "title": "创建你的第一个工作区",
+        "description": "工作区让你与同事协作并共享笔记。",
+        "create": "创建工作区"
+      },
+      "loadError": {
+        "title": "无法加载工作区",
+        "description": "请检查网络连接后重试。",
+        "retry": "重试"
       },
       "tab": {
-        "general": "General",
-        "members": "Miembros",
-        "teams": "Equipos",
-        "billing": "Facturación",
-        "developer": "Desarrollador"
+        "general": "常规",
+        "members": "成员",
+        "teams": "团队",
+        "billing": "账单",
+        "developer": "开发者"
       },
       "role": {
-        "owner": "Propietario",
-        "admin": "Administrador",
-        "member": "Miembro"
+        "owner": "所有者",
+        "admin": "管理员",
+        "member": "成员"
       },
       "general": {
-        "nameLabel": "Nombre del espacio de trabajo",
-        "slugLabel": "Slug",
-        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
-        "saved": "Espacio de trabajo actualizado",
-        "dangerTitle": "Eliminar espacio de trabajo",
-        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
-        "delete": "Eliminar espacio de trabajo",
-        "confirmTitle": "¿Eliminar {{name}}?",
-        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+        "nameLabel": "工作区名称",
+        "slugLabel": "简短名称",
+        "slugHint": "用于 URL 和邀请链接。仅限小写字母、数字和连字符。",
+        "slugInvalid": "仅限小写字母、数字和连字符。",
+        "saved": "工作区已更新",
+        "dangerTitle": "删除工作区",
+        "dangerDescription": "所有共享笔记、文件夹和集成都将被删除。此操作无法撤销。",
+        "delete": "删除工作区",
+        "confirmTitle": "删除 {{name}}？",
+        "confirmDescription": "这将取消订阅并永久删除工作区的所有数据。",
+        "deleting": "删除中…",
+        "deleted": "工作区已删除",
+        "leaveTitle": "退出工作区",
+        "leaveDescription": "你将失去对此工作区及其共享笔记的访问权限。",
+        "leave": "退出工作区",
+        "leaving": "退出中…",
+        "leaveConfirm": {
+          "title": "退出 {{name}}？",
+          "description": "你将立即失去访问权限。管理员可以重新邀请你。"
+        },
+        "left": "你已退出 {{name}}"
       },
       "members": {
-        "title": "Miembros",
-        "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
-        "roleUpdated": "Rol actualizado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
-        "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo"
-      },
-      "invites": {
-        "title": "Invitaciones pendientes",
-        "resend": "Reenviar",
-        "revoke": "Revocar",
-        "resent": "Invitación reenviada"
+        "title": "成员",
+        "description": "已使用 {{count}}/{{seats}} 个席位。",
+        "invite": "邀请",
+        "empty": "暂无成员。",
+        "loadError": "无法加载成员。",
+        "roleUpdated": "角色已更新",
+        "promote": "设为管理员",
+        "demote": "设为成员",
+        "transferOwnership": "转让所有权",
+        "remove": "从工作区移除",
+        "removeConfirm": {
+          "title": "移除此成员？",
+          "description": "{{name}} 将立即失去对 {{workspace}} 的访问权限。"
+        },
+        "transferConfirm": {
+          "title": "转让所有权？",
+          "description": "{{name}} 将成为 {{workspace}} 的所有者。你的角色将变为管理员，只有新所有者才能转回所有权。"
+        }
       },
       "teams": {
-        "title": "Equipos",
-        "description": "Agrupa miembros para compartir con alcance limitado.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
-        "descriptionLabel": "Descripción",
-        "memberCount": "{{count}} miembros"
+        "title": "团队",
+        "description": "将成员分组以进行有针对性的共享。",
+        "new": "新建团队",
+        "empty": "暂无团队。",
+        "createFirst": "创建您的第一个团队",
+        "createTitle": "创建团队",
+        "nameLabel": "团队名称",
+        "memberCount_one": "{{count}} 名成员",
+        "memberCount_other": "{{count}} 名成员"
+      },
+      "invites": {
+        "title": "待处理的邀请",
+        "expiresIn_one": "{{count}} 天后过期",
+        "expiresIn_other": "{{count}} 天后过期",
+        "expired": "已过期",
+        "loadError": "无法加载邀请。",
+        "resend": "重新发送",
+        "resending": "重新发送中…",
+        "revoke": "撤销",
+        "resent": "邀请已重新发送",
+        "revokeFailed": "无法撤销邀请",
+        "revokeConfirm": {
+          "title": "撤销此邀请？",
+          "description": "发送给 {{email}} 的邀请链接将失效。"
+        }
       },
       "billing": {
-        "title": "Facturación",
-        "description": "Plan, asientos y pago.",
-        "plan": "Plan",
-        "seats": "Asientos",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción"
+        "title": "账单",
+        "description": "套餐、席位和付款。",
+        "plan": "套餐",
+        "seats": "席位",
+        "ownerOnly": "只有工作区所有者可以管理订阅。",
+        "nextInvoice": "下一张账单",
+        "manageStripe": "在 Stripe 中管理",
+        "opening": "正在打开...",
+        "startSubscription": "开始订阅",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "免费版"
+        },
+        "status": {
+          "active": "生效中",
+          "trialing": "试用中",
+          "past_due": "逾期未付",
+          "canceled": "已取消",
+          "incomplete": "未完成",
+          "unpaid": "未支付"
+        }
       },
       "developer": {
-        "title": "Claves API",
-        "description": "Acceso programático limitado a este espacio de trabajo.",
-        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
-        "new": "Nueva clave",
-        "create": "Crear clave",
-        "createTitle": "Crear clave API",
-        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
-        "nameLabel": "Nombre de la clave",
-        "namePlaceholder": "Integración de producción",
-        "revoke": "Revocar clave",
-        "lastUsed": "Último uso {{date}}",
-        "neverUsed": "Nunca utilizada",
-        "keyCreatedTitle": "Clave API creada",
-        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
+        "title": "API 密钥",
+        "description": "仅限此工作区的编程访问。",
+        "empty": "暂无 API 密钥。创建一个即可与此工作区集成。",
+        "loadError": "无法加载 API 密钥。",
+        "new": "新建密钥",
+        "create": "创建密钥",
+        "createTitle": "创建 API 密钥",
+        "createDescription": "选择此密钥所需的权限。你可以随时撤销。",
+        "nameLabel": "密钥名称",
+        "namePlaceholder": "生产环境集成",
+        "revoke": "撤销密钥",
+        "lastUsed": "上次使用于 {{date}}",
+        "neverUsed": "从未使用",
+        "keyCreatedTitle": "API 密钥已创建",
+        "keyCreatedDescription": "请立即复制此密钥——之后将无法再次查看。",
+        "revokeConfirm": {
+          "title": "撤销此密钥？",
+          "description": "{{name}} 将立即失效。使用它的所有集成都将开始报错。"
+        },
+        "scopes": {
+          "notes": {
+            "title": "笔记",
+            "read": "读取笔记",
+            "write": "写入笔记"
+          },
+          "folders": {
+            "title": "文件夹",
+            "read": "读取文件夹",
+            "write": "写入文件夹"
+          },
+          "transcriptions": {
+            "title": "转录",
+            "read": "读取转录"
+          },
+          "members": {
+            "title": "成员",
+            "read": "读取成员",
+            "write": "管理成员"
+          },
+          "billing": {
+            "title": "账单",
+            "read": "读取账单"
+          },
+          "full": {
+            "title": "完全访问",
+            "admin": "工作区管理员"
+          }
+        }
       }
     }
   },
@@ -2088,6 +2168,77 @@
       "searchNotes": "搜索笔记",
       "actions": "操作"
     },
+    "spaces": {
+      "privateSpaces": "私人空间",
+      "teamSpaces": "团队空间",
+      "personal": "个人",
+      "privateTooltip": "只有你可以看到你的个人空间",
+      "newSpace": "新建空间",
+      "createTitle": "创建空间",
+      "nameLabel": "名称",
+      "emojiLabel": "表情符号",
+      "create": "创建",
+      "couldNotCreate": "无法创建空间",
+      "rename": "重命名",
+      "changeEmoji": "更改表情符号",
+      "couldNotRename": "无法重命名空间",
+      "deleteSpace": "删除空间",
+      "deleteConfirmTitle": "删除空间？",
+      "deleteConfirmDescription": "这将从此设备永久删除 {{space}} 及其所有文件夹和笔记。",
+      "deleteConfirmTeamDescription": "这将为所有人删除 {{space}}。成员将无法再访问其所有文件夹和笔记。",
+      "deleteTypeName": "输入 {{space}} 以确认",
+      "couldNotDelete": "无法删除空间",
+      "deleted": "已删除 {{space}}",
+      "moveTo": "移动到",
+      "moveToSpace": "移动到空间…",
+      "searchSpaces": "搜索空间...",
+      "noSpacesFound": "未找到空间",
+      "spaceRoot": "空间根目录",
+      "moveConfirm": "移动",
+      "confirmMoveInTitle": "移动到 {{space}}？",
+      "confirmMoveIn": "{{space}} 中的所有人都将能查看和编辑此笔记。",
+      "confirmMoveInFolder": "{{space}} 中的所有人都将能查看和编辑此文件夹及其笔记。",
+      "confirmMoveInShared": "其公开链接将被停用。",
+      "confirmMoveOutTitle": "移出 {{space}}？",
+      "confirmMoveOut": "{{space}} 的成员将无法再访问此笔记。",
+      "confirmMoveOutFolder": "{{space}} 的成员将无法再访问此文件夹及其笔记。",
+      "moved": "已将“{{title}}”移动到 {{target}}",
+      "couldNotMove": "无法移动文件夹",
+      "couldNotMoveNote": "无法移动笔记",
+      "shareRevokeFailed": "无法停用公开链接",
+      "folderNameTaken": "无法移动“{{name}}”：该位置已存在同名文件夹",
+      "undo": "撤销",
+      "emptySpace": "还没有笔记。这里的笔记对 {{space}} 中的所有人可见。",
+      "emptyTeamHint": "与你共享的空间将显示在这里。",
+      "noteCount_one": "{{count}} 条笔记",
+      "noteCount_other": "{{count}} 条笔记",
+      "accessRevoked": "你已无法访问 {{space}}",
+      "movedToPersonal": "你已无法访问 {{space}}，“{{title}}”已移至你的个人空间",
+      "conflictBanner": "此笔记存在更新的版本。",
+      "conflictRefresh": "刷新",
+      "conflictKeep": "继续编辑",
+      "editedBy": "由 {{name}} 编辑 · {{time}}",
+      "members": {
+        "menu": "成员…",
+        "title": "{{space}} 的成员",
+        "addPeople": "添加成员",
+        "addFailed": "{{total}} 人中有 {{failed}} 人无法添加",
+        "searchPlaceholder": "搜索成员…",
+        "roleAdmin": "管理员",
+        "roleMember": "成员",
+        "remove": "移除",
+        "removeConfirm": "将 {{name}} 从 {{space}} 中移除？",
+        "removeConfirmDescription": "对方将无法再访问此空间的所有笔记。",
+        "leave": "退出空间",
+        "leaveConfirm": "退出 {{space}}？",
+        "leaveConfirmDescription": "你将无法再访问此空间的所有笔记。",
+        "implicitAdminCannotLeave": "工作区所有者和管理员可以访问所有团队空间,无法退出。",
+        "inviteFooter": "邀请 {{email}} 加入工作区…",
+        "empty": "尚未添加任何成员"
+      },
+      "invitedTo_one": "你将加入 {{count}} 个团队空间",
+      "invitedTo_other": "你将加入 {{count}} 个团队空间"
+    },
     "folders": {
       "title": "文件夹",
       "soon": "即将推出",
@@ -2105,6 +2256,7 @@
       "newNote": "新建笔记",
       "untitled": "无标题",
       "untitledNote": "无标题笔记",
+      "shared": "已分享",
       "timeNow": "刚刚",
       "minutesAgo": "{{count}} 分钟前",
       "hoursAgo": "{{count}} 小时前",
@@ -2265,8 +2417,8 @@
       },
       "errors": {
         "noModel": "未选择 AI 模型。请在设置中配置。",
-        "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。",
-        "actionFailed": "操作失败"
+        "actionFailed": "操作失败",
+        "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。"
       }
     },
     "empty": {
@@ -2430,8 +2582,6 @@
     "defaultUser": "用户",
     "notSignedIn": "未登录",
     "chat": "聊天",
-    "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo",
     "collapse": "折叠侧边栏",
     "expand": "展开侧边栏"
   },
@@ -2522,6 +2672,12 @@
         "title": "快捷键不可用",
         "description": "无法注册所选快捷键。请在设置中选择其他快捷键。"
       },
+      "addedToDict": "已将 {{words}} 添加到你的词典",
+      "undo": "撤消",
+      "accessibilityMissing": {
+        "title": "需要辅助功能权限",
+        "description": "OpenWhispr 需要辅助功能权限来检测快捷键和粘贴文本。请在控制面板中启用。"
+      },
       "gpuFallback": {
         "title": "GPU 加速不可用",
         "description": "转录正在使用 CPU。你可以在设置中关闭 GPU 加速。"
@@ -2529,12 +2685,6 @@
       "cleanupFailed": {
         "title": "清理失败",
         "description": "你的听写已直接粘贴，未经 AI 清理。"
-      },
-      "addedToDict": "已将 {{words}} 添加到你的词典",
-      "undo": "撤消",
-      "accessibilityMissing": {
-        "title": "需要辅助功能权限",
-        "description": "OpenWhispr 需要辅助功能权限来检测快捷键和粘贴文本。请在控制面板中启用。"
       }
     },
     "mic": {
@@ -2552,28 +2702,6 @@
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏"
     }
-  },
-  "dictationTranslation": {
-    "title": "听写翻译",
-    "description": "专用快捷键，将你的听写翻译成另一种语言后粘贴",
-    "enabled": "启用听写翻译",
-    "enabledDescription": "通过翻译快捷键开始的听写会先整理再翻译，然后粘贴",
-    "sourceLanguage": "口语语言",
-    "sourceLanguageDescription": "你听写时使用的语言——自动检测也能处理混合语言听写",
-    "targetLanguage": "翻译为",
-    "targetLanguageDescription": "粘贴文本的语言",
-    "targetLanguageMissing": "请选择目标语言以启用翻译快捷键",
-    "selectLanguage": "选择语言…",
-    "prompt": {
-      "title": "翻译提示词",
-      "description": "自定义模型翻译听写内容的方式"
-    },
-    "hotkeyHint": "在 设置 → 通用 → 翻译快捷键 中设置快捷键",
-    "targetsLabel": "目标语言",
-    "addTarget": "添加语言…",
-    "activeTarget": "当前目标语言",
-    "removeTarget": "移除{{language}}",
-    "maxTargets": "最多 {{max}} 种语言"
   },
   "dictationAgent": {
     "enabled": "启用语音助手",
@@ -2816,9 +2944,11 @@
       "button": "分享",
       "dialog": {
         "title": "分享笔记",
+        "description": "通过电子邮件邀请他人，或分享此笔记的链接。",
         "searchPlaceholder": "通过电子邮件添加成员",
         "emailLabel": "收件人邮箱",
         "shareButton": "分享",
+        "createLink": "创建链接",
         "copyLink": "复制链接",
         "copied": "已复制",
         "owner": "所有者",
@@ -2827,9 +2957,14 @@
         "resend": "重新发送邀请",
         "revoke": "移除",
         "invitationActions": "邀请操作",
-        "permissionRequired": "只有笔记的所有者可以更改分享设置。",
+        "resendSent": "邀请已发送",
+        "resendThrottled": "邀请刚刚发送过，请一分钟后再试。",
+        "syncPrompt": "分享会在你的 OpenWhispr 云端保留此笔记的副本。",
+        "syncAndShare": "同步笔记",
         "visibility": {
           "label": "可见性",
+          "private": "私密",
+          "privateOption": "私密 — 仅自己",
           "link": "拥有链接的任何人",
           "domain": "{{domain}} 内拥有链接的所有人",
           "invited": "仅受邀者"
@@ -2838,19 +2973,27 @@
           "invalidEmail": "请输入有效的电子邮件地址",
           "alreadyInvited": "{{email}} 已经被邀请",
           "inviteFailed": "无法发送邀请。请重试。",
-          "linkUnavailable": "生成或更换链接后即可复制"
+          "visibilityFailed": "无法更新分享设置。请重试。",
+          "copyFailed": "无法复制链接。请重试。",
+          "revokeFailed": "无法移除邀请。请重试。",
+          "resendFailed": "无法重新发送邀请。请重试。",
+          "syncFailed": "无法同步此笔记。请重试。",
+          "loadFailed": "无法加载分享设置",
+          "retry": "重试"
         }
       }
     }
   },
   "commandSearch": {
+    "allSpaces": "所有空间",
     "title": "搜索",
     "description": "搜索笔记和转录",
     "shortPlaceholder": "搜索",
     "placeholder": "搜索笔记和转录…",
     "sections": {
       "notes": "笔记",
-      "transcripts": "转录"
+      "transcripts": "转录",
+      "jumpTo": "跳转到"
     },
     "noResults": "无结果",
     "emptyState": "输入内容开始搜索",
@@ -2946,51 +3089,82 @@
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
-      "workspaces": "Espacios de trabajo",
-      "empty": "Aún no hay espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "workspaces": "工作区",
+      "create": "创建工作区…"
     },
     "create": {
-      "title": "Crear espacio de trabajo",
-      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
-      "nameLabel": "Nombre del espacio de trabajo",
+      "title": "创建工作区",
+      "description": "工作区让你在一处协作、共享笔记并管理账单。",
+      "nameLabel": "工作区名称",
       "namePlaceholder": "Acme Corp",
-      "submit": "Crear espacio de trabajo",
-      "submitting": "Creando…",
-      "errorTitle": "No se pudo crear el espacio de trabajo"
+      "submit": "创建工作区",
+      "submitting": "创建中…",
+      "errorTitle": "无法创建工作区"
     },
     "created": {
-      "title": "Espacio de trabajo creado",
-      "description": "Ahora eres el propietario de {{name}}."
+      "title": "工作区已创建",
+      "description": "你现在是 {{name}} 的所有者。"
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "roleLabel": "Rol",
-      "teamsLabel": "Agregar a equipos",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "title": "邀请加入 {{workspace}}",
+      "description": "通过电子邮件添加同事。他们将收到加入链接。",
+      "emailLabel": "电子邮件",
+      "emailPlaceholder": "teammate@example.com",
+      "roleLabel": "角色",
+      "seatUsage": "已使用 {{used}}/{{seats}} 个席位",
+      "seatLimit": "全部 {{seats}} 个席位均已使用。",
+      "askOwner": "全部 {{seats}} 个席位均已使用。请联系工作区所有者添加席位。",
+      "manageSeats": "管理席位",
+      "submit": "发送邀请",
+      "submitting": "发送中…",
+      "sentTitle": "邀请已发送",
+      "sentDescription": "我们已向 {{email}} 发送邀请。",
+      "errorTitle": "无法发送邀请",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "管理员",
+        "member": "成员"
+      },
+      "roleDescription": {
+        "admin": "管理成员和账单",
+        "member": "使用工作区"
       }
     },
     "accept": {
-      "title": "Unirse al espacio de trabajo",
-      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
-      "loading": "Cargando invitación…",
-      "accept": "Aceptar invitación",
-      "accepting": "Aceptando…",
-      "signInToAccept": "Inicia sesión para aceptar",
-      "successTitle": "Te uniste",
-      "successDescription": "Bienvenido a {{name}}.",
-      "errorTitle": "No se pudo aceptar la invitación"
+      "title": "加入工作区",
+      "description": "{{inviter}} 邀请你以{{role}}身份加入 {{workspace}}。",
+      "loading": "正在加载邀请…",
+      "accept": "接受邀请",
+      "accepting": "接受中…",
+      "signInToAccept": "登录以接受",
+      "switchAccount": "切换账号",
+      "successTitle": "你已加入",
+      "successDescription": "你已成为 {{name}} 的成员。可在设置 → 工作区中管理。",
+      "errorTitle": "无法接受邀请",
+      "sentTo": "邀请已发送至 {{email}}",
+      "wrongAccount": "此邀请发送给了 {{email}}，而你当前登录的是 {{current}}。"
     }
+  },
+  "dictationTranslation": {
+    "title": "听写翻译",
+    "description": "专用快捷键，将你的听写翻译成另一种语言后粘贴",
+    "enabled": "启用听写翻译",
+    "enabledDescription": "通过翻译快捷键开始的听写会先整理再翻译，然后粘贴",
+    "sourceLanguage": "口语语言",
+    "sourceLanguageDescription": "你听写时使用的语言——自动检测也能处理混合语言听写",
+    "targetLanguage": "翻译为",
+    "targetLanguageDescription": "粘贴文本的语言",
+    "targetLanguageMissing": "请选择目标语言以启用翻译快捷键",
+    "selectLanguage": "选择语言…",
+    "prompt": {
+      "title": "翻译提示词",
+      "description": "自定义模型翻译听写内容的方式"
+    },
+    "hotkeyHint": "在 设置 → 通用 → 翻译快捷键 中设置快捷键",
+    "targetsLabel": "目标语言",
+    "addTarget": "添加语言…",
+    "activeTarget": "当前目标语言",
+    "removeTarget": "移除{{language}}",
+    "maxTargets": "最多 {{max}} 种语言"
   },
   "meetingNotification": {
     "title": "检测到会议",

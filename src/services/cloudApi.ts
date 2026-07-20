@@ -6,29 +6,43 @@ interface CloudApiResponse<T = unknown> {
   status?: number;
 }
 
+// Common `{ data: T }` envelope returned by the cloud API.
+export interface DataWrap<T> {
+  data: T;
+}
+
 export class CloudApiError extends Error {
   status: number;
   code?: string;
-  constructor(message: string, status: number, code?: string) {
+  details?: unknown;
+  constructor(message: string, status: number, code?: string, details?: unknown) {
     super(message);
     this.name = "CloudApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
-async function cloudRequest<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+async function cloudRequest<T = unknown>(
+  method: string,
+  path: string,
+  body?: unknown,
+  isPublic?: boolean
+): Promise<T> {
   const result = (await window.electronAPI?.cloudApiRequest?.({
     method,
     path,
     body,
-  })) as CloudApiResponse<T> | undefined;
+    public: isPublic,
+  })) as (CloudApiResponse<T> & { details?: unknown }) | undefined;
 
   if (!result?.success) {
     throw new CloudApiError(
       result?.error ?? "Cloud API request failed",
       result?.status ?? 0,
-      result?.code
+      result?.code,
+      result?.details
     );
   }
 
@@ -37,6 +51,11 @@ async function cloudRequest<T = unknown>(method: string, path: string, body?: un
 
 export async function cloudGet<T = unknown>(path: string): Promise<T> {
   return cloudRequest<T>("GET", path);
+}
+
+// For endpoints that work without a session (e.g. invitation previews).
+export async function cloudGetPublic<T = unknown>(path: string): Promise<T> {
+  return cloudRequest<T>("GET", path, undefined, true);
 }
 
 export async function cloudPost<T = unknown>(path: string, body?: unknown): Promise<T> {

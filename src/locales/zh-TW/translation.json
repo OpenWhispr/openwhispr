@@ -152,16 +152,16 @@
     "tap": "點按",
     "close": "關閉",
     "dismiss": "忽略",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "create": "Crear",
-    "delete": "Eliminar",
-    "actions": "Acciones",
-    "error": "Algo salió mal",
-    "unknownError": "Ocurrió un error desconocido",
-    "copy": "Copiar",
-    "copied": "Copiado",
-    "done": "Listo",
+    "save": "儲存",
+    "saving": "儲存中…",
+    "create": "建立",
+    "delete": "刪除",
+    "actions": "操作",
+    "error": "發生錯誤",
+    "unknownError": "發生未知錯誤",
+    "copy": "複製",
+    "copied": "已複製",
+    "done": "完成",
     "skip": "略過"
   },
   "onboarding": {
@@ -385,7 +385,6 @@
       "showInFolderWindows": "在檔案總管中顯示",
       "showInFolderLinux": "在檔案管理員中顯示",
       "retryTranscription": "重新轉錄",
-      "retryTranslationMode": "翻譯模式",
       "retrying": "正在重新轉錄…",
       "retrySuccess": "轉錄已更新",
       "retryError": "重新轉錄失敗",
@@ -400,7 +399,8 @@
         "recordingWithDuration": "已捨棄的錄音 · {{duration}}",
         "recover": "復原",
         "recovered": "已復原"
-      }
+      },
+      "retryTranslationMode": "翻譯模式"
     },
     "cloudMigration": {
       "title": "歡迎使用 OpenWhispr Cloud",
@@ -561,12 +561,6 @@
         "title": "備援模式",
         "description": "本機 Whisper 失敗，已改用 OpenAI API。"
       },
-      "translationFallback": {
-        "unreachableTitle": "翻譯無法使用",
-        "unreachableDescription": "你的口述內容已按原文貼上，未經翻譯。請檢查翻譯設定。",
-        "failedTitle": "翻譯失敗",
-        "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
-      },
       "noAudio": {
         "title": "未偵測到音訊",
         "description": "錄音中未偵測到聲音。請再試一次。"
@@ -580,6 +574,12 @@
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
         "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
         "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。"
+      },
+      "translationFallback": {
+        "unreachableTitle": "翻譯無法使用",
+        "unreachableDescription": "你的口述內容已按原文貼上，未經翻譯。請檢查翻譯設定。",
+        "failedTitle": "翻譯失敗",
+        "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
       }
     },
     "clipboard": {
@@ -997,7 +997,6 @@
       "save": "儲存"
     },
     "defaultTestInput": "嘿 Whispr，今天天氣怎麼樣？",
-    "defaultTestInputTranslate": "今天天氣真好，要不要出去走走？",
     "dialogs": {
       "reset": {
         "description": "提示詞已重設為預設值。",
@@ -1022,8 +1021,6 @@
     },
     "test": {
       "addressHint": "試試對「{{agentName}}」說話以測試指令模式",
-      "translateHint": "文字將翻譯為{{language}}",
-      "translation": "翻譯",
       "aiModels": "AI 模型",
       "baseUrlMissing": "缺少 {{provider}} 的 URL。請在 AI 模型設定中新增。",
       "cleanup": "文字整理",
@@ -1044,6 +1041,8 @@
       "run": "執行測試",
       "customEndpoint": "自訂端點",
       "apiKeyMissing": "未設定 {{provider}} API 金鑰。請在 AI 模型設定中新增。",
+      "translateHint": "文字將翻譯為{{language}}",
+      "translation": "翻譯",
       "translationDisabled": "啟用聽寫翻譯以測試此提示詞",
       "noTargetLanguage": "請先選擇目標語言"
     },
@@ -1051,7 +1050,8 @@
       "customPrompt": "自訂提示詞",
       "defaultPrompt": "預設提示詞",
       "modified": "已修改"
-    }
+    },
+    "defaultTestInputTranslate": "今天天氣真好，要不要出去走走？"
   },
   "settingsModal": {
     "groups": {
@@ -1094,8 +1094,8 @@
         "label": "系統"
       },
       "workspace": {
-        "label": "Espacio de trabajo",
-        "description": "Miembros, equipos, facturación y claves API"
+        "description": "成員、帳單與 API 金鑰",
+        "label": "工作區"
       }
     },
     "title": "設定"
@@ -1217,12 +1217,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
-          "features": [
-            "無限會議錄製",
-            "代理模式",
-            "與您的資料對話",
-            "優先支援"
-          ],
+          "features": ["無限會議錄製", "代理模式", "與您的資料對話", "優先支援"],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
         },
@@ -1444,10 +1439,6 @@
         "title": "語音助手快捷鍵",
         "description": "說出你的需求，AI 助手會輸入結果，而不是你說的原話"
       },
-      "translationHotkey": {
-        "title": "翻譯快捷鍵",
-        "description": "用任何語言聽寫——貼上的文字會自動翻譯"
-      },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",
         "title": "麥克風"
@@ -1611,6 +1602,10 @@
         "title": "更新",
         "versionPlaceholder": "—",
         "whatsNew": "v{{version}} 的新功能"
+      },
+      "translationHotkey": {
+        "title": "翻譯快捷鍵",
+        "description": "用任何語言聽寫——貼上的文字會自動翻譯"
       }
     },
     "permissions": {
@@ -1683,9 +1678,9 @@
       "tabs": {
         "dictationCleanup": "聽寫清理",
         "dictationAgent": "Voice Agent",
-        "dictationTranslation": "翻譯",
         "noteFormatting": "筆記格式化",
-        "chatIntelligence": "聊天"
+        "chatIntelligence": "聊天",
+        "dictationTranslation": "翻譯"
       }
     },
     "noteFormatting": {
@@ -1800,88 +1795,173 @@
       "apiKeyOptional": "API Key（選填）"
     },
     "workspace": {
-      "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "title": "工作區",
+      "description": "與團隊成員協作、分享筆記，並在同一處管理帳單。",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
-        "create": "Crear espacio de trabajo"
+        "title": "建立你的第一個工作區",
+        "description": "工作區讓你與團隊成員協作並分享筆記。",
+        "create": "建立工作區"
+      },
+      "loadError": {
+        "title": "無法載入工作區",
+        "description": "請檢查網路連線後再試一次。",
+        "retry": "重試"
       },
       "tab": {
-        "general": "General",
-        "members": "Miembros",
-        "teams": "Equipos",
-        "billing": "Facturación",
-        "developer": "Desarrollador"
+        "general": "一般",
+        "members": "成員",
+        "teams": "團隊",
+        "billing": "帳單",
+        "developer": "開發者"
       },
       "role": {
-        "owner": "Propietario",
-        "admin": "Administrador",
-        "member": "Miembro"
+        "owner": "擁有者",
+        "admin": "管理員",
+        "member": "成員"
       },
       "general": {
-        "nameLabel": "Nombre del espacio de trabajo",
-        "slugLabel": "Slug",
-        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
-        "saved": "Espacio de trabajo actualizado",
-        "dangerTitle": "Eliminar espacio de trabajo",
-        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
-        "delete": "Eliminar espacio de trabajo",
-        "confirmTitle": "¿Eliminar {{name}}?",
-        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+        "nameLabel": "工作區名稱",
+        "slugLabel": "簡短名稱",
+        "slugHint": "用於網址與邀請連結。僅限小寫字母、數字與連字號。",
+        "slugInvalid": "僅限小寫字母、數字與連字號。",
+        "saved": "工作區已更新",
+        "dangerTitle": "刪除工作區",
+        "dangerDescription": "所有共享的筆記、資料夾與整合都會被刪除。此操作無法復原。",
+        "delete": "刪除工作區",
+        "confirmTitle": "要刪除 {{name}} 嗎？",
+        "confirmDescription": "這會取消訂閱並永久移除所有工作區資料。",
+        "deleting": "刪除中…",
+        "deleted": "工作區已刪除",
+        "leaveTitle": "離開工作區",
+        "leaveDescription": "你將失去此工作區及其共享筆記的存取權。",
+        "leave": "離開工作區",
+        "leaving": "離開中…",
+        "leaveConfirm": {
+          "title": "要離開 {{name}} 嗎？",
+          "description": "你將立即失去存取權。管理員可以再次邀請你加入。"
+        },
+        "left": "你已離開 {{name}}"
       },
       "members": {
-        "title": "Miembros",
-        "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
-        "roleUpdated": "Rol actualizado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
-        "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo"
-      },
-      "invites": {
-        "title": "Invitaciones pendientes",
-        "resend": "Reenviar",
-        "revoke": "Revocar",
-        "resent": "Invitación reenviada"
+        "title": "成員",
+        "description": "已使用 {{count}} / {{seats}} 個席次。",
+        "invite": "邀請",
+        "empty": "尚無成員。",
+        "loadError": "無法載入成員。",
+        "roleUpdated": "角色已更新",
+        "promote": "設為管理員",
+        "demote": "設為成員",
+        "transferOwnership": "轉移擁有權",
+        "remove": "從工作區移除",
+        "removeConfirm": {
+          "title": "要移除這位成員嗎？",
+          "description": "{{name}} 將立即失去 {{workspace}} 的存取權。"
+        },
+        "transferConfirm": {
+          "title": "要轉移擁有權嗎？",
+          "description": "{{name}} 將成為 {{workspace}} 的擁有者。你的角色會變更為管理員，且只有新擁有者能將擁有權轉回。"
+        }
       },
       "teams": {
-        "title": "Equipos",
-        "description": "Agrupa miembros para compartir con alcance limitado.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
-        "descriptionLabel": "Descripción",
-        "memberCount": "{{count}} miembros"
+        "title": "團隊",
+        "description": "將成員分組以進行有針對性的共享。",
+        "new": "新增團隊",
+        "empty": "尚無團隊。",
+        "createFirst": "建立您的第一個團隊",
+        "createTitle": "建立團隊",
+        "nameLabel": "團隊名稱",
+        "memberCount_one": "{{count}} 位成員",
+        "memberCount_other": "{{count}} 位成員"
+      },
+      "invites": {
+        "title": "待處理的邀請",
+        "expiresIn_one": "{{count}} 天後到期",
+        "expiresIn_other": "{{count}} 天後到期",
+        "expired": "已到期",
+        "loadError": "無法載入邀請。",
+        "resend": "重新傳送",
+        "resending": "重新傳送中…",
+        "revoke": "撤銷",
+        "resent": "邀請已重新傳送",
+        "revokeFailed": "無法撤銷邀請",
+        "revokeConfirm": {
+          "title": "要撤銷此邀請嗎？",
+          "description": "{{email}} 的邀請連結將會失效。"
+        }
       },
       "billing": {
-        "title": "Facturación",
-        "description": "Plan, asientos y pago.",
-        "plan": "Plan",
-        "seats": "Asientos",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción"
+        "title": "帳單",
+        "description": "方案、席次與付款。",
+        "plan": "方案",
+        "seats": "席次",
+        "ownerOnly": "只有工作區擁有者可以管理訂閱。",
+        "nextInvoice": "下期帳單",
+        "manageStripe": "在 Stripe 中管理",
+        "opening": "開啟中…",
+        "startSubscription": "開始訂閱",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "免費"
+        },
+        "status": {
+          "active": "使用中",
+          "trialing": "試用中",
+          "past_due": "逾期未付",
+          "canceled": "已取消",
+          "incomplete": "未完成",
+          "unpaid": "未付款"
+        }
       },
       "developer": {
-        "title": "Claves API",
-        "description": "Acceso programático limitado a este espacio de trabajo.",
-        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
-        "new": "Nueva clave",
-        "create": "Crear clave",
-        "createTitle": "Crear clave API",
-        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
-        "nameLabel": "Nombre de la clave",
-        "namePlaceholder": "Integración de producción",
-        "revoke": "Revocar clave",
-        "lastUsed": "Último uso {{date}}",
-        "neverUsed": "Nunca utilizada",
-        "keyCreatedTitle": "Clave API creada",
-        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
+        "title": "API 金鑰",
+        "description": "範圍限於此工作區的程式化存取。",
+        "empty": "尚無 API 金鑰。建立一個以整合此工作區。",
+        "loadError": "無法載入 API 金鑰。",
+        "new": "新增金鑰",
+        "create": "建立金鑰",
+        "createTitle": "建立 API 金鑰",
+        "createDescription": "選擇此金鑰所需的權限。你隨時可以撤銷它。",
+        "nameLabel": "金鑰名稱",
+        "namePlaceholder": "正式環境整合",
+        "revoke": "撤銷金鑰",
+        "lastUsed": "上次使用於 {{date}}",
+        "neverUsed": "從未使用",
+        "keyCreatedTitle": "API 金鑰已建立",
+        "keyCreatedDescription": "請立即複製此金鑰 — 之後將無法再次檢視。",
+        "revokeConfirm": {
+          "title": "要撤銷此金鑰嗎？",
+          "description": "{{name}} 將立即失效。所有使用它的整合都會開始失敗。"
+        },
+        "scopes": {
+          "notes": {
+            "title": "筆記",
+            "read": "讀取筆記",
+            "write": "寫入筆記"
+          },
+          "folders": {
+            "title": "資料夾",
+            "read": "讀取資料夾",
+            "write": "寫入資料夾"
+          },
+          "transcriptions": {
+            "title": "轉錄",
+            "read": "讀取轉錄"
+          },
+          "members": {
+            "title": "成員",
+            "read": "讀取成員",
+            "write": "管理成員"
+          },
+          "billing": {
+            "title": "帳單",
+            "read": "讀取帳單"
+          },
+          "full": {
+            "title": "完整存取",
+            "admin": "工作區管理員"
+          }
+        }
       }
     }
   },
@@ -2088,6 +2168,77 @@
       "searchNotes": "搜尋筆記",
       "actions": "動作"
     },
+    "spaces": {
+      "privateSpaces": "私人空間",
+      "teamSpaces": "團隊空間",
+      "personal": "個人",
+      "privateTooltip": "只有你可以看到你的個人空間",
+      "newSpace": "新增空間",
+      "createTitle": "建立空間",
+      "nameLabel": "名稱",
+      "emojiLabel": "表情符號",
+      "create": "建立",
+      "couldNotCreate": "無法建立空間",
+      "rename": "重新命名",
+      "changeEmoji": "變更表情符號",
+      "couldNotRename": "無法重新命名空間",
+      "deleteSpace": "刪除空間",
+      "deleteConfirmTitle": "刪除空間？",
+      "deleteConfirmDescription": "這會從此裝置永久刪除 {{space}} 及其所有資料夾和筆記。",
+      "deleteConfirmTeamDescription": "這會為所有人刪除 {{space}}。成員將無法再存取其所有資料夾和筆記。",
+      "deleteTypeName": "輸入 {{space}} 以確認",
+      "couldNotDelete": "無法刪除空間",
+      "deleted": "已刪除 {{space}}",
+      "moveTo": "移動到",
+      "moveToSpace": "移動到空間…",
+      "searchSpaces": "搜尋空間...",
+      "noSpacesFound": "找不到空間",
+      "spaceRoot": "空間根目錄",
+      "moveConfirm": "移動",
+      "confirmMoveInTitle": "移動到 {{space}}？",
+      "confirmMoveIn": "{{space}} 中的所有人都將能檢視和編輯這則筆記。",
+      "confirmMoveInFolder": "{{space}} 中的所有人都將能檢視和編輯這個資料夾及其筆記。",
+      "confirmMoveInShared": "其公開連結將被停用。",
+      "confirmMoveOutTitle": "移出 {{space}}？",
+      "confirmMoveOut": "{{space}} 的成員將無法再存取這則筆記。",
+      "confirmMoveOutFolder": "{{space}} 的成員將無法再存取這個資料夾及其筆記。",
+      "moved": "已將「{{title}}」移動到 {{target}}",
+      "couldNotMove": "無法移動資料夾",
+      "couldNotMoveNote": "無法移動筆記",
+      "shareRevokeFailed": "無法停用公開連結",
+      "folderNameTaken": "無法移動「{{name}}」：該位置已存在同名資料夾",
+      "undo": "復原",
+      "emptySpace": "還沒有筆記。這裡的筆記對 {{space}} 中的所有人可見。",
+      "emptyTeamHint": "與你共享的空間將顯示在這裡。",
+      "noteCount_one": "{{count}} 則筆記",
+      "noteCount_other": "{{count}} 則筆記",
+      "accessRevoked": "你已無法存取 {{space}}",
+      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至你的個人空間",
+      "conflictBanner": "此筆記有更新的版本。",
+      "conflictRefresh": "重新整理",
+      "conflictKeep": "繼續編輯",
+      "editedBy": "由 {{name}} 編輯 · {{time}}",
+      "members": {
+        "menu": "成員…",
+        "title": "{{space}} 的成員",
+        "addPeople": "新增成員",
+        "addFailed": "{{total}} 人中有 {{failed}} 人無法加入",
+        "searchPlaceholder": "搜尋成員…",
+        "roleAdmin": "管理員",
+        "roleMember": "成員",
+        "remove": "移除",
+        "removeConfirm": "要將 {{name}} 從 {{space}} 移除嗎？",
+        "removeConfirmDescription": "對方將無法再存取此空間的所有筆記。",
+        "leave": "退出空間",
+        "leaveConfirm": "要退出 {{space}} 嗎？",
+        "leaveConfirmDescription": "你將無法再存取此空間的所有筆記。",
+        "implicitAdminCannotLeave": "工作區擁有者和管理員可以存取所有團隊空間,無法退出。",
+        "inviteFooter": "邀請 {{email}} 加入工作區…",
+        "empty": "尚未新增任何成員"
+      },
+      "invitedTo_one": "你將加入 {{count}} 個團隊空間",
+      "invitedTo_other": "你將加入 {{count}} 個團隊空間"
+    },
     "folders": {
       "title": "資料夾",
       "soon": "即將推出",
@@ -2105,6 +2256,7 @@
       "newNote": "新增筆記",
       "untitled": "未命名",
       "untitledNote": "未命名筆記",
+      "shared": "已分享",
       "timeNow": "剛剛",
       "minutesAgo": "{{count}} 分鐘前",
       "hoursAgo": "{{count}} 小時前",
@@ -2265,8 +2417,8 @@
       },
       "errors": {
         "noModel": "未選擇 AI 模型。請在設定中進行配置。",
-        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。",
-        "actionFailed": "操作失敗"
+        "actionFailed": "操作失敗",
+        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。"
       }
     },
     "empty": {
@@ -2430,8 +2582,6 @@
     "defaultUser": "使用者",
     "notSignedIn": "尚未登入",
     "chat": "聊天",
-    "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo",
     "collapse": "收合側邊欄",
     "expand": "展開側邊欄"
   },
@@ -2522,6 +2672,12 @@
         "title": "快捷鍵無法使用",
         "description": "無法註冊所選快捷鍵。請在設定中選擇其他快捷鍵。"
       },
+      "addedToDict": "已將 {{words}} 加入到你的詞典",
+      "undo": "復原",
+      "accessibilityMissing": {
+        "title": "需要輔助使用權限",
+        "description": "OpenWhispr 需要輔助使用權限來偵測快捷鍵和貼上文字。請在控制面板中啟用。"
+      },
       "gpuFallback": {
         "title": "GPU 加速無法使用",
         "description": "轉錄正在使用 CPU。你可以在設定中關閉 GPU 加速。"
@@ -2529,12 +2685,6 @@
       "cleanupFailed": {
         "title": "清理失敗",
         "description": "你的聽寫已直接貼上，未經 AI 清理。"
-      },
-      "addedToDict": "已將 {{words}} 加入到你的詞典",
-      "undo": "復原",
-      "accessibilityMissing": {
-        "title": "需要輔助使用權限",
-        "description": "OpenWhispr 需要輔助使用權限來偵測快捷鍵和貼上文字。請在控制面板中啟用。"
       }
     },
     "mic": {
@@ -2552,28 +2702,6 @@
       "startListening": "開始錄音",
       "hideForNow": "暫時隱藏"
     }
-  },
-  "dictationTranslation": {
-    "title": "聽寫翻譯",
-    "description": "專用快捷鍵，將你的聽寫翻譯成另一種語言後貼上",
-    "enabled": "啟用聽寫翻譯",
-    "enabledDescription": "透過翻譯快捷鍵開始的聽寫會先整理再翻譯，然後貼上",
-    "sourceLanguage": "口說語言",
-    "sourceLanguageDescription": "你聽寫時使用的語言——自動偵測也能處理混合語言聽寫",
-    "targetLanguage": "翻譯為",
-    "targetLanguageDescription": "貼上文字的語言",
-    "targetLanguageMissing": "請選擇目標語言以啟用翻譯快捷鍵",
-    "selectLanguage": "選擇語言…",
-    "prompt": {
-      "title": "翻譯提示詞",
-      "description": "自訂模型翻譯聽寫內容的方式"
-    },
-    "hotkeyHint": "在 設定 → 一般 → 翻譯快捷鍵 中設定快捷鍵",
-    "targetsLabel": "目標語言",
-    "addTarget": "新增語言…",
-    "activeTarget": "目前目標語言",
-    "removeTarget": "移除{{language}}",
-    "maxTargets": "最多 {{max}} 種語言"
   },
   "dictationAgent": {
     "enabled": "啟用語音代理",
@@ -2816,9 +2944,11 @@
       "button": "分享",
       "dialog": {
         "title": "分享筆記",
+        "description": "透過電子郵件邀請成員，或分享此筆記的連結。",
         "searchPlaceholder": "透過電子郵件新增成員",
         "emailLabel": "收件人電子郵件",
         "shareButton": "分享",
+        "createLink": "建立連結",
         "copyLink": "複製連結",
         "copied": "已複製",
         "owner": "擁有者",
@@ -2827,9 +2957,14 @@
         "resend": "重新傳送邀請",
         "revoke": "移除",
         "invitationActions": "邀請操作",
-        "permissionRequired": "只有筆記的擁有者可以變更分享設定。",
+        "resendSent": "邀請已傳送",
+        "resendThrottled": "邀請剛剛已傳送，請一分鐘後再試。",
+        "syncPrompt": "分享後，這則筆記會在你的 OpenWhispr 雲端保留一份副本。",
+        "syncAndShare": "同步筆記",
         "visibility": {
           "label": "可見性",
+          "private": "私人",
+          "privateOption": "私人 — 只有你",
           "link": "任何擁有連結的人",
           "domain": "{{domain}} 中擁有連結的所有人",
           "invited": "僅限受邀者"
@@ -2838,19 +2973,27 @@
           "invalidEmail": "請輸入有效的電子郵件地址",
           "alreadyInvited": "{{email}} 已被邀請",
           "inviteFailed": "無法傳送邀請。請再試一次。",
-          "linkUnavailable": "產生或更換連結後即可複製"
+          "visibilityFailed": "無法更新分享設定。請再試一次。",
+          "copyFailed": "無法複製連結。請再試一次。",
+          "revokeFailed": "無法移除邀請。請再試一次。",
+          "resendFailed": "無法重新傳送邀請。請再試一次。",
+          "syncFailed": "無法同步此筆記。請再試一次。",
+          "loadFailed": "無法載入分享設定",
+          "retry": "重試"
         }
       }
     }
   },
   "commandSearch": {
+    "allSpaces": "所有空間",
     "title": "搜尋",
     "description": "搜尋筆記與轉錄",
     "shortPlaceholder": "搜尋",
     "placeholder": "搜尋筆記與轉錄…",
     "sections": {
       "notes": "筆記",
-      "transcripts": "轉錄"
+      "transcripts": "轉錄",
+      "jumpTo": "跳至"
     },
     "noResults": "無結果",
     "emptyState": "輸入內容開始搜尋",
@@ -2946,51 +3089,82 @@
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
-      "workspaces": "Espacios de trabajo",
-      "empty": "Aún no hay espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "workspaces": "工作區",
+      "create": "建立工作區…"
     },
     "create": {
-      "title": "Crear espacio de trabajo",
-      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
-      "nameLabel": "Nombre del espacio de trabajo",
+      "title": "建立工作區",
+      "description": "工作區讓你在同一處協作、分享筆記並管理帳單。",
+      "nameLabel": "工作區名稱",
       "namePlaceholder": "Acme Corp",
-      "submit": "Crear espacio de trabajo",
-      "submitting": "Creando…",
-      "errorTitle": "No se pudo crear el espacio de trabajo"
+      "submit": "建立工作區",
+      "submitting": "建立中…",
+      "errorTitle": "無法建立工作區"
     },
     "created": {
-      "title": "Espacio de trabajo creado",
-      "description": "Ahora eres el propietario de {{name}}."
+      "title": "工作區已建立",
+      "description": "你現在是 {{name}} 的擁有者。"
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "roleLabel": "Rol",
-      "teamsLabel": "Agregar a equipos",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "title": "邀請加入 {{workspace}}",
+      "description": "透過電子郵件新增團隊成員，他們會收到加入連結。",
+      "emailLabel": "電子郵件",
+      "emailPlaceholder": "teammate@example.com",
+      "roleLabel": "角色",
+      "seatUsage": "已使用 {{used}} / {{seats}} 個席次",
+      "seatLimit": "{{seats}} 個席次已全數使用。",
+      "askOwner": "{{seats}} 個席次已全數使用。請聯絡工作區擁有者新增席次。",
+      "manageSeats": "管理席次",
+      "submit": "傳送邀請",
+      "submitting": "傳送中…",
+      "sentTitle": "邀請已傳送",
+      "sentDescription": "我們已將邀請傳送至 {{email}}。",
+      "errorTitle": "無法傳送邀請",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "管理員",
+        "member": "成員"
+      },
+      "roleDescription": {
+        "admin": "管理成員與帳單",
+        "member": "使用工作區"
       }
     },
     "accept": {
-      "title": "Unirse al espacio de trabajo",
-      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
-      "loading": "Cargando invitación…",
-      "accept": "Aceptar invitación",
-      "accepting": "Aceptando…",
-      "signInToAccept": "Inicia sesión para aceptar",
-      "successTitle": "Te uniste",
-      "successDescription": "Bienvenido a {{name}}.",
-      "errorTitle": "No se pudo aceptar la invitación"
+      "title": "加入工作區",
+      "description": "{{inviter}} 邀請你以 {{role}} 的身分加入 {{workspace}}。",
+      "loading": "正在載入邀請…",
+      "accept": "接受邀請",
+      "accepting": "接受中…",
+      "signInToAccept": "登入以接受",
+      "switchAccount": "切換帳號",
+      "successTitle": "你已加入",
+      "successDescription": "你已成為 {{name}} 的成員。可前往「設定 → 工作區」進行管理。",
+      "errorTitle": "無法接受邀請",
+      "sentTo": "邀請已傳送至 {{email}}",
+      "wrongAccount": "此邀請是傳送給 {{email}} 的。你目前以 {{current}} 的身分登入。"
     }
+  },
+  "dictationTranslation": {
+    "title": "聽寫翻譯",
+    "description": "專用快捷鍵，將你的聽寫翻譯成另一種語言後貼上",
+    "enabled": "啟用聽寫翻譯",
+    "enabledDescription": "透過翻譯快捷鍵開始的聽寫會先整理再翻譯，然後貼上",
+    "sourceLanguage": "口說語言",
+    "sourceLanguageDescription": "你聽寫時使用的語言——自動偵測也能處理混合語言聽寫",
+    "targetLanguage": "翻譯為",
+    "targetLanguageDescription": "貼上文字的語言",
+    "targetLanguageMissing": "請選擇目標語言以啟用翻譯快捷鍵",
+    "selectLanguage": "選擇語言…",
+    "prompt": {
+      "title": "翻譯提示詞",
+      "description": "自訂模型翻譯聽寫內容的方式"
+    },
+    "hotkeyHint": "在 設定 → 一般 → 翻譯快捷鍵 中設定快捷鍵",
+    "targetsLabel": "目標語言",
+    "addTarget": "新增語言…",
+    "activeTarget": "目前目標語言",
+    "removeTarget": "移除{{language}}",
+    "maxTargets": "最多 {{max}} 種語言"
   },
   "meetingNotification": {
     "title": "偵測到會議",

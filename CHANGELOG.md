@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-07-20
+
+Team spaces and web note sharing headline this release: create shared spaces inside your workspace, invite teammates with roles and one-click deep links, and publish notes to the web with link, domain, or invite-only visibility — all local-first, with access enforced server-side and revocation handled gracefully. Alongside it: workspace management lands in Settings, the macOS Dock icon finally behaves, the tray icon toggles the control panel, Opus imports work, and Windows stops flashing console windows.
+
+### Team spaces & sharing
+
+- **Team spaces in the notes sidebar.** A new TEAM SPACES section sits alongside your private space: create a space with a name and emoji, organize per-space folders and notes, drag notes between containers, and drive the whole tree from the keyboard. The editor shows where a note lives — a breadcrumb chip that jumps to and reveals its space, and an audience pill showing how many people can see it. Content is local-first: your notes stay in the on-device database as the source of truth, with each space syncing to the cloud in the background. (#925)
+- **Membership, roles, and invitations.** Invite teammates by email with team spaces pre-selected; the invitation email lands on notes.openwhispr.com with a one-click "Open in OpenWhispr" deep link straight into the accept flow (and an honest copy-the-link path on phones). Space members are admins or members, workspace owners and admins hold implicit admin access to every space, and rosters are managed from the space's Members dialog or Settings → Workspace → Teams — with type-the-name confirmation before a space is deleted, everywhere it can be deleted from. (#925)
+- **Server-enforced access with graceful revocation.** Membership checks live on the server — non-members get existence privacy, and revoked or archived spaces return typed errors the app understands. Losing access to a space removes its synced notes locally and relocates anything you never managed to sync into your private space, with a toast explaining what happened. If a teammate's edit arrives while you have unpushed changes, a conflict banner names who edited it and lets you take their copy or keep yours. (#925)
+- **Share notes on the web.** Personal notes can be published to notes.openwhispr.com under three visibilities: anyone with the link, anyone signed in under your email domain, or invited people only. Rich link previews (title and snippet) are emitted only for link-visibility shares — restricted notes unfurl generically so nothing leaks into chat preview caches. Team notes deliberately have no public link; their audience is the space. (#925)
+- **Changes land live, everywhere.** Space changes now broadcast across windows the way notes and folders already did: a teammate's rename, a role or member-count change, or a freshly accepted invitation appears in an open sidebar without remounting, skeleton rows clear as a new space's content finishes backfilling, and a deleted space vanishes from every window at once. (#925)
+- **Workspace management in Settings.** The new Settings → Workspace section covers members (invite, remove, roles), team spaces, billing with per-seat counts, and developer settings — with workspace creation and switching built in. (#925)
+
+### Notes
+
+- **Chat text selection survives live transcription.** With meeting transcription running in Notes, every incoming transcript update could yank the text selection out of the embedded chat; selections in chat are now left alone while the transcript streams. (#1027)
+
+### Audio upload & import
+
+- **Opus uploads transcribe correctly.** YouTube imports often arrive as `.opus` files, which were uploaded with a generic MPEG content type and rejected by cloud transcription as an unsupported format. Opus (and a filename-first media-type check) is now part of the upload pipeline, so short YouTube links and direct Opus files transcribe instead of erroring. (#1249)
+
+### Interface
+
+- **The macOS Dock icon follows the control panel.** The Dock icon appears when the control panel opens and disappears when it closes to the tray — and nothing else can resurrect it, which fixes the icon reappearing after dictation. The separate "Show Dock Icon" setting is gone; the Dock now simply reflects whether the panel is open. (#1202)
+- **The tray icon toggles the control panel.** Clicking the tray icon hides the panel if it's visible and shows-and-focuses it otherwise (previously it could only open it), with a matching toggle item in the tray menu. Especially useful on Linux, where a window parked on another workspace no longer gets stuck out of sight. (#1133)
+
+### Windows
+
+- **No more console window flashes.** Native helper launches across dictation, meetings, GPU probes, and media control — `where.exe` lookups, nvidia-smi GPU detection, media pause/resume and paste helpers, the meeting AEC, text-edit monitor, and mic listener — now spawn hidden instead of flashing a console window mid-flow. (#1228, #1232, #1233, #1234)
+
 ## [1.7.6] - 2026-07-18
 
 A feature release across the entire app on top of 1.7.5: dictation translation with its own hotkey and dedicated model, audio import that takes YouTube and direct URLs plus batch uploads with on-device speaker detection, one-click Vulkan GPU acceleration bringing local Whisper GPU support to AMD and Intel, NVIDIA Nemotron streaming models that decode dictation live and commit the moment you stop, Liquid AI LFM2/LFM2.5 local reasoning models, a collapsible sidebar, and meeting prompts unified into the in-app overlay — plus a deep reliability pass on self-hosted routing (uploads, retries, note formatting, chat), Mistral and Groq cleanup, local LLM memory safety, media pause/resume on macOS 15.4+, and Windows/Linux packaging.

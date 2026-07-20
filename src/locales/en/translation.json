@@ -373,7 +373,6 @@
       "showInFolderWindows": "Show in Explorer",
       "showInFolderLinux": "Show in File Manager",
       "retryTranscription": "Re-transcribe",
-      "retryTranslationMode": "Translation Mode",
       "retrying": "Re-transcribing...",
       "retrySuccess": "Transcription updated",
       "retryError": "Failed to re-transcribe",
@@ -400,7 +399,8 @@
         "recordingWithDuration": "Discarded recording · {{duration}}",
         "recover": "Recover",
         "recovered": "Recovered"
-      }
+      },
+      "retryTranslationMode": "Translation Mode"
     },
     "cloudMigration": {
       "title": "Welcome to OpenWhispr Cloud",
@@ -561,12 +561,6 @@
         "title": "Fallback Mode",
         "description": "Local Whisper failed. Used OpenAI API instead."
       },
-      "translationFallback": {
-        "unreachableTitle": "Translation unavailable",
-        "unreachableDescription": "Your dictation was pasted untranslated. Check the translation settings.",
-        "failedTitle": "Translation failed",
-        "failedDescription": "The original text was pasted. You can retry it from History."
-      },
       "noAudio": {
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
@@ -580,6 +574,12 @@
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again."
+      },
+      "translationFallback": {
+        "unreachableTitle": "Translation unavailable",
+        "unreachableDescription": "Your dictation was pasted untranslated. Check the translation settings.",
+        "failedTitle": "Translation failed",
+        "failedDescription": "The original text was pasted. You can retry it from History."
       }
     },
     "clipboard": {
@@ -1085,7 +1085,6 @@
       "save": "Save"
     },
     "defaultTestInput": "Hey Whispr, what's the weather like today?",
-    "defaultTestInputTranslate": "The weather is beautiful today, want to go for a walk?",
     "dialogs": {
       "reset": {
         "description": "Prompt has been reset to the default value.",
@@ -1110,8 +1109,6 @@
     },
     "test": {
       "addressHint": "Try addressing \"{{agentName}}\" to test instruction mode",
-      "translateHint": "The text will be translated to {{language}}",
-      "translation": "Translation",
       "aiModels": "AI Models",
       "baseUrlMissing": "{{provider}} base URL missing. Add it in AI Models settings.",
       "cleanup": "Cleanup",
@@ -1132,6 +1129,8 @@
       "run": "Run Test",
       "customEndpoint": "Custom endpoint",
       "apiKeyMissing": "{{provider}} API key not configured. Add it in AI Models settings.",
+      "translateHint": "The text will be translated to {{language}}",
+      "translation": "Translation",
       "translationDisabled": "Enable Dictation Translation to test this prompt",
       "noTargetLanguage": "Pick a target language first"
     },
@@ -1139,7 +1138,8 @@
       "customPrompt": "Custom prompt",
       "defaultPrompt": "Default prompt",
       "modified": "Modified"
-    }
+    },
+    "defaultTestInputTranslate": "The weather is beautiful today, want to go for a walk?"
   },
   "settingsModal": {
     "groups": {
@@ -1158,7 +1158,7 @@
         "label": "Plans & Billing"
       },
       "workspace": {
-        "description": "Members, teams, billing & API keys",
+        "description": "Members, billing & API keys",
         "label": "Workspace"
       },
       "general": {
@@ -1197,6 +1197,11 @@
         "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
       },
+      "loadError": {
+        "title": "Couldn't load workspaces",
+        "description": "Check your connection and try again.",
+        "retry": "Retry"
+      },
       "tab": {
         "general": "General",
         "members": "Members",
@@ -1211,31 +1216,46 @@
       },
       "general": {
         "nameLabel": "Workspace name",
-        "slugLabel": "Slug",
+        "slugLabel": "Short name",
         "slugHint": "Used in URLs and invite links. Lowercase letters, digits, and dashes only.",
+        "slugInvalid": "Only lowercase letters, digits, and dashes.",
         "saved": "Workspace updated",
         "dangerTitle": "Delete workspace",
         "dangerDescription": "All shared notes, folders, and integrations will be deleted. This cannot be undone.",
         "delete": "Delete workspace",
         "confirmTitle": "Delete {{name}}?",
-        "confirmDescription": "This cancels the subscription and removes all workspace data permanently."
+        "confirmDescription": "This cancels the subscription and removes all workspace data permanently.",
+        "deleting": "Deleting…",
+        "deleted": "Workspace deleted",
+        "leaveTitle": "Leave workspace",
+        "leaveDescription": "You'll lose access to this workspace and its shared notes.",
+        "leave": "Leave workspace",
+        "leaving": "Leaving…",
+        "leaveConfirm": {
+          "title": "Leave {{name}}?",
+          "description": "You'll lose access immediately. An admin can invite you back."
+        },
+        "left": "You left {{name}}"
       },
       "members": {
         "title": "Members",
         "description": "{{count}} of {{seats}} seats used.",
         "invite": "Invite",
         "empty": "No members yet.",
+        "loadError": "Couldn't load members.",
         "roleUpdated": "Role updated",
         "promote": "Make admin",
         "demote": "Make member",
         "transferOwnership": "Transfer ownership",
-        "remove": "Remove from workspace"
-      },
-      "invites": {
-        "title": "Pending invitations",
-        "resend": "Resend",
-        "revoke": "Revoke",
-        "resent": "Invitation resent"
+        "remove": "Remove from workspace",
+        "removeConfirm": {
+          "title": "Remove this member?",
+          "description": "{{name}} will lose access to {{workspace}} immediately."
+        },
+        "transferConfirm": {
+          "title": "Transfer ownership?",
+          "description": "{{name}} becomes the owner of {{workspace}}. Your role changes to admin and only the new owner can transfer it back."
+        }
       },
       "teams": {
         "title": "Teams",
@@ -1245,22 +1265,54 @@
         "createFirst": "Create your first team",
         "createTitle": "Create team",
         "nameLabel": "Team name",
-        "descriptionLabel": "Description",
-        "memberCount": "{{count}} members"
+        "memberCount_one": "{{count}} member",
+        "memberCount_other": "{{count}} members"
+      },
+      "invites": {
+        "title": "Pending invitations",
+        "expiresIn_one": "Expires in {{count}} day",
+        "expiresIn_other": "Expires in {{count}} days",
+        "expired": "Expired",
+        "loadError": "Couldn't load invitations.",
+        "resend": "Resend",
+        "resending": "Resending…",
+        "revoke": "Revoke",
+        "resent": "Invitation resent",
+        "revokeFailed": "Could not revoke invitation",
+        "revokeConfirm": {
+          "title": "Revoke this invitation?",
+          "description": "The invitation link for {{email}} will stop working."
+        }
       },
       "billing": {
         "title": "Billing",
         "description": "Plan, seats, and payment.",
         "plan": "Plan",
         "seats": "Seats",
+        "ownerOnly": "Only the workspace owner can manage the subscription.",
         "nextInvoice": "Next invoice",
         "manageStripe": "Manage in Stripe",
-        "startSubscription": "Start subscription"
+        "opening": "Opening…",
+        "startSubscription": "Start subscription",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "Free"
+        },
+        "status": {
+          "active": "Active",
+          "trialing": "Trialing",
+          "past_due": "Past due",
+          "canceled": "Canceled",
+          "incomplete": "Incomplete",
+          "unpaid": "Unpaid"
+        }
       },
       "developer": {
         "title": "API keys",
         "description": "Programmatic access scoped to this workspace.",
         "empty": "No API keys yet. Create one to integrate with this workspace.",
+        "loadError": "Couldn't load API keys.",
         "new": "New key",
         "create": "Create key",
         "createTitle": "Create API key",
@@ -1271,7 +1323,40 @@
         "lastUsed": "Last used {{date}}",
         "neverUsed": "Never used",
         "keyCreatedTitle": "API key created",
-        "keyCreatedDescription": "Copy this key now — you won't be able to see it again."
+        "keyCreatedDescription": "Copy this key now — you won't be able to see it again.",
+        "revokeConfirm": {
+          "title": "Revoke this key?",
+          "description": "{{name}} will stop working immediately. Any integration using it will start failing."
+        },
+        "scopes": {
+          "notes": {
+            "title": "Notes",
+            "read": "Read notes",
+            "write": "Write notes"
+          },
+          "folders": {
+            "title": "Folders",
+            "read": "Read folders",
+            "write": "Write folders"
+          },
+          "transcriptions": {
+            "title": "Transcriptions",
+            "read": "Read transcriptions"
+          },
+          "members": {
+            "title": "Members",
+            "read": "Read members",
+            "write": "Manage members"
+          },
+          "billing": {
+            "title": "Billing",
+            "read": "Read billing"
+          },
+          "full": {
+            "title": "Full access",
+            "admin": "Workspace admin"
+          }
+        }
       }
     },
     "account": {
@@ -1617,10 +1702,6 @@
         "title": "Voice Agent Hotkey",
         "description": "Speak a request — your AI agent types the result, not your words"
       },
-      "translationHotkey": {
-        "title": "Translation Hotkey",
-        "description": "Dictate in any language — the pasted text comes out translated"
-      },
       "microphone": {
         "description": "Select which input device to use for dictation",
         "title": "Microphone"
@@ -1784,6 +1865,10 @@
         "title": "Updates",
         "versionPlaceholder": "—",
         "whatsNew": "What's new in v{{version}}"
+      },
+      "translationHotkey": {
+        "title": "Translation Hotkey",
+        "description": "Dictate in any language — the pasted text comes out translated"
       }
     },
     "permissions": {
@@ -1856,9 +1941,9 @@
       "tabs": {
         "dictationCleanup": "Dictation Cleanup",
         "dictationAgent": "Voice Agent",
-        "dictationTranslation": "Translation",
         "noteFormatting": "Note Formatting",
-        "chatIntelligence": "Chat"
+        "chatIntelligence": "Chat",
+        "dictationTranslation": "Translation"
       }
     },
     "noteFormatting": {
@@ -2116,16 +2201,12 @@
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
     "chat": "Chat",
-    "inviteTeammate": "Invite teammate",
-    "createWorkspace": "Create workspace",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar"
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
       "workspaces": "Workspaces",
-      "empty": "No workspaces yet",
       "create": "Create workspace…"
     },
     "create": {
@@ -2145,8 +2226,12 @@
       "title": "Invite to {{workspace}}",
       "description": "Add teammates by email. They'll get a link to join.",
       "emailLabel": "Email",
+      "emailPlaceholder": "teammate@example.com",
       "roleLabel": "Role",
-      "teamsLabel": "Add to teams",
+      "seatUsage": "Using {{used}} of {{seats}} seats",
+      "seatLimit": "All {{seats}} seats are in use.",
+      "askOwner": "All {{seats}} seats are in use. Ask the workspace owner to add seats.",
+      "manageSeats": "Manage seats",
       "submit": "Send invite",
       "submitting": "Sending…",
       "sentTitle": "Invite sent",
@@ -2155,6 +2240,10 @@
       "role": {
         "admin": "Admin",
         "member": "Member"
+      },
+      "roleDescription": {
+        "admin": "Manages members and billing",
+        "member": "Uses the workspace"
       }
     },
     "accept": {
@@ -2164,9 +2253,12 @@
       "accept": "Accept invitation",
       "accepting": "Accepting…",
       "signInToAccept": "Sign in to accept",
+      "switchAccount": "Switch account",
       "successTitle": "You're in",
-      "successDescription": "Welcome to {{name}}.",
-      "errorTitle": "Couldn't accept invitation"
+      "successDescription": "You're a member of {{name}}. Manage it in Settings → Workspace.",
+      "errorTitle": "Couldn't accept invitation",
+      "sentTo": "Invitation sent to {{email}}",
+      "wrongAccount": "This invitation was sent to {{email}}. You're signed in as {{current}}."
     }
   },
   "chat": {
@@ -2289,6 +2381,77 @@
       "searchNotes": "Search notes",
       "actions": "Actions"
     },
+    "spaces": {
+      "privateSpaces": "Private spaces",
+      "teamSpaces": "Team spaces",
+      "personal": "Personal",
+      "privateTooltip": "Only you can see your Personal space",
+      "newSpace": "New space",
+      "createTitle": "Create space",
+      "nameLabel": "Name",
+      "emojiLabel": "Emoji",
+      "create": "Create",
+      "couldNotCreate": "Couldn't create space",
+      "rename": "Rename",
+      "changeEmoji": "Change emoji",
+      "couldNotRename": "Couldn't rename space",
+      "deleteSpace": "Delete space",
+      "deleteConfirmTitle": "Delete space?",
+      "deleteConfirmDescription": "This permanently deletes {{space}} with all of its folders and notes on this device.",
+      "deleteConfirmTeamDescription": "This deletes {{space}} for everyone. Members will lose access to all of its folders and notes.",
+      "deleteTypeName": "Type {{space}} to confirm",
+      "couldNotDelete": "Couldn't delete space",
+      "deleted": "Deleted {{space}}",
+      "moveTo": "Move to",
+      "moveToSpace": "Move to space…",
+      "searchSpaces": "Search spaces...",
+      "noSpacesFound": "No spaces found",
+      "spaceRoot": "Space root",
+      "moveConfirm": "Move",
+      "confirmMoveInTitle": "Move to {{space}}?",
+      "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note.",
+      "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes.",
+      "confirmMoveInShared": "Its public link will be disabled.",
+      "confirmMoveOutTitle": "Move out of {{space}}?",
+      "confirmMoveOut": "Members of {{space}} will lose access to this note.",
+      "confirmMoveOutFolder": "Members of {{space}} will lose access to this folder and its notes.",
+      "moved": "Moved “{{title}}” to {{target}}",
+      "couldNotMove": "Couldn't move folder",
+      "couldNotMoveNote": "Couldn't move note",
+      "shareRevokeFailed": "Couldn't disable the public link",
+      "folderNameTaken": "Couldn't move “{{name}}” — a folder with that name already exists there",
+      "undo": "Undo",
+      "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
+      "emptyTeamHint": "Spaces shared with you will appear here.",
+      "noteCount_one": "{{count}} note",
+      "noteCount_other": "{{count}} notes",
+      "accessRevoked": "You no longer have access to {{space}}",
+      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to your Personal space",
+      "conflictBanner": "A newer version of this note exists.",
+      "conflictRefresh": "Refresh",
+      "conflictKeep": "Keep editing",
+      "editedBy": "Edited by {{name}} · {{time}}",
+      "members": {
+        "menu": "Members…",
+        "title": "Members of {{space}}",
+        "addPeople": "Add people",
+        "addFailed": "{{failed}} of {{total}} people couldn't be added",
+        "searchPlaceholder": "Search people…",
+        "roleAdmin": "Admin",
+        "roleMember": "Member",
+        "remove": "Remove",
+        "removeConfirm": "Remove {{name}} from {{space}}?",
+        "removeConfirmDescription": "They'll lose access to all notes in this space.",
+        "leave": "Leave space",
+        "leaveConfirm": "Leave {{space}}?",
+        "leaveConfirmDescription": "You'll lose access to all notes in this space.",
+        "implicitAdminCannotLeave": "Workspace owners and admins have access to every team space and can't leave it.",
+        "inviteFooter": "Invite {{email}} to workspace…",
+        "empty": "No one has been added yet"
+      },
+      "invitedTo_one": "You'll join {{count}} team space",
+      "invitedTo_other": "You'll join {{count}} team spaces"
+    },
     "folders": {
       "title": "Folders",
       "soon": "Soon",
@@ -2306,6 +2469,7 @@
       "newNote": "New note",
       "untitled": "Untitled",
       "untitledNote": "Untitled Note",
+      "shared": "Shared",
       "timeNow": "now",
       "minutesAgo": "{{count}}m",
       "hoursAgo": "{{count}}h",
@@ -2482,8 +2646,8 @@
       },
       "errors": {
         "noModel": "No AI model selected. Configure one in Settings.",
-        "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
-        "actionFailed": "Action failed"
+        "actionFailed": "Action failed",
+        "noEndpoint": "No self-hosted server URL set. Configure one in Settings."
       }
     },
     "onboarding": {
@@ -2658,6 +2822,12 @@
         "title": "Hotkey unavailable",
         "description": "The selected hotkey could not be registered. Please choose a different one in settings."
       },
+      "addedToDict": "Added {{words}} to your dictionary",
+      "undo": "Undo",
+      "accessibilityMissing": {
+        "title": "Accessibility permissions required",
+        "description": "OpenWhispr needs accessibility permissions to detect your hotkey and paste text. Please enable them in the Control Panel."
+      },
       "gpuFallback": {
         "title": "GPU acceleration unavailable",
         "description": "Transcription is using the CPU instead. You can disable GPU acceleration in Settings."
@@ -2665,12 +2835,6 @@
       "cleanupFailed": {
         "title": "Cleanup failed",
         "description": "Your dictation was pasted without AI cleanup."
-      },
-      "addedToDict": "Added {{words}} to your dictionary",
-      "undo": "Undo",
-      "accessibilityMissing": {
-        "title": "Accessibility permissions required",
-        "description": "OpenWhispr needs accessibility permissions to detect your hotkey and paste text. Please enable them in the Control Panel."
       }
     },
     "mic": {
@@ -2688,28 +2852,6 @@
       "startListening": "Start listening",
       "hideForNow": "Hide for now"
     }
-  },
-  "dictationTranslation": {
-    "title": "Dictation Translation",
-    "description": "A dedicated hotkey that pastes your dictation translated into another language",
-    "enabled": "Enable Dictation Translation",
-    "enabledDescription": "Dictations started with the translation hotkey are cleaned up and then translated before pasting",
-    "sourceLanguage": "Spoken language",
-    "sourceLanguageDescription": "The language you dictate in — Automatic also handles mixed-language dictation",
-    "targetLanguage": "Translate to",
-    "targetLanguageDescription": "The language of the pasted text",
-    "targetLanguageMissing": "Pick a target language to activate the translation hotkey",
-    "selectLanguage": "Select language…",
-    "prompt": {
-      "title": "Translation Prompt",
-      "description": "Customize how the model translates your dictation"
-    },
-    "hotkeyHint": "Set the hotkey under Settings → General → Translation Hotkey",
-    "targetsLabel": "Target languages",
-    "addTarget": "Add language…",
-    "activeTarget": "Active target language",
-    "removeTarget": "Remove {{language}}",
-    "maxTargets": "Up to {{max}} languages"
   },
   "dictationAgent": {
     "enabled": "Enable voice agent",
@@ -2912,9 +3054,11 @@
       "button": "Share",
       "dialog": {
         "title": "Share note",
+        "description": "Invite people by email or share a link to this note.",
         "searchPlaceholder": "Add people by email",
         "emailLabel": "Recipient email",
         "shareButton": "Share",
+        "createLink": "Create link",
         "copyLink": "Copy link",
         "copied": "Copied",
         "owner": "Owner",
@@ -2923,9 +3067,14 @@
         "resend": "Resend invite",
         "revoke": "Remove",
         "invitationActions": "Invitation actions",
-        "permissionRequired": "Only the note owner can change sharing.",
+        "resendSent": "Invitation sent",
+        "resendThrottled": "Invitation sent recently. Try again in a minute.",
+        "syncPrompt": "Sharing keeps a copy of this note in your OpenWhispr cloud.",
+        "syncAndShare": "Sync note",
         "visibility": {
           "label": "Visibility",
+          "private": "Private",
+          "privateOption": "Private — only you",
           "link": "Anyone with the link",
           "domain": "Everyone at {{domain}} with the link",
           "invited": "Only people invited"
@@ -2934,19 +3083,27 @@
           "invalidEmail": "Enter a valid email address",
           "alreadyInvited": "{{email}} is already invited",
           "inviteFailed": "Couldn't send the invitation. Try again.",
-          "linkUnavailable": "Generate or rotate the link to copy it"
+          "visibilityFailed": "Couldn't update sharing. Try again.",
+          "copyFailed": "Couldn't copy the link. Try again.",
+          "revokeFailed": "Couldn't remove the invitation. Try again.",
+          "resendFailed": "Couldn't resend the invitation. Try again.",
+          "syncFailed": "Couldn't sync this note. Try again.",
+          "loadFailed": "Couldn't load share settings",
+          "retry": "Retry"
         }
       }
     }
   },
   "commandSearch": {
+    "allSpaces": "All spaces",
     "title": "Search",
     "description": "Search across notes and transcripts",
     "shortPlaceholder": "Search",
     "placeholder": "Search notes and transcripts…",
     "sections": {
       "notes": "Notes",
-      "transcripts": "Transcripts"
+      "transcripts": "Transcripts",
+      "jumpTo": "Jump to"
     },
     "noResults": "No results",
     "emptyState": "Start typing to search",
@@ -2991,6 +3148,28 @@
       "you": "You",
       "others": "Others"
     }
+  },
+  "dictationTranslation": {
+    "title": "Dictation Translation",
+    "description": "A dedicated hotkey that pastes your dictation translated into another language",
+    "enabled": "Enable Dictation Translation",
+    "enabledDescription": "Dictations started with the translation hotkey are cleaned up and then translated before pasting",
+    "sourceLanguage": "Spoken language",
+    "sourceLanguageDescription": "The language you dictate in — Automatic also handles mixed-language dictation",
+    "targetLanguage": "Translate to",
+    "targetLanguageDescription": "The language of the pasted text",
+    "targetLanguageMissing": "Pick a target language to activate the translation hotkey",
+    "selectLanguage": "Select language…",
+    "prompt": {
+      "title": "Translation Prompt",
+      "description": "Customize how the model translates your dictation"
+    },
+    "hotkeyHint": "Set the hotkey under Settings → General → Translation Hotkey",
+    "targetsLabel": "Target languages",
+    "addTarget": "Add language…",
+    "activeTarget": "Active target language",
+    "removeTarget": "Remove {{language}}",
+    "maxTargets": "Up to {{max}} languages"
   },
   "meetingNotification": {
     "title": "Meeting detected",

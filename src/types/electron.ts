@@ -53,12 +53,15 @@ export interface NoteItem {
   source_file: string | null;
   audio_duration_seconds: number | null;
   folder_id: number | null;
+  space_id: number;
   transcript: string | null;
   calendar_event_id: string | null;
   participants: string | null;
   diarization_enabled: number | null;
   expected_speaker_count: number | null;
   cloud_id: string | null;
+  is_shared: number;
+  share_token: string | null;
   created_at: string;
   updated_at: string;
   client_note_id: string;
@@ -66,6 +69,9 @@ export interface NoteItem {
   deleted_at: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
+  // 1 while a cloud-backed row that left a team still owes its scope
+  // retraction push (D6); cleared when the row settles.
+  left_team?: number;
 }
 
 export type ShareVisibility = "private" | "link" | "domain" | "invited";
@@ -93,6 +99,7 @@ export interface FolderItem {
   name: string;
   is_default: number;
   sort_order: number;
+  space_id: number;
   created_at: string;
   updated_at: string;
   client_folder_id: string;
@@ -101,6 +108,26 @@ export interface FolderItem {
   deleted_at: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
+  // 1 while a cloud-backed row that left a team still owes its scope
+  // retraction push (D6); cleared when the row settles.
+  left_team?: number;
+}
+
+export interface SpaceItem {
+  id: number;
+  client_space_id: string;
+  cloud_team_id: string | null;
+  workspace_id: string | null;
+  kind: "private" | "team";
+  name: string;
+  emoji: string | null;
+  sort_order: number;
+  my_role: "admin" | "member" | null;
+  member_count: number | null;
+  sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DictionaryEntryItem {
@@ -128,7 +155,6 @@ export interface SnippetEntryItem {
 }
 
 export type WorkspaceRole = "owner" | "admin" | "member";
-export type TeamRole = "admin" | "member";
 
 export interface Workspace {
   id: string;
@@ -157,12 +183,15 @@ export interface WorkspaceMember {
   image: string | null;
 }
 
+export type TeamRole = "admin" | "member";
+
 export interface Team {
   id: string;
   workspace_id: string;
   name: string;
   slug: string;
   description: string | null;
+  emoji?: string | null;
   created_at: string;
   updated_at: string;
   member_count?: number;
@@ -180,7 +209,7 @@ export interface TeamMember {
 export interface WorkspaceInvitation {
   id: string;
   email: string;
-  workspace_role: TeamRole;
+  workspace_role: WorkspaceRole;
   team_ids: string[];
   invited_by_user_id: string;
   expires_at: string;
@@ -192,7 +221,7 @@ export interface WorkspaceInvitation {
 export interface InvitationPreview {
   id: string;
   email: string;
-  workspace_role: TeamRole;
+  workspace_role: WorkspaceRole;
   team_ids: string[];
   expires_at: string;
   workspace_id: string;
@@ -615,13 +644,15 @@ declare global {
         noteType?: string,
         sourceFile?: string | null,
         audioDuration?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceId?: number | null
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
         noteType?: string | null,
         limit?: number,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceId?: number | null
       ) => Promise<NoteItem[]>;
       updateNote: (
         id: number,
@@ -632,11 +663,14 @@ declare global {
           enhancement_prompt?: string | null;
           enhanced_at_content_hash?: string | null;
           folder_id?: number | null;
+          space_id?: number;
           transcript?: string | null;
           calendar_event_id?: string | null;
           participants?: string | null;
           diarization_enabled?: number | null;
           expected_speaker_count?: number | null;
+          client_note_id?: string;
+          cloud_id?: string | null;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
@@ -649,25 +683,74 @@ declare global {
         format: "txt" | "srt" | "json" | "md"
       ) => Promise<{ success: boolean; error?: string }>;
       exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
-      searchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
-      semanticSearchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
+      searchNotes: (query: string, limit?: number, spaceId?: number | null) => Promise<NoteItem[]>;
+      semanticSearchNotes: (
+        query: string,
+        limit?: number,
+        spaceId?: number | null
+      ) => Promise<NoteItem[]>;
       semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
       onSemanticReindexProgress: (
         callback: (data: { done: number; total: number }) => void
       ) => () => void;
       updateNoteCloudId: (id: number, cloudId: string) => Promise<NoteItem>;
+      updateNoteShareState: (
+        id: number,
+        state: { is_shared: number; share_token?: string | null }
+      ) => Promise<NoteItem>;
 
       // Folder operations
-      getFolders: () => Promise<FolderItem[]>;
+      getFolders: (spaceId?: number | null) => Promise<FolderItem[]>;
       createFolder: (
-        name: string
+        name: string,
+        spaceId?: number | null
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
       renameFolder: (
         id: number,
         name: string
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
-      getFolderNoteCounts: () => Promise<Array<{ folder_id: number; count: number }>>;
+      moveFolderToSpace: (
+        id: number,
+        spaceId: number
+      ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
+      getFolderNoteCounts: () => Promise<
+        Array<{ space_id: number; folder_id: number | null; count: number }>
+      >;
+
+      // Space operations
+      getSpaces?: () => Promise<SpaceItem[]>;
+      createSpace?: (space: {
+        name: string;
+        emoji?: string | null;
+      }) => Promise<{ success: boolean; space?: SpaceItem; error?: string }>;
+      updateSpace?: (
+        id: number,
+        updates: { name?: string; emoji?: string | null }
+      ) => Promise<{ success: boolean; space?: SpaceItem; error?: string }>;
+      deleteSpace?: (id: number) => Promise<{ success: boolean; id?: number; error?: string }>;
+      purgeSpace?: (id: number) => Promise<{
+        success: boolean;
+        noteIds?: number[];
+        folderNames?: string[];
+        spaceId?: number;
+        relocatedNotes?: NoteItem[];
+        relocatedCount?: number;
+        relocatedTitles?: string[];
+        error?: string;
+      }>;
+      getSpaceByCloudTeamId?: (cloudTeamId: string) => Promise<SpaceItem | null>;
+      upsertSpaceFromCloud?: (team: Record<string, unknown>) => Promise<SpaceItem>;
+      updateSpaceMemberCount?: (
+        id: number,
+        count: number
+      ) => Promise<{ success: boolean; space?: SpaceItem; error?: string }>;
+      setSpaceSyncStatus?: (
+        id: number,
+        status: SpaceItem["sync_status"]
+      ) => Promise<{ success: boolean }>;
+      onSpacePurged?: (callback: (payload: { spaceId: number }) => void) => () => void;
+      onSpaceSynced?: (callback: (space: SpaceItem) => void) => () => void;
 
       // Note files (markdown mirror)
       noteFilesSetEnabled?: (
@@ -753,6 +836,13 @@ declare global {
       onNoteAdded?: (callback: (note: NoteItem) => void) => () => void;
       onNoteUpdated?: (callback: (note: NoteItem) => void) => () => void;
       onNoteDeleted?: (callback: (payload: { id: number }) => void) => () => void;
+      onNoteSynced?: (callback: (note: NoteItem) => void) => () => void;
+      onFolderSynced?: (callback: (folder: FolderItem) => void) => () => void;
+      onFolderDeleted?: (callback: (payload: { id: number }) => void) => () => void;
+
+      // Cross-window sync events
+      emitSyncEvent?: (name: string, payload?: unknown) => Promise<{ success: boolean }>;
+      onSyncEvent?: (callback: (event: { name: string; payload?: unknown }) => void) => () => void;
 
       // Database event listeners
       onTranscriptionAdded?: (callback: (item: TranscriptionItem) => void) => () => void;
@@ -1342,12 +1432,19 @@ declare global {
         error?: string;
       }>;
 
-      // Authenticated cloud API proxy
-      cloudApiRequest?: (opts: { method?: string; path: string; body?: unknown }) => Promise<{
+      // Authenticated cloud API proxy (`public: true` skips the auth requirement)
+      cloudApiRequest?: (opts: {
+        method?: string;
+        path: string;
+        body?: unknown;
+        public?: boolean;
+      }) => Promise<{
         success: boolean;
         data?: unknown;
         error?: string;
         code?: string;
+        status?: number;
+        details?: unknown;
       }>;
 
       // Cloud audio file transcription
@@ -1392,6 +1489,7 @@ declare global {
 
       // Workspace invitation deep link
       onWorkspaceInvitationToken?: (callback: (token: string) => void) => () => void;
+      getPendingInvitationToken?: () => Promise<string | null>;
 
       // AssemblyAI Streaming
       assemblyAiStreamingWarmup?: (options?: {
@@ -1986,30 +2084,57 @@ declare global {
       sendDictationPreviewAudio?: (data: ArrayBuffer) => void;
 
       // Sync operations
-      getPendingNotes?: () => Promise<NoteItem[]>;
+      getPendingNotes?: (spaceKind?: "private" | "team") => Promise<NoteItem[]>;
       getPendingNoteDeletes?: () => Promise<NoteItem[]>;
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
       upsertNoteFromCloud?: (
         cloudNote: Record<string, unknown>,
-        localFolderId: number | null
+        localFolderId: number | null,
+        localSpaceId?: number | null
       ) => Promise<NoteItem>;
       markNoteSynced?: (id: number, cloudId: string) => Promise<void>;
+      markNoteSyncedIfUnchanged?: (
+        id: number,
+        cloudId: string,
+        snapshotUpdatedAt: string
+      ) => Promise<{ success: boolean; changes: number }>;
       markNoteSyncError?: (id: number) => Promise<void>;
       hardDeleteNote?: (id: number) => Promise<void>;
 
-      getPendingFolders?: () => Promise<FolderItem[]>;
+      getPendingFolders?: (spaceKind?: "private" | "team") => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
-      upsertFolderFromCloud?: (cloudFolder: Record<string, unknown>) => Promise<FolderItem>;
+      upsertFolderFromCloud?: (
+        cloudFolder: Record<string, unknown>,
+        localSpaceId?: number | null
+      ) => Promise<FolderItem>;
       markFolderSynced?: (id: number, cloudId: string) => Promise<void>;
+      markFolderSyncedIfUnchanged?: (
+        id: number,
+        cloudId: string,
+        snapshotUpdatedAt: string
+      ) => Promise<{ success: boolean; changes: number }>;
       adoptFolderIdentity?: (
         id: number,
         clientFolderId: string,
         cloudId: string,
         updatedAt?: string
       ) => Promise<void>;
+      forkFolderIdentity?: (id: number) => Promise<{ success: boolean }>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
+      relocateRevokedFolder?: (
+        id: number,
+        privateSpaceId: number,
+        preserveFolder?: boolean
+      ) => Promise<{
+        success: boolean;
+        folder?: FolderItem | null;
+        folderName?: string;
+        relocatedNotes?: NoteItem[];
+        deletedNoteIds?: number[];
+        error?: string;
+      }>;
 
       getPendingConversations?: () => Promise<ConversationPreview[]>;
       getPendingConversationDeletes?: () => Promise<ConversationPreview[]>;

@@ -105,6 +105,9 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel?: () => void;
   variant?: "default" | "destructive";
+  /** Extra content between the header and the footer (e.g. a type-to-confirm input). */
+  children?: React.ReactNode;
+  confirmDisabled?: boolean;
 }
 
 const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -117,6 +120,8 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
   variant = "default",
+  children,
+  confirmDisabled = false,
 }) => {
   const handleConfirm = () => {
     onConfirm();
@@ -135,6 +140,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
+        {children}
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel}>
             {cancelText}
@@ -142,6 +148,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <Button
             variant={variant === "destructive" ? "destructive" : "default"}
             onClick={handleConfirm}
+            disabled={confirmDisabled}
           >
             {confirmText}
           </Button>

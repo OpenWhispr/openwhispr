@@ -324,14 +324,20 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   }, []);
 
   useEffect(() => {
-    window.electronAPI.getFolders?.().then((f) => {
+    // Uploads and URL downloads are a personal flow: scope the folder list
+    // (and the by-name "Videos" destination lookup) to the private space so a
+    // same-named team folder can never capture them.
+    (async () => {
+      const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
+      const privateSpace = spaces.find((s) => s.kind === "private");
+      const f = (await window.electronAPI.getFolders?.(privateSpace?.id ?? null)) ?? [];
       setFolders(f);
       const personal = findDefaultFolder(f);
       if (personal) {
         setSelectedFolderId(String(personal.id));
         setBatchFolderId(String(personal.id));
       }
-    });
+    })();
   }, []);
 
   useEffect(() => {

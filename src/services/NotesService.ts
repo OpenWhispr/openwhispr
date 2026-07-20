@@ -2,6 +2,8 @@ import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
 
 interface NoteInput {
   client_note_id?: string;
+  workspace_id?: string | null;
+  team_id?: string | null;
   title?: string | null;
   content?: string;
   enhanced_content?: string | null;
@@ -20,7 +22,7 @@ interface NoteInput {
   updated_at?: string;
 }
 
-interface CloudNote {
+export interface CloudNote {
   id: string;
   client_note_id: string | null;
   title: string | null;
@@ -37,6 +39,13 @@ interface CloudNote {
   calendar_event_id: string | null;
   diarization_enabled: number | null;
   expected_speaker_count: number | null;
+  workspace_id: string | null;
+  team_id: string | null;
+  updated_by_user_id: string | null;
+  previous_team_id?: string | null;
+  // Redacted stub for a row that moved out of one of the caller's teams —
+  // only id/client_note_id/scope/updated_at are present.
+  access_removed?: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -70,12 +79,14 @@ async function deleteNote(id: string): Promise<void> {
 async function list(
   limit?: number,
   before?: string,
-  since?: string
+  since?: string,
+  scope?: "all"
 ): Promise<{ notes: CloudNote[] }> {
   const params = new URLSearchParams();
   if (limit !== undefined) params.set("limit", String(limit));
   if (before !== undefined) params.set("before", before);
   if (since !== undefined) params.set("since", since);
+  if (scope !== undefined) params.set("scope", scope);
   const query = params.toString();
   return cloudGet<{ notes: CloudNote[] }>(`/api/notes/list${query ? `?${query}` : ""}`);
 }
@@ -94,10 +105,19 @@ async function deleteAll(): Promise<{ deleted: number; errors: number }> {
   return { deleted: results.length - errors, errors };
 }
 
-async function search(query: string, limit?: number): Promise<{ notes: SearchResult[] }> {
+// scope "all" opts into team results (legacy clients stay personal-only);
+// team_id narrows to a single team and takes precedence over scope.
+async function search(
+  query: string,
+  limit?: number,
+  scope?: "all",
+  teamId?: string
+): Promise<{ notes: SearchResult[] }> {
   return cloudPost<{ notes: SearchResult[] }>("/api/notes/search", {
     query,
     ...(limit !== undefined ? { limit } : {}),
+    ...(scope !== undefined ? { scope } : {}),
+    ...(teamId !== undefined ? { team_id: teamId } : {}),
   });
 }
 

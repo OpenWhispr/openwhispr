@@ -46,6 +46,7 @@ import { isAccessibilitySkipped } from "../utils/permissions";
 import {
   setActiveNoteId,
   setActiveFolderId,
+  navigateToContainer,
   useActiveNoteId,
   initializeNotes,
 } from "../stores/noteStore";
@@ -53,6 +54,7 @@ import { fetchProviders as fetchStreamingProviders } from "../stores/streamingPr
 import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
@@ -60,7 +62,6 @@ import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
-import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
 
@@ -197,6 +198,23 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     });
   }, []);
 
+  // One-time background reindex after the spaces migration: pre-existing
+  // Qdrant points carry no space_id payload, so scoped semantic search would
+  // miss them. Delayed so the Qdrant sidecar has time to come up; if it isn't
+  // ready yet the flag stays unset and the next launch retries.
+  useEffect(() => {
+    if (localStorage.getItem("semanticSpaceReindexDone") === "true") return;
+    const timer = setTimeout(() => {
+      window.electronAPI
+        ?.semanticReindexAll?.()
+        .then((result) => {
+          if (result?.success) localStorage.setItem("semanticSpaceReindexDone", "true");
+        })
+        .catch(() => {});
+    }, 15_000);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     if (platform !== "darwin") return;
     window.electronAPI?.getPostMigrationState?.().then((state) => {
@@ -288,15 +306,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
 
   useEffect(() => {
-    if (!WORKSPACES_ENABLED) return;
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);
+      // Consume the main-process stash so a handled push isn't re-pulled on a
+      // later remount.
+      void window.electronAPI?.getPendingInvitationToken?.();
+    });
+    window.electronAPI?.getPendingInvitationToken?.().then((token) => {
+      if (token) setInvitationToken(token);
     });
     return () => unsubscribe?.();
   }, []);
 
   useEffect(() => {
-    if (!WORKSPACES_ENABLED || !authLoaded || !isSignedIn) return;
+    // Also when signed out (the modal's "Sign in to accept" handles auth);
+    // isSignedIn stays in the deps so a stored token resurfaces after sign-in.
+    if (!authLoaded) return;
     const pending = consumePendingInvitationToken();
     if (pending) {
       setInvitationToken(pending);
@@ -801,16 +826,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      {WORKSPACES_ENABLED && (
-        <AcceptInvitationModal
-          token={invitationToken}
-          onClose={() => setInvitationToken(null)}
-          isSignedIn={isSignedIn}
-          onSignIn={() => {
-            setInvitationToken(null);
-          }}
-        />
-      )}
+      <AcceptInvitationModal token={invitationToken} onClose={() => setInvitationToken(null)} />
 
       {showSearch && (
         <Suspense fallback={null}>
@@ -818,9 +834,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             open={showSearch}
             onOpenChange={setShowSearch}
             transcriptions={history}
-            onNoteSelect={(id, folderId) => {
-              if (folderId) setActiveFolderId(folderId);
+            onNoteSelect={(id, folderId, spaceId) => {
+              if (folderId != null) setActiveFolderId(folderId);
+              else if (spaceId != null) navigateToContainer(spaceId, null);
               setActiveNoteId(id);
+              setActiveView("personal-notes");
+            }}
+            onContainerSelect={(spaceId, folderId) => {
+              navigateToContainer(spaceId, folderId);
               setActiveView("personal-notes");
             }}
             onTranscriptSelect={() => {
@@ -1094,6 +1115,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         )}
       </div>
       <BackgroundActionToastListener />
+      <SpaceSyncToastListener />
     </div>
   );
 }

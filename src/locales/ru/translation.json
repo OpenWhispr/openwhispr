@@ -385,7 +385,6 @@
       "showInFolderWindows": "Показать в Проводнике",
       "showInFolderLinux": "Показать в файловом менеджере",
       "retryTranscription": "Повторить расшифровку",
-      "retryTranslationMode": "Режим перевода",
       "retrying": "Повторная расшифровка…",
       "retrySuccess": "Расшифровка обновлена",
       "retryError": "Не удалось повторить расшифровку",
@@ -400,7 +399,8 @@
         "recordingWithDuration": "Отменённая запись · {{duration}}",
         "recover": "Восстановить",
         "recovered": "Восстановлено"
-      }
+      },
+      "retryTranslationMode": "Режим перевода"
     },
     "cloudMigration": {
       "title": "Добро пожаловать в OpenWhispr Cloud",
@@ -561,12 +561,6 @@
         "title": "Резервный режим",
         "description": "Локальный Whisper не сработал. Использован OpenAI API."
       },
-      "translationFallback": {
-        "unreachableTitle": "Перевод недоступен",
-        "unreachableDescription": "Ваша диктовка вставлена без перевода. Проверьте настройки перевода.",
-        "failedTitle": "Не удалось выполнить перевод",
-        "failedDescription": "Вставлен исходный текст. Вы можете повторить попытку в Истории."
-      },
       "noAudio": {
         "title": "Звук не обнаружен",
         "description": "В записи не обнаружен звук. Попробуйте ещё раз."
@@ -580,6 +574,12 @@
         "offline": "Вы офлайн. Облачная транскрипция требует подключения к интернету.",
         "dailyLimitReached": "Достигнут дневной лимит транскрипций. Попробуйте завтра или обновите тариф.",
         "providerRateLimited": "Ваш провайдер транскрипции ограничил запрос. Подождите немного и попробуйте снова."
+      },
+      "translationFallback": {
+        "unreachableTitle": "Перевод недоступен",
+        "unreachableDescription": "Ваша диктовка вставлена без перевода. Проверьте настройки перевода.",
+        "failedTitle": "Не удалось выполнить перевод",
+        "failedDescription": "Вставлен исходный текст. Вы можете повторить попытку в Истории."
       }
     },
     "clipboard": {
@@ -997,7 +997,6 @@
       "save": "Сохранить"
     },
     "defaultTestInput": "Привет, Whispr, какая сегодня погода?",
-    "defaultTestInputTranslate": "Сегодня прекрасная погода, хочешь прогуляться?",
     "dialogs": {
       "reset": {
         "description": "Промпт сброшен до значения по умолчанию.",
@@ -1022,8 +1021,6 @@
     },
     "test": {
       "addressHint": "Попробуйте обратиться к «{{agentName}}» для проверки режима инструкций",
-      "translateHint": "Текст будет переведён на {{language}}",
-      "translation": "Перевод",
       "aiModels": "ИИ-модели",
       "baseUrlMissing": "Базовый URL для {{provider}} не указан. Добавьте его в настройках ИИ-моделей.",
       "cleanup": "Очистка",
@@ -1044,6 +1041,8 @@
       "run": "Запустить тест",
       "customEndpoint": "Пользовательская конечная точка",
       "apiKeyMissing": "API-ключ {{provider}} не настроен. Добавьте его в настройках ИИ-моделей.",
+      "translateHint": "Текст будет переведён на {{language}}",
+      "translation": "Перевод",
       "translationDisabled": "Включите перевод диктовки, чтобы протестировать этот промпт",
       "noTargetLanguage": "Сначала выберите язык перевода"
     },
@@ -1051,7 +1050,8 @@
       "customPrompt": "Пользовательский промпт",
       "defaultPrompt": "Промпт по умолчанию",
       "modified": "Изменён"
-    }
+    },
+    "defaultTestInputTranslate": "Сегодня прекрасная погода, хочешь прогуляться?"
   },
   "settingsModal": {
     "groups": {
@@ -1094,8 +1094,8 @@
         "label": "Система"
       },
       "workspace": {
-        "label": "Workspace",
-        "description": "Mitglieder, Teams, Abrechnung und API-Schlüssel"
+        "description": "Участники, оплата и API-ключи",
+        "label": "Рабочее пространство"
       }
     },
     "title": "Настройки"
@@ -1444,10 +1444,6 @@
         "title": "Горячая клавиша голосового агента",
         "description": "Скажите, что нужно — ИИ-агент напечатает результат, а не ваши слова"
       },
-      "translationHotkey": {
-        "title": "Горячая клавиша перевода",
-        "description": "Диктуйте на любом языке — вставленный текст будет переведён"
-      },
       "microphone": {
         "description": "Выберите устройство ввода для диктовки",
         "title": "Микрофон"
@@ -1611,6 +1607,10 @@
         "title": "Обновления",
         "versionPlaceholder": "—",
         "whatsNew": "Что нового в v{{version}}"
+      },
+      "translationHotkey": {
+        "title": "Горячая клавиша перевода",
+        "description": "Диктуйте на любом языке — вставленный текст будет переведён"
       }
     },
     "permissions": {
@@ -1683,9 +1683,9 @@
       "tabs": {
         "dictationCleanup": "Очистка диктовки",
         "dictationAgent": "Voice Agent",
-        "dictationTranslation": "Перевод",
         "noteFormatting": "Форматирование заметок",
-        "chatIntelligence": "Чат"
+        "chatIntelligence": "Чат",
+        "dictationTranslation": "Перевод"
       }
     },
     "noteFormatting": {
@@ -1800,88 +1800,177 @@
       "apiKeyOptional": "API-ключ (необязательно)"
     },
     "workspace": {
-      "title": "Workspace",
-      "description": "Arbeiten Sie zusammen, teilen Sie Notizen und verwalten Sie die Abrechnung an einem Ort.",
+      "title": "Рабочее пространство",
+      "description": "Работайте с командой, делитесь заметками и управляйте оплатой в одном месте.",
       "empty": {
-        "title": "Ersten Workspace erstellen",
-        "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
-        "create": "Workspace erstellen"
+        "title": "Создайте первое рабочее пространство",
+        "description": "Рабочие пространства позволяют работать с командой и делиться заметками.",
+        "create": "Создать рабочее пространство"
+      },
+      "loadError": {
+        "title": "Не удалось загрузить рабочие пространства",
+        "description": "Проверьте подключение и попробуйте ещё раз.",
+        "retry": "Повторить"
       },
       "tab": {
-        "general": "Allgemein",
-        "members": "Mitglieder",
-        "teams": "Teams",
-        "billing": "Abrechnung",
-        "developer": "Entwickler"
+        "general": "Общие",
+        "members": "Участники",
+        "teams": "Команды",
+        "billing": "Оплата",
+        "developer": "Разработчик"
       },
       "role": {
-        "owner": "Inhaber",
-        "admin": "Administrator",
-        "member": "Mitglied"
+        "owner": "Владелец",
+        "admin": "Администратор",
+        "member": "Участник"
       },
       "general": {
-        "nameLabel": "Workspace-Name",
-        "slugLabel": "Slug",
-        "slugHint": "Wird in URLs verwendet. Nur Kleinbuchstaben, Ziffern und Bindestriche.",
-        "saved": "Workspace aktualisiert",
-        "dangerTitle": "Workspace löschen",
-        "dangerDescription": "Alle geteilten Notizen, Ordner und Integrationen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
-        "delete": "Workspace löschen",
-        "confirmTitle": "{{name}} löschen?",
-        "confirmDescription": "Dies kündigt das Abonnement und entfernt alle Workspace-Daten dauerhaft."
+        "nameLabel": "Название рабочего пространства",
+        "slugLabel": "Короткое имя",
+        "slugHint": "Используется в URL и ссылках-приглашениях. Только строчные буквы, цифры и дефисы.",
+        "slugInvalid": "Только строчные буквы, цифры и дефисы.",
+        "saved": "Рабочее пространство обновлено",
+        "dangerTitle": "Удалить рабочее пространство",
+        "dangerDescription": "Все общие заметки, папки и интеграции будут удалены. Это действие нельзя отменить.",
+        "delete": "Удалить рабочее пространство",
+        "confirmTitle": "Удалить {{name}}?",
+        "confirmDescription": "Подписка будет отменена, а все данные рабочего пространства безвозвратно удалены.",
+        "deleting": "Удаление…",
+        "deleted": "Рабочее пространство удалено",
+        "leaveTitle": "Покинуть рабочее пространство",
+        "leaveDescription": "Вы потеряете доступ к этому рабочему пространству и его общим заметкам.",
+        "leave": "Покинуть рабочее пространство",
+        "leaving": "Выход…",
+        "leaveConfirm": {
+          "title": "Покинуть {{name}}?",
+          "description": "Вы сразу потеряете доступ. Администратор сможет пригласить вас снова."
+        },
+        "left": "Вы покинули {{name}}"
       },
       "members": {
-        "title": "Mitglieder",
-        "description": "{{count}} von {{seats}} Plätzen belegt.",
-        "invite": "Einladen",
-        "empty": "Noch keine Mitglieder.",
-        "roleUpdated": "Rolle aktualisiert",
-        "promote": "Zum Administrator machen",
-        "demote": "Zum Mitglied machen",
-        "transferOwnership": "Eigentum übertragen",
-        "remove": "Aus Workspace entfernen"
-      },
-      "invites": {
-        "title": "Ausstehende Einladungen",
-        "resend": "Erneut senden",
-        "revoke": "Widerrufen",
-        "resent": "Einladung erneut gesendet"
+        "title": "Участники",
+        "description": "Занято {{count}} из {{seats}} мест.",
+        "invite": "Пригласить",
+        "empty": "Пока нет участников.",
+        "loadError": "Не удалось загрузить участников.",
+        "roleUpdated": "Роль обновлена",
+        "promote": "Сделать администратором",
+        "demote": "Сделать участником",
+        "transferOwnership": "Передать владение",
+        "remove": "Удалить из рабочего пространства",
+        "removeConfirm": {
+          "title": "Удалить этого участника?",
+          "description": "{{name}} сразу потеряет доступ к {{workspace}}."
+        },
+        "transferConfirm": {
+          "title": "Передать владение?",
+          "description": "{{name}} станет владельцем {{workspace}}. Ваша роль изменится на администратора, и вернуть владение сможет только новый владелец."
+        }
       },
       "teams": {
-        "title": "Teams",
-        "description": "Mitglieder gruppieren für gezieltes Teilen.",
-        "new": "Neues Team",
-        "empty": "Noch keine Teams.",
-        "createFirst": "Erstellen Sie Ihr erstes Team",
-        "createTitle": "Team erstellen",
-        "nameLabel": "Team-Name",
-        "descriptionLabel": "Beschreibung",
-        "memberCount": "{{count}} Mitglieder"
+        "title": "Команды",
+        "description": "Группируйте участников для адресного доступа.",
+        "new": "Новая команда",
+        "empty": "Команд пока нет.",
+        "createFirst": "Создайте первую команду",
+        "createTitle": "Создать команду",
+        "nameLabel": "Название команды",
+        "memberCount_one": "{{count}} участник",
+        "memberCount_few": "{{count}} участника",
+        "memberCount_many": "{{count}} участников",
+        "memberCount_other": "{{count}} участника"
+      },
+      "invites": {
+        "title": "Ожидающие приглашения",
+        "expiresIn_one": "Истекает через {{count}} день",
+        "expiresIn_few": "Истекает через {{count}} дня",
+        "expiresIn_many": "Истекает через {{count}} дней",
+        "expiresIn_other": "Истекает через {{count}} дня",
+        "expired": "Истекло",
+        "loadError": "Не удалось загрузить приглашения.",
+        "resend": "Отправить снова",
+        "resending": "Отправка…",
+        "revoke": "Отозвать",
+        "resent": "Приглашение отправлено повторно",
+        "revokeFailed": "Не удалось отозвать приглашение",
+        "revokeConfirm": {
+          "title": "Отозвать это приглашение?",
+          "description": "Ссылка-приглашение для {{email}} перестанет работать."
+        }
       },
       "billing": {
-        "title": "Abrechnung",
-        "description": "Plan, Plätze und Zahlung.",
-        "plan": "Plan",
-        "seats": "Plätze",
-        "nextInvoice": "Nächste Rechnung",
-        "manageStripe": "In Stripe verwalten",
-        "startSubscription": "Abonnement starten"
+        "title": "Оплата",
+        "description": "Тариф, места и оплата.",
+        "plan": "Тариф",
+        "seats": "Места",
+        "ownerOnly": "Управлять подпиской может только владелец рабочего пространства.",
+        "nextInvoice": "Следующий счёт",
+        "manageStripe": "Управлять в Stripe",
+        "opening": "Открытие…",
+        "startSubscription": "Оформить подписку",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "Бесплатный"
+        },
+        "status": {
+          "active": "Активна",
+          "trialing": "Пробный период",
+          "past_due": "Просрочена",
+          "canceled": "Отменена",
+          "incomplete": "Не завершена",
+          "unpaid": "Не оплачена"
+        }
       },
       "developer": {
-        "title": "API-Schlüssel",
-        "description": "Programmatischer Zugriff auf diesen Workspace.",
-        "empty": "Noch keine API-Schlüssel. Erstellen Sie einen für Integrationen.",
-        "new": "Neuer Schlüssel",
-        "create": "Schlüssel erstellen",
-        "createTitle": "API-Schlüssel erstellen",
-        "createDescription": "Wählen Sie die Berechtigungen. Sie können den Schlüssel jederzeit widerrufen.",
-        "nameLabel": "Schlüsselname",
-        "namePlaceholder": "Produktionsintegration",
-        "revoke": "Schlüssel widerrufen",
-        "lastUsed": "Zuletzt verwendet {{date}}",
-        "neverUsed": "Nie verwendet",
-        "keyCreatedTitle": "API-Schlüssel erstellt",
-        "keyCreatedDescription": "Kopieren Sie diesen Schlüssel jetzt — Sie können ihn nicht erneut sehen."
+        "title": "API-ключи",
+        "description": "Программный доступ в рамках этого рабочего пространства.",
+        "empty": "Пока нет API-ключей. Создайте ключ для интеграции с этим рабочим пространством.",
+        "loadError": "Не удалось загрузить API-ключи.",
+        "new": "Новый ключ",
+        "create": "Создать ключ",
+        "createTitle": "Создать API-ключ",
+        "createDescription": "Выберите разрешения для этого ключа. Вы можете отозвать его в любой момент.",
+        "nameLabel": "Название ключа",
+        "namePlaceholder": "Интеграция для продакшена",
+        "revoke": "Отозвать ключ",
+        "lastUsed": "Последнее использование: {{date}}",
+        "neverUsed": "Не использовался",
+        "keyCreatedTitle": "API-ключ создан",
+        "keyCreatedDescription": "Скопируйте ключ сейчас — увидеть его снова будет невозможно.",
+        "revokeConfirm": {
+          "title": "Отозвать этот ключ?",
+          "description": "{{name}} сразу перестанет работать. Все интеграции, использующие этот ключ, начнут выдавать ошибки."
+        },
+        "scopes": {
+          "notes": {
+            "title": "Заметки",
+            "read": "Чтение заметок",
+            "write": "Запись заметок"
+          },
+          "folders": {
+            "title": "Папки",
+            "read": "Чтение папок",
+            "write": "Запись папок"
+          },
+          "transcriptions": {
+            "title": "Транскрипции",
+            "read": "Чтение транскрипций"
+          },
+          "members": {
+            "title": "Участники",
+            "read": "Чтение участников",
+            "write": "Управление участниками"
+          },
+          "billing": {
+            "title": "Оплата",
+            "read": "Чтение данных об оплате"
+          },
+          "full": {
+            "title": "Полный доступ",
+            "admin": "Администратор рабочего пространства"
+          }
+        }
       }
     }
   },
@@ -2088,6 +2177,81 @@
       "searchNotes": "Поиск заметок",
       "actions": "Действия"
     },
+    "spaces": {
+      "privateSpaces": "Личные пространства",
+      "teamSpaces": "Командные пространства",
+      "personal": "Личное",
+      "privateTooltip": "Только вы видите своё личное пространство",
+      "newSpace": "Новое пространство",
+      "createTitle": "Создать пространство",
+      "nameLabel": "Название",
+      "emojiLabel": "Эмодзи",
+      "create": "Создать",
+      "couldNotCreate": "Не удалось создать пространство",
+      "rename": "Переименовать",
+      "changeEmoji": "Изменить эмодзи",
+      "couldNotRename": "Не удалось переименовать пространство",
+      "deleteSpace": "Удалить пространство",
+      "deleteConfirmTitle": "Удалить пространство?",
+      "deleteConfirmDescription": "Пространство {{space}} со всеми его папками и заметками будет безвозвратно удалено с этого устройства.",
+      "deleteConfirmTeamDescription": "Это удалит {{space}} для всех. Участники потеряют доступ ко всем его папкам и заметкам.",
+      "deleteTypeName": "Введите {{space}} для подтверждения",
+      "couldNotDelete": "Не удалось удалить пространство",
+      "deleted": "{{space}} удалено",
+      "moveTo": "Переместить в",
+      "moveToSpace": "Переместить в пространство…",
+      "searchSpaces": "Поиск пространств...",
+      "noSpacesFound": "Пространства не найдены",
+      "spaceRoot": "Корень пространства",
+      "moveConfirm": "Переместить",
+      "confirmMoveInTitle": "Переместить в {{space}}?",
+      "confirmMoveIn": "Все в {{space}} смогут просматривать и редактировать эту заметку.",
+      "confirmMoveInFolder": "Все в {{space}} смогут просматривать и редактировать эту папку и её заметки.",
+      "confirmMoveInShared": "Публичная ссылка будет отключена.",
+      "confirmMoveOutTitle": "Переместить из {{space}}?",
+      "confirmMoveOut": "Участники {{space}} потеряют доступ к этой заметке.",
+      "confirmMoveOutFolder": "Участники {{space}} потеряют доступ к этой папке и её заметкам.",
+      "moved": "«{{title}}» перемещено в {{target}}",
+      "couldNotMove": "Не удалось переместить папку",
+      "couldNotMoveNote": "Не удалось переместить заметку",
+      "shareRevokeFailed": "Не удалось отключить публичную ссылку",
+      "folderNameTaken": "Не удалось переместить «{{name}}» — там уже есть папка с таким именем",
+      "undo": "Отменить",
+      "emptySpace": "Пока нет заметок. Заметки здесь видны всем в {{space}}.",
+      "emptyTeamHint": "Пространства, которыми с вами поделились, появятся здесь.",
+      "noteCount_one": "{{count}} заметка",
+      "noteCount_few": "{{count}} заметки",
+      "noteCount_many": "{{count}} заметок",
+      "noteCount_other": "{{count}} заметки",
+      "accessRevoked": "У вас больше нет доступа к {{space}}",
+      "movedToPersonal": "У вас больше нет доступа к {{space}} — «{{title}}» перемещена в ваше личное пространство",
+      "conflictBanner": "Существует более новая версия этой заметки.",
+      "conflictRefresh": "Обновить",
+      "conflictKeep": "Продолжить редактирование",
+      "editedBy": "Изменено: {{name}} · {{time}}",
+      "members": {
+        "menu": "Участники…",
+        "title": "Участники {{space}}",
+        "addPeople": "Добавить людей",
+        "addFailed": "Не удалось добавить {{failed}} из {{total}} участников",
+        "searchPlaceholder": "Поиск людей…",
+        "roleAdmin": "Администратор",
+        "roleMember": "Участник",
+        "remove": "Удалить",
+        "removeConfirm": "Удалить {{name}} из {{space}}?",
+        "removeConfirmDescription": "Этот участник потеряет доступ ко всем заметкам этого пространства.",
+        "leave": "Покинуть пространство",
+        "leaveConfirm": "Покинуть {{space}}?",
+        "leaveConfirmDescription": "Вы потеряете доступ ко всем заметкам этого пространства.",
+        "implicitAdminCannotLeave": "Владельцы и администраторы рабочего пространства имеют доступ ко всем командным пространствам и не могут их покинуть.",
+        "inviteFooter": "Пригласить {{email}} в рабочее пространство…",
+        "empty": "Пока никто не добавлен"
+      },
+      "invitedTo_one": "Вы присоединитесь к {{count}} командному пространству",
+      "invitedTo_few": "Вы присоединитесь к {{count}} командным пространствам",
+      "invitedTo_many": "Вы присоединитесь к {{count}} командным пространствам",
+      "invitedTo_other": "Вы присоединитесь к {{count}} командным пространствам"
+    },
     "folders": {
       "title": "Папки",
       "soon": "Скоро",
@@ -2105,6 +2269,7 @@
       "newNote": "Новая заметка",
       "untitled": "Без названия",
       "untitledNote": "Заметка без названия",
+      "shared": "Общий доступ",
       "timeNow": "Только что",
       "minutesAgo": "{{count}} мин. назад",
       "hoursAgo": "{{count}} ч. назад",
@@ -2265,8 +2430,8 @@
       },
       "errors": {
         "noModel": "Модель ИИ не выбрана. Настройте её в разделе Настройки.",
-        "noEndpoint": "URL собственного сервера не задан. Настройте его в разделе Настройки.",
-        "actionFailed": "Действие не выполнено"
+        "actionFailed": "Действие не выполнено",
+        "noEndpoint": "URL собственного сервера не задан. Настройте его в разделе Настройки."
       }
     },
     "empty": {
@@ -2434,8 +2599,6 @@
     "defaultUser": "Пользователь",
     "notSignedIn": "Не авторизован",
     "chat": "Чат",
-    "inviteTeammate": "Teammitglied einladen",
-    "createWorkspace": "Workspace erstellen",
     "collapse": "Свернуть боковую панель",
     "expand": "Развернуть боковую панель"
   },
@@ -2526,6 +2689,12 @@
         "title": "Горячая клавиша недоступна",
         "description": "Не удалось зарегистрировать выбранную комбинацию. Выберите другую в настройках."
       },
+      "addedToDict": "{{words}} добавлено в ваш словарь",
+      "undo": "Отменить",
+      "accessibilityMissing": {
+        "title": "Требуются разрешения универсального доступа",
+        "description": "OpenWhispr нужны разрешения универсального доступа для распознавания горячей клавиши и вставки текста. Включите их в Панели управления."
+      },
       "gpuFallback": {
         "title": "Ускорение GPU недоступно",
         "description": "Транскрипция выполняется на CPU. Вы можете отключить ускорение GPU в настройках."
@@ -2533,12 +2702,6 @@
       "cleanupFailed": {
         "title": "Не удалось выполнить очистку",
         "description": "Диктовка вставлена без ИИ-очистки."
-      },
-      "addedToDict": "{{words}} добавлено в ваш словарь",
-      "undo": "Отменить",
-      "accessibilityMissing": {
-        "title": "Требуются разрешения универсального доступа",
-        "description": "OpenWhispr нужны разрешения универсального доступа для распознавания горячей клавиши и вставки текста. Включите их в Панели управления."
       }
     },
     "mic": {
@@ -2556,28 +2719,6 @@
       "startListening": "Начать запись",
       "hideForNow": "Скрыть"
     }
-  },
-  "dictationTranslation": {
-    "title": "Перевод диктовки",
-    "description": "Отдельная горячая клавиша, вставляющая вашу диктовку в переводе на другой язык",
-    "enabled": "Включить перевод диктовки",
-    "enabledDescription": "Диктовки, начатые горячей клавишей перевода, очищаются и затем переводятся перед вставкой",
-    "sourceLanguage": "Язык речи",
-    "sourceLanguageDescription": "Язык, на котором вы диктуете — «Автоматически» подходит и для смешанной речи",
-    "targetLanguage": "Перевести на",
-    "targetLanguageDescription": "Язык вставляемого текста",
-    "targetLanguageMissing": "Выберите целевой язык, чтобы активировать горячую клавишу перевода",
-    "selectLanguage": "Выберите язык…",
-    "prompt": {
-      "title": "Промпт перевода",
-      "description": "Настройте, как модель переводит вашу диктовку"
-    },
-    "hotkeyHint": "Задайте горячую клавишу в Настройки → Общие → Горячая клавиша перевода",
-    "targetsLabel": "Языки перевода",
-    "addTarget": "Добавить язык…",
-    "activeTarget": "Активный язык перевода",
-    "removeTarget": "Удалить {{language}}",
-    "maxTargets": "До {{max}} языков"
   },
   "dictationAgent": {
     "enabled": "Включить голосового агента",
@@ -2820,9 +2961,11 @@
       "button": "Поделиться",
       "dialog": {
         "title": "Поделиться заметкой",
+        "description": "Приглашайте людей по эл. почте или поделитесь ссылкой на эту заметку.",
         "searchPlaceholder": "Добавьте людей по эл. почте",
         "emailLabel": "Эл. почта получателя",
         "shareButton": "Поделиться",
+        "createLink": "Создать ссылку",
         "copyLink": "Скопировать ссылку",
         "copied": "Скопировано",
         "owner": "Владелец",
@@ -2831,9 +2974,14 @@
         "resend": "Отправить приглашение снова",
         "revoke": "Удалить",
         "invitationActions": "Действия с приглашением",
-        "permissionRequired": "Изменять настройки публикации может только владелец заметки.",
+        "resendSent": "Приглашение отправлено",
+        "resendThrottled": "Приглашение недавно отправлено. Попробуйте через минуту.",
+        "syncPrompt": "При публикации копия этой заметки сохраняется в вашем облаке OpenWhispr.",
+        "syncAndShare": "Синхронизировать заметку",
         "visibility": {
           "label": "Видимость",
+          "private": "Приватная",
+          "privateOption": "Приватная — только вы",
           "link": "Любой со ссылкой",
           "domain": "Все в {{domain}} со ссылкой",
           "invited": "Только приглашённые"
@@ -2842,19 +2990,27 @@
           "invalidEmail": "Введите корректный адрес эл. почты",
           "alreadyInvited": "{{email}} уже приглашён",
           "inviteFailed": "Не удалось отправить приглашение. Попробуйте ещё раз.",
-          "linkUnavailable": "Сгенерируйте или обновите ссылку, чтобы скопировать её"
+          "visibilityFailed": "Не удалось обновить настройки доступа. Попробуйте ещё раз.",
+          "copyFailed": "Не удалось скопировать ссылку. Попробуйте ещё раз.",
+          "revokeFailed": "Не удалось удалить приглашение. Попробуйте ещё раз.",
+          "resendFailed": "Не удалось отправить приглашение повторно. Попробуйте ещё раз.",
+          "syncFailed": "Не удалось синхронизировать заметку. Попробуйте ещё раз.",
+          "loadFailed": "Не удалось загрузить настройки доступа",
+          "retry": "Повторить"
         }
       }
     }
   },
   "commandSearch": {
+    "allSpaces": "Все пространства",
     "title": "Поиск",
     "description": "Поиск по заметкам и транскрипциям",
     "shortPlaceholder": "Поиск",
     "placeholder": "Поиск по заметкам и транскрипциям…",
     "sections": {
       "notes": "Заметки",
-      "transcripts": "Транскрипции"
+      "transcripts": "Транскрипции",
+      "jumpTo": "Перейти к"
     },
     "noResults": "Нет результатов",
     "emptyState": "Начните ввод для поиска",
@@ -2950,51 +3106,82 @@
   },
   "workspaces": {
     "switcher": {
-      "personal": "Persönlich",
-      "workspaces": "Workspaces",
-      "empty": "Noch keine Workspaces",
-      "create": "Workspace erstellen…"
+      "workspaces": "Рабочие пространства",
+      "create": "Создать рабочее пространство…"
     },
     "create": {
-      "title": "Workspace erstellen",
-      "description": "Workspaces ermöglichen Zusammenarbeit, geteilte Notizen und gemeinsame Abrechnung.",
-      "nameLabel": "Workspace-Name",
+      "title": "Создать рабочее пространство",
+      "description": "Рабочие пространства позволяют работать с командой, делиться заметками и управлять оплатой в одном месте.",
+      "nameLabel": "Название рабочего пространства",
       "namePlaceholder": "Acme Corp",
-      "submit": "Workspace erstellen",
-      "submitting": "Erstelle…",
-      "errorTitle": "Workspace konnte nicht erstellt werden"
+      "submit": "Создать рабочее пространство",
+      "submitting": "Создание…",
+      "errorTitle": "Не удалось создать рабочее пространство"
     },
     "created": {
-      "title": "Workspace erstellt",
-      "description": "Sie sind nun Inhaber von {{name}}."
+      "title": "Рабочее пространство создано",
+      "description": "Теперь вы владелец {{name}}."
     },
     "invite": {
-      "title": "Zu {{workspace}} einladen",
-      "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
-      "emailLabel": "E-Mail",
-      "roleLabel": "Rolle",
-      "teamsLabel": "Zu Teams hinzufügen",
-      "submit": "Einladung senden",
-      "submitting": "Sende…",
-      "sentTitle": "Einladung gesendet",
-      "sentDescription": "Einladung an {{email}} gesendet.",
-      "errorTitle": "Einladung konnte nicht gesendet werden",
+      "title": "Пригласить в {{workspace}}",
+      "description": "Добавьте коллег по эл. почте. Они получат ссылку для присоединения.",
+      "emailLabel": "Эл. почта",
+      "emailPlaceholder": "kollega@example.com",
+      "roleLabel": "Роль",
+      "seatUsage": "Занято {{used}} из {{seats}} мест",
+      "seatLimit": "Все {{seats}} мест заняты.",
+      "askOwner": "Все {{seats}} мест заняты. Попросите владельца рабочего пространства добавить места.",
+      "manageSeats": "Управлять местами",
+      "submit": "Отправить приглашение",
+      "submitting": "Отправка…",
+      "sentTitle": "Приглашение отправлено",
+      "sentDescription": "Мы отправили приглашение на {{email}}.",
+      "errorTitle": "Не удалось отправить приглашение",
       "role": {
-        "admin": "Administrator",
-        "member": "Mitglied"
+        "admin": "Администратор",
+        "member": "Участник"
+      },
+      "roleDescription": {
+        "admin": "Управляет участниками и оплатой",
+        "member": "Пользуется рабочим пространством"
       }
     },
     "accept": {
-      "title": "Workspace beitreten",
-      "description": "{{inviter}} hat Sie eingeladen, {{workspace}} als {{role}} beizutreten.",
-      "loading": "Lade Einladung…",
-      "accept": "Einladung annehmen",
-      "accepting": "Annehmen…",
-      "signInToAccept": "Anmelden zum Annehmen",
-      "successTitle": "Beigetreten",
-      "successDescription": "Willkommen bei {{name}}.",
-      "errorTitle": "Einladung konnte nicht angenommen werden"
+      "title": "Присоединиться к рабочему пространству",
+      "description": "{{inviter}} приглашает вас в {{workspace}} с ролью «{{role}}».",
+      "loading": "Загрузка приглашения…",
+      "accept": "Принять приглашение",
+      "accepting": "Принятие…",
+      "signInToAccept": "Войдите, чтобы принять",
+      "switchAccount": "Сменить аккаунт",
+      "successTitle": "Вы в команде",
+      "successDescription": "Вы участник {{name}}. Управляйте им в разделе Настройки → Рабочее пространство.",
+      "errorTitle": "Не удалось принять приглашение",
+      "sentTo": "Приглашение отправлено на {{email}}",
+      "wrongAccount": "Это приглашение было отправлено на {{email}}. Вы вошли как {{current}}."
     }
+  },
+  "dictationTranslation": {
+    "title": "Перевод диктовки",
+    "description": "Отдельная горячая клавиша, вставляющая вашу диктовку в переводе на другой язык",
+    "enabled": "Включить перевод диктовки",
+    "enabledDescription": "Диктовки, начатые горячей клавишей перевода, очищаются и затем переводятся перед вставкой",
+    "sourceLanguage": "Язык речи",
+    "sourceLanguageDescription": "Язык, на котором вы диктуете — «Автоматически» подходит и для смешанной речи",
+    "targetLanguage": "Перевести на",
+    "targetLanguageDescription": "Язык вставляемого текста",
+    "targetLanguageMissing": "Выберите целевой язык, чтобы активировать горячую клавишу перевода",
+    "selectLanguage": "Выберите язык…",
+    "prompt": {
+      "title": "Промпт перевода",
+      "description": "Настройте, как модель переводит вашу диктовку"
+    },
+    "hotkeyHint": "Задайте горячую клавишу в Настройки → Общие → Горячая клавиша перевода",
+    "targetsLabel": "Языки перевода",
+    "addTarget": "Добавить язык…",
+    "activeTarget": "Активный язык перевода",
+    "removeTarget": "Удалить {{language}}",
+    "maxTargets": "До {{max}} языков"
   },
   "meetingNotification": {
     "title": "Обнаружена встреча",

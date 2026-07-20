@@ -5,6 +5,8 @@ interface FolderInput {
   client_folder_id?: string;
   is_default?: boolean;
   sort_order?: number;
+  workspace_id?: string | null;
+  team_id?: string | null;
 }
 
 interface CloudFolder {
@@ -13,6 +15,12 @@ interface CloudFolder {
   name: string;
   is_default: boolean;
   sort_order: number;
+  workspace_id: string | null;
+  team_id: string | null;
+  previous_team_id?: string | null;
+  // Redacted stub for a row that moved out of one of the caller's teams —
+  // only id/client_folder_id/scope/updated_at are present.
+  access_removed?: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -34,9 +42,12 @@ async function deleteFolder(id: string): Promise<void> {
   await cloudDelete("/api/folders/delete", { id });
 }
 
-async function list(since?: string): Promise<{ folders: CloudFolder[] }> {
-  const query = since ? `?since=${encodeURIComponent(since)}` : "";
-  return cloudGet<{ folders: CloudFolder[] }>(`/api/folders/list${query}`);
+async function list(since?: string, scope?: "all"): Promise<{ folders: CloudFolder[] }> {
+  const params = new URLSearchParams();
+  if (since !== undefined) params.set("since", since);
+  if (scope !== undefined) params.set("scope", scope);
+  const query = params.toString();
+  return cloudGet<{ folders: CloudFolder[] }>(`/api/folders/list${query ? `?${query}` : ""}`);
 }
 
 export { create, batchCreate, update, deleteFolder, list };

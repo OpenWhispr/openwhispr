@@ -535,25 +535,33 @@ function isInvitationDeepLink(url) {
   return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
 }
 
+// Deep links can arrive before windowManager exists (cold start) or before the
+// renderer has mounted its listener. The token is stashed here and the renderer
+// pulls it via `get-pending-invitation-token` on mount; the push below is a
+// best-effort fast path for an already-running app.
+let pendingInvitationDeepLinkToken = null;
+
+ipcMain.handle("get-pending-invitation-token", () => {
+  const token = pendingInvitationDeepLinkToken;
+  pendingInvitationDeepLinkToken = null;
+  return token;
+});
+
 function handleInvitationDeepLink(deepLinkUrl) {
   try {
     const match = deepLinkUrl.match(/invitations\/([^/?#]+)/);
     const token = match?.[1];
     if (!token) return;
-    if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
+    pendingInvitationDeepLinkToken = token;
+    if (!windowManager) return;
+    if (isLiveWindow(windowManager.controlPanelWindow)) {
       windowManager.controlPanelWindow.show();
       windowManager.controlPanelWindow.focus();
       dockManager.setControlPanelVisible(true);
+      // Best-effort fast path — the get-pending-invitation-token pull is the reliable path.
       windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
-    } else if (windowManager) {
+    } else {
       windowManager.createControlPanelWindow();
-      // Defer the send until renderer is ready; main.js relies on `did-finish-load`
-      const win = windowManager.controlPanelWindow;
-      if (win) {
-        win.webContents.once("did-finish-load", () => {
-          win.webContents.send("workspace-invitation-token", token);
-        });
-      }
     }
   } catch (error) {
     console.error("Invitation deep link parse failed:", error);
@@ -863,6 +871,21 @@ async function startApp() {
     await windowManager.createControlPanelWindow();
   }
 
+  // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
+  // open-url); without this scan a deep link that launches the app is lost.
+  if (process.platform !== "darwin") {
+    const protocolArg = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
+    if (protocolArg) {
+      if (protocolArg.includes("upgrade-success")) {
+        handleUpgradeDeepLink();
+      } else if (protocolArg.includes("/invitations/")) {
+        handleInvitationDeepLink(protocolArg);
+      } else {
+        void handleOAuthDeepLink(protocolArg);
+      }
+    }
+  }
+
   // Create agent window (hidden) and set up agent hotkey
   await windowManager.createAgentWindow();
 
@@ -1056,9 +1079,14 @@ async function startApp() {
         if (qdrantManager.isReady()) {
           const vectorIndex = require("./src/helpers/vectorIndex");
           vectorIndex.init(qdrantManager.getPort());
-          vectorIndex.ensureCollection().catch((err) => {
-            debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
-          });
+          vectorIndex
+            .ensureCollection()
+            .then(() => ipcHandlers?.drainPendingVectorPurges())
+            .catch((err) => {
+              debugLogger.debug("Qdrant collection setup error (non-fatal)", {
+                error: err.message,
+              });
+            });
         }
       })
       .catch((err) => {
