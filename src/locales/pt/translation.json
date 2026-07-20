@@ -1454,6 +1454,8 @@
         "title": "Área de transferência",
         "autoPaste": "Colagem automática",
         "autoPasteDescription": "Colar automaticamente o texto transcrito no aplicativo ativo ao finalizar o ditado",
+        "submitAfterPaste": "Enviar após colar",
+        "submitAfterPasteDescription": "Pressionar Enter automaticamente após colar para enviar mensagens de chat e formulários de uma linha",
         "keepInClipboard": "Manter transcrição na área de transferência",
         "keepInClipboardDescription": "Manter o texto ditado na área de transferência para poder colar manualmente se necessário"
       },

@@ -305,6 +305,7 @@ Settings stored in localStorage with these keys:
 - `hotkey`: Custom hotkey configuration
 - `hasCompletedOnboarding`: Onboarding completion flag
 - `customDictionary`: JSON array of words/phrases for improved transcription accuracy
+- `submitAfterPasteEnabled`: Boolean to send Enter after auto-paste. Held hotkey modifiers are cleared before the keystroke so the submit is a bare Enter (a still-held Ctrl otherwise turns it into Ctrl+Enter, which apps treat differently — e.g. Cursor broadcasts the prompt to all agent tabs). On Linux, Enter is additionally routed through the same channel that delivered the paste (portal / uinput / XTest via `linux-fast-paste --press-enter`, or the same external tool). On Windows, `windows-fast-paste.exe --press-enter` is capability-probed via the `SUPPORTS press-enter` marker in `--detect-only` output (older prebuilt binaries ignore unknown flags and would paste instead)
 
 Secret env vars (12 total: 7 BYOK API keys + 5 enterprise cloud creds — see `SECRET_KEYS` in `environment.js`) are encrypted at rest via Electron `safeStorage` and stored as per-key files under `userData/secure-keys/`. They are loaded into `process.env` at startup by `EnvironmentManager.init()`. Renderer reads them via IPC (`get-*-key`) and writes via debounced IPC (`save-*-key`). On Linux without a keyring, secrets fall back to plaintext.
 

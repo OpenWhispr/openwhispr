@@ -334,6 +334,8 @@ function useSettingsInternal() {
     setShowTranscriptionPreview: store.setShowTranscriptionPreview,
     autoPasteEnabled: store.autoPasteEnabled,
     setAutoPasteEnabled: store.setAutoPasteEnabled,
+    submitAfterPasteEnabled: store.submitAfterPasteEnabled,
+    setSubmitAfterPasteEnabled: store.setSubmitAfterPasteEnabled,
     keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard: store.setKeepTranscriptionInClipboard,
     noteFilesEnabled: store.noteFilesEnabled,

@@ -1648,6 +1648,8 @@
         "title": "Clipboard",
         "autoPaste": "Automatic pasting",
         "autoPasteDescription": "Automatically paste transcribed text into the active app when dictation finishes",
+        "submitAfterPaste": "Submit after paste",
+        "submitAfterPasteDescription": "Automatically send Enter after pasting to submit chat messages and single-line forms",
         "keepInClipboard": "Keep transcription in clipboard",
         "keepInClipboardDescription": "Keep dictated text in your clipboard so you can paste it manually if needed"
       },

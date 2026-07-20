@@ -506,6 +506,7 @@ declare global {
           fromStreaming?: boolean;
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
+          submitAfterPaste?: boolean;
         }
       ) => Promise<void>;
       hideWindow: () => Promise<void>;

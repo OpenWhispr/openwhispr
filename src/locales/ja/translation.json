@@ -1475,6 +1475,8 @@
         "title": "クリップボード",
         "autoPaste": "自動貼り付け",
         "autoPasteDescription": "ディクテーション完了後、文字起こしテキストをアクティブなアプリに自動的に貼り付けます",
+        "submitAfterPaste": "貼り付け後に送信",
+        "submitAfterPasteDescription": "貼り付け後に Enter キーを自動送信し、チャットメッセージや単一行フォームを送信します",
         "keepInClipboard": "文字起こしをクリップボードに保持",
         "keepInClipboardDescription": "必要に応じて手動で貼り付けできるよう、音声入力テキストをクリップボードに保持します"
       },

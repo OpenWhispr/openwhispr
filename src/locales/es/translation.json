@@ -1523,6 +1523,8 @@
         "title": "Portapapeles",
         "autoPaste": "Pegado automático",
         "autoPasteDescription": "Pegar automáticamente el texto transcrito en la aplicación activa al finalizar el dictado",
+        "submitAfterPaste": "Enviar después de pegar",
+        "submitAfterPasteDescription": "Pulsar Enter automáticamente después de pegar para enviar mensajes de chat y formularios de una sola línea",
         "keepInClipboard": "Mantener transcripción en el portapapeles",
         "keepInClipboardDescription": "Mantener el texto dictado en el portapapeles para poder pegarlo manualmente si es necesario"
       },
