@@ -1,4 +1,5 @@
 const { spawn } = require("child_process");
+const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { resolveBundledBinary } = require("./binaryResolver");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
@@ -116,9 +117,30 @@ class AppleCalendarManager {
       return false;
     }
 
+    let command = binaryPath;
+    let args = requestAccess ? ["--request"] : [];
+    if (!app.isPackaged) {
+      // A terminal-launched dev app makes the terminal the helper's TCC
+      // "responsible process", and its missing calendar usage strings abort
+      // the permission prompt. The disclaim shim makes the helper responsible
+      // for itself so its embedded Info.plist usage strings apply. Packaged
+      // builds are self-responsible and keep OpenWhispr as the prompt source.
+      const shimPath = resolveBundledBinary("macos-disclaim-exec", "acal");
+      if (shimPath) {
+        args = [binaryPath, ...args];
+        command = shimPath;
+      } else {
+        debugLogger.warn(
+          "macos-disclaim-exec not found; calendar permission prompt may not appear in dev",
+          {},
+          "acal"
+        );
+      }
+    }
+
     try {
       // stdin stays open for "sync" requests; its EOF also ends the helper
-      const child = spawn(binaryPath, requestAccess ? ["--request"] : [], {
+      const child = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
       });
       this._helperProcess = child;

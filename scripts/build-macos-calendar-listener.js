@@ -5,48 +5,46 @@ const fs = require("fs");
 const path = require("path");
 const { buildMacosSwiftBinary } = require("./lib/build-macos-swift-binary");
 
-// Dev Electron ships without calendar usage strings; without them the TCC
-// request from the spawned helper aborts. Patch the dev app bundle once and
-// re-ad-hoc-sign it. Packaged builds get the strings via electron-builder's
-// mac.extendInfo instead.
-function patchDevElectronPlist({ projectRoot, log }) {
-  const electronApp = path.join(projectRoot, "node_modules", "electron", "dist", "Electron.app");
-  const plistPath = path.join(electronApp, "Contents", "Info.plist");
-  if (!fs.existsSync(plistPath)) return;
+const projectRoot = path.resolve(__dirname, "..");
 
-  const usage =
-    "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events.";
-  const keys = ["NSCalendarsUsageDescription", "NSCalendarsFullAccessUsageDescription"];
-  const missing = keys.filter(
-    (key) => spawnSync("plutil", ["-extract", key, "raw", "-o", "-", plistPath]).status !== 0
-  );
-  if (missing.length === 0) return;
+// Dev builds are launched from a terminal, so macOS attributes the helper's
+// calendar permission request to the terminal app, which lacks calendar usage
+// strings — the TCC prompt is silently aborted. The manager therefore spawns
+// the helper through this shim in dev, disclaiming responsibility so the
+// helper's embedded Info.plist usage strings apply. Packaged builds are
+// self-responsible (usage strings via electron-builder's mac.extendInfo) and
+// don't use the shim, so it is not in the electron-builder bin filter.
+function buildDisclaimShim() {
+  if (process.platform !== "darwin") return;
 
-  for (const key of missing) {
-    const result = spawnSync("plutil", ["-insert", key, "-string", usage, plistPath]);
-    if (result.status !== 0) {
-      log(`Warning: failed to insert ${key} into dev Electron Info.plist`);
+  const source = path.join(projectRoot, "resources", "macos-disclaim-exec.c");
+  const output = path.join(projectRoot, "resources", "bin", "macos-disclaim-exec");
+  try {
+    if (fs.existsSync(output) && fs.statSync(output).mtimeMs >= fs.statSync(source).mtimeMs) {
       return;
     }
+  } catch {
+    // fall through to rebuild
   }
 
-  const signResult = spawnSync("codesign", ["--force", "--sign", "-", electronApp]);
-  if (signResult.status !== 0) {
-    log("Warning: failed to re-sign dev Electron after Info.plist patch");
+  const result = spawnSync("cc", ["-O2", "-o", output, source], { stdio: "inherit" });
+  if (result.status !== 0) {
+    console.warn(
+      "[calendar-listener] Warning: failed to compile macos-disclaim-exec; " +
+        "calendar permission prompts will not work in dev."
+    );
     return;
   }
-  log("Patched dev Electron Info.plist with calendar usage strings and re-signed the bundle.");
-  log(
-    "NOTE: re-signing changes dev Electron's code hash, so macOS drops its previously granted " +
-      "permissions (Accessibility, Microphone, Screen & System Audio Recording). Re-grant them " +
-      "in System Settings > Privacy & Security when prompted."
-  );
+  fs.chmodSync(output, 0o755);
+  console.log("[calendar-listener] Built macos-disclaim-exec.");
 }
+
+buildDisclaimShim();
 
 buildMacosSwiftBinary({
   label: "calendar-listener",
   sourceName: "macos-calendar-listener.swift",
   binaryName: "macos-calendar-listener",
   frameworks: ["EventKit", "Foundation"],
-  beforeBuild: patchDevElectronPlist,
+  linkerInfoPlist: path.join(projectRoot, "resources", "macos-calendar-listener-Info.plist"),
 });
