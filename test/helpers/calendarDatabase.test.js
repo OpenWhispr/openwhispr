@@ -46,7 +46,7 @@ function createDb(t) {
   }
 }
 
-function appleEvent(id) {
+function appleEvent(id, overrides = {}) {
   return {
     id,
     calendar_id: "apple-calendar",
@@ -56,6 +56,7 @@ function appleEvent(id) {
     end_time: "2026-07-20T11:00:00Z",
     is_all_day: false,
     status: "confirmed",
+    ...overrides,
   };
 }
 
@@ -120,5 +121,26 @@ test("full-sync prune with an empty fresh set clears the calendar's unlinked eve
   db.removeStaleCalendarEvents("microsoft", "ms-cal", []);
 
   assert.equal(db.getCalendarEventById("stale"), null);
+  db.db.close();
+});
+
+test("tentative Apple events remain visible in upcoming meetings", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const now = Date.now();
+  db.upsertCalendarEvents([
+    appleEvent("tentative-event", {
+      start_time: new Date(now + 5 * 60_000).toISOString(),
+      end_time: new Date(now + 35 * 60_000).toISOString(),
+      status: "tentative",
+    }),
+  ]);
+
+  const events = db.getUpcomingEvents(15);
+  assert.equal(
+    events.some((event) => event.id === "tentative-event"),
+    true
+  );
   db.db.close();
 });

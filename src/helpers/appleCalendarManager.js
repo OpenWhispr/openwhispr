@@ -280,6 +280,7 @@ class AppleCalendarManager {
       if (contacts.length > 0) this.databaseManager.upsertContacts(contacts);
 
       broadcastToWindows("acal-events-synced", {});
+      this.reminderScheduler.reconcileProvider("apple");
       this.reminderScheduler.scheduleNextMeeting();
 
       if (this._pendingConnect?.awaitingSnapshot) {
