@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { buildPublicationPayload, selectContent } = require("../../src/helpers/notionExporter");
+const {
+  buildPublicationPayload,
+  formatTranscript,
+  selectContent,
+} = require("../../src/helpers/notionExporter");
 
 test("honors the caller's content source without re-deriving staleness", () => {
   const note = { content: "raw notes", enhanced_content: "enhanced notes" };
@@ -29,4 +33,27 @@ test("builds a payload from the enhanced content when requested", () => {
     .join("\n");
   assert.ok(text.includes("Enhanced notes"));
   assert.ok(!text.includes("raw notes"));
+});
+
+test("formats stored transcript segments as readable speaker text", () => {
+  const stored = JSON.stringify([
+    { text: "Welcome everyone", source: "mic", speaker: "you", timestamp: 2 },
+    {
+      text: "Thanks for having me",
+      source: "system",
+      speaker: "speaker_0",
+      speakerName: "Maya",
+      timestamp: 8,
+    },
+  ]);
+
+  const formatted = formatTranscript(stored);
+  assert.match(formatted, /\*\*You\*\* `00:00:02`/);
+  assert.match(formatted, /Welcome everyone/);
+  assert.match(formatted, /\*\*Maya\*\* `00:00:08`/);
+  assert.doesNotMatch(formatted, /"source":/);
+});
+
+test("keeps legacy plain-text transcripts unchanged", () => {
+  assert.equal(formatTranscript("A plain transcript"), "A plain transcript");
 });

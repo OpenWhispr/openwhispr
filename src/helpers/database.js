@@ -388,8 +388,8 @@ class DatabaseManager {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- PRAGMA foreign_keys is off in this database, so referential cleanup is
-        -- done manually (deleteNotionConnection, saveNotionConnection, deleteNote).
+        -- Referential cleanup is explicit so it remains consistent across SQLite
+        -- runtimes that differ in foreign-key enforcement.
         CREATE TABLE IF NOT EXISTS notion_destinations (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           connection_id INTEGER NOT NULL REFERENCES notion_connections(id),
@@ -399,9 +399,10 @@ class DatabaseManager {
           schema_snapshot TEXT NOT NULL,
           layout_key TEXT NOT NULL DEFAULT 'general' CHECK(layout_key IN ('meeting', 'general')),
           include_transcript INTEGER NOT NULL DEFAULT 0,
+          is_selected INTEGER NOT NULL DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(connection_id)
+          UNIQUE(connection_id, data_source_id)
         );
 
         CREATE TABLE IF NOT EXISTS notion_publications (
@@ -427,8 +428,91 @@ class DatabaseManager {
       `);
 
       try {
+        const indexes = this.db.pragma("index_list('notion_destinations')");
+        const hasLegacyConnectionConstraint = indexes.some((index) => {
+          if (!index.unique) return false;
+          const columns = this.db.pragma(`index_info('${index.name}')`);
+          return columns.length === 1 && columns[0].name === "connection_id";
+        });
+        if (hasLegacyConnectionConstraint) {
+          const foreignKeysEnabled = this.db.pragma("foreign_keys", { simple: true }) === 1;
+          if (foreignKeysEnabled) this.db.pragma("foreign_keys = OFF");
+          try {
+            this.db.transaction(() => {
+              this.db.exec(`
+                CREATE TABLE notion_destinations_v2 (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  connection_id INTEGER NOT NULL REFERENCES notion_connections(id),
+                  data_source_id TEXT NOT NULL,
+                  database_id TEXT,
+                  data_source_name TEXT NOT NULL,
+                  schema_snapshot TEXT NOT NULL,
+                  layout_key TEXT NOT NULL DEFAULT 'general' CHECK(layout_key IN ('meeting', 'general')),
+                  include_transcript INTEGER NOT NULL DEFAULT 0,
+                  is_selected INTEGER NOT NULL DEFAULT 0,
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  UNIQUE(connection_id, data_source_id)
+                );
+                INSERT INTO notion_destinations_v2 (
+                  id, connection_id, data_source_id, database_id, data_source_name,
+                  schema_snapshot, layout_key, include_transcript, is_selected, created_at, updated_at
+                )
+                SELECT id, connection_id, data_source_id, database_id, data_source_name,
+                       schema_snapshot, layout_key, include_transcript, 1, created_at, updated_at
+                FROM notion_destinations;
+                DROP TABLE notion_destinations;
+                ALTER TABLE notion_destinations_v2 RENAME TO notion_destinations;
+              `);
+            })();
+          } finally {
+            if (foreignKeysEnabled) this.db.pragma("foreign_keys = ON");
+          }
+        }
+      } catch (error) {
+        debugLogger.error(
+          "Migration: preserve Notion destination identity",
+          { error: error.message },
+          "database"
+        );
+        throw error;
+      }
+
+      try {
+        const destinationColumns = this.db.pragma("table_info('notion_destinations')");
+        if (!destinationColumns.some((column) => column.name === "is_selected")) {
+          this.db.exec(
+            "ALTER TABLE notion_destinations ADD COLUMN is_selected INTEGER NOT NULL DEFAULT 0"
+          );
+          this.db.exec(`
+            UPDATE notion_destinations
+            SET is_selected = 1
+            WHERE id IN (
+              SELECT current.id
+              FROM notion_destinations AS current
+              WHERE current.id = (
+                SELECT candidate.id
+                FROM notion_destinations AS candidate
+                WHERE candidate.connection_id = current.connection_id
+                ORDER BY candidate.updated_at DESC, candidate.id DESC
+                LIMIT 1
+              )
+            )
+          `);
+        }
+      } catch (error) {
+        debugLogger.error(
+          "Migration: track selected Notion destination",
+          { error: error.message },
+          "database"
+        );
+        throw error;
+      }
+
+      try {
         // Early builds stored a payload_snapshot that was never read back;
-        // resume correctness is guaranteed by content_hash equality instead.
+        // content_hash identifies resumable payloads, while publishing/unknown
+        // status prevents replay after an ambiguous remote outcome.
         this.db.exec("ALTER TABLE notion_publications DROP COLUMN payload_snapshot");
       } catch (err) {
         // Column already absent.
@@ -3370,8 +3454,8 @@ class DatabaseManager {
     return this.getNotionConnection(id);
   }
 
-  // Foreign keys are not enforced in this database, so dependent rows are
-  // removed explicitly.
+  // Dependent rows are removed explicitly so behavior does not depend on the
+  // runtime's foreign-key enforcement setting.
   _deleteNotionPublicationsForFolder(folderId) {
     this.db
       .prepare(
@@ -3405,40 +3489,61 @@ class DatabaseManager {
       typeof destination.schemaSnapshot === "string"
         ? destination.schemaSnapshot
         : JSON.stringify(destination.schemaSnapshot || {});
-    this.db
-      .prepare(
-        `INSERT INTO notion_destinations (
-           connection_id, data_source_id, database_id, data_source_name,
-           schema_snapshot, layout_key, include_transcript
-         ) VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(connection_id) DO UPDATE SET
-           data_source_id = excluded.data_source_id,
-           database_id = excluded.database_id,
-           data_source_name = excluded.data_source_name,
-           schema_snapshot = excluded.schema_snapshot,
-           layout_key = excluded.layout_key,
-           include_transcript = excluded.include_transcript,
-           updated_at = CURRENT_TIMESTAMP`
-      )
-      .run(
-        destination.connectionId,
-        destination.dataSourceId,
-        destination.databaseId || null,
-        destination.dataSourceName || "Untitled data source",
-        schemaSnapshot,
-        destination.layoutKey === "meeting" ? "meeting" : "general",
-        destination.includeTranscript ? 1 : 0
+    return this.db.transaction(() => {
+      this.db
+        .prepare("UPDATE notion_destinations SET is_selected = 0 WHERE connection_id = ?")
+        .run(destination.connectionId);
+      this.db
+        .prepare(
+          `INSERT INTO notion_destinations (
+             connection_id, data_source_id, database_id, data_source_name,
+             schema_snapshot, layout_key, include_transcript, is_selected, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
+           ON CONFLICT(connection_id, data_source_id) DO UPDATE SET
+             database_id = excluded.database_id,
+             data_source_name = excluded.data_source_name,
+             schema_snapshot = excluded.schema_snapshot,
+             layout_key = excluded.layout_key,
+             include_transcript = excluded.include_transcript,
+             is_selected = 1,
+             updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')`
+        )
+        .run(
+          destination.connectionId,
+          destination.dataSourceId,
+          destination.databaseId || null,
+          destination.dataSourceName || "Untitled data source",
+          schemaSnapshot,
+          destination.layoutKey === "meeting" ? "meeting" : "general",
+          destination.includeTranscript ? 1 : 0
+        );
+      return (
+        this.db
+          .prepare(
+            `SELECT * FROM notion_destinations
+             WHERE connection_id = ? AND data_source_id = ?`
+          )
+          .get(destination.connectionId, destination.dataSourceId) || null
       );
-    return this.getNotionDestination(destination.connectionId);
+    })();
   }
 
   getNotionDestination(connectionId = null) {
     if (!this.db) throw new Error("Database not initialized");
     const row = connectionId
       ? this.db
-          .prepare("SELECT * FROM notion_destinations WHERE connection_id = ? LIMIT 1")
+          .prepare(
+            `SELECT * FROM notion_destinations
+             WHERE connection_id = ?
+             ORDER BY is_selected DESC, updated_at DESC, id DESC LIMIT 1`
+          )
           .get(connectionId)
-      : this.db.prepare("SELECT * FROM notion_destinations ORDER BY updated_at DESC LIMIT 1").get();
+      : this.db
+          .prepare(
+            `SELECT * FROM notion_destinations
+             ORDER BY is_selected DESC, updated_at DESC, id DESC LIMIT 1`
+          )
+          .get();
     return row || null;
   }
 
@@ -3527,7 +3632,25 @@ class DatabaseManager {
         .prepare(
           `SELECT * FROM notion_publications
            WHERE note_id = ? AND destination_id = ? AND content_hash = ?
-             AND status IN ('pending', 'publishing', 'partial', 'failed', 'needs_reauth')
+             AND status IN ('pending', 'partial', 'failed', 'needs_reauth')
+             AND COALESCE(last_error, '') NOT LIKE '%\"outcomeUnknown\":true%'
+           ORDER BY id DESC LIMIT 1`
+        )
+        .get(noteId, destinationId, hash) || null
+    );
+  }
+
+  findUncertainNotionPublication(noteId, destinationId, hash) {
+    if (!this.db) throw new Error("Database not initialized");
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM notion_publications
+           WHERE note_id = ? AND destination_id = ? AND content_hash = ?
+             AND (
+               status = 'publishing'
+               OR COALESCE(last_error, '') LIKE '%\"outcomeUnknown\":true%'
+             )
            ORDER BY id DESC LIMIT 1`
         )
         .get(noteId, destinationId, hash) || null

@@ -91,6 +91,7 @@ export interface NotionDestination {
   schema_snapshot: string;
   layout_key: NotionLayoutKey;
   include_transcript: number;
+  is_selected: number;
   created_at: string;
   updated_at: string;
 }
@@ -117,6 +118,13 @@ export interface NotionDataSource {
   icon: unknown;
   parent: unknown;
   url: string | null;
+}
+
+export interface NotionNoteDraft {
+  title: string;
+  content: string;
+  enhancedContent: string | null;
+  transcript: string | null;
 }
 
 export type ShareVisibility = "private" | "link" | "domain" | "invited";
@@ -1810,6 +1818,7 @@ declare global {
           layoutKey: NotionLayoutKey;
           contentSource: "enhanced" | "original";
           includeTranscript: boolean;
+          draft: NotionNoteDraft;
         }
       ) => Promise<{
         success: boolean;
@@ -1827,6 +1836,7 @@ declare global {
           contentSource: "enhanced" | "original";
           includeTranscript: boolean;
           allowDuplicate?: boolean;
+          draft: NotionNoteDraft;
         }
       ) => Promise<{
         success: boolean;

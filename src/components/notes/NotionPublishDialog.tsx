@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "../ui/button";
@@ -17,6 +17,7 @@ import type {
   NoteItem,
   NotionDestination,
   NotionLayoutKey,
+  NotionNoteDraft,
   NotionPublication,
 } from "../../types/electron";
 
@@ -25,6 +26,7 @@ interface NotionPublishDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enhancedIsStale?: boolean;
+  enhancedContent?: string | null;
   onPublished: (publication: NotionPublication) => void;
 }
 
@@ -33,6 +35,7 @@ export default function NotionPublishDialog({
   open,
   onOpenChange,
   enhancedIsStale = false,
+  enhancedContent,
   onPublished,
 }: NotionPublishDialogProps) {
   const { t } = useTranslation();
@@ -42,7 +45,7 @@ export default function NotionPublishDialog({
     note.note_type === "meeting" ? "meeting" : "general"
   );
   const [contentSource, setContentSource] = useState<"enhanced" | "original">(
-    note.enhanced_content && !enhancedIsStale ? "enhanced" : "original"
+    (enhancedContent ?? note.enhanced_content) && !enhancedIsStale ? "enhanced" : "original"
   );
   const [includeTranscript, setIncludeTranscript] = useState(false);
   const [preview, setPreview] = useState("");
@@ -51,6 +54,19 @@ export default function NotionPublishDialog({
   const [loading, setLoading] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uncertainPageUrl, setUncertainPageUrl] = useState<string | null>(null);
+  const [outcomeUnknown, setOutcomeUnknown] = useState(false);
+  const availableEnhancedContent =
+    enhancedContent === undefined ? note.enhanced_content || null : enhancedContent;
+  const draft = useMemo<NotionNoteDraft>(
+    () => ({
+      title: note.title,
+      content: note.content,
+      enhancedContent: availableEnhancedContent,
+      transcript: note.transcript || null,
+    }),
+    [availableEnhancedContent, note.content, note.title, note.transcript]
+  );
 
   const loadPreview = useCallback(async () => {
     setLoading(true);
@@ -68,6 +84,7 @@ export default function NotionPublishDialog({
         layoutKey,
         contentSource,
         includeTranscript,
+        draft,
       });
       if (!result?.success) {
         throw new Error(result?.error || t("noteEditor.notion.previewFailedFallback"));
@@ -80,12 +97,14 @@ export default function NotionPublishDialog({
     } finally {
       setLoading(false);
     }
-  }, [contentSource, includeTranscript, layoutKey, note.id, t]);
+  }, [contentSource, draft, includeTranscript, layoutKey, note.id, t]);
 
   useEffect(() => {
     if (!open) return;
     setLayoutKey(note.note_type === "meeting" ? "meeting" : "general");
-    setContentSource(note.enhanced_content && !enhancedIsStale ? "enhanced" : "original");
+    setContentSource(availableEnhancedContent && !enhancedIsStale ? "enhanced" : "original");
+    setUncertainPageUrl(null);
+    setOutcomeUnknown(false);
     void window.electronAPI?.notionGetStatus?.().then((status) => {
       if (status?.destination) {
         setIncludeTranscript(
@@ -93,7 +112,7 @@ export default function NotionPublishDialog({
         );
       }
     });
-  }, [enhancedIsStale, note.enhanced_content, note.note_type, note.transcript, open]);
+  }, [availableEnhancedContent, enhancedIsStale, note.note_type, note.transcript, open]);
 
   useEffect(() => {
     if (open) void loadPreview();
@@ -102,16 +121,23 @@ export default function NotionPublishDialog({
   const publish = async (allowDuplicate = false) => {
     setPublishing(true);
     setError(null);
+    setUncertainPageUrl(null);
+    setOutcomeUnknown(false);
     try {
       const result = await window.electronAPI?.notionPublish?.(note.id, {
         layoutKey,
         contentSource,
         includeTranscript,
         allowDuplicate,
+        draft,
       });
       if (result?.code === "DUPLICATE" && result.duplicate) {
         setDuplicate(result.duplicate);
         return;
+      }
+      if (result?.code === "OUTCOME_UNKNOWN") {
+        setUncertainPageUrl(result.pageUrl || null);
+        setOutcomeUnknown(true);
       }
       if (!result?.success || !result.publication) {
         throw new Error(result?.error || t("noteEditor.notion.publishFailedFallback"));
@@ -198,14 +224,14 @@ export default function NotionPublishDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="original">{t("noteEditor.notion.contentOriginal")}</SelectItem>
-                  {note.enhanced_content && !enhancedIsStale && (
+                  {availableEnhancedContent && !enhancedIsStale && (
                     <SelectItem value="enhanced">
                       {t("noteEditor.notion.contentEnhanced")}
                     </SelectItem>
                   )}
                 </SelectContent>
               </Select>
-              {note.note_type === "meeting" && (!note.enhanced_content || enhancedIsStale) && (
+              {note.note_type === "meeting" && (!availableEnhancedContent || enhancedIsStale) && (
                 <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
                   {t("noteEditor.notion.staleEnhancedWarning")}
                 </p>
@@ -273,7 +299,30 @@ export default function NotionPublishDialog({
           </div>
         )}
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+          <div className="flex items-center justify-between gap-3 text-xs text-destructive">
+            <p>{error}</p>
+            {uncertainPageUrl && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.electronAPI?.openExternal?.(uncertainPageUrl)}
+              >
+                {t("noteEditor.notion.openInNotion")}
+              </Button>
+            )}
+            {outcomeUnknown && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={publishing}
+                onClick={() => void publish(true)}
+              >
+                {t("noteEditor.notion.publishAnother")}
+              </Button>
+            )}
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={publishing}>

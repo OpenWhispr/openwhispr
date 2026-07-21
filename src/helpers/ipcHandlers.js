@@ -8527,6 +8527,22 @@ class IPCHandlers {
     });
 
     // Notion publishing. Credentials and network calls stay in the main process.
+    const sanitizeNotionDraft = (draft) => {
+      if (!draft || typeof draft !== "object") return undefined;
+      const result = {};
+      const fields = [
+        ["title", 2000],
+        ["content", 5_000_000],
+        ["enhancedContent", 5_000_000],
+        ["transcript", 10_000_000],
+      ];
+      for (const [key, maxLength] of fields) {
+        if (draft[key] === null) result[key] = null;
+        else if (typeof draft[key] === "string") result[key] = draft[key].slice(0, maxLength);
+      }
+      return result;
+    };
+
     ipcMain.handle("notion-start-oauth", async () => {
       try {
         return await this.notionIntegration.startOAuth();
@@ -8617,7 +8633,12 @@ class IPCHandlers {
 
     ipcMain.handle("notion-preview-publication", (_event, noteId, options = {}) => {
       try {
-        const preview = this.notionIntegration.previewPublication(Number(noteId), options);
+        const preview = this.notionIntegration.previewPublication(Number(noteId), {
+          layoutKey: options.layoutKey === "meeting" ? "meeting" : "general",
+          contentSource: options.contentSource === "original" ? "original" : "enhanced",
+          includeTranscript: options.includeTranscript === true,
+          draft: sanitizeNotionDraft(options.draft),
+        });
         return {
           success: true,
           destination: preview.destination,
@@ -8640,6 +8661,7 @@ class IPCHandlers {
           contentSource: options.contentSource === "original" ? "original" : "enhanced",
           includeTranscript: options.includeTranscript === true,
           allowDuplicate: options.allowDuplicate === true,
+          draft: sanitizeNotionDraft(options.draft),
         });
       } catch (error) {
         debugLogger.error(

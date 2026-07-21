@@ -46,6 +46,7 @@ function createDatabase(overrides = {}) {
     getNotionDestination: () => destination,
     getNotionDestinationById: () => destination,
     findPublishedNotionPublication: () => null,
+    findUncertainNotionPublication: () => null,
     findResumableNotionPublication: () => publication,
     createNotionPublication: () => publication,
     updateNotionPublication: (_id, update) => {
@@ -78,6 +79,47 @@ test("returns the existing page instead of silently duplicating unchanged conten
   assert.equal(result.success, false);
   assert.equal(result.code, "DUPLICATE");
   assert.equal(result.duplicate, existing);
+});
+
+test("uses the renderer draft consistently instead of stale persisted content", () => {
+  const database = createDatabase();
+  const service = new NotionPublicationService(database, {});
+
+  const result = service.preview(12, {
+    contentSource: "enhanced",
+    draft: {
+      title: "Draft title",
+      content: "Current original",
+      enhancedContent: "Current enhanced",
+      transcript: null,
+    },
+  });
+
+  assert.equal(result.payload.title, "Draft title");
+  assert.match(result.preview, /Current enhanced/);
+  assert.doesNotMatch(result.preview, /Paragraph 1/);
+});
+
+test("does not automatically resume a publish left in an uncertain state", async () => {
+  const uncertain = {
+    id: 21,
+    status: "publishing",
+    notion_page_id: "possibly-created-page",
+    notion_page_url: "https://notion.so/possibly-created-page",
+  };
+  const database = createDatabase({ findUncertainNotionPublication: () => uncertain });
+  let appendCalls = 0;
+  const service = new NotionPublicationService(database, {
+    appendBlocks: async () => {
+      appendCalls += 1;
+    },
+  });
+
+  const result = await service.publish(12, { contentSource: "original" });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "OUTCOME_UNKNOWN");
+  assert.equal(result.pageUrl, uncertain.notion_page_url);
+  assert.equal(appendCalls, 0);
 });
 
 test("resumes a partial publish from next_block_index in 100-block batches", async () => {
@@ -113,6 +155,26 @@ test("marks the tracked publication partial when a later batch fails", async () 
   const last = database.updates.at(-1);
   assert.equal(last.status, "partial");
   assert.ok(last.lastError.includes("boom"));
+});
+
+test("persists an ambiguous append outcome so it cannot be resumed silently", async () => {
+  const database = createDatabase();
+  const service = new NotionPublicationService(database, {
+    appendBlocks: async () => {
+      throw Object.assign(new Error("Check Notion before trying again"), {
+        code: "OUTCOME_UNKNOWN",
+        outcomeUnknown: true,
+      });
+    },
+  });
+
+  const result = await service.publish(12, { contentSource: "original" });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "OUTCOME_UNKNOWN");
+  assert.equal(result.pageUrl, "https://notion.so/page-id");
+  const last = database.updates.at(-1);
+  assert.equal(last.status, "partial");
+  assert.match(last.lastError, /"outcomeUnknown":true/);
 });
 
 test("touches no publication row when the failure precedes its creation", async () => {

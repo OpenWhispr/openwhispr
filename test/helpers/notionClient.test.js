@@ -67,6 +67,53 @@ test("refreshes once and retries after a 401", async () => {
   assert.deepEqual(refreshCalls, [{}, { force: true }]);
 });
 
+test("does not replay a mutation when the outcome is unknown", async () => {
+  let calls = 0;
+  const waits = [];
+  const client = new NotionClient(
+    { refresh: async () => "access-token" },
+    {
+      fetch: async () => {
+        calls += 1;
+        throw new Error("connection reset after upload");
+      },
+      sleep: async (milliseconds) => waits.push(milliseconds),
+    }
+  );
+
+  await assert.rejects(
+    () =>
+      client.createPage(1, {
+        dataSourceId: "source",
+        titleProperty: "Name",
+        title: "Page title",
+      }),
+    (error) => error.code === "OUTCOME_UNKNOWN" && error.outcomeUnknown === true
+  );
+  assert.equal(calls, 1);
+  assert.deepEqual(waits, []);
+});
+
+test("uses exponential backoff when a retryable response has no Retry-After header", async () => {
+  const waits = [];
+  let calls = 0;
+  const client = new NotionClient(
+    { refresh: async () => "access-token" },
+    {
+      fetch: async () => {
+        calls += 1;
+        return calls === 1
+          ? response(503, { code: "service_unavailable" })
+          : response(200, { ok: true });
+      },
+      sleep: async (milliseconds) => waits.push(milliseconds),
+    }
+  );
+
+  assert.deepEqual(await client.request(1, "/users/me"), { ok: true });
+  assert.deepEqual(waits, [500]);
+});
+
 test("normalizes database URLs and finds the live title property", () => {
   assert.equal(
     normalizeUuid("https://www.notion.so/workspace/0123456789abcdef0123456789abcdef?v=abc"),

@@ -6,12 +6,16 @@ const NOTION_API_VERSION = "2026-03-11";
 const DEFAULT_MAX_ATTEMPTS = 4;
 
 class NotionApiError extends Error {
-  constructor(message, { status = 0, code = "NOTION_API_ERROR", retryable = false } = {}) {
+  constructor(
+    message,
+    { status = 0, code = "NOTION_API_ERROR", retryable = false, outcomeUnknown = false } = {}
+  ) {
     super(message);
     this.name = "NotionApiError";
     this.status = status;
     this.code = code;
     this.retryable = retryable;
+    this.outcomeUnknown = outcomeUnknown;
   }
 }
 
@@ -61,6 +65,7 @@ class NotionClient {
   async request(connectionId, path, options = {}) {
     let token = await this.oauth.refresh(connectionId);
     let refreshedAfterUnauthorized = false;
+    const mutation = options.mutation === true;
 
     for (let attempt = 0; attempt < this.maxAttempts; attempt += 1) {
       let response;
@@ -78,6 +83,15 @@ class NotionClient {
           useSessionCookies: false,
         });
       } catch {
+        if (mutation) {
+          throw new NotionApiError(
+            "Notion may have completed this change, but OpenWhispr could not confirm it. Check Notion before trying again.",
+            {
+              code: "OUTCOME_UNKNOWN",
+              outcomeUnknown: true,
+            }
+          );
+        }
         if (attempt + 1 < this.maxAttempts) {
           await this.sleep(Math.min(8000, 500 * 2 ** attempt));
           continue;
@@ -99,8 +113,19 @@ class NotionClient {
 
       const retryable =
         response.status === 429 || response.status === 409 || response.status >= 500;
+      if (mutation && response.status >= 500) {
+        throw new NotionApiError(
+          "Notion may have completed this change, but OpenWhispr could not confirm it. Check Notion before trying again.",
+          {
+            status: response.status,
+            code: "OUTCOME_UNKNOWN",
+            outcomeUnknown: true,
+          }
+        );
+      }
       if (retryable && attempt + 1 < this.maxAttempts) {
-        const retryAfter = Number(response.headers.get("retry-after"));
+        const retryAfterHeader = response.headers.get("retry-after");
+        const retryAfter = retryAfterHeader === null ? NaN : Number(retryAfterHeader);
         const waitMs = Number.isFinite(retryAfter)
           ? retryAfter * 1000
           : Math.min(8000, 500 * 2 ** attempt);
@@ -177,6 +202,7 @@ class NotionClient {
   createPage(connectionId, { dataSourceId, titleProperty, title }) {
     return this.request(connectionId, "/pages", {
       method: "POST",
+      mutation: true,
       body: {
         parent: { data_source_id: dataSourceId },
         properties: {
@@ -192,6 +218,7 @@ class NotionClient {
     }
     return this.request(connectionId, `/blocks/${encodeURIComponent(pageId)}/children`, {
       method: "PATCH",
+      mutation: true,
       body: { children },
     });
   }

@@ -1032,6 +1032,7 @@ export default function NoteEditor({
           open={notionDialogOpen}
           onOpenChange={setNotionDialogOpen}
           enhancedIsStale={enhancement?.isStale}
+          enhancedContent={enhancement?.content ?? note.enhanced_content ?? null}
           onPublished={setNotionPublication}
         />
       )}

@@ -41,6 +41,44 @@ function participantNames(raw) {
   }
 }
 
+function formatTranscriptTimestamp(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
+  const wholeSeconds = Math.floor(seconds);
+  const hours = Math.floor(wholeSeconds / 3600);
+  const minutes = Math.floor((wholeSeconds % 3600) / 60);
+  const remainder = wholeSeconds % 60;
+  return [hours, minutes, remainder].map((part) => String(part).padStart(2, "0")).join(":");
+}
+
+function transcriptSpeaker(segment) {
+  if (segment?.speakerName) return String(segment.speakerName);
+  if (segment?.speaker === "you" || segment?.source === "mic") return "You";
+  const speakerNumber = String(segment?.speaker || "").match(/^speaker_(\d+)$/)?.[1];
+  if (speakerNumber !== undefined) return `Speaker ${Number(speakerNumber) + 1}`;
+  if (segment?.source === "system") return "Others";
+  return "Unknown speaker";
+}
+
+function formatTranscript(raw) {
+  const fallback = String(raw || "");
+  if (!fallback.trimStart().startsWith("[")) return fallback;
+  try {
+    const segments = JSON.parse(fallback);
+    if (!Array.isArray(segments)) return fallback;
+    return segments
+      .filter((segment) => typeof segment?.text === "string" && segment.text.trim())
+      .map((segment) => {
+        const timestamp = formatTranscriptTimestamp(segment.timestamp);
+        const heading = `**${transcriptSpeaker(segment)}**${timestamp ? ` \`${timestamp}\`` : ""}`;
+        return `${heading}\n${segment.text.trim()}`;
+      })
+      .join("\n\n");
+  } catch {
+    return fallback;
+  }
+}
+
 // Staleness of enhanced content is decided in the renderer (PersonalNotesView's
 // isEnhancementStale), which sees the live editor content this process cannot.
 // The publish dialog only offers contentSource "enhanced" when it is fresh.
@@ -63,7 +101,7 @@ function buildMeetingBlocks(note, options) {
   blocks.push(...markdownToBlocks(selectContent(note, options.contentSource)));
 
   if (options.includeTranscript && note.transcript) {
-    blocks.push(...toggleBlocks("Transcript", note.transcript));
+    blocks.push(...toggleBlocks("Transcript", formatTranscript(note.transcript)));
   }
 
   blocks.push({ object: "block", type: "divider", divider: {} });
@@ -78,7 +116,7 @@ function buildGeneralBlocks(note, options) {
   ];
 
   if (options.includeTranscript && note.transcript) {
-    blocks.push(...toggleBlocks("Transcript", note.transcript));
+    blocks.push(...toggleBlocks("Transcript", formatTranscript(note.transcript)));
   }
 
   blocks.push({ object: "block", type: "divider", divider: {} });
@@ -112,6 +150,7 @@ function buildPublicationPayload(note, options = {}) {
 module.exports = {
   buildPublicationPayload,
   formatDuration,
+  formatTranscript,
   participantNames,
   selectContent,
 };

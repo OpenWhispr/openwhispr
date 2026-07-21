@@ -27,7 +27,31 @@ function safeError(error) {
     message: error?.message || "Publishing to Notion failed",
     retryable: error?.retryable === true,
     status: Number(error?.status) || 0,
+    outcomeUnknown: error?.outcomeUnknown === true,
   };
+}
+
+function applyDraft(note, draft) {
+  if (!draft || typeof draft !== "object") return note;
+  const next = { ...note };
+  const fields = [
+    ["title", "title", 2000],
+    ["content", "content", 5_000_000],
+    ["enhancedContent", "enhanced_content", 5_000_000],
+    ["transcript", "transcript", 10_000_000],
+  ];
+  for (const [inputKey, noteKey, maxLength] of fields) {
+    if (!Object.prototype.hasOwnProperty.call(draft, inputKey)) continue;
+    const value = draft[inputKey];
+    if (value !== null && typeof value !== "string") {
+      throw new TypeError(`Invalid Notion draft ${inputKey}`);
+    }
+    if (typeof value === "string" && value.length > maxLength) {
+      throw new RangeError(`Notion draft ${inputKey} is too large`);
+    }
+    next[noteKey] = value;
+  }
+  return next;
 }
 
 function requiresReauth(error) {
@@ -47,8 +71,9 @@ class NotionPublicationService {
   }
 
   preview(noteId, options = {}) {
-    const note = this.databaseManager.getNote(noteId);
-    if (!note) throw new Error("Note not found");
+    const storedNote = this.databaseManager.getNote(noteId);
+    if (!storedNote) throw new Error("Note not found");
+    const note = applyDraft(storedNote, options.draft);
     const destination = options.destinationId
       ? this.databaseManager.getNotionDestinationById(options.destinationId)
       : this.databaseManager.getNotionDestination();
@@ -97,6 +122,21 @@ class NotionPublicationService {
       const { destination, payload, contentHash: hash, duplicate } = this.preview(noteId, options);
       if (duplicate && options.allowDuplicate !== true) {
         return { success: false, code: "DUPLICATE", duplicate };
+      }
+
+      const uncertain =
+        options.allowDuplicate === true
+          ? null
+          : this.databaseManager.findUncertainNotionPublication(noteId, destination.id, hash);
+      if (uncertain) {
+        return {
+          success: false,
+          code: "OUTCOME_UNKNOWN",
+          error:
+            "A previous publish may have reached Notion. Check the destination before publishing another copy.",
+          publication: uncertain,
+          pageUrl: uncertain.notion_page_url || undefined,
+        };
       }
 
       publication =
@@ -156,14 +196,26 @@ class NotionPublicationService {
       return { success: true, publication: published, pageUrl };
     } catch (error) {
       const info = safeError(error);
+      let failedPublication = publication;
       if (publication) {
         const status = requiresReauth(error) ? "needs_reauth" : pageId ? "partial" : "failed";
-        this.databaseManager.updateNotionPublication(publication.id, {
+        failedPublication = this.databaseManager.updateNotionPublication(publication.id, {
           status,
           lastError: JSON.stringify(info),
         });
       }
-      return { success: false, error: info.message, code: info.code, retryable: info.retryable };
+      return {
+        success: false,
+        error: info.message,
+        code: info.code,
+        retryable: info.retryable,
+        ...(info.outcomeUnknown && failedPublication
+          ? {
+              publication: failedPublication,
+              pageUrl: failedPublication.notion_page_url || undefined,
+            }
+          : {}),
+      };
     } finally {
       this.activeNotes.delete(noteId);
     }
@@ -172,6 +224,7 @@ class NotionPublicationService {
 
 module.exports = {
   NotionPublicationService,
+  applyDraft,
   contentHash,
   requiresReauth,
   stableStringify,
