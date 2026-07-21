@@ -6947,8 +6947,7 @@ class IPCHandlers {
     ipcMain.handle("agent-open-note", async (_event, noteId) => {
       try {
         const note = this.databaseManager.getNote(noteId);
-        await this.windowManager.createControlPanelWindow();
-        this.windowManager.sendToControlPanel("navigate-to-note", {
+        await this.windowManager.queueNoteNavigation({
           noteId,
           folderId: note?.folder_id ?? null,
         });
@@ -8804,6 +8803,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-pending-meeting-note-navigation", async () => {
       return this.windowManager?.consumePendingMeetingNoteNavigation() ?? null;
+    });
+
+    ipcMain.handle("get-pending-note-navigation", async () => {
+      return this.windowManager?.consumePendingNoteNavigation() ?? null;
     });
 
     ipcMain.handle("meeting-notification-ready", async () => {

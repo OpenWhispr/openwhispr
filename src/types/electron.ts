@@ -2001,9 +2001,11 @@ declare global {
         trigger?: "hotkey" | "manual" | "calendar-join";
       } | null>;
       onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
-      onNavigateToNote?: (
-        callback: (data: { noteId: number; folderId: number | null }) => void
-      ) => () => void;
+      getPendingNoteNavigation?: () => Promise<{
+        noteId: number;
+        folderId: number | null;
+      } | null>;
+      onNoteNavigationPending?: (callback: () => void) => () => void;
       onUpdateNotificationData?: (
         callback: (data: { version: string; releaseDate?: string }) => void
       ) => () => void;
