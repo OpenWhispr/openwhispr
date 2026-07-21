@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="mcal-tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E9BE6"/>
+      <stop offset="1" stop-color="#0F6CBD"/>
+    </linearGradient>
+  </defs>
+  <rect x="14" y="14" width="172" height="172" rx="38" fill="url(#mcal-tile)"/>
+  <rect x="52" y="64" width="96" height="84" rx="10" fill="#FFFFFF"/>
+  <path d="M52 74a10 10 0 0 1 10-10h76a10 10 0 0 1 10 10v14H52z" fill="#0A4E8C"/>
+  <rect x="72" y="50" width="8" height="24" rx="4" fill="#FFFFFF"/>
+  <rect x="120" y="50" width="8" height="24" rx="4" fill="#FFFFFF"/>
+  <g fill="#0F6CBD" opacity="0.9">
+    <rect x="66" y="100" width="16" height="12" rx="2"/>
+    <rect x="92" y="100" width="16" height="12" rx="2"/>
+    <rect x="118" y="100" width="16" height="12" rx="2"/>
+    <rect x="66" y="122" width="16" height="12" rx="2"/>
+    <rect x="92" y="122" width="16" height="12" rx="2"/>
+    <rect x="118" y="122" width="16" height="12" rx="2"/>
+  </g>
+</svg>

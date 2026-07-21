@@ -1,6 +1,7 @@
 const { net } = require("electron");
 const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
+const CalendarSyncInterval = require("./calendarSyncInterval");
 const { broadcastToWindows } = require("./windowBroadcast");
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
@@ -12,11 +13,11 @@ class GoogleCalendarManager {
     this.reminderScheduler = reminderScheduler;
     this.oauth = new GoogleCalendarOAuth(databaseManager);
     this.accounts = new Map();
-    this.syncInterval = null;
-    this.SYNC_INTERVAL_MS = 2 * 60 * 1000;
-    this._consecutiveFailures = 0;
-    this._lastFocusSync = 0;
     this.primaryOnly = true;
+    this.syncRunner = new CalendarSyncInterval(
+      () => this.syncEvents().then(() => this.reminderScheduler.scheduleNextMeeting()),
+      { intervalMs: 2 * 60 * 1000, maxIntervalMs: 30 * 60 * 1000, logScope: "gcal" }
+    );
   }
 
   start() {
@@ -25,22 +26,16 @@ class GoogleCalendarManager {
 
     this.fetchCalendars()
       .then(() => this.syncEvents())
-      .then(() => {
-        this.reminderScheduler.scheduleNextMeeting();
-        this._consecutiveFailures = 0;
-      })
+      .then(() => this.reminderScheduler.scheduleNextMeeting())
       .catch((err) =>
         debugLogger.error("Initial calendar sync failed", { error: err.message }, "gcal")
       );
 
-    this._startSyncInterval();
+    this.syncRunner.start();
   }
 
   stop() {
-    if (this.syncInterval) {
-      clearInterval(this.syncInterval);
-      this.syncInterval = null;
-    }
+    this.syncRunner.stop();
   }
 
   isConnected() {
@@ -69,9 +64,8 @@ class GoogleCalendarManager {
 
     await this.fetchCalendars(result.email);
     await this.syncEvents();
-    this._consecutiveFailures = 0;
     this.reminderScheduler.scheduleNextMeeting();
-    this._startSyncInterval();
+    this.syncRunner.start();
     this._broadcastAccountsChanged();
 
     return result;
@@ -136,7 +130,7 @@ class GoogleCalendarManager {
     }
 
     this.databaseManager.applyPrimaryOnlyToSelection(this.primaryOnly);
-    this.databaseManager.removeEventsFromDeselectedCalendars();
+    this.databaseManager.removeEventsFromDeselectedCalendars("google");
     return allCalendars;
   }
 
@@ -176,6 +170,7 @@ class GoogleCalendarManager {
       params.set("syncToken", calendar.sync_token);
     }
 
+    let isFullSync = !calendar.sync_token;
     let data;
     try {
       data = await this._apiGet(
@@ -185,6 +180,7 @@ class GoogleCalendarManager {
     } catch (err) {
       // 410 Gone means syncToken is invalid; fall back to full sync
       if (err.statusCode === 410) {
+        isFullSync = true;
         const fullParams = new URLSearchParams({
           singleEvents: "true",
           orderBy: "startTime",
@@ -236,6 +232,16 @@ class GoogleCalendarManager {
       });
     }
 
+    // A full sync has no incremental baseline, so deletions that happened
+    // while the sync token was invalid never arrive as cancelled items —
+    // prune what the fresh snapshot no longer contains.
+    if (isFullSync) {
+      this.databaseManager.removeStaleCalendarEvents(
+        "google",
+        calendar.id,
+        toUpsert.map((event) => event.id)
+      );
+    }
     if (toUpsert.length > 0) this.databaseManager.upsertCalendarEvents(toUpsert);
     if (toRemove.length > 0) this.databaseManager.removeCalendarEvents(toRemove);
     if (data.nextSyncToken)
@@ -255,30 +261,13 @@ class GoogleCalendarManager {
 
   onWakeFromSleep() {
     this.syncEvents()
-      .then(() => {
-        this._consecutiveFailures = 0;
-        this._restartSyncInterval();
-      })
+      .then(() => this.syncRunner.notifySuccess())
       .catch((err) => debugLogger.error("Post-wake sync failed", { error: err.message }, "gcal"));
   }
 
   syncOnFocus() {
     if (!this.isConnected()) return;
-    const now = Date.now();
-    if (now - this._lastFocusSync < 30000) return;
-    this._lastFocusSync = now;
-
-    this.syncEvents()
-      .then(() => {
-        this.reminderScheduler.scheduleNextMeeting();
-        if (this._consecutiveFailures > 0) {
-          this._consecutiveFailures = 0;
-          this._restartSyncInterval();
-        }
-      })
-      .catch((err) =>
-        debugLogger.error("Focus-triggered sync failed", { error: err.message }, "gcal")
-      );
+    this.syncRunner.syncOnFocus();
   }
 
   getCalendars() {
@@ -288,7 +277,7 @@ class GoogleCalendarManager {
   async setCalendarSelection(calendarId, isSelected) {
     this.databaseManager.updateCalendarSelection(calendarId, isSelected);
     await this.syncEvents();
-    this._consecutiveFailures = 0;
+    this.syncRunner.notifySuccess();
     this.reminderScheduler.scheduleNextMeeting();
   }
 
@@ -318,50 +307,6 @@ class GoogleCalendarManager {
 
   _getAccountEmails() {
     return Array.from(this.accounts.keys());
-  }
-
-  _startSyncInterval() {
-    if (this.syncInterval) clearInterval(this.syncInterval);
-
-    const interval = this._getSyncInterval();
-    debugLogger.info(
-      "Calendar sync scheduled",
-      { intervalMs: interval, consecutiveFailures: this._consecutiveFailures },
-      "gcal"
-    );
-
-    this.syncInterval = setInterval(() => {
-      this.syncEvents()
-        .then(() => {
-          this.reminderScheduler.scheduleNextMeeting();
-          if (this._consecutiveFailures > 0) {
-            this._consecutiveFailures = 0;
-            this._restartSyncInterval();
-          }
-        })
-        .catch((err) => {
-          this._consecutiveFailures++;
-          debugLogger.error(
-            "Calendar sync failed",
-            {
-              error: err.message,
-              consecutiveFailures: this._consecutiveFailures,
-              nextIntervalMs: this._getSyncInterval(),
-            },
-            "gcal"
-          );
-          this._restartSyncInterval();
-        });
-    }, interval);
-  }
-
-  _getSyncInterval() {
-    if (this._consecutiveFailures === 0) return this.SYNC_INTERVAL_MS;
-    return Math.min(this.SYNC_INTERVAL_MS * Math.pow(2, this._consecutiveFailures), 30 * 60 * 1000);
-  }
-
-  _restartSyncInterval() {
-    this._startSyncInterval();
   }
 
   _broadcastAccountsChanged() {

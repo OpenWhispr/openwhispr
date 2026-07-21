@@ -24,7 +24,7 @@ export interface CalendarEvent {
   attendees: string | null;
 }
 
-export interface GoogleCalendarAccount {
+export interface CalendarAccount {
   email: string;
 }
 

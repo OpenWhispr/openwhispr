@@ -2682,6 +2682,19 @@
       "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
       "openSettings": "打开系统设置"
     },
+    "microsoftCalendar": {
+      "title": "Microsoft 日历",
+      "optional": "可选",
+      "description": "从 Outlook 或 Microsoft 365 日历读取会议。",
+      "connect": "连接 Microsoft 日历",
+      "connected": "已连接",
+      "addAnother": "添加其他日历",
+      "primaryOnly": "仅同步主日历",
+      "primaryOnlyDescription": "忽略他人共享给你的日历事件。",
+      "disconnect": "断开",
+      "disconnectConfirm": "断开 {{email}}？",
+      "disconnectDescription": "将不再从此日历记录会议笔记。"
+    },
     "appleCalendar": {
       "title": "Apple 日历",
       "optional": "可选",

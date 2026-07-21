@@ -75,6 +75,55 @@ test("Apple snapshots retain events referenced by meeting notes", (t) => {
   db.db.close();
 });
 
+function restEvent(provider, calendarId, id) {
+  return {
+    id,
+    calendar_id: calendarId,
+    provider,
+    summary: id,
+    start_time: "2026-07-22T10:00:00Z",
+    end_time: "2026-07-22T11:00:00Z",
+    is_all_day: false,
+    status: "confirmed",
+  };
+}
+
+test("full-sync prune drops stale events but keeps fresh, note-linked, and other-scope rows", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.upsertCalendarEvents([
+    restEvent("microsoft", "ms-cal", "fresh"),
+    restEvent("microsoft", "ms-cal", "stale"),
+    restEvent("microsoft", "ms-cal", "stale-linked"),
+    restEvent("microsoft", "other-cal", "other-calendar"),
+    restEvent("google", "ms-cal", "other-provider"),
+  ]);
+  const note = db.saveNote("Linked meeting", "", "meeting").note;
+  db.updateNote(note.id, { calendar_event_id: "stale-linked" });
+
+  db.removeStaleCalendarEvents("microsoft", "ms-cal", ["fresh"]);
+
+  assert.equal(db.getCalendarEventById("fresh")?.summary, "fresh");
+  assert.equal(db.getCalendarEventById("stale"), null);
+  assert.equal(db.getCalendarEventById("stale-linked")?.summary, "stale-linked");
+  assert.equal(db.getCalendarEventById("other-calendar")?.summary, "other-calendar");
+  assert.equal(db.getCalendarEventById("other-provider")?.summary, "other-provider");
+  db.db.close();
+});
+
+test("full-sync prune with an empty fresh set clears the calendar's unlinked events", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.upsertCalendarEvents([restEvent("microsoft", "ms-cal", "stale")]);
+
+  db.removeStaleCalendarEvents("microsoft", "ms-cal", []);
+
+  assert.equal(db.getCalendarEventById("stale"), null);
+  db.db.close();
+});
+
 test("tentative Apple events remain visible in upcoming meetings", (t) => {
   const db = createDb(t);
   if (!db) return;

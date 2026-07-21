@@ -13,7 +13,7 @@ export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
   isSignedIn: boolean;
-  gcalConnected: boolean;
+  calendarConnected: boolean;
   cloudBackupEnabled: boolean;
 }
 
@@ -32,7 +32,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(webSearchTool);
   }
 
-  if (settings.gcalConnected) {
+  if (settings.calendarConnected) {
     registry.register(calendarTool);
   }
 

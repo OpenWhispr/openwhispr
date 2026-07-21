@@ -1,19 +1,10 @@
-const http = require("http");
-const crypto = require("crypto");
-const { net, shell } = require("electron");
+const { net } = require("electron");
+const { runOAuthLoopbackFlow, OAuthFlowError } = require("./oauthLoopbackFlow");
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_SCOPE =
   "openid email https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly";
-const OAUTH_TIMEOUT_MS = 120000;
-const DEFAULT_DESKTOP_CALLBACK_URL = "https://openwhispr.com/auth/desktop-callback";
-
-const PROTOCOL_BY_CHANNEL = {
-  development: "openwhispr-dev",
-  staging: "openwhispr-staging",
-  production: "openwhispr",
-};
 
 class GoogleCalendarOAuth {
   constructor(databaseManager) {
@@ -28,114 +19,10 @@ class GoogleCalendarOAuth {
     return process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
   }
 
-  _getDesktopCallbackUrl() {
-    return process.env.VITE_OPENWHISPR_OAUTH_CALLBACK_URL || DEFAULT_DESKTOP_CALLBACK_URL;
-  }
-
-  _getProtocol() {
-    const channel = process.env.OPENWHISPR_CHANNEL || "production";
-    return PROTOCOL_BY_CHANNEL[channel] || PROTOCOL_BY_CHANNEL.production;
-  }
-
-  _buildCallbackRedirect(params) {
-    const url = new URL(this._getDesktopCallbackUrl());
-    url.searchParams.set("protocol", this._getProtocol());
-    for (const [key, value] of Object.entries(params)) {
-      url.searchParams.set(key, value);
-    }
-    return url.toString();
-  }
-
-  _redirect(res, params) {
-    res.writeHead(302, { Location: this._buildCallbackRedirect(params) });
-    res.end();
-  }
-
   startOAuthFlow() {
-    return new Promise((resolve, reject) => {
-      const codeVerifier = crypto.randomBytes(32).toString("base64url").slice(0, 43);
-      const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
-      const state = crypto.randomBytes(32).toString("hex");
-
-      const server = http.createServer(async (req, res) => {
-        try {
-          const url = new URL(req.url, `http://127.0.0.1`);
-          const returnedState = url.searchParams.get("state");
-          const code = url.searchParams.get("code");
-          const error = url.searchParams.get("error");
-
-          if (error) {
-            this._redirect(res, { gcal_error: error });
-            cleanup();
-            reject(new Error(`OAuth error: ${error}`));
-            return;
-          }
-
-          if (!code || returnedState !== state) {
-            res.writeHead(400, { "Content-Type": "text/html" });
-            res.end("<html><body><h3>Invalid request.</h3></body></html>");
-            return;
-          }
-
-          const redirectUri = `http://127.0.0.1:${server.address().port}`;
-          const tokenData = await this.exchangeCodeForTokens(code, redirectUri, codeVerifier);
-
-          if (tokenData.error) {
-            this._redirect(res, { gcal_error: "token_exchange_failed" });
-            cleanup();
-            reject(
-              new Error(`Token exchange failed: ${tokenData.error_description || tokenData.error}`)
-            );
-            return;
-          }
-
-          let email = null;
-          if (tokenData.id_token) {
-            try {
-              const payload = JSON.parse(
-                Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
-              );
-              email = payload.email;
-            } catch {}
-          }
-
-          if (!email) {
-            this._redirect(res, { gcal_error: "no_email" });
-            cleanup();
-            reject(new Error("Could not extract email from Google OAuth response"));
-            return;
-          }
-
-          const expiresAt = Date.now() + tokenData.expires_in * 1000;
-          this.databaseManager.saveGoogleTokens({
-            google_email: email,
-            access_token: tokenData.access_token,
-            refresh_token: tokenData.refresh_token,
-            expires_at: expiresAt,
-            scope: tokenData.scope || CALENDAR_SCOPE,
-          });
-
-          this._redirect(res, { gcal_connected: "true" });
-          cleanup();
-          resolve({ success: true, email });
-        } catch (err) {
-          this._redirect(res, { gcal_error: "server_error" });
-          cleanup();
-          reject(err);
-        }
-      });
-
-      let timeoutId;
-
-      const cleanup = () => {
-        clearTimeout(timeoutId);
-        server.close();
-      };
-
-      server.listen(0, "127.0.0.1", () => {
-        const port = server.address().port;
-        const redirectUri = `http://127.0.0.1:${port}`;
-
+    return runOAuthLoopbackFlow({
+      errorParam: "gcal_error",
+      buildAuthUrl: (redirectUri, state, codeChallenge) => {
         const params = new URLSearchParams({
           client_id: this.getClientId(),
           redirect_uri: redirectUri,
@@ -147,19 +34,45 @@ class GoogleCalendarOAuth {
           code_challenge: codeChallenge,
           code_challenge_method: "S256",
         });
+        return `${GOOGLE_AUTH_URL}?${params.toString()}`;
+      },
+      handleCallback: async (code, redirectUri, codeVerifier) => {
+        const tokenData = await this.exchangeCodeForTokens(code, redirectUri, codeVerifier);
 
-        shell.openExternal(`${GOOGLE_AUTH_URL}?${params.toString()}`);
-      });
+        if (tokenData.error) {
+          throw new OAuthFlowError(
+            "token_exchange_failed",
+            `Token exchange failed: ${tokenData.error_description || tokenData.error}`
+          );
+        }
 
-      timeoutId = setTimeout(() => {
-        server.close();
-        reject(new Error("OAuth flow timed out"));
-      }, OAUTH_TIMEOUT_MS);
+        let email = null;
+        if (tokenData.id_token) {
+          try {
+            const payload = JSON.parse(
+              Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
+            );
+            email = payload.email;
+          } catch {}
+        }
 
-      server.on("error", (err) => {
-        cleanup();
-        reject(err);
-      });
+        if (!email) {
+          throw new OAuthFlowError(
+            "no_email",
+            "Could not extract email from Google OAuth response"
+          );
+        }
+
+        this.databaseManager.saveGoogleTokens({
+          google_email: email,
+          access_token: tokenData.access_token,
+          refresh_token: tokenData.refresh_token,
+          expires_at: Date.now() + tokenData.expires_in * 1000,
+          scope: tokenData.scope || CALENDAR_SCOPE,
+        });
+
+        return { success: true, email };
+      },
     });
   }
 
@@ -230,6 +143,7 @@ class GoogleCalendarOAuth {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
+      signal: AbortSignal.timeout(10000),
       useSessionCookies: false,
     });
     const text = await response.text();
