@@ -34,7 +34,9 @@
     },
     "openControlPanel": "Abrir panel de control",
     "quit": "Salir de OpenWhispr",
-    "tooltip": "OpenWhispr - Dictado por voz"
+    "tooltip": "OpenWhispr - Dictado por voz",
+    "tooltipLocalColdStart": "OpenWhispr - Modelo local: arranque en frio en el primer uso",
+    "tooltipLocalNoGpu": "OpenWhispr - Sin GPU detectada; la primera transcripcion puede ser mas lenta"
   },
   "menu": {
     "appLabel": "OpenWhispr",
@@ -1833,7 +1835,11 @@
             "info": "Audio que se extiende de un segmento al siguiente para evitar cortes bruscos al concatenarlos."
           }
         }
-      }
+      },
+      "coldStartBadge": "Arranque en frio",
+      "coldStartHint": "El precalentamiento del modelo local se omitio o sigue cargando. La primera transcripcion puede tardar unos segundos.",
+      "noGpuBadge": "Sin GPU detectada",
+      "noGpuHint": "No se detecto aceleracion por GPU. La primera transcripcion puede ser mas lenta en CPU."
     },
     "intelligence": {
       "gpuDevice": {

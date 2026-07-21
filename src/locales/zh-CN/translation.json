@@ -34,7 +34,9 @@
     },
     "openControlPanel": "打开控制面板",
     "quit": "退出 OpenWhispr",
-    "tooltip": "OpenWhispr - 语音听写"
+    "tooltip": "OpenWhispr - 语音听写",
+    "tooltipLocalColdStart": "OpenWhispr - 本地模型：首次使用需冷启动",
+    "tooltipLocalNoGpu": "OpenWhispr - 未检测到 GPU，首次转录可能较慢"
   },
   "menu": {
     "appLabel": "OpenWhispr",
@@ -1216,7 +1218,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1780,7 +1787,11 @@
             "info": "将每个片段延伸到下一个片段的音频量，避免拼接时出现突兀的截断。"
           }
         }
-      }
+      },
+      "coldStartBadge": "冷启动",
+      "coldStartHint": "本地模型预热已跳过或仍在加载。首次转录可能需要几秒。",
+      "noGpuBadge": "未检测到 GPU",
+      "noGpuHint": "未检测到 GPU 加速。首次转录在 CPU 上可能较慢。"
     },
     "intelligence": {
       "gpuDevice": {
