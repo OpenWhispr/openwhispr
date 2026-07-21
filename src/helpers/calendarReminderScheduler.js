@@ -58,15 +58,7 @@ class CalendarReminderScheduler {
     debugLogger.info("Calendar meeting reminder due", { summary: event.summary }, "calendar");
     this.meetingDetectionEngine?.handleCalendarReminder(event);
 
-    if (this.meetingEndTimer) {
-      clearTimeout(this.meetingEndTimer);
-    }
-    const endDelay = new Date(event.end_time).getTime() - Date.now();
-    if (endDelay > 0) {
-      this.meetingEndTimer = setTimeout(() => {
-        this.onMeetingEnd();
-      }, endDelay);
-    }
+    this._scheduleMeetingEnd(event);
 
     this.scheduleNextMeeting();
   }
@@ -78,10 +70,7 @@ class CalendarReminderScheduler {
       "calendar"
     );
     this.activeMeeting = null;
-    if (this.meetingEndTimer) {
-      clearTimeout(this.meetingEndTimer);
-      this.meetingEndTimer = null;
-    }
+    this._clearMeetingEndTimer();
     this.scheduleNextMeeting();
   }
 
@@ -101,15 +90,51 @@ class CalendarReminderScheduler {
     };
   }
 
+  // Refresh or clear the cached active event after a provider replaces its
+  // rows. Keep notifiedMeetings intact so periodic snapshots cannot re-fire a
+  // reminder that was already delivered.
+  reconcileProvider(provider) {
+    if (!this.activeMeeting || this.activeMeeting.provider !== provider) return;
+
+    const key = notificationKey(this.activeMeeting);
+    const currentEvent = [
+      ...this.databaseManager.getActiveEvents(),
+      ...this.databaseManager.getUpcomingEvents(1),
+    ].find((event) => notificationKey(event) === key);
+
+    if (!currentEvent) {
+      this.activeMeeting = null;
+      this._clearMeetingEndTimer();
+      return;
+    }
+
+    this.activeMeeting = currentEvent;
+    this._scheduleMeetingEnd(currentEvent);
+  }
+
+  _scheduleMeetingEnd(event) {
+    this._clearMeetingEndTimer();
+    const endDelay = new Date(event.end_time).getTime() - Date.now();
+    if (endDelay > 0) {
+      this.meetingEndTimer = setTimeout(() => {
+        this.onMeetingEnd();
+      }, endDelay);
+    }
+  }
+
+  _clearMeetingEndTimer() {
+    if (this.meetingEndTimer) {
+      clearTimeout(this.meetingEndTimer);
+      this.meetingEndTimer = null;
+    }
+  }
+
   stop() {
     if (this.nextMeetingTimer) {
       clearTimeout(this.nextMeetingTimer);
       this.nextMeetingTimer = null;
     }
-    if (this.meetingEndTimer) {
-      clearTimeout(this.meetingEndTimer);
-      this.meetingEndTimer = null;
-    }
+    this._clearMeetingEndTimer();
     this.activeMeeting = null;
   }
 
@@ -129,10 +154,7 @@ class CalendarReminderScheduler {
 
     if (this.activeMeeting?.provider === provider) {
       this.activeMeeting = null;
-      if (this.meetingEndTimer) {
-        clearTimeout(this.meetingEndTimer);
-        this.meetingEndTimer = null;
-      }
+      this._clearMeetingEndTimer();
     }
 
     const prefix = `${provider}:`;
