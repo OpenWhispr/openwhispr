@@ -35,7 +35,11 @@ function buildDisclaimShim() {
     );
     return;
   }
-  fs.chmodSync(output, 0o755);
+  try {
+    fs.chmodSync(output, 0o755);
+  } catch (error) {
+    console.warn(`[calendar-listener] Unable to set shim permissions: ${error.message}`);
+  }
   console.log("[calendar-listener] Built macos-disclaim-exec.");
 }
 

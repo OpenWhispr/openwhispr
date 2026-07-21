@@ -6,10 +6,13 @@
  * calendars+events snapshot whenever the store changes, "sync" arrives on
  * stdin, or a 5-minute timer rolls the 7-day window forward.
  *
- * Pass --request to prompt for calendar access when it is not determined —
- * the TCC prompt is attributed to the parent app's usage string.
+ * Pass --request to prompt for calendar access when it is not determined.
+ * macOS reads the usage strings from the TCC "responsible process": the
+ * OpenWhispr app bundle in packaged builds, or this binary's embedded
+ * __info_plist in dev, where the manager spawns it via macos-disclaim-exec
+ * (see build-macos-calendar-listener.js).
  *
- * Compile: swiftc -O macos-calendar-listener.swift -o macos-calendar-listener -framework EventKit -framework Foundation
+ * Compile: see scripts/build-macos-calendar-listener.js (embeds the Info.plist)
  */
 
 import CoreGraphics
