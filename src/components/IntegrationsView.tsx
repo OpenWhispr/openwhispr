@@ -6,6 +6,7 @@ import { Badge } from "./ui/badge";
 import { SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
 import { Toggle } from "./ui/toggle";
 import {
+  AlertDialog,
   ConfirmDialog,
   Dialog,
   DialogContent,
@@ -54,7 +55,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
   const [isAppleConnecting, setIsAppleConnecting] = useState(false);
   const [appleSourceNames, setAppleSourceNames] = useState<string[]>([]);
   const [confirmAppleDisconnect, setConfirmAppleDisconnect] = useState(false);
-  const [showCalendarPermissionDialog, setShowCalendarPermissionDialog] = useState(false);
+  const [appleConnectError, setAppleConnectError] = useState<"denied" | "failed" | null>(null);
   const [apiKeysDialogOpen, setApiKeysDialogOpen] = useState(false);
   const systemAudio = useSystemAudioPermission();
   const { request: requestSystemAudioAccess } = systemAudio;
@@ -85,7 +86,9 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
       if (result?.success) {
         setAppleCalendarConnected(true);
       } else {
-        setShowCalendarPermissionDialog(true);
+        // Only send the user to Privacy settings when access was actually
+        // denied; helper-missing/snapshot-failed are not permission problems.
+        setAppleConnectError(result?.reason === "denied" ? "denied" : "failed");
       }
     } finally {
       setIsAppleConnecting(false);
@@ -456,12 +459,20 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
       />
 
       <ConfirmDialog
-        open={showCalendarPermissionDialog}
-        onOpenChange={setShowCalendarPermissionDialog}
+        open={appleConnectError === "denied"}
+        onOpenChange={(open) => !open && setAppleConnectError(null)}
         title={t("integrations.appleCalendar.permissionDenied")}
         description={t("integrations.appleCalendar.permissionDeniedDescription")}
         confirmText={t("integrations.appleCalendar.openSettings")}
         onConfirm={() => window.electronAPI?.openCalendarPrivacySettings?.()}
+      />
+
+      <AlertDialog
+        open={appleConnectError === "failed"}
+        onOpenChange={(open) => !open && setAppleConnectError(null)}
+        title={t("integrations.appleCalendar.connectFailed")}
+        description={t("integrations.appleCalendar.connectFailedDescription")}
+        onOk={() => {}}
       />
     </div>
   );

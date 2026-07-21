@@ -3153,7 +3153,9 @@
       "disconnectDescription": "Meeting notes will no longer be recorded from your Apple Calendar.",
       "permissionDenied": "Calendar Access Required",
       "permissionDeniedDescription": "OpenWhispr needs calendar access to detect meetings. Enable OpenWhispr in System Settings under Privacy & Security → Calendars.",
-      "openSettings": "Open System Settings"
+      "openSettings": "Open System Settings",
+      "connectFailed": "Connection Failed",
+      "connectFailedDescription": "Something went wrong while connecting to Calendar.app. Please restart OpenWhispr and try again."
     },
     "sections": {
       "calendar": "Calendar",

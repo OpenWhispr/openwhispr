@@ -2,6 +2,10 @@ const debugLogger = require("./debugLogger");
 
 const MEETING_REMINDER_LEAD_MS = 60 * 1000;
 
+function notificationKey(event) {
+  return `${event.provider || "google"}:${event.id}`;
+}
+
 // Provider-agnostic meeting reminder scheduling. Reads only the shared
 // calendar_events table (deduped across providers), so a single scheduler
 // serves both calendar managers without double-firing reminders.
@@ -21,7 +25,7 @@ class CalendarReminderScheduler {
     }
 
     const upcoming = this.databaseManager.getUpcomingEvents(1440);
-    const next = upcoming.find((e) => !this.notifiedMeetings.has(e.id));
+    const next = upcoming.find((e) => !this.notifiedMeetings.has(notificationKey(e)));
     if (!next) return;
 
     const delay = new Date(next.start_time).getTime() - MEETING_REMINDER_LEAD_MS - Date.now();
@@ -38,8 +42,10 @@ class CalendarReminderScheduler {
   onMeetingStart(event) {
     const events = this.databaseManager.getActiveEvents();
     const stillExists =
-      events.some((e) => e.id === event.id) ||
-      this.databaseManager.getUpcomingEvents(1).some((e) => e.id === event.id);
+      events.some((e) => notificationKey(e) === notificationKey(event)) ||
+      this.databaseManager
+        .getUpcomingEvents(1)
+        .some((e) => notificationKey(e) === notificationKey(event));
 
     if (!stillExists) {
       this.scheduleNextMeeting();
@@ -47,7 +53,7 @@ class CalendarReminderScheduler {
     }
 
     this.activeMeeting = event;
-    this.notifiedMeetings.add(event.id);
+    this.notifiedMeetings.add(notificationKey(event));
 
     debugLogger.info("Calendar meeting reminder due", { summary: event.summary }, "calendar");
     this.meetingDetectionEngine?.handleCalendarReminder(event);
@@ -66,7 +72,11 @@ class CalendarReminderScheduler {
   }
 
   onMeetingEnd() {
-    debugLogger.info("Calendar meeting ended", { summary: this.activeMeeting?.summary }, "calendar");
+    debugLogger.info(
+      "Calendar meeting ended",
+      { summary: this.activeMeeting?.summary },
+      "calendar"
+    );
     this.activeMeeting = null;
     if (this.meetingEndTimer) {
       clearTimeout(this.meetingEndTimer);
@@ -103,11 +113,32 @@ class CalendarReminderScheduler {
     this.activeMeeting = null;
   }
 
-  // Called when a provider disconnects; the caller re-arms via
-  // scheduleNextMeeting() since the other provider's events may remain.
-  reset() {
-    this.stop();
-    this.notifiedMeetings.clear();
+  // Re-arm after one provider's data changes without forgetting reminders
+  // already delivered by the other provider.
+  reset(provider = null) {
+    if (!provider) {
+      this.stop();
+      this.notifiedMeetings.clear();
+      return;
+    }
+
+    if (this.nextMeetingTimer) {
+      clearTimeout(this.nextMeetingTimer);
+      this.nextMeetingTimer = null;
+    }
+
+    if (this.activeMeeting?.provider === provider) {
+      this.activeMeeting = null;
+      if (this.meetingEndTimer) {
+        clearTimeout(this.meetingEndTimer);
+        this.meetingEndTimer = null;
+      }
+    }
+
+    const prefix = `${provider}:`;
+    for (const key of this.notifiedMeetings) {
+      if (key.startsWith(prefix)) this.notifiedMeetings.delete(key);
+    }
   }
 }
 

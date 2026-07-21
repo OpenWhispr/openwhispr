@@ -3005,7 +3005,9 @@
       "disconnectDescription": "将不再从 Apple 日历记录会议笔记。",
       "permissionDenied": "需要日历访问权限",
       "permissionDeniedDescription": "OpenWhispr 需要日历访问权限来检测会议。请在系统设置的「隐私与安全性」→「日历」中启用 OpenWhispr。",
-      "openSettings": "打开系统设置"
+      "openSettings": "打开系统设置",
+      "connectFailed": "连接失败",
+      "connectFailedDescription": "连接 Calendar.app 时出错。请重启 OpenWhispr 后重试。"
     },
     "sections": {
       "calendar": "日历",

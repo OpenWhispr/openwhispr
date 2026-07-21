@@ -28,6 +28,12 @@ function loadDetector(platform, spawn) {
     if (request === "child_process") {
       return { ...childProcess, spawn };
     }
+    // Binary resolution hits the real filesystem, so without this the platform
+    // under test would be decided by which listener binaries happen to be built
+    // on the host rather than by setPlatform().
+    if (request === "./binaryResolver") {
+      return { resolveBundledBinary: (name) => `/fake/bin/${name}` };
+    }
     return originalLoad.call(this, request, parent, isMain);
   };
 
@@ -68,7 +74,6 @@ function createDetector(platform, { spawnError } = {}) {
   });
 
   const detector = new AudioActivityDetector();
-  detector._resolveBinary = (name) => `/fake/bin/${name}`;
   detector._isMicActive = async () => false;
   return { detector, children, calls };
 }

@@ -3035,7 +3035,9 @@
       "disconnectDescription": "Заметки встреч больше не будут записываться из вашего Календаря Apple.",
       "permissionDenied": "Требуется доступ к календарю",
       "permissionDeniedDescription": "OpenWhispr нужен доступ к календарю для обнаружения встреч. Включите OpenWhispr в Системных настройках: Конфиденциальность и безопасность → Календари.",
-      "openSettings": "Открыть Системные настройки"
+      "openSettings": "Открыть Системные настройки",
+      "connectFailed": "Ошибка подключения",
+      "connectFailedDescription": "При подключении к Calendar.app произошла ошибка. Перезапустите OpenWhispr и попробуйте снова."
     },
     "sections": {
       "calendar": "Календарь",

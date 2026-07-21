@@ -519,7 +519,6 @@ class DatabaseManager {
           title TEXT NOT NULL,
           color TEXT,
           source_name TEXT,
-          is_selected INTEGER NOT NULL DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
@@ -3507,7 +3506,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction((list) => {
         // Snapshots are complete: prune calendars removed from Calendar.app,
-        // upsert the rest so is_selected survives.
+        // upsert the rest so created_at survives.
         if (list.length === 0) {
           this.db.prepare("DELETE FROM apple_calendars").run();
           return;
@@ -3547,22 +3546,26 @@ class DatabaseManager {
     }
   }
 
-  getSelectedAppleCalendars() {
-    try {
-      if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM apple_calendars WHERE is_selected = 1").all();
-    } catch (error) {
-      debugLogger.error("Error getting selected Apple calendars", { error: error.message }, "acal");
-      throw error;
-    }
-  }
-
-  // Snapshots cover the full sync window, so full-replace also handles deletions.
+  // Snapshots cover the full current/future window, so missing unreferenced
+  // events can be removed while note-linked history is retained.
   replaceAppleCalendarEvents(events) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction((list) => {
-        this.db.prepare("DELETE FROM calendar_events WHERE provider = 'apple'").run();
+        // The helper snapshot only contains current/future events. Keep past or
+        // rescheduled rows that are still referenced by meeting notes so those
+        // notes retain their calendar metadata.
+        this.db
+          .prepare(
+            `DELETE FROM calendar_events
+             WHERE provider = 'apple'
+               AND id NOT IN (
+                 SELECT calendar_event_id
+                 FROM notes
+                 WHERE calendar_event_id IS NOT NULL AND deleted_at IS NULL
+               )`
+          )
+          .run();
         if (list.length > 0) this.upsertCalendarEvents(list);
       });
       transaction(events);

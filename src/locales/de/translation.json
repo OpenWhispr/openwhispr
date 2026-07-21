@@ -3153,7 +3153,9 @@
       "disconnectDescription": "Besprechungsnotizen werden von deinem Apple Kalender nicht mehr aufgezeichnet.",
       "permissionDenied": "Kalenderzugriff erforderlich",
       "permissionDeniedDescription": "OpenWhispr benötigt Kalenderzugriff, um Besprechungen zu erkennen. Aktiviere OpenWhispr in den Systemeinstellungen unter Datenschutz & Sicherheit → Kalender.",
-      "openSettings": "Systemeinstellungen öffnen"
+      "openSettings": "Systemeinstellungen öffnen",
+      "connectFailed": "Verbindung fehlgeschlagen",
+      "connectFailedDescription": "Beim Verbinden mit Calendar.app ist ein Fehler aufgetreten. Starte OpenWhispr neu und versuche es erneut."
     },
     "sections": {
       "calendar": "Kalender",

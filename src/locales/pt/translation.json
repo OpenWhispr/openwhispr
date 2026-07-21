@@ -3005,7 +3005,9 @@
       "disconnectDescription": "As notas de reunião não serão mais gravadas do seu Calendário da Apple.",
       "permissionDenied": "Acesso ao calendário necessário",
       "permissionDeniedDescription": "O OpenWhispr precisa de acesso ao calendário para detectar reuniões. Ative o OpenWhispr em Configurações do Sistema, em Privacidade e Segurança → Calendários.",
-      "openSettings": "Abrir Configurações do Sistema"
+      "openSettings": "Abrir Configurações do Sistema",
+      "connectFailed": "Falha na conexão",
+      "connectFailedDescription": "Ocorreu um erro ao conectar ao Calendar.app. Reinicie o OpenWhispr e tente novamente."
     },
     "sections": {
       "calendar": "Calendário",

@@ -1,24 +1,26 @@
 const { spawn } = require("child_process");
-const path = require("path");
-const fs = require("fs");
-const { BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
+const { resolveBundledBinary } = require("./binaryResolver");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
+const { broadcastToWindows } = require("./windowBroadcast");
 
 const BINARY_NAME = "macos-calendar-listener";
 const FOCUS_SYNC_THROTTLE_MS = 30 * 1000;
+const HELPER_RESTART_BASE_MS = 1000;
+const HELPER_RESTART_MAX_MS = 30 * 1000;
 
 // Reads the local EventKit store (all accounts Calendar.app aggregates) via a
 // bundled Swift helper that pushes calendars+events snapshots as line-delimited
 // JSON. "Connected" means apple_calendars has rows — no tokens or settings.
 class AppleCalendarManager {
-  constructor(databaseManager, windowManager, reminderScheduler) {
+  constructor(databaseManager, reminderScheduler) {
     this.databaseManager = databaseManager;
-    this.windowManager = windowManager;
     this.reminderScheduler = reminderScheduler;
     this._helperProcess = null;
     this._pendingConnect = null;
     this._lastFocusSync = 0;
+    this._restartTimer = null;
+    this._restartAttempts = 0;
   }
 
   isConnected() {
@@ -44,6 +46,7 @@ class AppleCalendarManager {
     if (process.platform !== "darwin") {
       return Promise.resolve({ success: false, reason: "unsupported" });
     }
+    this._restartAttempts = 0;
     return new Promise((resolve) => {
       this._pendingConnect = { resolve, awaitingSnapshot: false };
       if (!this._spawnHelper(true)) {
@@ -55,15 +58,20 @@ class AppleCalendarManager {
 
   disconnect() {
     this.stop();
-    this.databaseManager.clearAppleCalendarData();
-    this.reminderScheduler.reset();
-    this.reminderScheduler.scheduleNextMeeting();
-    this._broadcastConnectionChanged();
-    this.broadcastToWindows("acal-events-synced", {});
+    this._clearStoredCalendarData();
     return { success: true };
   }
 
   stop() {
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
+    }
+    this._restartAttempts = 0;
+    this._stopHelperProcess();
+  }
+
+  _stopHelperProcess() {
     if (this._helperProcess) {
       const child = this._helperProcess;
       this._helperProcess = null;
@@ -87,15 +95,6 @@ class AppleCalendarManager {
     this._requestSync();
   }
 
-  broadcastToWindows(channel, data) {
-    const windows = BrowserWindow.getAllWindows();
-    windows.forEach((win) => {
-      if (!win.isDestroyed()) {
-        win.webContents.send(channel, data);
-      }
-    });
-  }
-
   _requestSync() {
     try {
       this._helperProcess?.stdin.write("sync\n");
@@ -104,39 +103,14 @@ class AppleCalendarManager {
     }
   }
 
-  _resolveBinary() {
-    const candidates = [
-      path.join(__dirname, "..", "..", "resources", "bin", BINARY_NAME),
-      path.join(__dirname, "..", "..", "resources", BINARY_NAME),
-    ];
-
-    if (process.resourcesPath) {
-      candidates.push(
-        path.join(process.resourcesPath, BINARY_NAME),
-        path.join(process.resourcesPath, "bin", BINARY_NAME),
-        path.join(process.resourcesPath, "resources", "bin", BINARY_NAME),
-        path.join(process.resourcesPath, "app.asar.unpacked", "resources", "bin", BINARY_NAME)
-      );
-    }
-
-    for (const candidate of candidates) {
-      try {
-        if (fs.existsSync(candidate)) {
-          fs.accessSync(candidate, fs.constants.X_OK);
-          debugLogger.info("Resolved binary", { name: BINARY_NAME, path: candidate }, "acal");
-          return candidate;
-        }
-      } catch {
-        // continue
-      }
-    }
-    return null;
-  }
-
   _spawnHelper(requestAccess) {
-    this.stop();
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
+    }
+    this._stopHelperProcess();
 
-    const binaryPath = this._resolveBinary();
+    const binaryPath = resolveBundledBinary(BINARY_NAME, "acal");
     if (!binaryPath) {
       debugLogger.warn("macos-calendar-listener binary not found", {}, "acal");
       return false;
@@ -203,6 +177,39 @@ class AppleCalendarManager {
       this._pendingConnect = null;
       pending.resolve({ success: false, reason: "denied" });
     }
+
+    this._scheduleHelperRestart();
+  }
+
+  _scheduleHelperRestart() {
+    if (process.platform !== "darwin" || this._restartTimer || this._helperProcess) return;
+
+    try {
+      if (!this.isConnected()) return;
+    } catch (err) {
+      debugLogger.warn(
+        "Could not determine whether calendar listener should restart",
+        { error: err.message },
+        "acal"
+      );
+      return;
+    }
+
+    const delay = Math.min(
+      HELPER_RESTART_BASE_MS * Math.pow(2, this._restartAttempts),
+      HELPER_RESTART_MAX_MS
+    );
+    this._restartAttempts += 1;
+    debugLogger.info(
+      "Scheduling calendar listener restart",
+      { delayMs: delay, attempt: this._restartAttempts },
+      "acal"
+    );
+
+    this._restartTimer = setTimeout(() => {
+      this._restartTimer = null;
+      if (!this._spawnHelper(false)) this._scheduleHelperRestart();
+    }, delay);
   }
 
   _handleMessage(message) {
@@ -223,6 +230,7 @@ class AppleCalendarManager {
       } else if (status !== "notDetermined") {
         // notDetermined means the TCC prompt is up; wait for the re-emit
         this._pendingConnect = null;
+        if (this.isConnected()) this._clearStoredCalendarData();
         pending.resolve({ success: false, reason: "denied" });
       }
       return;
@@ -231,33 +239,25 @@ class AppleCalendarManager {
     if (status !== "granted" && this.isConnected()) {
       // Access revoked in System Settings; a full re-connect is required
       debugLogger.warn("Calendar access no longer granted", { status }, "acal");
-      this.databaseManager.clearAppleCalendarData();
-      this._broadcastConnectionChanged();
-      this.broadcastToWindows("acal-events-synced", {});
+      this._clearStoredCalendarData();
     }
   }
 
   _applySnapshot({ calendars, events }) {
     try {
+      this._restartAttempts = 0;
       this.databaseManager.saveAppleCalendars(calendars);
-
-      const selectedIds = new Set(
-        this.databaseManager.getSelectedAppleCalendars().map((cal) => cal.id)
-      );
-      const selectedEvents = events.filter((event) => selectedIds.has(event.calendar_id));
-      this.databaseManager.replaceAppleCalendarEvents(
-        selectedEvents.map((event) => this._mapEvent(event))
-      );
+      this.databaseManager.replaceAppleCalendarEvents(events.map((event) => this._mapEvent(event)));
 
       const contacts = [];
-      for (const event of selectedEvents) {
+      for (const event of events) {
         for (const attendee of event.attendees || []) {
           if (attendee.email) contacts.push({ email: attendee.email, displayName: attendee.name });
         }
       }
       if (contacts.length > 0) this.databaseManager.upsertContacts(contacts);
 
-      this.broadcastToWindows("acal-events-synced", {});
+      broadcastToWindows("acal-events-synced", {});
       this.reminderScheduler.scheduleNextMeeting();
 
       if (this._pendingConnect?.awaitingSnapshot) {
@@ -308,7 +308,15 @@ class AppleCalendarManager {
   }
 
   _broadcastConnectionChanged() {
-    this.broadcastToWindows("acal-connection-changed", this.getConnectionStatus());
+    broadcastToWindows("acal-connection-changed", this.getConnectionStatus());
+  }
+
+  _clearStoredCalendarData() {
+    this.databaseManager.clearAppleCalendarData();
+    this.reminderScheduler.reset("apple");
+    this.reminderScheduler.scheduleNextMeeting();
+    this._broadcastConnectionChanged();
+    broadcastToWindows("acal-events-synced", {});
   }
 }
 

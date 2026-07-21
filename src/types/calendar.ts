@@ -8,14 +8,6 @@ export interface GoogleCalendar {
   sync_token: string | null;
 }
 
-export interface AppleCalendar {
-  id: string;
-  title: string;
-  color: string | null;
-  source_name: string | null;
-  is_selected: number;
-}
-
 export interface CalendarEvent {
   id: string;
   calendar_id: string;
