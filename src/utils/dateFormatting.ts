@@ -1,5 +1,6 @@
 export function normalizeDbDate(dateStr: string): Date {
-  const source = dateStr.endsWith("Z") ? dateStr : `${dateStr}Z`;
+  const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateStr);
+  const source = hasExplicitZone ? dateStr : `${dateStr}Z`;
   return new Date(source);
 }
 
@@ -17,7 +18,7 @@ export function formatUpcomingDateGroup(date: Date | string, t: (key: string) =>
 }
 
 export function formatDateGroup(date: Date | string, t: (key: string) => string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = typeof date === "string" ? normalizeDbDate(date) : date;
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today);
