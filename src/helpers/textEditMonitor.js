@@ -235,7 +235,9 @@ class TextEditMonitor extends EventEmitter {
               try {
                 resolve({
                   state: "selected",
-                  text: Buffer.from(output.slice("SELECTED_B64:".length), "base64").toString("utf8"),
+                  text: Buffer.from(output.slice("SELECTED_B64:".length), "base64").toString(
+                    "utf8"
+                  ),
                 });
                 return;
               } catch (decodeError) {
@@ -249,11 +251,14 @@ class TextEditMonitor extends EventEmitter {
               return;
             }
 
-            debugLogger.debug("[TextEditMonitor] Native selected-text read unavailable; trying AppleScript", {
-              pid,
-              error: error?.message || null,
-              stderr: stderr?.trim() || null,
-            });
+            debugLogger.debug(
+              "[TextEditMonitor] Native selected-text read unavailable; trying AppleScript",
+              {
+                pid,
+                error: error?.message || null,
+                stderr: stderr?.trim() || null,
+              }
+            );
             this._getSelectedTextViaAppleScript(pid, timeoutMs, resolve);
           }
         );

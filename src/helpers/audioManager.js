@@ -1726,7 +1726,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       capture = await window.electronAPI?.captureSelectedText?.();
     } catch (cause) {
-      const error = new Error(`Selection edit could not safely read the selection: ${cause.message}`);
+      const error = new Error(
+        `Selection edit could not safely read the selection: ${cause.message}`
+      );
       error.code = "SELECTION_EDIT_CAPTURE_FAILED";
       error.messageKey = "hooks.audioRecording.selectionEditing.unavailable";
       error.selectionEditFatal = true;
@@ -1747,10 +1749,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
-    const captureDisposition = getSelectionCaptureDisposition(
-      capture,
-      isAccessibilitySkipped()
-    );
+    const captureDisposition = getSelectionCaptureDisposition(capture, isAccessibilitySkipped());
 
     if (captureDisposition === "standalone") {
       // No selection, or selection capture is unavailable by design (for

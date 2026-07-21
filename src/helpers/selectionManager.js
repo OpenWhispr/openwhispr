@@ -419,10 +419,7 @@ class SelectionManager {
     // be mistaken for the copied selection. Known limitation: a clipboard that
     // already held exactly the selected text reads as "no selection", and the
     // command falls back to standalone dictation.
-    const baseline = new Set([
-      ...beforeWrite,
-      ...this.clipboardManager._readClipboardTextAll(),
-    ]);
+    const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
 
     const copyResult = await sendCopy();
     if (!copyResult?.success || !copyResult.target) {

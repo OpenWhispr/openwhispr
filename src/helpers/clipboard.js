@@ -1524,7 +1524,9 @@ class ClipboardManager {
 
     if (linuxFastPaste && !skipFastPasteForKonsole) {
       const earlyIsTerminal =
-        windowSignals.length > 0 ? LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term)) : false;
+        windowSignals.length > 0
+          ? LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term))
+          : false;
       const appendModeFlag = (args) => {
         if (useShiftInsert) args.push("--shift-insert");
         else if (earlyIsTerminal) args.push("--terminal");
