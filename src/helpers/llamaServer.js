@@ -27,6 +27,7 @@ class LlamaServerManager {
     this.port = null;
     this.ready = false;
     this.modelPath = null;
+    this.draftModelPath = null;
     this.startupPromise = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
@@ -107,7 +108,11 @@ class LlamaServerManager {
   async start(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
-    if (this.ready && this.modelPath === modelPath) return;
+    // A change in drafter presence for the same model must still restart the
+    // server so the new speculative-decoding flags take effect.
+    const requestedDraftPath = options.draftModelPath || null;
+    if (this.ready && this.modelPath === modelPath && this.draftModelPath === requestedDraftPath)
+      return;
 
     if (this.process) {
       await this.stop();
@@ -128,6 +133,7 @@ class LlamaServerManager {
 
     this.port = await this.findAvailablePort();
     this.modelPath = modelPath;
+    this.draftModelPath = options.draftModelPath || null;
 
     const baseArgs = [
       "--model",
@@ -144,6 +150,18 @@ class LlamaServerManager {
       String(options.contextSize || DEFAULT_CONTEXT_SIZE),
       "--jinja",
     ];
+
+    // MTP speculative decoding when a drafter is present; absent, args are unchanged.
+    if (options.draftModelPath) {
+      baseArgs.push(
+        "--model-draft",
+        options.draftModelPath,
+        "--spec-type",
+        "draft-mtp",
+        "--spec-draft-n-max",
+        "3"
+      );
+    }
 
     if (process.platform === "darwin") {
       const args = [...baseArgs, "--n-gpu-layers", String(options.gpuLayers ?? 99)];
@@ -554,6 +572,7 @@ class LlamaServerManager {
     this.ready = false;
     this.port = null;
     this.modelPath = null;
+    this.draftModelPath = null;
     this.activeBackend = null;
   }
 
