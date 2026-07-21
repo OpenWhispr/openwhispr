@@ -27,6 +27,7 @@ function buildDisclaimShim() {
     // fall through to rebuild
   }
 
+  fs.mkdirSync(path.dirname(output), { recursive: true });
   const result = spawnSync("cc", ["-O2", "-o", output, source], { stdio: "inherit" });
   if (result.status !== 0) {
     console.warn(
