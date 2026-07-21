@@ -149,3 +149,120 @@ test("llama-server start restarts only when model or drafter presence changes", 
   assert.equal(calls.length, 3);
   assert.equal(manager.draftModelPath, null);
 });
+
+// --- Degrade ladder for stale (pre-b9763) Vulkan binaries ---
+
+const LADDER_BASE_ARGS = ["--model", "/models/main.gguf", "--host", "127.0.0.1", "--port", "8221"];
+const LADDER_DRAFT_ARGS = [
+  "--model-draft",
+  "/models/draft.gguf",
+  "--spec-type",
+  "draft-mtp",
+  "--spec-draft-n-max",
+  "3",
+];
+
+// Builds a manager with _startWithBinary stubbed at the method boundary. shouldFail
+// receives a {binary, draft, gpu} descriptor and decides whether that rung throws.
+function makeLadderManager(shouldFail) {
+  const LlamaServerManager = require("../../src/helpers/llamaServer.js");
+  const manager = new LlamaServerManager();
+  const attempts = [];
+  manager.draftModelPath = "/models/draft.gguf";
+  manager._buildEnv = () => ({});
+  manager._killCurrentProcess = async () => {};
+  manager.findAvailablePort = async () => 8221;
+  manager._startWithBinary = async (binary, args) => {
+    const attempt = {
+      binary,
+      draft: args.includes("--model-draft"),
+      gpu: args.includes("--n-gpu-layers"),
+    };
+    attempts.push(attempt);
+    if (shouldFail(attempt)) throw new Error(`stub fail: ${binary} draft=${attempt.draft}`);
+  };
+  return { manager, attempts };
+}
+
+const LADDER_BINARIES = { vulkan: "/bin/vulkan", cpu: "/bin/cpu" };
+
+test("degrade ladder attempts GPU+MTP, GPU, CPU+MTP, CPU in that order", async () => {
+  const { manager, attempts } = makeLadderManager(() => true);
+  await assert.rejects(() =>
+    manager._startWithGpuFallback(LADDER_BINARIES, LADDER_BASE_ARGS, {}, LADDER_DRAFT_ARGS)
+  );
+  assert.deepEqual(attempts, [
+    { binary: "/bin/vulkan", draft: true, gpu: true },
+    { binary: "/bin/vulkan", draft: false, gpu: true },
+    { binary: "/bin/cpu", draft: true, gpu: false },
+    { binary: "/bin/cpu", draft: false, gpu: false },
+  ]);
+  assert.equal(manager.activeBackend, null);
+  assert.equal(manager.activeDraftModelPath, null);
+});
+
+test("stale vulkan (rejects MTP args) degrades to vulkan WITHOUT draft, not CPU", async () => {
+  const { manager, attempts } = makeLadderManager((a) => a.draft);
+  await manager._startWithGpuFallback(LADDER_BINARIES, LADDER_BASE_ARGS, {}, LADDER_DRAFT_ARGS);
+  assert.deepEqual(attempts, [
+    { binary: "/bin/vulkan", draft: true, gpu: true },
+    { binary: "/bin/vulkan", draft: false, gpu: true },
+  ]);
+  assert.equal(manager.activeBackend, "vulkan");
+  assert.equal(manager.activeDraftModelPath, null);
+});
+
+test("no drafter keeps today's vulkan->cpu order with no extra attempts", async () => {
+  const { manager, attempts } = makeLadderManager(() => true);
+  manager.draftModelPath = null;
+  await assert.rejects(() =>
+    manager._startWithGpuFallback(LADDER_BINARIES, LADDER_BASE_ARGS, {}, [])
+  );
+  assert.deepEqual(attempts, [
+    { binary: "/bin/vulkan", draft: false, gpu: true },
+    { binary: "/bin/cpu", draft: false, gpu: false },
+  ]);
+});
+
+test("degraded start does not churn on identical requests", async () => {
+  const LlamaServerManager = require("../../src/helpers/llamaServer.js");
+  const manager = new LlamaServerManager();
+
+  let starts = 0;
+  manager._doStart = async (modelPath, options) => {
+    starts++;
+    manager.ready = true;
+    manager.modelPath = modelPath;
+    manager.draftModelPath = options.draftModelPath || null; // REQUESTED, stays stable
+    manager.activeDraftModelPath = null; // simulate a degraded start (drafter dropped)
+  };
+
+  await manager.start("/models/main.gguf", { draftModelPath: "/models/draft.gguf" });
+  assert.equal(starts, 1);
+  assert.equal(manager.draftModelPath, "/models/draft.gguf");
+  assert.equal(manager.activeDraftModelPath, null);
+
+  // Identical request must NOT bounce the ready server despite the degrade.
+  await manager.start("/models/main.gguf", { draftModelPath: "/models/draft.gguf" });
+  assert.equal(starts, 1);
+});
+
+test("stop() clears both the requested and active draft paths", async () => {
+  const LlamaServerManager = require("../../src/helpers/llamaServer.js");
+  const manager = new LlamaServerManager();
+
+  manager.draftModelPath = "/models/draft.gguf";
+  manager.activeDraftModelPath = "/models/draft.gguf";
+  manager.ready = true;
+  manager.process = {
+    exitCode: undefined,
+    kill() {},
+    once(event, cb) {
+      if (event === "close") cb();
+    },
+  };
+
+  await manager.stop();
+  assert.equal(manager.draftModelPath, null);
+  assert.equal(manager.activeDraftModelPath, null);
+});
