@@ -8,8 +8,8 @@
       "transcriptionLabel": "轉錄語言",
       "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度",
       "chineseScriptLabel": "中文書寫（自動偵測）",
-      "chineseScriptDescription": "偵測到中文時，將轉寫結果轉換為簡體或繁體。口語聽起來一樣；Whisper 只會輸出一種字體。",
-      "chineseScriptAsTranscribed": "保持轉寫原樣",
+      "chineseScriptDescription": "偵測到中文時，將轉錄結果轉換為簡體或繁體。口語聽起來一樣；Whisper 只會輸出一種字形。",
+      "chineseScriptAsTranscribed": "保持轉錄原樣",
       "chineseScriptSimplified": "簡體",
       "chineseScriptTraditional": "繁體"
     },
