@@ -45,7 +45,16 @@ function verifyBinaryArch(binaryPath, expectedArch) {
 // to resources/bin/<binaryName> for the target arch, skipping the build when
 // the binary is up to date (mtime + source hash + arch check). Exits the
 // process on failure, matching the original standalone scripts.
-function buildMacosSwiftBinary({ label, sourceName, binaryName, frameworks = [], beforeBuild }) {
+// linkerInfoPlist embeds the given plist as a __TEXT,__info_plist section so
+// unbundled binaries can carry a bundle id and privacy usage strings.
+function buildMacosSwiftBinary({
+  label,
+  sourceName,
+  binaryName,
+  frameworks = [],
+  beforeBuild,
+  linkerInfoPlist,
+}) {
   if (process.platform !== "darwin") {
     process.exit(0);
   }
@@ -100,11 +109,17 @@ function buildMacosSwiftBinary({ label, sourceName, binaryName, frameworks = [],
     }
   }
 
+  // Hash the Swift source plus any embedded plist, so edits to either rebuild
+  function computeSourceHash() {
+    let content = fs.readFileSync(swiftSource, "utf8");
+    if (linkerInfoPlist) content += fs.readFileSync(linkerInfoPlist, "utf8");
+    return crypto.createHash("sha256").update(content).digest("hex");
+  }
+
   // Secondary check: compare source hash
   if (!needsBuild && fs.existsSync(outputBinary)) {
     try {
-      const sourceContent = fs.readFileSync(swiftSource, "utf8");
-      const currentHash = crypto.createHash("sha256").update(sourceContent).digest("hex");
+      const currentHash = computeSourceHash();
 
       if (fs.existsSync(hashFile)) {
         const savedHash = fs.readFileSync(hashFile, "utf8").trim();
@@ -138,6 +153,9 @@ function buildMacosSwiftBinary({ label, sourceName, binaryName, frameworks = [],
     });
   }
 
+  const infoPlistArgs = linkerInfoPlist
+    ? ["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", linkerInfoPlist]
+    : [];
   const compileArgs = [
     swiftSource,
     "-O",
@@ -147,6 +165,7 @@ function buildMacosSwiftBinary({ label, sourceName, binaryName, frameworks = [],
     moduleCacheDir,
     "-o",
     outputBinary,
+    ...infoPlistArgs,
     ...frameworks.flatMap((framework) => ["-framework", framework]),
   ];
 
@@ -178,9 +197,7 @@ function buildMacosSwiftBinary({ label, sourceName, binaryName, frameworks = [],
 
   // Save source hash after successful build
   try {
-    const sourceContent = fs.readFileSync(swiftSource, "utf8");
-    const hash = crypto.createHash("sha256").update(sourceContent).digest("hex");
-    fs.writeFileSync(hashFile, hash);
+    fs.writeFileSync(hashFile, computeSourceHash());
   } catch (err) {
     // Non-critical, just log
     log(`Warning: Could not save source hash: ${err.message}`);
