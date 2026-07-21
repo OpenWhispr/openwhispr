@@ -641,6 +641,10 @@
         "descriptionWithSpace": "Model deleted successfully! Freed {{sizeMb}}MB of disk space.",
         "description": "Model deleted successfully!"
       },
+      "modelDownloaded": {
+        "title": "Model Downloaded",
+        "description": "{{model}} is ready to use."
+      },
       "deleteFailed": {
         "title": "Delete Failed",
         "description": "Failed to delete model: {{error}}"
