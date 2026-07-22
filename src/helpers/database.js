@@ -2714,6 +2714,12 @@ class DatabaseManager {
   upsertNoteFromCloud(cloudNote, localFolderId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Content columns keep the local value when the cloud copy is empty:
+      // sync must never replace non-empty local content/enhanced_content/
+      // transcript with an empty cloud value (#1290, the #938 invariant).
+      // enhancement_prompt/enhanced_at_content_hash travel with
+      // enhanced_content — a preserved enhancement must keep its hash or
+      // staleness detection breaks.
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhanced_at_content_hash, note_type, source_file,
@@ -2723,11 +2729,21 @@ class DatabaseManager {
         ON CONFLICT(client_note_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           title = excluded.title,
-          content = excluded.content,
-          enhanced_content = excluded.enhanced_content,
-          enhancement_prompt = excluded.enhancement_prompt,
-          enhanced_at_content_hash = excluded.enhanced_at_content_hash,
-          transcript = excluded.transcript,
+          content = CASE
+            WHEN COALESCE(excluded.content, '') = '' AND COALESCE(content, '') <> ''
+            THEN content ELSE excluded.content END,
+          enhanced_content = CASE
+            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            THEN enhanced_content ELSE excluded.enhanced_content END,
+          enhancement_prompt = CASE
+            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            THEN enhancement_prompt ELSE excluded.enhancement_prompt END,
+          enhanced_at_content_hash = CASE
+            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            THEN enhanced_at_content_hash ELSE excluded.enhanced_at_content_hash END,
+          transcript = CASE
+            WHEN COALESCE(excluded.transcript, '') = '' AND COALESCE(transcript, '') <> ''
+            THEN transcript ELSE excluded.transcript END,
           folder_id = excluded.folder_id,
           participants = COALESCE(excluded.participants, participants),
           calendar_event_id = COALESCE(excluded.calendar_event_id, calendar_event_id),
