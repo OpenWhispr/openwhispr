@@ -89,7 +89,12 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import type { GpuDevice, LocalTranscriptionProvider, InferenceMode } from "../types/electron";
+import type {
+  GpuDevice,
+  LocalTranscriptionProvider,
+  InferenceMode,
+  DisplayInfo,
+} from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
@@ -773,6 +778,8 @@ export default function SettingsPage({
     setStartMinimized,
     panelStartPosition,
     setPanelStartPosition,
+    panelDisplay,
+    setPanelDisplay,
     cloudBackupEnabled,
     setCloudBackupEnabled,
     telemetryEnabled,
@@ -864,6 +871,76 @@ export default function SettingsPage({
       })
       .catch(() => {});
   }, [activeSection]);
+
+  // Monitor list for the floating-icon "Monitor" picker. Refetched on focus because
+  // displays can be plugged/unplugged while Settings is open.
+  const [availableDisplays, setAvailableDisplays] = useState<DisplayInfo[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadDisplays = () => {
+      const getDisplays = window.electronAPI?.getDisplays;
+      if (!getDisplays) return; // Older preload without the method: leave list empty.
+      getDisplays()
+        .then((displays) => {
+          if (!cancelled && Array.isArray(displays)) setAvailableDisplays(displays);
+        })
+        .catch(() => {});
+    };
+    loadDisplays();
+    window.addEventListener("focus", loadDisplays);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", loadDisplays);
+    };
+  }, []);
+
+  // Canonical option value for a display: the exact string persisted as panelDisplay
+  // when that monitor is pinned. Mirrors the decode contract in displaySelection.js.
+  const displayOptionValue = useCallback(
+    (d: DisplayInfo) => JSON.stringify({ id: d.id, label: d.label, bounds: d.bounds }),
+    []
+  );
+
+  // Resolve the <select> value and whether the saved pin points at an absent monitor.
+  // panelDisplay is either "auto" or a JSON {id,label,bounds}; match by id so the value
+  // equals one of the rendered options even if label/bounds drifted since it was saved.
+  const { panelDisplaySelectValue, disconnectedDisplayValue } = (() => {
+    if (panelDisplay === "auto" || !panelDisplay) {
+      return { panelDisplaySelectValue: "auto", disconnectedDisplayValue: null as string | null };
+    }
+    let savedId: number | null = null;
+    try {
+      const parsed: unknown = JSON.parse(panelDisplay);
+      if (typeof parsed === "object" && parsed !== null) {
+        const id = (parsed as { id?: unknown }).id;
+        if (typeof id === "number") savedId = id;
+      }
+    } catch {
+      // Unparseable stored value: treat the pin as effectively "auto".
+    }
+    if (savedId === null) {
+      return { panelDisplaySelectValue: "auto", disconnectedDisplayValue: null };
+    }
+    const match = availableDisplays.find((d) => d.id === savedId);
+    if (match) {
+      return { panelDisplaySelectValue: displayOptionValue(match), disconnectedDisplayValue: null };
+    }
+    // Pin set but monitor not present: keep the saved value selected via a synthetic option.
+    return { panelDisplaySelectValue: panelDisplay, disconnectedDisplayValue: panelDisplay };
+  })();
+
+  // Label shown for a display option: real label, else a geometric description; "(primary)" suffix.
+  const displayOptionLabel = (d: DisplayInfo) => {
+    const base =
+      typeof d.label === "string" && d.label.trim().length > 0
+        ? d.label
+        : t("settingsPage.general.floatingIcon.displayLabel", {
+            number: d.index,
+            width: d.bounds.width,
+            height: d.bounds.height,
+          });
+    return d.primary ? `${base} (${t("settingsPage.general.floatingIcon.displayPrimary")})` : base;
+  };
 
   // Lazy keep-alive: mount AI sections only after the user has visited them once,
   // then keep them mounted so model-download progress and IPC listeners survive
@@ -2656,6 +2733,34 @@ export default function SettingsPage({
                     </select>
                   </SettingsRow>
                 </SettingsPanelRow>
+                {(availableDisplays.length > 1 || disconnectedDisplayValue) && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.floatingIcon.display")}
+                      description={t("settingsPage.general.floatingIcon.displayDescription")}
+                    >
+                      <select
+                        value={panelDisplaySelectValue}
+                        onChange={(e) => setPanelDisplay(e.target.value)}
+                        className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
+                      >
+                        <option value="auto">
+                          {t("settingsPage.general.floatingIcon.displayAuto")}
+                        </option>
+                        {availableDisplays.map((d) => (
+                          <option key={d.id} value={displayOptionValue(d)}>
+                            {displayOptionLabel(d)}
+                          </option>
+                        ))}
+                        {disconnectedDisplayValue && (
+                          <option value={disconnectedDisplayValue} disabled>
+                            {t("settingsPage.general.floatingIcon.displayDisconnected")}
+                          </option>
+                        )}
+                      </select>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 
