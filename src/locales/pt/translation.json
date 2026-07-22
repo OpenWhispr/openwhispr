@@ -1731,6 +1731,12 @@
       },
       "transcriptionPreview": "Pré-visualização ao vivo",
       "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza",
+      "aec": {
+        "toggle": {
+          "title": "Cancelamento de eco para reuniões",
+          "description": "Cancela o áudio da reunião que vaza para o seu microfone. Deixe isto desativado ao usar fones de ouvido ou auriculares — não há eco para cancelar e pode suprimir totalmente a sua voz."
+        }
+      },
       "vad": {
         "title": "Detecção de atividade de voz",
         "description": "Configure como o Silero VAD detecta e segmenta a fala na transcrição local do Whisper",

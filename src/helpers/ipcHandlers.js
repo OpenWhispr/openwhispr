@@ -5316,6 +5316,10 @@ class IPCHandlers {
     let meetingPendingMicFinals = [];
     let meetingPendingMicFinalTimer = null;
     let meetingAecEnabled = false;
+    // Whether the user opted into acoustic echo cancellation for this meeting.
+    // Set from the start options; gates startMeetingAec (off by default — AEC can
+    // suppress the mic entirely on headsets, where there's no echo to cancel).
+    let meetingAecRequested = false;
     let meetingOneOnOneAttendee = null;
     let meetingOneOnOneProfileBound = false;
     let meetingNoteId = null;
@@ -5457,6 +5461,9 @@ class IPCHandlers {
 
     const startMeetingAec = async (systemAudioMode) => {
       meetingAecEnabled = false;
+      if (!meetingAecRequested) {
+        return false;
+      }
       if (systemAudioMode === "unsupported" || !this.meetingAecManager?.isAvailable()) {
         return false;
       }
@@ -6211,6 +6218,7 @@ class IPCHandlers {
       meetingConnectionOptions = options;
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
+      meetingAecRequested = options.aecEnabled === true;
       this.meetingDetectionEngine?.setUserRecording(true);
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan();

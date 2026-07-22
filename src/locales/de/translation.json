@@ -1752,6 +1752,12 @@
       },
       "transcriptionPreview": "Live-Transkriptionsvorschau",
       "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen",
+      "aec": {
+        "toggle": {
+          "title": "Echounterdrückung für Meetings",
+          "description": "Unterdrückt Meeting-Audio, das in Ihr Mikrofon gelangt. Lassen Sie dies bei Verwendung von Kopfhörern oder Ohrhörern deaktiviert – es gibt kein Echo zu unterdrücken und es kann Ihre Stimme vollständig unterdrücken."
+        }
+      },
       "vad": {
         "title": "Sprachaktivitätserkennung",
         "description": "Konfiguriere, wie Silero VAD Sprache für die lokale Whisper-Transkription erkennt und segmentiert",
