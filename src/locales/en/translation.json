@@ -223,7 +223,7 @@
       "title": "Voice Agent Setup",
       "description": "Talk to your AI agent with a single keypress",
       "hotkey": "Hotkey",
-      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. {{agentName}} types the result wherever your cursor is. No need to say “Hey {{agentName}}” first.",
+      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces that selection; otherwise it types at your cursor. No need to say “Hey {{agentName}}” first.",
       "test": "Try it",
       "testInstruction": "Click below, press {{hotkey}} and say a command",
       "testSetHotkey": "Set a hotkey above to try it",
@@ -589,6 +589,15 @@
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again."
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "Selection edit not applied",
+        "changed": "The selected text or target app changed while OpenWhispr was processing. Nothing was replaced.",
+        "expired": "The selection edit took too long and expired. Select the text and try again.",
+        "pasteFailed": "OpenWhispr generated the edit but could not replace the selected text.",
+        "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
+        "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
+        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
       }
     },
     "clipboard": {
@@ -1469,7 +1478,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the AI executes your command — composing content, formatting text, or answering questions — instead of transcribing it verbatim.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the AI executes your command. If text is highlighted, that text is sent to your configured Voice Agent model and safely replaced with the result.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
@@ -1477,7 +1486,7 @@
       "title": "Voice Agent",
       "examples": {
         "formalEmail": "Hey {{agentName}}, write a formal email about the budget",
-        "professional": "Hey {{agentName}}, make this more professional",
+        "professional": "Select text, then say: Hey {{agentName}}, make this more professional",
         "bulletPoints": "Hey {{agentName}}, convert this to bullet points"
       }
     },
@@ -1624,7 +1633,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Agent Hotkey",
-        "description": "Speak a request — your AI agent types the result, not your words"
+        "description": "Speak a request — highlighted text is edited in place; otherwise your agent types at the cursor"
       },
       "translationHotkey": {
         "title": "Translation Hotkey",
@@ -2724,7 +2733,7 @@
   },
   "dictationAgent": {
     "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabledDescription": "Dictate instructions to your agent. Highlighted text is sent to the configured model and edited in place. Activate by saying \"{{agentName}}\".",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",

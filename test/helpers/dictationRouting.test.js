@@ -341,3 +341,57 @@ test("translation needs a model on model-required providers", async () => {
     true
   );
 });
+
+test("cloud agent always resolves the openwhispr provider", async () => {
+  const { resolveDictationAgentProvider } = await load();
+
+  assert.equal(
+    resolveDictationAgentProvider({
+      isCloudAgent: true,
+      dictationAgentMode: "openwhispr",
+      dictationAgentProvider: "anthropic",
+    }),
+    "openwhispr"
+  );
+});
+
+test("local mode resolves the local provider, not the stored brand group", async () => {
+  const { resolveDictationAgentProvider } = await load();
+
+  // The local model picker stores its brand group ("qwen", "llama", ...) in
+  // dictationAgentProvider; ReasoningService only knows "local".
+  assert.equal(
+    resolveDictationAgentProvider({
+      isCloudAgent: false,
+      dictationAgentMode: "local",
+      dictationAgentProvider: "qwen",
+    }),
+    "local"
+  );
+});
+
+test("BYOK providers mode passes the stored provider through", async () => {
+  const { resolveDictationAgentProvider } = await load();
+
+  assert.equal(
+    resolveDictationAgentProvider({
+      isCloudAgent: false,
+      dictationAgentMode: "providers",
+      dictationAgentProvider: "anthropic",
+    }),
+    "anthropic"
+  );
+});
+
+test("blank stored provider resolves to undefined outside local mode", async () => {
+  const { resolveDictationAgentProvider } = await load();
+
+  assert.equal(
+    resolveDictationAgentProvider({
+      isCloudAgent: false,
+      dictationAgentMode: "providers",
+      dictationAgentProvider: "  ",
+    }),
+    undefined
+  );
+});

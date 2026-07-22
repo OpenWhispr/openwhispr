@@ -202,7 +202,7 @@
       "title": "Configuração do agente de voz",
       "description": "Fale com seu agente de IA com um único atalho",
       "hotkey": "Atalho",
-      "howItWorks": "Pressione a tecla e diga o que quer — por exemplo, “escreva uma breve nota de agradecimento”. {{agentName}} escreve o resultado onde estiver o cursor. Não precisa dizer “Hey {{agentName}}” antes.",
+      "howItWorks": "Pressione a tecla e diga o que quer — por exemplo, “escreva uma breve nota de agradecimento”. Se houver texto destacado, {{agentName}} edita e substitui essa seleção; caso contrário, escreve o resultado onde estiver o cursor. Não precisa dizer “Hey {{agentName}}” antes.",
       "test": "Experimente",
       "testInstruction": "Clique abaixo, pressione {{hotkey}} e diga um comando",
       "testSetHotkey": "Defina um atalho acima para experimentar",
@@ -568,6 +568,15 @@
         "offline": "Você está offline. A transcrição na nuvem exige conexão com a internet.",
         "dailyLimitReached": "Você atingiu o limite de transcrições de hoje. Tente novamente amanhã ou faça upgrade do seu plano.",
         "providerRateLimited": "Seu provedor de transcrição limitou a solicitação. Aguarde um momento e tente novamente."
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "Edição da seleção não aplicada",
+        "changed": "O texto selecionado ou o aplicativo de destino mudou durante o processamento. Nada foi substituído.",
+        "expired": "A edição expirou. Selecione o texto novamente e tente de novo.",
+        "pasteFailed": "O OpenWhispr gerou a edição, mas não conseguiu substituir o texto selecionado.",
+        "unavailable": "O OpenWhispr não conseguiu ler o texto selecionado com segurança. Verifique as permissões de acessibilidade ou automação.",
+        "tooLarge": "A seleção é muito grande. Selecione no máximo 6.000 caracteres.",
+        "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado."
       }
     },
     "clipboard": {
@@ -1275,7 +1284,7 @@
       },
       "examplesTitle": "Exemplos",
       "helper": "Escolha algo curto e natural de se dizer em voz alta",
-      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, a IA executa seu comando — redigindo conteúdo, formatando texto ou respondendo perguntas — em vez de transcrevê-lo literalmente.",
+      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, a IA executa seu comando. Se houver texto destacado, esse texto é enviado ao modelo de agente de voz configurado e substituído com segurança pelo resultado.",
       "howItWorksTitle": "Como funciona",
       "instructionMode": "Instrução",
       "placeholder": "ex.: Jarvis, Nova, Atlas...",
@@ -1283,7 +1292,7 @@
       "title": "Agente de voz",
       "examples": {
         "formalEmail": "Hey {{agentName}}, escreva um e-mail formal sobre o orçamento",
-        "professional": "Hey {{agentName}}, torne isso mais profissional",
+        "professional": "Selecione o texto e depois diga: Hey {{agentName}}, torne isso mais profissional",
         "bulletPoints": "Hey {{agentName}}, converta isso em tópicos"
       }
     },
@@ -1430,7 +1439,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atalho do agente de voz",
-        "description": "Diga o que você precisa — seu agente de IA escreve o resultado, não suas palavras"
+        "description": "Diga o que você precisa — o texto destacado é editado no lugar; caso contrário, seu agente escreve onde estiver o cursor"
       },
       "translationHotkey": {
         "title": "Atalho de Tradução",
@@ -2588,7 +2597,7 @@
   },
   "dictationAgent": {
     "enabled": "Ativar agente de voz",
-    "enabledDescription": "Dite instruções para o seu agente. Ative dizendo \"{{agentName}}\". Configurável abaixo.",
+    "enabledDescription": "Dite instruções para o seu agente. O texto destacado é enviado ao modelo configurado e editado no lugar. Ative dizendo \"{{agentName}}\".",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Use o agente gerenciado pelo OpenWhispr, sem precisar de chave API.",

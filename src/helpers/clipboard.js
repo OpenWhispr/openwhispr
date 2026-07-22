@@ -61,6 +61,36 @@ const RESTORE_DELAYS = {
   linux_kde_wayland: 1200,
 };
 
+// Window classes that identify terminal emulators, which expect
+// Ctrl+Shift+V/C instead of Ctrl+V/C. Mirrors terminal_classes in
+// resources/linux-fast-paste.c — keep the two lists in sync.
+const LINUX_TERMINAL_CLASSES = [
+  "konsole",
+  "gnome-terminal",
+  "terminal",
+  "kitty",
+  "alacritty",
+  "terminator",
+  "xterm",
+  "urxvt",
+  "rxvt",
+  "tilix",
+  "terminology",
+  "wezterm",
+  "foot",
+  "st",
+  "yakuake",
+  "ghostty",
+  "guake",
+  "tilda",
+  "hyper",
+  "tabby",
+  "sakura",
+  "warp",
+  "termius",
+  "waveterm",
+];
+
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
     return Promise.reject(new Error("Invalid webContents for clipboard write"));
@@ -224,6 +254,61 @@ class ClipboardManager {
       return clipboard.readText("selection") || "";
     } catch {}
     return null;
+  }
+
+  isLinuxTerminalWindowClass(windowClass) {
+    if (!windowClass) return false;
+    const normalized = String(windowClass).toLowerCase();
+    return LINUX_TERMINAL_CLASSES.some((term) => normalized.includes(term));
+  }
+
+  // Selection capture (SelectionManager) seeds a sentinel and polls until a
+  // synthetic copy replaces it. On Wayland — KDE especially — the X11 and
+  // Wayland clipboards can be desynced, so write and read BOTH sides; a value
+  // appearing on either side counts.
+  _writeClipboardTextAll(text) {
+    if (this._isWayland() && this.commandExists("wl-copy")) {
+      try {
+        spawnSync("wl-copy", ["--", text], { timeout: 200 });
+      } catch {}
+    }
+    if (process.platform === "linux" && this.commandExists("xclip")) {
+      try {
+        spawnSync("xclip", ["-selection", "clipboard"], { input: text, timeout: 200 });
+      } catch {}
+    }
+    if (process.platform === "linux" && this.commandExists("xsel")) {
+      try {
+        spawnSync("xsel", ["--clipboard", "--input"], { input: text, timeout: 200 });
+      } catch {}
+    }
+    clipboard.writeText(text);
+  }
+
+  _readClipboardTextAll() {
+    const texts = [];
+    if (this._isWayland() && this.commandExists("wl-paste")) {
+      try {
+        const result = spawnSync("wl-paste", ["--no-newline"], { timeout: 200 });
+        if (result.status === 0) texts.push(result.stdout.toString());
+      } catch {}
+    }
+    if (process.platform === "linux" && this.commandExists("xclip")) {
+      try {
+        const result = spawnSync("xclip", ["-selection", "clipboard", "-o"], { timeout: 200 });
+        if (result.status === 0) texts.push(result.stdout.toString());
+      } catch {}
+    }
+    if (process.platform === "linux" && this.commandExists("xsel")) {
+      try {
+        const result = spawnSync("xsel", ["--clipboard", "--output"], { timeout: 200 });
+        if (result.status === 0) texts.push(result.stdout.toString());
+      } catch {}
+    }
+    try {
+      texts.push(clipboard.readText());
+    } catch {}
+    return [...new Set(texts.filter((text) => typeof text === "string"))];
   }
 
   getNircmdPath() {
@@ -427,9 +512,10 @@ class ClipboardManager {
     }
   }
 
-  _runPortalPaste(fastPasteBinary, { shiftInsert = false, terminal = false } = {}) {
+  _runPortalPaste(fastPasteBinary, { shiftInsert = false, terminal = false, copy = false } = {}) {
     return new Promise((resolve, reject) => {
       const args = ["--portal"];
+      if (copy) args.push("--copy");
       if (shiftInsert) args.push("--shift-insert");
       else if (terminal) args.push("--terminal");
 
@@ -725,6 +811,17 @@ class ClipboardManager {
   }
 
   async pasteText(text, options = {}) {
+    return this._runClipboardOperation(
+      () => this._pasteText(text, options),
+      (result) => result?.restoreComplete
+    );
+  }
+
+  async runClipboardOperation(operation) {
+    return this._runClipboardOperation(operation);
+  }
+
+  async _runClipboardOperation(operation, completionForResult = null) {
     const previousPaste = this.pasteQueue.catch(() => {});
     let markRestoreComplete;
     const restoreGate = new Promise((resolve) => {
@@ -735,8 +832,10 @@ class ClipboardManager {
     await previousPaste;
 
     try {
-      const result = await this._pasteText(text, options);
-      Promise.resolve(result?.restoreComplete).then(markRestoreComplete, markRestoreComplete);
+      const result = await operation();
+      const completion = completionForResult ? completionForResult(result) : null;
+      Promise.resolve(completion).then(markRestoreComplete, markRestoreComplete);
+      return result;
     } catch (error) {
       markRestoreComplete();
       throw error;
@@ -1311,33 +1410,6 @@ class ClipboardManager {
       return Promise.resolve();
     };
 
-    const terminalClasses = [
-      "konsole",
-      "gnome-terminal",
-      "terminal",
-      "kitty",
-      "alacritty",
-      "terminator",
-      "xterm",
-      "urxvt",
-      "rxvt",
-      "tilix",
-      "terminology",
-      "wezterm",
-      "foot",
-      "st",
-      "yakuake",
-      "ghostty",
-      "guake",
-      "tilda",
-      "hyper",
-      "tabby",
-      "sakura",
-      "warp",
-      "termius",
-      "waveterm",
-    ];
-
     // Pre-detect the target window BEFORE our window takes focus or blurs,
     // so the fast-paste binary and fallback tools know where to send keystrokes.
     const preDetectTargetWindow = () => {
@@ -1452,7 +1524,9 @@ class ClipboardManager {
 
     if (linuxFastPaste && !skipFastPasteForKonsole) {
       const earlyIsTerminal =
-        windowSignals.length > 0 ? terminalClasses.some((term) => signalsMatch(term)) : false;
+        windowSignals.length > 0
+          ? LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term))
+          : false;
       const appendModeFlag = (args) => {
         if (useShiftInsert) args.push("--shift-insert");
         else if (earlyIsTerminal) args.push("--terminal");
@@ -1663,7 +1737,7 @@ class ClipboardManager {
     // Terminals use Ctrl+Shift+V instead of Ctrl+V
     const isTerminal = () => {
       if (windowSignals.length === 0) return false;
-      const isTerminalWindow = terminalClasses.some((term) => signalsMatch(term));
+      const isTerminalWindow = LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term));
       if (isTerminalWindow) {
         this.safeLog(`🖥️ Terminal detected: ${windowSignals.join(" | ")}`);
       }

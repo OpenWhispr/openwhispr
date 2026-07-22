@@ -553,8 +553,39 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<void>;
+      captureSelectedText?: () => Promise<
+        | {
+            status: "selected";
+            sessionId: string;
+            text: string;
+            characterCount: number;
+          }
+        | {
+            status: "none" | "unavailable" | "target_changed" | "too_large";
+            code?: string;
+            characterCount?: number;
+            maxCharacters?: number;
+          }
+      >;
+      replaceSelectedText?: (
+        sessionId: string,
+        text: string,
+        options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
+      ) => Promise<{
+        success: boolean;
+        code?:
+          | "invalid_replacement"
+          | "session_expired"
+          | "target_changed"
+          | "selection_unavailable"
+          | "selection_changed"
+          | "paste_failed"
+          | "selection_manager_unavailable";
+        error?: string;
+      }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
+      captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;

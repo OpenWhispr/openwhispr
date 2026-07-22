@@ -27,6 +27,20 @@ export function resolveDictationTranslationReachability({
   return (translationModel?.trim()?.length ?? 0) > 0;
 }
 
+// Maps the dictation agent's stored provider to a ReasoningService provider id.
+// In local mode the store holds the model picker's brand group ("qwen",
+// "llama", ...), which is UI state, not an inference provider — route it to
+// "local" so PROVIDER_REGISTRY can resolve it.
+export function resolveDictationAgentProvider({
+  isCloudAgent,
+  dictationAgentMode,
+  dictationAgentProvider,
+}) {
+  if (isCloudAgent) return "openwhispr";
+  if (dictationAgentMode === "local") return "local";
+  return dictationAgentProvider?.trim() || undefined;
+}
+
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")
 // a finished dictation takes. A recording started via the voice agent hotkey
 // always takes the agent path — no wake word needed — and never falls back to

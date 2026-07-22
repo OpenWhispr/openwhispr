@@ -8,6 +8,15 @@ import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
 
+// Maps a failed selection-replacement code to its `selectionEditing.*` toast
+// detail key; unlisted codes fall back to the generic "unavailable" message.
+const SELECTION_EDIT_DETAIL_KEY_BY_CODE = {
+  target_changed: "changed",
+  selection_changed: "changed",
+  session_expired: "expired",
+  paste_failed: "pasteFailed",
+};
+
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
@@ -32,6 +41,16 @@ export const useAudioRecording = (toast, options = {}) => {
 
         const currentState = audioManagerRef.current.getState();
         if (currentState.isRecording || currentState.isProcessing) return false;
+
+        // The floating dictation panel is non-focusable, so the foreground app is
+        // still the user's actual editing target here. Refresh it for recordings
+        // started from the panel itself as well as from global hotkeys; otherwise
+        // paste can reactivate a stale target from the preceding dictation.
+        try {
+          await window.electronAPI.captureDictationTarget?.();
+        } catch (error) {
+          logger.warn("Failed to refresh dictation target", { error: error?.message });
+        }
 
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
         audioManagerRef.current.setTranslationRequested(translationRequested);
@@ -168,7 +187,12 @@ export const useAudioRecording = (toast, options = {}) => {
             return;
           }
 
-          result.text = expandSnippets(result.text, getSettings().snippets);
+          // A selection edit must replace the model's exact result. Snippet
+          // expansion is a dictation convenience and can otherwise mutate a
+          // legitimate replacement that happens to contain a snippet trigger.
+          if (!result.selectionEdit?.sessionId) {
+            result.text = expandSnippets(result.text, getSettings().snippets);
+          }
 
           setTranscript(result.text);
           window.electronAPI?.completeDictationPreview?.({ text: result.text });
@@ -186,17 +210,44 @@ export const useAudioRecording = (toast, options = {}) => {
 
           if (autoPasteEnabled) {
             const pasteStart = performance.now();
-            await audioManagerRef.current.safePaste(result.text, {
-              ...(isStreaming ? { fromStreaming: true } : {}),
-              restoreClipboard: !keepTranscriptionInClipboard,
-              allowClipboardFallback: isAccessibilitySkipped(),
-            });
+            let pasteSucceeded = true;
+            if (result.selectionEdit?.sessionId) {
+              const replacement = await window.electronAPI?.replaceSelectedText?.(
+                result.selectionEdit.sessionId,
+                result.text,
+                {
+                  restoreClipboard: !keepTranscriptionInClipboard,
+                  allowClipboardFallback: isAccessibilitySkipped(),
+                }
+              );
+              pasteSucceeded = replacement?.success === true;
+              if (!pasteSucceeded) {
+                if (keepTranscriptionInClipboard) {
+                  await navigator.clipboard.writeText(result.text);
+                }
+                const detailKey =
+                  SELECTION_EDIT_DETAIL_KEY_BY_CODE[replacement?.code] || "unavailable";
+                toast({
+                  title: t("hooks.audioRecording.selectionEditing.notAppliedTitle"),
+                  description: t(`hooks.audioRecording.selectionEditing.${detailKey}`),
+                  variant: "destructive",
+                });
+              }
+            } else {
+              pasteSucceeded = await audioManagerRef.current.safePaste(result.text, {
+                ...(isStreaming ? { fromStreaming: true } : {}),
+                restoreClipboard: !keepTranscriptionInClipboard,
+                allowClipboardFallback: isAccessibilitySkipped(),
+              });
+            }
             logger.info(
               "Paste timing",
               {
                 pasteMs: Math.round(performance.now() - pasteStart),
                 source: result.source,
                 textLength: result.text.length,
+                selectionEdit: !!result.selectionEdit,
+                success: pasteSucceeded,
               },
               "streaming"
             );

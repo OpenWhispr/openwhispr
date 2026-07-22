@@ -88,7 +88,11 @@ class LlamaServerManager {
       if (cpuBin) paths.cpu = cpuBin;
     }
 
-    this.cachedServerBinaryPaths = paths;
+    // Only cache hits: a miss may be transient (binary downloaded after
+    // startup), and caching it would require an app restart to recover.
+    if (Object.keys(paths).length > 0) {
+      this.cachedServerBinaryPaths = paths;
+    }
     return paths;
   }
 
@@ -491,6 +495,13 @@ class LlamaServerManager {
 
             try {
               const response = JSON.parse(data);
+              if (
+                options.requireCompleteOutput &&
+                ["length", "max_tokens"].includes(response.choices?.[0]?.finish_reason)
+              ) {
+                reject(new Error("Model output was truncated before the selection edit completed"));
+                return;
+              }
               const message = response.choices?.[0]?.message;
               const text = message?.content || message?.reasoning_content || "";
               resolve(text.trim());

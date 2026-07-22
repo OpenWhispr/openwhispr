@@ -455,6 +455,16 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      // Capture the paste target and any selection on every toggle press,
+      // before the overlay steals focus — the paste can't refocus the target
+      // otherwise (#668). The renderer owns the real recording state and may
+      // decline a toggle (mic error, silence gate, Esc cancel), so gating this
+      // on _isDictatingToggle desyncs and leaves a stale target from a
+      // previous app. Press-time capture matches the dictation hotkey call
+      // sites in main.js; a stop-press capture resolves the same frontmost
+      // app, since NSWorkspace ignores the overlay panel.
+      if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+      void this.selectionManager?.captureTarget?.();
       this.showDictationPanel();
       this.mainWindow.webContents.send(channel);
       this._isDictatingToggle = !this._isDictatingToggle;
@@ -467,10 +477,6 @@ class WindowManager {
   }
 
   sendToggleVoiceAgent() {
-    // The voice-agent hotkeys, unlike the dictation paths, don't capture the
-    // target PID at their call sites, so capture here or the paste can't
-    // refocus the target (#668).
-    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
     this._sendDictationToggle("toggle-voice-agent");
   }
 
@@ -486,6 +492,8 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+      void this.selectionManager?.captureTarget?.();
       this.showDictationPanel();
       this.mainWindow.webContents.send("start-dictation");
       this.meetingDetectionEngine?.setUserRecording(true);
