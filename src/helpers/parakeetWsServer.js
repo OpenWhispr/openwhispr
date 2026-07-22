@@ -429,10 +429,17 @@ class ParakeetWsServer {
     };
 
     const sendFloat32 = (float32Samples) => {
-      if (closed || finishResolve) return;
+      if (closed) return;
+      // A chunk after finish() means the renderer flushed late (contract broke) so the
+      // tail is lost; when only closed is set, settle already happened and a plain drop is fine.
+      if (finishResolve) {
+        truncated = true;
+        return;
+      }
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(float32Samples, (err) => {
           if (err) {
+            truncated = true;
             debugLogger.error("parakeet-ws online stream send error", { error: err.message });
           }
         });
@@ -443,7 +450,12 @@ class ParakeetWsServer {
 
     ws.on("open", () => {
       for (const chunk of pendingChunks) {
-        ws.send(chunk);
+        ws.send(chunk, (err) => {
+          if (err) {
+            truncated = true;
+            debugLogger.error("parakeet-ws online stream send error", { error: err.message });
+          }
+        });
       }
       pendingChunks.length = 0;
       if (finishResolve) ws.send("Done");

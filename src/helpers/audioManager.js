@@ -54,6 +54,8 @@ import { getDictionaryHintWords } from "../utils/snippets";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
+// Failure detector only: fires when the worklet or audio graph is dead and never flushes.
+const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
 function dictationAgentReachable(settings) {
@@ -1435,11 +1437,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       let result;
-      if (typeof metadata.streamedText === "string") {
-        const streamedText = metadata.streamedText.trim();
-        if (!streamedText) {
-          throw new Error("No audio detected");
-        }
+      const streamedText =
+        typeof metadata.streamedText === "string" ? metadata.streamedText.trim() : null;
+      // An empty stream is indistinguishable from silence; let the offline decode settle it.
+      if (streamedText) {
         logger.debug("Parakeet using committed streaming transcript", { model }, "performance");
         timings.transcriptionProcessingDurationMs = 0;
         result = { success: true, text: streamedText };
@@ -4023,17 +4024,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._previewSource = null;
     this._previewAudioContext = null;
 
+    let flushed = true;
     if (processor) {
-      // Wait for the worklet to flush its partial buffer so the final PCM
-      // chunk reaches the stream before it is finished.
+      // The worklet posts all PCM before "flushed", and the PCM sends share the
+      // renderer->main pipe with the stop invoke (FIFO), so the final chunk precedes finish.
       let resolveFlush;
-      const flushed = new Promise((resolve) => {
-        resolveFlush = resolve;
-        setTimeout(resolve, 150);
+      const flushSentinel = new Promise((resolve) => {
+        resolveFlush = () => resolve(true);
+      });
+      let watchdogTimer;
+      const watchdogFired = new Promise((resolve) => {
+        watchdogTimer = setTimeout(() => resolve(false), PREVIEW_FLUSH_WATCHDOG_MS);
       });
       this._previewFlushResolve = resolveFlush;
       processor.port.postMessage("stop");
-      await flushed;
+      flushed = await Promise.race([flushSentinel, watchdogFired]);
+      clearTimeout(watchdogTimer);
       if (this._previewFlushResolve === resolveFlush) this._previewFlushResolve = null;
       processor.disconnect();
     }
@@ -4043,7 +4049,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       window.electronAPI?.dismissDictationPreview?.();
       return null;
     }
-    return (await window.electronAPI?.stopDictationPreview?.({ showCleanup })) || null;
+    return (await window.electronAPI?.stopDictationPreview?.({ showCleanup, flushed })) || null;
   }
 
   cleanupStreamingAudio() {

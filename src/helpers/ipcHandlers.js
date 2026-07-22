@@ -6735,6 +6735,8 @@ class IPCHandlers {
       clearInterval(dictationPreviewTimer);
       dictationPreviewTimer = null;
       const display = dictationPreviewDisplay;
+      // Missing flag defaults to trusted so non-streaming callers never regress.
+      const rendererFlushOk = options.flushed !== false;
       let streamed = false;
       let streamedText = "";
       if (dictationPreviewStream) {
@@ -6747,8 +6749,8 @@ class IPCHandlers {
         }
         if (result) {
           streamedText = result.text || "";
-          // Only a clean flush is trustworthy as the final transcript.
-          streamed = !result.truncated;
+          // Trust the streamed transcript only on a clean server flush and a clean renderer flush.
+          streamed = !result.truncated && rendererFlushOk;
         }
         if (streamedText && display && dictationPreviewSessionActive) {
           this.windowManager.showTranscriptionPreview(streamedText);
