@@ -1424,6 +1424,12 @@
         "title": "フローティングアイコン",
         "startPosition": "開始位置",
         "startPositionDescription": "音声レコーダーパネルが画面上に表示される位置",
+        "display": "モニター",
+        "displayDescription": "ディクテーションウィジェットを表示するモニターを選択します。",
+        "displayAuto": "自動（カーソルに追従）",
+        "displayLabel": "ディスプレイ {{number}} — {{width}}×{{height}}",
+        "displayPrimary": "メイン",
+        "displayDisconnected": "（切断済み）",
         "bottomRight": "右下",
         "center": "下中央",
         "bottomLeft": "左下"

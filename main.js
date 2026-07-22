@@ -904,6 +904,7 @@ async function startApp() {
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
+  windowManager.setPanelDisplay(environmentManager.getPanelDisplay());
 
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     windowManager.setActivationModeCache(mode);
@@ -927,6 +928,11 @@ async function startApp() {
   ipcMain.on("panel-start-position-changed", (_event, position) => {
     windowManager.setPanelStartPosition(position);
     environmentManager.savePanelStartPosition(position);
+  });
+
+  ipcMain.on("panel-display-changed", (_event, value) => {
+    windowManager.setPanelDisplay(value);
+    environmentManager.savePanelDisplay(value);
   });
 
   dockManager.init();
