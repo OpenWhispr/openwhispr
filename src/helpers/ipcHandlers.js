@@ -3724,12 +3724,10 @@ class IPCHandlers {
 
         const modelPath = require("path").join(modelManager.modelsDir, modelInfo.model.fileName);
 
-        // Mirror runInference/prewarmServer so a manual start also picks up the MTP drafter.
-        const startOptions = modelManager.serverOptions(modelInfo);
-        const draftPath = await modelManager.resolveDraftPath(modelInfo.model);
-        if (draftPath) startOptions.draftModelPath = draftPath;
-
-        await modelManager.serverManager.start(modelPath, startOptions);
+        await modelManager.serverManager.start(
+          modelPath,
+          await modelManager.serverStartOptions(modelInfo)
+        );
         modelManager.currentServerModelId = modelId;
 
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});

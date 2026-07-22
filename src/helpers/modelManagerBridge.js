@@ -206,6 +206,13 @@ class ModelManager {
     };
   }
 
+  async serverStartOptions(modelInfo) {
+    const options = this.serverOptions(modelInfo);
+    const draftPath = await this.resolveDraftPath(modelInfo.model);
+    if (draftPath) options.draftModelPath = draftPath;
+    return options;
+  }
+
   async downloadModel(modelId, onProgress) {
     this.ensureInitialized();
     const modelInfo = this.findModelById(modelId);
@@ -482,11 +489,7 @@ class ModelManager {
         serverReady: this.serverManager.ready,
       });
 
-      const startOptions = this.serverOptions(modelInfo);
-      const draftPath = await this.resolveDraftPath(modelInfo.model);
-      if (draftPath) startOptions.draftModelPath = draftPath;
-
-      await this.serverManager.start(modelPath, startOptions);
+      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
       this.currentServerModelId = modelId;
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
@@ -556,11 +559,7 @@ class ModelManager {
     if (!this.serverManager.isAvailable()) return false;
 
     try {
-      const startOptions = this.serverOptions(modelInfo);
-      const draftPath = await this.resolveDraftPath(modelInfo.model);
-      if (draftPath) startOptions.draftModelPath = draftPath;
-
-      await this.serverManager.start(modelPath, startOptions);
+      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
       this.currentServerModelId = modelId;
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;
