@@ -10,6 +10,26 @@ const { app } = require("electron");
 // trigger can't 400 the whole sync batch.
 const MAX_SNIPPET_TRIGGER_LENGTH = 100;
 
+// A meeting synced by both Google and Apple (Calendar.app mirroring the same
+// account) would double-fire reminders and duplicate UI rows; suppress the
+// Apple copy when a Google row occupies the same time slot + title (Google has
+// richer conference data). datetime() normalizes the providers' timestamp
+// formats (Google stores offset-form RFC3339, Apple stores UTC "Z" form), and
+// Google rows are never collapsed so Google-only behavior is unchanged.
+function dedupedEventsQuery(where) {
+  return `SELECT * FROM (
+    SELECT *, MAX(provider = 'google') OVER (
+      PARTITION BY datetime(start_time), datetime(end_time), COALESCE(summary, '')
+    ) AS has_google
+    FROM calendar_events
+    WHERE ${where}
+  ) WHERE provider = 'google' OR has_google = 0 ORDER BY datetime(start_time) ASC`;
+}
+
+function stripDedupeColumn({ has_google: _hasGoogle, ...event }) {
+  return event;
+}
+
 class DatabaseManager {
   constructor() {
     this.db = null;
@@ -407,6 +427,24 @@ class DatabaseManager {
           organizer_email TEXT,
           attendees_count INTEGER DEFAULT 0,
           synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      try {
+        this.db.exec(
+          "ALTER TABLE calendar_events ADD COLUMN provider TEXT NOT NULL DEFAULT 'google'"
+        );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS apple_calendars (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          color TEXT,
+          source_name TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
 
@@ -2095,12 +2133,13 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction((eventList) => {
         const stmt = this.db.prepare(
-          "INSERT OR REPLACE INTO calendar_events (id, calendar_id, summary, start_time, end_time, is_all_day, status, hangout_link, conference_data, organizer_email, attendees_count, attendees, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+          "INSERT OR REPLACE INTO calendar_events (id, calendar_id, provider, summary, start_time, end_time, is_all_day, status, hangout_link, conference_data, organizer_email, attendees_count, attendees, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
         );
         for (const e of eventList) {
           stmt.run(
             e.id,
             e.calendar_id,
+            e.provider || "google",
             e.summary || null,
             e.start_time,
             e.end_time,
@@ -2127,9 +2166,12 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT * FROM calendar_events WHERE datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now') AND is_all_day = 0 AND status = 'confirmed' ORDER BY start_time ASC"
+          dedupedEventsQuery(
+            "datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now') AND is_all_day = 0 AND status IN ('confirmed', 'tentative')"
+          )
         )
-        .all();
+        .all()
+        .map(stripDedupeColumn);
     } catch (error) {
       debugLogger.error("Error getting active events", { error: error.message }, "gcal");
       throw error;
@@ -2164,9 +2206,12 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT * FROM calendar_events WHERE ((datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now'))) AND is_all_day = 0 AND status = 'confirmed' ORDER BY start_time ASC"
+          dedupedEventsQuery(
+            "((datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now'))) AND is_all_day = 0 AND status IN ('confirmed', 'tentative')"
+          )
         )
-        .all(windowMinutes);
+        .all(windowMinutes)
+        .map(stripDedupeColumn);
     } catch (error) {
       debugLogger.error("Error getting upcoming events", { error: error.message }, "gcal");
       throw error;
@@ -2235,11 +2280,11 @@ class DatabaseManager {
     }
   }
 
-  clearCalendarData() {
+  clearGoogleCalendarData() {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction(() => {
-        this.db.prepare("DELETE FROM calendar_events").run();
+        this.db.prepare("DELETE FROM calendar_events WHERE provider = 'google'").run();
         this.db.prepare("DELETE FROM google_calendars").run();
         this.db.prepare("DELETE FROM google_calendar_tokens").run();
       });
@@ -2281,7 +2326,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       this.db
         .prepare(
-          "DELETE FROM calendar_events WHERE calendar_id NOT IN (SELECT id FROM google_calendars WHERE is_selected = 1)"
+          "DELETE FROM calendar_events WHERE provider = 'google' AND calendar_id NOT IN (SELECT id FROM google_calendars WHERE is_selected = 1)"
         )
         .run();
       return { success: true };
@@ -2291,6 +2336,96 @@ class DatabaseManager {
         { error: error.message },
         "gcal"
       );
+      throw error;
+    }
+  }
+
+  saveAppleCalendars(calendars) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const transaction = this.db.transaction((list) => {
+        // Snapshots are complete: prune calendars removed from Calendar.app,
+        // upsert the rest so created_at survives.
+        if (list.length === 0) {
+          this.db.prepare("DELETE FROM apple_calendars").run();
+          return;
+        }
+        const placeholders = list.map(() => "?").join(", ");
+        this.db
+          .prepare(`DELETE FROM apple_calendars WHERE id NOT IN (${placeholders})`)
+          .run(...list.map((cal) => cal.id));
+
+        const stmt = this.db.prepare(
+          `INSERT INTO apple_calendars (id, title, color, source_name)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             title = excluded.title,
+             color = excluded.color,
+             source_name = excluded.source_name`
+        );
+        for (const cal of list) {
+          stmt.run(cal.id, cal.title, cal.color || null, cal.source_name || null);
+        }
+      });
+      transaction(calendars);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error saving Apple calendars", { error: error.message }, "acal");
+      throw error;
+    }
+  }
+
+  getAppleCalendars() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db.prepare("SELECT * FROM apple_calendars").all();
+    } catch (error) {
+      debugLogger.error("Error getting Apple calendars", { error: error.message }, "acal");
+      throw error;
+    }
+  }
+
+  // Snapshots cover the full current/future window, so missing unreferenced
+  // events can be removed while note-linked history is retained.
+  replaceAppleCalendarEvents(events) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const transaction = this.db.transaction((list) => {
+        // The helper snapshot only contains current/future events. Keep past or
+        // rescheduled rows that are still referenced by meeting notes so those
+        // notes retain their calendar metadata.
+        this.db
+          .prepare(
+            `DELETE FROM calendar_events
+             WHERE provider = 'apple'
+               AND id NOT IN (
+                 SELECT calendar_event_id
+                 FROM notes
+                 WHERE calendar_event_id IS NOT NULL AND deleted_at IS NULL
+               )`
+          )
+          .run();
+        if (list.length > 0) this.upsertCalendarEvents(list);
+      });
+      transaction(events);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error replacing Apple calendar events", { error: error.message }, "acal");
+      throw error;
+    }
+  }
+
+  clearAppleCalendarData() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const transaction = this.db.transaction(() => {
+        this.db.prepare("DELETE FROM calendar_events WHERE provider = 'apple'").run();
+        this.db.prepare("DELETE FROM apple_calendars").run();
+      });
+      transaction();
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error clearing Apple calendar data", { error: error.message }, "acal");
       throw error;
     }
   }

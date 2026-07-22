@@ -2835,6 +2835,21 @@
       "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
       "openSettings": "Open System Settings"
     },
+    "appleCalendar": {
+      "title": "Apple Calendar",
+      "optional": "Optional",
+      "description": "Read meetings from Calendar.app — iCloud, Google, Exchange, and Outlook in one place.",
+      "connect": "Connect Apple Calendar",
+      "connected": "Connected",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect Apple Calendar?",
+      "disconnectDescription": "Meeting notes will no longer be recorded from your Apple Calendar.",
+      "permissionDenied": "Calendar Access Required",
+      "permissionDeniedDescription": "OpenWhispr needs calendar access to detect meetings. Enable OpenWhispr in System Settings under Privacy & Security → Calendars.",
+      "openSettings": "Open System Settings",
+      "connectFailed": "Connection Failed",
+      "connectFailedDescription": "Something went wrong while connecting to Calendar.app. Please restart OpenWhispr and try again."
+    },
     "sections": {
       "calendar": "Calendar",
       "api": "API",

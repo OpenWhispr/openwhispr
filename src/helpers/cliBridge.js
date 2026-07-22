@@ -5,6 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
+const { broadcastToWindows } = require("./windowBroadcast");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -313,7 +314,7 @@ class CliBridge {
             body.folder_id ?? null
           );
           const note = unwrapMutationResult(result, "note");
-          setImmediate(() => ipc.broadcastToWindows("note-added", note));
+          setImmediate(() => broadcastToWindows("note-added", note));
           ipc._asyncVectorUpsert(note);
           ipc._asyncMirrorWrite(note);
           return { data: note };
@@ -324,7 +325,7 @@ class CliBridge {
         const id = requireId(params, "note");
         const result = db.updateNote(id, body || {});
         const note = unwrapMutationResult(result, "note");
-        setImmediate(() => ipc.broadcastToWindows("note-updated", note));
+        setImmediate(() => broadcastToWindows("note-updated", note));
         ipc._asyncVectorUpsert(note);
         ipc._asyncMirrorWrite(note);
         return { data: note };
@@ -344,7 +345,7 @@ class CliBridge {
         ({ body }) => {
           const result = db.createFolder(body?.name);
           const folder = unwrapMutationResult(result, "folder");
-          setImmediate(() => ipc.broadcastToWindows("folder-created", folder));
+          setImmediate(() => broadcastToWindows("folder-created", folder));
           return { data: folder };
         },
         201

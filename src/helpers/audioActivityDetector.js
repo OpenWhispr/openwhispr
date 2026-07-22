@@ -1,9 +1,8 @@
 const { exec, spawn } = require("child_process");
 const { promisify } = require("util");
-const path = require("path");
-const fs = require("fs");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
+const { resolveBundledBinary } = require("./binaryResolver");
 
 const execAsync = promisify(exec);
 
@@ -160,35 +159,6 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
-  _resolveBinary(binaryName) {
-    const candidates = [
-      path.join(__dirname, "..", "..", "resources", "bin", binaryName),
-      path.join(__dirname, "..", "..", "resources", binaryName),
-    ];
-
-    if (process.resourcesPath) {
-      candidates.push(
-        path.join(process.resourcesPath, binaryName),
-        path.join(process.resourcesPath, "bin", binaryName),
-        path.join(process.resourcesPath, "resources", "bin", binaryName),
-        path.join(process.resourcesPath, "app.asar.unpacked", "resources", "bin", binaryName)
-      );
-    }
-
-    for (const candidate of candidates) {
-      try {
-        if (fs.existsSync(candidate)) {
-          fs.accessSync(candidate, fs.constants.X_OK);
-          debugLogger.info("Resolved binary", { name: binaryName, path: candidate }, "meeting");
-          return candidate;
-        }
-      } catch {
-        // continue
-      }
-    }
-    return null;
-  }
-
   _attachFallbackHandlers(child, label) {
     const fallbackToPolling = () => {
       this._listenerProcess = null;
@@ -210,7 +180,7 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   _tryEventDrivenDarwin() {
-    const binaryPath = this._resolveBinary("macos-mic-listener");
+    const binaryPath = resolveBundledBinary("macos-mic-listener", "meeting");
     if (!binaryPath) {
       debugLogger.warn("macos-mic-listener binary not found, will use polling", {}, "meeting");
       return false;
@@ -252,7 +222,7 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   _tryEventDrivenWin32() {
-    const binaryPath = this._resolveBinary("windows-mic-listener.exe");
+    const binaryPath = resolveBundledBinary("windows-mic-listener.exe", "meeting");
     if (!binaryPath) {
       debugLogger.warn("windows-mic-listener.exe not found, will use polling", {}, "meeting");
       return false;

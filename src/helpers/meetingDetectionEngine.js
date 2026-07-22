@@ -1,6 +1,7 @@
-const { BrowserWindow, shell } = require("electron");
+const { shell } = require("electron");
 const debugLogger = require("./debugLogger");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
+const { broadcastToWindows } = require("./windowBroadcast");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 
@@ -25,13 +26,13 @@ function placeholderEvent(calendarId) {
 
 class MeetingDetectionEngine {
   constructor(
-    googleCalendarManager,
+    reminderScheduler,
     meetingProcessDetector,
     audioActivityDetector,
     windowManager,
     databaseManager
   ) {
-    this.googleCalendarManager = googleCalendarManager;
+    this.reminderScheduler = reminderScheduler;
     this.meetingProcessDetector = meetingProcessDetector;
     this.audioActivityDetector = audioActivityDetector;
     this.windowManager = windowManager;
@@ -124,8 +125,7 @@ class MeetingDetectionEngine {
   // activeMeeting only means the event's scheduled window is open — actual meeting
   // recordings are tracked by _meetingModeActive.
   _findCalendarEvent() {
-    const calendarState = this.googleCalendarManager?.getActiveMeetingState?.();
-    if (!calendarState) return null;
+    const calendarState = this.reminderScheduler.getActiveMeetingState();
     if (calendarState.activeMeeting) return calendarState.activeMeeting;
 
     const now = Date.now();
@@ -212,7 +212,7 @@ class MeetingDetectionEngine {
 
         this._meetingModeActive = true;
 
-        this.broadcastToWindows("note-added", noteResult.note);
+        broadcastToWindows("note-added", noteResult.note);
 
         const isRealEvent =
           detection.event?.calendar_id &&
@@ -227,7 +227,7 @@ class MeetingDetectionEngine {
           }
           const updateResult = this.databaseManager.updateNote(noteResult.note.id, updates);
           if (updateResult?.success && updateResult?.note) {
-            this.broadcastToWindows("note-updated", updateResult.note);
+            broadcastToWindows("note-updated", updateResult.note);
           }
         }
 
@@ -284,7 +284,7 @@ class MeetingDetectionEngine {
       return;
     }
 
-    this.broadcastToWindows("note-added", noteResult.note);
+    broadcastToWindows("note-added", noteResult.note);
 
     await this.windowManager.queueMeetingNoteNavigation({
       noteId: noteResult.note.id,
@@ -324,7 +324,7 @@ class MeetingDetectionEngine {
     }
     const updateResult = this.databaseManager.updateNote(noteResult.note.id, updates);
 
-    this.broadcastToWindows("note-added", updateResult?.note || noteResult.note);
+    broadcastToWindows("note-added", updateResult?.note || noteResult.note);
 
     await this.windowManager.queueMeetingNoteNavigation({
       noteId: noteResult.note.id,
@@ -449,15 +449,6 @@ class MeetingDetectionEngine {
       this._postRecordingCooldown = null;
     }
     this._notificationQueue = [];
-  }
-
-  broadcastToWindows(channel, data) {
-    const windows = BrowserWindow.getAllWindows();
-    windows.forEach((win) => {
-      if (!win.isDestroyed()) {
-        win.webContents.send(channel, data);
-      }
-    });
   }
 }
 

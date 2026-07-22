@@ -110,6 +110,7 @@
         "macos-globe-listener",
         "macos-fast-paste",
         "macos-mic-listener",
+        "macos-calendar-listener",
         "macos-text-monitor",
         "macos-media-remote",
         "MediaRemoteAdapter.framework/**",
@@ -161,7 +162,9 @@
       "CFBundleIconName": "openwhispr",
       "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
       "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings.",
-      "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications."
+      "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications.",
+      "NSCalendarsUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events.",
+      "NSCalendarsFullAccessUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events."
     }
   },
   "win": {
