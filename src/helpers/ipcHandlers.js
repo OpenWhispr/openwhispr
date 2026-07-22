@@ -39,6 +39,7 @@ const {
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
+const { isEmptyRecording } = require("./recordingGuard");
 const postMigrationDetector = require("./postMigrationDetector");
 const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
@@ -4328,6 +4329,11 @@ class IPCHandlers {
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };
+      // Header-only blobs stored by older builds fail every backend with a
+      // confusing "corrupted or unsupported" error; reject them clearly here.
+      if (isEmptyRecording(buffer.length)) {
+        return { success: false, error: "Recording contains no audio" };
+      }
       try {
         let result;
         const preferredLanguage = settings?.preferredLanguage;
