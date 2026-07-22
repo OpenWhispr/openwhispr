@@ -903,6 +903,11 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("set-main-window-menu-focus", (event, open) => {
+      this.windowManager.setMainWindowMenuFocus(Boolean(open));
+      return { success: true };
+    });
+
     ipcMain.handle("set-notification-interactivity", (event, interactive) => {
       this.windowManager.setNotificationInteractivity(Boolean(interactive));
       return { success: true };

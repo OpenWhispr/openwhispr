@@ -18,8 +18,15 @@ const REGISTRY_OPTIONS: LanguageOption[] = registry.languages.map(({ code, label
 }));
 
 interface LanguageSelectorProps {
-  value: string;
-  onChange: (value: string) => void;
+  value?: string;
+  onChange?: (value: string) => void;
+  /** Multi-select mode: options toggle in and out of `values` and the
+   * dropdown stays open. `values`/`onValuesChange` replace `value`/`onChange`. */
+  multiple?: boolean;
+  values?: string[];
+  onValuesChange?: (values: string[]) => void;
+  /** In multiple mode, cap on how many languages can be selected. */
+  maxValues?: number;
   options?: LanguageOption[];
   className?: string;
   placeholder?: string;
@@ -28,6 +35,10 @@ interface LanguageSelectorProps {
 export default function LanguageSelector({
   value,
   onChange,
+  multiple = false,
+  values,
+  onValuesChange,
+  maxValues,
   options,
   className = "",
   placeholder,
@@ -108,8 +119,19 @@ export default function LanguageSelector({
       }
     };
 
+    // Clicks in another application never reach this document, so also
+    // collapse when the window itself loses focus.
+    const handleWindowBlur = () => {
+      setIsOpen(false);
+      setSearchQuery("");
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
   }, []);
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) {
@@ -143,8 +165,20 @@ export default function LanguageSelector({
     }
   };
 
+  const selectedValues = multiple ? (values ?? []) : value ? [value] : [];
+
   const handleSelect = (languageValue: string) => {
-    onChange(languageValue);
+    if (multiple) {
+      const current = values ?? [];
+      if (current.includes(languageValue)) {
+        // Never allow deselecting the last language.
+        if (current.length > 1) onValuesChange?.(current.filter((v) => v !== languageValue));
+      } else if (!maxValues || current.length < maxValues) {
+        onValuesChange?.([...current, languageValue]);
+      }
+      return;
+    }
+    onChange?.(languageValue);
     setIsOpen(false);
     handleSearchQueryChange("");
   };
@@ -157,6 +191,7 @@ export default function LanguageSelector({
   };
 
   const selected = items.find((l) => l.value === value);
+  const selectedOptions = multiple ? items.filter((l) => selectedValues.includes(l.value)) : [];
 
   return (
     <div className={`relative ${className}`} ref={setContainerNode}>
@@ -182,10 +217,26 @@ export default function LanguageSelector({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>
-          <span className="mr-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
-          {selected?.label ?? (value || placeholder || "")}
-        </span>
+        {multiple ? (
+          <span
+            className={`truncate ${selectedOptions.length > 0 ? "text-foreground" : "text-muted-foreground"}`}
+            title={selectedOptions.map((l) => l.label).join(", ")}
+          >
+            {selectedOptions.length === 0 ? (
+              placeholder || ""
+            ) : (
+              <>
+                <span className="mr-1.5">{selectedOptions.map((l) => l.flag).join(" ")}</span>
+                {selectedOptions.length === 1 && selectedOptions[0].label}
+              </>
+            )}
+          </span>
+        ) : (
+          <span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>
+            <span className="mr-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
+            {selected?.label ?? (value || placeholder || "")}
+          </span>
+        )}
         <ChevronDown
           className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-[color,transform] duration-200 ${
             isOpen ? "rotate-180 text-primary" : "group-hover:text-foreground"
@@ -240,9 +291,15 @@ export default function LanguageSelector({
                   {t("languageSelector.noLanguagesFound")}
                 </div>
               ) : (
-                <div role="listbox" className="space-y-0.5 pt-1">
+                <div
+                  role="listbox"
+                  aria-multiselectable={multiple || undefined}
+                  className="space-y-0.5 pt-1"
+                >
                   {filteredLanguages.map((language, index) => {
-                    const isSelected = language.value === value;
+                    const isSelected = multiple
+                      ? selectedValues.includes(language.value)
+                      : language.value === value;
                     const isHighlighted = index === highlightedIndex;
 
                     return (

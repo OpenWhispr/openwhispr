@@ -152,6 +152,7 @@ const ARRAY_SETTINGS = new Set([
   "gcalAccounts",
   "onboardingUseCases",
   "translationTargets",
+  "preferredLanguages",
 ]);
 
 const NUMERIC_SETTINGS = new Set([
@@ -575,6 +576,7 @@ export interface SettingsState
   setAllowLocalFallback: (value: boolean) => void;
   setFallbackWhisperModel: (value: string) => void;
   setPreferredLanguage: (value: string) => void;
+  setPreferredLanguages: (languages: string[]) => void;
   setCloudTranscriptionProvider: (value: string) => void;
   setCloudTranscriptionModel: (value: string) => void;
   setCloudTranscriptionBaseUrl: (value: string) => void;
@@ -899,6 +901,27 @@ function createSecretSetter(
 }
 
 export const MAX_TRANSLATION_TARGETS = 5;
+export const MAX_PREFERRED_LANGUAGES = 5;
+
+// "auto" is a detection mode, not a language preset — it never belongs in the
+// multi-select set. Also repairs values persisted before this rule existed.
+const initialPreferredLanguages = (() => {
+  const stored = readStringArray("preferredLanguages", []);
+  const sanitized = stored.filter((v) => v !== "auto").slice(0, MAX_PREFERRED_LANGUAGES);
+  if (isBrowser && sanitized.length !== stored.length) {
+    localStorage.setItem("preferredLanguages", JSON.stringify(sanitized));
+  }
+  return sanitized;
+})();
+
+const initialPreferredLanguage = (() => {
+  const stored = readString("preferredLanguage", "auto");
+  if (initialPreferredLanguages.length > 0 && !initialPreferredLanguages.includes(stored)) {
+    if (isBrowser) localStorage.setItem("preferredLanguage", initialPreferredLanguages[0]);
+    return initialPreferredLanguages[0];
+  }
+  return stored;
+})();
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
@@ -911,7 +934,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   allowOpenAIFallback: readBoolean("allowOpenAIFallback", false),
   allowLocalFallback: readBoolean("allowLocalFallback", false),
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
-  preferredLanguage: readString("preferredLanguage", "auto"),
+  preferredLanguage: initialPreferredLanguage,
+  // Multi-select transcription languages. Empty means the user never picked
+  // multiple — the effective set is then just [preferredLanguage].
+  preferredLanguages: initialPreferredLanguages,
   cloudTranscriptionProvider: readString("cloudTranscriptionProvider", "openai"),
   cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
   cloudTranscriptionBaseUrl: readString(
@@ -1325,7 +1351,39 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAllowOpenAIFallback: createBooleanSetter("allowOpenAIFallback"),
   setAllowLocalFallback: createBooleanSetter("allowLocalFallback"),
   setFallbackWhisperModel: createStringSetter("fallbackWhisperModel"),
-  setPreferredLanguage: createStringSetter("preferredLanguage"),
+  setPreferredLanguage: (value: string) => {
+    if (isBrowser) localStorage.setItem("preferredLanguage", value);
+    set((s) => {
+      // Auto detect is exclusive — choosing it drops the multi-language set.
+      if (value === "auto") {
+        if (s.preferredLanguages.length === 0) return { preferredLanguage: value };
+        if (isBrowser) localStorage.setItem("preferredLanguages", JSON.stringify([]));
+        return { preferredLanguage: value, preferredLanguages: [] };
+      }
+      // Keep the active language inside the multi-select set (when one exists)
+      // so the dictation panel switcher always offers it.
+      if (s.preferredLanguages.length > 0 && !s.preferredLanguages.includes(value)) {
+        const languages = [...s.preferredLanguages, value].slice(0, MAX_PREFERRED_LANGUAGES);
+        if (isBrowser) localStorage.setItem("preferredLanguages", JSON.stringify(languages));
+        return { preferredLanguage: value, preferredLanguages: languages };
+      }
+      return { preferredLanguage: value };
+    });
+  },
+  setPreferredLanguages: (languages: string[]) => {
+    // "auto" is a detection mode, not a preset — never part of the set.
+    const normalized = Array.from(
+      new Set(languages.filter((v) => typeof v === "string" && v.trim() && v !== "auto"))
+    ).slice(0, MAX_PREFERRED_LANGUAGES);
+    if (isBrowser) localStorage.setItem("preferredLanguages", JSON.stringify(normalized));
+    set((s) => {
+      if (normalized.length > 0 && !normalized.includes(s.preferredLanguage)) {
+        if (isBrowser) localStorage.setItem("preferredLanguage", normalized[0]);
+        return { preferredLanguages: normalized, preferredLanguage: normalized[0] };
+      }
+      return { preferredLanguages: normalized };
+    });
+  },
   setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
@@ -1754,6 +1812,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setFallbackWhisperModel(settings.fallbackWhisperModel);
     if (settings.preferredLanguage !== undefined)
       s.setPreferredLanguage(settings.preferredLanguage);
+    if (settings.preferredLanguages !== undefined)
+      s.setPreferredLanguages(settings.preferredLanguages);
     if (settings.cloudTranscriptionProvider !== undefined)
       s.setCloudTranscriptionProvider(settings.cloudTranscriptionProvider);
     if (settings.cloudTranscriptionModel !== undefined)

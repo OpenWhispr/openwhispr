@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import "./index.css";
-import { X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { useToast } from "./components/ui/useToast";
 import { LoadingDots } from "./components/ui/LoadingDots";
 import { useHotkey } from "./hooks/useHotkey";
@@ -9,6 +9,7 @@ import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useSettingsStore } from "./stores/settingsStore";
+import { getLanguageLabel } from "./utils/languageSupport";
 
 // Sound Wave Icon Component (for idle/hover states)
 const SoundWaveIcon = ({ size = 16 }) => {
@@ -62,7 +63,7 @@ const Tooltip = ({ children, content, emoji, align = "center" }) => {
       <div onMouseEnter={() => setIsVisible(true)} onMouseLeave={() => setIsVisible(false)}>
         {children}
       </div>
-      {isVisible && (
+      {isVisible && content && (
         <div
           className={`absolute bottom-full ${alignClass} mb-2 px-1.5 py-1 text-[10px] text-popover-foreground bg-popover border border-border rounded-md z-10 shadow-lg transition-opacity duration-150 whitespace-nowrap`}
         >
@@ -80,7 +81,10 @@ const Tooltip = ({ children, content, emoji, align = "center" }) => {
 export default function App() {
   const [isHovered, setIsHovered] = useState(false);
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const commandMenuRef = useRef(null);
+  const languageMenuRef = useRef(null);
+  const languagePopupRef = useRef(null);
   const buttonRef = useRef(null);
   const { toast, dismiss, toastCount } = useToast();
   const { t } = useTranslation();
@@ -93,6 +97,17 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
+
+  // Transcription language switcher (only shown when several are selected)
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
+  const preferredLanguages = useSettingsStore((s) => s.preferredLanguages);
+  const setPreferredLanguage = useSettingsStore((s) => s.setPreferredLanguage);
+  const languageOptions = React.useMemo(
+    () => (preferredLanguages.length > 0 ? preferredLanguages : [preferredLanguage]),
+    [preferredLanguages, preferredLanguage]
+  );
+  const showLanguageSwitcher = languageOptions.length > 1;
+  const activeLanguageLabel = getLanguageLabel(preferredLanguage);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
@@ -179,30 +194,54 @@ export default function App() {
   }, [toast, dismiss, t]);
 
   useEffect(() => {
-    if (isCommandMenuOpen || toastCount > 0) {
+    if (isCommandMenuOpen || isLanguageMenuOpen || toastCount > 0) {
       setWindowInteractivity(true);
     } else if (!isHovered) {
       setWindowInteractivity(false);
     }
-  }, [isCommandMenuOpen, isHovered, toastCount, setWindowInteractivity]);
+  }, [isCommandMenuOpen, isLanguageMenuOpen, isHovered, toastCount, setWindowInteractivity]);
 
   useEffect(() => {
+    const hasMenu = isCommandMenuOpen || isLanguageMenuOpen;
     const resizeWindow = () => {
-      if (isCommandMenuOpen && toastCount > 0) {
+      if (hasMenu && toastCount > 0) {
         window.electronAPI?.resizeMainWindow?.("EXPANDED");
-      } else if (isCommandMenuOpen) {
+      } else if (hasMenu) {
         window.electronAPI?.resizeMainWindow?.("WITH_MENU");
       } else if (toastCount > 0) {
         window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
       } else {
-        window.electronAPI?.resizeMainWindow?.("BASE");
+        // Wider resting size so the hover language chip isn't clipped
+        window.electronAPI?.resizeMainWindow?.(showLanguageSwitcher ? "WITH_LANGUAGE" : "BASE");
       }
     };
     resizeWindow();
-  }, [isCommandMenuOpen, toastCount]);
+  }, [isCommandMenuOpen, isLanguageMenuOpen, toastCount, showLanguageSwitcher]);
+
+  // Keep toasts stacked above an open menu instead of covering it
+  // (the toast viewport in Toast.tsx reads --toast-viewport-bottom)
+  useLayoutEffect(() => {
+    const menuTops = [];
+    if (isLanguageMenuOpen && languagePopupRef.current) {
+      menuTops.push(languagePopupRef.current.getBoundingClientRect().top);
+    }
+    if (isCommandMenuOpen && commandMenuRef.current) {
+      menuTops.push(commandMenuRef.current.getBoundingClientRect().top);
+    }
+    if (menuTops.length > 0) {
+      document.documentElement.style.setProperty(
+        "--toast-viewport-bottom",
+        `${Math.round(window.innerHeight - Math.min(...menuTops) + 8)}px`
+      );
+    } else {
+      document.documentElement.style.removeProperty("--toast-viewport-bottom");
+    }
+    return () => document.documentElement.style.removeProperty("--toast-viewport-bottom");
+  }, [isCommandMenuOpen, isLanguageMenuOpen, languageOptions]);
 
   const handleDictationToggle = React.useCallback(() => {
     setIsCommandMenuOpen(false);
+    setIsLanguageMenuOpen(false);
     setWindowInteractivity(false);
   }, [setWindowInteractivity]);
 
@@ -261,12 +300,13 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!isCommandMenuOpen) {
+    if (!isCommandMenuOpen && !isLanguageMenuOpen) {
       return;
     }
 
     const handleClickOutside = (event) => {
       if (
+        isCommandMenuOpen &&
         commandMenuRef.current &&
         !commandMenuRef.current.contains(event.target) &&
         buttonRef.current &&
@@ -274,16 +314,50 @@ export default function App() {
       ) {
         setIsCommandMenuOpen(false);
       }
+      if (
+        isLanguageMenuOpen &&
+        languageMenuRef.current &&
+        !languageMenuRef.current.contains(event.target)
+      ) {
+        setIsLanguageMenuOpen(false);
+      }
+    };
+
+    // Close when the window loses focus (e.g. a click landing in another app).
+    // The window holds focus while a menu is open — see the effect below.
+    const handleWindowBlur = () => {
+      setIsCommandMenuOpen(false);
+      setIsLanguageMenuOpen(false);
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isCommandMenuOpen]);
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, [isCommandMenuOpen, isLanguageMenuOpen]);
+
+  // The panel window is non-focusable, so a click landing in another app is
+  // invisible to the renderer and would leave an open menu dangling. While a
+  // menu is open the main process makes the window focusable and focused, so
+  // that click blurs the window and the handler above closes the menu.
+  useEffect(() => {
+    const hasOpenMenu = isCommandMenuOpen || isLanguageMenuOpen;
+    window.electronAPI?.setMainWindowMenuFocus?.(hasOpenMenu);
+    return () => {
+      if (hasOpenMenu) {
+        window.electronAPI?.setMainWindowMenuFocus?.(false);
+      }
+    };
+  }, [isCommandMenuOpen, isLanguageMenuOpen]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
       if (e.key === "Escape") {
-        if (isCommandMenuOpen) {
+        if (isLanguageMenuOpen) {
+          setIsLanguageMenuOpen(false);
+        } else if (isCommandMenuOpen) {
           setIsCommandMenuOpen(false);
         } else {
           handleClose();
@@ -293,7 +367,7 @@ export default function App() {
 
     document.addEventListener("keydown", handleKeyPress);
     return () => document.removeEventListener("keydown", handleKeyPress);
-  }, [isCommandMenuOpen]);
+  }, [isCommandMenuOpen, isLanguageMenuOpen]);
 
   // Determine current mic state
   const getMicState = () => {
@@ -364,12 +438,75 @@ export default function App() {
           }}
           onMouseLeave={() => {
             setIsHovered(false);
-            if (!isCommandMenuOpen) {
+            if (!isCommandMenuOpen && !isLanguageMenuOpen) {
               setWindowInteractivity(false);
             }
           }}
         >
-          {(isRecording || isProcessing) && isHovered && (
+          {showLanguageSwitcher && (isHovered || isLanguageMenuOpen) && !isProcessing && (
+            <div ref={languageMenuRef} className="flex items-center">
+              <Tooltip content={isLanguageMenuOpen ? null : activeLanguageLabel}>
+                <button
+                  aria-label={t("app.mic.languageTooltip", {
+                    language: activeLanguageLabel,
+                  })}
+                  aria-haspopup="menu"
+                  aria-expanded={isLanguageMenuOpen}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCommandMenuOpen(false);
+                    setIsLanguageMenuOpen((prev) => !prev);
+                  }}
+                  className="h-[18px] px-1.5 rounded-full bg-surface-2/90 hover:bg-surface-2 border border-border hover:border-border-hover flex items-center gap-1 text-[10px] font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors duration-150"
+                >
+                  <span className="uppercase">{preferredLanguage}</span>
+                  <ChevronDown
+                    size={10}
+                    strokeWidth={2.5}
+                    className={`shrink-0 transition-transform duration-150 ${
+                      isLanguageMenuOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+              </Tooltip>
+              {isLanguageMenuOpen && (
+                <div
+                  ref={languagePopupRef}
+                  className={`absolute bottom-full ${
+                    panelStartPosition === "bottom-left"
+                      ? "left-0"
+                      : panelStartPosition === "center"
+                        ? "left-1/2 -translate-x-1/2"
+                        : "right-0"
+                  } mb-2 w-44 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm`}
+                  role="menu"
+                >
+                  {languageOptions.map((code) => {
+                    const isActive = code === preferredLanguage;
+                    return (
+                      <button
+                        key={code}
+                        className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 first:pt-2 last:pb-2 hover:bg-muted focus:bg-muted focus:outline-none ${
+                          isActive ? "text-primary font-medium" : ""
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreferredLanguage(code);
+                          setIsLanguageMenuOpen(false);
+                        }}
+                        role="menuitemradio"
+                        aria-checked={isActive}
+                      >
+                        <span className="truncate flex-1">{getLanguageLabel(code)}</span>
+                        {isActive && <Check size={12} strokeWidth={2.5} className="shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          {(isRecording || isProcessing) && (isHovered || isLanguageMenuOpen) && (
             <button
               aria-label={
                 isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
@@ -432,6 +569,7 @@ export default function App() {
                 e.preventDefault();
                 if (!hasDragged) {
                   setWindowInteractivity(true);
+                  setIsLanguageMenuOpen(false);
                   setIsCommandMenuOpen((prev) => !prev);
                 }
               }}
@@ -510,6 +648,33 @@ export default function App() {
                   ? t("app.commandMenu.stopListening")
                   : t("app.commandMenu.startListening")}
               </button>
+              {showLanguageSwitcher && (
+                <>
+                  <div className="h-px bg-border" />
+                  <div className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("app.commandMenu.language")}
+                  </div>
+                  <div className="max-h-36 overflow-y-auto pb-1">
+                    {languageOptions.map((code) => {
+                      const isActive = code === preferredLanguage;
+                      return (
+                        <button
+                          key={code}
+                          className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-muted focus:bg-muted focus:outline-none ${
+                            isActive ? "text-primary font-medium" : ""
+                          }`}
+                          onClick={() => setPreferredLanguage(code)}
+                          role="menuitemradio"
+                          aria-checked={isActive}
+                        >
+                          <span className="truncate flex-1">{getLanguageLabel(code)}</span>
+                          {isActive && <Check size={12} strokeWidth={2.5} className="shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
               <div className="h-px bg-border" />
               <button
                 className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"

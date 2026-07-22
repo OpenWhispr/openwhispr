@@ -6,7 +6,9 @@
       "uiLabel": "界面语言",
       "uiDescription": "选择 OpenWhispr 界面使用的语言",
       "transcriptionLabel": "转录语言",
-      "transcriptionDescription": "选择你说话的语言，以提高转录准确率"
+      "transcriptionDescription": "最多选择 {{max}} 种你说话的语言——可在听写面板中切换当前语言",
+      "activeLanguage": "当前语言",
+      "removeLanguage": "移除{{language}}"
     },
     "noteFiles": {
       "title": "将笔记保存为文件",
@@ -2552,7 +2554,8 @@
       "recording": "录音中...",
       "processing": "处理中...",
       "clickToSpeak": "点击开始说话",
-      "waitingForMicrophone": "等待麦克风…"
+      "waitingForMicrophone": "等待麦克风…",
+      "languageTooltip": "语言：{{language}}——点击切换"
     },
     "buttons": {
       "cancelRecording": "取消录音",
@@ -2561,7 +2564,8 @@
     "commandMenu": {
       "stopListening": "停止录音",
       "startListening": "开始录音",
-      "hideForNow": "暂时隐藏"
+      "hideForNow": "暂时隐藏",
+      "language": "转录语言"
     }
   },
   "dictationTranslation": {
