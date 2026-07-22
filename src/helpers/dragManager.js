@@ -1,6 +1,7 @@
 const { screen } = require("electron");
 const { WindowPositionUtil } = require("./windowConfig");
 const debugLogger = require("./debugLogger");
+const { resolveEffectiveDisplay } = require("./effectiveWorkArea");
 
 class DragManager {
   constructor() {
@@ -78,10 +79,13 @@ class DragManager {
       // Constrain against the display the window lands on, not the one under the
       // cursor: near a boundary between differently sized displays, the cursor's
       // work area permits positions that leave the window in dead space.
-      const display = screen.getDisplayNearestPoint({
-        x: x + width / 2,
-        y: y + height / 2,
-      });
+      // The work area is KDE panel-strut corrected (identity on Windows/macOS).
+      const display = resolveEffectiveDisplay(
+        screen.getDisplayNearestPoint({
+          x: x + width / 2,
+          y: y + height / 2,
+        })
+      );
       const clamped = WindowPositionUtil.clampToWorkArea({ x, y, width, height }, display);
 
       this.targetWindow.setPosition(clamped.x, clamped.y);
