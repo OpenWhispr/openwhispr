@@ -13,6 +13,7 @@ function createOnlineAccumulator() {
   const finalizedSegments = new Set();
   let finalizedText = "";
   let partialText = "";
+  let partialSegment = null;
   let fallbackKey = 0;
 
   const text = () =>
@@ -33,6 +34,7 @@ function createOnlineAccumulator() {
 
       if (!parsed.is_final) {
         partialText = finalizedSegments.has(parsed.segment) ? "" : messageText;
+        partialSegment = parsed.segment ?? null;
         return text();
       }
 
@@ -41,7 +43,10 @@ function createOnlineAccumulator() {
         finalizedSegments.add(segment);
         finalizedText = finalizedText ? `${finalizedText} ${messageText}` : messageText;
       }
-      partialText = "";
+      if (partialSegment === null || partialSegment === segment) {
+        partialText = "";
+        partialSegment = null;
+      }
       return text();
     },
     text,
