@@ -323,6 +323,9 @@ let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
+let pendingNoteCloudId = null;
+let pendingNoteRetryTimer = null;
+let pendingNoteRetryCount = 0;
 const WHISPER_WAKE_REWARM_DELAY_MS = 3000;
 let wakeRewarmTimer = null;
 
@@ -517,6 +520,11 @@ app.on("open-url", (event, url) => {
     return;
   }
 
+  if (isNoteDeepLink(url)) {
+    void handleNoteDeepLink(url);
+    return;
+  }
+
   if (isInvitationDeepLink(url)) {
     handleInvitationDeepLink(url);
     return;
@@ -533,6 +541,79 @@ app.on("open-url", (event, url) => {
 
 function isInvitationDeepLink(url) {
   return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
+}
+
+function isNoteDeepLink(url) {
+  return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("notes/");
+}
+
+function parseNoteCloudId(deepLinkUrl) {
+  try {
+    const match = deepLinkUrl.match(/notes\/([^/?#]+)/);
+    const cloudId = match?.[1] ? decodeURIComponent(match[1]) : "";
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cloudId)
+      ? cloudId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingNoteDeepLink() {
+  clearTimeout(pendingNoteRetryTimer);
+  pendingNoteRetryTimer = null;
+  pendingNoteCloudId = null;
+  pendingNoteRetryCount = 0;
+}
+
+async function flushPendingNoteDeepLink() {
+  if (!pendingNoteCloudId || !windowManager || !databaseManager) return;
+
+  try {
+    // Surface the panel on the first attempt only; retries just poll the
+    // database so they can't repeatedly steal focus.
+    if (pendingNoteRetryCount === 0) {
+      await windowManager.createControlPanelWindow();
+    }
+
+    const note = databaseManager.getNoteByCloudId(pendingNoteCloudId);
+    if (!note) {
+      // Cloud sync may still be hydrating during a cold launch. Retry briefly so
+      // the handoff can resolve a note pulled after the protocol event arrived.
+      pendingNoteRetryCount += 1;
+      if (pendingNoteRetryCount <= 10) {
+        clearTimeout(pendingNoteRetryTimer);
+        pendingNoteRetryTimer = setTimeout(() => {
+          void flushPendingNoteDeepLink();
+        }, 1000);
+      } else {
+        console.warn("Note deep link could not resolve a local note", {
+          cloudId: pendingNoteCloudId,
+        });
+        clearPendingNoteDeepLink();
+      }
+      return;
+    }
+
+    const payload = { noteId: note.id, folderId: note.folder_id ?? null };
+    clearPendingNoteDeepLink();
+    await windowManager.queueNoteNavigation(payload);
+  } catch (error) {
+    console.error("Note deep link failed:", error);
+    clearPendingNoteDeepLink();
+  }
+}
+
+async function handleNoteDeepLink(deepLinkUrl) {
+  const cloudId = parseNoteCloudId(deepLinkUrl);
+  if (!cloudId) {
+    console.warn("Invalid note deep link");
+    return;
+  }
+
+  clearPendingNoteDeepLink();
+  pendingNoteCloudId = cloudId;
+  await flushPendingNoteDeepLink();
 }
 
 function handleInvitationDeepLink(deepLinkUrl) {
@@ -861,6 +942,13 @@ async function startApp() {
   await windowManager.createMainWindow();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
+  }
+
+  const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
+  if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
+    await handleNoteDeepLink(initialProtocolUrl);
+  } else {
+    await flushPendingNoteDeepLink();
   }
 
   // Create agent window (hidden) and set up agent hotkey
@@ -1557,6 +1645,8 @@ if (gotSingleInstanceLock) {
     if (url) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
+      } else if (isNoteDeepLink(url)) {
+        await handleNoteDeepLink(url);
       } else if (isInvitationDeepLink(url)) {
         handleInvitationDeepLink(url);
       } else {
@@ -1677,6 +1767,7 @@ function performSyncTeardown() {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;
   }
+  clearPendingNoteDeepLink();
   if (authBridgeServer) {
     authBridgeServer.close();
     authBridgeServer = null;

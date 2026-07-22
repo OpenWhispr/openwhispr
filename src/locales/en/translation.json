@@ -367,6 +367,7 @@
         "yesterday": "Yesterday"
       },
       "copyText": "Copy text",
+      "copyRawTranscript": "Copy raw transcript",
       "deleteItem": "Delete",
       "viewRawTranscript": "View raw transcript",
       "showInFolder": "Reveal in Finder",

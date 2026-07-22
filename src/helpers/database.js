@@ -1464,6 +1464,21 @@ class DatabaseManager {
     }
   }
 
+  getNoteByCloudId(cloudId) {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+      const stmt = this.db.prepare(
+        "SELECT * FROM notes WHERE cloud_id = ? AND deleted_at IS NULL LIMIT 1"
+      );
+      return stmt.get(cloudId) || null;
+    } catch (error) {
+      debugLogger.error("Error getting note by cloud_id", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
   getNotes(noteType = null, limit = 100, folderId = null) {
     try {
       if (!this.db) {
