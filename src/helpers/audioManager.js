@@ -15,6 +15,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
+import { isMicWarm, MIC_WARM_TTL_MS } from "./micWarmState";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic, reconcileSavedMicSelection } from "./micSelectionRecovery";
 import { isStaleDeviceError } from "./staleMicDevice";
@@ -299,7 +300,7 @@ class AudioManager {
     this._onDeviceChange = () => {
       this.cachedMicDeviceId = null;
       this.validatedSelectedMicDeviceId = null;
-      this.micDriverWarmedUp = false;
+      this._micWarmedAt = 0;
       this.rejectedMicDeviceId = null;
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
@@ -322,6 +323,7 @@ class AudioManager {
     this.cachedMicDeviceId = null;
     this.validatedSelectedMicDeviceId = null;
     this.rejectedMicDeviceId = null;
+    this._micWarmedAt = 0;
     this.persistentAudioContext = null;
     this.workletModuleLoaded = false;
     this.workletBlobUrl = null;
@@ -688,21 +690,40 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Warm the mic driver at most once per TTL. Shared by the batch and streaming
+  // sites so they can't drift or latch each other permanently off.
+  async _warmMicDriverOnce(logCategory) {
+    if (isMicWarm(this._micWarmedAt, Date.now())) return;
+    try {
+      const constraints = await this.getAudioConstraints();
+      const streamPromise = navigator.mediaDevices.getUserMedia(constraints);
+      // Stop the mic whenever it resolves, so a stream that arrives after the
+      // timeout is still released instead of leaking open.
+      streamPromise
+        .then((stream) => stream.getTracks().forEach((track) => track.stop()))
+        .catch(() => {});
+      let timer = null;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("mic warmup timed out")), MIC_WARM_TTL_MS);
+      });
+      try {
+        await Promise.race([streamPromise, timeout]);
+      } finally {
+        if (timer !== null) clearTimeout(timer);
+      }
+      this._micWarmedAt = Date.now();
+      logger.debug("Microphone driver pre-warmed", {}, logCategory);
+    } catch (e) {
+      logger.debug("Mic driver warmup failed (non-critical)", { error: e.message }, logCategory);
+    }
+  }
+
   // Briefly acquire and release the mic so the OS audio driver is warm before
   // the first real recording, reducing cold-start empty captures. See #871.
   async warmupMicDriver() {
-    if (this.micDriverWarmedUp) return;
     // Skip while a recording is active so we don't double-acquire the mic. See #871.
     if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") return;
-    try {
-      const constraints = await this.getAudioConstraints();
-      const tempStream = await navigator.mediaDevices.getUserMedia(constraints);
-      tempStream.getTracks().forEach((track) => track.stop());
-      this.micDriverWarmedUp = true;
-      logger.debug("Microphone driver pre-warmed", {}, "audio");
-    } catch (e) {
-      logger.debug("Mic driver warmup failed (non-critical)", { error: e.message }, "audio");
-    }
+    await this._warmMicDriverOnce("audio");
   }
 
   // Recovers a dead/muted capture: retries the same device, then hops to the OS default,
@@ -3253,21 +3274,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Warm up the OS audio driver by briefly acquiring the mic, then releasing.
         // This forces macOS to initialize the audio subsystem so subsequent
         // getUserMedia calls resolve in ~100-200ms instead of ~500-1000ms.
-        if (!this.micDriverWarmedUp) {
-          try {
-            const constraints = await this.getAudioConstraints();
-            const tempStream = await navigator.mediaDevices.getUserMedia(constraints);
-            tempStream.getTracks().forEach((track) => track.stop());
-            this.micDriverWarmedUp = true;
-            logger.debug("Microphone driver pre-warmed", {}, "streaming");
-          } catch (e) {
-            logger.debug(
-              "Mic driver warmup failed (non-critical)",
-              { error: e.message },
-              "streaming"
-            );
-          }
-        }
+        await this._warmMicDriverOnce("streaming");
 
         logger.info(
           "Streaming connection warmed up",
@@ -3563,7 +3570,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           wsConnectMs: Math.round(tWs - tPipeline),
           totalMs: Math.round(tWs - t0),
           usedWarmConnection: result.usedWarmConnection,
-          micDriverWarmedUp: !!this.micDriverWarmedUp,
+          micWarm: isMicWarm(this._micWarmedAt, Date.now()),
         },
         "streaming"
       );
