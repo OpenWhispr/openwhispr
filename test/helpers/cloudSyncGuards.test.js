@@ -3,12 +3,9 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/helpers/cloudSyncGuards.js");
 
-// Regression for the sync data-loss in #1290: local rows carry SQLite
-// `CURRENT_TIMESTAMP` format ("2026-07-22 08:47:00", space at index 10) while
-// cloud rows are ISO 8601 ("2026-07-22T08:18:27.790Z", 'T' at index 10). A raw
-// lexical `>` makes any same-UTC-day cloud timestamp beat any local one
-// ('T' 0x54 > ' ' 0x20), so a staler empty cloud copy wins the pull and wipes
-// the local edit.
+// Regression for #1290: local rows carry SQLite format ("2026-07-22 08:47:00")
+// while cloud rows are ISO ("2026-07-22T08:18:27.790Z"), so a raw lexical `>`
+// let any same-UTC-day cloud copy beat any local edit and wipe it on pull.
 
 test("a 29-minute-older cloud copy is not judged newer than a local edit", async () => {
   const { isCloudEntryNewer } = await load();
@@ -50,12 +47,9 @@ test("a missing local timestamp always yields to the cloud value", async () => {
   assert.equal(isCloudEntryNewer("2026-07-22T08:47:00.000Z", null), true);
 });
 
-// Regression for the wipe engine in #1290: the migration branch of
-// pushPendingNotes PATCHed only { client_note_id } for cloud_id-bearing pending
-// notes — bumping the cloud row's updated_at without ever uploading the local
-// content, so the same sync pass pulled the still-empty-but-now-"newer" cloud
-// row back down over the local edit. The update payload must carry the full
-// note content.
+// Regression for #1290's wipe engine: pushPendingNotes' migration branch
+// PATCHed only { client_note_id }, bumping the cloud row's updated_at without
+// uploading the local edit — the same pass then pulled the empty row back down.
 
 const localNote = {
   id: 7,
@@ -84,10 +78,8 @@ test("the note update payload carries the full content, not just identifiers", a
   const { buildNoteUpdatePayload } = await load();
   const payload = buildNoteUpdatePayload(localNote, new Map([[3, "cloud-folder-3"]]));
 
-  // client_note_id stays OUT of the shared payload: pre-client_note_id-era
-  // cloud notes carry a different backfilled UUID per device, so PATCHing it
-  // from the debounced push would flip the cloud row's identity between
-  // devices on every edit. Only the one-shot migration branch may send it.
+  // Only the one-shot migration branch may send client_note_id
+  // (see buildNoteUpdatePayload):
   assert.equal("client_note_id" in payload, false);
   assert.equal(payload.title, "Vision, Values, and Product Priorities");
   assert.equal(payload.content, "REAL MEETING NOTES");

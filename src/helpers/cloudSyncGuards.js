@@ -1,5 +1,4 @@
-// Sync-pull ordering and push-payload helpers shared by SyncService and the
-// node --test suite (#1290).
+// Sync guards shared by SyncService and the node --test suite (#1290).
 
 // SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
 // the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
@@ -12,22 +11,19 @@ export function normalizeTimestamp(value) {
   return (/\.\d+$/.test(iso) ? iso : `${iso}.000`) + "Z";
 }
 
-// The pull loops' last-writer-wins gate. Comparing the raw values instead
-// silently hands every same-UTC-day conflict to the cloud copy — 'T' (0x54)
-// sorts after ' ' (0x20) at index 10 — which is how a staler, still-empty
-// cloud shell overwrote fresh local meeting notes (#1290).
+// Last-writer-wins gate for the pull loops. A raw compare hands every
+// same-UTC-day conflict to the cloud copy ('T' > ' ' at index 10), which is
+// how a staler empty cloud shell overwrote fresh local notes (#1290).
 export function isCloudEntryNewer(cloudUpdatedAt, localUpdatedAt) {
   return normalizeTimestamp(cloudUpdatedAt) > normalizeTimestamp(localUpdatedAt);
 }
 
-// Full-content PATCH payload for an existing cloud note. Both the debounced
-// editor push and the pushPendingNotes migration branch must send this same
-// shape: a content-less PATCH still bumps the cloud row's updated_at, so the
-// next pull elects a copy that never received the local edit (#1290).
-// Deliberately NO client_note_id: pre-client_note_id-era cloud notes carry a
-// different backfilled UUID per device, so PATCHing it from every push would
-// flip the cloud row's identity between devices on each edit and fork
-// duplicate local notes. Only the one-shot migration branch sends it.
+// Full-content PATCH payload for an existing cloud note — a content-less
+// PATCH still bumps the cloud row's updated_at, so the next pull elects a
+// copy that never received the local edit (#1290). No client_note_id here:
+// legacy cloud notes carry a different backfilled UUID per device, so
+// PATCHing it on every push would fork duplicate notes; only the one-shot
+// migration branch sends it.
 export function buildNoteUpdatePayload(note, folderMap) {
   return {
     title: note.title,

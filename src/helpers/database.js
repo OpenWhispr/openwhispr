@@ -2714,12 +2714,9 @@ class DatabaseManager {
   upsertNoteFromCloud(cloudNote, localFolderId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      // Content columns keep the local value when the cloud copy is empty:
-      // sync must never replace non-empty local content/enhanced_content/
+      // Sync must never replace non-empty local content/enhanced_content/
       // transcript with an empty cloud value (#1290, the #938 invariant).
-      // enhancement_prompt/enhanced_at_content_hash travel with
-      // enhanced_content — a preserved enhancement must keep its hash or
-      // staleness detection breaks.
+      // The enhancement prompt/hash travel with enhanced_content.
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhanced_at_content_hash, note_type, source_file,
