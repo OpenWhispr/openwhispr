@@ -824,3 +824,121 @@ test("folders rebuild succeeds on a legacy DB with notes referencing folders", (
   );
   db.db.close();
 });
+
+test("purgeSpace preserves dirty cloud-backed notes with forked identities", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = db.createSpace({ name: "Revoked" }).space;
+  const folder = db.createFolder("Ops", team.id).folder;
+
+  const dirty = db.saveNote(
+    "Edited offline",
+    "walrus intel",
+    "personal",
+    null,
+    null,
+    folder.id
+  ).note;
+  db.markNoteSynced(dirty.id, "cloud-dirty-note");
+  db.updateNote(dirty.id, { content: "walrus intel v2" });
+  const errored = db.saveNote(
+    "Errored push",
+    "narwhal notes",
+    "personal",
+    null,
+    null,
+    folder.id
+  ).note;
+  db.markNoteSynced(errored.id, "cloud-error-note");
+  db.updateNote(errored.id, { content: "narwhal v2" });
+  db.markNoteSyncError(errored.id);
+  const clean = db.saveNote("Clean", "synced beluga", "personal", null, null, folder.id).note;
+  db.markNoteSynced(clean.id, "cloud-clean-note");
+  const before = { dirty: db.getNote(dirty.id), errored: db.getNote(errored.id) };
+
+  const result = db.purgeSpace(team.id);
+  assert.ok(result.success);
+  assert.equal(result.relocatedCount, 2);
+
+  // Unpushed edits ('pending' and 'error') survive in the private space as
+  // forked personal notes; only the clean server-owned copy is destroyed.
+  for (const [id, prior] of [
+    [dirty.id, before.dirty],
+    [errored.id, before.errored],
+  ]) {
+    const relocated = db.getNote(id);
+    assert.equal(relocated.space_id, privateId);
+    assert.equal(relocated.folder_id, null);
+    assert.equal(relocated.cloud_id, null);
+    assert.equal(relocated.sync_status, "pending");
+    assert.equal(relocated.left_team, 0);
+    assert.notEqual(relocated.client_note_id, prior.client_note_id);
+  }
+  const count = (sql, ...args) => db.db.prepare(sql).get(...args).count;
+  assert.equal(count("SELECT COUNT(*) as count FROM notes WHERE id = ?", clean.id), 0);
+});
+
+test("purgeSpace survives tombstones in other spaces referencing its folders", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = db.createSpace({ name: "Movers" }).space;
+
+  // Deleting a note keeps folder_id on the tombstone; moving the folder into
+  // the team afterwards leaves a cross-space reference that must not abort
+  // the purge on the notes→folders FK.
+  const folder = db.createFolder("Shared docs", privateId).folder;
+  const note = db.saveNote("Doomed", "tombstone gazelle", "personal", null, null, folder.id).note;
+  db.markNoteSynced(note.id, "cloud-tombstone-note");
+  db.deleteNote(note.id);
+  db.moveFolderToSpace(folder.id, team.id);
+
+  const result = db.purgeSpace(team.id);
+  assert.ok(result.success);
+
+  const tombstone = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(note.id);
+  assert.ok(tombstone.deleted_at, "the tombstone survives — its cloud delete still has to push");
+  assert.equal(tombstone.folder_id, null);
+  assert.ok(db.getPendingNoteDeletes().some((n) => n.id === note.id));
+  const count = (sql, ...args) => db.db.prepare(sql).get(...args).count;
+  assert.equal(count("SELECT COUNT(*) as count FROM folders WHERE space_id = ?", team.id), 0);
+  assert.equal(count("SELECT COUNT(*) as count FROM spaces WHERE id = ?", team.id), 0);
+});
+
+test("getPendingNotes includes error rows so failed pushes retry", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Retry me", "flaky ferret").note;
+  db.markNoteSyncError(note.id);
+
+  assert.ok(db.getPendingNotes().some((n) => n.id === note.id));
+  assert.ok(db.getPendingNotes("private").some((n) => n.id === note.id));
+});
+
+test("upsertSpaceFromCloud inserts as pending and never flips status on update", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = db.upsertSpaceFromCloud({ id: "team-1", name: "Cloud team", workspace_id: "ws-1" });
+  assert.equal(team.sync_status, "pending", "new spaces need a content backfill");
+
+  // A second mirror pass before the backfill completes must not settle it.
+  const again = db.upsertSpaceFromCloud({ id: "team-1", name: "Renamed" });
+  assert.equal(again.sync_status, "pending");
+
+  db.setSpaceSyncStatus(team.id, "synced");
+  const after = db.upsertSpaceFromCloud({ id: "team-1", name: "Renamed again" });
+  assert.equal(after.sync_status, "synced");
+});
+
+test("createSpace refuses non-team kinds so the private space stays unique", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const result = db.createSpace({ name: "Sneaky", kind: "private" });
+  assert.equal(result.success, false);
+
+  const privateCount = db.db
+    .prepare("SELECT COUNT(*) as count FROM spaces WHERE kind = 'private'")
+    .get().count;
+  assert.equal(privateCount, 1);
+});

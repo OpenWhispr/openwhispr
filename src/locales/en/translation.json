@@ -2746,6 +2746,44 @@
         "othersInCall_one": "{{count}} other in call",
         "othersInCall_other": "{{count}} others in call"
       }
+    },
+    "overview": {
+      "subtitle": {
+        "team": "Notes visible to everyone in this space.",
+        "private": "Only you can see these notes."
+      },
+      "meta": {
+        "folders_one": "{{count}} folder",
+        "folders_other": "{{count}} folders",
+        "members_one": "{{count}} member",
+        "members_other": "{{count}} members"
+      },
+      "banner": {
+        "title": {
+          "team": "Your team space",
+          "private": "Your private space"
+        },
+        "body": {
+          "team": "Share meeting notes with your team. Add user interviews, sales calls and team meetings so everyone stays in the loop.",
+          "private": "Keep meeting notes, ideas and drafts in one place — and ask about anything in this space."
+        },
+        "dismiss": "Dismiss"
+      },
+      "ask": {
+        "placeholder": "Ask anything",
+        "chips": {
+          "catchUp": "Catch me up",
+          "keyDecisions": "List key decisions",
+          "inFlight": "Show in flight projects"
+        }
+      },
+      "invite": "Invite",
+      "list": {
+        "empty": "No notes here yet"
+      },
+      "author": {
+        "you": "You"
+      }
     }
   },
   "dictionary": {

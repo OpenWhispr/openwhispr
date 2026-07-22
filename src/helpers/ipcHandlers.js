@@ -503,7 +503,9 @@ class IPCHandlers {
       if (!vectorIndex.isReady()) return;
       const { LocalEmbeddings } = require("./localEmbeddings");
       const text = LocalEmbeddings.noteEmbedText(note.title, note.content, note.enhanced_content);
-      vectorIndex.upsertNote(note.id, text, { space_id: note.space_id }).catch(() => {});
+      vectorIndex
+        .upsertNote(note.id, text, { space_id: note.space_id, folder_id: note.folder_id ?? null })
+        .catch(() => {});
     });
   }
 
@@ -1222,6 +1224,10 @@ class IPCHandlers {
       return this.databaseManager.getNotes(noteType, limit, folderId, spaceId);
     });
 
+    ipcMain.handle("db-get-space-notes", async (event, spaceId, limit) => {
+      return this.databaseManager.getNotesForSpace(spaceId, limit);
+    });
+
     ipcMain.handle("db-update-note", async (event, id, updates) => {
       const result = this.databaseManager.updateNote(id, updates);
       if (result?.success && result?.note) {
@@ -1237,26 +1243,34 @@ class IPCHandlers {
       return this.deleteNoteInternal(id);
     });
 
-    ipcMain.handle("db-search-notes", async (event, query, limit, spaceId) => {
-      return this.databaseManager.searchNotes(query, limit, spaceId);
+    ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId) => {
+      return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
     });
 
-    ipcMain.handle("db-semantic-search-notes", async (event, query, limit = 5, spaceId) => {
+    ipcMain.handle("db-semantic-search-notes", async (event, query, limit = 5, spaceId, folderId) => {
       const vectorIndex = require("./vectorIndex");
       if (!vectorIndex.isReady()) {
-        return this.databaseManager.searchNotes(query, limit, spaceId);
+        return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
       }
 
       try {
+        // Folder scoping post-filters the vector leg by note-id set (existing
+        // Qdrant payloads only carry space_id), so over-fetch harder to
+        // compensate for discarded out-of-folder hits.
+        const scopedIds =
+          folderId != null ? new Set(this.databaseManager.getNoteIdsInFolder(folderId)) : null;
+        const overFetch = folderId != null ? limit * 4 : limit * 2;
         const vectorFilter =
           spaceId != null ? { must: [{ key: "space_id", match: { value: spaceId } }] } : undefined;
         const [ftsResults, vectorResults] = await Promise.all([
-          this.databaseManager.searchNotes(query, limit * 2, spaceId),
-          vectorIndex.search(query, limit * 2, vectorFilter),
+          this.databaseManager.searchNotes(query, overFetch, spaceId, folderId),
+          vectorIndex.search(query, overFetch, vectorFilter),
         ]);
 
         // Filter low-confidence semantic matches before RRF
-        const filteredVectorResults = vectorResults.filter(({ score }) => score > 0.3);
+        const filteredVectorResults = vectorResults.filter(
+          ({ noteId, score }) => score > 0.3 && (!scopedIds || scopedIds.has(noteId))
+        );
 
         // Reciprocal Rank Fusion (K=60, matching cloud implementation)
         const scores = new Map();
@@ -1284,7 +1298,7 @@ class IPCHandlers {
         return rankedIds.map((id) => noteMap.get(id)).filter(Boolean);
       } catch (error) {
         debugLogger.error("Semantic search failed, falling back to FTS5", { error: error.message });
-        return this.databaseManager.searchNotes(query, limit, spaceId);
+        return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
       }
     });
 
@@ -1389,16 +1403,6 @@ class IPCHandlers {
       return this.databaseManager.updateSpace(id, updates);
     });
 
-    ipcMain.handle("db-delete-space", async (event, id) => {
-      const space = this.databaseManager.db.prepare("SELECT kind FROM spaces WHERE id = ?").get(id);
-      if (!space) return { success: false, error: "Space not found" };
-      if (space.kind === "private") {
-        return { success: false, error: "Cannot delete the private space" };
-      }
-      this.databaseManager.db.prepare("DELETE FROM spaces WHERE id = ?").run(id);
-      return { success: true, id };
-    });
-
     ipcMain.handle("db-purge-space", async (event, id) => {
       const result = this.databaseManager.purgeSpace(id);
       if (result?.success) {
@@ -1460,13 +1464,23 @@ class IPCHandlers {
     });
 
     // Agent conversation handlers
-    ipcMain.handle("db-create-agent-conversation", async (event, title, noteId) => {
-      return this.databaseManager.createAgentConversation(title, noteId);
-    });
+    ipcMain.handle(
+      "db-create-agent-conversation",
+      async (event, title, noteId, spaceId, folderId) => {
+        return this.databaseManager.createAgentConversation(title, noteId, spaceId, folderId);
+      }
+    );
 
     ipcMain.handle("db-get-conversations-for-note", async (event, noteId, limit) => {
       return this.databaseManager.getConversationsForNote(noteId, limit);
     });
+
+    ipcMain.handle(
+      "db-get-conversations-for-container",
+      async (event, spaceId, folderId, limit) => {
+        return this.databaseManager.getConversationsForContainer(spaceId, folderId, limit);
+      }
+    );
 
     ipcMain.handle("db-get-agent-conversations", async (event, limit) => {
       return this.databaseManager.getAgentConversations(limit);
@@ -1575,7 +1589,10 @@ class IPCHandlers {
     );
     ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
       const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
-      if (note) setImmediate(() => this.broadcastToWindows("note-synced", note));
+      if (note) {
+        setImmediate(() => this.broadcastToWindows("note-synced", note));
+        this._asyncVectorUpsert(note);
+      }
       return note;
     });
     ipcMain.handle("db-mark-note-synced", (_, id, cloudId) =>

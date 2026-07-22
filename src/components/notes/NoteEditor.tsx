@@ -34,7 +34,7 @@ import {
   navigateToContainer,
   updateNoteInStore,
 } from "../../stores/noteStore";
-import { TeamsService } from "../../services/TeamsService";
+import { fetchTeamRoster } from "../../hooks/useTeamRoster";
 import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
@@ -52,7 +52,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
-import type { NoteItem, FolderItem, TeamMember } from "../../types/electron";
+import type { NoteItem, FolderItem } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
@@ -71,19 +71,6 @@ import type { CalendarAttendee } from "../../types/calendar";
 
 const CHIP_BUTTON_CLASS =
   "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
-
-// Conflict attribution rosters, cached per team so repeated conflicts don't refetch.
-const conflictRosterCache = new Map<string, Promise<TeamMember[]>>();
-
-function fetchTeamRoster(teamId: string): Promise<TeamMember[]> {
-  let roster = conflictRosterCache.get(teamId);
-  if (!roster) {
-    roster = TeamsService.listMembers(teamId);
-    roster.catch(() => conflictRosterCache.delete(teamId));
-    conflictRosterCache.set(teamId, roster);
-  }
-  return roster;
-}
 
 function formatNoteDate(dateStr: string): string {
   const date = normalizeDbDate(dateStr);

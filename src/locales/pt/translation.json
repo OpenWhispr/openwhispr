@@ -2538,6 +2538,44 @@
         "othersInCall_one": "{{count}} outra pessoa na chamada",
         "othersInCall_other": "{{count}} outras pessoas na chamada"
       }
+    },
+    "overview": {
+      "subtitle": {
+        "team": "Notas visíveis para todos neste espaço.",
+        "private": "Só você pode ver estas notas."
+      },
+      "meta": {
+        "folders_one": "{{count}} pasta",
+        "folders_other": "{{count}} pastas",
+        "members_one": "{{count}} membro",
+        "members_other": "{{count}} membros"
+      },
+      "banner": {
+        "title": {
+          "team": "Seu espaço de equipe",
+          "private": "Seu espaço privado"
+        },
+        "body": {
+          "team": "Compartilhe notas de reuniões com sua equipe. Adicione entrevistas com usuários, ligações de vendas e reuniões de equipe para que todos fiquem por dentro.",
+          "private": "Guarde notas de reuniões, ideias e rascunhos em um só lugar — e pergunte sobre qualquer coisa neste espaço."
+        },
+        "dismiss": "Dispensar"
+      },
+      "ask": {
+        "placeholder": "Pergunte qualquer coisa",
+        "chips": {
+          "catchUp": "Me atualize",
+          "keyDecisions": "Liste as decisões principais",
+          "inFlight": "Mostre os projetos em andamento"
+        }
+      },
+      "invite": "Convidar",
+      "list": {
+        "empty": "Ainda não há notas aqui"
+      },
+      "author": {
+        "you": "Você"
+      }
     }
   },
   "dictionary": {

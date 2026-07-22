@@ -6,15 +6,27 @@ const MAX_CONTENT_LENGTH = 500;
 
 interface SearchToolOptions {
   useCloudSearch: boolean;
+  /** Pins every search to this container; the LLM's space arg is dropped. */
+  fixedScope?: { spaceId: number; folderId: number | null };
 }
 
 export function createSearchNotesTool(options: SearchToolOptions): ToolDefinition {
-  const { useCloudSearch } = options;
+  const { useCloudSearch, fixedScope } = options;
+
+  const spaceParameter = fixedScope
+    ? {}
+    : {
+        space: {
+          type: "string",
+          description: "Space name to search within. Omit to search all accessible spaces.",
+        },
+      };
 
   return {
     name: "search_notes",
-    description:
-      "Search the user's notes using semantic search. Understands meaning and context, not just keywords. Searches every space the user can access by default; pass space to search within a single space. Returns matching notes with title, date, relevance score, space, and a preview of content.",
+    description: fixedScope
+      ? "Search the notes in the folder or space the user is currently viewing, using semantic search. Understands meaning and context, not just keywords. Returns matching notes with title, date, relevance score, space, and a preview of content."
+      : "Search the user's notes using semantic search. Understands meaning and context, not just keywords. Searches every space the user can access by default; pass space to search within a single space. Returns matching notes with title, date, relevance score, space, and a preview of content.",
     parameters: {
       type: "object",
       properties: {
@@ -26,10 +38,7 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
           type: "number",
           description: "Maximum number of results to return (default 5)",
         },
-        space: {
-          type: "string",
-          description: "Space name to search within. Omit to search all accessible spaces.",
-        },
+        ...spaceParameter,
       },
       required: ["query"],
       additionalProperties: false,
@@ -39,28 +48,38 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
     async execute(args: Record<string, unknown>): Promise<ToolResult> {
       const query = args.query as string;
       const limit = typeof args.limit === "number" ? args.limit : 5;
-      const spaceName = args.space as string | undefined;
+      const spaceName = fixedScope ? undefined : (args.space as string | undefined);
 
       const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
       let space: SpaceItem | undefined;
-      if (spaceName) {
+      if (fixedScope) {
+        space = spaces.find((s) => s.id === fixedScope.spaceId);
+      } else if (spaceName) {
         const resolved = resolveSpace(spaces, spaceName);
         if (resolved.error) {
           return { success: false, data: null, displayText: resolved.error };
         }
         space = resolved.space;
       }
+      const spaceId = fixedScope?.spaceId ?? space?.id ?? null;
+      const folderId = fixedScope?.folderId ?? null;
 
       // Fallback chain: cloud → local semantic (hybrid RRF) → FTS5 keyword.
       // A team space without a cloud team can't be scoped server-side, so its
-      // searches go straight to the local legs.
+      // searches go straight to the local legs. Folder scoping is local-only:
+      // the cloud API has no folder filter, and a pinned scope whose space
+      // didn't resolve must not widen to an all-spaces cloud search.
       const strategies: Array<() => Promise<ToolResult>> = [];
-      const cloudCanScope = !space || space.kind === "private" || !!space.cloud_team_id;
-      if (useCloudSearch && cloudCanScope) {
+      const cloudCanScope = fixedScope
+        ? !!space && (space.kind === "private" || !!space.cloud_team_id)
+        : !space || space.kind === "private" || !!space.cloud_team_id;
+      if (useCloudSearch && cloudCanScope && folderId == null) {
         strategies.push(() => executeCloudSearch(query, limit, space, spaces));
       }
-      strategies.push(() => executeLocalSearch(query, limit, true, space, spaces));
-      strategies.push(() => executeLocalSearch(query, limit, false, space, spaces));
+      strategies.push(() => executeLocalSearch(query, limit, true, space, spaces, spaceId, folderId));
+      strategies.push(() =>
+        executeLocalSearch(query, limit, false, space, spaces, spaceId, folderId)
+      );
 
       for (let i = 0; i < strategies.length; i++) {
         try {
@@ -97,12 +116,13 @@ async function executeLocalSearch(
   limit: number,
   semantic: boolean,
   space: SpaceItem | undefined,
-  spaces: SpaceItem[]
+  spaces: SpaceItem[],
+  spaceId: number | null,
+  folderId: number | null
 ): Promise<ToolResult> {
-  const spaceId = space?.id ?? null;
   const notes = semantic
-    ? await window.electronAPI.semanticSearchNotes(query, limit, spaceId)
-    : await window.electronAPI.searchNotes(query, limit, spaceId);
+    ? await window.electronAPI.semanticSearchNotes(query, limit, spaceId, folderId)
+    : await window.electronAPI.searchNotes(query, limit, spaceId, folderId);
 
   const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]));
   const results = notes.map((note) => ({

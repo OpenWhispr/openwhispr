@@ -3,6 +3,12 @@ export function normalizeDbDate(dateStr: string): Date {
   return new Date(source);
 }
 
+export function formatShortDate(dateStr: string): string {
+  const date = normalizeDbDate(dateStr);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export function formatRelativeTime(
   dateStr: string,
   t: (key: string, options?: Record<string, unknown>) => string
@@ -17,7 +23,7 @@ export function formatRelativeTime(
   if (minutes < 60) return t("notes.list.minutesAgo", { count: minutes });
   if (hours < 24) return t("notes.list.hoursAgo", { count: hours });
   if (days < 7) return t("notes.list.daysAgo", { count: days });
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return formatShortDate(dateStr);
 }
 
 export function formatUpcomingDateGroup(date: Date | string, t: (key: string) => string): string {

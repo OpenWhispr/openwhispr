@@ -6,7 +6,7 @@ import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
 import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
-import { normalizeDbDate } from "../../utils/dateFormatting";
+import { formatShortDate } from "../../utils/dateFormatting";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -45,12 +45,6 @@ function EmptyState() {
       </p>
     </div>
   );
-}
-
-function formatConversationDate(dateStr: string): string {
-  const date = normalizeDbDate(dateStr);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export default function EmbeddedChat({
@@ -131,7 +125,7 @@ export default function EmbeddedChat({
               >
                 <span className="truncate flex-1">{conv.title}</span>
                 <span className="text-[10px] text-foreground/30 shrink-0">
-                  {formatConversationDate(conv.updated_at)}
+                  {formatShortDate(conv.updated_at)}
                 </span>
               </DropdownMenuItem>
             ))}

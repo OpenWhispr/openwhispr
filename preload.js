@@ -113,15 +113,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
   getNotes: (noteType, limit, folderId, spaceId) =>
     ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId),
+  getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
   updateNote: (id, updates) => ipcRenderer.invoke("db-update-note", id, updates),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
   exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
-  searchNotes: (query, limit, spaceId) =>
-    ipcRenderer.invoke("db-search-notes", query, limit, spaceId),
-  semanticSearchNotes: (query, limit, spaceId) =>
-    ipcRenderer.invoke("db-semantic-search-notes", query, limit, spaceId),
+  searchNotes: (query, limit, spaceId, folderId) =>
+    ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId),
+  semanticSearchNotes: (query, limit, spaceId, folderId) =>
+    ipcRenderer.invoke("db-semantic-search-notes", query, limit, spaceId, folderId),
   semanticReindexAll: () => ipcRenderer.invoke("db-semantic-reindex-all"),
   onSemanticReindexProgress: (callback) => {
     const listener = (_event, data) => callback?.(data);
@@ -143,7 +144,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSpaces: () => ipcRenderer.invoke("db-get-spaces"),
   createSpace: (space) => ipcRenderer.invoke("db-create-space", space),
   updateSpace: (id, updates) => ipcRenderer.invoke("db-update-space", id, updates),
-  deleteSpace: (id) => ipcRenderer.invoke("db-delete-space", id),
   purgeSpace: (id) => ipcRenderer.invoke("db-purge-space", id),
   getSpaceByCloudTeamId: (cloudTeamId) =>
     ipcRenderer.invoke("db-get-space-by-cloud-team-id", cloudTeamId),
@@ -879,8 +879,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   agentOpenNote: (noteId) => ipcRenderer.invoke("agent-open-note", noteId),
 
   // Agent conversation persistence
-  createAgentConversation: (title, noteId) =>
-    ipcRenderer.invoke("db-create-agent-conversation", title, noteId),
+  createAgentConversation: (title, noteId, spaceId, folderId) =>
+    ipcRenderer.invoke("db-create-agent-conversation", title, noteId, spaceId, folderId),
   getAgentConversations: (limit) => ipcRenderer.invoke("db-get-agent-conversations", limit),
   getAgentConversation: (id) => ipcRenderer.invoke("db-get-agent-conversation", id),
   deleteAgentConversation: (id) => ipcRenderer.invoke("db-delete-agent-conversation", id),
@@ -895,6 +895,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-search-agent-conversations", query, limit),
   getConversationsForNote: (noteId, limit) =>
     ipcRenderer.invoke("db-get-conversations-for-note", noteId, limit),
+  getConversationsForContainer: (spaceId, folderId, limit) =>
+    ipcRenderer.invoke("db-get-conversations-for-container", spaceId, folderId, limit),
   archiveAgentConversation: (id) => ipcRenderer.invoke("db-archive-agent-conversation", id),
   unarchiveAgentConversation: (id) => ipcRenderer.invoke("db-unarchive-agent-conversation", id),
   updateAgentConversationCloudId: (id, cloudId) =>

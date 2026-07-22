@@ -67,6 +67,10 @@ const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
 
+// Bump to force a one-time full semantic reindex on next launch (see the
+// reindex effect for the per-version history).
+const SEMANTIC_REINDEX_VERSION = 2;
+
 const toggleIconClass =
   "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
 
@@ -202,17 +206,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     });
   }, []);
 
-  // One-time background reindex after the spaces migration: pre-existing
-  // Qdrant points carry no space_id payload, so scoped semantic search would
-  // miss them. Delayed so the Qdrant sidecar has time to come up; if it isn't
-  // ready yet the flag stays unset and the next launch retries.
+  // One-time background reindex, versioned: v1 backfilled space_id payloads
+  // after the spaces migration; v2 backfills cloud-pulled notes, which were
+  // never incrementally indexed before the upsert-from-cloud handler gained a
+  // vector upsert. Delayed so the Qdrant sidecar has time to come up; if it
+  // isn't ready yet the flag stays unset and the next launch retries.
   useEffect(() => {
-    if (localStorage.getItem("semanticSpaceReindexDone") === "true") return;
+    if (Number(localStorage.getItem("semanticReindexVersion")) >= SEMANTIC_REINDEX_VERSION) return;
     const timer = setTimeout(() => {
       window.electronAPI
         ?.semanticReindexAll?.()
         .then((result) => {
-          if (result?.success) localStorage.setItem("semanticSpaceReindexDone", "true");
+          if (result?.success) {
+            localStorage.setItem("semanticReindexVersion", String(SEMANTIC_REINDEX_VERSION));
+          }
         })
         .catch(() => {});
     }, 15_000);

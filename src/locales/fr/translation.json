@@ -2746,6 +2746,44 @@
         "othersInCall_one": "{{count}} autre dans l'appel",
         "othersInCall_other": "{{count}} autres dans l'appel"
       }
+    },
+    "overview": {
+      "subtitle": {
+        "team": "Notes visibles par tout le monde dans cet espace.",
+        "private": "Vous seul pouvez voir ces notes."
+      },
+      "meta": {
+        "folders_one": "{{count}} dossier",
+        "folders_other": "{{count}} dossiers",
+        "members_one": "{{count}} membre",
+        "members_other": "{{count}} membres"
+      },
+      "banner": {
+        "title": {
+          "team": "Votre espace d'équipe",
+          "private": "Votre espace privé"
+        },
+        "body": {
+          "team": "Partagez vos notes de réunion avec votre équipe. Ajoutez des entretiens utilisateurs, des appels commerciaux et des réunions d'équipe pour que tout le monde reste informé.",
+          "private": "Regroupez notes de réunion, idées et brouillons au même endroit, et posez des questions sur tout ce que contient cet espace."
+        },
+        "dismiss": "Fermer"
+      },
+      "ask": {
+        "placeholder": "Posez une question",
+        "chips": {
+          "catchUp": "Résume-moi les nouveautés",
+          "keyDecisions": "Liste les décisions clés",
+          "inFlight": "Montre les projets en cours"
+        }
+      },
+      "invite": "Inviter",
+      "list": {
+        "empty": "Aucune note ici pour l'instant"
+      },
+      "author": {
+        "you": "Vous"
+      }
     }
   },
   "dictionary": {

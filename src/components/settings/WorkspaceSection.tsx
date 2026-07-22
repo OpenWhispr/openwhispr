@@ -161,7 +161,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="min-w-0">
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger
               className={cn(
                 "group flex items-center gap-1.5 outline-none rounded-md px-2 -mx-2 py-0.5",

@@ -46,6 +46,9 @@ export async function createTeamSpace(
       my_role: "admin",
       member_count: memberIds.length - failedMembers,
     })) ?? null;
+  // Cloud upserts insert as 'pending' (backfill marker); a team created this
+  // second has no pre-existing content, so settle it — no skeletons.
+  if (space) await window.electronAPI.setSpaceSyncStatus?.(space.id, "synced");
   await loadSpaces();
   syncService.requestSyncAll("manual");
   return { space, failedMembers };
@@ -79,7 +82,7 @@ export async function deleteTeamSpace(
       return { success: false, error: errorMessage(err) };
     }
     // Park the team id so an in-flight pull can't resurrect purged rows.
-    markTeamSpacePurged(space.cloud_team_id);
+    await markTeamSpacePurged(space.cloud_team_id);
   }
   // Store cleanup rides on the space-purged broadcast.
   return purgeSpace(space.id);
@@ -102,7 +105,7 @@ export async function leaveTeamSpace(
   const roster = await TeamsService.listMembers(teamId);
   if (isImplicitAdmin || !roster.some((m) => m.user_id === userId)) return "implicit";
   await TeamsService.removeMember(teamId, userId);
-  markTeamSpacePurged(teamId);
+  await markTeamSpacePurged(teamId);
   await purgeSpace(space.id);
   return "left";
 }

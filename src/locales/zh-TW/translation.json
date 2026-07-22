@@ -2538,6 +2538,44 @@
         "othersInCall_one": "通話中還有 {{count}} 人",
         "othersInCall_other": "通話中還有 {{count}} 人"
       }
+    },
+    "overview": {
+      "subtitle": {
+        "team": "此空間中的所有成員都可以檢視這些筆記。",
+        "private": "只有你可以檢視這些筆記。"
+      },
+      "meta": {
+        "folders_one": "{{count}} 個資料夾",
+        "folders_other": "{{count}} 個資料夾",
+        "members_one": "{{count}} 位成員",
+        "members_other": "{{count}} 位成員"
+      },
+      "banner": {
+        "title": {
+          "team": "你的團隊空間",
+          "private": "你的私人空間"
+        },
+        "body": {
+          "team": "與團隊共享會議筆記。加入使用者訪談、銷售通話和團隊會議，讓所有人保持同步。",
+          "private": "將會議筆記、想法和草稿集中在一處，並隨時詢問此空間中的任何內容。"
+        },
+        "dismiss": "關閉"
+      },
+      "ask": {
+        "placeholder": "隨便問點什麼",
+        "chips": {
+          "catchUp": "幫我補上進度",
+          "keyDecisions": "列出關鍵決策",
+          "inFlight": "顯示進行中的專案"
+        }
+      },
+      "invite": "邀請",
+      "list": {
+        "empty": "這裡還沒有筆記"
+      },
+      "author": {
+        "you": "你"
+      }
     }
   },
   "dictionary": {

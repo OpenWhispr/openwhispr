@@ -17,6 +17,7 @@ import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
 import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
+import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
 import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
@@ -154,6 +155,17 @@ export default function PersonalNotesView({
   const spaces = useSpaces();
   const folders = useFolders();
   const activeContext = useActiveContext();
+  const overviewSpace = useMemo(
+    () => (activeContext ? (spaces.find((s) => s.id === activeContext.spaceId) ?? null) : null),
+    [activeContext, spaces]
+  );
+  const overviewFolder = useMemo(
+    () =>
+      activeContext?.folderId != null
+        ? (folders.find((f) => f.id === activeContext.folderId) ?? null)
+        : null,
+    [activeContext, folders]
+  );
 
   useEffect(() => {
     initializeNotesTree();
@@ -814,6 +826,15 @@ export default function PersonalNotesView({
             />
             <ActionManagerDialog open={showActionManager} onOpenChange={setShowActionManager} />
           </>
+        ) : activeContext && overviewSpace ? (
+          <ContainerOverview
+            key={activeContext.folderId != null ? `f:${activeContext.folderId}` : `s:${activeContext.spaceId}`}
+            space={overviewSpace}
+            folder={overviewFolder}
+            onOpenNote={setActiveNoteId}
+            onNewNote={handleNewNote}
+            onAddExisting={activeFolderId != null ? () => setShowAddNotesDialog(true) : undefined}
+          />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center -mt-6">
             <svg

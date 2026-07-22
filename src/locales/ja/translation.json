@@ -2466,6 +2466,44 @@
       "addContact": "連絡先を追加",
       "save": "保存",
       "cancel": "キャンセル"
+    },
+    "overview": {
+      "subtitle": {
+        "team": "このスペースの全員がノートを閲覧できます。",
+        "private": "このノートはあなただけが閲覧できます。"
+      },
+      "meta": {
+        "folders_one": "{{count}} 件のフォルダ",
+        "folders_other": "{{count}} 件のフォルダ",
+        "members_one": "{{count}} 人のメンバー",
+        "members_other": "{{count}} 人のメンバー"
+      },
+      "banner": {
+        "title": {
+          "team": "チームスペース",
+          "private": "プライベートスペース"
+        },
+        "body": {
+          "team": "会議のノートをチームと共有しましょう。ユーザーインタビュー、営業の通話、チームミーティングを追加して、全員が最新情報を把握できます。",
+          "private": "会議のノート、アイデア、下書きを一か所にまとめて、このスペースの内容について何でも質問できます。"
+        },
+        "dismiss": "閉じる"
+      },
+      "ask": {
+        "placeholder": "何でも質問",
+        "chips": {
+          "catchUp": "最新情報をまとめて",
+          "keyDecisions": "重要な決定事項を一覧に",
+          "inFlight": "進行中のプロジェクトを表示"
+        }
+      },
+      "invite": "招待",
+      "list": {
+        "empty": "まだノートがありません"
+      },
+      "author": {
+        "you": "自分"
+      }
     }
   },
   "dictionary": {

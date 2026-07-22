@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
+import { addNoteConflictId, removeNoteConflictId } from "../lib/noteConflictRegistry";
 import { findDefaultFolder } from "../components/notes/shared";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
@@ -574,6 +575,9 @@ function handleSpacePurged(spaceId: number): void {
         (purgedTeamId == null || cloudNote.team_id !== purgedTeamId)
     )
   );
+  Object.keys(state.noteConflicts).forEach((clientId) => {
+    if (!(clientId in noteConflicts)) removeNoteConflictId(clientId);
+  });
 
   const extra: Partial<NoteState> = {
     spaces: state.spaces.filter((s) => s.id !== spaceId),
@@ -723,6 +727,9 @@ export function setActiveNoteId(id: number | null): void {
  * initializeNotesTree resolves on mount.
  */
 export function navigateToContainer(spaceId: number, folderId: number | null): void {
+  // Container jumps land on the overview; flows that open a note afterwards
+  // (e.g. CommandSearch note select) re-set activeNoteId themselves.
+  setActiveNoteId(null);
   if (folderId != null) {
     setActiveFolderId(folderId);
     return;
@@ -871,11 +878,15 @@ export async function startMigration(): Promise<void> {
 }
 
 export function setNoteConflict(clientNoteId: string, cloudNote: CloudNote): void {
+  addNoteConflictId(clientNoteId);
   const { noteConflicts } = useNoteStore.getState();
   useNoteStore.setState({ noteConflicts: { ...noteConflicts, [clientNoteId]: cloudNote } });
 }
 
 export function clearNoteConflict(clientNoteId: string): void {
+  // Unblock the push gate even when the in-memory banner state is gone
+  // (e.g. cleared in another window or dropped by a restart).
+  removeNoteConflictId(clientNoteId);
   const { noteConflicts } = useNoteStore.getState();
   if (!(clientNoteId in noteConflicts)) return;
   const next = { ...noteConflicts };

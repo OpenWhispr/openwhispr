@@ -62,6 +62,8 @@ export interface NoteItem {
   cloud_id: string | null;
   is_shared: number;
   share_token: string | null;
+  // Last cloud editor; only populated on cloud pull (local edits don't set it).
+  updated_by_user_id?: string | null;
   created_at: string;
   updated_at: string;
   client_note_id: string;
@@ -654,6 +656,7 @@ declare global {
         folderId?: number | null,
         spaceId?: number | null
       ) => Promise<NoteItem[]>;
+      getSpaceNotes: (spaceId: number, limit?: number) => Promise<NoteItem[]>;
       updateNote: (
         id: number,
         updates: {
@@ -671,6 +674,7 @@ declare global {
           expected_speaker_count?: number | null;
           client_note_id?: string;
           cloud_id?: string | null;
+          left_team?: number;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
@@ -683,11 +687,17 @@ declare global {
         format: "txt" | "srt" | "json" | "md"
       ) => Promise<{ success: boolean; error?: string }>;
       exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
-      searchNotes: (query: string, limit?: number, spaceId?: number | null) => Promise<NoteItem[]>;
+      searchNotes: (
+        query: string,
+        limit?: number,
+        spaceId?: number | null,
+        folderId?: number | null
+      ) => Promise<NoteItem[]>;
       semanticSearchNotes: (
         query: string,
         limit?: number,
-        spaceId?: number | null
+        spaceId?: number | null,
+        folderId?: number | null
       ) => Promise<NoteItem[]>;
       semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
       onSemanticReindexProgress: (
@@ -728,7 +738,6 @@ declare global {
         id: number,
         updates: { name?: string; emoji?: string | null }
       ) => Promise<{ success: boolean; space?: SpaceItem; error?: string }>;
-      deleteSpace?: (id: number) => Promise<{ success: boolean; id?: number; error?: string }>;
       purgeSpace?: (id: number) => Promise<{
         success: boolean;
         noteIds?: number[];
@@ -1575,16 +1584,33 @@ declare global {
       saveAgentKey?: (key: string) => Promise<void>;
       createAgentConversation?: (
         title: string,
-        noteId?: number
+        noteId?: number | null,
+        spaceId?: number | null,
+        folderId?: number | null
       ) => Promise<{
         id: number;
         title: string;
         note_id?: number | null;
+        space_id?: number | null;
+        folder_id?: number | null;
         created_at: string;
         updated_at: string;
       }>;
       getConversationsForNote?: (
         noteId: number,
+        limit?: number
+      ) => Promise<
+        Array<{
+          id: number;
+          title: string;
+          created_at: string;
+          updated_at: string;
+          message_count: number;
+        }>
+      >;
+      getConversationsForContainer?: (
+        spaceId: number,
+        folderId?: number | null,
         limit?: number
       ) => Promise<
         Array<{

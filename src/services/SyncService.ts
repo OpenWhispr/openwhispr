@@ -15,6 +15,7 @@ import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError } from "./cloudApi.js";
 import { notifyTeamSpacesCapabilityChanged } from "../lib/teamSpacesCapability";
 import { subscribeIsSubscribed } from "../lib/subscriptionFlag";
+import { readNoteConflictIds } from "../lib/noteConflictRegistry";
 
 function isHttpStatus(err: unknown, status: number): boolean {
   return err instanceof CloudApiError && err.status === status;
@@ -87,6 +88,10 @@ function normalizeTimestamp(value: string | null | undefined): string {
 // leave cannot hide a still-live team forever.
 const PURGED_TEAM_GUARD_KEY = "purgedTeamIds";
 const PURGED_TEAM_GUARD_TTL_MS = 15 * 60 * 1000;
+// Serializes the guard's read-modify-write across windows: a prune inside a
+// sync pass racing a leave/delete in another window must not drop the
+// just-written entry.
+const PURGED_TEAM_GUARD_LOCK = "openwhispr-purged-teams";
 
 function readPurgedTeamIds(): Record<string, number> {
   try {
@@ -103,18 +108,22 @@ function readPurgedTeamIds(): Record<string, number> {
 
 // Call BEFORE purgeSpace, from every purge path (sync revocation, sign-out,
 // and the UI's leave/delete-space flows).
-export function markTeamSpacePurged(cloudTeamId: string): void {
-  localStorage.setItem(
-    PURGED_TEAM_GUARD_KEY,
-    JSON.stringify({ ...readPurgedTeamIds(), [cloudTeamId]: Date.now() })
-  );
+export async function markTeamSpacePurged(cloudTeamId: string): Promise<void> {
+  await navigator.locks.request(PURGED_TEAM_GUARD_LOCK, () => {
+    localStorage.setItem(
+      PURGED_TEAM_GUARD_KEY,
+      JSON.stringify({ ...readPurgedTeamIds(), [cloudTeamId]: Date.now() })
+    );
+  });
 }
 
-function prunePurgedTeamIds(liveCloudTeamIds: Set<string>): void {
-  const kept = Object.fromEntries(
-    Object.entries(readPurgedTeamIds()).filter(([id]) => liveCloudTeamIds.has(id))
-  );
-  localStorage.setItem(PURGED_TEAM_GUARD_KEY, JSON.stringify(kept));
+async function prunePurgedTeamIds(liveCloudTeamIds: Set<string>): Promise<void> {
+  await navigator.locks.request(PURGED_TEAM_GUARD_LOCK, () => {
+    const kept = Object.fromEntries(
+      Object.entries(readPurgedTeamIds()).filter(([id]) => liveCloudTeamIds.has(id))
+    );
+    localStorage.setItem(PURGED_TEAM_GUARD_KEY, JSON.stringify(kept));
+  });
 }
 
 class SyncService {
@@ -168,12 +177,26 @@ class SyncService {
   // and backfills from scratch. Never throws — a failed purge must not block
   // signing out.
   async purgeTeamSpacesForSignOut(): Promise<void> {
+    // Wait for the sync lock: an in-flight pass (often in another window)
+    // still holds a pre-purge space map, and its remaining rows would
+    // re-insert team content after the purge — unreachable by any later
+    // cleanup once the guard entries below are gone.
+    try {
+      await navigator.locks.request(SYNC_ALL_LOCK, () => this.purgeAllTeamSpaces());
+    } catch (err) {
+      console.error("Sign-out purge could not take the sync lock:", err);
+      // Never block sign-out: purge unfenced rather than not at all.
+      await this.purgeAllTeamSpaces();
+    }
+  }
+
+  private async purgeAllTeamSpaces(): Promise<void> {
     try {
       const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
       for (const space of spaces) {
         if (space.kind !== "team") continue;
         try {
-          if (space.cloud_team_id) markTeamSpacePurged(space.cloud_team_id);
+          if (space.cloud_team_id) await markTeamSpacePurged(space.cloud_team_id);
           await window.electronAPI.purgeSpace?.(space.id);
         } catch (err) {
           console.error(`Purging space ${space.id} on sign-out failed:`, err);
@@ -634,16 +657,16 @@ class SyncService {
     const cloudIds = new Set(teams.map((t) => t.id));
     // Teams confirmed gone can no longer resurrect through pulls — their
     // purge-race guard entries are done.
-    prunePurgedTeamIds(cloudIds);
+    await prunePurgedTeamIds(cloudIds);
 
     const prior = (await window.electronAPI.getSpaces?.()) ?? [];
-    const backfillIds = await this.upsertTeamSpaces(teams, prior);
+    const backfillIds = await this.upsertTeamSpaces(teams);
 
     for (const space of prior) {
       if (space.kind !== "team" || !space.cloud_team_id || cloudIds.has(space.cloud_team_id)) {
         continue;
       }
-      markTeamSpacePurged(space.cloud_team_id);
+      await markTeamSpacePurged(space.cloud_team_id);
       const purged = await window.electronAPI.purgeSpace?.(space.id);
       this.dispatchSpaceRevoked(space.name);
       // Never-synced notes survive the purge in Personal (plan §10.6) —
@@ -675,24 +698,19 @@ class SyncService {
   // Upserts cloud teams into local spaces. Returns local ids of spaces that
   // still need a content backfill: brand new, or left 'pending' by a backfill
   // that never finished.
-  private async upsertTeamSpaces(teams: MyTeam[], prior: SpaceItem[]): Promise<number[]> {
-    const priorByCloudId = new Map(
-      prior.filter((s) => s.cloud_team_id).map((s) => [s.cloud_team_id!, s])
-    );
+  private async upsertTeamSpaces(teams: MyTeam[]): Promise<number[]> {
     const purged = readPurgedTeamIds();
     const backfillIds: number[] = [];
     for (const team of teams) {
       // A purge racing this pass (leave/delete just clicked, or the server
       // hasn't processed it yet) must not resurrect the space.
       if (purged[team.id]) continue;
-      const existing = priorByCloudId.get(team.id);
       const space = await window.electronAPI.upsertSpaceFromCloud?.(
         team as unknown as Record<string, unknown>
       );
-      if (space && (!existing || existing.sync_status === "pending")) {
-        // The upsert marks rows synced; flag the space back to pending until
-        // its content backfill completes.
-        await window.electronAPI.setSpaceSyncStatus?.(space.id, "pending");
+      // New spaces insert as 'pending' and stay that way until their content
+      // backfill completes, so an interruption anywhere re-runs it.
+      if (space?.sync_status === "pending") {
         backfillIds.push(space.id);
       }
     }
@@ -728,10 +746,9 @@ class SyncService {
     ctx.refreshedSpaces = true;
     try {
       const teams = await TeamsService.myTeams();
-      const prior = (await window.electronAPI.getSpaces?.()) ?? [];
       // New spaces stay 'pending' so the next spaces pass backfills their
       // pre-existing content (this delta pull only sees rows past the cursor).
-      await this.upsertTeamSpaces(teams, prior);
+      await this.upsertTeamSpaces(teams);
     } catch (err) {
       console.error("Mid-pass spaces refresh failed:", err);
       return null;
@@ -758,22 +775,28 @@ class SyncService {
   }
 
   // A push was rejected because the note's team is gone or access was revoked
-  // (plan §7.2): a row already on the server stays the team's — drop the local
-  // copy; a row that never reached the server is the only content the client
-  // keeps — move it to the private space so the next push creates it as
-  // personal.
+  // (plan §7.2). The server row (if any) stays the team's, but this pending
+  // row carries unpushed work — it is here because a push was attempted — so
+  // it survives as a personal note with a forked identity, exactly like the
+  // pull-side access_removed stub; never destroy the edits.
   private async handleRevokedNotePush(note: NoteItem, ctx: SpaceSyncContext): Promise<void> {
     const spaceName = ctx.byId.get(note.space_id)?.name ?? null;
-    if (note.cloud_id) {
-      await window.electronAPI.hardDeleteNote?.(note.id);
-      this.dispatchSpaceRevoked(spaceName);
-    } else if (ctx.privateSpace) {
-      await window.electronAPI.updateNote(note.id, {
-        space_id: ctx.privateSpace.id,
-        folder_id: null,
-      });
-      this.dispatchNoteRelocated(note.title, spaceName);
+    if (!ctx.privateSpace) {
+      if (note.cloud_id) {
+        await window.electronAPI.hardDeleteNote?.(note.id);
+        this.dispatchSpaceRevoked(spaceName);
+      }
+      return;
     }
+    // left_team rows already sit in the private space — fork in place.
+    const alreadyPrivate = note.space_id === ctx.privateSpace.id;
+    await window.electronAPI.updateNote(note.id, {
+      ...(alreadyPrivate ? {} : { space_id: ctx.privateSpace.id, folder_id: null }),
+      ...(note.cloud_id ? { client_note_id: crypto.randomUUID() } : {}),
+      cloud_id: null,
+      left_team: 0,
+    });
+    if (!alreadyPrivate) this.dispatchNoteRelocated(note.title, spaceName);
   }
 
   // Sync passes run in whichever window holds the web lock (often the always-
@@ -814,6 +837,9 @@ class SyncService {
     if (!teamOnly) await this.adoptDefaultFolders();
     await this.pushPendingFolders(teamOnly);
     await this.pushFolderDeletes(teamOnly);
+    if (!teamOnly && this.teamCursorLagging("folders")) {
+      await this.pullFolders(true);
+    }
     await this.pullFolders(teamOnly);
   }
 
@@ -1030,6 +1056,8 @@ class SyncService {
               if (cloudFolder.deleted_at) {
                 await window.electronAPI.hardDeleteFolder?.(local.id);
               } else if (
+                // Pending rows are never overwritten by pull (D2), here too.
+                local.sync_status !== "pending" &&
                 normalizeTimestamp(cloudFolder.updated_at) > normalizeTimestamp(local.updated_at)
               ) {
                 await window.electronAPI.upsertFolderFromCloud?.(
@@ -1108,15 +1136,18 @@ class SyncService {
       // A backfill snapshot never sees tombstones or stubs, and a dirty pass
       // must re-see its parked/failed rows, so neither advances the cursors.
       if (!snapshot && dirtyRows === 0) {
-        // A degraded (own-rows-only) pull never saw team rows; advancing
-        // would permanently skip teammate edits once the capability probe
-        // recovers.
         const hasTeamSpaces = [...ctx.byId.values()].some((s) => s.kind === "team");
         if (teamCapable || !hasTeamSpaces) {
           localStorage.setItem(cursorKey, syncStartedAt);
           // Full pulls cover team rows too; keep the team cursor current so a
           // later backup-off pass doesn't re-pull from the distant past.
           if (!teamOnly) localStorage.setItem("lastSyncedAt.folders.team", syncStartedAt);
+        } else if (!teamOnly) {
+          // Degraded (own-rows-only) full pull: personal rows were fully
+          // covered, so the personal cursor may advance; the untouched .team
+          // cursor lets syncFolders' recovery pull catch up on teammate
+          // edits made during the outage.
+          localStorage.setItem(cursorKey, syncStartedAt);
         }
       }
       return dirtyRows === 0;
@@ -1126,9 +1157,22 @@ class SyncService {
     }
   }
 
+  // The team cursor lags the personal one only when degraded passes advanced
+  // the personal cursor during a capability outage; the gap is exactly the
+  // teammate edits the recovery pull below must cover.
+  private teamCursorLagging(kind: "notes" | "folders"): boolean {
+    if (!this.canSyncTeamSpaces() || !this.hasTeamSpacesCapability()) return false;
+    const team = localStorage.getItem(`lastSyncedAt.${kind}.team`);
+    const full = localStorage.getItem(`lastSyncedAt.${kind}`);
+    return !!team && !!full && team < full;
+  }
+
   private async syncNotes(teamOnly = false): Promise<void> {
     await this.pushPendingNotes(teamOnly);
     await this.pushNoteDeletes();
+    if (!teamOnly && this.teamCursorLagging("notes")) {
+      await this.pullNotes(true);
+    }
     // A dirty pull left its cursors in place, so the next pass re-sees the
     // parked rows — typically after syncSpaces has mirrored the missing team.
     await this.pullNotes(teamOnly);
@@ -1141,8 +1185,15 @@ class SyncService {
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
+    const conflicted = readNoteConflictIds();
     const pushable: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
     for (const note of pending) {
+      if (conflicted.has(note.client_note_id)) {
+        // An unresolved pull conflict: pushing now would auto-resolve it as
+        // local-wins before the user chose Keep or Refresh (which clear the
+        // registry entry and unblock the row).
+        continue;
+      }
       if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
         // The folder's own changes haven't landed (e.g. a cross-space move
         // that 409'd on a name conflict): the server would reject the note's
@@ -1274,11 +1325,12 @@ class SyncService {
           );
 
           // Redacted stub: the note moved out of one of our teams. Clean local
-          // copies are no longer ours to keep; dirty ones move to the private
-          // space so unpushed work survives (plan §7.2).
+          // copies are no longer ours to keep; dirty ones ('pending' or
+          // 'error') move to the private space so unpushed work survives
+          // (plan §7.2).
           if (cloudNote.access_removed) {
             if (!local) continue;
-            if (local.sync_status === "pending" && !local.deleted_at && ctx.privateSpace) {
+            if (local.sync_status !== "synced" && !local.deleted_at && ctx.privateSpace) {
               // Already-private rows were just relocated by their folder's
               // stub — keep their folder link, only fork identity: the server
               // row now belongs to a scope we can't write, so pushing under
@@ -1312,8 +1364,16 @@ class SyncService {
               } else if (
                 normalizeTimestamp(cloudNote.updated_at) > normalizeTimestamp(local.updated_at)
               ) {
-                if (local.sync_status === "pending") {
+                // 'error' rows carry unpushed work just like 'pending' ones.
+                if (local.sync_status !== "synced") {
                   await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                } else if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+                  // Filing to the fallback would stick (the advanced cursor
+                  // never re-pulls this row) — park until the folder arrives.
+                  dirtyRows++;
+                  console.warn(
+                    `Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`
+                  );
                 } else if (ctx.privateSpace) {
                   await window.electronAPI.upsertNoteFromCloud?.(
                     cloudNote as unknown as Record<string, unknown>,
@@ -1347,11 +1407,20 @@ class SyncService {
             !local ||
             normalizeTimestamp(cloudNote.updated_at) > normalizeTimestamp(local.updated_at)
           ) {
-            if (local?.sync_status === "pending") {
-              // A newer cloud copy over unpushed local edits: surface the
-              // conflict to the editor banner instead of silently dropping
-              // the local edit (plan §7.3).
+            if (local && local.sync_status !== "synced") {
+              // A newer cloud copy over unpushed local edits ('pending' or
+              // 'error'): surface the conflict to the editor banner instead
+              // of silently dropping the local edit (plan §7.3).
               await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+              continue;
+            }
+            if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+              // The note's folder isn't known locally yet (created moments
+              // ago, or its pull failed). Filing it to the fallback would
+              // stick — the advanced cursor never re-pulls the row — so park
+              // it like an unknown team until the folder arrives.
+              dirtyRows++;
+              console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
               continue;
             }
             await window.electronAPI.upsertNoteFromCloud?.(
@@ -1380,15 +1449,18 @@ class SyncService {
       // A backfill snapshot never sees tombstones or stubs, so it must not
       // advance the delta cursors.
       if (!snapshot && dirtyRows === 0) {
-        // A degraded (own-rows-only) pull never saw team rows; advancing
-        // would permanently skip teammate edits once the capability probe
-        // recovers.
         const hasTeamSpaces = [...ctx.byId.values()].some((s) => s.kind === "team");
         if (teamCapable || !hasTeamSpaces) {
           localStorage.setItem(cursorKey, syncStartedAt);
           // Full pulls cover team rows too; keep the team cursor current so a
           // later backup-off pass doesn't re-pull from the distant past.
           if (!teamOnly) localStorage.setItem("lastSyncedAt.notes.team", syncStartedAt);
+        } else if (!teamOnly) {
+          // Degraded (own-rows-only) full pull: personal rows were fully
+          // covered, so the personal cursor may advance; the untouched .team
+          // cursor lets syncNotes' recovery pull catch up on teammate edits
+          // made during the outage.
+          localStorage.setItem(cursorKey, syncStartedAt);
         }
       }
       return dirtyRows === 0;

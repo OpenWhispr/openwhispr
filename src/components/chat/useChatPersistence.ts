@@ -6,11 +6,20 @@ interface UseChatPersistenceOptions {
   onConversationCreated?: (id: number, title: string) => void;
 }
 
+export interface ConversationScope {
+  spaceId: number;
+  folderId: number | null;
+}
+
 export interface ChatPersistence {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   conversationId: number | null;
-  createConversation: (title: string, noteId?: number | null) => Promise<number>;
+  createConversation: (
+    title: string,
+    noteId?: number | null,
+    scope?: ConversationScope
+  ) => Promise<number>;
   loadConversation: (id: number) => Promise<void>;
   saveUserMessage: (text: string) => Promise<void>;
   saveAssistantMessage: (content: string, toolCalls?: ToolCallInfo[]) => Promise<void>;
@@ -29,8 +38,13 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   }, [conversationId]);
 
   const createConversation = useCallback(
-    async (title: string, noteId?: number | null): Promise<number> => {
-      const conv = await window.electronAPI?.createAgentConversation?.(title, noteId ?? undefined);
+    async (title: string, noteId?: number | null, scope?: ConversationScope): Promise<number> => {
+      const conv = await window.electronAPI?.createAgentConversation?.(
+        title,
+        noteId ?? undefined,
+        scope?.spaceId,
+        scope?.folderId ?? undefined
+      );
       const id = conv?.id ?? 0;
       conversationIdRef.current = id;
       setConversationId(id);

@@ -2746,6 +2746,44 @@
         "othersInCall_one": "{{count}} weitere Person im Gespräch",
         "othersInCall_other": "{{count}} weitere Personen im Gespräch"
       }
+    },
+    "overview": {
+      "subtitle": {
+        "team": "Notizen sind für alle in diesem Space sichtbar.",
+        "private": "Nur du kannst diese Notizen sehen."
+      },
+      "meta": {
+        "folders_one": "{{count}} Ordner",
+        "folders_other": "{{count}} Ordner",
+        "members_one": "{{count}} Mitglied",
+        "members_other": "{{count}} Mitglieder"
+      },
+      "banner": {
+        "title": {
+          "team": "Dein Team-Space",
+          "private": "Dein privater Space"
+        },
+        "body": {
+          "team": "Teile Meeting-Notizen mit deinem Team. Füge Nutzerinterviews, Vertriebsgespräche und Team-Meetings hinzu, damit alle auf dem Laufenden bleiben.",
+          "private": "Bewahre Meeting-Notizen, Ideen und Entwürfe an einem Ort auf – und frag nach allem in diesem Space."
+        },
+        "dismiss": "Ausblenden"
+      },
+      "ask": {
+        "placeholder": "Frag etwas",
+        "chips": {
+          "catchUp": "Bring mich auf den neuesten Stand",
+          "keyDecisions": "Liste die wichtigsten Entscheidungen auf",
+          "inFlight": "Zeig laufende Projekte"
+        }
+      },
+      "invite": "Einladen",
+      "list": {
+        "empty": "Hier gibt es noch keine Notizen"
+      },
+      "author": {
+        "you": "Du"
+      }
     }
   },
   "dictionary": {

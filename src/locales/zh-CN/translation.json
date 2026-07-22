@@ -2538,6 +2538,44 @@
         "othersInCall_one": "通话中还有 {{count}} 人",
         "othersInCall_other": "通话中还有 {{count}} 人"
       }
+    },
+    "overview": {
+      "subtitle": {
+        "team": "此空间中的所有成员都可以查看这些笔记。",
+        "private": "只有你可以查看这些笔记。"
+      },
+      "meta": {
+        "folders_one": "{{count}} 个文件夹",
+        "folders_other": "{{count}} 个文件夹",
+        "members_one": "{{count}} 位成员",
+        "members_other": "{{count}} 位成员"
+      },
+      "banner": {
+        "title": {
+          "team": "你的团队空间",
+          "private": "你的私人空间"
+        },
+        "body": {
+          "team": "与团队共享会议笔记。添加用户访谈、销售通话和团队会议，让所有人保持同步。",
+          "private": "将会议笔记、想法和草稿集中在一处，并随时询问此空间中的任何内容。"
+        },
+        "dismiss": "关闭"
+      },
+      "ask": {
+        "placeholder": "随便问点什么",
+        "chips": {
+          "catchUp": "帮我补上进展",
+          "keyDecisions": "列出关键决定",
+          "inFlight": "显示进行中的项目"
+        }
+      },
+      "invite": "邀请",
+      "list": {
+        "empty": "这里还没有笔记"
+      },
+      "author": {
+        "you": "你"
+      }
     }
   },
   "dictionary": {

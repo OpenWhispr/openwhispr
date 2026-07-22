@@ -15,13 +15,15 @@ interface ToolRegistrySettings {
   isSignedIn: boolean;
   gcalConnected: boolean;
   cloudBackupEnabled: boolean;
+  /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
+  searchScope?: { spaceId: number; folderId: number | null };
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
   const registry = new ToolRegistry();
 
   const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
-  registry.register(createSearchNotesTool({ useCloudSearch }));
+  registry.register(createSearchNotesTool({ useCloudSearch, fixedScope: settings.searchScope }));
   registry.register(getNoteTool);
   registry.register(createNoteTool);
   registry.register(updateNoteTool);

@@ -103,8 +103,20 @@ type TFn = (key: string, options?: Record<string, unknown>) => string;
 
 type TreeRow =
   | { type: "space"; key: string; space: SpaceItem; parentKey?: undefined }
-  | { type: "folder"; key: string; folder: FolderItem; parentKey: string }
-  | { type: "note"; key: string; note: NoteItem; parentKey: string; level: 2 | 3 };
+  | {
+      type: "folder";
+      key: string;
+      folder: FolderItem;
+      parentKey?: string;
+      level: 1 | 2;
+    }
+  | {
+      type: "note";
+      key: string;
+      note: NoteItem;
+      parentKey?: string;
+      level: 1 | 2 | 3;
+    };
 
 interface DropHandlers {
   onDragOver: (e: React.DragEvent) => void;
@@ -145,22 +157,72 @@ function SectionHeader({
   label,
   action,
   className,
+  expanded,
+  onToggle,
+  toggleRef,
+  dropHandlers,
+  isDragOver,
+  isDropSuccess,
 }: {
   label: string;
   action?: React.ReactNode;
   className?: string;
+  expanded?: boolean;
+  onToggle?: () => void;
+  toggleRef?: React.Ref<HTMLButtonElement>;
+  dropHandlers?: DropHandlers;
+  isDragOver?: boolean;
+  isDropSuccess?: boolean;
 }) {
+  const labelClassName =
+    "text-[10px] font-semibold uppercase tracking-wide text-foreground/50 select-none";
+
   return (
-    <div role="none" className={cn("flex items-center justify-between h-6 px-2 mt-1", className)}>
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground/50 select-none">
-        {label}
-      </span>
+    <div
+      role="none"
+      {...dropHandlers}
+      className={cn(
+        "flex items-center justify-between h-6 px-2 mt-1 rounded-md",
+        isDragOver && "bg-primary/12 dark:bg-primary/15 ring-1 ring-primary/25",
+        isDropSuccess && "bg-emerald-500/10 dark:bg-emerald-400/10 ring-1 ring-emerald-500/20",
+        className
+      )}
+    >
+      {onToggle ? (
+        <button
+          ref={toggleRef}
+          type="button"
+          aria-expanded={expanded}
+          onClick={onToggle}
+          className="flex h-full min-w-0 items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/30"
+        >
+          <ChevronRight
+            size={11}
+            aria-hidden="true"
+            className={cn(
+              "shrink-0 text-foreground/40 transition-transform duration-150",
+              expanded && "rotate-90"
+            )}
+          />
+          <span className={labelClassName}>{label}</span>
+        </button>
+      ) : (
+        <span className={labelClassName}>{label}</span>
+      )}
       {action}
     </div>
   );
 }
 
-function TreeChildren({ open, children }: { open: boolean; children: React.ReactNode }) {
+function TreeChildren({
+  open,
+  children,
+  grouped = true,
+}: {
+  open: boolean;
+  children: React.ReactNode;
+  grouped?: boolean;
+}) {
   return (
     <div
       role="none"
@@ -170,7 +232,7 @@ function TreeChildren({ open, children }: { open: boolean; children: React.React
       )}
     >
       <div
-        role="group"
+        role={grouped ? "group" : "none"}
         className={cn(
           "min-h-0 overflow-hidden transition-opacity duration-[80ms]",
           open ? "opacity-100" : "opacity-0"
@@ -437,6 +499,7 @@ function SpaceRow({
 
 function FolderRow({
   folder,
+  level,
   spaces,
   isExpanded,
   isActive,
@@ -455,6 +518,7 @@ function FolderRow({
   t,
 }: {
   folder: FolderItem;
+  level: 1 | 2;
   spaces: SpaceItem[];
   isExpanded: boolean;
   isActive: boolean;
@@ -487,7 +551,7 @@ function FolderRow({
   return (
     <div
       role="treeitem"
-      aria-level={2}
+      aria-level={level}
       aria-expanded={isExpanded}
       aria-selected={isActive}
       aria-label={
@@ -502,7 +566,8 @@ function FolderRow({
       {...dropHandlers}
       className={cn(
         ROW_BASE_CLASS,
-        "h-7 pl-[14px] pr-2",
+        "h-7 pr-2",
+        level === 1 ? "pl-2" : "pl-[14px]",
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -679,6 +744,7 @@ interface MoveOption {
 function NoteLeaf({
   note,
   level,
+  indentClassName,
   isActive,
   isDragging,
   dragHandlers,
@@ -694,7 +760,8 @@ function NoteLeaf({
   t,
 }: {
   note: NoteItem;
-  level: 2 | 3;
+  level: 1 | 2 | 3;
+  indentClassName?: string;
   isActive: boolean;
   isDragging: boolean;
   dragHandlers: {
@@ -786,7 +853,7 @@ function NoteLeaf({
       className={cn(
         ROW_BASE_CLASS,
         "h-7 pr-2",
-        level === 3 ? "pl-7" : "pl-[14px]",
+        indentClassName ?? (level === 3 ? "pl-10" : "pl-[14px]"),
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -1060,11 +1127,16 @@ export default function SpacesTree({
   const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<SpaceItem | null>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const privateSectionToggleRef = useRef<HTMLButtonElement>(null);
   const undoToastIdRef = useRef<string | null>(null);
 
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
   const privateSpaces = useMemo(() => spaces.filter((s) => s.kind === "private"), [spaces]);
+  const privateSpace = privateSpaces[0];
+  const privateSectionExpanded = privateSpace
+    ? expanded.has(spaceContainerKey(privateSpace.id))
+    : false;
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
   const showWorkspaceGroups = workspaces.length > 1;
   const teamSpaceGroups = useMemo(
@@ -1310,6 +1382,30 @@ export default function SpacesTree({
 
   const visibleRows = useMemo<TreeRow[]>(() => {
     const rows: TreeRow[] = [];
+    const pushPrivateSpace = (space: SpaceItem) => {
+      const spaceKey = spaceContainerKey(space.id);
+      if (!expanded.has(spaceKey)) return;
+      folders
+        .filter((f) => f.space_id === space.id)
+        .forEach((folder) => {
+          const folderKey = folderContainerKey(folder.id);
+          rows.push({ type: "folder", key: folderKey, folder, level: 1 });
+          if (expanded.has(folderKey)) {
+            (notesByContainer[folderKey] ?? []).forEach((note) => {
+              rows.push({
+                type: "note",
+                key: `n:${note.id}`,
+                note,
+                parentKey: folderKey,
+                level: 2,
+              });
+            });
+          }
+        });
+      (notesByContainer[spaceKey] ?? []).forEach((note) => {
+        rows.push({ type: "note", key: `n:${note.id}`, note, level: 1 });
+      });
+    };
     const pushSpace = (space: SpaceItem) => {
       const spaceKey = spaceContainerKey(space.id);
       rows.push({ type: "space", key: spaceKey, space });
@@ -1318,7 +1414,7 @@ export default function SpacesTree({
         .filter((f) => f.space_id === space.id)
         .forEach((folder) => {
           const folderKey = folderContainerKey(folder.id);
-          rows.push({ type: "folder", key: folderKey, folder, parentKey: spaceKey });
+          rows.push({ type: "folder", key: folderKey, folder, parentKey: spaceKey, level: 2 });
           if (expanded.has(folderKey)) {
             (notesByContainer[folderKey] ?? []).forEach((note) => {
               rows.push({
@@ -1335,7 +1431,7 @@ export default function SpacesTree({
         rows.push({ type: "note", key: `n:${note.id}`, note, parentKey: spaceKey, level: 2 });
       });
     };
-    privateSpaces.forEach(pushSpace);
+    privateSpaces.forEach(pushPrivateSpace);
     if (teamCapability) teamSpaces.forEach(pushSpace);
     return rows;
   }, [privateSpaces, teamSpaces, folders, notesByContainer, expanded, teamCapability]);
@@ -1359,9 +1455,12 @@ export default function SpacesTree({
 
   const activateRow = (row: TreeRow) => {
     if (row.type === "space") {
+      // Deselect the note so the main pane shows the container overview.
+      setActiveNoteId(null);
       setActiveContext(row.space.id, null);
       toggleContainerExpanded(row.key);
     } else if (row.type === "folder") {
+      setActiveNoteId(null);
       setActiveContext(row.folder.space_id, row.folder.id);
       toggleContainerExpanded(row.key);
     } else {
@@ -1593,11 +1692,17 @@ export default function SpacesTree({
     }
   };
 
-  const renderNote = (note: NoteItem, level: 2 | 3, parentKey: string) => (
+  const renderNote = (
+    note: NoteItem,
+    level: 1 | 2 | 3,
+    parentKey?: string,
+    indentClassName?: string
+  ) => (
     <NoteLeaf
       key={note.id}
       note={note}
       level={level}
+      indentClassName={indentClassName}
       isActive={note.id === activeNoteId}
       isDragging={dragState.draggingNoteId === note.id}
       dragHandlers={noteDragHandlers({
@@ -1619,14 +1724,14 @@ export default function SpacesTree({
     />
   );
 
-  const renderFolder = (folder: FolderItem, parentKey: string) => {
+  const renderFolder = (folder: FolderItem, parentKey?: string, level: 1 | 2 = 2) => {
     const folderKey = folderContainerKey(folder.id);
     const isExpanded = expanded.has(folderKey);
     const isRenaming = renamingFolderId === folder.id;
 
     if (isRenaming) {
       return (
-        <div key={folder.id} role="none" className="pl-[14px] pr-2">
+        <div key={folder.id} role="none" className={cn(level === 1 ? "pl-2" : "pl-[14px]", "pr-2")}>
           <input
             autoFocus
             value={renameValue}
@@ -1654,6 +1759,7 @@ export default function SpacesTree({
       <div key={folder.id} role="none">
         <FolderRow
           folder={folder}
+          level={level}
           spaces={visibleSpaces}
           isExpanded={isExpanded}
           isActive={activeContext?.folderId === folder.id}
@@ -1668,7 +1774,9 @@ export default function SpacesTree({
           })}
           noteFilesEnabled={noteFilesEnabled}
           fileManagerName={fileManagerName}
-          onActivate={() => activateRow({ type: "folder", key: folderKey, folder, parentKey })}
+          onActivate={() =>
+            activateRow({ type: "folder", key: folderKey, folder, parentKey, level })
+          }
           onToggle={() => toggleContainerExpanded(folderKey)}
           onRename={() => startRenameFolder(folder)}
           onMoveToSpace={(space) => requestMoveFolder(folder, space)}
@@ -1678,24 +1786,19 @@ export default function SpacesTree({
         />
         <TreeChildren open={isExpanded}>
           <div className="space-y-px">
-            {(notesByContainer[folderKey] ?? []).map((note) => renderNote(note, 3, folderKey))}
+            {(notesByContainer[folderKey] ?? []).map((note) =>
+              level === 1 ? renderNote(note, 2, folderKey, "pl-8") : renderNote(note, 3, folderKey)
+            )}
           </div>
         </TreeChildren>
       </div>
     );
   };
 
-  const renderSpace = (space: SpaceItem) => {
+  const renderSpaceContents = (space: SpaceItem, flattened = false) => {
     const spaceKey = spaceContainerKey(space.id);
-    const isExpanded = expanded.has(spaceKey);
     const spaceFolders = folders.filter((f) => f.space_id === space.id);
     const rootNotes = notesByContainer[spaceKey];
-    const displayName = spaceDisplayName(space, t);
-    // DB-backed counts: space-root notes count before their container loads,
-    // and the root contribution isn't capped at the container's page size.
-    const noteCount =
-      spaceFolders.reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0) +
-      (spaceRootCounts[space.id] ?? 0);
     const showSkeletons =
       space.kind === "team" &&
       space.sync_status === "pending" &&
@@ -1704,6 +1807,68 @@ export default function SpacesTree({
     const showEmptySpace =
       space.kind === "team" && spaceFolders.length === 0 && rootNotes?.length === 0;
 
+    return (
+      <div className="space-y-px">
+        {spaceFolders.map((folder) =>
+          flattened ? renderFolder(folder, undefined, 1) : renderFolder(folder, spaceKey)
+        )}
+        {creatingFolderSpaceId === space.id && (
+          <div className={cn(flattened ? "pl-2" : "pl-[14px]", "pr-2")}>
+            <input
+              autoFocus
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void confirmCreateFolder().then((key) => key && focusRowSoon(key));
+                }
+                if (e.key === "Escape") {
+                  setCreatingFolderSpaceId(null);
+                  setNewFolderName("");
+                  if (flattened) privateSectionToggleRef.current?.focus();
+                  else focusRowSoon(spaceKey);
+                }
+              }}
+              onBlur={confirmCreateFolder}
+              placeholder={t("notes.folders.folderName")}
+              className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/20")}
+            />
+          </div>
+        )}
+        {(rootNotes ?? []).map((note) =>
+          flattened ? renderNote(note, 1, undefined, "pl-[30px]") : renderNote(note, 2, spaceKey)
+        )}
+        {showSkeletons && <SkeletonRows />}
+        {showEmptySpace && (
+          <div className="pl-[18px] pr-2 py-1">
+            <p className="text-xs text-foreground/40 leading-relaxed mb-1.5">
+              {t("notes.spaces.emptySpace", { space: space.name })}
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onNewNote(space.id, null)}
+              className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
+            >
+              <Plus size={11} />
+              {t("notes.list.newNote")}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSpace = (space: SpaceItem) => {
+    const spaceKey = spaceContainerKey(space.id);
+    const isExpanded = expanded.has(spaceKey);
+    const spaceFolders = folders.filter((f) => f.space_id === space.id);
+    const displayName = spaceDisplayName(space, t);
+    // DB-backed counts: space-root notes count before their container loads,
+    // and the root contribution isn't capped at the container's page size.
+    const noteCount =
+      spaceFolders.reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0) +
+      (spaceRootCounts[space.id] ?? 0);
     return (
       <div key={space.id} role="none">
         {renamingSpaceId === space.id ? (
@@ -1769,51 +1934,7 @@ export default function SpacesTree({
             t={t}
           />
         )}
-        <TreeChildren open={isExpanded}>
-          <div className="space-y-px">
-            {spaceFolders.map((folder) => renderFolder(folder, spaceKey))}
-            {creatingFolderSpaceId === space.id && (
-              <div className="pl-[14px] pr-2">
-                <input
-                  autoFocus
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      void confirmCreateFolder().then((key) => key && focusRowSoon(key));
-                    }
-                    if (e.key === "Escape") {
-                      setCreatingFolderSpaceId(null);
-                      setNewFolderName("");
-                      focusRowSoon(spaceKey);
-                    }
-                  }}
-                  onBlur={confirmCreateFolder}
-                  placeholder={t("notes.folders.folderName")}
-                  className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/20")}
-                />
-              </div>
-            )}
-            {(rootNotes ?? []).map((note) => renderNote(note, 2, spaceKey))}
-            {showSkeletons && <SkeletonRows />}
-            {showEmptySpace && (
-              <div className="pl-[18px] pr-2 py-1">
-                <p className="text-xs text-foreground/40 leading-relaxed mb-1.5">
-                  {t("notes.spaces.emptySpace", { space: space.name })}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onNewNote(space.id, null)}
-                  className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
-                >
-                  <Plus size={11} />
-                  {t("notes.list.newNote")}
-                </Button>
-              </div>
-            )}
-          </div>
-        </TreeChildren>
+        <TreeChildren open={isExpanded}>{renderSpaceContents(space)}</TreeChildren>
       </div>
     );
   };
@@ -1836,8 +1957,50 @@ export default function SpacesTree({
         aria-label={t("notes.list.title")}
         className="flex-1 overflow-y-auto px-1.5 pb-2 space-y-px"
       >
-        <SectionHeader label={t("notes.spaces.privateSpaces")} />
-        {privateSpaces.map(renderSpace)}
+        <div role="none" className="group/section">
+          <SectionHeader
+            label={t("notes.spaces.privateSpaces")}
+            expanded={privateSectionExpanded}
+            onToggle={() => {
+              if (privateSpace) toggleContainerExpanded(spaceContainerKey(privateSpace.id));
+            }}
+            toggleRef={privateSectionToggleRef}
+            dropHandlers={
+              privateSpace
+                ? dropTargetHandlers({ spaceId: privateSpace.id, folderId: null })
+                : undefined
+            }
+            isDragOver={
+              privateSpace && dragState.dragOverKey === spaceContainerKey(privateSpace.id)
+            }
+            isDropSuccess={
+              privateSpace && dragState.dropSuccessKey === spaceContainerKey(privateSpace.id)
+            }
+            action={
+              privateSpace ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("notes.context.newFolder")}
+                  onClick={() => startCreateFolder(privateSpace)}
+                  className={cn(
+                    "h-5 w-5 rounded-sm opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100",
+                    "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40",
+                    "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
+                  )}
+                >
+                  <Plus size={12} />
+                </Button>
+              ) : undefined
+            }
+          />
+          {privateSpace && (
+            <TreeChildren open={privateSectionExpanded} grouped={false}>
+              {/* The private space remains the storage/sync boundary but is flattened in the UI. */}
+              {renderSpaceContents(privateSpace, true)}
+            </TreeChildren>
+          )}
+        </div>
         {teamCapability && (
           <div role="none" className="group/section">
             <SectionHeader

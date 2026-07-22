@@ -94,7 +94,7 @@ class VectorIndex {
         const points = batch.map((n, j) => ({
           id: n.id,
           vector: Array.from(vectors[j]),
-          payload: { space_id: n.space_id },
+          payload: { space_id: n.space_id, folder_id: n.folder_id ?? null },
         }));
         await this.client.upsert(this.collectionName, { points });
       } catch (err) {

@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
-import { normalizeDbDate } from "../../utils/dateFormatting";
+import { formatShortDate, normalizeDbDate } from "../../utils/dateFormatting";
 
 export interface ConversationPreview {
   id: number;
@@ -42,7 +42,7 @@ function formatTimestamp(dateStr: string): string {
   if (minutes < 60) return `${minutes}m`;
   if (hours < 24) return `${hours}h`;
   if (days < 7) return `${days}d`;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return formatShortDate(dateStr);
 }
 
 export default function ConversationItem({
