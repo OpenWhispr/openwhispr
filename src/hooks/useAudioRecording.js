@@ -230,6 +230,9 @@ export const useAudioRecording = (toast, options = {}) => {
 
           if (audioManagerRef.current.shouldUseStreaming()) {
             audioManagerRef.current.warmupStreamingConnection();
+          } else {
+            // Batch path: a dictation soon after this one should also find a warm driver.
+            audioManagerRef.current?.warmupMicDriver?.();
           }
         }
       },
