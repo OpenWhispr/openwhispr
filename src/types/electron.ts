@@ -78,6 +78,38 @@ export interface NoteItem {
 
 export type ShareVisibility = "private" | "link" | "domain" | "invited";
 
+export type NotePermission = "owner" | "editor" | "viewer";
+
+export type NoteAccessPrincipalType = "user" | "email" | "team" | "folder" | "workspace";
+
+export interface NoteAccessPrincipal {
+  type: NoteAccessPrincipalType;
+  id: string | null;
+  email: string | null;
+  name: string | null;
+  image: string | null;
+  member_count: number | null;
+}
+
+export interface NoteAccessGrant {
+  id: string;
+  principal: NoteAccessPrincipal;
+  permission: Exclude<NotePermission, "owner">;
+  source: "direct" | "team" | "folder" | "workspace";
+  inherited: boolean;
+  pending: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteAccessState {
+  owner: NoteAccessPrincipal;
+  grants: NoteAccessGrant[];
+  my_permission: NotePermission;
+  can_manage_access: boolean;
+  can_manage_inherited_access: boolean;
+}
+
 export interface ShareSettings {
   visibility: ShareVisibility;
   token_prefix: string | null;
@@ -1299,6 +1331,7 @@ declare global {
       openSoundInputSettings?: () => Promise<{ success: boolean; error?: string }>;
       openAccessibilitySettings?: () => Promise<{ success: boolean; error?: string }>;
       openSystemAudioSettings?: () => Promise<{ success: boolean; error?: string }>;
+      showEmojiPanel?: () => Promise<boolean>;
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
       resumeMediaPlayback?: () => Promise<boolean>;

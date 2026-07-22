@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
@@ -12,6 +12,7 @@ import {
 } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useToast } from "../ui/useToast";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
@@ -22,12 +23,41 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
+import { clampEmojiInput } from "../../lib/emojiInput";
 import {
   manageableWorkspaces as findManageableWorkspaces,
   selectWorkspaceForSpaceCreation,
 } from "../../lib/workspaceSelection";
 import { revealContainer, setActiveContext } from "../../stores/noteStore";
+import { cn } from "../lib/utils";
 import type { WorkspaceMember } from "../../types/electron";
+
+const EMOJI_CHOICES = [
+  "📝",
+  "📋",
+  "💡",
+  "🚀",
+  "🎯",
+  "📣",
+  "🛠️",
+  "🎨",
+  "📊",
+  "💼",
+  "🤝",
+  "🌱",
+  "🔬",
+  "🧪",
+  "📚",
+  "✨",
+  "🔥",
+  "⭐",
+  "💬",
+  "🗂️",
+  "🧭",
+  "🌍",
+  "🔒",
+  "🏆",
+];
 
 interface CreateSpaceDialogProps {
   open: boolean;
@@ -54,6 +84,8 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
   );
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("");
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const emojiInputRef = useRef<HTMLInputElement>(null);
   const [memberSearch, setMemberSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [membersError, setMembersError] = useState(false);
@@ -116,6 +148,7 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
     if (!nextOpen) {
       setName("");
       setEmoji("");
+      setEmojiPickerOpen(false);
       setMemberSearch("");
       setSelectedIds(new Set());
       setRosterWorkspaceId(null);
@@ -140,6 +173,12 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
       if (!next.delete(member.user_id)) next.add(member.user_id);
       return next;
     });
+  };
+
+  // Linux has no OS emoji panel; the in-app grid is the fallback.
+  const openEmojiPicker = async (): Promise<void> => {
+    const nativeShown = await window.electronAPI?.showEmojiPanel?.().catch(() => false);
+    if (!nativeShown) setEmojiPickerOpen(true);
   };
 
   const handleWorkspaceChange = (workspaceId: string) => {
@@ -249,12 +288,46 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
                   <label className="text-xs font-medium text-foreground/50">
                     {t("notes.spaces.emojiLabel")}
                   </label>
-                  <Input
-                    value={emoji}
-                    onChange={(e) => setEmoji(e.target.value)}
-                    maxLength={4}
-                    className="text-center"
-                  />
+                  <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
+                    <PopoverAnchor asChild>
+                      <Input
+                        ref={emojiInputRef}
+                        value={emoji}
+                        onChange={(e) => setEmoji(clampEmojiInput(e.target.value))}
+                        onClick={() => void openEmojiPicker()}
+                        aria-label={t("notes.spaces.changeEmoji")}
+                        className="text-center"
+                      />
+                    </PopoverAnchor>
+                    <PopoverContent
+                      className="w-auto min-w-0 p-1.5"
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                      onCloseAutoFocus={(e) => e.preventDefault()}
+                      onInteractOutside={(e) => {
+                        if (e.target === emojiInputRef.current) e.preventDefault();
+                      }}
+                    >
+                      <div className="grid grid-cols-8 gap-0.5">
+                        {EMOJI_CHOICES.map((choice) => (
+                          <button
+                            key={choice}
+                            type="button"
+                            onClick={() => {
+                              setEmoji(choice === emoji ? "" : choice);
+                              setEmojiPickerOpen(false);
+                              emojiInputRef.current?.focus();
+                            }}
+                            className={cn(
+                              "flex h-7 w-7 items-center justify-center rounded-md text-base outline-none transition-colors hover:bg-accent focus-visible:bg-accent",
+                              choice === emoji && "bg-accent"
+                            )}
+                          >
+                            {choice}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-1.5 flex-1">
                   <label className="text-xs font-medium text-foreground/50">

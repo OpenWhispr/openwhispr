@@ -42,9 +42,9 @@ import {
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { clampEmojiInput } from "../../lib/emojiInput";
 import { canManageSpace } from "../../lib/spacePermissions";
 import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
-import { NoteSharingService } from "../../services/NoteSharingService";
 import { deleteTeamSpace, leaveTeamSpace, renameTeamSpace } from "../../services/teamSpaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
@@ -77,8 +77,6 @@ import {
   getNoteFromStore,
   getFoldersValue,
   getSpacesValue,
-  updateShareCache,
-  persistNoteShareState,
 } from "../../stores/noteStore";
 
 const FOLDER_INPUT_CLASS =
@@ -1211,8 +1209,7 @@ export default function SpacesTree({
     fromSpaceId: number,
     toSpaceId: number,
     isFolder: boolean,
-    onConfirm: () => void,
-    willDisableShare = false
+    onConfirm: () => void
   ) => {
     const intoSpace = spaces.find((s) => s.id === toSpaceId);
     const fromSpace = spaces.find((s) => s.id === fromSpaceId);
@@ -1227,42 +1224,13 @@ export default function SpacesTree({
         ? t("notes.spaces.confirmMoveInTitle", { space: intoSpace.name })
         : t("notes.spaces.confirmMoveOutTitle", { space: fromSpace.name }),
       description: movingIntoTeam
-        ? willDisableShare
-          ? `${moveInDescription} ${t("notes.spaces.confirmMoveInShared")}`
-          : moveInDescription
+        ? moveInDescription
         : t(isFolder ? "notes.spaces.confirmMoveOutFolder" : "notes.spaces.confirmMoveOut", {
             space: fromSpace.name,
           }),
       confirmText: t("notes.spaces.moveConfirm"),
       onConfirm,
     });
-  };
-
-  // D8: team notes never carry a public web link — moving a web-shared note
-  // into a team space revokes its share (the confirm dialog announces it).
-  const willRevokeShare = (note: NoteItem, toSpaceId: number): boolean =>
-    Boolean(note.is_shared && note.cloud_id) &&
-    note.space_id !== toSpaceId &&
-    spaces.find((s) => s.id === toSpaceId)?.kind === "team";
-
-  const revokePublicShare = async (note: NoteItem) => {
-    const cloudId = note.cloud_id;
-    if (!cloudId) return;
-    try {
-      const res = await NoteSharingService.clearShare(cloudId);
-      updateShareCache(cloudId, (entry) => ({
-        share: res.share,
-        invitations: entry?.invitations ?? [],
-        rawToken: null,
-      }));
-      void persistNoteShareState(note.id, { is_shared: 0, share_token: null }).catch(
-        (err: unknown) => console.error("Share flag persist failed:", err)
-      );
-    } catch {
-      // Best effort — the move proceeds; the link stays revocable by moving
-      // the note back to Personal.
-      toast({ title: t("notes.spaces.shareRevokeFailed"), variant: "destructive" });
-    }
   };
 
   const moveNoteSafely = async (noteId: number, target: NoteMoveTarget): Promise<boolean> => {
@@ -1298,9 +1266,6 @@ export default function SpacesTree({
     const prev: NoteMoveTarget | null = note
       ? { spaceId: note.space_id, folderId: note.folder_id }
       : null;
-    if (note && willRevokeShare(note, target.spaceId)) {
-      await revokePublicShare(note);
-    }
     const moved = await moveNoteSafely(noteId, target);
     if (moved && prev) {
       const title = note?.title || t("notes.list.untitled");
@@ -1317,8 +1282,7 @@ export default function SpacesTree({
         note.space_id,
         target.spaceId,
         false,
-        () => void commitMoveNote(noteId, target),
-        willRevokeShare(note, target.spaceId)
+        () => void commitMoveNote(noteId, target)
       );
     } else {
       void commitMoveNote(noteId, target);
@@ -1368,14 +1332,7 @@ export default function SpacesTree({
   const { dragState, noteDragHandlers, dropTargetHandlers } = useNoteDragAndDrop({
     onMoveToTarget: commitMoveNote,
     onCrossSpaceDrop: (note: DraggedNoteInfo, target, commit) => {
-      const full = getNoteFromStore(note.id);
-      confirmCrossSpaceMove(
-        note.spaceId,
-        target.spaceId,
-        false,
-        commit,
-        full ? willRevokeShare(full, target.spaceId) : false
-      );
+      confirmCrossSpaceMove(note.spaceId, target.spaceId, false, commit);
     },
     onHoverTarget: (key) => setContainerExpanded(key, true),
   });
@@ -1894,8 +1851,7 @@ export default function SpacesTree({
             <input
               autoFocus={spaceRenameFocus === "emoji"}
               value={renameSpaceEmoji}
-              onChange={(e) => setRenameSpaceEmoji(e.target.value)}
-              maxLength={4}
+              onChange={(e) => setRenameSpaceEmoji(clampEmojiInput(e.target.value))}
               aria-label={t("notes.spaces.changeEmoji")}
               className={cn(FOLDER_INPUT_CLASS, "w-8 shrink-0 px-0 text-center")}
             />

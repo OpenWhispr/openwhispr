@@ -5,6 +5,7 @@ import { findDefaultFolder } from "../components/notes/shared";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
+  NoteAccessState,
   NoteItem,
   NoteShareInvitation,
   ShareSettings,
@@ -14,6 +15,7 @@ import type {
 export interface NoteShareCacheEntry {
   share: ShareSettings;
   invitations: NoteShareInvitation[];
+  access?: NoteAccessState;
   // Raw token is returned by the API exactly once (on generate or rotate)
   // and is only kept in memory for the active dialog session.
   rawToken: string | null;
@@ -917,7 +919,8 @@ export function updateShareCache(
 ): void {
   const { shareByCloudId } = useNoteStore.getState();
   const next = new Map(shareByCloudId);
-  next.set(cloudId, updater(next.get(cloudId)));
+  const current = next.get(cloudId);
+  next.set(cloudId, { ...current, ...updater(current) });
   useNoteStore.setState({ shareByCloudId: next });
 }
 

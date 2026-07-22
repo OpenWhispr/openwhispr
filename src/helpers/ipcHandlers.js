@@ -4050,6 +4050,18 @@ class IPCHandlers {
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
 
+    ipcMain.handle("show-emoji-panel", () => {
+      try {
+        if (app.isEmojiPanelSupported()) {
+          app.showEmojiPanel();
+          return true;
+        }
+      } catch (error) {
+        debugLogger.error("Failed to show native emoji panel:", error);
+      }
+      return false;
+    });
+
     ipcMain.handle("toggle-media-playback", () => {
       const mediaPlayer = require("./mediaPlayer");
       return mediaPlayer.toggleMedia();

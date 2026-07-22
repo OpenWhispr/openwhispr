@@ -25,6 +25,7 @@ import {
   Users,
 } from "lucide-react";
 import ShareNoteDialog from "./ShareNoteDialog";
+import { noteCapabilities } from "../../lib/notePermissions";
 import SpaceMembersDialog from "./SpaceMembersDialog";
 import {
   useShareCacheEntry,
@@ -250,9 +251,17 @@ export default function NoteEditor({
   const isShared = shareCache ? shareCache.share.visibility !== "private" : Boolean(note.is_shared);
   // Same gate as SyncService.canSyncSharedNotes: sharing needs a subscription.
   // An already-shared note stays manageable (unshare/revoke) after a lapse.
-  // Team notes never get a public web link — their audience is the space (D8).
   const isSubscribed = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
-  const canShare = isSignedIn && !isTeamNote && (isSubscribed || Boolean(note.is_shared));
+  // Legacy servers do not return note ACLs. Their existing model gives every
+  // team member edit access and personal notes to their owner, so those are
+  // the safe compatibility defaults until `access.my_permission` is present.
+  const shareCapabilities = noteCapabilities(
+    shareCache?.access?.my_permission ?? (isTeamNote ? "editor" : "owner")
+  );
+  const canShare =
+    isSignedIn && shareCapabilities.canShare && (isSubscribed || Boolean(note.is_shared));
+  // Sync doesn't carry permissions, so a viewer is only known once share state loads.
+  const canEditNote = shareCapabilities.canEdit;
   // A newer cloud copy arrived while this note had unpushed edits (plan §7.3).
   const conflict = useNoteConflict(note.client_note_id);
   const [conflictEditorName, setConflictEditorName] = useState<string | null>(null);
@@ -723,7 +732,7 @@ export default function NoteEditor({
         <div className="px-5 pt-4 pb-0">
           <div
             ref={titleRef}
-            contentEditable
+            contentEditable={canEditNote}
             suppressContentEditableWarning
             onInput={handleTitleInput}
             onKeyDown={handleTitleKeyDown}
@@ -1126,14 +1135,18 @@ export default function NoteEditor({
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
               <RichTextEditor value={note.transcript || ""} disabled />
             ) : viewMode === "enhanced" && enhancement ? (
-              <RichTextEditor value={enhancement.content} onChange={handleEnhancedChange} />
+              <RichTextEditor
+                value={enhancement.content}
+                onChange={handleEnhancedChange}
+                disabled={!canEditNote}
+              />
             ) : (
               <RichTextEditor
                 value={note.content}
                 onChange={handleContentChange}
                 editorRef={editorRef}
                 placeholder={t("notes.editor.startWriting")}
-                disabled={actionProcessingState === "processing"}
+                disabled={!canEditNote || actionProcessingState === "processing"}
               />
             )}
           </div>

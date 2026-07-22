@@ -575,6 +575,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),
   openAccessibilitySettings: () => ipcRenderer.invoke("open-accessibility-settings"),
   openSystemAudioSettings: () => ipcRenderer.invoke("open-system-audio-settings"),
+  showEmojiPanel: () => ipcRenderer.invoke("show-emoji-panel"),
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
