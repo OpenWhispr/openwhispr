@@ -11,6 +11,11 @@ import { TranscriptionsService } from "./TranscriptionsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError } from "./cloudApi.js";
+import {
+  normalizeTimestamp,
+  isCloudEntryNewer,
+  buildNoteUpdatePayload,
+} from "../helpers/cloudSyncGuards.js";
 
 function isHttpStatus(err: unknown, status: number): boolean {
   return err instanceof CloudApiError && err.status === status;
@@ -31,17 +36,6 @@ const SYNC_ALL_LOCK = "openwhispr-sync-all";
 // localStorage keys gating canSync(); a change in another window means sync
 // may have just become possible (sign-in, subscription, backup enabled).
 const CAN_SYNC_KEYS = ["isSignedIn", "cloudBackupEnabled", "isSubscribed"];
-
-// SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
-// the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
-// millis-precision ISO so the pull loop's lexical greater-than compares
-// correctly — without the ".000" pad a whole-second local value sorts after a
-// sub-second cloud value at the same instant ('Z' > '.').
-function normalizeTimestamp(value: string | null | undefined): string {
-  if (!value) return "";
-  const iso = value.replace(" ", "T").replace(/Z$/, "");
-  return (/\.\d+$/.test(iso) ? iso : `${iso}.000`) + "Z";
-}
 
 class SyncService {
   private syncing = false;
@@ -241,23 +235,7 @@ class SyncService {
     const cloudFolderId = note.folder_id ? (folderMap.get(note.folder_id) ?? null) : null;
 
     if (note.cloud_id) {
-      await NotesService.update(note.cloud_id, {
-        title: note.title,
-        content: note.content,
-        enhanced_content: note.enhanced_content,
-        enhancement_prompt: note.enhancement_prompt,
-        enhanced_at_content_hash: note.enhanced_at_content_hash,
-        note_type: note.note_type,
-        source_file: note.source_file,
-        audio_duration_seconds: note.audio_duration_seconds,
-        transcript: note.transcript,
-        participants: note.participants,
-        calendar_event_id: note.calendar_event_id,
-        diarization_enabled: note.diarization_enabled,
-        expected_speaker_count: note.expected_speaker_count,
-        folder_id: cloudFolderId,
-        updated_at: note.updated_at,
-      });
+      await NotesService.update(note.cloud_id, buildNoteUpdatePayload(note, folderMap));
     } else {
       const cloud = await NotesService.create({
         client_note_id: note.client_note_id,
@@ -480,7 +458,7 @@ class SyncService {
         }
 
         if (local?.deleted_at) continue;
-        if (!local || cloudFolder.updated_at > local.updated_at) {
+        if (!local || isCloudEntryNewer(cloudFolder.updated_at, local.updated_at)) {
           await window.electronAPI.upsertFolderFromCloud?.(
             cloudFolder as unknown as Record<string, unknown>
           );
@@ -509,7 +487,13 @@ class SyncService {
 
     for (const note of migration) {
       try {
-        await NotesService.update(note.cloud_id!, { client_note_id: note.client_note_id });
+        // Full content, not just { client_note_id }: a content-less PATCH bumps
+        // the cloud row's updated_at without uploading the local edit, and the
+        // pull in this same pass then elects the still-empty cloud copy (#1290).
+        await NotesService.update(note.cloud_id!, {
+          client_note_id: note.client_note_id,
+          ...buildNoteUpdatePayload(note, folderMap),
+        });
         await window.electronAPI.markNoteSynced?.(note.id, note.cloud_id!);
       } catch {
         await window.electronAPI.markNoteSyncError?.(note.id);
@@ -583,7 +567,7 @@ class SyncService {
             continue;
           }
 
-          if (!local || cloudNote.updated_at > local.updated_at) {
+          if (!local || isCloudEntryNewer(cloudNote.updated_at, local.updated_at)) {
             const localFolderId = cloudNote.folder_id
               ? (cloudToLocal.get(cloudNote.folder_id) ?? defaultFolderId)
               : defaultFolderId;
@@ -689,7 +673,7 @@ class SyncService {
             continue;
           }
 
-          if (!local || cloudConv.updated_at > local.updated_at) {
+          if (!local || isCloudEntryNewer(cloudConv.updated_at, local.updated_at)) {
             await window.electronAPI.upsertConversationFromCloud?.(
               cloudConv as unknown as Record<string, unknown>,
               (cloudConv.messages ?? []) as unknown as Array<Record<string, unknown>>

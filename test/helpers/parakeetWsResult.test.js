@@ -19,6 +19,27 @@ test("online sherpa messages keep finalized segments and latest partial", () => 
   );
 });
 
+test("online sherpa duplicate final keeps a newer segment partial", () => {
+  assert.equal(
+    parseOnlineMessages([
+      JSON.stringify({ text: "hello", is_final: true, segment: 0 }),
+      JSON.stringify({ text: "new partial", is_final: false, segment: 1 }),
+      JSON.stringify({ text: "hello", is_final: true, segment: 0 }),
+    ]),
+    "hello new partial"
+  );
+});
+
+test("online sherpa matching final replaces its partial", () => {
+  assert.equal(
+    parseOnlineMessages([
+      JSON.stringify({ text: "hello", is_final: false, segment: 0 }),
+      JSON.stringify({ text: "hello world", is_final: true, segment: 0 }),
+    ]),
+    "hello world"
+  );
+});
+
 test("online sherpa parser keeps numeric final text as text", () => {
   assert.equal(
     parseOnlineMessages([JSON.stringify({ text: "2026", is_final: true, segment: 0 })]),

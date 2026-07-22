@@ -13,6 +13,7 @@ function parseOfflineMessage(message) {
 function createOnlineAccumulator() {
   const finalizedSegments = new Map();
   let partialText = "";
+  let partialSegment = null;
   let fallbackKey = 0;
 
   const text = () => {
@@ -37,12 +38,16 @@ function createOnlineAccumulator() {
 
       if (!parsed.is_final) {
         partialText = finalizedSegments.has(parsed.segment) ? "" : messageText;
+        partialSegment = parsed.segment ?? null;
         return text();
       }
 
       const segment = parsed.segment ?? `fallback:${fallbackKey++}`;
       finalizedSegments.set(segment, messageText);
-      partialText = "";
+      if (partialSegment === null || partialSegment === segment) {
+        partialText = "";
+        partialSegment = null;
+      }
       return text();
     },
     text,

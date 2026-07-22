@@ -3724,7 +3724,10 @@ class IPCHandlers {
 
         const modelPath = require("path").join(modelManager.modelsDir, modelInfo.model.fileName);
 
-        await modelManager.serverManager.start(modelPath, modelManager.serverOptions(modelInfo));
+        await modelManager.serverManager.start(
+          modelPath,
+          await modelManager.serverStartOptions(modelInfo)
+        );
         modelManager.currentServerModelId = modelId;
 
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
