@@ -1012,6 +1012,11 @@
     },
     "helpText": "Selecciona un micrófono específico o usa la configuración predeterminada del sistema.",
     "inputDevice": "Dispositivo de entrada",
+    "maxDuration": {
+      "description": "La grabación se detiene automáticamente después de este número de segundos. Deja vacío o 0 para desactivar el límite.",
+      "label": "Duración máxima de grabación",
+      "placeholder": "Sin límite"
+    },
     "noBuiltInDetected": "No se detectó micrófono integrado. Usando el predeterminado del sistema.",
     "preferBuiltIn": {
       "description": "Los micrófonos externos pueden causar latencia o menor calidad de transcripción",

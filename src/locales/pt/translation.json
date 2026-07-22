@@ -943,6 +943,11 @@
     },
     "helpText": "Selecione um microfone específico ou use a configuração padrão do sistema.",
     "inputDevice": "Dispositivo de entrada",
+    "maxDuration": {
+      "description": "A gravação para automaticamente após esse número de segundos. Deixe vazio ou 0 para não ter limite.",
+      "label": "Duração máxima de gravação",
+      "placeholder": "Sem limite"
+    },
     "noBuiltInDetected": "Nenhum microfone integrado detectado. Usando o padrão do sistema.",
     "preferBuiltIn": {
       "description": "Microfones externos podem causar latência ou reduzir a qualidade da transcrição",

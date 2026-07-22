@@ -964,6 +964,11 @@
     },
     "helpText": "Wählen Sie ein bestimmtes Mikrofon oder verwenden Sie die Systemstandardeinstellung.",
     "inputDevice": "Eingabegerät",
+    "maxDuration": {
+      "description": "Die Aufnahme stoppt automatisch nach dieser Anzahl von Sekunden. Leer lassen oder 0 für keine Begrenzung.",
+      "label": "Maximale Aufnahmedauer",
+      "placeholder": "Keine Begrenzung"
+    },
     "noBuiltInDetected": "Kein integriertes Mikrofon erkannt. Systemstandard wird verwendet.",
     "preferBuiltIn": {
       "description": "Externe Mikrofone können Latenz oder eine verringerte Transkriptionsqualität verursachen",

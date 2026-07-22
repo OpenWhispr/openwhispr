@@ -5,6 +5,7 @@ import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
+import { armMaxRecordingDurationTimer } from "../utils/recordingMaxDuration";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
 
@@ -21,6 +22,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const stopLockRef = useRef(false);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
+  const maxDurationDisarmRef = useRef(null);
   const { onToggle } = options;
 
   const performStartRecording = useCallback(
@@ -99,6 +101,21 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
+        if (isRecording) {
+          // Arm once per recording; mic-recovery restarts re-emit isRecording, so keep the existing timer.
+          // performStopRecording re-checks state, so a late fire is harmless.
+          if (!maxDurationDisarmRef.current) {
+            maxDurationDisarmRef.current = armMaxRecordingDurationTimer(
+              getSettings().maxRecordingDurationSec,
+              () => {
+                void performStopRecording();
+              }
+            );
+          }
+        } else {
+          maxDurationDisarmRef.current?.();
+          maxDurationDisarmRef.current = null;
+        }
         if (!isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Resume media the instant recording ends, not after transcription.
@@ -324,6 +341,8 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Cleanup
     return () => {
+      maxDurationDisarmRef.current?.();
+      maxDurationDisarmRef.current = null;
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();

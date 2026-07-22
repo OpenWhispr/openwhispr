@@ -1052,6 +1052,11 @@
     },
     "helpText": "Select a specific microphone or use the system default setting.",
     "inputDevice": "Input Device",
+    "maxDuration": {
+      "description": "Recording stops automatically after this many seconds. Leave empty or 0 for no limit.",
+      "label": "Maximum Recording Duration",
+      "placeholder": "No limit"
+    },
     "noBuiltInDetected": "No built-in microphone detected. Using system default.",
     "preferBuiltIn": {
       "description": "External microphones may cause latency or reduced transcription quality",
