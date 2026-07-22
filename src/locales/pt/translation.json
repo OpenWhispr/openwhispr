@@ -6,7 +6,9 @@
       "uiLabel": "Idioma da interface",
       "uiDescription": "Escolha o idioma usado na interface do OpenWhispr",
       "transcriptionLabel": "Idioma de transcrição",
-      "transcriptionDescription": "Escolha o idioma que você fala para maior precisão"
+      "transcriptionDescription": "Escolha até {{max}} idiomas que você fala — troque o idioma ativo no painel de ditado",
+      "activeLanguage": "Idioma ativo",
+      "removeLanguage": "Remover {{language}}"
     },
     "noteFiles": {
       "title": "Salvar notas como arquivos",
@@ -2552,7 +2554,8 @@
       "recording": "Gravando...",
       "processing": "Processando...",
       "clickToSpeak": "Clique para falar",
-      "waitingForMicrophone": "Aguardando microfone…"
+      "waitingForMicrophone": "Aguardando microfone…",
+      "languageTooltip": "Idioma: {{language}} — clique para alternar"
     },
     "buttons": {
       "cancelRecording": "Cancelar gravação",
@@ -2561,7 +2564,8 @@
     "commandMenu": {
       "stopListening": "Parar de ouvir",
       "startListening": "Começar a ouvir",
-      "hideForNow": "Ocultar por agora"
+      "hideForNow": "Ocultar por agora",
+      "language": "Idioma de transcrição"
     }
   },
   "dictationTranslation": {
