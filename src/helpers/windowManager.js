@@ -23,6 +23,8 @@ const {
   sanitizePanelDisplayValue,
   resolveTargetDisplay,
 } = require("./displaySelection");
+const effectiveWorkArea = require("./effectiveWorkArea");
+const { resolveEffectiveDisplay } = effectiveWorkArea;
 
 class WindowManager {
   constructor() {
@@ -58,6 +60,7 @@ class WindowManager {
     this._pendingNoteNavigation = null;
 
     this._registerDisplayListeners();
+    effectiveWorkArea.init();
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -87,10 +90,8 @@ class WindowManager {
   async createMainWindow() {
     const cursorPos = screen.getCursorScreenPoint();
     const cursorDisplay = screen.getDisplayNearestPoint(cursorPos);
-    const display = resolveTargetDisplay(
-      this._panelDisplay,
-      screen.getAllDisplays(),
-      cursorDisplay
+    const display = resolveEffectiveDisplay(
+      resolveTargetDisplay(this._panelDisplay, screen.getAllDisplays(), cursorDisplay)
     );
     const position = WindowPositionUtil.getMainWindowPosition(
       display,
@@ -180,10 +181,12 @@ class WindowManager {
     const currentBounds = this.mainWindow.getBounds();
     const position = this._panelStartPosition;
 
-    const display = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height,
-    });
+    const display = resolveEffectiveDisplay(
+      screen.getDisplayNearestPoint({
+        x: currentBounds.x + currentBounds.width / 2,
+        y: currentBounds.y + currentBounds.height,
+      })
+    );
     const workArea = display.workArea || display.bounds;
 
     let newX, newY;
@@ -584,10 +587,12 @@ class WindowManager {
     // Reposition the window immediately
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       const currentBounds = this.mainWindow.getBounds();
-      const display = screen.getDisplayNearestPoint({
-        x: currentBounds.x + currentBounds.width / 2,
-        y: currentBounds.y + currentBounds.height / 2,
-      });
+      const display = resolveEffectiveDisplay(
+        screen.getDisplayNearestPoint({
+          x: currentBounds.x + currentBounds.width / 2,
+          y: currentBounds.y + currentBounds.height / 2,
+        })
+      );
       const newPos = WindowPositionUtil.getMainWindowPosition(
         display,
         { width: currentBounds.width, height: currentBounds.height },
@@ -609,6 +614,9 @@ class WindowManager {
   // Returns true when the widget changed displays (caller re-asserts on-top).
   _moveWidgetToDisplay(targetDisplay) {
     if (!this.mainWindow || this.mainWindow.isDestroyed() || !targetDisplay) return false;
+
+    // Correct the target's work area for KDE panel struts (identity on Windows/macOS).
+    targetDisplay = resolveEffectiveDisplay(targetDisplay);
 
     const currentBounds = this.mainWindow.getBounds();
     const currentDisplay = screen.getDisplayNearestPoint({
@@ -922,7 +930,9 @@ class WindowManager {
       this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : null;
 
     if (mainBounds) {
-      const display = screen.getDisplayNearestPoint({ x: mainBounds.x, y: mainBounds.y });
+      const display = resolveEffectiveDisplay(
+        screen.getDisplayNearestPoint({ x: mainBounds.x, y: mainBounds.y })
+      );
       const position = WindowPositionUtil.getTranscriptionPreviewPosition(display, mainBounds, {
         width: TRANSCRIPTION_PREVIEW_CONFIG.width,
         height: TRANSCRIPTION_PREVIEW_CONFIG.height,
@@ -983,7 +993,9 @@ class WindowManager {
       this.mainWindow && !this.mainWindow.isDestroyed()
         ? this.mainWindow.getBounds()
         : this.transcriptionPreviewWindow.getBounds();
-    const display = screen.getDisplayNearestPoint({ x: anchorBounds.x, y: anchorBounds.y });
+    const display = resolveEffectiveDisplay(
+      screen.getDisplayNearestPoint({ x: anchorBounds.x, y: anchorBounds.y })
+    );
     const bounds = WindowPositionUtil.getTranscriptionPreviewPosition(display, anchorBounds, {
       width: targetWidth,
       height: targetHeight,
