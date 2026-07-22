@@ -203,6 +203,20 @@ class MarkdownMirror {
     return fs.existsSync(dirPath) ? dirPath : null;
   }
 
+  _isNoteMarkdownFile(filePath) {
+    let fd;
+    try {
+      fd = fs.openSync(filePath, "r");
+      const marker = Buffer.alloc(4);
+      const bytesRead = fs.readSync(fd, marker, 0, marker.length, 0);
+      return marker.toString("utf8", 0, bytesRead) === "---\n";
+    } catch {
+      return false;
+    } finally {
+      if (fd !== undefined) fs.closeSync(fd);
+    }
+  }
+
   _globNoteFiles(noteId) {
     if (!this._basePath) return [];
     const results = [];
@@ -214,8 +228,13 @@ class MarkdownMirror {
         const dirPath = path.join(this._basePath, dir.name);
         const files = fs.readdirSync(dirPath);
         for (const file of files) {
-          if (file.startsWith(prefix) && file.endsWith(".md")) {
-            results.push(path.join(dirPath, file));
+          const filePath = path.join(dirPath, file);
+          if (
+            file.startsWith(prefix) &&
+            file.endsWith(".md") &&
+            this._isNoteMarkdownFile(filePath)
+          ) {
+            results.push(filePath);
           }
         }
       }
@@ -234,11 +253,13 @@ class MarkdownMirror {
         const dirPath = path.join(this._basePath, dir.name);
         const files = fs.readdirSync(dirPath);
         for (const file of files) {
+          const filePath = path.join(dirPath, file);
           if (
             file.startsWith(prefix) &&
-            (file.endsWith("-transcript.md") || file.endsWith("-transcript.txt"))
+            (file.endsWith("-transcript.txt") ||
+              (file.endsWith("-transcript.md") && !this._isNoteMarkdownFile(filePath)))
           ) {
-            results.push(path.join(dirPath, file));
+            results.push(filePath);
           }
         }
       }
