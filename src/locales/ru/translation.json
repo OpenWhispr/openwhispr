@@ -379,6 +379,7 @@
       "clearAllErrorTitle": "Не удалось очистить историю",
       "clearAllErrorDescription": "Что-то пошло не так. Попробуйте ещё раз.",
       "copyText": "Копировать текст",
+      "copyRawTranscript": "Копировать исходную расшифровку",
       "deleteItem": "Удалить",
       "viewRawTranscript": "Показать исходную расшифровку",
       "showInFolder": "Показать в Finder",

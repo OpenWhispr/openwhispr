@@ -379,6 +379,7 @@
       "clearAllErrorTitle": "Impossible d'effacer l'historique",
       "clearAllErrorDescription": "Une erreur est survenue. Veuillez réessayer.",
       "copyText": "Copier le texte",
+      "copyRawTranscript": "Copier la transcription brute",
       "deleteItem": "Supprimer",
       "viewRawTranscript": "Voir la transcription brute",
       "showInFolder": "Afficher dans le Finder",
