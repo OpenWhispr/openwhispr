@@ -1,4 +1,5 @@
 import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import { buildNotesListPath } from "./noteListQuery";
 
 interface NoteInput {
   client_note_id?: string;
@@ -80,15 +81,12 @@ async function list(
   limit?: number,
   before?: string,
   since?: string,
-  scope?: "all"
+  scope?: "all",
+  cursorId?: string
 ): Promise<{ notes: CloudNote[] }> {
-  const params = new URLSearchParams();
-  if (limit !== undefined) params.set("limit", String(limit));
-  if (before !== undefined) params.set("before", before);
-  if (since !== undefined) params.set("since", since);
-  if (scope !== undefined) params.set("scope", scope);
-  const query = params.toString();
-  return cloudGet<{ notes: CloudNote[] }>(`/api/notes/list${query ? `?${query}` : ""}`);
+  return cloudGet<{ notes: CloudNote[] }>(
+    buildNotesListPath({ limit, before, since, scope, cursorId })
+  );
 }
 
 async function deleteAll(): Promise<{ deleted: number; errors: number }> {

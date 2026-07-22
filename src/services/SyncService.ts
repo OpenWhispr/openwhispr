@@ -14,6 +14,7 @@ import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError } from "./cloudApi.js";
 import { notifyTeamSpacesCapabilityChanged } from "../lib/teamSpacesCapability";
+import { subscribeIsSubscribed } from "../lib/subscriptionFlag";
 
 function isHttpStatus(err: unknown, status: number): boolean {
   return err instanceof CloudApiError && err.status === status;
@@ -58,6 +59,8 @@ const SNIPPET_BATCH_SIZE = 200;
 // any window (the stamp lives in shared localStorage).
 const AUTO_SYNC_THROTTLE_MS = 20000;
 const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const TEAM_SPACES_RETRY_MS = 10_000;
+const TEAM_SPACES_MAX_RETRY_MS = AUTO_SYNC_INTERVAL_MS;
 // Web Lock name serializing syncAll() across windows (each renderer has its
 // own SyncService instance, but localStorage and the local DB are shared).
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
@@ -121,6 +124,8 @@ class SyncService {
   private dictionaryDirty = false;
   private snippetsDirty = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private teamSpacesRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private teamSpacesRetryAttempt = 0;
 
   canSync(): boolean {
     return (
@@ -219,7 +224,24 @@ class SyncService {
         this.requestSyncAll("start");
       }
     });
+    // Storage events only fire in other windows; the window that flips the
+    // subscription flag itself (post-checkout refetch, invite acceptance)
+    // kicks a pass through the reactive flag instead.
+    subscribeIsSubscribed(() => this.requestSyncAll("start"));
     setInterval(() => this.requestSyncAll("interval"), AUTO_SYNC_INTERVAL_MS);
+  }
+
+  private scheduleTeamSpacesRetry(): void {
+    if (this.teamSpacesRetryTimer) return;
+    const delay = Math.min(
+      TEAM_SPACES_RETRY_MS * 2 ** this.teamSpacesRetryAttempt,
+      TEAM_SPACES_MAX_RETRY_MS
+    );
+    this.teamSpacesRetryAttempt++;
+    this.teamSpacesRetryTimer = setTimeout(() => {
+      this.teamSpacesRetryTimer = null;
+      this.requestSyncAll("retry");
+    }, delay);
   }
 
   async syncAll(waitForLock = false): Promise<void> {
@@ -232,13 +254,14 @@ class SyncService {
       return;
     }
     this.syncing = true;
+    let teamSpacesReady = false;
     try {
       // Ambient passes skip when another window holds the lock — that pass
       // reads the same local DB and cloud state, so it covers this request.
       // Manual passes wait so a user action is never silently dropped.
       await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: !waitForLock }, async (lock) => {
         if (!lock) return;
-        await this.syncSpaces();
+        teamSpacesReady = await this.syncSpaces();
         if (full) {
           await this.syncFolders();
           await this.syncNotes();
@@ -261,10 +284,26 @@ class SyncService {
           await this.syncFolders(true);
           await this.syncNotes(true);
         }
+        if (teamSpacesReady) {
+          if (this.teamSpacesRetryTimer) {
+            clearTimeout(this.teamSpacesRetryTimer);
+            this.teamSpacesRetryTimer = null;
+          }
+          this.teamSpacesRetryAttempt = 0;
+        } else {
+          // A failed team probe must not wait for the five-minute interval;
+          // the backoff retry bypasses the throttle the stamp below feeds.
+          this.scheduleTeamSpacesRetry();
+        }
+        // Stamped even when the team probe failed: ambient triggers stay
+        // throttled while the dedicated retry handles probe recovery.
         localStorage.setItem("lastSyncedAt", new Date().toISOString());
       });
     } catch (err) {
       console.error("Sync failed:", err);
+      // A throw mid-pass skips the retry scheduling above; recover discovery
+      // only when this pass never confirmed the team probe.
+      if (!teamSpacesReady && this.canSyncTeamSpaces()) this.scheduleTeamSpacesRetry();
     } finally {
       this.syncing = false;
     }
@@ -274,15 +313,26 @@ class SyncService {
     }
   }
 
-  requestSyncAll(reason: "start" | "focus" | "interval" | "online" | "manual" | "team-push"): void {
+  requestSyncAll(
+    reason: "start" | "focus" | "interval" | "online" | "manual" | "team-push" | "retry"
+  ): void {
     if (!this.canSync() && !this.canSyncSharedNotes()) return;
+    const waitForLock = reason === "manual" || reason === "retry";
+    // An older client may have just stamped the global sync time without ever
+    // probing team spaces. The upgrade's first probe must bypass that throttle;
+    // it stays ambient so another window holding the lock can cover it.
+    const firstTeamSpacesProbe =
+      reason === "start" &&
+      this.canSyncTeamSpaces() &&
+      localStorage.getItem("teamSpacesCapability.probedAt") == null;
+    const bypassThrottle = waitForLock || firstTeamSpacesProbe;
     if (
-      reason !== "manual" &&
+      !bypassThrottle &&
       (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
     ) {
       return;
     }
-    void this.syncAll(reason === "manual");
+    void this.syncAll(waitForLock);
   }
 
   async syncDictionaryNow(): Promise<void> {
@@ -564,17 +614,20 @@ class SyncService {
   // Runs first in every pass: probes team-spaces availability, mirrors the
   // caller's teams into local spaces, purges spaces whose teams vanished
   // (deleted, archived, or membership revoked) and backfills new ones.
-  private async syncSpaces(): Promise<void> {
-    if (!this.canSyncTeamSpaces()) return;
+  private async syncSpaces(): Promise<boolean> {
+    if (!this.canSyncTeamSpaces()) return true;
     let teams: MyTeam[];
     try {
       teams = await TeamsService.myTeams();
     } catch (err) {
       // 404 = endpoint not deployed yet (rollout probe): remember and skip
       // silently so pulls and pushes stay personal-only until a probe succeeds.
-      if (isHttpStatus(err, 404)) this.cacheTeamSpacesCapability(false);
-      else console.error("Teams fetch failed:", err);
-      return;
+      if (isHttpStatus(err, 404)) {
+        this.cacheTeamSpacesCapability(false);
+        return true;
+      }
+      console.error("Teams fetch failed:", err);
+      return false;
     }
     this.cacheTeamSpacesCapability(true);
 
@@ -612,8 +665,11 @@ class SyncService {
         for (const id of backfillIds) {
           await window.electronAPI.setSpaceSyncStatus?.(id, "synced");
         }
+      } else {
+        return false;
       }
     }
+    return true;
   }
 
   // Upserts cloud teams into local spaces. Returns local ids of spaces that
@@ -1073,6 +1129,8 @@ class SyncService {
   private async syncNotes(teamOnly = false): Promise<void> {
     await this.pushPendingNotes(teamOnly);
     await this.pushNoteDeletes();
+    // A dirty pull left its cursors in place, so the next pass re-sees the
+    // parked rows — typically after syncSpaces has mirrored the missing team.
     await this.pullNotes(teamOnly);
   }
 
@@ -1202,10 +1260,12 @@ class SyncService {
       const scope = teamCapable ? "all" : undefined;
 
       let cursor: string | undefined = since;
+      let cursorId: string | undefined;
+      let dirtyRows = 0;
       while (true) {
         const { notes: cloudNotes } = since
-          ? await NotesService.list(BATCH_SIZE, undefined, cursor, scope)
-          : await NotesService.list(BATCH_SIZE, cursor, undefined, scope);
+          ? await NotesService.list(BATCH_SIZE, undefined, cursor, scope, cursorId)
+          : await NotesService.list(BATCH_SIZE, cursor, undefined, scope, cursorId);
         if (cloudNotes.length === 0) break;
 
         for (const cloudNote of cloudNotes) {
@@ -1278,6 +1338,7 @@ class SyncService {
 
           const space = await this.resolveSpaceForCloudRow(cloudNote.team_id, ctx);
           if (!space) {
+            dirtyRows++;
             console.warn(`Parking note ${cloudNote.id}: unknown team ${cloudNote.team_id}`);
             continue;
           }
@@ -1308,13 +1369,17 @@ class SyncService {
         if (cloudNotes.length < BATCH_SIZE) break;
         const last = cloudNotes[cloudNotes.length - 1];
         const next = since ? last.updated_at : last.created_at;
-        if (next === cursor) break;
+        if (next === cursor && last.id === cursorId) {
+          console.warn(`Note pull cursor stalled at ${next} / ${last.id}`);
+          return false;
+        }
         cursor = next;
+        cursorId = last.id;
       }
 
       // A backfill snapshot never sees tombstones or stubs, so it must not
       // advance the delta cursors.
-      if (!snapshot) {
+      if (!snapshot && dirtyRows === 0) {
         // A degraded (own-rows-only) pull never saw team rows; advancing
         // would permanently skip teammate edits once the capability probe
         // recovers.
@@ -1326,7 +1391,7 @@ class SyncService {
           if (!teamOnly) localStorage.setItem("lastSyncedAt.notes.team", syncStartedAt);
         }
       }
-      return true;
+      return dirtyRows === 0;
     } catch (err) {
       console.error("Note pull failed:", err);
       return false;

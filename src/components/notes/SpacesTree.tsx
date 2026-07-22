@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -7,6 +7,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  Info,
   Loader2,
   Lock,
   LogOut,
@@ -42,6 +43,7 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { canManageSpace } from "../../lib/spacePermissions";
+import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { NoteSharingService } from "../../services/NoteSharingService";
 import { deleteTeamSpace, leaveTeamSpace, renameTeamSpace } from "../../services/teamSpaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -123,6 +125,8 @@ interface SpacesTreeProps {
   onMoveNote: (noteId: number, target: NoteMoveTarget) => Promise<void>;
   onCreateFolderAndMove: (noteId: number, folderName: string) => void;
   onNewNote: (spaceId: number, folderId: number | null) => void;
+  onShowStructureIntro?: () => void;
+  onUpgrade?: () => void;
 }
 
 function spaceDisplayName(space: SpaceItem, t: TFn): string {
@@ -1020,6 +1024,8 @@ export default function SpacesTree({
   onMoveNote,
   onCreateFolderAndMove,
   onNewNote,
+  onShowStructureIntro,
+  onUpgrade,
 }: SpacesTreeProps) {
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
@@ -1035,6 +1041,7 @@ export default function SpacesTree({
   const activeNoteId = useActiveNoteId();
   const isTreeLoading = useIsTreeLoading();
   const teamCapability = useTeamSpacesCapability();
+  const isSubscribed = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
   const { isSignedIn, user } = useAuth();
   const { workspaces, loaded: workspacesLoaded } = useWorkspace();
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
@@ -1059,6 +1066,23 @@ export default function SpacesTree({
 
   const privateSpaces = useMemo(() => spaces.filter((s) => s.kind === "private"), [spaces]);
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
+  const showWorkspaceGroups = workspaces.length > 1;
+  const teamSpaceGroups = useMemo(
+    () =>
+      workspaces
+        .map((workspace) => ({
+          workspace,
+          spaces: teamSpaces.filter((space) => space.workspace_id === workspace.id),
+        }))
+        .filter((group) => group.spaces.length > 0),
+    [teamSpaces, workspaces]
+  );
+  const ungroupedTeamSpaces = useMemo(() => {
+    const workspaceIds = new Set(workspaces.map((workspace) => workspace.id));
+    return teamSpaces.filter(
+      (space) => space.workspace_id == null || !workspaceIds.has(space.workspace_id)
+    );
+  }, [teamSpaces, workspaces]);
   const visibleSpaces = teamCapability ? spaces : privateSpaces;
 
   // The server 403s team creation for plain members; no-workspace users get the create funnel.
@@ -1817,27 +1841,62 @@ export default function SpacesTree({
         {teamCapability && (
           <div role="none" className="group/section">
             <SectionHeader
-              label={t("notes.spaces.teamSpaces")}
+              label={
+                showWorkspaceGroups
+                  ? t("workspaces.switcher.workspaces")
+                  : t("notes.spaces.teamSpaces")
+              }
               className="mt-3"
               action={
-                canCreateTeamSpace ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("notes.spaces.newSpace")}
-                    onClick={() => setShowCreateSpace(true)}
-                    className={cn(
-                      "h-5 w-5 rounded-sm opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100",
-                      "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40",
-                      "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
-                    )}
-                  >
-                    <Plus size={12} />
-                  </Button>
-                ) : undefined
+                <div className="flex items-center gap-px">
+                  {onShowStructureIntro && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("notes.structureIntro.reopen")}
+                      onClick={onShowStructureIntro}
+                      className={cn(
+                        "h-5 w-5 rounded-sm opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100",
+                        "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40",
+                        "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
+                      )}
+                    >
+                      <Info size={11} />
+                    </Button>
+                  )}
+                  {canCreateTeamSpace && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("notes.spaces.newSpace")}
+                      onClick={() => setShowCreateSpace(true)}
+                      className={cn(
+                        "h-5 w-5 rounded-sm opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100",
+                        "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40",
+                        "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
+                      )}
+                    >
+                      <Plus size={12} />
+                    </Button>
+                  )}
+                </div>
               }
             />
-            {teamSpaces.map(renderSpace)}
+            {showWorkspaceGroups
+              ? teamSpaceGroups.map(({ workspace, spaces: workspaceSpaces }) => (
+                  <div key={workspace.id} role="group" aria-label={workspace.name} className="mt-1">
+                    <div
+                      role="none"
+                      title={workspace.name}
+                      className="h-5 px-4 text-[10px] font-medium text-foreground/40 truncate"
+                    >
+                      {workspace.name}
+                    </div>
+                    {workspaceSpaces.map(renderSpace)}
+                  </div>
+                ))
+              : teamSpaces.map(renderSpace)}
+            {showWorkspaceGroups && ungroupedTeamSpaces.map(renderSpace)}
             {teamSpaces.length === 0 &&
               (canCreateTeamSpace ? (
                 <div className="pl-[18px] pr-2 py-1">
@@ -1856,6 +1915,24 @@ export default function SpacesTree({
                   {t("notes.spaces.emptyTeamHint")}
                 </p>
               ))}
+          </div>
+        )}
+        {!teamCapability && isSignedIn && !isSubscribed && (
+          <div role="none">
+            <SectionHeader label={t("notes.spaces.teamSpaces")} className="mt-3" />
+            <p className="pl-[18px] pr-2 py-1 text-xs text-foreground/40 leading-relaxed">
+              {t("notes.spaces.lockedPitch")}
+            </p>
+            <div className="pl-[18px] pr-2 pb-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onUpgrade}
+                className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
+              >
+                {t("settingsPage.account.pricing.upgrade")}
+              </Button>
+            </div>
           </div>
         )}
       </div>

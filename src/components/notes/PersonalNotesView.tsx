@@ -17,6 +17,7 @@ import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
 import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
+import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
 import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
@@ -41,6 +42,7 @@ import {
   useActiveNoteId,
   useActiveFolderId,
   useActiveContext,
+  useIsTreeLoading,
   initializeNotes,
   initializeNotesTree,
   loadFolders,
@@ -61,8 +63,14 @@ import {
   setSessionExpectedCount,
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
+import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
+import { useAuth } from "../../hooks/useAuth";
 import NotesOnboarding from "./NotesOnboarding";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
+import {
+  markNotesStructureIntroSeen,
+  shouldShowNotesStructureIntro,
+} from "../../lib/notesStructureIntro";
 
 function makeContentHash(content: string): string {
   return String(content.length) + "-" + content.slice(0, 50);
@@ -77,6 +85,8 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
+  invitationEntry?: { workspaceId: string; teamIds: string[] } | null;
+  onInvitationEntryHandled?: () => void;
 }
 
 export default function PersonalNotesView({
@@ -84,6 +94,8 @@ export default function PersonalNotesView({
   onOpenSearch,
   meetingRecordingRequest,
   onMeetingRecordingRequestHandled,
+  invitationEntry,
+  onInvitationEntryHandled,
 }: PersonalNotesViewProps) {
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
@@ -124,6 +136,13 @@ export default function PersonalNotesView({
   const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
   const effectiveModelId = useSettingsStore((s) => selectResolvedNoteFormatting(s).model);
   const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
+  const { isSignedIn } = useAuth();
+  const teamSpacesAvailable = useTeamSpacesCapability();
+  const isTreeLoading = useIsTreeLoading();
+  const [structureIntroPending, setStructureIntroPending] = useState(() =>
+    shouldShowNotesStructureIntro(localStorage)
+  );
+  const [showStructureIntro, setShowStructureIntro] = useState(false);
 
   const isTranscribing = useMeetingRecordingStore((s) => s.isRecording);
   const diarizationSessionId = useMeetingRecordingStore((s) => s.diarizationSessionId);
@@ -138,6 +157,65 @@ export default function PersonalNotesView({
 
   useEffect(() => {
     initializeNotesTree();
+  }, []);
+
+  useEffect(() => {
+    if (
+      structureIntroPending &&
+      isOnboardingComplete &&
+      isSignedIn &&
+      teamSpacesAvailable &&
+      !isTreeLoading &&
+      !isSidePanelLayout
+    ) {
+      setShowStructureIntro(true);
+    }
+  }, [
+    structureIntroPending,
+    isOnboardingComplete,
+    isSignedIn,
+    teamSpacesAvailable,
+    isTreeLoading,
+    isSidePanelLayout,
+  ]);
+
+  // Arriving via an accepted invitation reopens the structure intro even when
+  // this device has already seen it, and even before notes onboarding is done
+  // (the dialog also renders in the onboarding branch below).
+  useEffect(() => {
+    if (invitationEntry && !isSidePanelLayout) setShowStructureIntro(true);
+  }, [invitationEntry, isSidePanelLayout]);
+
+  // The acceptance modal starts a sync before navigating here. Once the first
+  // invited cloud team appears in the local spaces mirror, take the user to it
+  // instead of leaving the newly shared content hidden behind Personal.
+  useEffect(() => {
+    if (!invitationEntry) return;
+    const invitedTeamIds = new Set(invitationEntry.teamIds);
+    const invitedSpace = spaces.find(
+      (space) =>
+        space.kind === "team" &&
+        space.workspace_id === invitationEntry.workspaceId &&
+        space.cloud_team_id != null &&
+        // Workspace owners/admins receive implicit access, so their invitation
+        // may not enumerate team ids. In that case, open the first accessible
+        // team space belonging to the accepted workspace.
+        (invitedTeamIds.size === 0 || invitedTeamIds.has(space.cloud_team_id))
+    );
+    if (!invitedSpace) return;
+
+    setActiveNoteId(null);
+    revealContainer(invitedSpace.id, null);
+    setActiveContext(invitedSpace.id, null);
+    onInvitationEntryHandled?.();
+  }, [invitationEntry, onInvitationEntryHandled, spaces]);
+
+  const handleStructureIntroOpenChange = useCallback((open: boolean) => {
+    setShowStructureIntro(open);
+    if (!open) {
+      markNotesStructureIntroSeen(localStorage);
+      setStructureIntroPending(false);
+    }
   }, []);
 
   const activeNote = useActiveNote();
@@ -563,7 +641,15 @@ export default function PersonalNotesView({
     : null;
 
   if (!isOnboardingComplete) {
-    return <NotesOnboarding onComplete={completeOnboarding} />;
+    return (
+      <>
+        <NotesOnboarding onComplete={completeOnboarding} />
+        <NotesStructureIntroDialog
+          open={showStructureIntro}
+          onOpenChange={handleStructureIntroOpenChange}
+        />
+      </>
+    );
   }
 
   return (
@@ -619,6 +705,8 @@ export default function PersonalNotesView({
             onMoveNote={handleMoveNote}
             onCreateFolderAndMove={handleCreateFolderAndMove}
             onNewNote={handleNewNoteIn}
+            onShowStructureIntro={() => setShowStructureIntro(true)}
+            onUpgrade={() => onOpenSettings?.("plansBilling")}
           />
         </div>
       </div>
@@ -986,6 +1074,11 @@ export default function PersonalNotesView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NotesStructureIntroDialog
+        open={showStructureIntro}
+        onOpenChange={handleStructureIntroOpenChange}
+      />
     </div>
   );
 }

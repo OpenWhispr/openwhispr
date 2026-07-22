@@ -1200,6 +1200,7 @@
             "无限云端转录",
             "每月 20 小时会议录制",
             "跨设备同步",
+            "通过公开链接分享笔记",
             "个人 API 访问",
             "在所有应用中集成 MCP",
             "移动应用（iOS 即将推出）",
@@ -1217,7 +1218,14 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "用于共享笔记的团队空间",
+            "工作区角色与成员管理",
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1633,6 +1641,7 @@
     "privacy": {
       "cloudBackup": "云端备份",
       "cloudBackupDescription": "将转录记录和笔记备份到云端，实现跨设备无缝访问。",
+      "cloudBackupTeamCaveat": "团队空间中的笔记和您已分享的笔记会始终同步，不受此设置影响。",
       "cloudNotesMigration": "正在备份笔记… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "所有笔记已备份",
       "description": "控制哪些数据会离开你的设备。默认全部关闭。",
@@ -1810,7 +1819,7 @@
       "tab": {
         "general": "常规",
         "members": "成员",
-        "teams": "团队",
+        "teams": "团队空间",
         "billing": "账单",
         "developer": "开发者"
       },
@@ -1863,13 +1872,13 @@
         }
       },
       "teams": {
-        "title": "团队",
-        "description": "将成员分组以进行有针对性的共享。",
-        "new": "新建团队",
-        "empty": "暂无团队。",
-        "createFirst": "创建您的第一个团队",
-        "createTitle": "创建团队",
-        "nameLabel": "团队名称",
+        "title": "团队空间",
+        "description": "为工作区中的指定成员整理共享文件夹和笔记。",
+        "new": "新建团队空间",
+        "empty": "暂无团队空间。",
+        "createFirst": "创建您的第一个团队空间",
+        "createTitle": "创建团队空间",
+        "nameLabel": "团队空间名称",
         "memberCount_one": "{{count}} 名成员",
         "memberCount_other": "{{count}} 名成员"
       },
@@ -2173,8 +2182,9 @@
       "teamSpaces": "团队空间",
       "personal": "个人",
       "privateTooltip": "只有你可以看到你的个人空间",
-      "newSpace": "新建空间",
-      "createTitle": "创建空间",
+      "newSpace": "新建团队空间",
+      "createTitle": "创建团队空间",
+      "createDescription": "工作区内供指定团队成员使用的共享区域。",
       "nameLabel": "名称",
       "emojiLabel": "表情符号",
       "create": "创建",
@@ -2210,6 +2220,8 @@
       "undo": "撤销",
       "emptySpace": "还没有笔记。这里的笔记对 {{space}} 中的所有人可见。",
       "emptyTeamHint": "与你共享的空间将显示在这里。",
+      "lockedPitch": "创建共享空间，让团队笔记保持同步。",
+      "upgradeRequired": "团队空间需要付费方案。",
       "noteCount_one": "{{count}} 条笔记",
       "noteCount_other": "{{count}} 条笔记",
       "accessRevoked": "你已无法访问 {{space}}",
@@ -2238,6 +2250,25 @@
       },
       "invitedTo_one": "你将加入 {{count}} 个团队空间",
       "invitedTo_other": "你将加入 {{count}} 个团队空间"
+    },
+    "structureIntro": {
+      "title": "笔记存放在哪里",
+      "description": "OpenWhispr 将个人想法与协作内容分开，让合适的人看到合适的笔记。",
+      "personal": {
+        "title": "个人空间",
+        "description": "只有你能看到这里的文件夹和笔记。"
+      },
+      "workspace": {
+        "title": "工作区",
+        "description": "集中管理组织的成员、角色和账单。"
+      },
+      "teamSpace": {
+        "title": "团队空间",
+        "description": "工作区内供指定团队成员使用的共享区域。"
+      },
+      "contents": "每个空间都可以包含文件夹和笔记。",
+      "done": "知道了",
+      "reopen": "了解空间的组织方式"
     },
     "folders": {
       "title": "文件夹",
@@ -2974,6 +3005,7 @@
           "alreadyInvited": "{{email}} 已经被邀请",
           "inviteFailed": "无法发送邀请。请重试。",
           "visibilityFailed": "无法更新分享设置。请重试。",
+          "upgradeRequired": "分享笔记需要付费方案。",
           "copyFailed": "无法复制链接。请重试。",
           "revokeFailed": "无法移除邀请。请重试。",
           "resendFailed": "无法重新发送邀请。请重试。",
@@ -3094,7 +3126,7 @@
     },
     "create": {
       "title": "创建工作区",
-      "description": "工作区让你在一处协作、共享笔记并管理账单。",
+      "description": "工作区集中管理组织的成员和账单。你可以在其中创建团队空间来共享笔记。",
       "nameLabel": "工作区名称",
       "namePlaceholder": "Acme Corp",
       "submit": "创建工作区",

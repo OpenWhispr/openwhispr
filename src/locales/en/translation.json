@@ -1205,7 +1205,7 @@
       "tab": {
         "general": "General",
         "members": "Members",
-        "teams": "Teams",
+        "teams": "Team spaces",
         "billing": "Billing",
         "developer": "Developer"
       },
@@ -1258,13 +1258,13 @@
         }
       },
       "teams": {
-        "title": "Teams",
-        "description": "Group members for scoped sharing.",
-        "new": "New team",
-        "empty": "No teams yet.",
-        "createFirst": "Create your first team",
-        "createTitle": "Create team",
-        "nameLabel": "Team name",
+        "title": "Team spaces",
+        "description": "Organize shared folders and notes for selected workspace members.",
+        "new": "New team space",
+        "empty": "No team spaces yet.",
+        "createFirst": "Create your first team space",
+        "createTitle": "Create team space",
+        "nameLabel": "Team space name",
         "memberCount_one": "{{count}} member",
         "memberCount_other": "{{count}} members"
       },
@@ -1438,6 +1438,7 @@
             "Unlimited cloud transcription",
             "20 hours of meeting recordings/month",
             "Sync across devices",
+            "Share notes with public links",
             "Personal API access",
             "MCP integration in all your apps",
             "Mobile app (iOS Coming Soon)",
@@ -1456,6 +1457,8 @@
           "includesPrefix": "All Pro features +",
           "badge": "Most Popular",
           "features": [
+            "Team spaces for shared notes",
+            "Workspace roles & member management",
             "Unlimited meeting recordings",
             "Agent mode",
             "Chat over your data",
@@ -1896,6 +1899,7 @@
     "privacy": {
       "cloudBackup": "Cloud backup",
       "cloudBackupDescription": "Back up your transcriptions and notes to the cloud for seamless access across devices.",
+      "cloudBackupTeamCaveat": "Notes in team spaces and notes you've shared always sync, regardless of this setting.",
       "cloudNotesMigration": "Backing up notes… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "All notes backed up",
       "description": "Control what data leaves your device. Everything is off by default.",
@@ -2211,7 +2215,7 @@
     },
     "create": {
       "title": "Create workspace",
-      "description": "Workspaces let you collaborate, share notes, and manage billing in one place.",
+      "description": "A workspace brings your organization's members and billing together. Create team spaces inside it for shared notes.",
       "nameLabel": "Workspace name",
       "namePlaceholder": "Acme Corp",
       "submit": "Create workspace",
@@ -2386,8 +2390,9 @@
       "teamSpaces": "Team spaces",
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
-      "newSpace": "New space",
-      "createTitle": "Create space",
+      "newSpace": "New team space",
+      "createTitle": "Create team space",
+      "createDescription": "A shared area inside a workspace for selected teammates.",
       "nameLabel": "Name",
       "emojiLabel": "Emoji",
       "create": "Create",
@@ -2423,6 +2428,8 @@
       "undo": "Undo",
       "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
       "emptyTeamHint": "Spaces shared with you will appear here.",
+      "lockedPitch": "Create shared spaces where your team's notes stay in sync.",
+      "upgradeRequired": "Team spaces require a paid plan.",
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
@@ -2451,6 +2458,25 @@
       },
       "invitedTo_one": "You'll join {{count}} team space",
       "invitedTo_other": "You'll join {{count}} team spaces"
+    },
+    "structureIntro": {
+      "title": "Where your notes live",
+      "description": "OpenWhispr separates private thoughts from shared work so the right people see the right notes.",
+      "personal": {
+        "title": "Personal space",
+        "description": "Only you can see the folders and notes here."
+      },
+      "workspace": {
+        "title": "Workspace",
+        "description": "The home for your organization's members, roles, and billing."
+      },
+      "teamSpace": {
+        "title": "Team space",
+        "description": "A shared area inside a workspace for selected teammates."
+      },
+      "contents": "Each space can contain folders and notes.",
+      "done": "Got it",
+      "reopen": "Learn how spaces are organized"
     },
     "folders": {
       "title": "Folders",
@@ -3084,6 +3110,7 @@
           "alreadyInvited": "{{email}} is already invited",
           "inviteFailed": "Couldn't send the invitation. Try again.",
           "visibilityFailed": "Couldn't update sharing. Try again.",
+          "upgradeRequired": "Sharing notes requires a paid plan.",
           "copyFailed": "Couldn't copy the link. Try again.",
           "revokeFailed": "Couldn't remove the invitation. Try again.",
           "resendFailed": "Couldn't resend the invitation. Try again.",

@@ -101,6 +101,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
+    workspaceId: string;
+    teamIds: string[];
+  } | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
@@ -826,7 +830,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      <AcceptInvitationModal token={invitationToken} onClose={() => setInvitationToken(null)} />
+      <AcceptInvitationModal
+        token={invitationToken}
+        onClose={() => setInvitationToken(null)}
+        onAccepted={(entry) => {
+          setInvitationNotesEntry(entry);
+          setActiveView("personal-notes");
+        }}
+      />
 
       {showSearch && (
         <Suspense fallback={null}>
@@ -1055,6 +1066,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   onOpenSearch={() => setShowSearch(true)}
                   meetingRecordingRequest={meetingRecordingRequest}
                   onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
+                  invitationEntry={invitationNotesEntry}
+                  onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
                 />
               </Suspense>
             )}

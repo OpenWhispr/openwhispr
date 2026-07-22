@@ -1200,6 +1200,7 @@
             "Trascrizione cloud illimitata",
             "20 ore di registrazioni riunioni/mese",
             "Sincronizzazione tra dispositivi",
+            "Condividi note con link pubblici",
             "Accesso personale all'API",
             "Integrazione MCP in tutte le tue app",
             "App mobile (iOS in arrivo)",
@@ -1218,6 +1219,8 @@
           "includesPrefix": "Tutte le funzionalità Pro +",
           "badge": "Più popolare",
           "features": [
+            "Spazi del team per note condivise",
+            "Ruoli e gestione dei membri dell'area di lavoro",
             "Registrazioni riunioni illimitate",
             "Modalità agente",
             "Chatta con i tuoi dati",
@@ -1638,6 +1641,7 @@
     "privacy": {
       "cloudBackup": "Backup cloud",
       "cloudBackupDescription": "Salva trascrizioni e note nel cloud per un accesso senza interruzioni da tutti i dispositivi.",
+      "cloudBackupTeamCaveat": "Le note negli spazi del team e quelle che hai condiviso vengono sempre sincronizzate, indipendentemente da questa impostazione.",
       "cloudNotesMigration": "Backup delle note in corso… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Tutte le note salvate nel cloud",
       "description": "Controlla quali dati escono dal tuo dispositivo. Tutto è disattivato per impostazione predefinita.",
@@ -1815,7 +1819,7 @@
       "tab": {
         "general": "Generale",
         "members": "Membri",
-        "teams": "Team",
+        "teams": "Spazi del team",
         "billing": "Fatturazione",
         "developer": "Sviluppatore"
       },
@@ -1868,13 +1872,13 @@
         }
       },
       "teams": {
-        "title": "Team",
-        "description": "Raggruppa i membri per una condivisione mirata.",
-        "new": "Nuovo team",
-        "empty": "Ancora nessun team.",
-        "createFirst": "Crea il tuo primo team",
-        "createTitle": "Crea team",
-        "nameLabel": "Nome del team",
+        "title": "Spazi del team",
+        "description": "Organizza cartelle e note condivise per membri selezionati dell'area di lavoro.",
+        "new": "Nuovo spazio del team",
+        "empty": "Ancora nessuno spazio del team.",
+        "createFirst": "Crea il tuo primo spazio del team",
+        "createTitle": "Crea spazio del team",
+        "nameLabel": "Nome dello spazio del team",
         "memberCount_one": "{{count}} membro",
         "memberCount_other": "{{count}} membri"
       },
@@ -2178,8 +2182,9 @@
       "teamSpaces": "Spazi del team",
       "personal": "Personale",
       "privateTooltip": "Solo tu puoi vedere il tuo spazio personale",
-      "newSpace": "Nuovo spazio",
-      "createTitle": "Crea spazio",
+      "newSpace": "Nuovo spazio del team",
+      "createTitle": "Crea spazio del team",
+      "createDescription": "Un'area condivisa in un'area di lavoro per i membri selezionati del team.",
       "nameLabel": "Nome",
       "emojiLabel": "Emoji",
       "create": "Crea",
@@ -2215,6 +2220,8 @@
       "undo": "Annulla",
       "emptySpace": "Ancora nessuna nota. Le note qui sono visibili a tutti in {{space}}.",
       "emptyTeamHint": "Gli spazi condivisi con te appariranno qui.",
+      "lockedPitch": "Crea spazi condivisi dove le note del tuo team restano sincronizzate.",
+      "upgradeRequired": "Gli spazi del team richiedono un piano a pagamento.",
       "noteCount_one": "{{count}} nota",
       "noteCount_other": "{{count}} note",
       "accessRevoked": "Non hai più accesso a {{space}}",
@@ -2243,6 +2250,25 @@
       },
       "invitedTo_one": "Entrerai in {{count}} spazio del team",
       "invitedTo_other": "Entrerai in {{count}} spazi del team"
+    },
+    "structureIntro": {
+      "title": "Dove si trovano le tue note",
+      "description": "OpenWhispr separa i pensieri privati dal lavoro condiviso, così le note sono visibili alle persone giuste.",
+      "personal": {
+        "title": "Spazio personale",
+        "description": "Solo tu puoi vedere le cartelle e le note in questo spazio."
+      },
+      "workspace": {
+        "title": "Area di lavoro",
+        "description": "La sede di membri, ruoli e fatturazione della tua organizzazione."
+      },
+      "teamSpace": {
+        "title": "Spazio del team",
+        "description": "Un'area condivisa in un'area di lavoro per i membri selezionati del team."
+      },
+      "contents": "Ogni spazio può contenere cartelle e note.",
+      "done": "Ho capito",
+      "reopen": "Scopri come sono organizzati gli spazi"
     },
     "folders": {
       "title": "Cartelle",
@@ -2979,6 +3005,7 @@
           "alreadyInvited": "{{email}} è già stato invitato",
           "inviteFailed": "Impossibile inviare l'invito. Riprova.",
           "visibilityFailed": "Impossibile aggiornare la condivisione. Riprova.",
+          "upgradeRequired": "La condivisione delle note richiede un piano a pagamento.",
           "copyFailed": "Impossibile copiare il link. Riprova.",
           "revokeFailed": "Impossibile rimuovere l'invito. Riprova.",
           "resendFailed": "Impossibile reinviare l'invito. Riprova.",
@@ -3099,7 +3126,7 @@
     },
     "create": {
       "title": "Crea area di lavoro",
-      "description": "Le aree di lavoro ti permettono di collaborare, condividere note e gestire la fatturazione in un unico posto.",
+      "description": "Un'area di lavoro riunisce membri e fatturazione della tua organizzazione. Crea al suo interno spazi del team per le note condivise.",
       "nameLabel": "Nome dell'area di lavoro",
       "namePlaceholder": "Acme Corp",
       "submit": "Crea area di lavoro",

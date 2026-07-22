@@ -1205,7 +1205,7 @@
       "tab": {
         "general": "Général",
         "members": "Membres",
-        "teams": "Équipes",
+        "teams": "Espaces d'équipe",
         "billing": "Facturation",
         "developer": "Développeur"
       },
@@ -1258,13 +1258,13 @@
         }
       },
       "teams": {
-        "title": "Équipes",
-        "description": "Groupez les membres pour un partage ciblé.",
-        "new": "Nouvelle équipe",
-        "empty": "Aucune équipe.",
-        "createFirst": "Créez votre première équipe",
-        "createTitle": "Créer une équipe",
-        "nameLabel": "Nom de l'équipe",
+        "title": "Espaces d'équipe",
+        "description": "Organisez des dossiers et notes partagés pour certains membres de l'espace de travail.",
+        "new": "Nouvel espace d'équipe",
+        "empty": "Aucun espace d'équipe.",
+        "createFirst": "Créez votre premier espace d'équipe",
+        "createTitle": "Créer un espace d'équipe",
+        "nameLabel": "Nom de l'espace d'équipe",
         "memberCount_one": "{{count}} membre",
         "memberCount_other": "{{count}} membres"
       },
@@ -1438,6 +1438,7 @@
             "Transcription cloud illimitée",
             "20 heures d'enregistrements de réunions/mois",
             "Synchronisation entre appareils",
+            "Partagez des notes via des liens publics",
             "Accès personnel à l'API",
             "Intégration MCP dans toutes vos apps",
             "Application mobile (iOS bientôt disponible)",
@@ -1456,6 +1457,8 @@
           "includesPrefix": "Toutes les fonctionnalités Pro +",
           "badge": "Le plus populaire",
           "features": [
+            "Espaces d'équipe pour des notes partagées",
+            "Rôles et gestion des membres de l'espace de travail",
             "Enregistrements de réunions illimités",
             "Mode agent",
             "Discutez avec vos données",
@@ -1896,6 +1899,7 @@
     "privacy": {
       "cloudBackup": "Sauvegarde cloud",
       "cloudBackupDescription": "Sauvegardez vos transcriptions et notes dans le cloud pour un accès fluide sur tous vos appareils.",
+      "cloudBackupTeamCaveat": "Les notes des espaces d'équipe et celles que vous avez partagées sont toujours synchronisées, quel que soit ce réglage.",
       "cloudNotesMigration": "Sauvegarde des notes… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Toutes les notes sauvegardées",
       "description": "Contrôlez quelles données quittent votre appareil. Tout est désactivé par défaut.",
@@ -2211,7 +2215,7 @@
     },
     "create": {
       "title": "Créer un espace de travail",
-      "description": "Les espaces de travail vous permettent de collaborer, partager des notes et gérer la facturation.",
+      "description": "Un espace de travail réunit les membres et la facturation de votre organisation. Créez-y des espaces d'équipe pour les notes partagées.",
       "nameLabel": "Nom de l'espace de travail",
       "namePlaceholder": "Acme Corp",
       "submit": "Créer l'espace",
@@ -2386,8 +2390,9 @@
       "teamSpaces": "Espaces d'équipe",
       "personal": "Personnel",
       "privateTooltip": "Vous seul pouvez voir votre espace personnel",
-      "newSpace": "Nouvel espace",
-      "createTitle": "Créer un espace",
+      "newSpace": "Nouvel espace d'équipe",
+      "createTitle": "Créer un espace d'équipe",
+      "createDescription": "Un espace partagé au sein d'un espace de travail pour certains coéquipiers.",
       "nameLabel": "Nom",
       "emojiLabel": "Émoji",
       "create": "Créer",
@@ -2423,6 +2428,8 @@
       "undo": "Annuler",
       "emptySpace": "Aucune note pour le moment. Les notes ici sont visibles par tous les membres de {{space}}.",
       "emptyTeamHint": "Les espaces partagés avec vous apparaîtront ici.",
+      "lockedPitch": "Créez des espaces partagés où les notes de votre équipe restent synchronisées.",
+      "upgradeRequired": "Les espaces d'équipe nécessitent un forfait payant.",
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "Vous n'avez plus accès à {{space}}",
@@ -2451,6 +2458,25 @@
       },
       "invitedTo_one": "Vous rejoindrez {{count}} espace d'équipe",
       "invitedTo_other": "Vous rejoindrez {{count}} espaces d'équipe"
+    },
+    "structureIntro": {
+      "title": "Où se trouvent vos notes",
+      "description": "OpenWhispr sépare les idées privées du travail partagé afin que les bonnes personnes voient les bonnes notes.",
+      "personal": {
+        "title": "Espace personnel",
+        "description": "Vous seul pouvez voir les dossiers et les notes qui s'y trouvent."
+      },
+      "workspace": {
+        "title": "Espace de travail",
+        "description": "L'espace des membres, des rôles et de la facturation de votre organisation."
+      },
+      "teamSpace": {
+        "title": "Espace d'équipe",
+        "description": "Un espace partagé au sein d'un espace de travail pour certains coéquipiers."
+      },
+      "contents": "Chaque espace peut contenir des dossiers et des notes.",
+      "done": "Compris",
+      "reopen": "Comprendre l'organisation des espaces"
     },
     "folders": {
       "title": "Dossiers",
@@ -3084,6 +3110,7 @@
           "alreadyInvited": "{{email}} est déjà invité(e)",
           "inviteFailed": "Impossible d'envoyer l'invitation. Réessayez.",
           "visibilityFailed": "Impossible de modifier le partage. Réessayez.",
+          "upgradeRequired": "Le partage de notes nécessite un forfait payant.",
           "copyFailed": "Impossible de copier le lien. Réessayez.",
           "revokeFailed": "Impossible de retirer l'invitation. Réessayez.",
           "resendFailed": "Impossible de renvoyer l'invitation. Réessayez.",

@@ -1180,6 +1180,7 @@
             "無制限のクラウド文字起こし",
             "月20時間の会議録音",
             "デバイス間の同期",
+            "公開リンクでノートを共有",
             "個人APIアクセス",
             "すべてのアプリでMCP統合",
             "モバイルアプリ（iOS 近日公開）",
@@ -1198,6 +1199,8 @@
           "includesPrefix": "Pro の全機能 +",
           "badge": "一番人気",
           "features": [
+            "共有ノートのためのチームスペース",
+            "ワークスペースのロールとメンバー管理",
             "無制限の会議録音",
             "エージェントモード",
             "データとチャット",
@@ -1638,6 +1641,7 @@
     "privacy": {
       "cloudBackup": "クラウドバックアップ",
       "cloudBackupDescription": "文字起こしとノートをクラウドにバックアップして、すべてのデバイスからシームレスにアクセスできます。",
+      "cloudBackupTeamCaveat": "チームスペース内のノートと共有したノートは、この設定に関係なく常に同期されます。",
       "cloudNotesMigration": "ノートをバックアップ中… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "すべてのノートがバックアップされました",
       "description": "デバイスからのデータ送信を管理します。初期設定ではすべてオフです。",
@@ -1815,7 +1819,7 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
-        "teams": "チーム",
+        "teams": "チームスペース",
         "billing": "請求",
         "developer": "開発者"
       },
@@ -1868,13 +1872,13 @@
         }
       },
       "teams": {
-        "title": "チーム",
-        "description": "メンバーをグループ化して共有範囲を絞ります。",
-        "new": "新しいチーム",
-        "empty": "チームはまだありません。",
-        "createFirst": "最初のチームを作成",
-        "createTitle": "チームを作成",
-        "nameLabel": "チーム名",
+        "title": "チームスペース",
+        "description": "ワークスペース内の選択したメンバーと共有するフォルダーやノートを整理します。",
+        "new": "新しいチームスペース",
+        "empty": "チームスペースはまだありません。",
+        "createFirst": "最初のチームスペースを作成",
+        "createTitle": "チームスペースを作成",
+        "nameLabel": "チームスペース名",
         "memberCount_one": "{{count}}人のメンバー",
         "memberCount_other": "{{count}}人のメンバー"
       },
@@ -2106,8 +2110,9 @@
       "teamSpaces": "チームスペース",
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
-      "newSpace": "新しいスペース",
-      "createTitle": "スペースを作成",
+      "newSpace": "新しいチームスペース",
+      "createTitle": "チームスペースを作成",
+      "createDescription": "選択したチームメンバーのための、ワークスペース内の共有エリアです。",
       "nameLabel": "名前",
       "emojiLabel": "絵文字",
       "create": "作成",
@@ -2143,6 +2148,8 @@
       "undo": "元に戻す",
       "emptySpace": "まだノートがありません。ここのノートは{{space}}の全員に表示されます。",
       "emptyTeamHint": "共有されたスペースはここに表示されます。",
+      "lockedPitch": "チームのノートが同期される共有スペースを作成しましょう。",
+      "upgradeRequired": "チームスペースの利用には有料プランが必要です。",
       "noteCount_one": "{{count}} 件のノート",
       "noteCount_other": "{{count}} 件のノート",
       "accessRevoked": "{{space}} へのアクセス権がなくなりました",
@@ -2171,6 +2178,25 @@
       },
       "invitedTo_one": "{{count}} 件のチームスペースに参加します",
       "invitedTo_other": "{{count}} 件のチームスペースに参加します"
+    },
+    "structureIntro": {
+      "title": "ノートの保存場所",
+      "description": "OpenWhispr は個人的な考えと共同作業を分け、適切な人だけがノートを見られるようにします。",
+      "personal": {
+        "title": "個人スペース",
+        "description": "ここのフォルダーとノートは自分だけが見ることができます。"
+      },
+      "workspace": {
+        "title": "ワークスペース",
+        "description": "組織のメンバー、役割、請求をまとめる場所です。"
+      },
+      "teamSpace": {
+        "title": "チームスペース",
+        "description": "選択したチームメンバーのための、ワークスペース内の共有エリアです。"
+      },
+      "contents": "各スペースにはフォルダーとノートを作成できます。",
+      "done": "了解",
+      "reopen": "スペースの構成を確認"
     },
     "editor": {
       "transcribe": "文字起こし",
@@ -2979,6 +3005,7 @@
           "alreadyInvited": "{{email}} はすでに招待されています",
           "inviteFailed": "招待を送信できませんでした。もう一度お試しください。",
           "visibilityFailed": "共有設定を更新できませんでした。もう一度お試しください。",
+          "upgradeRequired": "ノートの共有には有料プランが必要です。",
           "copyFailed": "リンクをコピーできませんでした。もう一度お試しください。",
           "revokeFailed": "招待を削除できませんでした。もう一度お試しください。",
           "resendFailed": "招待を再送信できませんでした。もう一度お試しください。",
@@ -3099,7 +3126,7 @@
     },
     "create": {
       "title": "ワークスペースを作成",
-      "description": "ワークスペースでは、コラボレーション、ノートの共有、請求の管理を一括で行えます。",
+      "description": "ワークスペースには組織のメンバーと請求がまとまります。その中に共有ノート用のチームスペースを作成できます。",
       "nameLabel": "ワークスペース名",
       "namePlaceholder": "Acme Corp",
       "submit": "ワークスペースを作成",

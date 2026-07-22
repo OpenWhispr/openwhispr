@@ -26,9 +26,10 @@ import type { InvitationPreview } from "../types/electron";
 interface Props {
   token: string | null;
   onClose: () => void;
+  onAccepted?: (entry: { workspaceId: string; teamIds: string[] }) => void;
 }
 
-export default function AcceptInvitationModal({ token, onClose }: Props) {
+export default function AcceptInvitationModal({ token, onClose, onAccepted }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { isSignedIn, user } = useAuth();
@@ -65,9 +66,13 @@ export default function AcceptInvitationModal({ token, onClose }: Props) {
     }
     setAccepting(true);
     try {
-      await InvitationsService.accept(token);
+      const accepted = await InvitationsService.accept(token);
       clearPendingInvitationToken();
       await refresh();
+      // A free invitee just gained a billable seat server-side; refetch usage
+      // so the isSubscribed flag flips and team sync can run (the flag flip
+      // itself kicks another sync pass).
+      window.dispatchEvent(new Event("usage-changed"));
       // Pull the just-granted team spaces right away (skeleton rows render
       // while their backfill is pending).
       syncService.requestSyncAll("manual");
@@ -78,6 +83,10 @@ export default function AcceptInvitationModal({ token, onClose }: Props) {
           : undefined,
       });
       onClose();
+      onAccepted?.({
+        workspaceId: accepted.workspace_id,
+        teamIds: preview?.team_ids ?? [],
+      });
     } catch (err) {
       toast({
         title: t("workspaces.accept.errorTitle"),

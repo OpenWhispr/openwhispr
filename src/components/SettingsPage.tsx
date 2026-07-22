@@ -3464,6 +3464,9 @@ EOF`,
                       </SettingsRow>
                     </SettingsPanelRow>
                   </SettingsPanel>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("settingsPage.privacy.cloudBackupTeamCaveat")}
+                  </p>
                   {migration && (
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">

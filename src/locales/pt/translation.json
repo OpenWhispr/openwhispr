@@ -1179,6 +1179,7 @@
             "Transcrição na nuvem ilimitada",
             "20 horas de gravação de reuniões/mês",
             "Sincronização entre dispositivos",
+            "Compartilhe notas com links públicos",
             "Acesso pessoal à API",
             "Integração MCP em todos os seus apps",
             "Aplicativo móvel (iOS em breve)",
@@ -1197,6 +1198,8 @@
           "includesPrefix": "Todos os recursos do Pro +",
           "badge": "Mais popular",
           "features": [
+            "Espaços de equipe para notas compartilhadas",
+            "Funções e gestão de membros do espaço de trabalho",
             "Gravações de reuniões ilimitadas",
             "Modo agente",
             "Converse com seus dados",
@@ -1617,6 +1620,7 @@
     "privacy": {
       "cloudBackup": "Backup na nuvem",
       "cloudBackupDescription": "Salve suas transcrições e notas na nuvem para acesso contínuo em todos os dispositivos.",
+      "cloudBackupTeamCaveat": "Notas em espaços de equipe e notas que você compartilhou são sempre sincronizadas, independentemente desta configuração.",
       "cloudNotesMigration": "Fazendo backup das notas… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Todas as notas salvas na nuvem",
       "description": "Controle quais dados saem do seu dispositivo. Tudo está desativado por padrão.",
@@ -1794,7 +1798,7 @@
       "tab": {
         "general": "Geral",
         "members": "Membros",
-        "teams": "Equipes",
+        "teams": "Espaços de equipe",
         "billing": "Cobrança",
         "developer": "Desenvolvedor"
       },
@@ -1847,13 +1851,13 @@
         }
       },
       "teams": {
-        "title": "Equipes",
-        "description": "Agrupe membros para compartilhamento direcionado.",
-        "new": "Nova equipe",
-        "empty": "Ainda não há equipes.",
-        "createFirst": "Crie sua primeira equipe",
-        "createTitle": "Criar equipe",
-        "nameLabel": "Nome da equipe",
+        "title": "Espaços de equipe",
+        "description": "Organize pastas e notas compartilhadas para membros selecionados do espaço de trabalho.",
+        "new": "Novo espaço de equipe",
+        "empty": "Ainda não há espaços de equipe.",
+        "createFirst": "Crie seu primeiro espaço de equipe",
+        "createTitle": "Criar espaço de equipe",
+        "nameLabel": "Nome do espaço de equipe",
         "memberCount_one": "{{count}} membro",
         "memberCount_other": "{{count}} membros"
       },
@@ -2178,8 +2182,9 @@
       "teamSpaces": "Espaços de equipe",
       "personal": "Pessoal",
       "privateTooltip": "Somente você pode ver seu espaço pessoal",
-      "newSpace": "Novo espaço",
-      "createTitle": "Criar espaço",
+      "newSpace": "Novo espaço de equipe",
+      "createTitle": "Criar espaço de equipe",
+      "createDescription": "Uma área compartilhada dentro de um espaço de trabalho para colegas selecionados.",
       "nameLabel": "Nome",
       "emojiLabel": "Emoji",
       "create": "Criar",
@@ -2215,6 +2220,8 @@
       "undo": "Desfazer",
       "emptySpace": "Nenhuma nota ainda. As notas aqui são visíveis para todos em {{space}}.",
       "emptyTeamHint": "Os espaços compartilhados com você aparecerão aqui.",
+      "lockedPitch": "Crie espaços compartilhados onde as notas da sua equipe ficam sincronizadas.",
+      "upgradeRequired": "Os espaços de equipe exigem um plano pago.",
       "noteCount_one": "{{count}} nota",
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Você não tem mais acesso a {{space}}",
@@ -2243,6 +2250,25 @@
       },
       "invitedTo_one": "Você entrará em {{count}} espaço de equipe",
       "invitedTo_other": "Você entrará em {{count}} espaços de equipe"
+    },
+    "structureIntro": {
+      "title": "Onde ficam suas notas",
+      "description": "O OpenWhispr separa pensamentos privados do trabalho compartilhado para que as pessoas certas vejam as notas certas.",
+      "personal": {
+        "title": "Espaço pessoal",
+        "description": "Somente você pode ver as pastas e notas deste espaço."
+      },
+      "workspace": {
+        "title": "Espaço de trabalho",
+        "description": "O lugar dos membros, funções e cobrança da sua organização."
+      },
+      "teamSpace": {
+        "title": "Espaço de equipe",
+        "description": "Uma área compartilhada dentro de um espaço de trabalho para colegas selecionados."
+      },
+      "contents": "Cada espaço pode conter pastas e notas.",
+      "done": "Entendi",
+      "reopen": "Entenda como os espaços são organizados"
     },
     "folders": {
       "title": "Pastas",
@@ -2979,6 +3005,7 @@
           "alreadyInvited": "{{email}} já foi convidado",
           "inviteFailed": "Não foi possível enviar o convite. Tente novamente.",
           "visibilityFailed": "Não foi possível atualizar o compartilhamento. Tente novamente.",
+          "upgradeRequired": "Compartilhar notas exige um plano pago.",
           "copyFailed": "Não foi possível copiar o link. Tente novamente.",
           "revokeFailed": "Não foi possível remover o convite. Tente novamente.",
           "resendFailed": "Não foi possível reenviar o convite. Tente novamente.",
@@ -3099,7 +3126,7 @@
     },
     "create": {
       "title": "Criar espaço de trabalho",
-      "description": "Espaços de trabalho permitem colaborar, compartilhar notas e gerenciar a cobrança em um só lugar.",
+      "description": "Um espaço de trabalho reúne os membros e a cobrança da sua organização. Crie espaços de equipe dentro dele para notas compartilhadas.",
       "nameLabel": "Nome do espaço de trabalho",
       "namePlaceholder": "Acme Corp",
       "submit": "Criar espaço de trabalho",

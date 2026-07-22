@@ -2,17 +2,30 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useToast } from "../ui/useToast";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
 import MemberPickList from "../MemberPickList";
 import { createTeamSpace } from "../../services/teamSpaceActions";
+import { CloudApiError } from "../../services/cloudApi";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
+import {
+  manageableWorkspaces as findManageableWorkspaces,
+  selectWorkspaceForSpaceCreation,
+} from "../../lib/workspaceSelection";
 import { revealContainer, setActiveContext } from "../../stores/noteStore";
 import type { WorkspaceMember } from "../../types/electron";
 
@@ -44,13 +57,18 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
   const [memberSearch, setMemberSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [membersError, setMembersError] = useState(false);
+  const [rosterWorkspaceId, setRosterWorkspaceId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const showSpinner = useDelayedFlag(isCreating);
 
-  // Multiple workspaces with none active: default to the first the user can
-  // create spaces in (owner/admin) — kept deliberately simple for v1.
-  const workspace =
-    active ?? workspaces.find((w) => w.role === "owner" || w.role === "admin") ?? null;
+  const manageableWorkspaces = useMemo(() => findManageableWorkspaces(workspaces), [workspaces]);
+  const defaultWorkspace = selectWorkspaceForSpaceCreation(manageableWorkspaces, active, null);
+  const workspace = selectWorkspaceForSpaceCreation(
+    manageableWorkspaces,
+    active,
+    selectedWorkspaceId
+  );
   // A failed workspace fetch gets a retry state, never the create funnel.
   const needsWorkspace = open && loaded && !workspace && !workspacesError;
   const workspacesFailed = loaded && !workspace && workspacesError;
@@ -58,8 +76,10 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
   const loadMembers = useCallback(
     async (workspaceId: string) => {
       setMembersError(false);
+      setRosterWorkspaceId(null);
       try {
         await refreshMembers(workspaceId);
+        setRosterWorkspaceId(workspaceId);
       } catch {
         setMembersError(true);
       }
@@ -71,9 +91,17 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
     if (open && workspace) void loadMembers(workspace.id);
   }, [open, workspace, loadMembers]);
 
+  useEffect(() => {
+    if (!open) return;
+    setSelectedWorkspaceId((current) => {
+      if (current && manageableWorkspaces.some((w) => w.id === current)) return current;
+      return defaultWorkspace?.id ?? null;
+    });
+  }, [open, manageableWorkspaces, defaultWorkspace?.id]);
+
   const candidates = useMemo(
-    () => roster.filter((m) => m.user_id !== user?.id),
-    [roster, user?.id]
+    () => (rosterWorkspaceId === workspace?.id ? roster.filter((m) => m.user_id !== user?.id) : []),
+    [roster, rosterWorkspaceId, user?.id, workspace?.id]
   );
   const filteredCandidates = useMemo(() => {
     const query = memberSearch.trim().toLowerCase();
@@ -90,6 +118,8 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
       setEmoji("");
       setMemberSearch("");
       setSelectedIds(new Set());
+      setRosterWorkspaceId(null);
+      setSelectedWorkspaceId(null);
     }
   };
 
@@ -110,6 +140,13 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
       if (!next.delete(member.user_id)) next.add(member.user_id);
       return next;
     });
+  };
+
+  const handleWorkspaceChange = (workspaceId: string) => {
+    setSelectedWorkspaceId(workspaceId);
+    setSelectedIds(new Set());
+    setMemberSearch("");
+    setMembersError(false);
   };
 
   const handleCreate = async () => {
@@ -140,7 +177,12 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
     } catch (err) {
       toast({
         title: t("notes.spaces.couldNotCreate"),
-        description: err instanceof Error ? err.message : t("common.unknownError"),
+        description:
+          err instanceof CloudApiError && err.code === "upgrade_required"
+            ? t("notes.spaces.upgradeRequired")
+            : err instanceof Error
+              ? err.message
+              : t("common.unknownError"),
         variant: "destructive",
       });
     } finally {
@@ -156,6 +198,7 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
         <DialogContent className="sm:max-w-95 p-6 gap-5">
           <DialogHeader>
             <DialogTitle>{t("notes.spaces.createTitle")}</DialogTitle>
+            <DialogDescription>{t("notes.spaces.createDescription")}</DialogDescription>
           </DialogHeader>
 
           {workspacesFailed ? (
@@ -181,6 +224,26 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
             </div>
           ) : (
             <>
+              {manageableWorkspaces.length > 1 && workspace && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground/50">
+                    {t("settingsPage.workspace.title")}
+                  </label>
+                  <Select value={workspace.id} onValueChange={handleWorkspaceChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {manageableWorkspaces.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="flex gap-3">
                 <div className="space-y-1.5 w-14 shrink-0">
                   <label className="text-xs font-medium text-foreground/50">

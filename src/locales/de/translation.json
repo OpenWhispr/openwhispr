@@ -1205,7 +1205,7 @@
       "tab": {
         "general": "Allgemein",
         "members": "Mitglieder",
-        "teams": "Teams",
+        "teams": "Team-Bereiche",
         "billing": "Abrechnung",
         "developer": "Entwickler"
       },
@@ -1258,13 +1258,13 @@
         }
       },
       "teams": {
-        "title": "Teams",
-        "description": "Mitglieder gruppieren für gezieltes Teilen.",
-        "new": "Neues Team",
-        "empty": "Noch keine Teams.",
-        "createFirst": "Erstellen Sie Ihr erstes Team",
-        "createTitle": "Team erstellen",
-        "nameLabel": "Team-Name",
+        "title": "Team-Bereiche",
+        "description": "Organisieren Sie gemeinsame Ordner und Notizen für ausgewählte Workspace-Mitglieder.",
+        "new": "Neuer Team-Bereich",
+        "empty": "Noch keine Team-Bereiche.",
+        "createFirst": "Erstellen Sie Ihren ersten Team-Bereich",
+        "createTitle": "Team-Bereich erstellen",
+        "nameLabel": "Name des Team-Bereichs",
         "memberCount_one": "{{count}} Mitglied",
         "memberCount_other": "{{count}} Mitglieder"
       },
@@ -1438,6 +1438,7 @@
             "Unbegrenzte Cloud-Transkription",
             "20 Stunden Meeting-Aufnahmen/Monat",
             "Geräteübergreifende Synchronisierung",
+            "Notizen per öffentlichem Link teilen",
             "Persönlicher API-Zugang",
             "MCP-Integration in all deinen Apps",
             "Mobile App (iOS demnächst verfügbar)",
@@ -1456,6 +1457,8 @@
           "includesPrefix": "Alle Pro-Funktionen +",
           "badge": "Beliebteste Wahl",
           "features": [
+            "Team-Bereiche für gemeinsame Notizen",
+            "Workspace-Rollen & Mitgliederverwaltung",
             "Unbegrenzte Meeting-Aufnahmen",
             "Agentenmodus",
             "Chat über Ihre Daten",
@@ -1896,6 +1899,7 @@
     "privacy": {
       "cloudBackup": "Cloud-Backup",
       "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen und Notizen in der Cloud für nahtlosen Zugriff auf allen Geräten.",
+      "cloudBackupTeamCaveat": "Notizen in Team-Bereichen und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert.",
       "cloudNotesMigration": "Notizen werden gesichert… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
@@ -2211,7 +2215,7 @@
     },
     "create": {
       "title": "Workspace erstellen",
-      "description": "Workspaces ermöglichen Zusammenarbeit, geteilte Notizen und gemeinsame Abrechnung.",
+      "description": "Ein Workspace bündelt die Mitglieder und Abrechnung Ihrer Organisation. Darin erstellen Sie Team-Bereiche für gemeinsame Notizen.",
       "nameLabel": "Workspace-Name",
       "namePlaceholder": "Acme Corp",
       "submit": "Workspace erstellen",
@@ -2386,8 +2390,9 @@
       "teamSpaces": "Team-Bereiche",
       "personal": "Persönlich",
       "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
-      "newSpace": "Neuer Bereich",
-      "createTitle": "Bereich erstellen",
+      "newSpace": "Neuer Team-Bereich",
+      "createTitle": "Team-Bereich erstellen",
+      "createDescription": "Ein gemeinsamer Bereich in einem Workspace für ausgewählte Teammitglieder.",
       "nameLabel": "Name",
       "emojiLabel": "Emoji",
       "create": "Erstellen",
@@ -2423,6 +2428,8 @@
       "undo": "Rückgängig",
       "emptySpace": "Noch keine Notizen. Notizen hier sind für alle in {{space}} sichtbar.",
       "emptyTeamHint": "Mit Ihnen geteilte Bereiche erscheinen hier.",
+      "lockedPitch": "Erstellen Sie gemeinsame Bereiche, in denen die Notizen Ihres Teams synchron bleiben.",
+      "upgradeRequired": "Team-Bereiche erfordern einen kostenpflichtigen Tarif.",
       "noteCount_one": "{{count}} Notiz",
       "noteCount_other": "{{count}} Notizen",
       "accessRevoked": "Du hast keinen Zugriff mehr auf {{space}}",
@@ -2451,6 +2458,25 @@
       },
       "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
       "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei"
+    },
+    "structureIntro": {
+      "title": "Wo Ihre Notizen gespeichert sind",
+      "description": "OpenWhispr trennt private Gedanken von gemeinsamer Arbeit, damit nur die richtigen Personen Ihre Notizen sehen.",
+      "personal": {
+        "title": "Persönlicher Bereich",
+        "description": "Nur Sie können die Ordner und Notizen hier sehen."
+      },
+      "workspace": {
+        "title": "Workspace",
+        "description": "Hier werden Mitglieder, Rollen und Abrechnung Ihrer Organisation verwaltet."
+      },
+      "teamSpace": {
+        "title": "Team-Bereich",
+        "description": "Ein gemeinsamer Bereich in einem Workspace für ausgewählte Teammitglieder."
+      },
+      "contents": "Jeder Bereich kann Ordner und Notizen enthalten.",
+      "done": "Verstanden",
+      "reopen": "Organisation der Bereiche erklären"
     },
     "folders": {
       "title": "Ordner",
@@ -3084,6 +3110,7 @@
           "alreadyInvited": "{{email}} ist bereits eingeladen",
           "inviteFailed": "Die Einladung konnte nicht gesendet werden. Versuche es erneut.",
           "visibilityFailed": "Die Freigabe konnte nicht aktualisiert werden. Versuche es erneut.",
+          "upgradeRequired": "Das Teilen von Notizen erfordert einen kostenpflichtigen Tarif.",
           "copyFailed": "Der Link konnte nicht kopiert werden. Versuche es erneut.",
           "revokeFailed": "Die Einladung konnte nicht entfernt werden. Versuche es erneut.",
           "resendFailed": "Die Einladung konnte nicht erneut gesendet werden. Versuche es erneut.",
