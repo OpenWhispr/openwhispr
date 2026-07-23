@@ -2681,6 +2681,10 @@
         "title": "Cleanup failed",
         "description": "Your dictation was pasted without AI cleanup."
       },
+      "sttSetupNeeded": {
+        "title": "No STT model configured",
+        "description": "Download a local model or add a cloud API key to get started."
+      },
       "addedToDict": "Added {{words}} to your dictionary",
       "undo": "Undo",
       "accessibilityMissing": {
