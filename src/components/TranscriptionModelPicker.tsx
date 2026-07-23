@@ -547,12 +547,16 @@ export default function TranscriptionModelPicker({
         if (cuda?.gpuInfo.hasNvidiaGpu) {
           setGpuBackend("cuda");
           setGpuDownloaded(cuda.downloaded);
+          // The download runs in the main process, so it survives this
+          // component unmounting; pick it back up after a remount.
+          setGpuDownloading(cuda.downloading === true);
           return;
         }
         const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
         if (vulkan?.vulkan.available) {
           setGpuBackend("vulkan");
           setGpuDownloaded(vulkan.downloaded);
+          setGpuDownloading(vulkan.downloading === true);
         }
       } catch {}
     };
@@ -567,6 +571,20 @@ export default function TranscriptionModelPicker({
         : window.electronAPI?.onVulkanWhisperDownloadProgress;
     return subscribe?.((data) => setGpuProgress(data));
   }, [gpuDownloading, gpuBackend]);
+
+  // Settles a download this component did not start (it began before a
+  // remount), where no in-flight invoke resolves to update the state.
+  useEffect(() => {
+    if (!gpuBackend) return;
+    const subscribe =
+      gpuBackend === "cuda"
+        ? window.electronAPI?.onCudaDownloadComplete
+        : window.electronAPI?.onVulkanWhisperDownloadComplete;
+    return subscribe?.((result) => {
+      setGpuDownloading(false);
+      if (result?.success) setGpuDownloaded(true);
+    });
+  }, [gpuBackend]);
 
   const handleGpuDownload = async () => {
     setGpuDownloading(true);
