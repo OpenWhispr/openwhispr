@@ -208,7 +208,7 @@
   "deb": {
     "afterInstall": "resources/linux/after-install.sh",
     "afterRemove": "resources/linux/after-remove.sh",
-    "depends": ["ydotool", "libpipewire-0.3-0"],
+    "depends": ["ydotool", "libpipewire-0.3-0 | libpipewire-0.3-0t64"],
     "fpm": [
       "--deb-recommends",
       "ydotoold",
