@@ -2515,6 +2515,8 @@
     "addButton": "追加",
     "testing": "キーを確認中...",
     "verified": "確認済み",
+    "saved": "保存済み",
+    "savedUnverified": "未確認のまま保存しました: {{reason}} セットアップを続行できます。",
     "errors": {
       "INVALID_KEY": "プロバイダーがこの API キーを拒否しました。",
       "PERMISSION_DENIED": "このキーには必要な権限がありません。",
@@ -2526,7 +2528,7 @@
       "INVALID_ENDPOINT": "キーをテストする前に有効なエンドポイントを入力してください。",
       "UNSUPPORTED_PROVIDER": "このプロバイダーはキーの検証に対応していません。",
       "INVALID_REQUEST": "有効な API キーを入力してください。",
-      "PERSISTENCE_FAILED": "キーは有効ですが、安全に保存できませんでした。",
+      "PERSISTENCE_FAILED": "キーを安全に保存できませんでした。",
       "VALIDATION_FAILED": "API キーを検証できませんでした。"
     }
   },

@@ -2510,6 +2510,8 @@
     "addButton": "新增金鑰",
     "testing": "正在驗證金鑰...",
     "verified": "已驗證",
+    "saved": "已儲存",
+    "savedUnverified": "已儲存但未驗證：{{reason}} 你可以繼續設定。",
     "errors": {
       "INVALID_KEY": "服務供應商拒絕了此 API 金鑰。",
       "PERMISSION_DENIED": "此金鑰沒有必要的權限。",
@@ -2521,7 +2523,7 @@
       "INVALID_ENDPOINT": "請先輸入有效的端點再驗證金鑰。",
       "UNSUPPORTED_PROVIDER": "此服務供應商不支援金鑰驗證。",
       "INVALID_REQUEST": "請輸入有效的 API 金鑰。",
-      "PERSISTENCE_FAILED": "金鑰有效，但無法安全儲存。",
+      "PERSISTENCE_FAILED": "無法安全儲存金鑰。",
       "VALIDATION_FAILED": "無法驗證 API 金鑰。"
     }
   },

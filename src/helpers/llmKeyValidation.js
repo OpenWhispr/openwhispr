@@ -1,5 +1,7 @@
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_KEY_LENGTH = 16 * 1024;
+const TINFOIL_VALIDATION_MODEL = "nomic-embed-text";
+const TINFOIL_VALIDATION_INPUT = ".";
 
 const HTTP_VALIDATORS = Object.freeze({
   openai: {
@@ -52,7 +54,7 @@ const ERROR_MESSAGES = Object.freeze({
   INVALID_ENDPOINT: "Enter a valid HTTP or HTTPS endpoint before testing the key.",
   UNSUPPORTED_PROVIDER: "This provider does not support API-key validation.",
   INVALID_REQUEST: "Enter a valid API key.",
-  PERSISTENCE_FAILED: "The API key was valid but could not be saved securely.",
+  PERSISTENCE_FAILED: "The API key could not be saved securely.",
   VALIDATION_FAILED: "The API key could not be validated.",
 });
 
@@ -60,8 +62,24 @@ function failure(provider, code, options = {}) {
   return {
     success: false,
     provider,
+    verified: false,
     code,
     error: options.error || ERROR_MESSAGES[code] || ERROR_MESSAGES.VALIDATION_FAILED,
+    retryable: options.retryable === true,
+  };
+}
+
+function verified(provider) {
+  return { success: true, provider, verified: true };
+}
+
+function unverified(provider, code, options = {}) {
+  return {
+    success: true,
+    provider,
+    verified: false,
+    code,
+    warning: options.warning || ERROR_MESSAGES[code] || ERROR_MESSAGES.VALIDATION_FAILED,
     retryable: options.retryable === true,
   };
 }
@@ -75,21 +93,21 @@ function classifyStatus(provider, status) {
     return failure(provider, "INVALID_KEY");
   }
   if (status === 402) {
-    return failure(provider, "BILLING_REQUIRED");
+    return unverified(provider, "BILLING_REQUIRED");
   }
   if (status === 403) {
-    return failure(provider, "PERMISSION_DENIED");
+    return unverified(provider, "PERMISSION_DENIED");
   }
   if (status === 408 || status === 504) {
-    return failure(provider, "TIMEOUT", { retryable: true });
+    return unverified(provider, "TIMEOUT", { retryable: true });
   }
   if (status === 429) {
-    return failure(provider, "RATE_LIMITED", { retryable: true });
+    return unverified(provider, "RATE_LIMITED", { retryable: true });
   }
   if (status >= 500) {
-    return failure(provider, "PROVIDER_UNAVAILABLE", { retryable: true });
+    return unverified(provider, "PROVIDER_UNAVAILABLE", { retryable: true });
   }
-  return failure(provider, "VALIDATION_FAILED");
+  return unverified(provider, "VALIDATION_FAILED");
 }
 
 function classifyThrownError(provider, error) {
@@ -101,10 +119,44 @@ function classifyThrownError(provider, error) {
   const name = error?.name || "";
   const message = String(error?.message || "");
   if (name === "AbortError" || name === "TimeoutError" || /timed?\s*out|timeout/i.test(message)) {
-    return failure(provider, "TIMEOUT", { retryable: true });
+    return unverified(provider, "TIMEOUT", { retryable: true });
   }
 
-  return failure(provider, "NETWORK_ERROR", { retryable: true });
+  return unverified(provider, "NETWORK_ERROR", { retryable: true });
+}
+
+async function readStructuredError(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function isProviderInvalidKeyResponse(provider, response) {
+  if (provider !== "gemini" && provider !== "xai") return false;
+
+  const body = await readStructuredError(response);
+  if (provider === "gemini") {
+    return (
+      Array.isArray(body?.error?.details) &&
+      body.error.details.some((detail) => detail?.reason === "API_KEY_INVALID")
+    );
+  }
+
+  return (
+    body?.code === "invalid-argument" &&
+    typeof body?.error === "string" &&
+    /^incorrect api key provided\b/i.test(body.error)
+  );
+}
+
+async function classifyResponse(provider, response) {
+  if (response.ok) return verified(provider);
+  if (response.status === 401 || (await isProviderInvalidKeyResponse(provider, response))) {
+    return failure(provider, "INVALID_KEY");
+  }
+  return classifyStatus(provider, response.status);
 }
 
 function resolveCustomModelsUrl(baseUrl) {
@@ -124,14 +176,26 @@ function resolveCustomModelsUrl(baseUrl) {
   }
 }
 
-async function defaultTinfoilValidator(key, timeoutMs) {
-  const { TinfoilAI } = await import("tinfoil");
-  const client = new TinfoilAI({
+async function defaultTinfoilValidator(key, timeoutMs, dependencies) {
+  const createClient =
+    dependencies.createTinfoilClient ||
+    (async (options) => {
+      const { TinfoilAI } = await import("tinfoil");
+      return new TinfoilAI(options);
+    });
+  const client = await createClient({
     apiKey: key,
     maxRetries: 0,
     timeout: timeoutMs,
   });
-  await client.models.list();
+
+  // Tinfoil's model catalog is public, so models.list() cannot authenticate a
+  // key. A one-token embedding is the smallest SDK request that reaches an
+  // authenticated inference endpoint while retaining enclave attestation.
+  await client.embeddings.create({
+    model: TINFOIL_VALIDATION_MODEL,
+    input: TINFOIL_VALIDATION_INPUT,
+  });
 }
 
 async function validateLlmApiKey(request, dependencies = {}) {
@@ -146,8 +210,8 @@ async function validateLlmApiKey(request, dependencies = {}) {
   if (provider === "tinfoil") {
     const validateTinfoil = dependencies.validateTinfoil || defaultTinfoilValidator;
     try {
-      await validateTinfoil(key, timeoutMs);
-      return { success: true, provider };
+      await validateTinfoil(key, timeoutMs, dependencies);
+      return verified(provider);
     } catch (error) {
       return classifyThrownError(provider, error);
     }
@@ -179,11 +243,7 @@ async function validateLlmApiKey(request, dependencies = {}) {
       signal: controller.signal,
     });
 
-    if (response.ok) {
-      return { success: true, provider };
-    }
-
-    return classifyStatus(provider, response.status);
+    return await classifyResponse(provider, response);
   } catch (error) {
     return classifyThrownError(provider, error);
   } finally {
@@ -206,11 +266,18 @@ async function validateAndSaveLlmApiKey(request, dependencies = {}) {
   if (key) {
     const validation = await validateLlmApiKey({ ...request, provider, key }, dependencies);
     if (!validation.success) return validation;
+
+    try {
+      await saveKey(key);
+      return validation;
+    } catch {
+      return failure(provider, "PERSISTENCE_FAILED", { retryable: true });
+    }
   }
 
   try {
     await saveKey(key);
-    return { success: true, provider, removed: key.length === 0 };
+    return { success: true, provider, removed: true };
   } catch {
     return failure(provider, "PERSISTENCE_FAILED", { retryable: true });
   }
@@ -220,6 +287,8 @@ module.exports = {
   DEFAULT_TIMEOUT_MS,
   HTTP_VALIDATORS,
   SUPPORTED_LLM_KEY_PROVIDERS,
+  TINFOIL_VALIDATION_MODEL,
+  TINFOIL_VALIDATION_INPUT,
   validateLlmApiKey,
   validateAndSaveLlmApiKey,
   resolveCustomModelsUrl,

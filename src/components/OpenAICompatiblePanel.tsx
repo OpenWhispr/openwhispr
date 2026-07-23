@@ -10,6 +10,7 @@ import { isSecureEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { useSettingsStore } from "../stores/settingsStore";
 import type { LlmKeyProvider, LlmKeyValidationResult } from "../types/electron";
+import { createUnverifiedLlmKeyResult, shouldBlockLlmKeySetup } from "../utils/llmKeyValidation";
 
 interface ModelOption {
   value: string;
@@ -287,7 +288,13 @@ export default function OpenAICompatiblePanel({
     async (key: string): Promise<LlmKeyValidationResult> => {
       if (!validationProvider) {
         setApiKey(key);
-        return { success: true, provider: "" };
+        return {
+          success: true,
+          provider: "",
+          verified: false,
+          code: "UNSUPPORTED_PROVIDER",
+          warning: "This provider does not expose an API-key validation check.",
+        };
       }
 
       if (validationProvider !== "custom") {
@@ -302,22 +309,32 @@ export default function OpenAICompatiblePanel({
 
       const api = window.electronAPI;
       if (!api?.testLlmApiKey) {
-        return {
-          success: false,
-          provider: "custom",
-          code: "VALIDATION_FAILED",
-          error: "API-key validation is unavailable.",
-          retryable: false,
-        };
+        setApiKey(normalized);
+        return createUnverifiedLlmKeyResult(
+          "custom",
+          "VALIDATION_FAILED",
+          "API-key validation is unavailable right now."
+        );
       }
 
-      const result = await api.testLlmApiKey({
-        provider: "custom",
-        key: normalized,
-        baseUrl: normalizeBaseUrl(draftBase || baseUrl),
-      });
-      if (result.success) setApiKey(normalized);
-      return result;
+      try {
+        const result = await api.testLlmApiKey({
+          provider: "custom",
+          key: normalized,
+          baseUrl: normalizeBaseUrl(draftBase || baseUrl),
+        });
+        if (result.success) {
+          setApiKey(normalized);
+          return result;
+        }
+        if (shouldBlockLlmKeySetup(result)) return result;
+
+        setApiKey(normalized);
+        return createUnverifiedLlmKeyResult("custom", result.code, result.error || result.warning);
+      } catch {
+        setApiKey(normalized);
+        return createUnverifiedLlmKeyResult("custom");
+      }
     },
     [baseUrl, draftBase, saveValidatedLlmApiKey, setApiKey, validationProvider]
   );

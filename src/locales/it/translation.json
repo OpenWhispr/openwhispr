@@ -2515,6 +2515,8 @@
     "addButton": "Aggiungi",
     "testing": "Verifica della chiave...",
     "verified": "verificata",
+    "saved": "salvata",
+    "savedUnverified": "Salvata senza verifica: {{reason}} Puoi continuare la configurazione.",
     "errors": {
       "INVALID_KEY": "Il provider ha rifiutato questa chiave API.",
       "PERMISSION_DENIED": "Questa chiave non dispone delle autorizzazioni necessarie.",
@@ -2526,7 +2528,7 @@
       "INVALID_ENDPOINT": "Inserisci un endpoint valido prima di testare la chiave.",
       "UNSUPPORTED_PROVIDER": "Questo provider non supporta la verifica delle chiavi.",
       "INVALID_REQUEST": "Inserisci una chiave API valida.",
-      "PERSISTENCE_FAILED": "La chiave è valida, ma non è stato possibile salvarla in modo sicuro.",
+      "PERSISTENCE_FAILED": "Non è stato possibile salvare la chiave in modo sicuro.",
       "VALIDATION_FAILED": "Impossibile verificare la chiave API."
     }
   },

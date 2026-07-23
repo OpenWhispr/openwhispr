@@ -43,8 +43,10 @@ export interface LlmKeyValidationRequest {
 export interface LlmKeyValidationResult {
   success: boolean;
   provider: string;
+  verified?: boolean;
   code?: LlmKeyValidationCode;
   error?: string;
+  warning?: string;
   retryable?: boolean;
   removed?: boolean;
 }

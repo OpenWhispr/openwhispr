@@ -2510,6 +2510,8 @@
     "addButton": "添加密钥",
     "testing": "正在验证密钥...",
     "verified": "已验证",
+    "saved": "已保存",
+    "savedUnverified": "已保存但未验证：{{reason}} 你可以继续设置。",
     "errors": {
       "INVALID_KEY": "服务提供商拒绝了此 API 密钥。",
       "PERMISSION_DENIED": "此密钥没有所需权限。",
@@ -2521,7 +2523,7 @@
       "INVALID_ENDPOINT": "请先输入有效的端点再验证密钥。",
       "UNSUPPORTED_PROVIDER": "此服务提供商不支持密钥验证。",
       "INVALID_REQUEST": "请输入有效的 API 密钥。",
-      "PERSISTENCE_FAILED": "密钥有效，但无法安全保存。",
+      "PERSISTENCE_FAILED": "无法安全保存密钥。",
       "VALIDATION_FAILED": "无法验证 API 密钥。"
     }
   },

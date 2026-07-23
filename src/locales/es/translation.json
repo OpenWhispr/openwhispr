@@ -2563,6 +2563,8 @@
     "addButton": "Agregar",
     "testing": "Verificando clave...",
     "verified": "verificada",
+    "saved": "guardada",
+    "savedUnverified": "Guardada sin verificar: {{reason}} Puedes continuar con la configuración.",
     "errors": {
       "INVALID_KEY": "El proveedor rechazó esta clave API.",
       "PERMISSION_DENIED": "Esta clave no tiene los permisos necesarios.",
@@ -2574,7 +2576,7 @@
       "INVALID_ENDPOINT": "Introduce un endpoint válido antes de probar la clave.",
       "UNSUPPORTED_PROVIDER": "Este proveedor no admite la validación de claves.",
       "INVALID_REQUEST": "Introduce una clave API válida.",
-      "PERSISTENCE_FAILED": "La clave es válida, pero no se pudo guardar de forma segura.",
+      "PERSISTENCE_FAILED": "No se pudo guardar la clave de forma segura.",
       "VALIDATION_FAILED": "No se pudo validar la clave API."
     }
   },
