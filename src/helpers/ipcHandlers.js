@@ -1894,9 +1894,17 @@ class IPCHandlers {
       // too slow for the paste hot path.
       const textToPaste = applySmartSpacing({ text, mode: "append" });
 
+      // Windows: restore the foreground window captured at record start so the
+      // paste lands in the field the user was in, not wherever focus drifted
+      // during transcription (issue #859). macOS handles this via activateTargetPid
+      // above; Linux re-detects the target window inside pasteLinux.
+      const targetWindow =
+        process.platform === "win32" ? this.textEditMonitor?.lastForegroundWindow || null : null;
+
       const result = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
         webContents: event.sender,
+        targetWindow,
       });
       debugLogger.debug("[AutoLearn] Paste completed", {
         autoLearnEnabled: this._autoLearnEnabled,
