@@ -134,9 +134,18 @@ export default function LocalModelPicker({
 
   const handleDownload = useCallback(
     (modelId: string) => {
-      downloadModel(modelId, onModelSelect);
+      // Bootstrap only: auto-select the freshly downloaded model when there
+      // is no valid current selection (first download, or the previous
+      // selection was deleted). Never steal the selection from a model the
+      // user explicitly picked.
+      downloadModel(modelId, (downloadedId) => {
+        const hasValidSelection = Boolean(selectedModel) && downloadedModels.has(selectedModel);
+        if (!hasValidSelection) {
+          onModelSelect(downloadedId);
+        }
+      });
     },
-    [downloadModel, onModelSelect]
+    [downloadModel, onModelSelect, selectedModel, downloadedModels]
   );
 
   const handleDelete = useCallback(
