@@ -152,8 +152,6 @@ class EnvironmentManager {
       return;
     }
 
-    process.env[envVarName] = value;
-
     const dir = this._getSecureKeysDir();
     await fsPromises.mkdir(dir, { recursive: true });
 
@@ -163,15 +161,16 @@ class EnvironmentManager {
 
     await fsPromises.writeFile(tmpPath, encrypted);
     await fsPromises.rename(tmpPath, filePath);
+    process.env[envVarName] = value;
   }
 
   async _deleteSecretKey(envVarName) {
-    delete process.env[envVarName];
     try {
       await fsPromises.unlink(this._getSecretFilePath(envVarName));
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
+    delete process.env[envVarName];
   }
 
   async _migrateToSecureStorage() {
@@ -248,6 +247,14 @@ class EnvironmentManager {
 
   _saveKey(envVarName, key) {
     if (SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable()) {
+      // Legacy setters are intentionally optimistic. Keep the in-memory value
+      // available immediately while encrypted persistence completes in the
+      // background; validation-gated callers use saveSecretKeyAndWait instead.
+      if (key) {
+        process.env[envVarName] = key;
+      } else {
+        delete process.env[envVarName];
+      }
       this._saveSecretKey(envVarName, key).catch((error) => {
         debugLogger.error(
           "Failed to persist encrypted secret",
@@ -260,6 +267,42 @@ class EnvironmentManager {
     } else {
       delete process.env[envVarName];
     }
+    return { success: true };
+  }
+
+  /**
+   * Persist a secret before reporting success to the caller.
+   *
+   * The regular setters stay synchronous for legacy call sites, but flows that
+   * gate activation on durable storage (such as API-key validation) must await
+   * this method so renderer state cannot get ahead of the secure store.
+   */
+  async saveSecretKeyAndWait(envVarName, key) {
+    if (!SECRET_KEY_SET.has(envVarName)) {
+      throw new Error(`Refusing to persist unknown secret: ${envVarName}`);
+    }
+
+    if (this._encryptionAvailable()) {
+      await this._saveSecretKey(envVarName, key);
+    } else {
+      const previousValue = process.env[envVarName];
+      try {
+        if (key) {
+          process.env[envVarName] = key;
+        } else {
+          delete process.env[envVarName];
+        }
+        await this.saveAllKeysToEnvFile();
+      } catch (error) {
+        if (previousValue === undefined) {
+          delete process.env[envVarName];
+        } else {
+          process.env[envVarName] = previousValue;
+        }
+        throw error;
+      }
+    }
+
     return { success: true };
   }
 
