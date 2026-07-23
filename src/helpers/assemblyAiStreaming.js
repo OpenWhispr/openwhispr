@@ -132,7 +132,10 @@ class AssemblyAiStreaming {
     debugLogger.debug("AssemblyAI warming up connection");
 
     return new Promise((resolve, reject) => {
+      let settled = false;
       const warmupTimeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         this.cleanupWarmConnection();
         reject(new Error("AssemblyAI warmup connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
@@ -146,7 +149,8 @@ class AssemblyAiStreaming {
       this.warmConnection.on("message", (data) => {
         try {
           const message = JSON.parse(data.toString());
-          if (message.type === "Begin") {
+          if (message.type === "Begin" && !settled) {
+            settled = true;
             clearTimeout(warmupTimeout);
             this.warmConnectionReady = true;
             this.warmSessionId = message.id || null;
@@ -163,7 +167,10 @@ class AssemblyAiStreaming {
         clearTimeout(warmupTimeout);
         debugLogger.error("AssemblyAI warmup connection error", { error: error.message });
         this.cleanupWarmConnection();
-        reject(error);
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
       });
 
       this.warmConnection.on("close", (code, reason) => {
@@ -177,6 +184,11 @@ class AssemblyAiStreaming {
           reason: reason?.toString(),
         });
         this.cleanupWarmConnection();
+        if (!settled) {
+          settled = true;
+          reject(new Error(`AssemblyAI warmup connection closed before ready (code: ${code})`));
+          return;
+        }
         if (wasReady && savedOptions) {
           this.warmConnectionOptions = savedOptions;
           this.scheduleRewarm();
@@ -355,6 +367,11 @@ class AssemblyAiStreaming {
           reason: reason?.toString(),
           wasActive,
         });
+        if (this.pendingReject) {
+          this.pendingReject(new Error(`AssemblyAI WebSocket closed before ready (code: ${code})`));
+          this.pendingReject = null;
+          this.pendingResolve = null;
+        }
         this.cleanup();
         if (wasActive && !this.isDisconnecting) {
           this.onError?.(new Error(`Connection lost (code: ${code})`));
