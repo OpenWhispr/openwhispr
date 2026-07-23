@@ -57,8 +57,15 @@ function log(level, message, extra) {
 
 function loadOrt() {
   if (ort) return;
-  ort = require("onnxruntime-node");
-  log("info", "ort loaded");
+  try {
+    ort = require("onnxruntime-node");
+    log("info", "ort loaded");
+  } catch (err) {
+    log("error", "ort load failed", { error: err?.message || String(err) });
+    throw new Error(
+      `onnxruntime-node native binding failed to load: ${err?.message || String(err)}`
+    );
+  }
 }
 
 const SESSION_OPTIONS = { intraOpNumThreads, executionMode: "sequential" };
