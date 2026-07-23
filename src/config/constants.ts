@@ -88,6 +88,7 @@ export const API_ENDPOINTS = {
   ANTHROPIC: "https://api.anthropic.com/v1/messages",
   GEMINI: "https://generativelanguage.googleapis.com/v1beta",
   GROQ_BASE: "https://api.groq.com/openai/v1",
+  CEREBRAS_BASE: "https://api.cerebras.ai/v1",
   CORTI_MODELS_BASE: "https://ai.eu.corti.app/v1",
   XAI_BASE: "https://api.x.ai/v1",
   MISTRAL_BASE: "https://api.mistral.ai/v1",

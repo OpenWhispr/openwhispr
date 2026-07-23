@@ -46,6 +46,7 @@ const CLOUD_PROVIDER_IDS = [
   OPENROUTER_TAB,
   "tinfoil",
   "corti",
+  "cerebras",
   "custom",
 ];
 
@@ -340,6 +341,8 @@ export default function ReasoningModelSelector({
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
   const setCortiApiKey = useSettingsStore((s) => s.setCortiApiKey);
+  const cerebrasApiKey = useSettingsStore((s) => s.cerebrasApiKey);
+  const setCerebrasApiKey = useSettingsStore((s) => s.setCerebrasApiKey);
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
@@ -658,6 +661,21 @@ export default function ReasoningModelSelector({
                     <ApiKeyInput
                       apiKey={cortiApiKey}
                       setApiKey={setCortiApiKey}
+                      label=""
+                      helpText=""
+                    />
+                  </div>
+                )}
+
+                {selectedCloudProvider === "cerebras" && (
+                  <div className="space-y-2">
+                    <div className="flex items-baseline justify-between">
+                      <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
+                      <GetApiKeyLink url="https://cloud.cerebras.ai/?utm_source=referral&utm_campaign=openwhispr" />
+                    </div>
+                    <ApiKeyInput
+                      apiKey={cerebrasApiKey}
+                      setApiKey={setCerebrasApiKey}
                       label=""
                       helpText=""
                     />

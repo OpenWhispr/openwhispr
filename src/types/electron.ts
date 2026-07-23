@@ -1162,6 +1162,8 @@ declare global {
         environment: string;
         tenant: string;
       }) => Promise<{ text: string }>;
+      getCerebrasKey?: () => Promise<string | null>;
+      saveCerebrasKey?: (key: string) => Promise<void>;
       getTinfoilKey?: () => Promise<string | null>;
       saveTinfoilKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;

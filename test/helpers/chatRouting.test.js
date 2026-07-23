@@ -20,6 +20,13 @@ test("built-in provider Chat stays on its provider route", async () => {
   assert.equal(route.kind, "provider");
 });
 
+test("cerebras Chat stays on its provider route", async () => {
+  const { resolveChatRoute } = await load();
+  const route = resolveChatRoute({ provider: "cerebras" });
+
+  assert.equal(route.kind, "provider");
+});
+
 test("local Chat stays on its local route", async () => {
   const { resolveChatRoute } = await load();
   const route = resolveChatRoute({ provider: "ollama" });

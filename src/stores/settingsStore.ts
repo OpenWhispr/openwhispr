@@ -603,6 +603,7 @@ export interface SettingsState
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
   setCortiApiKey: (key: string) => void;
+  setCerebrasApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
@@ -802,6 +803,7 @@ const SECRET_IPC_SAVERS = {
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
   cortiApiKey: "saveCortiKey",
+  cerebras: "saveCerebrasKey",
   tinfoil: "saveTinfoilKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
@@ -844,6 +846,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "cortiClientId",
   "cortiClientSecret",
   "cortiApiKey",
+  "cerebrasApiKey",
   "tinfoilApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
@@ -866,6 +869,7 @@ function invalidateApiKeyCaches(
     | "custom"
     | "openrouter"
     | "corti"
+    | "cerebras"
 ) {
   if (provider) {
     if (_ReasoningService) {
@@ -953,6 +957,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiClientId: "",
   cortiClientSecret: "",
   cortiApiKey: "",
+  cerebrasApiKey: "",
   tinfoilApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
@@ -1425,6 +1430,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiApiKey: createSecretSetter("cortiApiKey", "cortiApiKey", "corti"),
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
+  setCerebrasApiKey: createSecretSetter("cerebrasApiKey", "cerebras", "cerebras"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
@@ -1873,6 +1879,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
+    if (keys.cerebrasApiKey !== undefined) s.setCerebrasApiKey(keys.cerebrasApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
@@ -2133,6 +2140,7 @@ export async function initializeSettings(): Promise<void> {
         cortiClientId,
         cortiClientSecret,
         cortiApiKey,
+        cerebras,
         tinfoil,
         customTx,
         customRx,
@@ -2152,6 +2160,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
         window.electronAPI.getCortiKey?.(),
+        window.electronAPI.getCerebrasKey?.(),
         window.electronAPI.getTinfoilKey?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
@@ -2173,6 +2182,7 @@ export async function initializeSettings(): Promise<void> {
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",
         cortiApiKey: cortiApiKey || "",
+        cerebrasApiKey: cerebras || "",
         tinfoilApiKey: tinfoil || "",
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
