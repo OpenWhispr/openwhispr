@@ -69,9 +69,7 @@ export interface NoteItem {
   client_note_id: string;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
-  workspace_id?: string | null;
-  team_id?: string | null;
-  // 1 while a cloud-backed row that left a team still owes its scope
+  // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
   left_team?: number;
 }
@@ -140,24 +138,33 @@ export interface FolderItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
-  workspace_id?: string | null;
-  team_id?: string | null;
-  // 1 while a cloud-backed row that left a team still owes its scope
+  // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
   left_team?: number;
+}
+
+/** A team assigned to a space, as mirrored from GET /api/me/spaces. */
+export interface SpaceTeamRef {
+  id: string;
+  name: string;
+  // Explicit team membership role, if any (workspace admins may have none).
+  my_role?: "admin" | "member" | null;
 }
 
 export interface SpaceItem {
   id: number;
   client_space_id: string;
-  cloud_team_id: string | null;
+  cloud_space_id: string | null;
   workspace_id: string | null;
   kind: "private" | "team";
   name: string;
   emoji: string | null;
   sort_order: number;
+  // Server-computed max effective role across assigned teams (ws owner/admin ⇒ admin).
   my_role: "admin" | "member" | null;
+  // Server-computed deduped union of assigned team rosters.
   member_count: number | null;
+  teams: SpaceTeamRef[];
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
   created_at: string;
@@ -780,12 +787,8 @@ declare global {
         relocatedTitles?: string[];
         error?: string;
       }>;
-      getSpaceByCloudTeamId?: (cloudTeamId: string) => Promise<SpaceItem | null>;
-      upsertSpaceFromCloud?: (team: Record<string, unknown>) => Promise<SpaceItem>;
-      updateSpaceMemberCount?: (
-        id: number,
-        count: number
-      ) => Promise<{ success: boolean; space?: SpaceItem; error?: string }>;
+      getSpaceByCloudSpaceId?: (cloudSpaceId: string) => Promise<SpaceItem | null>;
+      upsertSpaceFromCloud?: (space: Record<string, unknown>) => Promise<SpaceItem>;
       setSpaceSyncStatus?: (
         id: number,
         status: SpaceItem["sync_status"]

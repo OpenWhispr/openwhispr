@@ -1258,15 +1258,30 @@
         }
       },
       "teams": {
-        "title": "Espaces d'équipe",
-        "description": "Organisez des dossiers et notes partagés pour certains membres de l'espace de travail.",
-        "new": "Nouvel espace d'équipe",
-        "empty": "Aucun espace d'équipe.",
-        "createFirst": "Créez votre premier espace d'équipe",
-        "createTitle": "Créer un espace d'équipe",
-        "nameLabel": "Nom de l'espace d'équipe",
+        "title": "Équipes",
+        "description": "Groupes de membres du workspace qui donnent accès aux espaces d'équipe.",
+        "new": "Nouvelle équipe",
+        "empty": "Pas encore d'équipes.",
+        "createFirst": "Créez votre première équipe",
+        "createTitle": "Créer une équipe",
+        "nameLabel": "Nom de l'équipe",
         "memberCount_one": "{{count}} membre",
-        "memberCount_other": "{{count}} membres"
+        "memberCount_other": "{{count}} membres",
+        "membersButton": "Membres",
+        "backsSpaces_one": "Porte {{count}} espace",
+        "backsSpaces_other": "Porte {{count}} espaces",
+        "couldNotCreate": "Impossible de créer l'équipe",
+        "deleteConfirmTitle": "Supprimer {{team}} ?",
+        "deleteConfirmDescription": "Cela archive l'équipe. Ses membres perdent l'accès qu'elle accordait.",
+        "deleteConfirmBacksSpaces_one": "Cette équipe porte {{count}} espace. Ses membres perdront l'accès accordé par son intermédiaire.",
+        "deleteConfirmBacksSpaces_other": "Cette équipe porte {{count}} espaces. Ses membres perdront l'accès accordé par son intermédiaire.",
+        "members": {
+          "title": "Membres de {{team}}",
+          "removeConfirm": "Retirer {{name}} de {{team}} ?",
+          "leave": "Quitter l'équipe",
+          "leaveConfirm": "Quitter {{team}} ?",
+          "leaveConfirmDescription": "Vous perdrez l'accès aux espaces portés par cette équipe, sauf si une autre équipe vous inclut."
+        }
       },
       "invites": {
         "title": "Invitations en attente",
@@ -2392,7 +2407,7 @@
       "privateTooltip": "Vous seul pouvez voir votre espace personnel",
       "newSpace": "Nouvel espace d'équipe",
       "createTitle": "Créer un espace d'équipe",
-      "createDescription": "Un espace partagé au sein d'un espace de travail pour certains coéquipiers.",
+      "createDescription": "Un espace partagé au sein d'un workspace, porté par une ou plusieurs équipes.",
       "nameLabel": "Nom",
       "emojiLabel": "Émoji",
       "create": "Créer",
@@ -2403,7 +2418,7 @@
       "deleteSpace": "Supprimer l'espace",
       "deleteConfirmTitle": "Supprimer l'espace ?",
       "deleteConfirmDescription": "Cela supprime définitivement {{space}} ainsi que tous ses dossiers et notes sur cet appareil.",
-      "deleteConfirmTeamDescription": "Cela supprime {{space}} pour tout le monde. Les membres perdront l'accès à tous ses dossiers et notes.",
+      "deleteConfirmTeamDescription": "Cela supprime {{space}} pour tout le monde. Ses équipes subsistent, mais les membres perdent l'accès à tous ses dossiers et notes.",
       "deleteTypeName": "Saisissez {{space}} pour confirmer",
       "couldNotDelete": "Impossible de supprimer l'espace",
       "deleted": "{{space}} supprimé",
@@ -2437,8 +2452,6 @@
       "conflictKeep": "Continuer à modifier",
       "editedBy": "Modifié par {{name}} · {{time}}",
       "members": {
-        "menu": "Membres…",
-        "title": "Membres de {{space}}",
         "addPeople": "Ajouter des personnes",
         "addFailed": "Impossible d'ajouter {{failed}} personnes sur {{total}}",
         "searchPlaceholder": "Rechercher des personnes…",
@@ -2447,15 +2460,29 @@
         "remove": "Retirer",
         "removeConfirm": "Retirer {{name}} de {{space}} ?",
         "removeConfirmDescription": "Cette personne perdra l'accès à toutes les notes de cet espace.",
-        "leave": "Quitter l'espace",
-        "leaveConfirm": "Quitter {{space}} ?",
-        "leaveConfirmDescription": "Vous perdrez l'accès à toutes les notes de cet espace.",
-        "implicitAdminCannotLeave": "Les propriétaires et administrateurs de l'espace de travail ont accès à tous les espaces d'équipe et ne peuvent pas les quitter.",
         "inviteFooter": "Inviter {{email}} dans l'espace de travail…",
         "empty": "Personne n'a encore été ajouté"
       },
       "invitedTo_one": "Vous rejoindrez {{count}} espace d'équipe",
-      "invitedTo_other": "Vous rejoindrez {{count}} espaces d'équipe"
+      "invitedTo_other": "Vous rejoindrez {{count}} espaces d'équipe",
+      "teamsMembers": {
+        "menu": "Équipes et membres…",
+        "title": "Équipes et membres de {{space}}",
+        "noTeams": "Aucune équipe n'est encore rattachée à cet espace. Seuls les administrateurs du workspace peuvent le voir.",
+        "addTeam": "Ajouter une équipe…",
+        "removeTeamFromSpace": "Retirer de l'espace",
+        "removeTeamConfirm": "Retirer {{team}} de {{space}} ?",
+        "removeTeamConfirmDescription": "Ses membres perdront l'accès à cet espace, sauf si une autre équipe rattachée les inclut.",
+        "lastTeamWarning": "C'est la seule équipe rattachée à cet espace. Après son retrait, seuls les administrateurs du workspace garderont l'accès.",
+        "affectsOtherSpaces_one": "Les modifications de {{team}} s'appliquent aussi à {{count}} autre espace qu'elle porte.",
+        "affectsOtherSpaces_other": "Les modifications de {{team}} s'appliquent aussi à {{count}} autres espaces qu'elle porte."
+      },
+      "teams": {
+        "assignLabel": "Équipes",
+        "newTeam": "Nouvelle équipe",
+        "newTeamNameLabel": "Nom de l'équipe",
+        "loadError": "Impossible de charger les équipes."
+      }
     },
     "structureIntro": {
       "title": "Où se trouvent vos notes",
@@ -2470,7 +2497,7 @@
       },
       "teamSpace": {
         "title": "Espace d'équipe",
-        "description": "Un espace partagé au sein d'un espace de travail pour certains coéquipiers."
+        "description": "Un espace partagé au sein d'un workspace. Une ou plusieurs équipes y donnent accès."
       },
       "contents": "Chaque espace peut contenir des dossiers et des notes.",
       "done": "Compris",

@@ -73,7 +73,7 @@ export function ContainerOverview({
     : undefined;
   const canInvite =
     space.kind === "team" &&
-    !!space.cloud_team_id &&
+    !!space.cloud_space_id &&
     !!workspace &&
     canManageSpace(space, workspace.role ?? null);
 
@@ -150,13 +150,13 @@ export function ContainerOverview({
         </div>
       </div>
 
-      {canInvite && workspace && space.cloud_team_id && (
+      {canInvite && workspace && space.cloud_space_id && (
         <InviteTeammateDialog
           open={showInviteDialog}
           onOpenChange={setShowInviteDialog}
           workspaceId={workspace.id}
           workspaceName={workspace.name}
-          teamIds={[space.cloud_team_id]}
+          teamIds={space.teams.map((team) => team.id)}
         />
       )}
     </div>

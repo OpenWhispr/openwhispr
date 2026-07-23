@@ -1694,27 +1694,21 @@ class IPCHandlers {
     });
 
     // Spaces sync
-    ipcMain.handle("db-get-space-by-cloud-team-id", (_, cloudTeamId) =>
-      this.databaseManager.getSpaceByCloudTeamId(cloudTeamId)
+    ipcMain.handle("db-get-space-by-cloud-space-id", (_, cloudSpaceId) =>
+      this.databaseManager.getSpaceByCloudSpaceId(cloudSpaceId)
     );
-    ipcMain.handle("db-upsert-space-from-cloud", (_, team) => {
-      const space = this.databaseManager.upsertSpaceFromCloud(team);
+    ipcMain.handle("db-upsert-space-from-cloud", (_, cloudSpace) => {
+      const space = this.databaseManager.upsertSpaceFromCloud(cloudSpace);
       if (space) setImmediate(() => this.broadcastToWindows("space-synced", space));
       return space;
-    });
-    ipcMain.handle("db-update-space-member-count", (_, id, count) => {
-      const result = this.databaseManager.updateSpaceMemberCount(id, count);
-      if (result?.space) {
-        const space = result.space;
-        setImmediate(() => this.broadcastToWindows("space-synced", space));
-      }
-      return result;
     });
     ipcMain.handle("db-set-space-sync-status", (_, id, status) => {
       const result = this.databaseManager.setSpaceSyncStatus(id, status);
       if (result?.success) {
         // Live skeleton toggling: the tree keys pending/synced off this flag.
-        const space = this.databaseManager.db.prepare("SELECT * FROM spaces WHERE id = ?").get(id);
+        const space = this.databaseManager._spaceRow(
+          this.databaseManager.db.prepare("SELECT * FROM spaces WHERE id = ?").get(id)
+        );
         if (space) setImmediate(() => this.broadcastToWindows("space-synced", space));
       }
       return result;

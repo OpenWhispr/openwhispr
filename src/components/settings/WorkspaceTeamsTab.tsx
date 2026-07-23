@@ -1,16 +1,25 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Users, Trash2, Loader2 } from "lucide-react";
-import { createTeamSpace, deleteTeamSpace } from "../../services/teamSpaceActions";
+import { deleteTeam } from "../../services/spaceActions";
+import { TeamsService } from "../../services/TeamsService";
 import { loadSpaces, useSpaces } from "../../stores/noteStore";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
+import { useDialogs } from "../../hooks/useDialogs";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { useToast } from "../ui/useToast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
-import DeleteSpaceDialog from "../notes/DeleteSpaceDialog";
-import type { SpaceItem, Workspace } from "../../types/electron";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  ConfirmDialog,
+} from "../ui/dialog";
+import TeamMembersDialog from "./TeamMembersDialog";
+import type { Team, Workspace } from "../../types/electron";
 
 interface Props {
   workspace: Workspace;
@@ -19,24 +28,47 @@ interface Props {
 export default function WorkspaceTeamsTab({ workspace }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const spaces = useSpaces();
-  const teams = useMemo(
-    () => spaces.filter((s) => s.kind === "team" && s.workspace_id === workspace.id),
-    [spaces, workspace.id]
-  );
-  const [spacesLoaded, setSpacesLoaded] = useState(false);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamsLoaded, setTeamsLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const showCreateSpinner = useDelayedFlag(submitting);
-  const [deleteTarget, setDeleteTarget] = useState<SpaceItem | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [membersTeam, setMembersTeam] = useState<Team | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const canManage = workspace.role === "owner" || workspace.role === "admin";
 
-  // The settings surface can open before the notes tree ever loads spaces.
+  const loadTeams = useCallback(async () => {
+    setLoadFailed(false);
+    try {
+      setTeams(await TeamsService.list(workspace.id));
+    } catch {
+      setLoadFailed(true);
+    } finally {
+      setTeamsLoaded(true);
+    }
+  }, [workspace.id]);
+
+  // Spaces feed the "backs N spaces" column; the settings surface can open
+  // before the notes tree ever loads them.
   useEffect(() => {
-    void loadSpaces().finally(() => setSpacesLoaded(true));
-  }, []);
+    void loadTeams();
+    void loadSpaces();
+  }, [loadTeams]);
+
+  const backedSpacesByTeam = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const space of spaces) {
+      if (space.kind !== "team") continue;
+      for (const teamRef of space.teams) {
+        counts.set(teamRef.id, (counts.get(teamRef.id) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [spaces]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -44,12 +76,13 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
     if (!trimmed || submitting) return;
     setSubmitting(true);
     try {
-      await createTeamSpace(workspace.id, { name: trimmed });
+      await TeamsService.create(workspace.id, { name: trimmed });
+      await loadTeams();
       setName("");
       setCreateOpen(false);
     } catch (error) {
       toast({
-        title: t("notes.spaces.couldNotCreate"),
+        title: t("settingsPage.workspace.teams.couldNotCreate"),
         description: error instanceof Error ? error.message : t("common.unknownError"),
         variant: "destructive",
       });
@@ -58,22 +91,32 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
     }
   }
 
-  async function performDelete(space: SpaceItem) {
-    setDeletingId(space.id);
-    try {
-      const result = await deleteTeamSpace(space);
-      if (!result.success) {
-        toast({
-          title: t("notes.spaces.couldNotDelete"),
-          description: result.error ?? t("common.unknownError"),
-          variant: "destructive",
-        });
-        return;
-      }
-      toast({ title: t("notes.spaces.deleted", { space: space.name }) });
-    } finally {
-      setDeletingId(null);
-    }
+  function confirmDelete(team: Team) {
+    const backedSpaces = backedSpacesByTeam.get(team.id) ?? 0;
+    showConfirmDialog({
+      title: t("settingsPage.workspace.teams.deleteConfirmTitle", { team: team.name }),
+      description:
+        backedSpaces > 0
+          ? t("settingsPage.workspace.teams.deleteConfirmBacksSpaces", { count: backedSpaces })
+          : t("settingsPage.workspace.teams.deleteConfirmDescription"),
+      confirmText: t("common.delete"),
+      variant: "destructive",
+      onConfirm: async () => {
+        setDeletingId(team.id);
+        try {
+          await deleteTeam(team.id);
+          await loadTeams();
+        } catch (error) {
+          toast({
+            title: t("common.error"),
+            description: error instanceof Error ? error.message : t("common.unknownError"),
+            variant: "destructive",
+          });
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   }
 
   return (
@@ -95,8 +138,17 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         )}
       </div>
 
-      {!spacesLoaded && teams.length === 0 ? (
+      {!teamsLoaded ? (
         <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
+      ) : loadFailed && teams.length === 0 ? (
+        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            {t("settingsPage.workspace.loadError.description")}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void loadTeams()}>
+            {t("settingsPage.workspace.loadError.retry")}
+          </Button>
+        </div>
       ) : (
         <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
           {teams.length === 0 && (
@@ -114,27 +166,37 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
           )}
           {teams.map((team) => {
             const isDeleting = deletingId === team.id;
+            const backedSpaces = backedSpacesByTeam.get(team.id) ?? 0;
             return (
               <div key={team.id} className="flex items-center gap-3 px-4 h-14">
-                {team.emoji && (
-                  <span className="text-[13px] leading-none shrink-0" aria-hidden="true">
-                    {team.emoji}
-                  </span>
-                )}
-                <p className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">
-                  {team.name}
-                </p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-foreground truncate">{team.name}</p>
+                  {backedSpaces > 0 && (
+                    <p className="text-xs text-muted-foreground/80 truncate">
+                      {t("settingsPage.workspace.teams.backsSpaces", { count: backedSpaces })}
+                    </p>
+                  )}
+                </div>
                 <span className="text-xs text-muted-foreground">
                   {t("settingsPage.workspace.teams.memberCount", {
                     count: team.member_count ?? 0,
                   })}
                 </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMembersTeam(team)}
+                  className="h-7 px-2 text-xs"
+                >
+                  <Users className="mr-1 h-3 w-3" />
+                  {t("settingsPage.workspace.teams.membersButton")}
+                </Button>
                 {canManage && (
                   <button
                     type="button"
-                    onClick={() => setDeleteTarget(team)}
+                    onClick={() => confirmDelete(team)}
                     disabled={isDeleting}
-                    aria-label={t("notes.spaces.deleteSpace")}
+                    aria-label={t("common.delete")}
                     className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30 disabled:pointer-events-none"
                   >
                     {isDeleting ? (
@@ -187,10 +249,29 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         </DialogContent>
       </Dialog>
 
-      <DeleteSpaceDialog
-        space={deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={(space) => void performDelete(space)}
+      {membersTeam && (
+        <TeamMembersDialog
+          team={membersTeam}
+          workspace={workspace}
+          open={!!membersTeam}
+          onOpenChange={(open) => {
+            if (!open) {
+              setMembersTeam(null);
+              void loadTeams();
+            }
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(o) => !o && hideConfirmDialog()}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        onConfirm={confirmDialog.onConfirm}
+        variant={confirmDialog.variant}
       />
     </div>
   );

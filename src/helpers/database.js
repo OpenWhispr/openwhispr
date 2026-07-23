@@ -706,6 +706,24 @@ class DatabaseManager {
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_team_id ON spaces(cloud_team_id) WHERE cloud_team_id IS NOT NULL"
       );
 
+      // First-class spaces: a space mirrors a cloud space backed by one or more
+      // teams. cloud_team_id survives only so pre-spaces rows can be adopted by
+      // upsertSpaceFromCloud (matched via the space's single backfilled team).
+      try {
+        this.db.exec("ALTER TABLE spaces ADD COLUMN cloud_space_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        // JSON array of { id, name, my_role } mirrored from GET /api/me/spaces.
+        this.db.exec("ALTER TABLE spaces ADD COLUMN teams TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_space_id ON spaces(cloud_space_id) WHERE cloud_space_id IS NOT NULL"
+      );
+
       const privateSpaceCount = this.db
         .prepare("SELECT COUNT(*) as count FROM spaces WHERE kind = 'private'")
         .get();
@@ -1963,6 +1981,20 @@ class DatabaseManager {
     }
   }
 
+  // Parses the teams JSON mirror so renderer consumers only ever see an array.
+  _spaceRow(row) {
+    if (!row) return row;
+    let teams = [];
+    if (row.teams) {
+      try {
+        teams = JSON.parse(row.teams);
+      } catch {
+        teams = [];
+      }
+    }
+    return { ...row, teams };
+  }
+
   getSpaces() {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -1970,7 +2002,8 @@ class DatabaseManager {
         .prepare(
           "SELECT * FROM spaces WHERE deleted_at IS NULL ORDER BY CASE WHEN kind = 'private' THEN 0 ELSE 1 END, sort_order ASC, name ASC"
         )
-        .all();
+        .all()
+        .map((row) => this._spaceRow(row));
     } catch (error) {
       debugLogger.error("Error getting spaces", { error: error.message }, "spaces");
       throw error;
@@ -1994,9 +2027,9 @@ class DatabaseManager {
           "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order) VALUES (?, ?, ?, ?, ?)"
         )
         .run(randomUUID(), kind, trimmed, emoji, sortOrder);
-      const space = this.db
-        .prepare("SELECT * FROM spaces WHERE id = ?")
-        .get(result.lastInsertRowid);
+      const space = this._spaceRow(
+        this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(result.lastInsertRowid)
+      );
       return { success: true, space };
     } catch (error) {
       debugLogger.error("Error creating space", { error: error.message }, "spaces");
@@ -2028,7 +2061,7 @@ class DatabaseManager {
       fields.push("sync_status = 'pending'", "updated_at = datetime('now')");
       values.push(id);
       this.db.prepare(`UPDATE spaces SET ${fields.join(", ")} WHERE id = ?`).run(...values);
-      const updated = this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(id);
+      const updated = this._spaceRow(this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(id));
       return { success: true, space: updated };
     } catch (error) {
       debugLogger.error("Error updating space", { error: error.message }, "spaces");
@@ -2038,21 +2071,6 @@ class DatabaseManager {
 
   renameSpace(id, name) {
     return this.updateSpace(id, { name });
-  }
-
-  // Touches ONLY member_count — never clobbers a concurrent rename or backfill flag.
-  updateSpaceMemberCount(id, count) {
-    try {
-      if (!this.db) throw new Error("Database not initialized");
-      const result = this.db
-        .prepare("UPDATE spaces SET member_count = ? WHERE id = ?")
-        .run(count, id);
-      if (result.changes === 0) return { success: false, error: "Space not found" };
-      return { success: true, space: this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(id) };
-    } catch (error) {
-      debugLogger.error("Error updating space member count", { error: error.message }, "spaces");
-      throw error;
-    }
   }
 
   setSpaceSyncStatus(id, status) {
@@ -2068,39 +2086,58 @@ class DatabaseManager {
     }
   }
 
-  getSpaceByCloudTeamId(cloudTeamId) {
+  getSpaceByCloudSpaceId(cloudSpaceId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return (
-        this.db.prepare("SELECT * FROM spaces WHERE cloud_team_id = ?").get(cloudTeamId) || null
-      );
+      const row = this.db
+        .prepare("SELECT * FROM spaces WHERE cloud_space_id = ?")
+        .get(cloudSpaceId);
+      return row ? this._spaceRow(row) : null;
     } catch (error) {
-      debugLogger.error("Error getting space by cloud team id", { error: error.message }, "spaces");
+      debugLogger.error(
+        "Error getting space by cloud space id",
+        { error: error.message },
+        "spaces"
+      );
       throw error;
     }
   }
 
-  upsertSpaceFromCloud(team) {
+  upsertSpaceFromCloud(space) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const updatedAt = team.updated_at || team.created_at || new Date().toISOString();
-      const existing = this.db.prepare("SELECT * FROM spaces WHERE cloud_team_id = ?").get(team.id);
+      const updatedAt = space.updated_at || space.created_at || new Date().toISOString();
+      const teams = Array.isArray(space.teams) ? space.teams : [];
+      const teamsJson = JSON.stringify(teams);
+      let existing = this.db
+        .prepare("SELECT * FROM spaces WHERE cloud_space_id = ?")
+        .get(space.id);
+      if (!existing && teams.length === 1) {
+        // Adopt a pre-spaces row: the server backfilled one space per legacy
+        // team, so a single-team space claims the local row that mirrored that
+        // team. Keeps local ids alive for chats, vector payloads and tree state.
+        existing = this.db
+          .prepare("SELECT * FROM spaces WHERE cloud_space_id IS NULL AND cloud_team_id = ?")
+          .get(teams[0].id);
+      }
       if (existing) {
         this.db
           .prepare(
-            `UPDATE spaces SET workspace_id = ?, name = ?, emoji = ?, my_role = ?, member_count = ?,
-               deleted_at = NULL, updated_at = ? WHERE id = ?`
+            `UPDATE spaces SET cloud_space_id = ?, workspace_id = ?, name = ?, emoji = ?, my_role = ?,
+               member_count = ?, teams = ?, deleted_at = NULL, updated_at = ? WHERE id = ?`
           )
           .run(
-            team.workspace_id ?? null,
-            team.name,
-            team.emoji ?? null,
-            team.my_role ?? null,
-            team.member_count ?? null,
+            space.id,
+            space.workspace_id ?? null,
+            space.name,
+            space.emoji ?? null,
+            space.my_role ?? null,
+            space.member_count ?? null,
+            teamsJson,
             updatedAt,
             existing.id
           );
-        return this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(existing.id);
+        return this._spaceRow(this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(existing.id));
       }
       const maxOrder = this.db.prepare("SELECT MAX(sort_order) as max_order FROM spaces").get();
       // New spaces insert as 'pending' (skeletons until the content backfill
@@ -2108,23 +2145,26 @@ class DatabaseManager {
       // backfill's 'pending' survives the next mirror pass and re-runs.
       const result = this.db
         .prepare(
-          `INSERT INTO spaces (client_space_id, cloud_team_id, workspace_id, kind, name, emoji,
-             sort_order, my_role, member_count, sync_status, created_at, updated_at)
-           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, 'pending', ?, ?)`
+          `INSERT INTO spaces (client_space_id, cloud_space_id, workspace_id, kind, name, emoji,
+             sort_order, my_role, member_count, teams, sync_status, created_at, updated_at)
+           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
         )
         .run(
           randomUUID(),
-          team.id,
-          team.workspace_id ?? null,
-          team.name,
-          team.emoji ?? null,
+          space.id,
+          space.workspace_id ?? null,
+          space.name,
+          space.emoji ?? null,
           (maxOrder?.max_order ?? 0) + 1,
-          team.my_role ?? null,
-          team.member_count ?? null,
-          team.created_at || updatedAt,
+          space.my_role ?? null,
+          space.member_count ?? null,
+          teamsJson,
+          space.created_at || updatedAt,
           updatedAt
         );
-      return this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(result.lastInsertRowid);
+      return this._spaceRow(
+        this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(result.lastInsertRowid)
+      );
     } catch (error) {
       debugLogger.error("Error upserting space from cloud", { error: error.message }, "spaces");
       throw error;

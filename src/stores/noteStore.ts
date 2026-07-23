@@ -536,7 +536,7 @@ export function removeNote(id: number): void {
 
 function handleSpacePurged(spaceId: number): void {
   const state = useNoteStore.getState();
-  const purgedTeamId = state.spaces.find((s) => s.id === spaceId)?.cloud_team_id ?? null;
+  const purgedCloudSpaceId = state.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? null;
   const removedKeys = new Set<string>([spaceContainerKey(spaceId)]);
   state.folders.forEach((f) => {
     if (f.space_id === spaceId) removedKeys.add(folderContainerKey(f.id));
@@ -574,7 +574,7 @@ function handleSpacePurged(spaceId: number): void {
     Object.entries(state.noteConflicts).filter(
       ([clientId, cloudNote]) =>
         !purgedClientIds.has(clientId) &&
-        (purgedTeamId == null || cloudNote.team_id !== purgedTeamId)
+        (purgedCloudSpaceId == null || cloudNote.space_id !== purgedCloudSpaceId)
     )
   );
   Object.keys(state.noteConflicts).forEach((clientId) => {

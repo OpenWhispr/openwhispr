@@ -1258,15 +1258,30 @@
         }
       },
       "teams": {
-        "title": "Team-Bereiche",
-        "description": "Organisieren Sie gemeinsame Ordner und Notizen für ausgewählte Workspace-Mitglieder.",
-        "new": "Neuer Team-Bereich",
-        "empty": "Noch keine Team-Bereiche.",
-        "createFirst": "Erstellen Sie Ihren ersten Team-Bereich",
-        "createTitle": "Team-Bereich erstellen",
-        "nameLabel": "Name des Team-Bereichs",
+        "title": "Teams",
+        "description": "Gruppen von Workspace-Mitgliedern, die Zugriff auf Team-Spaces gewähren.",
+        "new": "Neues Team",
+        "empty": "Noch keine Teams.",
+        "createFirst": "Erstelle dein erstes Team",
+        "createTitle": "Team erstellen",
+        "nameLabel": "Teamname",
         "memberCount_one": "{{count}} Mitglied",
-        "memberCount_other": "{{count}} Mitglieder"
+        "memberCount_other": "{{count}} Mitglieder",
+        "membersButton": "Mitglieder",
+        "backsSpaces_one": "Trägt {{count}} Space",
+        "backsSpaces_other": "Trägt {{count}} Spaces",
+        "couldNotCreate": "Team konnte nicht erstellt werden",
+        "deleteConfirmTitle": "{{team}} löschen?",
+        "deleteConfirmDescription": "Das Team wird archiviert. Seine Mitglieder verlieren den dadurch gewährten Zugriff.",
+        "deleteConfirmBacksSpaces_one": "Dieses Team trägt {{count}} Space. Seine Mitglieder verlieren den darüber gewährten Zugriff.",
+        "deleteConfirmBacksSpaces_other": "Dieses Team trägt {{count}} Spaces. Seine Mitglieder verlieren den darüber gewährten Zugriff.",
+        "members": {
+          "title": "Mitglieder von {{team}}",
+          "removeConfirm": "{{name}} aus {{team}} entfernen?",
+          "leave": "Team verlassen",
+          "leaveConfirm": "{{team}} verlassen?",
+          "leaveConfirmDescription": "Du verlierst den Zugriff auf Spaces dieses Teams, sofern dich kein anderes Team einschließt."
+        }
       },
       "invites": {
         "title": "Ausstehende Einladungen",
@@ -2392,7 +2407,7 @@
       "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
       "newSpace": "Neuer Team-Bereich",
       "createTitle": "Team-Bereich erstellen",
-      "createDescription": "Ein gemeinsamer Bereich in einem Workspace für ausgewählte Teammitglieder.",
+      "createDescription": "Ein gemeinsamer Bereich in einem Workspace, getragen von einem oder mehreren Teams.",
       "nameLabel": "Name",
       "emojiLabel": "Emoji",
       "create": "Erstellen",
@@ -2403,7 +2418,7 @@
       "deleteSpace": "Bereich löschen",
       "deleteConfirmTitle": "Bereich löschen?",
       "deleteConfirmDescription": "Dadurch werden {{space}} und alle zugehörigen Ordner und Notizen auf diesem Gerät endgültig gelöscht.",
-      "deleteConfirmTeamDescription": "Dadurch wird {{space}} für alle gelöscht. Mitglieder verlieren den Zugriff auf alle zugehörigen Ordner und Notizen.",
+      "deleteConfirmTeamDescription": "Dies löscht {{space}} für alle. Die Teams bleiben bestehen, aber Mitglieder verlieren den Zugriff auf alle Ordner und Notizen.",
       "deleteTypeName": "Geben Sie {{space}} zur Bestätigung ein",
       "couldNotDelete": "Bereich konnte nicht gelöscht werden",
       "deleted": "{{space}} gelöscht",
@@ -2437,8 +2452,6 @@
       "conflictKeep": "Weiter bearbeiten",
       "editedBy": "Bearbeitet von {{name}} · {{time}}",
       "members": {
-        "menu": "Mitglieder…",
-        "title": "Mitglieder von {{space}}",
         "addPeople": "Personen hinzufügen",
         "addFailed": "{{failed}} von {{total}} Personen konnten nicht hinzugefügt werden",
         "searchPlaceholder": "Personen suchen…",
@@ -2447,15 +2460,29 @@
         "remove": "Entfernen",
         "removeConfirm": "{{name}} aus {{space}} entfernen?",
         "removeConfirmDescription": "Diese Person verliert den Zugriff auf alle Notizen in diesem Bereich.",
-        "leave": "Bereich verlassen",
-        "leaveConfirm": "{{space}} verlassen?",
-        "leaveConfirmDescription": "Sie verlieren den Zugriff auf alle Notizen in diesem Bereich.",
-        "implicitAdminCannotLeave": "Workspace-Inhaber und -Administratoren haben Zugriff auf alle Team-Bereiche und können sie nicht verlassen.",
         "inviteFooter": "{{email}} in den Workspace einladen…",
         "empty": "Noch niemand hinzugefügt"
       },
       "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
-      "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei"
+      "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei",
+      "teamsMembers": {
+        "menu": "Teams & Mitglieder…",
+        "title": "Teams & Mitglieder von {{space}}",
+        "noTeams": "Diesem Space sind noch keine Teams zugewiesen. Nur Workspace-Admins können ihn sehen.",
+        "addTeam": "Team hinzufügen…",
+        "removeTeamFromSpace": "Aus dem Space entfernen",
+        "removeTeamConfirm": "{{team}} aus {{space}} entfernen?",
+        "removeTeamConfirmDescription": "Seine Mitglieder verlieren den Zugriff auf diesen Space, sofern kein anderes zugewiesenes Team sie einschließt.",
+        "lastTeamWarning": "Dies ist das einzige Team dieses Space. Danach behalten nur Workspace-Admins Zugriff.",
+        "affectsOtherSpaces_one": "Änderungen an {{team}} gelten auch für {{count}} weiteren Space.",
+        "affectsOtherSpaces_other": "Änderungen an {{team}} gelten auch für {{count}} weitere Spaces."
+      },
+      "teams": {
+        "assignLabel": "Teams",
+        "newTeam": "Neues Team",
+        "newTeamNameLabel": "Teamname",
+        "loadError": "Teams konnten nicht geladen werden."
+      }
     },
     "structureIntro": {
       "title": "Wo Ihre Notizen gespeichert sind",
@@ -2470,7 +2497,7 @@
       },
       "teamSpace": {
         "title": "Team-Bereich",
-        "description": "Ein gemeinsamer Bereich in einem Workspace für ausgewählte Teammitglieder."
+        "description": "Ein gemeinsamer Bereich in einem Workspace. Ein oder mehrere Teams gewähren Zugriff."
       },
       "contents": "Jeder Bereich kann Ordner und Notizen enthalten.",
       "done": "Verstanden",

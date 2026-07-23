@@ -6,7 +6,7 @@ interface FolderInput {
   is_default?: boolean;
   sort_order?: number;
   workspace_id?: string | null;
-  team_id?: string | null;
+  space_id?: string | null;
 }
 
 interface CloudFolder {
@@ -16,9 +16,9 @@ interface CloudFolder {
   is_default: boolean;
   sort_order: number;
   workspace_id: string | null;
-  team_id: string | null;
-  previous_team_id?: string | null;
-  // Redacted stub for a row that moved out of one of the caller's teams —
+  space_id: string | null;
+  previous_space_id?: string | null;
+  // Redacted stub for a row that moved out of one of the caller's spaces —
   // only id/client_folder_id/scope/updated_at are present.
   access_removed?: boolean;
   deleted_at: string | null;

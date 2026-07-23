@@ -4,7 +4,7 @@ import { buildNotesListPath } from "./noteListQuery";
 interface NoteInput {
   client_note_id?: string;
   workspace_id?: string | null;
-  team_id?: string | null;
+  space_id?: string | null;
   title?: string | null;
   content?: string;
   enhanced_content?: string | null;
@@ -41,10 +41,10 @@ export interface CloudNote {
   diarization_enabled: number | null;
   expected_speaker_count: number | null;
   workspace_id: string | null;
-  team_id: string | null;
+  space_id: string | null;
   updated_by_user_id: string | null;
-  previous_team_id?: string | null;
-  // Redacted stub for a row that moved out of one of the caller's teams —
+  previous_space_id?: string | null;
+  // Redacted stub for a row that moved out of one of the caller's spaces —
   // only id/client_note_id/scope/updated_at are present.
   access_removed?: boolean;
   deleted_at: string | null;
@@ -103,19 +103,19 @@ async function deleteAll(): Promise<{ deleted: number; errors: number }> {
   return { deleted: results.length - errors, errors };
 }
 
-// scope "all" opts into team results (legacy clients stay personal-only);
-// team_id narrows to a single team and takes precedence over scope.
+// scope "all" opts into space results (legacy clients stay personal-only);
+// space_id narrows to a single space and takes precedence over scope.
 async function search(
   query: string,
   limit?: number,
   scope?: "all",
-  teamId?: string
+  spaceId?: string
 ): Promise<{ notes: SearchResult[] }> {
   return cloudPost<{ notes: SearchResult[] }>("/api/notes/search", {
     query,
     ...(limit !== undefined ? { limit } : {}),
     ...(scope !== undefined ? { scope } : {}),
-    ...(teamId !== undefined ? { team_id: teamId } : {}),
+    ...(spaceId !== undefined ? { space_id: spaceId } : {}),
   });
 }
 

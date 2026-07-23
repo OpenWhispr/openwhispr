@@ -1872,15 +1872,30 @@
         }
       },
       "teams": {
-        "title": "团队空间",
-        "description": "为工作区中的指定成员整理共享文件夹和笔记。",
-        "new": "新建团队空间",
-        "empty": "暂无团队空间。",
-        "createFirst": "创建您的第一个团队空间",
-        "createTitle": "创建团队空间",
-        "nameLabel": "团队空间名称",
+        "title": "团队",
+        "description": "授予团队空间访问权限的工作区成员分组。",
+        "new": "新建团队",
+        "empty": "还没有团队。",
+        "createFirst": "创建你的第一个团队",
+        "createTitle": "创建团队",
+        "nameLabel": "团队名称",
         "memberCount_one": "{{count}} 名成员",
-        "memberCount_other": "{{count}} 名成员"
+        "memberCount_other": "{{count}} 名成员",
+        "membersButton": "成员",
+        "backsSpaces_one": "支持 {{count}} 个空间",
+        "backsSpaces_other": "支持 {{count}} 个空间",
+        "couldNotCreate": "无法创建团队",
+        "deleteConfirmTitle": "删除 {{team}}？",
+        "deleteConfirmDescription": "这将归档该团队。其成员将失去它授予的访问权限。",
+        "deleteConfirmBacksSpaces_one": "该团队支持 {{count}} 个空间。其成员将失去通过它获得的访问权限。",
+        "deleteConfirmBacksSpaces_other": "该团队支持 {{count}} 个空间。其成员将失去通过它获得的访问权限。",
+        "members": {
+          "title": "{{team}} 的成员",
+          "removeConfirm": "将 {{name}} 从 {{team}} 移除？",
+          "leave": "退出团队",
+          "leaveConfirm": "退出 {{team}}？",
+          "leaveConfirmDescription": "除非其他团队包含你，否则你将失去对该团队支持的空间的访问权限。"
+        }
       },
       "invites": {
         "title": "待处理的邀请",
@@ -2184,7 +2199,7 @@
       "privateTooltip": "只有你可以看到你的个人空间",
       "newSpace": "新建团队空间",
       "createTitle": "创建团队空间",
-      "createDescription": "工作区内供指定团队成员使用的共享区域。",
+      "createDescription": "工作区内的共享区域，由一个或多个团队支持。",
       "nameLabel": "名称",
       "emojiLabel": "表情符号",
       "create": "创建",
@@ -2195,7 +2210,7 @@
       "deleteSpace": "删除空间",
       "deleteConfirmTitle": "删除空间？",
       "deleteConfirmDescription": "这将从此设备永久删除 {{space}} 及其所有文件夹和笔记。",
-      "deleteConfirmTeamDescription": "这将为所有人删除 {{space}}。成员将无法再访问其所有文件夹和笔记。",
+      "deleteConfirmTeamDescription": "这将为所有人删除 {{space}}。团队会保留，但成员将失去对其所有文件夹和笔记的访问权限。",
       "deleteTypeName": "输入 {{space}} 以确认",
       "couldNotDelete": "无法删除空间",
       "deleted": "已删除 {{space}}",
@@ -2229,8 +2244,6 @@
       "conflictKeep": "继续编辑",
       "editedBy": "由 {{name}} 编辑 · {{time}}",
       "members": {
-        "menu": "成员…",
-        "title": "{{space}} 的成员",
         "addPeople": "添加成员",
         "addFailed": "{{total}} 人中有 {{failed}} 人无法添加",
         "searchPlaceholder": "搜索成员…",
@@ -2239,15 +2252,29 @@
         "remove": "移除",
         "removeConfirm": "将 {{name}} 从 {{space}} 中移除？",
         "removeConfirmDescription": "对方将无法再访问此空间的所有笔记。",
-        "leave": "退出空间",
-        "leaveConfirm": "退出 {{space}}？",
-        "leaveConfirmDescription": "你将无法再访问此空间的所有笔记。",
-        "implicitAdminCannotLeave": "工作区所有者和管理员可以访问所有团队空间,无法退出。",
         "inviteFooter": "邀请 {{email}} 加入工作区…",
         "empty": "尚未添加任何成员"
       },
       "invitedTo_one": "你将加入 {{count}} 个团队空间",
-      "invitedTo_other": "你将加入 {{count}} 个团队空间"
+      "invitedTo_other": "你将加入 {{count}} 个团队空间",
+      "teamsMembers": {
+        "menu": "团队与成员…",
+        "title": "{{space}} 的团队与成员",
+        "noTeams": "此空间尚无团队支持。只有工作区管理员可以看到它。",
+        "addTeam": "添加团队…",
+        "removeTeamFromSpace": "从空间移除",
+        "removeTeamConfirm": "将 {{team}} 从 {{space}} 移除？",
+        "removeTeamConfirmDescription": "除非其他已分配的团队包含这些成员，否则他们将失去对此空间的访问权限。",
+        "lastTeamWarning": "这是支持此空间的唯一团队。移除后，只有工作区管理员保留访问权限。",
+        "affectsOtherSpaces_one": "对 {{team}} 的更改也会应用到它支持的另外 {{count}} 个空间。",
+        "affectsOtherSpaces_other": "对 {{team}} 的更改也会应用到它支持的另外 {{count}} 个空间。"
+      },
+      "teams": {
+        "assignLabel": "团队",
+        "newTeam": "新建团队",
+        "newTeamNameLabel": "团队名称",
+        "loadError": "无法加载团队。"
+      }
     },
     "structureIntro": {
       "title": "笔记存放在哪里",
@@ -2262,7 +2289,7 @@
       },
       "teamSpace": {
         "title": "团队空间",
-        "description": "工作区内供指定团队成员使用的共享区域。"
+        "description": "工作区内的共享区域。由一个或多个团队授予访问权限。"
       },
       "contents": "每个空间都可以包含文件夹和笔记。",
       "done": "知道了",

@@ -1872,15 +1872,30 @@
         }
       },
       "teams": {
-        "title": "團隊空間",
-        "description": "為工作區中的指定成員整理共享資料夾和筆記。",
-        "new": "新增團隊空間",
-        "empty": "尚無團隊空間。",
-        "createFirst": "建立您的第一個團隊空間",
-        "createTitle": "建立團隊空間",
-        "nameLabel": "團隊空間名稱",
+        "title": "團隊",
+        "description": "授予團隊空間存取權的工作區成員群組。",
+        "new": "新增團隊",
+        "empty": "還沒有團隊。",
+        "createFirst": "建立你的第一個團隊",
+        "createTitle": "建立團隊",
+        "nameLabel": "團隊名稱",
         "memberCount_one": "{{count}} 位成員",
-        "memberCount_other": "{{count}} 位成員"
+        "memberCount_other": "{{count}} 位成員",
+        "membersButton": "成員",
+        "backsSpaces_one": "支持 {{count}} 個空間",
+        "backsSpaces_other": "支持 {{count}} 個空間",
+        "couldNotCreate": "無法建立團隊",
+        "deleteConfirmTitle": "刪除 {{team}}？",
+        "deleteConfirmDescription": "這將封存該團隊。其成員將失去它授予的存取權。",
+        "deleteConfirmBacksSpaces_one": "該團隊支持 {{count}} 個空間。其成員將失去透過它取得的存取權。",
+        "deleteConfirmBacksSpaces_other": "該團隊支持 {{count}} 個空間。其成員將失去透過它取得的存取權。",
+        "members": {
+          "title": "{{team}} 的成員",
+          "removeConfirm": "將 {{name}} 從 {{team}} 移除？",
+          "leave": "退出團隊",
+          "leaveConfirm": "退出 {{team}}？",
+          "leaveConfirmDescription": "除非其他團隊包含你，否則你將失去該團隊支持空間的存取權。"
+        }
       },
       "invites": {
         "title": "待處理的邀請",
@@ -2184,7 +2199,7 @@
       "privateTooltip": "只有你可以看到你的個人空間",
       "newSpace": "新增團隊空間",
       "createTitle": "建立團隊空間",
-      "createDescription": "工作區內供指定團隊成員使用的共享區域。",
+      "createDescription": "工作區內的共享區域，由一個或多個團隊支持。",
       "nameLabel": "名稱",
       "emojiLabel": "表情符號",
       "create": "建立",
@@ -2195,7 +2210,7 @@
       "deleteSpace": "刪除空間",
       "deleteConfirmTitle": "刪除空間？",
       "deleteConfirmDescription": "這會從此裝置永久刪除 {{space}} 及其所有資料夾和筆記。",
-      "deleteConfirmTeamDescription": "這會為所有人刪除 {{space}}。成員將無法再存取其所有資料夾和筆記。",
+      "deleteConfirmTeamDescription": "這將為所有人刪除 {{space}}。團隊會保留，但成員將失去其所有資料夾與筆記的存取權。",
       "deleteTypeName": "輸入 {{space}} 以確認",
       "couldNotDelete": "無法刪除空間",
       "deleted": "已刪除 {{space}}",
@@ -2229,8 +2244,6 @@
       "conflictKeep": "繼續編輯",
       "editedBy": "由 {{name}} 編輯 · {{time}}",
       "members": {
-        "menu": "成員…",
-        "title": "{{space}} 的成員",
         "addPeople": "新增成員",
         "addFailed": "{{total}} 人中有 {{failed}} 人無法加入",
         "searchPlaceholder": "搜尋成員…",
@@ -2239,15 +2252,29 @@
         "remove": "移除",
         "removeConfirm": "要將 {{name}} 從 {{space}} 移除嗎？",
         "removeConfirmDescription": "對方將無法再存取此空間的所有筆記。",
-        "leave": "退出空間",
-        "leaveConfirm": "要退出 {{space}} 嗎？",
-        "leaveConfirmDescription": "你將無法再存取此空間的所有筆記。",
-        "implicitAdminCannotLeave": "工作區擁有者和管理員可以存取所有團隊空間,無法退出。",
         "inviteFooter": "邀請 {{email}} 加入工作區…",
         "empty": "尚未新增任何成員"
       },
       "invitedTo_one": "你將加入 {{count}} 個團隊空間",
-      "invitedTo_other": "你將加入 {{count}} 個團隊空間"
+      "invitedTo_other": "你將加入 {{count}} 個團隊空間",
+      "teamsMembers": {
+        "menu": "團隊與成員…",
+        "title": "{{space}} 的團隊與成員",
+        "noTeams": "此空間尚無團隊支持。只有工作區管理員可以看到它。",
+        "addTeam": "新增團隊…",
+        "removeTeamFromSpace": "從空間移除",
+        "removeTeamConfirm": "將 {{team}} 從 {{space}} 移除？",
+        "removeTeamConfirmDescription": "除非其他已指派的團隊包含這些成員，否則他們將失去此空間的存取權。",
+        "lastTeamWarning": "這是支持此空間的唯一團隊。移除後，只有工作區管理員保留存取權。",
+        "affectsOtherSpaces_one": "對 {{team}} 的變更也會套用到它支持的另外 {{count}} 個空間。",
+        "affectsOtherSpaces_other": "對 {{team}} 的變更也會套用到它支持的另外 {{count}} 個空間。"
+      },
+      "teams": {
+        "assignLabel": "團隊",
+        "newTeam": "新增團隊",
+        "newTeamNameLabel": "團隊名稱",
+        "loadError": "無法載入團隊。"
+      }
     },
     "structureIntro": {
       "title": "筆記存放在哪裡",
@@ -2262,7 +2289,7 @@
       },
       "teamSpace": {
         "title": "團隊空間",
-        "description": "工作區內供指定團隊成員使用的共享區域。"
+        "description": "工作區內的共享區域。由一個或多個團隊授予存取權。"
       },
       "contents": "每個空間都可以包含資料夾和筆記。",
       "done": "知道了",

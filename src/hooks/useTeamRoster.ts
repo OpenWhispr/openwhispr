@@ -1,31 +1,31 @@
 import { useEffect, useState } from "react";
-import { TeamsService } from "../services/TeamsService";
+import { SpacesService } from "../services/SpacesService";
 import type { TeamMember } from "../types/electron";
 
-// Rosters cached per team so repeated lookups (conflict attribution, note
-// authorship) don't refetch.
+// Union rosters cached per cloud space so repeated lookups (conflict
+// attribution, note authorship) don't refetch.
 const rosterCache = new Map<string, Promise<TeamMember[]>>();
 
-export function fetchTeamRoster(teamId: string): Promise<TeamMember[]> {
-  let roster = rosterCache.get(teamId);
+export function fetchSpaceRoster(cloudSpaceId: string): Promise<TeamMember[]> {
+  let roster = rosterCache.get(cloudSpaceId);
   if (!roster) {
-    roster = TeamsService.listMembers(teamId);
-    roster.catch(() => rosterCache.delete(teamId));
-    rosterCache.set(teamId, roster);
+    roster = SpacesService.listMembers(cloudSpaceId);
+    roster.catch(() => rosterCache.delete(cloudSpaceId));
+    rosterCache.set(cloudSpaceId, roster);
   }
   return roster;
 }
 
-export function useTeamRoster(teamId: string | null): Map<string, TeamMember> | null {
+export function useSpaceRoster(cloudSpaceId: string | null): Map<string, TeamMember> | null {
   const [membersById, setMembersById] = useState<Map<string, TeamMember> | null>(null);
 
   useEffect(() => {
-    if (!teamId) {
+    if (!cloudSpaceId) {
       setMembersById(null);
       return;
     }
     let stale = false;
-    fetchTeamRoster(teamId)
+    fetchSpaceRoster(cloudSpaceId)
       .then((members) => {
         if (!stale) setMembersById(new Map(members.map((m) => [m.user_id, m])));
       })
@@ -35,7 +35,7 @@ export function useTeamRoster(teamId: string | null): Map<string, TeamMember> | 
     return () => {
       stale = true;
     };
-  }, [teamId]);
+  }, [cloudSpaceId]);
 
   return membersById;
 }

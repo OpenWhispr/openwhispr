@@ -8,7 +8,7 @@ import type {
 import { NotesService, type CloudNote } from "./NotesService.js";
 import { ConversationsService } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
-import { TeamsService, type MyTeam } from "./TeamsService.js";
+import { SpacesService, type MySpace } from "./SpacesService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
@@ -39,13 +39,13 @@ function isFolderNameTakenError(err: unknown): boolean {
 }
 
 // Extra fields pushed with note/folder payloads so the server files rows into
-// the right team scope; `null` scope means the row must not push at all.
-type PushScopeFields = { workspace_id?: string | null; team_id?: string | null };
+// the right space scope; `null` scope means the row must not push at all.
+type PushScopeFields = { workspace_id?: string | null; space_id?: string | null };
 
-// Per-pull-pass mapping of cloud teams to local spaces.
+// Per-pull-pass mapping of cloud spaces to local spaces.
 interface SpaceSyncContext {
   byId: Map<number, SpaceItem>;
-  byCloudTeamId: Map<string, SpaceItem>;
+  byCloudSpaceId: Map<string, SpaceItem>;
   privateSpace: SpaceItem | null;
   // Guard: at most one mid-pass spaces re-pull per pass.
   refreshedSpaces: boolean;
@@ -81,25 +81,26 @@ function normalizeTimestamp(value: string | null | undefined): string {
 }
 
 // Cross-window guard against a space purge racing an in-flight pull: every
-// purge initiator records the cloud team id here, and pull/upsert paths park
-// rows for recently purged teams instead of resurrecting them as orphaned
+// purge initiator records the cloud space id here, and pull/upsert paths park
+// rows for recently purged spaces instead of resurrecting them as orphaned
 // local rows nothing can ever clean up. Entries are pruned once a spaces pass
-// confirms the team is gone from /api/me/teams, or after a TTL so a failed
-// leave cannot hide a still-live team forever.
-const PURGED_TEAM_GUARD_KEY = "purgedTeamIds";
-const PURGED_TEAM_GUARD_TTL_MS = 15 * 60 * 1000;
+// confirms the space is gone from /api/me/spaces, or after a TTL so a failed
+// delete cannot hide a still-live space forever. Never marked on TEAM delete:
+// a space backed by other teams survives the team's archival.
+const PURGED_SPACE_GUARD_KEY = "purgedSpaceIds";
+const PURGED_SPACE_GUARD_TTL_MS = 15 * 60 * 1000;
 // Serializes the guard's read-modify-write across windows: a prune inside a
-// sync pass racing a leave/delete in another window must not drop the
-// just-written entry.
-const PURGED_TEAM_GUARD_LOCK = "openwhispr-purged-teams";
+// sync pass racing a delete in another window must not drop the just-written
+// entry.
+const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 
-function readPurgedTeamIds(): Record<string, number> {
+export function readPurgedSpaceIds(): Record<string, number> {
   try {
-    const raw = localStorage.getItem(PURGED_TEAM_GUARD_KEY);
+    const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
     const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
     const now = Date.now();
     return Object.fromEntries(
-      Object.entries(parsed).filter(([, at]) => now - at < PURGED_TEAM_GUARD_TTL_MS)
+      Object.entries(parsed).filter(([, at]) => now - at < PURGED_SPACE_GUARD_TTL_MS)
     );
   } catch {
     return {};
@@ -107,22 +108,22 @@ function readPurgedTeamIds(): Record<string, number> {
 }
 
 // Call BEFORE purgeSpace, from every purge path (sync revocation, sign-out,
-// and the UI's leave/delete-space flows).
-export async function markTeamSpacePurged(cloudTeamId: string): Promise<void> {
-  await navigator.locks.request(PURGED_TEAM_GUARD_LOCK, () => {
+// and the UI's delete-space flow).
+export async function markSpacePurged(cloudSpaceId: string): Promise<void> {
+  await navigator.locks.request(PURGED_SPACE_GUARD_LOCK, () => {
     localStorage.setItem(
-      PURGED_TEAM_GUARD_KEY,
-      JSON.stringify({ ...readPurgedTeamIds(), [cloudTeamId]: Date.now() })
+      PURGED_SPACE_GUARD_KEY,
+      JSON.stringify({ ...readPurgedSpaceIds(), [cloudSpaceId]: Date.now() })
     );
   });
 }
 
-async function prunePurgedTeamIds(liveCloudTeamIds: Set<string>): Promise<void> {
-  await navigator.locks.request(PURGED_TEAM_GUARD_LOCK, () => {
+async function prunePurgedSpaceIds(liveCloudSpaceIds: Set<string>): Promise<void> {
+  await navigator.locks.request(PURGED_SPACE_GUARD_LOCK, () => {
     const kept = Object.fromEntries(
-      Object.entries(readPurgedTeamIds()).filter(([id]) => liveCloudTeamIds.has(id))
+      Object.entries(readPurgedSpaceIds()).filter(([id]) => liveCloudSpaceIds.has(id))
     );
-    localStorage.setItem(PURGED_TEAM_GUARD_KEY, JSON.stringify(kept));
+    localStorage.setItem(PURGED_SPACE_GUARD_KEY, JSON.stringify(kept));
   });
 }
 
@@ -196,7 +197,7 @@ class SyncService {
       for (const space of spaces) {
         if (space.kind !== "team") continue;
         try {
-          if (space.cloud_team_id) await markTeamSpacePurged(space.cloud_team_id);
+          if (space.cloud_space_id) await markSpacePurged(space.cloud_space_id);
           await window.electronAPI.purgeSpace?.(space.id);
         } catch (err) {
           console.error(`Purging space ${space.id} on sign-out failed:`, err);
@@ -211,8 +212,10 @@ class SyncService {
     localStorage.removeItem("lastSyncedAt.notes.team");
     localStorage.removeItem("lastSyncedAt.folders.team");
     // The guard protected any pass still in flight during the purge; drop it
-    // so the next account (possibly a member of the same teams) starts clean.
-    localStorage.removeItem(PURGED_TEAM_GUARD_KEY);
+    // so the next account (possibly a member of the same spaces) starts clean.
+    localStorage.removeItem(PURGED_SPACE_GUARD_KEY);
+    // Pre-spaces guard key; stale entries are meaningless now.
+    localStorage.removeItem("purgedTeamIds");
     // Both hold account-scoped/local numeric ids that collide across accounts.
     localStorage.removeItem("activeWorkspaceId");
     localStorage.removeItem("notesTree.expanded");
@@ -576,7 +579,7 @@ class SyncService {
     }
     // A push into a team must reach teammates fast; a pull may also carry
     // their concurrent edits back (throttled like other ambient triggers).
-    if (scope.team_id) this.requestSyncAll("team-push");
+    if (scope.space_id) this.requestSyncAll("team-push");
   }
 
   // Sharing requires a cloud copy. Deliberate single-note push that does not
@@ -634,14 +637,15 @@ class SyncService {
     await window.electronAPI.markTranscriptionSynced?.(t.id, cloud.id);
   }
 
-  // Runs first in every pass: probes team-spaces availability, mirrors the
-  // caller's teams into local spaces, purges spaces whose teams vanished
-  // (deleted, archived, or membership revoked) and backfills new ones.
+  // Runs first in every pass: probes spaces availability, mirrors the caller's
+  // cloud spaces into local rows, purges spaces that vanished (deleted,
+  // archived, or every backing team's membership revoked) and backfills new
+  // ones.
   private async syncSpaces(): Promise<boolean> {
     if (!this.canSyncTeamSpaces()) return true;
-    let teams: MyTeam[];
+    let cloudSpaces: MySpace[];
     try {
-      teams = await TeamsService.myTeams();
+      cloudSpaces = await SpacesService.mySpaces();
     } catch (err) {
       // 404 = endpoint not deployed yet (rollout probe): remember and skip
       // silently so pulls and pushes stay personal-only until a probe succeeds.
@@ -649,24 +653,24 @@ class SyncService {
         this.cacheTeamSpacesCapability(false);
         return true;
       }
-      console.error("Teams fetch failed:", err);
+      console.error("Spaces fetch failed:", err);
       return false;
     }
     this.cacheTeamSpacesCapability(true);
 
-    const cloudIds = new Set(teams.map((t) => t.id));
-    // Teams confirmed gone can no longer resurrect through pulls — their
+    const cloudIds = new Set(cloudSpaces.map((s) => s.id));
+    // Spaces confirmed gone can no longer resurrect through pulls — their
     // purge-race guard entries are done.
-    await prunePurgedTeamIds(cloudIds);
+    await prunePurgedSpaceIds(cloudIds);
 
     const prior = (await window.electronAPI.getSpaces?.()) ?? [];
-    const backfillIds = await this.upsertTeamSpaces(teams);
+    const backfillIds = await this.upsertCloudSpaces(cloudSpaces);
 
     for (const space of prior) {
-      if (space.kind !== "team" || !space.cloud_team_id || cloudIds.has(space.cloud_team_id)) {
+      if (space.kind !== "team" || !space.cloud_space_id || cloudIds.has(space.cloud_space_id)) {
         continue;
       }
-      await markTeamSpacePurged(space.cloud_team_id);
+      await markSpacePurged(space.cloud_space_id);
       const purged = await window.electronAPI.purgeSpace?.(space.id);
       this.dispatchSpaceRevoked(space.name);
       // Never-synced notes survive the purge in Personal (plan §10.6) —
@@ -677,7 +681,7 @@ class SyncService {
     }
 
     if (backfillIds.length > 0) {
-      // scope=all returns pre-existing team rows only when `since` is unset,
+      // scope=all returns pre-existing space rows only when `since` is unset,
       // so a full snapshot pull is the simplest correct backfill for a space
       // that just appeared (v1). Spaces stay 'pending' until it completes so
       // the tree shows skeletons — and so an interrupted backfill re-runs.
@@ -695,18 +699,18 @@ class SyncService {
     return true;
   }
 
-  // Upserts cloud teams into local spaces. Returns local ids of spaces that
+  // Upserts cloud spaces into local rows. Returns local ids of spaces that
   // still need a content backfill: brand new, or left 'pending' by a backfill
   // that never finished.
-  private async upsertTeamSpaces(teams: MyTeam[]): Promise<number[]> {
-    const purged = readPurgedTeamIds();
+  private async upsertCloudSpaces(cloudSpaces: MySpace[]): Promise<number[]> {
+    const purged = readPurgedSpaceIds();
     const backfillIds: number[] = [];
-    for (const team of teams) {
-      // A purge racing this pass (leave/delete just clicked, or the server
-      // hasn't processed it yet) must not resurrect the space.
-      if (purged[team.id]) continue;
+    for (const cloudSpace of cloudSpaces) {
+      // A purge racing this pass (delete just clicked, or the server hasn't
+      // processed it yet) must not resurrect the space.
+      if (purged[cloudSpace.id]) continue;
       const space = await window.electronAPI.upsertSpaceFromCloud?.(
-        team as unknown as Record<string, unknown>
+        cloudSpace as unknown as Record<string, unknown>
       );
       // New spaces insert as 'pending' and stay that way until their content
       // backfill completes, so an interruption anywhere re-runs it.
@@ -721,57 +725,58 @@ class SyncService {
     const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
     return {
       byId: new Map(spaces.map((s) => [s.id, s])),
-      byCloudTeamId: new Map(
-        spaces.filter((s) => s.cloud_team_id).map((s) => [s.cloud_team_id!, s])
+      byCloudSpaceId: new Map(
+        spaces.filter((s) => s.cloud_space_id).map((s) => [s.cloud_space_id!, s])
       ),
       privateSpace: spaces.find((s) => s.kind === "private") ?? null,
       refreshedSpaces: false,
     };
   }
 
-  // Maps a cloud row's team to its local space (team_id null → private space).
-  // An unknown team means we were added to it mid-pass: re-pull spaces once,
-  // then park still-unmapped rows — team content never files into Personal.
+  // Maps a cloud row's space to its local row (space_id null → private space).
+  // An unknown space means we gained access to it mid-pass: re-pull spaces
+  // once, then park still-unmapped rows — space content never files into
+  // Personal.
   private async resolveSpaceForCloudRow(
-    teamId: string | null | undefined,
+    cloudSpaceId: string | null | undefined,
     ctx: SpaceSyncContext
   ): Promise<SpaceItem | null> {
-    if (!teamId) return ctx.privateSpace;
+    if (!cloudSpaceId) return ctx.privateSpace;
     // Live read on every row: a purge can land mid-pass (this ctx would still
     // hold the deleted space), and writing the row would orphan it forever.
-    if (readPurgedTeamIds()[teamId]) return null;
-    const known = ctx.byCloudTeamId.get(teamId);
+    if (readPurgedSpaceIds()[cloudSpaceId]) return null;
+    const known = ctx.byCloudSpaceId.get(cloudSpaceId);
     if (known) return known;
     if (ctx.refreshedSpaces) return null;
     ctx.refreshedSpaces = true;
     try {
-      const teams = await TeamsService.myTeams();
+      const cloudSpaces = await SpacesService.mySpaces();
       // New spaces stay 'pending' so the next spaces pass backfills their
       // pre-existing content (this delta pull only sees rows past the cursor).
-      await this.upsertTeamSpaces(teams);
+      await this.upsertCloudSpaces(cloudSpaces);
     } catch (err) {
       console.error("Mid-pass spaces refresh failed:", err);
       return null;
     }
     const fresh = await this.buildSpaceContext();
     ctx.byId = fresh.byId;
-    ctx.byCloudTeamId = fresh.byCloudTeamId;
+    ctx.byCloudSpaceId = fresh.byCloudSpaceId;
     ctx.privateSpace = fresh.privateSpace;
-    return ctx.byCloudTeamId.get(teamId) ?? null;
+    return ctx.byCloudSpaceId.get(cloudSpaceId) ?? null;
   }
 
-  // Scope fields for push payloads. Team rows carry their team identity; when
-  // the server supports team scope, personal rows send explicit nulls so local
-  // moves out of a team propagate (the server treats an absent team_id as
-  // "keep the current scope"). Returns null for team rows that must not push:
-  // spaces with no cloud team yet (local-only dev spaces), or a server that
-  // no longer understands team scope and would file the row as personal.
+  // Scope fields for push payloads. Space rows carry their space identity;
+  // when the server supports space scope, personal rows send explicit nulls so
+  // local moves out of a space propagate (the server treats an absent space_id
+  // as "keep the current scope"). Returns null for space rows that must not
+  // push: spaces with no cloud id yet (local-only dev spaces), or a server
+  // that doesn't understand space scope and would file the row as personal.
   private pushScopeFields(space: SpaceItem | undefined): PushScopeFields | null {
     if (space?.kind === "team") {
-      if (!space.cloud_team_id || !this.hasTeamSpacesCapability()) return null;
-      return { workspace_id: space.workspace_id, team_id: space.cloud_team_id };
+      if (!space.cloud_space_id || !this.hasTeamSpacesCapability()) return null;
+      return { workspace_id: space.workspace_id, space_id: space.cloud_space_id };
     }
-    return this.hasTeamSpacesCapability() ? { workspace_id: null, team_id: null } : {};
+    return this.hasTeamSpacesCapability() ? { workspace_id: null, space_id: null } : {};
   }
 
   // A push was rejected because the note's team is gone or access was revoked
@@ -1025,12 +1030,12 @@ class SyncService {
                 preserveFolder
               );
               if (result?.success) {
-                const teamName = ctx.byCloudTeamId.get(cloudFolder.previous_team_id ?? "")?.name;
+                const spaceName = ctx.byCloudSpaceId.get(cloudFolder.previous_space_id ?? "")?.name;
                 if (result.folder) {
-                  this.dispatchNoteRelocated(result.folder.name, teamName);
+                  this.dispatchNoteRelocated(result.folder.name, spaceName);
                 } else {
                   for (const note of result.relocatedNotes ?? []) {
-                    this.dispatchNoteRelocated(note.title, teamName);
+                    this.dispatchNoteRelocated(note.title, spaceName);
                   }
                 }
               } else {
@@ -1043,7 +1048,7 @@ class SyncService {
             continue;
           }
 
-          if (teamOnly && !cloudFolder.team_id) {
+          if (teamOnly && !cloudFolder.space_id) {
             // A personal row whose local copy still sits in a team space
             // announces a team→personal transition — apply it, or a later
             // edit's push would re-team the privatized folder.
@@ -1074,10 +1079,10 @@ class SyncService {
             continue;
           }
 
-          const space = await this.resolveSpaceForCloudRow(cloudFolder.team_id, ctx);
+          const space = await this.resolveSpaceForCloudRow(cloudFolder.space_id, ctx);
           if (!space) {
             dirtyRows++;
-            console.warn(`Parking folder ${cloudFolder.id}: unknown team ${cloudFolder.team_id}`);
+            console.warn(`Parking folder ${cloudFolder.id}: unknown space ${cloudFolder.space_id}`);
             continue;
           }
 
@@ -1090,7 +1095,7 @@ class SyncService {
           // fixed-name defaults so distinct user folders like "work"/"Work"
           // never merge. Team rows skip this — upsertFolderFromCloud's
           // collision convergence owns those.
-          if (!local && !cloudFolder.team_id) {
+          if (!local && !cloudFolder.space_id) {
             const allFolders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
             const adoptable = allFolders.filter(
               (f) => f.space_id === space.id && (!f.cloud_id || f.cloud_id === cloudFolder.id)
@@ -1345,7 +1350,7 @@ class SyncService {
               if (!alreadyPrivate) {
                 this.dispatchNoteRelocated(
                   local.title,
-                  ctx.byCloudTeamId.get(cloudNote.previous_team_id ?? "")?.name
+                  ctx.byCloudSpaceId.get(cloudNote.previous_space_id ?? "")?.name
                 );
               }
             } else {
@@ -1354,7 +1359,7 @@ class SyncService {
             continue;
           }
 
-          if (teamOnly && !cloudNote.team_id) {
+          if (teamOnly && !cloudNote.space_id) {
             // A personal row whose local copy still sits in a team space
             // announces a team→personal transition — apply it, or a later
             // edit's push would re-team the privatized note.
@@ -1396,10 +1401,10 @@ class SyncService {
             continue;
           }
 
-          const space = await this.resolveSpaceForCloudRow(cloudNote.team_id, ctx);
+          const space = await this.resolveSpaceForCloudRow(cloudNote.space_id, ctx);
           if (!space) {
             dirtyRows++;
-            console.warn(`Parking note ${cloudNote.id}: unknown team ${cloudNote.team_id}`);
+            console.warn(`Parking note ${cloudNote.id}: unknown space ${cloudNote.space_id}`);
             continue;
           }
 
@@ -1418,7 +1423,7 @@ class SyncService {
               // The note's folder isn't known locally yet (created moments
               // ago, or its pull failed). Filing it to the fallback would
               // stick — the advanced cursor never re-pulls the row — so park
-              // it like an unknown team until the folder arrives.
+              // it like an unknown space until the folder arrives.
               dirtyRows++;
               console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
               continue;
@@ -2096,7 +2101,7 @@ class SyncService {
     cloudToLocal: Map<string, { id: number; space_id: number }>,
     defaultFolderId: number | null
   ): number | null {
-    const fallback = cloudNote.team_id ? null : defaultFolderId;
+    const fallback = cloudNote.space_id ? null : defaultFolderId;
     const mapped = cloudNote.folder_id ? cloudToLocal.get(cloudNote.folder_id) : undefined;
     return mapped && mapped.space_id === space.id ? mapped.id : fallback;
   }

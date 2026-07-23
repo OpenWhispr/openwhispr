@@ -29,7 +29,7 @@ export default function DeleteSpaceDialog({ space, onClose, onConfirm }: DeleteS
       description={
         space
           ? t(
-              space.cloud_team_id
+              space.cloud_space_id
                 ? "notes.spaces.deleteConfirmTeamDescription"
                 : "notes.spaces.deleteConfirmDescription",
               { space: space.name }

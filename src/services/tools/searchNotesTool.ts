@@ -71,8 +71,8 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
       // didn't resolve must not widen to an all-spaces cloud search.
       const strategies: Array<() => Promise<ToolResult>> = [];
       const cloudCanScope = fixedScope
-        ? !!space && (space.kind === "private" || !!space.cloud_team_id)
-        : !space || space.kind === "private" || !!space.cloud_team_id;
+        ? !!space && (space.kind === "private" || !!space.cloud_space_id)
+        : !space || space.kind === "private" || !!space.cloud_space_id;
       if (useCloudSearch && cloudCanScope && folderId == null) {
         strategies.push(() => executeCloudSearch(query, limit, space, spaces));
       }
@@ -148,14 +148,14 @@ async function executeCloudSearch(
   spaces: SpaceItem[]
 ): Promise<ToolResult> {
   const { NotesService } = await import("../../services/NotesService.js");
-  // No space → all accessible spaces; team space → that team only (membership
+  // No space → all accessible spaces; team space → that space only (membership
   // is server-enforced); private space → the personal-only default.
-  const teamId = space?.kind === "team" ? (space.cloud_team_id ?? undefined) : undefined;
+  const spaceId = space?.kind === "team" ? (space.cloud_space_id ?? undefined) : undefined;
   const scope = space ? undefined : ("all" as const);
-  const { notes: cloudNotes } = await NotesService.search(query, limit, scope, teamId);
+  const { notes: cloudNotes } = await NotesService.search(query, limit, scope, spaceId);
 
-  const spaceNameByTeamId = new Map(
-    spaces.filter((s) => s.cloud_team_id).map((s) => [s.cloud_team_id!, s.name])
+  const spaceNameByCloudId = new Map(
+    spaces.filter((s) => s.cloud_space_id).map((s) => [s.cloud_space_id!, s.name])
   );
   const privateSpaceName = spaces.find((s) => s.kind === "private")?.name ?? null;
   const results = cloudNotes.map((cn) => ({
@@ -164,7 +164,7 @@ async function executeCloudSearch(
     date: cn.created_at,
     type: cn.note_type,
     score: cn.score,
-    space: cn.team_id ? (spaceNameByTeamId.get(cn.team_id) ?? null) : privateSpaceName,
+    space: cn.space_id ? (spaceNameByCloudId.get(cn.space_id) ?? null) : privateSpaceName,
     content: (cn.enhanced_content || cn.content).slice(0, MAX_CONTENT_LENGTH),
   }));
 

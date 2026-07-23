@@ -1920,15 +1920,30 @@
         }
       },
       "teams": {
-        "title": "Espacios de equipo",
-        "description": "Organiza carpetas y notas compartidas para miembros seleccionados del espacio de trabajo.",
-        "new": "Nuevo espacio de equipo",
-        "empty": "Aún no hay espacios de equipo.",
-        "createFirst": "Crea tu primer espacio de equipo",
-        "createTitle": "Crear espacio de equipo",
-        "nameLabel": "Nombre del espacio de equipo",
+        "title": "Equipos",
+        "description": "Grupos de miembros del workspace que conceden acceso a espacios de equipo.",
+        "new": "Nuevo equipo",
+        "empty": "Aún no hay equipos.",
+        "createFirst": "Crea tu primer equipo",
+        "createTitle": "Crear equipo",
+        "nameLabel": "Nombre del equipo",
         "memberCount_one": "{{count}} miembro",
-        "memberCount_other": "{{count}} miembros"
+        "memberCount_other": "{{count}} miembros",
+        "membersButton": "Miembros",
+        "backsSpaces_one": "Respalda {{count}} espacio",
+        "backsSpaces_other": "Respalda {{count}} espacios",
+        "couldNotCreate": "No se pudo crear el equipo",
+        "deleteConfirmTitle": "¿Eliminar {{team}}?",
+        "deleteConfirmDescription": "Esto archiva el equipo. Sus miembros pierden el acceso que concedía.",
+        "deleteConfirmBacksSpaces_one": "Este equipo respalda {{count}} espacio. Sus miembros perderán el acceso concedido a través de él.",
+        "deleteConfirmBacksSpaces_other": "Este equipo respalda {{count}} espacios. Sus miembros perderán el acceso concedido a través de él.",
+        "members": {
+          "title": "Miembros de {{team}}",
+          "removeConfirm": "¿Quitar a {{name}} de {{team}}?",
+          "leave": "Salir del equipo",
+          "leaveConfirm": "¿Salir de {{team}}?",
+          "leaveConfirmDescription": "Perderás el acceso a los espacios que respalda este equipo salvo que otro equipo te incluya."
+        }
       },
       "invites": {
         "title": "Invitaciones pendientes",
@@ -2232,7 +2247,7 @@
       "privateTooltip": "Solo tú puedes ver tu espacio personal",
       "newSpace": "Nuevo espacio de equipo",
       "createTitle": "Crear espacio de equipo",
-      "createDescription": "Un área compartida dentro de un espacio de trabajo para compañeros seleccionados.",
+      "createDescription": "Un área compartida dentro de un workspace, respaldada por uno o más equipos.",
       "nameLabel": "Nombre",
       "emojiLabel": "Emoji",
       "create": "Crear",
@@ -2243,7 +2258,7 @@
       "deleteSpace": "Eliminar espacio",
       "deleteConfirmTitle": "¿Eliminar espacio?",
       "deleteConfirmDescription": "Esto elimina permanentemente {{space}} con todas sus carpetas y notas en este dispositivo.",
-      "deleteConfirmTeamDescription": "Esto elimina {{space}} para todos. Los miembros perderán el acceso a todas sus carpetas y notas.",
+      "deleteConfirmTeamDescription": "Esto elimina {{space}} para todos. Sus equipos permanecen, pero los miembros pierden el acceso a todas sus carpetas y notas.",
       "deleteTypeName": "Escribe {{space}} para confirmar",
       "couldNotDelete": "No se pudo eliminar el espacio",
       "deleted": "{{space}} eliminado",
@@ -2277,8 +2292,6 @@
       "conflictKeep": "Seguir editando",
       "editedBy": "Editado por {{name}} · {{time}}",
       "members": {
-        "menu": "Miembros…",
-        "title": "Miembros de {{space}}",
         "addPeople": "Añadir personas",
         "addFailed": "No se pudo añadir a {{failed}} de {{total}} personas",
         "searchPlaceholder": "Buscar personas…",
@@ -2287,15 +2300,29 @@
         "remove": "Quitar",
         "removeConfirm": "¿Quitar a {{name}} de {{space}}?",
         "removeConfirmDescription": "Perderá el acceso a todas las notas de este espacio.",
-        "leave": "Salir del espacio",
-        "leaveConfirm": "¿Salir de {{space}}?",
-        "leaveConfirmDescription": "Perderás el acceso a todas las notas de este espacio.",
-        "implicitAdminCannotLeave": "Los propietarios y administradores del espacio de trabajo tienen acceso a todos los espacios de equipo y no pueden salir de ellos.",
         "inviteFooter": "Invitar a {{email}} al espacio de trabajo…",
         "empty": "Aún no se ha añadido a nadie"
       },
       "invitedTo_one": "Te unirás a {{count}} espacio de equipo",
-      "invitedTo_other": "Te unirás a {{count}} espacios de equipo"
+      "invitedTo_other": "Te unirás a {{count}} espacios de equipo",
+      "teamsMembers": {
+        "menu": "Equipos y miembros…",
+        "title": "Equipos y miembros de {{space}}",
+        "noTeams": "Ningún equipo respalda este espacio todavía. Solo los administradores del workspace pueden verlo.",
+        "addTeam": "Añadir equipo…",
+        "removeTeamFromSpace": "Quitar del espacio",
+        "removeTeamConfirm": "¿Quitar {{team}} de {{space}}?",
+        "removeTeamConfirmDescription": "Sus miembros perderán el acceso a este espacio salvo que otro equipo asignado los incluya.",
+        "lastTeamWarning": "Es el único equipo que respalda este espacio. Tras quitarlo, solo los administradores del workspace mantendrán el acceso.",
+        "affectsOtherSpaces_one": "Los cambios en {{team}} también se aplican a {{count}} otro espacio que respalda.",
+        "affectsOtherSpaces_other": "Los cambios en {{team}} también se aplican a {{count}} otros espacios que respalda."
+      },
+      "teams": {
+        "assignLabel": "Equipos",
+        "newTeam": "Nuevo equipo",
+        "newTeamNameLabel": "Nombre del equipo",
+        "loadError": "No se pudieron cargar los equipos."
+      }
     },
     "structureIntro": {
       "title": "Dónde están tus notas",
@@ -2310,7 +2337,7 @@
       },
       "teamSpace": {
         "title": "Espacio de equipo",
-        "description": "Un área compartida dentro de un espacio de trabajo para compañeros seleccionados."
+        "description": "Un área compartida dentro de un workspace. Uno o más equipos conceden acceso a ella."
       },
       "contents": "Cada espacio puede contener carpetas y notas.",
       "done": "Entendido",

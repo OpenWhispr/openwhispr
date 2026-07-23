@@ -942,3 +942,74 @@ test("createSpace refuses non-team kinds so the private space stays unique", (t)
     .get().count;
   assert.equal(privateCount, 1);
 });
+
+test("upsertSpaceFromCloud round-trips the teams mirror as a parsed array", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const teams = [{ id: "team-1", name: "Design", my_role: "admin" }];
+  const space = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams,
+  });
+  assert.deepEqual(space.teams, teams);
+  assert.deepEqual(db.getSpaces().find((s) => s.id === space.id).teams, teams);
+  assert.deepEqual(db.getSpaceByCloudSpaceId("space-1").teams, teams);
+
+  // A corrupt column must degrade to an empty array, never throw.
+  db.db.prepare("UPDATE spaces SET teams = 'not json' WHERE id = ?").run(space.id);
+  assert.deepEqual(db.getSpaces().find((s) => s.id === space.id).teams, []);
+});
+
+test("upsertSpaceFromCloud adopts a pre-spaces row via its single backfilled team", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  // A row mirrored before the spaces refactor: keyed by cloud_team_id only.
+  db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, cloud_team_id, kind, name, sort_order, sync_status) VALUES ('legacy-client-id', 'team-1', 'team', 'Legacy', 1, 'synced')"
+    )
+    .run();
+  const legacyId = db.db.prepare("SELECT id FROM spaces WHERE cloud_team_id = 'team-1'").get().id;
+
+  const adopted = db.upsertSpaceFromCloud({
+    id: "team-1",
+    name: "Legacy",
+    workspace_id: "ws-1",
+    teams: [{ id: "team-1", name: "Legacy team", my_role: "member" }],
+  });
+  assert.equal(adopted.id, legacyId, "local id survives so chats and tree state keep working");
+  assert.equal(adopted.cloud_space_id, "team-1");
+  assert.equal(adopted.sync_status, "synced", "adoption must not trigger a backfill storm");
+
+  // Idempotent: the next pass hits the cloud_space_id key, no duplicate row.
+  const again = db.upsertSpaceFromCloud({
+    id: "team-1",
+    name: "Legacy",
+    teams: [{ id: "team-1", name: "Legacy team", my_role: "member" }],
+  });
+  assert.equal(again.id, legacyId);
+  assert.equal(db.db.prepare("SELECT COUNT(*) as count FROM spaces WHERE kind = 'team'").get().count, 1);
+});
+
+test("upsertSpaceFromCloud never adopts by team for multi-team spaces", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, cloud_team_id, kind, name, sort_order, sync_status) VALUES ('legacy-client-id', 'team-1', 'team', 'Legacy', 1, 'synced')"
+    )
+    .run();
+
+  const fresh = db.upsertSpaceFromCloud({
+    id: "space-9",
+    name: "Multi",
+    teams: [
+      { id: "team-1", name: "A", my_role: "member" },
+      { id: "team-2", name: "B", my_role: null },
+    ],
+  });
+  assert.notEqual(fresh.client_space_id, "legacy-client-id");
+  assert.equal(fresh.sync_status, "pending", "a genuinely new space still backfills");
+});

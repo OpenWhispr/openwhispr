@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import MemberAvatar from "../../MemberAvatar";
 import { groupItemsByDate } from "../../../utils/dateGrouping";
 import { formatRelativeTime } from "../../../utils/dateFormatting";
-import { useTeamRoster } from "../../../hooks/useTeamRoster";
+import { useSpaceRoster } from "../../../hooks/useTeamRoster";
 import { useAuth } from "../../../hooks/useAuth";
 import type { NoteItem, SpaceItem } from "../../../types/electron";
 
@@ -26,7 +26,7 @@ export function OverviewNoteList({
   const { t } = useTranslation();
   const { user } = useAuth();
   const isTeamSpace = space.kind === "team";
-  const roster = useTeamRoster(isTeamSpace ? space.cloud_team_id : null);
+  const roster = useSpaceRoster(isTeamSpace ? space.cloud_space_id : null);
 
   const groups = useMemo(() => groupItemsByDate(notes, (n) => n.updated_at, t), [notes, t]);
 

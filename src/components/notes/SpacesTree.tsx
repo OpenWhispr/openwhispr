@@ -45,7 +45,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { clampEmojiInput } from "../../lib/emojiInput";
 import { canManageSpace } from "../../lib/spacePermissions";
 import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
-import { deleteTeamSpace, leaveTeamSpace, renameTeamSpace } from "../../services/teamSpaceActions";
+import { deleteSpace, renameSpace } from "../../services/spaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import { formatRelativeTime } from "../../utils/dateFormatting";
@@ -284,13 +284,11 @@ function SpaceRow({
   isDropSuccess,
   dropHandlers,
   canManage,
-  canLeave,
   onActivate,
   onToggle,
   onNewFolder,
   onMembers,
   onRename,
-  onLeave,
   onDelete,
   a11y,
   t,
@@ -304,13 +302,11 @@ function SpaceRow({
   isDropSuccess: boolean;
   dropHandlers: DropHandlers;
   canManage: boolean;
-  canLeave: boolean;
   onActivate: () => void;
   onToggle: () => void;
   onNewFolder: () => void;
   onMembers: () => void;
   onRename: (focus: "name" | "emoji") => void;
-  onLeave: () => void;
   onDelete: () => void;
   a11y: RowA11yProps;
   t: TFn;
@@ -421,7 +417,7 @@ function SpaceRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={4} className="min-w-36">
-              {space.cloud_team_id && (
+              {space.cloud_space_id && (
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
@@ -430,7 +426,7 @@ function SpaceRow({
                   className={MENU_ITEM_CLASS}
                 >
                   <Users size={11} className="text-muted-foreground/60" />
-                  {t("notes.spaces.members.menu")}
+                  {t("notes.spaces.teamsMembers.menu")}
                 </DropdownMenuItem>
               )}
               {canManage && (
@@ -456,18 +452,6 @@ function SpaceRow({
                     {t("notes.spaces.changeEmoji")}
                   </DropdownMenuItem>
                 </>
-              )}
-              {space.cloud_team_id && canLeave && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onLeave();
-                  }}
-                  className={MENU_ITEM_CLASS}
-                >
-                  <LogOut size={11} className="text-muted-foreground/60" />
-                  {t("notes.spaces.members.leave")}
-                </DropdownMenuItem>
               )}
               {canManage && (
                 <>
@@ -1161,19 +1145,11 @@ export default function SpacesTree({
     workspacesLoaded &&
     (workspaces.length === 0 || workspaces.some((w) => w.role === "owner" || w.role === "admin"));
 
-  // Local-only spaces (no cloud team) stay fully manageable; cloud spaces
+  // Local-only spaces (no cloud id) stay fully manageable; cloud spaces
   // follow space/workspace roles. Cosmetic — the server enforces.
   const canManageTeamSpace = (space: SpaceItem): boolean =>
-    !space.cloud_team_id ||
+    !space.cloud_space_id ||
     canManageSpace(space, workspaces.find((w) => w.id === space.workspace_id)?.role ?? null);
-
-  // Workspace owners/admins access every team implicitly (no team_members
-  // row), so a "leave" is a server no-op and the space would resurrect on the
-  // next sync pass — Leave is n/a for them (plan §4).
-  const hasImplicitSpaceAccess = (space: SpaceItem): boolean => {
-    const role = workspaces.find((w) => w.id === space.workspace_id)?.role;
-    return role === "owner" || role === "admin";
-  };
 
   const targetLabel = (target: NoteMoveTarget): string => {
     if (target.folderId != null) {
@@ -1465,7 +1441,7 @@ export default function SpacesTree({
   };
 
   const performDeleteSpace = async (space: SpaceItem) => {
-    const result = await deleteTeamSpace(space);
+    const result = await deleteSpace(space);
     if (!result.success) {
       toast({
         title: t("notes.spaces.couldNotDelete"),
@@ -1475,31 +1451,6 @@ export default function SpacesTree({
       return;
     }
     toast({ title: t("notes.spaces.deleted", { space: space.name }) });
-  };
-
-  const requestLeaveSpace = (space: SpaceItem) => {
-    if (!space.cloud_team_id || !user?.id) return;
-    const userId = user.id;
-    showConfirmDialog({
-      title: t("notes.spaces.members.leaveConfirm", { space: space.name }),
-      description: t("notes.spaces.members.leaveConfirmDescription"),
-      confirmText: t("notes.spaces.members.leave"),
-      variant: "destructive",
-      onConfirm: async () => {
-        try {
-          if ((await leaveTeamSpace(space, userId)) === "implicit") {
-            toast({ title: t("notes.spaces.members.implicitAdminCannotLeave") });
-          }
-        } catch (err) {
-          // Server rejected the leave — surface its message.
-          toast({
-            title: t("common.error"),
-            description: err instanceof Error ? err.message : t("common.unknownError"),
-            variant: "destructive",
-          });
-        }
-      },
-    });
   };
 
   const handleRowKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, row: TreeRow) => {
@@ -1639,7 +1590,7 @@ export default function SpacesTree({
     setRenamingSpaceId(null);
     if (!space || !name) return;
     if (name === space.name && emoji === (space.emoji ?? null)) return;
-    const result = await renameTeamSpace(space, { name, emoji });
+    const result = await renameSpace(space, { name, emoji });
     if (!result.success) {
       toast({
         title: t("notes.spaces.couldNotRename"),
@@ -1875,7 +1826,6 @@ export default function SpacesTree({
             isDropSuccess={dragState.dropSuccessKey === spaceKey}
             dropHandlers={dropTargetHandlers({ spaceId: space.id, folderId: null })}
             canManage={canManageTeamSpace(space)}
-            canLeave={!hasImplicitSpaceAccess(space)}
             onActivate={() => activateRow({ type: "space", key: spaceKey, space })}
             onToggle={() => toggleContainerExpanded(spaceKey)}
             onNewFolder={() => startCreateFolder(space)}
@@ -1884,7 +1834,6 @@ export default function SpacesTree({
               setMembersOpen(true);
             }}
             onRename={(focus) => startRenameSpace(space, focus)}
-            onLeave={() => requestLeaveSpace(space)}
             onDelete={() => requestDeleteSpace(space)}
             a11y={a11yFor(spaceKey)}
             t={t}

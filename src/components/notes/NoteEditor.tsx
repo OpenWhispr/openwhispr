@@ -35,7 +35,7 @@ import {
   navigateToContainer,
   updateNoteInStore,
 } from "../../stores/noteStore";
-import { fetchTeamRoster } from "../../hooks/useTeamRoster";
+import { fetchSpaceRoster } from "../../hooks/useTeamRoster";
 import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
@@ -269,14 +269,14 @@ export default function NoteEditor({
     conflict?.updated_by_user_id && user?.id && conflict.updated_by_user_id !== user.id
       ? conflict.updated_by_user_id
       : null;
-  const conflictTeamId = space?.cloud_team_id ?? null;
+  const conflictSpaceId = space?.cloud_space_id ?? null;
   useEffect(() => {
-    if (!conflictEditorId || !conflictTeamId) {
+    if (!conflictEditorId || !conflictSpaceId) {
       setConflictEditorName(null);
       return;
     }
     let cancelled = false;
-    fetchTeamRoster(conflictTeamId)
+    fetchSpaceRoster(conflictSpaceId)
       .then((roster) => {
         if (cancelled) return;
         const member = roster.find((m) => m.user_id === conflictEditorId);
@@ -288,7 +288,7 @@ export default function NoteEditor({
     return () => {
       cancelled = true;
     };
-  }, [conflictEditorId, conflictTeamId]);
+  }, [conflictEditorId, conflictSpaceId]);
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerProfiles, setSpeakerProfiles] = useState<
@@ -881,11 +881,11 @@ export default function NoteEditor({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {isTeamNote && space?.cloud_team_id && (
+            {isTeamNote && space?.cloud_space_id && (
               <button
                 type="button"
                 onClick={() => setMembersDialogOpen(true)}
-                aria-label={t("notes.spaces.members.title", { space: space.name })}
+                aria-label={t("notes.spaces.teamsMembers.title", { space: space.name })}
                 className={CHIP_BUTTON_CLASS}
               >
                 <Users size={11} className="shrink-0" />
@@ -1215,7 +1215,7 @@ export default function NoteEditor({
       {canShare && (
         <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
       )}
-      {isTeamNote && space?.cloud_team_id && (
+      {isTeamNote && space?.cloud_space_id && (
         <SpaceMembersDialog
           space={space}
           open={membersDialogOpen}

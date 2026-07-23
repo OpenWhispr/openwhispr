@@ -199,8 +199,8 @@ export default function PersonalNotesView({
   }, [invitationEntry, isSidePanelLayout]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
-  // invited cloud team appears in the local spaces mirror, take the user to it
-  // instead of leaving the newly shared content hidden behind Personal.
+  // space backed by an invited team appears in the local mirror, take the user
+  // to it instead of leaving the newly shared content hidden behind Personal.
   useEffect(() => {
     if (!invitationEntry) return;
     const invitedTeamIds = new Set(invitationEntry.teamIds);
@@ -208,11 +208,11 @@ export default function PersonalNotesView({
       (space) =>
         space.kind === "team" &&
         space.workspace_id === invitationEntry.workspaceId &&
-        space.cloud_team_id != null &&
+        space.cloud_space_id != null &&
         // Workspace owners/admins receive implicit access, so their invitation
         // may not enumerate team ids. In that case, open the first accessible
         // team space belonging to the accepted workspace.
-        (invitedTeamIds.size === 0 || invitedTeamIds.has(space.cloud_team_id))
+        (invitedTeamIds.size === 0 || space.teams.some((team) => invitedTeamIds.has(team.id)))
     );
     if (!invitedSpace) return;
 

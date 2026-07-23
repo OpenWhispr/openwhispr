@@ -145,11 +145,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   createSpace: (space) => ipcRenderer.invoke("db-create-space", space),
   updateSpace: (id, updates) => ipcRenderer.invoke("db-update-space", id, updates),
   purgeSpace: (id) => ipcRenderer.invoke("db-purge-space", id),
-  getSpaceByCloudTeamId: (cloudTeamId) =>
-    ipcRenderer.invoke("db-get-space-by-cloud-team-id", cloudTeamId),
-  upsertSpaceFromCloud: (team) => ipcRenderer.invoke("db-upsert-space-from-cloud", team),
-  updateSpaceMemberCount: (id, count) =>
-    ipcRenderer.invoke("db-update-space-member-count", id, count),
+  getSpaceByCloudSpaceId: (cloudSpaceId) =>
+    ipcRenderer.invoke("db-get-space-by-cloud-space-id", cloudSpaceId),
+  upsertSpaceFromCloud: (space) => ipcRenderer.invoke("db-upsert-space-from-cloud", space),
   setSpaceSyncStatus: (id, status) => ipcRenderer.invoke("db-set-space-sync-status", id, status),
   onSpacePurged: (callback) => {
     const listener = (_event, payload) => callback?.(payload);

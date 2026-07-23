@@ -768,7 +768,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                 space &&
                 !(access?.grants ?? []).some(
                   (grant) =>
-                    grant.principal.type === "team" && grant.principal.id === space.cloud_team_id
+                    grant.principal.type === "team" && space.teams.some((team) => team.id === grant.principal.id)
                 ) && (
                   <MemberRow
                     leading={<AudienceIcon />}

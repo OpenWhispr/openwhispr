@@ -1851,15 +1851,30 @@
         }
       },
       "teams": {
-        "title": "Espaços de equipe",
-        "description": "Organize pastas e notas compartilhadas para membros selecionados do espaço de trabalho.",
-        "new": "Novo espaço de equipe",
-        "empty": "Ainda não há espaços de equipe.",
-        "createFirst": "Crie seu primeiro espaço de equipe",
-        "createTitle": "Criar espaço de equipe",
-        "nameLabel": "Nome do espaço de equipe",
+        "title": "Equipes",
+        "description": "Grupos de membros do workspace que concedem acesso a espaços de equipe.",
+        "new": "Nova equipe",
+        "empty": "Nenhuma equipe ainda.",
+        "createFirst": "Crie sua primeira equipe",
+        "createTitle": "Criar equipe",
+        "nameLabel": "Nome da equipe",
         "memberCount_one": "{{count}} membro",
-        "memberCount_other": "{{count}} membros"
+        "memberCount_other": "{{count}} membros",
+        "membersButton": "Membros",
+        "backsSpaces_one": "Sustenta {{count}} espaço",
+        "backsSpaces_other": "Sustenta {{count}} espaços",
+        "couldNotCreate": "Não foi possível criar a equipe",
+        "deleteConfirmTitle": "Excluir {{team}}?",
+        "deleteConfirmDescription": "Isso arquiva a equipe. Seus membros perdem o acesso que ela concedia.",
+        "deleteConfirmBacksSpaces_one": "Esta equipe sustenta {{count}} espaço. Seus membros perderão o acesso concedido por meio dela.",
+        "deleteConfirmBacksSpaces_other": "Esta equipe sustenta {{count}} espaços. Seus membros perderão o acesso concedido por meio dela.",
+        "members": {
+          "title": "Membros de {{team}}",
+          "removeConfirm": "Remover {{name}} de {{team}}?",
+          "leave": "Sair da equipe",
+          "leaveConfirm": "Sair de {{team}}?",
+          "leaveConfirmDescription": "Você perderá o acesso aos espaços que esta equipe sustenta, a menos que outra equipe o inclua."
+        }
       },
       "invites": {
         "title": "Convites pendentes",
@@ -2184,7 +2199,7 @@
       "privateTooltip": "Somente você pode ver seu espaço pessoal",
       "newSpace": "Novo espaço de equipe",
       "createTitle": "Criar espaço de equipe",
-      "createDescription": "Uma área compartilhada dentro de um espaço de trabalho para colegas selecionados.",
+      "createDescription": "Uma área compartilhada dentro de um workspace, sustentada por uma ou mais equipes.",
       "nameLabel": "Nome",
       "emojiLabel": "Emoji",
       "create": "Criar",
@@ -2195,7 +2210,7 @@
       "deleteSpace": "Excluir espaço",
       "deleteConfirmTitle": "Excluir espaço?",
       "deleteConfirmDescription": "Isso exclui permanentemente {{space}} com todas as suas pastas e notas neste dispositivo.",
-      "deleteConfirmTeamDescription": "Isso exclui {{space}} para todos. Os membros perderão o acesso a todas as suas pastas e notas.",
+      "deleteConfirmTeamDescription": "Isso exclui {{space}} para todos. Suas equipes permanecem, mas os membros perdem o acesso a todas as pastas e notas.",
       "deleteTypeName": "Digite {{space}} para confirmar",
       "couldNotDelete": "Não foi possível excluir o espaço",
       "deleted": "{{space}} excluído",
@@ -2229,8 +2244,6 @@
       "conflictKeep": "Continuar editando",
       "editedBy": "Editado por {{name}} · {{time}}",
       "members": {
-        "menu": "Membros…",
-        "title": "Membros de {{space}}",
         "addPeople": "Adicionar pessoas",
         "addFailed": "Não foi possível adicionar {{failed}} de {{total}} pessoas",
         "searchPlaceholder": "Pesquisar pessoas…",
@@ -2239,15 +2252,29 @@
         "remove": "Remover",
         "removeConfirm": "Remover {{name}} de {{space}}?",
         "removeConfirmDescription": "A pessoa perderá o acesso a todas as notas deste espaço.",
-        "leave": "Sair do espaço",
-        "leaveConfirm": "Sair de {{space}}?",
-        "leaveConfirmDescription": "Você perderá o acesso a todas as notas deste espaço.",
-        "implicitAdminCannotLeave": "Proprietários e administradores do espaço de trabalho têm acesso a todos os espaços de equipe e não podem sair deles.",
         "inviteFooter": "Convidar {{email}} para o espaço de trabalho…",
         "empty": "Ninguém foi adicionado ainda"
       },
       "invitedTo_one": "Você entrará em {{count}} espaço de equipe",
-      "invitedTo_other": "Você entrará em {{count}} espaços de equipe"
+      "invitedTo_other": "Você entrará em {{count}} espaços de equipe",
+      "teamsMembers": {
+        "menu": "Equipes e membros…",
+        "title": "Equipes e membros de {{space}}",
+        "noTeams": "Nenhuma equipe sustenta este espaço ainda. Apenas administradores do workspace podem vê-lo.",
+        "addTeam": "Adicionar equipe…",
+        "removeTeamFromSpace": "Remover do espaço",
+        "removeTeamConfirm": "Remover {{team}} de {{space}}?",
+        "removeTeamConfirmDescription": "Seus membros perderão o acesso a este espaço, a menos que outra equipe atribuída os inclua.",
+        "lastTeamWarning": "Esta é a única equipe que sustenta este espaço. Após removê-la, apenas administradores do workspace mantêm o acesso.",
+        "affectsOtherSpaces_one": "Alterações em {{team}} também se aplicam a {{count}} outro espaço que ela sustenta.",
+        "affectsOtherSpaces_other": "Alterações em {{team}} também se aplicam a {{count}} outros espaços que ela sustenta."
+      },
+      "teams": {
+        "assignLabel": "Equipes",
+        "newTeam": "Nova equipe",
+        "newTeamNameLabel": "Nome da equipe",
+        "loadError": "Não foi possível carregar as equipes."
+      }
     },
     "structureIntro": {
       "title": "Onde ficam suas notas",
@@ -2262,7 +2289,7 @@
       },
       "teamSpace": {
         "title": "Espaço de equipe",
-        "description": "Uma área compartilhada dentro de um espaço de trabalho para colegas selecionados."
+        "description": "Uma área compartilhada dentro de um workspace. Uma ou mais equipes concedem acesso a ela."
       },
       "contents": "Cada espaço pode conter pastas e notas.",
       "done": "Entendi",
