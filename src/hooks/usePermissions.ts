@@ -3,6 +3,7 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import type { PasteToolsResult } from "../types/electron";
 import { useLocalStorage } from "./useLocalStorage";
+import { shouldPromptForAccessibility } from "../helpers/accessibilityPromptPolicy";
 import logger from "../utils/logger";
 
 export interface UsePermissionsReturn {
@@ -117,6 +118,15 @@ export const usePermissions = (
   const [micPermissionError, setMicPermissionError] = useState<string | null>(null);
   const [accessibilityPermissionGranted, setAccessibilityPermissionGranted] = useLocalStorage(
     "accessibilityPermissionGranted",
+    false,
+    {
+      serialize: String,
+      deserialize: (value) => value === "true",
+    }
+  );
+  // One-shot: records that the registering TCC prompt has already been shown.
+  const [hasPromptedAccessibility, setHasPromptedAccessibility] = useLocalStorage(
+    "hasPromptedAccessibility",
     false,
     {
       serialize: String,
@@ -250,8 +260,25 @@ export const usePermissions = (
         return;
       }
 
-      // Open System Settings directly — avoids the undismissable macOS TCC dialog
-      // that isTrustedAccessibilityClient(true) would show.
+      // macOS only lists an app under Accessibility once it has asked for the
+      // permission, so an install that has never prompted has no row to enable
+      // and System Settings is a dead end. Prompt once to create the row. The
+      // TCC dialog cannot be dismissed programmatically, so this stays one-shot.
+      if (
+        shouldPromptForAccessibility({
+          platform,
+          alreadyGranted: false,
+          hasPromptedBefore: hasPromptedAccessibility,
+        })
+      ) {
+        setHasPromptedAccessibility(true);
+        const granted = await window.electronAPI?.promptAccessibilityPermission?.();
+        if (granted) {
+          setAccessibilityPermissionGranted(true);
+          return;
+        }
+      }
+
       await openSystemSettings("accessibility", window.electronAPI?.openAccessibilitySettings);
       return;
     }
@@ -267,7 +294,13 @@ export const usePermissions = (
       await checkPasteToolsAvailability();
       setAccessibilityPermissionGranted(true);
     }
-  }, [openSystemSettings, checkPasteToolsAvailability, setAccessibilityPermissionGranted]);
+  }, [
+    openSystemSettings,
+    checkPasteToolsAvailability,
+    setAccessibilityPermissionGranted,
+    hasPromptedAccessibility,
+    setHasPromptedAccessibility,
+  ]);
 
   // Check paste tools on mount
   useEffect(() => {
