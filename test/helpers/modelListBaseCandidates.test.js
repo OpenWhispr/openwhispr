@@ -60,3 +60,25 @@ test("normalizes trailing slashes and endpoint suffixes before deriving candidat
   ]);
   assert.deepEqual(getModelListBaseCandidates(""), []);
 });
+
+// Regression for #1309: query strings must not break /v1 detection or native
+// /api/v0|/api/v1 sibling derivation.
+test("preserves query strings while deriving /v1 candidates", async () => {
+  const { getModelListBaseCandidates } = await load();
+
+  assert.deepEqual(getModelListBaseCandidates("https://gateway.example.com/v1?api-key=secret"), [
+    "https://gateway.example.com/v1?api-key=secret",
+  ]);
+  assert.deepEqual(getModelListBaseCandidates("https://gateway.example.com?api-key=secret"), [
+    "https://gateway.example.com?api-key=secret",
+    "https://gateway.example.com/v1?api-key=secret",
+  ]);
+  assert.deepEqual(getModelListBaseCandidates("http://127.0.0.1:1234/api/v1?token=abc"), [
+    "http://127.0.0.1:1234/api/v1?token=abc",
+    "http://127.0.0.1:1234/v1?token=abc",
+  ]);
+  assert.deepEqual(
+    getModelListBaseCandidates("https://api.example.com/v1/models?api-version=2024-02-01"),
+    ["https://api.example.com/v1?api-version=2024-02-01"]
+  );
+});

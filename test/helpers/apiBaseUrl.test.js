@@ -100,3 +100,49 @@ test("buildApiUrl with an empty path returns just the normalized base", async ()
 
   assert.equal(buildApiUrl("https://api.openai.com/v1", ""), "https://api.openai.com/v1");
 });
+
+// Regression for #1309: query/hash must stay attached to the origin+path, not
+// absorb later path joins. Provider docs and Azure gateways often include
+// ?api-version=… on the pasted completions URL.
+test("pasted endpoint URLs with query strings still strip path suffixes", async () => {
+  const { normalizeBaseUrl } = await load();
+
+  assert.equal(
+    normalizeBaseUrl("https://api.example.com/v1/chat/completions?api-version=2024-02-01"),
+    "https://api.example.com/v1?api-version=2024-02-01"
+  );
+  assert.equal(
+    normalizeBaseUrl("https://api.example.com/v1/models?api-key=secret#section"),
+    "https://api.example.com/v1?api-key=secret#section"
+  );
+});
+
+test("buildApiUrl inserts the path before any query or hash", async () => {
+  const { buildApiUrl } = await load();
+
+  assert.equal(
+    buildApiUrl("https://api.example.com/v1/chat/completions?api-version=2024-02-01", "/responses"),
+    "https://api.example.com/v1/responses?api-version=2024-02-01"
+  );
+  assert.equal(
+    buildApiUrl("https://gateway.example.com/v1?api-key=secret", "/models"),
+    "https://gateway.example.com/v1/models?api-key=secret"
+  );
+  assert.equal(
+    buildApiUrl("https://gateway.example.com/v1?api-key=secret#frag", "chat/completions"),
+    "https://gateway.example.com/v1/chat/completions?api-key=secret#frag"
+  );
+});
+
+test("ensureV1Suffix checks the path, not characters after the query", async () => {
+  const { ensureV1Suffix } = await load();
+
+  assert.equal(
+    ensureV1Suffix("https://gateway.example.com/v1?api-key=secret"),
+    "https://gateway.example.com/v1?api-key=secret"
+  );
+  assert.equal(
+    ensureV1Suffix("https://gateway.example.com?api-key=secret"),
+    "https://gateway.example.com/v1?api-key=secret"
+  );
+});
