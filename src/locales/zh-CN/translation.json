@@ -200,7 +200,7 @@
       "systemAudioDescription": "让会议录音机听到通话另一方的声音 — 会议、讲座、播客。你可以稍后在“设置”中开启。",
       "optional": "可选",
       "recommended": "推荐",
-      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果无效，请将 OpenWhispr 从列表中移除后重新添加。还是不行？请发邮件至 support@openwhispr.com。"
+      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果列表中根本没有 OpenWhispr，请点按 + 并从“应用程序”文件夹中添加。还是不行？请发邮件至 support@openwhispr.com。"
     },
     "transcription": {
       "title": "转录设置",

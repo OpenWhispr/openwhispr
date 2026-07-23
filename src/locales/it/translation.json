@@ -200,7 +200,7 @@
       "systemAudioDescription": "Permette al registratore delle riunioni di sentire l'altro lato delle tue chiamate — riunioni, lezioni, podcast. Puoi attivarlo più tardi nelle Impostazioni.",
       "optional": "Facoltativo",
       "recommended": "Consigliato",
-      "accessibilityTroubleshooting": "In Impostazioni di Sistema → Accessibilità, disattiva l'interruttore di OpenWhispr e riattivalo. Se non funziona, rimuovi OpenWhispr dall'elenco e aggiungilo di nuovo. Ancora problemi? Scrivi a support@openwhispr.com."
+      "accessibilityTroubleshooting": "In Impostazioni di Sistema → Accessibilità, disattiva l'interruttore di OpenWhispr e riattivalo. Se OpenWhispr non compare nell'elenco, fai clic su + e aggiungilo dalla cartella Applicazioni. Ancora problemi? Scrivi a support@openwhispr.com."
     },
     "transcription": {
       "title": "Configurazione trascrizione",

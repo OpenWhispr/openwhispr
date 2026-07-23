@@ -200,7 +200,7 @@
       "systemAudioDescription": "Lässt den Meeting-Rekorder die Gegenseite deiner Anrufe hören — Meetings, Vorlesungen, Podcasts. Kann später in den Einstellungen aktiviert werden.",
       "optional": "Optional",
       "recommended": "Empfohlen",
-      "accessibilityTroubleshooting": "Schalte in Systemeinstellungen → Bedienungshilfen den Schalter für OpenWhispr aus und wieder ein. Wenn das nicht hilft, entferne OpenWhispr aus der Liste und füge es erneut hinzu. Klappt's immer noch nicht? Schreib an support@openwhispr.com."
+      "accessibilityTroubleshooting": "Schalte in Systemeinstellungen → Bedienungshilfen den Schalter für OpenWhispr aus und wieder ein. Wenn OpenWhispr gar nicht in der Liste steht, klicke auf + und füge es aus dem Programme-Ordner hinzu. Klappt's immer noch nicht? Schreib an support@openwhispr.com."
     },
     "transcription": {
       "title": "Transkriptions-Einrichtung",

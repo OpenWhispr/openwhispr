@@ -200,7 +200,7 @@
       "systemAudioDescription": "Lets the meeting recorder hear the other side of your calls — meetings, lectures, podcasts. You can turn this on later in Settings.",
       "optional": "Optional",
       "recommended": "Recommended",
-      "accessibilityTroubleshooting": "In System Settings → Accessibility, switch OpenWhispr's toggle off and back on. If that doesn't work, remove OpenWhispr from the list and add it back. Still stuck? Email support@openwhispr.com."
+      "accessibilityTroubleshooting": "In System Settings → Accessibility, switch OpenWhispr's toggle off and back on. If OpenWhispr isn't in the list at all, click + and add it from your Applications folder. Still stuck? Email support@openwhispr.com."
     },
     "transcription": {
       "title": "Transcription Setup",

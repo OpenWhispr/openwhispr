@@ -200,7 +200,7 @@
       "systemAudioDescription": "Permite que el grabador de reuniones escuche al resto de participantes de tus llamadas: reuniones, clases, pódcasts. Puedes activarlo más tarde en Ajustes.",
       "optional": "Opcional",
       "recommended": "Recomendado",
-      "accessibilityTroubleshooting": "En Configuración del Sistema → Accesibilidad, desactiva el interruptor de OpenWhispr y vuelve a activarlo. Si eso no funciona, elimina OpenWhispr de la lista y añádelo de nuevo. ¿Sigues con problemas? Escribe a support@openwhispr.com."
+      "accessibilityTroubleshooting": "En Configuración del Sistema → Accesibilidad, desactiva el interruptor de OpenWhispr y vuelve a activarlo. Si OpenWhispr no aparece en la lista, haz clic en + y añádelo desde la carpeta Aplicaciones. ¿Sigues con problemas? Escribe a support@openwhispr.com."
     },
     "transcription": {
       "title": "Configuración de transcripción",
