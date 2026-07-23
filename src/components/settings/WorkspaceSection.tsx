@@ -25,18 +25,18 @@ import {
 import { cn } from "../lib/utils";
 import WorkspaceMembersTab from "./WorkspaceMembersTab";
 import WorkspaceTeamsTab from "./WorkspaceTeamsTab";
-import WorkspaceBillingTab from "./WorkspaceBillingTab";
 import WorkspaceDeveloperTab from "./WorkspaceDeveloperTab";
 import type { Workspace } from "../../types/electron";
 
-const SUB_TABS = ["general", "members", "teams", "billing", "developer"] as const;
+const SUB_TABS = ["general", "members", "teams", "developer"] as const;
 type WorkspaceTab = (typeof SUB_TABS)[number];
 
 interface Props {
   initialSubTab?: string;
+  onNavigateToBilling?: () => void;
 }
 
-export default function WorkspaceSection({ initialSubTab }: Props) {
+export default function WorkspaceSection({ initialSubTab, onNavigateToBilling }: Props) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const { workspaces, activeWorkspaceId, setActiveWorkspaceId, loaded, loading, error, refresh } =
@@ -57,6 +57,15 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
   );
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string | null>(null);
+
+  function navigateToBilling(workspaceId: string) {
+    setActiveWorkspaceId(workspaceId);
+    localStorage.setItem(
+      "settings.billingSeatIntent",
+      JSON.stringify({ workspaceId, additionalSeats: 1 })
+    );
+    onNavigateToBilling?.();
+  }
 
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
@@ -91,7 +100,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
           workspaceId={inviteWorkspace.id}
           workspaceName={inviteWorkspace.name}
           cancelLabel={t("common.skip")}
-          onNavigateToBilling={() => setStoredTab("billing")}
+          onNavigateToBilling={() => navigateToBilling(inviteWorkspace.id)}
         />
       )}
     </>
@@ -225,11 +234,10 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
         {tab === "members" && (
           <WorkspaceMembersTab
             workspace={workspace}
-            onNavigateToBilling={() => setStoredTab("billing")}
+            onNavigateToBilling={() => navigateToBilling(workspace.id)}
           />
         )}
         {tab === "teams" && <WorkspaceTeamsTab workspace={workspace} />}
-        {tab === "billing" && <WorkspaceBillingTab workspace={workspace} />}
         {tab === "developer" && canManage && <WorkspaceDeveloperTab workspace={workspace} />}
       </div>
 

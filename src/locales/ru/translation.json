@@ -1094,13 +1094,34 @@
         "label": "Система"
       },
       "workspace": {
-        "description": "Участники, оплата и API-ключи",
+        "description": "Участники, командные пространства и API-ключи",
         "label": "Рабочее пространство"
       }
     },
     "title": "Настройки"
   },
   "settingsPage": {
+    "unifiedBilling": {
+      "workspaceTitle": "Workspace billing",
+      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
+      "billableSeat": "Your seat is billable",
+      "nonBillableSeat": "Admin-only access · no paid seat",
+      "managedBy": "Billing is managed by {{owner}}.",
+      "addSeat": "Add seat",
+      "startWithSeats": "Start Business with {{count}} seats",
+      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "seatUpdateFailed": "Couldn't update workspace seats",
+      "businessWorkspaceOnly": "Available for workspaces",
+      "personalPlanTitle": "Personal plan",
+      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "confirmSeats": {
+        "title": "Add a workspace seat?",
+        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "newCapacity": "New capacity",
+        "chargeToday": "Charge today",
+        "confirm": "Add seat"
+      }
+    },
     "account": {
       "badges": {
         "free": "Бесплатный",
@@ -1805,7 +1826,7 @@
     },
     "workspace": {
       "title": "Рабочее пространство",
-      "description": "Работайте с командой, делитесь заметками и управляйте оплатой в одном месте.",
+      "description": "Работайте с командой, делитесь заметками и управляйте доступом к рабочему пространству в одном месте.",
       "empty": {
         "title": "Создайте первое рабочее пространство",
         "description": "Рабочие пространства позволяют работать с командой и делиться заметками.",
@@ -2299,7 +2320,7 @@
       },
       "workspace": {
         "title": "Рабочее пространство",
-        "description": "Здесь находятся участники, роли и настройки оплаты вашей организации."
+        "description": "Здесь находятся участники, роли и командные пространства вашего рабочего пространства."
       },
       "teamSpace": {
         "title": "Командное пространство",

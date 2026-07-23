@@ -1094,13 +1094,34 @@
         "label": "Sistema"
       },
       "workspace": {
-        "description": "Membri, fatturazione e chiavi API",
+        "description": "Membri, spazi del team e chiavi API",
         "label": "Area di lavoro"
       }
     },
     "title": "Impostazioni"
   },
   "settingsPage": {
+    "unifiedBilling": {
+      "workspaceTitle": "Workspace billing",
+      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
+      "billableSeat": "Your seat is billable",
+      "nonBillableSeat": "Admin-only access · no paid seat",
+      "managedBy": "Billing is managed by {{owner}}.",
+      "addSeat": "Add seat",
+      "startWithSeats": "Start Business with {{count}} seats",
+      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "seatUpdateFailed": "Couldn't update workspace seats",
+      "businessWorkspaceOnly": "Available for workspaces",
+      "personalPlanTitle": "Personal plan",
+      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "confirmSeats": {
+        "title": "Add a workspace seat?",
+        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "newCapacity": "New capacity",
+        "chargeToday": "Charge today",
+        "confirm": "Add seat"
+      }
+    },
     "account": {
       "badges": {
         "free": "Gratuito",
@@ -1805,7 +1826,7 @@
     },
     "workspace": {
       "title": "Area di lavoro",
-      "description": "Collabora con il tuo team, condividi note e gestisci la fatturazione in un unico posto.",
+      "description": "Collabora con il tuo team, condividi note e gestisci l'accesso all'area di lavoro in un unico posto.",
       "empty": {
         "title": "Crea la tua prima area di lavoro",
         "description": "Le aree di lavoro ti permettono di collaborare con il team e condividere note.",
@@ -2285,7 +2306,7 @@
       },
       "workspace": {
         "title": "Area di lavoro",
-        "description": "La sede di membri, ruoli e fatturazione della tua organizzazione."
+        "description": "La sede di membri, ruoli e spazi del team della tua area di lavoro."
       },
       "teamSpace": {
         "title": "Spazio del team",

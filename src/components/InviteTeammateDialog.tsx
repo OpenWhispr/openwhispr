@@ -107,7 +107,10 @@ export default function InviteTeammateDialog({
       onInvited?.();
       onOpenChange(false);
     } catch (error) {
-      if (error instanceof CloudApiError && error.code === "seat_limit_reached") {
+      if (
+        error instanceof CloudApiError &&
+        (error.code === "seat_limit_reached" || error.code === "workspace_subscription_required")
+      ) {
         const details = error.details as { seats?: number } | undefined;
         setSeatLimitSeats(details?.seats ?? seats ?? 0);
       } else {

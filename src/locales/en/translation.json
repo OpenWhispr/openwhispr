@@ -1158,7 +1158,7 @@
         "label": "Plans & Billing"
       },
       "workspace": {
-        "description": "Members, billing & API keys",
+        "description": "Members, team spaces & API keys",
         "label": "Workspace"
       },
       "general": {
@@ -1191,7 +1191,7 @@
   "settingsPage": {
     "workspace": {
       "title": "Workspace",
-      "description": "Collaborate with teammates, share notes, and manage billing in one place.",
+      "description": "Collaborate with teammates, share notes, and manage workspace access in one place.",
       "empty": {
         "title": "Create your first workspace",
         "description": "Workspaces let you collaborate with teammates and share notes.",
@@ -1372,6 +1372,27 @@
             "admin": "Workspace admin"
           }
         }
+      }
+    },
+    "unifiedBilling": {
+      "workspaceTitle": "Workspace billing",
+      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
+      "billableSeat": "Your seat is billable",
+      "nonBillableSeat": "Admin-only access · no paid seat",
+      "managedBy": "Billing is managed by {{owner}}.",
+      "addSeat": "Add seat",
+      "startWithSeats": "Start Business with {{count}} seats",
+      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "seatUpdateFailed": "Couldn't update workspace seats",
+      "businessWorkspaceOnly": "Available for workspaces",
+      "personalPlanTitle": "Personal plan",
+      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "confirmSeats": {
+        "title": "Add a workspace seat?",
+        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "newCapacity": "New capacity",
+        "chargeToday": "Charge today",
+        "confirm": "Add seat"
       }
     },
     "account": {
@@ -2493,7 +2514,7 @@
       },
       "workspace": {
         "title": "Workspace",
-        "description": "The home for your organization's members, roles, and billing."
+        "description": "The home for your workspace's members, roles, and team spaces."
       },
       "teamSpace": {
         "title": "Team space",

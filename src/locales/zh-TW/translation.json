@@ -1094,13 +1094,34 @@
         "label": "系統"
       },
       "workspace": {
-        "description": "成員、帳單與 API 金鑰",
+        "description": "成員、團隊空間與 API 金鑰",
         "label": "工作區"
       }
     },
     "title": "設定"
   },
   "settingsPage": {
+    "unifiedBilling": {
+      "workspaceTitle": "Workspace billing",
+      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
+      "billableSeat": "Your seat is billable",
+      "nonBillableSeat": "Admin-only access · no paid seat",
+      "managedBy": "Billing is managed by {{owner}}.",
+      "addSeat": "Add seat",
+      "startWithSeats": "Start Business with {{count}} seats",
+      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "seatUpdateFailed": "Couldn't update workspace seats",
+      "businessWorkspaceOnly": "Available for workspaces",
+      "personalPlanTitle": "Personal plan",
+      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "confirmSeats": {
+        "title": "Add a workspace seat?",
+        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "newCapacity": "New capacity",
+        "chargeToday": "Charge today",
+        "confirm": "Add seat"
+      }
+    },
     "account": {
       "badges": {
         "free": "免費",
@@ -1805,7 +1826,7 @@
     },
     "workspace": {
       "title": "工作區",
-      "description": "與團隊成員協作、分享筆記，並在同一處管理帳單。",
+      "description": "與團隊成員協作、分享筆記，並在同一處管理工作區存取權限。",
       "empty": {
         "title": "建立你的第一個工作區",
         "description": "工作區讓你與團隊成員協作並分享筆記。",
@@ -2285,7 +2306,7 @@
       },
       "workspace": {
         "title": "工作區",
-        "description": "集中管理組織的成員、角色和帳單。"
+        "description": "集中管理工作區的成員、角色和團隊空間。"
       },
       "teamSpace": {
         "title": "團隊空間",

@@ -1143,12 +1143,33 @@
       },
       "workspace": {
         "label": "Espacio de trabajo",
-        "description": "Miembros, facturación y claves API"
+        "description": "Miembros, espacios de equipo y claves API"
       }
     },
     "title": "Ajustes"
   },
   "settingsPage": {
+    "unifiedBilling": {
+      "workspaceTitle": "Workspace billing",
+      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
+      "billableSeat": "Your seat is billable",
+      "nonBillableSeat": "Admin-only access · no paid seat",
+      "managedBy": "Billing is managed by {{owner}}.",
+      "addSeat": "Add seat",
+      "startWithSeats": "Start Business with {{count}} seats",
+      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "seatUpdateFailed": "Couldn't update workspace seats",
+      "businessWorkspaceOnly": "Available for workspaces",
+      "personalPlanTitle": "Personal plan",
+      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "confirmSeats": {
+        "title": "Add a workspace seat?",
+        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "newCapacity": "New capacity",
+        "chargeToday": "Charge today",
+        "confirm": "Add seat"
+      }
+    },
     "account": {
       "badges": {
         "free": "Gratis",
@@ -1853,7 +1874,7 @@
     },
     "workspace": {
       "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "description": "Colabora con compañeros, comparte notas y administra el acceso al espacio de trabajo en un solo lugar.",
       "empty": {
         "title": "Crea tu primer espacio de trabajo",
         "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
@@ -2333,7 +2354,7 @@
       },
       "workspace": {
         "title": "Espacio de trabajo",
-        "description": "El lugar de los miembros, roles y facturación de tu organización."
+        "description": "El lugar de los miembros, roles y espacios de equipo de tu espacio de trabajo."
       },
       "teamSpace": {
         "title": "Espacio de equipo",

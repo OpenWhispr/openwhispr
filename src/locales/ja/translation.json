@@ -1094,13 +1094,34 @@
         "label": "システム"
       },
       "workspace": {
-        "description": "メンバー、請求、API キー",
+        "description": "メンバー、チームスペース、API キー",
         "label": "ワークスペース"
       }
     },
     "title": "設定"
   },
   "settingsPage": {
+    "unifiedBilling": {
+      "workspaceTitle": "Workspace billing",
+      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
+      "billableSeat": "Your seat is billable",
+      "nonBillableSeat": "Admin-only access · no paid seat",
+      "managedBy": "Billing is managed by {{owner}}.",
+      "addSeat": "Add seat",
+      "startWithSeats": "Start Business with {{count}} seats",
+      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "seatUpdateFailed": "Couldn't update workspace seats",
+      "businessWorkspaceOnly": "Available for workspaces",
+      "personalPlanTitle": "Personal plan",
+      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "confirmSeats": {
+        "title": "Add a workspace seat?",
+        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "newCapacity": "New capacity",
+        "chargeToday": "Charge today",
+        "confirm": "Add seat"
+      }
+    },
     "account": {
       "badges": {
         "free": "無料",
@@ -1805,7 +1826,7 @@
     },
     "workspace": {
       "title": "ワークスペース",
-      "description": "チームメイトとのコラボレーション、ノートの共有、請求の管理を一括で行えます。",
+      "description": "チームメイトとのコラボレーション、ノートの共有、ワークスペースへのアクセス管理を一括で行えます。",
       "empty": {
         "title": "最初のワークスペースを作成",
         "description": "ワークスペースでは、チームメイトとのコラボレーションやノートの共有ができます。",
@@ -2213,7 +2234,7 @@
       },
       "workspace": {
         "title": "ワークスペース",
-        "description": "組織のメンバー、役割、請求をまとめる場所です。"
+        "description": "ワークスペースのメンバー、役割、チームスペースをまとめて管理します。"
       },
       "teamSpace": {
         "title": "チームスペース",

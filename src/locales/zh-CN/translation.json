@@ -1094,13 +1094,34 @@
         "label": "系统"
       },
       "workspace": {
-        "description": "成员、账单和 API 密钥",
+        "description": "成员、团队空间和 API 密钥",
         "label": "工作区"
       }
     },
     "title": "设置"
   },
   "settingsPage": {
+    "unifiedBilling": {
+      "workspaceTitle": "Workspace billing",
+      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
+      "billableSeat": "Your seat is billable",
+      "nonBillableSeat": "Admin-only access · no paid seat",
+      "managedBy": "Billing is managed by {{owner}}.",
+      "addSeat": "Add seat",
+      "startWithSeats": "Start Business with {{count}} seats",
+      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "seatUpdateFailed": "Couldn't update workspace seats",
+      "businessWorkspaceOnly": "Available for workspaces",
+      "personalPlanTitle": "Personal plan",
+      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "confirmSeats": {
+        "title": "Add a workspace seat?",
+        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "newCapacity": "New capacity",
+        "chargeToday": "Charge today",
+        "confirm": "Add seat"
+      }
+    },
     "account": {
       "badges": {
         "free": "免费版",
@@ -1805,7 +1826,7 @@
     },
     "workspace": {
       "title": "工作区",
-      "description": "在一处与同事协作、共享笔记并管理账单。",
+      "description": "在一处与同事协作、共享笔记并管理工作区访问权限。",
       "empty": {
         "title": "创建你的第一个工作区",
         "description": "工作区让你与同事协作并共享笔记。",
@@ -2285,7 +2306,7 @@
       },
       "workspace": {
         "title": "工作区",
-        "description": "集中管理组织的成员、角色和账单。"
+        "description": "集中管理工作区的成员、角色和团队空间。"
       },
       "teamSpace": {
         "title": "团队空间",

@@ -16,6 +16,10 @@ interface UsageData {
   currentPeriodEnd: string | null;
   billingInterval: "monthly" | "annual" | null;
   resetAt: string;
+  entitlementSources: {
+    personal: boolean;
+    workspaceIds: string[];
+  };
 }
 
 interface UseUsageResult {
@@ -26,6 +30,8 @@ interface UseUsageResult {
   wordsRemaining: number;
   limit: number;
   isSubscribed: boolean;
+  isPersonallySubscribed: boolean;
+  entitledWorkspaceIds: string[];
   isTrial: boolean;
   trialDaysLeft: number | null;
   currentPeriodEnd: string | null;
@@ -95,6 +101,13 @@ export function useUsage(): UseUsageResult | null {
             currentPeriodEnd: result.currentPeriodEnd ?? null,
             billingInterval: result.billingInterval ?? null,
             resetAt: result.resetAt ?? "rolling",
+            entitlementSources: result.entitlementSources ?? {
+              personal:
+                result.isTrial === true ||
+                (["pro", "business", "enterprise"].includes(result.plan ?? "free") &&
+                  ["active", "trialing"].includes(result.status ?? "active")),
+              workspaceIds: [],
+            },
           });
           lastFetchRef.current = Date.now();
           const isSubscribed = result.isSubscribed ?? false;
@@ -254,8 +267,10 @@ export function useUsage(): UseUsageResult | null {
   const wordsUsed = data?.wordsUsed ?? 0;
   const limit = data?.limit ?? 2000;
   const isSubscribed = data?.isSubscribed ?? false;
+  const isPersonallySubscribed = data?.entitlementSources.personal ?? false;
   const status = data?.status ?? "active";
-  const isPastDue = (data?.plan === "pro" || data?.plan === "business") && status === "past_due";
+  const isPastDue =
+    ["pro", "business", "enterprise"].includes(data?.plan ?? "free") && status === "past_due";
   const isOverLimit = !isSubscribed && limit > 0 && wordsUsed >= limit;
   const isApproachingLimit = !isSubscribed && limit > 0 && wordsUsed >= limit * 0.8 && !isOverLimit;
 
@@ -267,6 +282,8 @@ export function useUsage(): UseUsageResult | null {
     wordsRemaining: data?.wordsRemaining ?? (limit > 0 ? limit - wordsUsed : -1),
     limit,
     isSubscribed,
+    isPersonallySubscribed,
+    entitledWorkspaceIds: data?.entitlementSources.workspaceIds ?? [],
     isTrial: data?.isTrial ?? false,
     trialDaysLeft: data?.trialDaysLeft ?? null,
     currentPeriodEnd: data?.currentPeriodEnd ?? null,

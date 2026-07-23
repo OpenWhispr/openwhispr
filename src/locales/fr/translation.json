@@ -1158,7 +1158,7 @@
         "label": "Forfaits & facturation"
       },
       "workspace": {
-        "description": "Membres, facturation & clés API",
+        "description": "Membres, espaces d'équipe et clés API",
         "label": "Espace de travail"
       },
       "general": {
@@ -1191,7 +1191,7 @@
   "settingsPage": {
     "workspace": {
       "title": "Espace de travail",
-      "description": "Collaborez, partagez des notes et gérez la facturation au même endroit.",
+      "description": "Collaborez, partagez des notes et gérez l'accès à l'espace de travail au même endroit.",
       "empty": {
         "title": "Créez votre premier espace de travail",
         "description": "Les espaces de travail vous permettent de collaborer et partager des notes.",
@@ -1372,6 +1372,27 @@
             "admin": "Administrateur de l'espace"
           }
         }
+      }
+    },
+    "unifiedBilling": {
+      "workspaceTitle": "Workspace billing",
+      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
+      "billableSeat": "Your seat is billable",
+      "nonBillableSeat": "Admin-only access · no paid seat",
+      "managedBy": "Billing is managed by {{owner}}.",
+      "addSeat": "Add seat",
+      "startWithSeats": "Start Business with {{count}} seats",
+      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "seatUpdateFailed": "Couldn't update workspace seats",
+      "businessWorkspaceOnly": "Available for workspaces",
+      "personalPlanTitle": "Personal plan",
+      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "confirmSeats": {
+        "title": "Add a workspace seat?",
+        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "newCapacity": "New capacity",
+        "chargeToday": "Charge today",
+        "confirm": "Add seat"
       }
     },
     "account": {
@@ -2493,7 +2514,7 @@
       },
       "workspace": {
         "title": "Espace de travail",
-        "description": "L'espace des membres, des rôles et de la facturation de votre organisation."
+        "description": "L'espace des membres, des rôles et des espaces d'équipe de votre espace de travail."
       },
       "teamSpace": {
         "title": "Espace d'équipe",

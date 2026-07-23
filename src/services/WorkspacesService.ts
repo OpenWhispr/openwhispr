@@ -42,11 +42,12 @@ async function removeMember(workspaceId: string, userId: string): Promise<void> 
 
 async function billingCheckout(
   workspaceId: string,
-  interval: "monthly" | "annual" = "monthly"
+  interval: "monthly" | "annual" = "monthly",
+  additionalSeats = 0
 ): Promise<string> {
   const res = await cloudPost<DataWrap<{ url: string }>>(
     `/api/workspaces/${workspaceId}/billing/checkout`,
-    { interval }
+    { interval, additional_seats: additionalSeats }
   );
   return res.data.url;
 }
@@ -61,12 +62,35 @@ async function billingPortal(workspaceId: string): Promise<string> {
 async function previewSeats(
   workspaceId: string,
   additionalSeats: number
-): Promise<{ next_quantity: number; amount_due: number; currency: string }> {
+): Promise<{
+  next_quantity: number;
+  current_quantity: number;
+  seats_used: number;
+  amount_due: number;
+  currency: string;
+}> {
   const res = await cloudPost<
-    DataWrap<{ next_quantity: number; amount_due: number; currency: string }>
+    DataWrap<{
+      next_quantity: number;
+      current_quantity: number;
+      seats_used: number;
+      amount_due: number;
+      currency: string;
+    }>
   >(`/api/workspaces/${workspaceId}/billing/preview-seats`, {
     additional_seats: additionalSeats,
   });
+  return res.data;
+}
+
+async function updateSeats(
+  workspaceId: string,
+  quantity: number
+): Promise<{ quantity: number; seats_used: number }> {
+  const res = await cloudPost<DataWrap<{ quantity: number; seats_used: number }>>(
+    `/api/workspaces/${workspaceId}/billing/seats`,
+    { quantity }
+  );
   return res.data;
 }
 
@@ -81,4 +105,5 @@ export const WorkspacesService = {
   billingCheckout,
   billingPortal,
   previewSeats,
+  updateSeats,
 };
