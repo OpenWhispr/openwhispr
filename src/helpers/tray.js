@@ -12,6 +12,12 @@ class TrayManager {
     this.controlPanelWindow = null;
     this.windowManager = null;
     this.attachedControlPanels = new WeakSet();
+    this.sttPosture = "unknown";
+  }
+
+  setSttPosture(posture) {
+    this.sttPosture = typeof posture === "string" && posture ? posture : "unknown";
+    this.updateTrayMenu?.();
   }
 
   setWindows(mainWindow, controlPanelWindow) {
@@ -292,7 +298,9 @@ class TrayManager {
     if (!this.tray) return;
 
     const contextMenu = Menu.buildFromTemplate(this.buildContextMenuTemplate());
-    this.tray.setToolTip(i18nMain.t("tray.tooltip"));
+    const tooltipKey =
+      this.sttPosture === "cloud-only" ? "tray.tooltipCloudOnly" : "tray.tooltip";
+    this.tray.setToolTip(i18nMain.t(tooltipKey));
     this.tray.setContextMenu(contextMenu);
   }
 

@@ -464,6 +464,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   saveAllKeysToEnv: () => ipcRenderer.invoke("save-all-keys-to-env"),
   syncStartupPreferences: (prefs) => ipcRenderer.invoke("sync-startup-preferences", prefs),
+  syncSttPosture: (payload) => ipcRenderer.invoke("sync-stt-posture", payload),
 
   // Local reasoning
   processLocalReasoning: (text, modelId, agentName, config) =>
