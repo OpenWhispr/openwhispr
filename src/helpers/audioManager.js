@@ -53,7 +53,10 @@ import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
-import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
+import {
+  matchesDictionaryPrompt,
+  truncateDictionaryPrompt,
+} from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -423,8 +426,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return words.length > 0 ? words.join(", ") : null;
   }
 
-  isDictionaryEcho(text) {
-    return matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt());
+  isDictionaryEcho(text, dictionaryPrompt = this.getCustomDictionaryPrompt()) {
+    // Prefer the prompt actually sent to STT (may be truncated for Groq).
+    return matchesDictionaryPrompt(text, dictionaryPrompt);
   }
 
   setCallbacks({
@@ -2417,9 +2421,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
           const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+          dictionaryPrompt = truncateDictionaryPrompt(dictionaryPrompt, MAX_PROMPT_CHARS);
           logger.debug(
             "Custom dictionary prompt truncated",
             {
@@ -2467,7 +2469,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const proxyText = result?.text;
 
         if (proxyText && proxyText.trim().length > 0) {
-          if (this.isDictionaryEcho(proxyText)) {
+          if (this.isDictionaryEcho(proxyText, dictionaryPrompt)) {
             throw new Error("No audio detected");
           }
           timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
@@ -2681,7 +2683,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Check for text - handle both empty string and missing field
       if (result.text && result.text.trim().length > 0) {
-        if (this.isDictionaryEcho(result.text)) {
+        // Match against the prompt actually sent (truncated for Groq), not the full dict.
+        if (this.isDictionaryEcho(result.text, dictionaryPrompt)) {
           throw new Error("No audio detected");
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
