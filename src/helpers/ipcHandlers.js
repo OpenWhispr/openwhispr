@@ -8475,6 +8475,7 @@ class IPCHandlers {
       if (!voiceAgentCallback) {
         return { success: false, message: "Voice agent hotkey callback not initialized" };
       }
+      this.windowManager.resetVoiceAgentPushState();
 
       if (!hotkey) {
         hotkeyManager.unregisterSlot("voiceAgent");

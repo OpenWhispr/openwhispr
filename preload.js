@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
+  onStartVoiceAgent: registerListener("start-voice-agent", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
 
   // Database functions

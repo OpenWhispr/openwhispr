@@ -19,6 +19,8 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
+  const stopAfterStartRef = useRef(false);
+  const performStopRecordingRef = useRef(null);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const { onToggle } = options;
@@ -61,6 +63,10 @@ export const useAudioRecording = (toast, options = {}) => {
         return didStart;
       } finally {
         startLockRef.current = false;
+        if (stopAfterStartRef.current) {
+          stopAfterStartRef.current = false;
+          await performStopRecordingRef.current?.();
+        }
       }
     },
     []
@@ -93,6 +99,7 @@ export const useAudioRecording = (toast, options = {}) => {
       stopLockRef.current = false;
     }
   }, []);
+  performStopRecordingRef.current = performStopRecording;
 
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
@@ -264,6 +271,10 @@ export const useAudioRecording = (toast, options = {}) => {
       translationRequested = false,
     } = {}) => {
       if (!audioManagerRef.current) return;
+      if (startLockRef.current) {
+        stopAfterStartRef.current = true;
+        return;
+      }
       // Lazily warm the mic driver on first dictation use, not at launch. See #871.
       audioManagerRef.current.warmupMicDriver?.();
       const currentState = audioManagerRef.current.getState();
@@ -275,12 +286,16 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     };
 
-    const handleStart = async () => {
+    const handleStart = async ({ voiceAgentRequested = false } = {}) => {
       audioManagerRef.current?.warmupMicDriver?.();
-      await performStartRecording();
+      await performStartRecording({ voiceAgentRequested });
     };
 
     const handleStop = async () => {
+      if (startLockRef.current) {
+        stopAfterStartRef.current = true;
+        return;
+      }
       await performStopRecording();
     };
 
@@ -301,6 +316,11 @@ export const useAudioRecording = (toast, options = {}) => {
 
     const disposeStart = window.electronAPI.onStartDictation?.(() => {
       handleStart();
+      onToggle?.();
+    });
+
+    const disposeVoiceAgentStart = window.electronAPI.onStartVoiceAgent?.(() => {
+      handleStart({ voiceAgentRequested: true });
       onToggle?.();
     });
 
@@ -328,6 +348,7 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();
       disposeStart?.();
+      disposeVoiceAgentStart?.();
       disposeStop?.();
       disposeNoAudio?.();
       if (audioManagerRef.current) {

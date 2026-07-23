@@ -221,13 +221,13 @@
     },
     "voiceAgent": {
       "title": "Voice Agent Setup",
-      "description": "Talk to your AI agent with a single keypress",
+      "description": "Talk to your AI agent with a hold-to-submit hotkey",
       "hotkey": "Hotkey",
-      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. {{agentName}} types the result wherever your cursor is. No need to say “Hey {{agentName}}” first.",
+      "howItWorks": "Hold the key and say what you want — for example “write a short thank-you note” — then release to submit. {{agentName}} types the result wherever your cursor is. No need to say “Hey {{agentName}}” first.",
       "test": "Try it",
-      "testInstruction": "Click below, press {{hotkey}} and say a command",
+      "testInstruction": "Click below, hold {{hotkey}}, say a command, then release",
       "testSetHotkey": "Set a hotkey above to try it",
-      "testPlaceholder": "Click here, press your hotkey and say one of the examples...",
+      "testPlaceholder": "Click here, hold your hotkey, say one of the examples, then release...",
       "examples": [
         "Translate to Italian: “I talk faster than I type”",
         "Write a short email to my boss telling him I want a promotion, his name is Mark",
@@ -1625,7 +1625,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Agent Hotkey",
-        "description": "Speak a request — your AI agent types the result, not your words"
+        "description": "Hold while speaking, then release to submit the request to your AI agent"
       },
       "translationHotkey": {
         "title": "Translation Hotkey",

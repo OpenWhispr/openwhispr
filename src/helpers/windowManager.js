@@ -42,6 +42,7 @@ class WindowManager {
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
     this.winPushState = null;
+    this.voiceAgentPushState = null;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
     this._agentAnimationState = null;
@@ -262,7 +263,7 @@ class WindowManager {
     };
   }
 
-  startMacCompoundPushToTalk(hotkey) {
+  startMacCompoundPushToTalk(hotkey, target = "dictation") {
     if (this.macCompoundPushState?.active) {
       return;
     }
@@ -292,6 +293,7 @@ class WindowManager {
       isRecording: false,
       requiredModifiers,
       safetyTimeoutId,
+      target,
     };
 
     setTimeout(() => {
@@ -301,7 +303,11 @@ class WindowManager {
 
       if (!this.macCompoundPushState.isRecording) {
         this.macCompoundPushState.isRecording = true;
-        this.sendStartDictation();
+        if (target === "voiceAgent") {
+          this.sendStartVoiceAgent();
+        } else {
+          this.sendStartDictation();
+        }
       }
     }, MIN_HOLD_DURATION_MS);
   }
@@ -450,6 +456,97 @@ class WindowManager {
     this.handleWindowsPushKeyUp();
   }
 
+  startVoiceAgentPushToTalk(key) {
+    if (this.voiceAgentPushState?.active) {
+      return;
+    }
+
+    const MIN_HOLD_DURATION_MS = 150;
+    const MAX_PUSH_DURATION_MS = 300000;
+    const downTime = Date.now();
+
+    debugLogger.debug("Voice Agent PTT key down", { key }, "ptt");
+    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+    this.showDictationPanel();
+
+    const safetyTimeoutId = setTimeout(() => {
+      if (this.voiceAgentPushState?.active) {
+        debugLogger.warn("Voice Agent PTT safety timeout", { key }, "ptt");
+        this.handleVoiceAgentPushKeyUp();
+      }
+    }, MAX_PUSH_DURATION_MS);
+
+    this.voiceAgentPushState = {
+      active: true,
+      key,
+      downTime,
+      isRecording: false,
+      safetyTimeoutId,
+    };
+
+    setTimeout(() => {
+      if (!this.voiceAgentPushState || this.voiceAgentPushState.downTime !== downTime) {
+        return;
+      }
+
+      if (!this.voiceAgentPushState.isRecording) {
+        this.voiceAgentPushState.isRecording = true;
+        this.sendStartVoiceAgent();
+      }
+    }, MIN_HOLD_DURATION_MS);
+  }
+
+  // With several Voice Agent hotkeys bound, only the key that started the push
+  // may stop it. Called without a key to force-stop after settings changes.
+  handleVoiceAgentPushKeyUp(key) {
+    if (!this.voiceAgentPushState?.active) {
+      return;
+    }
+    if (key && this.voiceAgentPushState.key && key !== this.voiceAgentPushState.key) {
+      return;
+    }
+
+    if (this.voiceAgentPushState.safetyTimeoutId) {
+      clearTimeout(this.voiceAgentPushState.safetyTimeoutId);
+    }
+
+    const wasRecording = this.voiceAgentPushState.isRecording;
+    const heldForMs = Date.now() - this.voiceAgentPushState.downTime;
+    this.voiceAgentPushState = null;
+
+    debugLogger.debug("Voice Agent PTT key up", { key, heldForMs, wasRecording }, "ptt");
+    if (wasRecording) {
+      this.sendStopDictation();
+    } else {
+      this.hideDictationPanel();
+    }
+  }
+
+  cancelVoiceAgentPushToTalk() {
+    if (!this.voiceAgentPushState?.active) {
+      return;
+    }
+
+    if (this.voiceAgentPushState.safetyTimeoutId) {
+      clearTimeout(this.voiceAgentPushState.safetyTimeoutId);
+    }
+
+    const wasRecording = this.voiceAgentPushState.isRecording;
+    this.voiceAgentPushState = null;
+    if (wasRecording) {
+      this.sendCancelDictation();
+    } else {
+      this.hideDictationPanel();
+    }
+  }
+
+  resetVoiceAgentPushState() {
+    this.handleVoiceAgentPushKeyUp();
+    if (this.macCompoundPushState?.target === "voiceAgent") {
+      this.forceStopMacCompoundPush("voice-agent-hotkey-reset");
+    }
+  }
+
   _sendDictationToggle(channel) {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
@@ -472,6 +569,17 @@ class WindowManager {
     // refocus the target (#668).
     if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
     this._sendDictationToggle("toggle-voice-agent");
+  }
+
+  sendStartVoiceAgent() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.showDictationPanel();
+      this.mainWindow.webContents.send("start-voice-agent");
+      this.meetingDetectionEngine?.setUserRecording(true);
+    }
   }
 
   sendToggleTranslation() {

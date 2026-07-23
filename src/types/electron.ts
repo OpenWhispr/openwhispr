@@ -559,6 +559,7 @@ declare global {
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
+      onStartVoiceAgent?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
       // STT config

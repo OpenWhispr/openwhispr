@@ -29,17 +29,22 @@ test("tap mode watches modifier-only hotkeys for every slot", () => {
   ]);
 });
 
-test("regular key hotkeys are left to globalShortcut in tap mode", () => {
-  const mgr = makeManager({ dictation: "F8", voiceAgent: "Control+Shift+A" });
+test("regular non-Voice-Agent hotkeys are left to globalShortcut in tap mode", () => {
+  const mgr = makeManager({ dictation: "F8", agent: "Control+Shift+A" });
   assert.deepEqual(mgr.getNativeListenerKeys("tap"), []);
 });
 
-test("push mode watches the dictation key even when it is a regular key", () => {
+test("Voice Agent keys are watched for release even when dictation uses tap mode", () => {
   const mgr = makeManager({ dictation: "F8", voiceAgent: "Control+Shift+A" });
-  assert.deepEqual(mgr.getNativeListenerKeys("push"), ["F8"]);
+  assert.deepEqual(mgr.getNativeListenerKeys("tap"), ["Control+Shift+A"]);
 });
 
-test("push mode does not push-enable non-dictation slots", () => {
+test("push mode watches regular dictation and Voice Agent keys", () => {
+  const mgr = makeManager({ dictation: "F8", voiceAgent: "Control+Shift+A" });
+  assert.deepEqual(mgr.getNativeListenerKeys("push").sort(), ["Control+Shift+A", "F8"]);
+});
+
+test("push mode does not push-enable the Chat Agent slot", () => {
   const mgr = makeManager({ dictation: "Control+Super", agent: "F9" });
   assert.deepEqual(mgr.getNativeListenerKeys("push"), ["Control+Super"]);
 });
@@ -102,7 +107,7 @@ test("translation slot conflicts are detected and it is never push-enabled", () 
   const conflict = mgr._findSlotConflict("agent", "Control+Shift+T");
   assert.equal(conflict?.reason, "slot_conflict");
   assert.equal(conflict?.conflictSlot, "translation");
-  // Push mode only push-enables the dictation slot, never translation.
+  // Push mode never enables the translation slot.
   assert.deepEqual(mgr.getNativeListenerKeys("push"), ["F8"]);
   // Modifier-only translation hotkeys go through the native listener in tap mode.
   const mgr2 = makeManager({ translation: "Control+Alt" });

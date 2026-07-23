@@ -289,6 +289,7 @@ const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager")
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
+const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
 const sidecarRegistry = require("./src/helpers/sidecarRegistry");
@@ -908,6 +909,9 @@ async function startApp() {
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     windowManager.setActivationModeCache(mode);
     environmentManager.saveActivationMode(mode);
+    if (process.platform === "darwin") {
+      windowManager.forceStopMacCompoundPush("activation-mode-changed");
+    }
   });
 
   ipcMain.on("floating-icon-auto-hide-changed", (_event, enabled) => {
@@ -970,7 +974,30 @@ async function startApp() {
 
   // Set up voice agent hotkey (dictation routed straight to the dictation
   // agent, bypassing cleanup)
-  const voiceAgentHotkeyCallback = () => {
+  const voiceAgentHotkeyCallback = (triggeredHotkey) => {
+    if (hotkeyManager.isInListeningMode()) return;
+
+    const currentHotkey = triggeredHotkey || hotkeyManager.getSlotHotkey("voiceAgent");
+
+    if (
+      process.platform === "darwin" &&
+      currentHotkey &&
+      !isGlobeLikeHotkey(currentHotkey) &&
+      currentHotkey.includes("+")
+    ) {
+      windowManager.startMacCompoundPushToTalk(currentHotkey, "voiceAgent");
+      return;
+    }
+
+    // Windows/Linux low-level listeners deliver key-down and key-up. Desktop
+    // shortcut backends only deliver a toggle, so retain tap behavior there.
+    if (
+      (process.platform === "win32" || process.platform === "linux") &&
+      !hotkeyManager.isUsingNativeShortcut()
+    ) {
+      return;
+    }
+
     windowManager.sendToggleVoiceAgent();
   };
   windowManager._voiceAgentHotkeyCallback = voiceAgentHotkeyCallback;
@@ -1174,7 +1201,6 @@ async function startApp() {
   updateManager.checkForUpdatesOnStartup();
 
   if (process.platform === "darwin") {
-    const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
     let globeLastStopTime = 0;
@@ -1229,9 +1255,10 @@ async function startApp() {
 
       // Check agent and voice agent slots for Globe/Fn key
       const agentUsesGlobe = hotkeyManager.getSlotHotkeys("agent").some(isGlobeLikeHotkey);
-      const voiceAgentUsesGlobe = hotkeyManager
+      const voiceAgentGlobeHotkey = hotkeyManager
         .getSlotHotkeys("voiceAgent")
-        .some(isGlobeLikeHotkey);
+        .find(isGlobeLikeHotkey);
+      const voiceAgentUsesGlobe = Boolean(voiceAgentGlobeHotkey);
       const translationUsesGlobe = hotkeyManager
         .getSlotHotkeys("translation")
         .some(isGlobeLikeHotkey);
@@ -1239,7 +1266,7 @@ async function startApp() {
         windowManager.toggleAgentOverlay();
       }
       if (voiceAgentUsesGlobe) {
-        windowManager.sendToggleVoiceAgent();
+        windowManager.startVoiceAgentPushToTalk(voiceAgentGlobeHotkey);
       }
       if (translationUsesGlobe) {
         windowManager.sendToggleTranslation();
@@ -1270,6 +1297,13 @@ async function startApp() {
         }
       }
 
+      const voiceAgentGlobeHotkey = hotkeyManager
+        .getSlotHotkeys("voiceAgent")
+        .find(isGlobeLikeHotkey);
+      if (voiceAgentGlobeHotkey) {
+        windowManager.handleVoiceAgentPushKeyUp(voiceAgentGlobeHotkey);
+      }
+
       // Fn release also stops compound push-to-talk for Fn+F-key hotkeys
       windowManager.handleMacPushModifierUp("fn");
     });
@@ -1277,21 +1311,32 @@ async function startApp() {
     // Another key was pressed while Fn was held — user is using Fn as a
     // navigation modifier (Fn+Arrow → Home, Fn+Backspace → Forward Delete, etc.).
     // Cancel any bare-Fn push-to-talk in progress instead of transcribing noise.
-    // Only the bare-Fn path uses globeKeyDownTime/globeKeyIsRecording, so compound
-    // Fn-hotkey push-to-talk and tap mode are untouched.
+    // Bare-Fn dictation uses the local state below; bare-Fn Voice Agent uses its
+    // own push state. Compound Fn hotkeys and tap mode are untouched.
     globeKeyManager.on("globe-interrupted", () => {
-      if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
+      const voiceAgentGlobePushActive =
+        windowManager.voiceAgentPushState?.active &&
+        isGlobeLikeHotkey(windowManager.voiceAgentPushState.key);
+      const dictationGlobePushActive = globeKeyDownTime !== 0 || globeKeyIsRecording;
+      if (!dictationGlobePushActive && !voiceAgentGlobePushActive) {
         return;
       }
-      const wasRecording = globeKeyIsRecording;
-      debugLogger?.debug("[Globe] Fn+key interrupted push-to-talk", { wasRecording });
-      globeKeyDownTime = 0;
-      globeKeyIsRecording = false;
-      globeLastStopTime = Date.now();
-      if (wasRecording) {
-        windowManager.sendCancelDictation();
-      } else {
-        windowManager.hideDictationPanel();
+
+      if (dictationGlobePushActive) {
+        const wasRecording = globeKeyIsRecording;
+        debugLogger?.debug("[Globe] Fn+key interrupted push-to-talk", { wasRecording });
+        globeKeyDownTime = 0;
+        globeKeyIsRecording = false;
+        globeLastStopTime = Date.now();
+        if (wasRecording) {
+          windowManager.sendCancelDictation();
+        } else {
+          windowManager.hideDictationPanel();
+        }
+      }
+
+      if (voiceAgentGlobePushActive) {
+        windowManager.cancelVoiceAgentPushToTalk();
       }
     });
 
@@ -1313,7 +1358,7 @@ async function startApp() {
         windowManager.toggleAgentOverlay();
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
-        windowManager.sendToggleVoiceAgent();
+        windowManager.startVoiceAgentPushToTalk(modifier);
       }
       if (hotkeyManager.slotHasHotkey("translation", modifier)) {
         windowManager.sendToggleTranslation();
@@ -1345,6 +1390,10 @@ async function startApp() {
     });
 
     globeKeyManager.on("right-modifier-up", async (modifier) => {
+      if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
+        windowManager.handleVoiceAgentPushKeyUp(modifier);
+      }
+
       if (hotkeyManager.slotHasHotkey("dictation", modifier)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
@@ -1398,7 +1447,7 @@ async function startApp() {
         windowManager.toggleAgentOverlay();
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
-        windowManager.sendToggleVoiceAgent();
+        windowManager.startVoiceAgentPushToTalk(button);
       }
       if (hotkeyManager.slotHasHotkey("translation", button)) {
         windowManager.sendToggleTranslation();
@@ -1433,6 +1482,10 @@ async function startApp() {
     globeKeyManager.on("mouse-button-up", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+
+      if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
+        windowManager.handleVoiceAgentPushKeyUp(button);
+      }
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
@@ -1501,6 +1554,7 @@ async function startApp() {
       mouseButtonDownTime = 0;
       mouseButtonIsRecording = false;
       mouseButtonLastStopTime = 0;
+      windowManager.resetVoiceAgentPushState();
       syncSuppressedMouseButtons();
     });
   }
@@ -1514,8 +1568,8 @@ async function startApp() {
     const nativeKeyManager = isWindows ? windowsKeyManager : linuxKeyManager;
     debugLogger.debug("[Push-to-Talk] Native key listener setup starting");
 
-    // Dictation supports push-to-talk and needs the overlay window; agent/meeting
-    // drive other windows (matching their globalShortcut callbacks and macOS).
+    // Dictation and Voice Agent support push-to-talk. The remaining slots drive
+    // tap actions that match their globalShortcut callbacks and macOS paths.
     const dispatchNativeKeyDown = (key) => {
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
@@ -1527,7 +1581,7 @@ async function startApp() {
         return;
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
-        windowManager.sendToggleVoiceAgent();
+        windowManager.startVoiceAgentPushToTalk(key);
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("agent", key)) {
@@ -1537,8 +1591,12 @@ async function startApp() {
       }
     };
 
-    // Only dictation drives push-to-talk, so only its key-up matters.
+    // Route release to the push-to-talk pipeline that owns this key.
     const dispatchNativeKeyUp = (key) => {
+      if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
+        windowManager.handleVoiceAgentPushKeyUp(key);
+        return;
+      }
       if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
         windowManager.handleWindowsPushKeyUp(key);
