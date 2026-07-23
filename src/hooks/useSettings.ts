@@ -313,6 +313,8 @@ function useSettingsInternal() {
     setNotifyCalendarReminders: store.setNotifyCalendarReminders,
     notifyUpdates: store.notifyUpdates,
     setNotifyUpdates: store.setNotifyUpdates,
+    autoEndMeetingRecording: store.autoEndMeetingRecording,
+    setAutoEndMeetingRecording: store.setAutoEndMeetingRecording,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
     pauseMediaOnDictation: store.pauseMediaOnDictation,

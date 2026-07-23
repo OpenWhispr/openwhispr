@@ -1526,6 +1526,8 @@
         "meetingDetectionDescription": "Notificar cuando se detecta una reunión para iniciar la grabación",
         "calendarReminders": "Recordatorios del calendario",
         "calendarRemindersDescription": "Notificar cuando una reunión programada está a punto de comenzar",
+        "autoEndMeeting": "Finalizar grabación automáticamente",
+        "autoEndMeetingDescription": "Detén la grabación tras un periodo de silencio (con una cuenta atrás que puedes cancelar)",
         "updates": "Actualizaciones",
         "updatesDescription": "Notificar cuando hay una nueva versión disponible"
       },
@@ -3017,5 +3019,10 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir"
+  },
+  "meetingEndPrompt": {
+    "title": "¿Terminó la reunión?",
+    "body": "Sin audio desde hace un rato — finalizando en {{seconds}} s",
+    "keep": "Seguir grabando"
   }
 }

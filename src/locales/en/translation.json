@@ -1651,6 +1651,8 @@
         "meetingDetectionDescription": "Notify when a meeting is detected so you can start recording",
         "calendarReminders": "Calendar reminders",
         "calendarRemindersDescription": "Notify when a scheduled meeting is about to start",
+        "autoEndMeeting": "Auto-end meeting recording",
+        "autoEndMeetingDescription": "Stop recording after a period of silence (with a countdown you can cancel)",
         "updates": "App updates",
         "updatesDescription": "Notify when a new version is available"
       },
@@ -3017,5 +3019,10 @@
     },
     "start": "Take notes",
     "join": "Join & transcribe"
+  },
+  "meetingEndPrompt": {
+    "title": "Meeting ended?",
+    "body": "No audio for a while — ending in {{seconds}}s",
+    "keep": "Keep recording"
   }
 }

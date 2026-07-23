@@ -1478,6 +1478,8 @@
         "meetingDetectionDescription": "会議が検出されたときに通知して録音を開始できるようにする",
         "calendarReminders": "カレンダーリマインダー",
         "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する",
+        "autoEndMeeting": "会議の録音を自動終了",
+        "autoEndMeetingDescription": "一定時間無音が続いたら録音を停止します（キャンセル可能なカウントダウン付き）",
         "updates": "アプリの更新",
         "updatesDescription": "新しいバージョンが利用可能になったときに通知する"
       },
@@ -3017,5 +3019,10 @@
     },
     "start": "メモを取る",
     "join": "参加して文字起こし"
+  },
+  "meetingEndPrompt": {
+    "title": "会議は終了しましたか？",
+    "body": "しばらく音声がありません — {{seconds}} 秒後に終了します",
+    "keep": "録音を続ける"
   }
 }

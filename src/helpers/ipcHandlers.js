@@ -8838,6 +8838,30 @@ class IPCHandlers {
       return { success: true };
     });
 
+    // Meeting "ending?" prompt (silence auto-end)
+    ipcMain.handle("show-meeting-end-prompt", async (_event, options) => {
+      await this.windowManager?.showMeetingEndPrompt(options || {});
+      return { success: true };
+    });
+
+    ipcMain.handle("get-meeting-end-prompt-data", async () => {
+      return this.windowManager?._pendingMeetingEndData ?? null;
+    });
+
+    ipcMain.handle("meeting-end-prompt-ready", async () => {
+      this.windowManager?.showMeetingEndPromptWindow();
+    });
+
+    ipcMain.handle("meeting-end-prompt-respond", async (_event, action) => {
+      this.windowManager?.resolveMeetingEndPrompt(action);
+      return { success: true };
+    });
+
+    ipcMain.handle("dismiss-meeting-end-prompt", async () => {
+      this.windowManager?.dismissMeetingEndPrompt();
+      return { success: true };
+    });
+
     // Note files (markdown mirror) handlers
     ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath, options) => {
       try {

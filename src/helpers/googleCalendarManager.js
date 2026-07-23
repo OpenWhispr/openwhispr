@@ -1,6 +1,7 @@
 const { net, BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
+const { hasOtherAttendees } = require("./meetingAttendees");
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 const MEETING_REMINDER_LEAD_MS = 60 * 1000;
@@ -269,7 +270,8 @@ class GoogleCalendarManager {
     }
 
     const upcoming = this.databaseManager.getUpcomingEvents(1440);
-    const next = upcoming.find((e) => !this.notifiedMeetings.has(e.id));
+    // Skip solo blocks / personal reminders (no attendees other than you) — they aren't meetings.
+    const next = upcoming.find((e) => !this.notifiedMeetings.has(e.id) && hasOtherAttendees(e));
     if (!next) return;
 
     const delay = new Date(next.start_time).getTime() - MEETING_REMINDER_LEAD_MS - Date.now();
@@ -324,7 +326,7 @@ class GoogleCalendarManager {
   }
 
   onWakeFromSleep() {
-    const activeEvents = this.databaseManager.getActiveEvents();
+    const activeEvents = this.databaseManager.getActiveEvents().filter(hasOtherAttendees);
     if (activeEvents.length > 0 && !this.activeMeeting) {
       this.onMeetingStart(activeEvents[0]);
     }

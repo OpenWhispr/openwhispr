@@ -1478,6 +1478,8 @@
         "meetingDetectionDescription": "检测到会议时通知您以便开始录音",
         "calendarReminders": "日历提醒",
         "calendarRemindersDescription": "预定会议即将开始时通知您",
+        "autoEndMeeting": "自动结束会议录制",
+        "autoEndMeetingDescription": "在一段时间静音后停止录制（带可取消的倒计时）",
         "updates": "应用更新",
         "updatesDescription": "有新版本可用时通知您"
       },
@@ -3017,5 +3019,10 @@
     },
     "start": "开始记录",
     "join": "加入并转录"
+  },
+  "meetingEndPrompt": {
+    "title": "会议结束了吗？",
+    "body": "已有一段时间没有声音 — {{seconds}} 秒后结束",
+    "keep": "继续录制"
   }
 }

@@ -1478,6 +1478,8 @@
         "meetingDetectionDescription": "Avvisa quando viene rilevata una riunione per avviare la registrazione",
         "calendarReminders": "Promemoria calendario",
         "calendarRemindersDescription": "Avvisa quando una riunione programmata sta per iniziare",
+        "autoEndMeeting": "Termina automaticamente la registrazione",
+        "autoEndMeetingDescription": "Interrompi la registrazione dopo un periodo di silenzio (con un conto alla rovescia annullabile)",
         "updates": "Aggiornamenti app",
         "updatesDescription": "Avvisa quando è disponibile una nuova versione"
       },
@@ -3017,5 +3019,10 @@
     },
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi"
+  },
+  "meetingEndPrompt": {
+    "title": "Riunione terminata?",
+    "body": "Nessun audio da un po' — termino tra {{seconds}} s",
+    "keep": "Continua a registrare"
   }
 }

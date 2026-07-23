@@ -143,6 +143,7 @@ const BOOLEAN_SETTINGS = new Set([
   "notifyMeetingDetection",
   "notifyCalendarReminders",
   "notifyUpdates",
+  "autoEndMeetingRecording",
   "gcalPrimaryOnly",
 ]);
 
@@ -419,6 +420,7 @@ export interface SettingsState
   notifyMeetingDetection: boolean;
   notifyCalendarReminders: boolean;
   notifyUpdates: boolean;
+  autoEndMeetingRecording: boolean;
   gcalPrimaryOnly: boolean;
   meetingProcessDetection: boolean;
   speakerDiarizationEnabled: boolean;
@@ -671,6 +673,7 @@ export interface SettingsState
   setNotifyMeetingDetection: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
   setNotifyUpdates: (value: boolean) => void;
+  setAutoEndMeetingRecording: (value: boolean) => void;
   setGcalPrimaryOnly: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
@@ -1014,6 +1017,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
   notifyUpdates: readBoolean("notifyUpdates", true),
+  autoEndMeetingRecording: readBoolean("autoEndMeetingRecording", true),
   ...(() => {
     let accounts: GoogleCalendarAccount[] = [];
     try {
@@ -1622,6 +1626,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
   setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
   setNotifyUpdates: createBooleanSetter("notifyUpdates"),
+  setAutoEndMeetingRecording: createBooleanSetter("autoEndMeetingRecording"),
   setGcalPrimaryOnly: (value: boolean) => {
     if (isBrowser) localStorage.setItem("gcalPrimaryOnly", String(value));
     useSettingsStore.setState({ gcalPrimaryOnly: value });

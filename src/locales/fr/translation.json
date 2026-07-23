@@ -1526,6 +1526,8 @@
         "meetingDetectionDescription": "Prévenir quand une réunion est détectée pour lancer l'enregistrement",
         "calendarReminders": "Rappels de calendrier",
         "calendarRemindersDescription": "Prévenir quand une réunion planifiée va commencer",
+        "autoEndMeeting": "Arrêter l'enregistrement automatiquement",
+        "autoEndMeetingDescription": "Arrête l'enregistrement après une période de silence (avec un compte à rebours annulable)",
         "updates": "Mises à jour",
         "updatesDescription": "Prévenir quand une nouvelle version est disponible"
       },
@@ -3017,5 +3019,10 @@
     },
     "start": "Prendre des notes",
     "join": "Rejoindre et transcrire"
+  },
+  "meetingEndPrompt": {
+    "title": "Réunion terminée ?",
+    "body": "Aucun son depuis un moment — fin dans {{seconds}} s",
+    "keep": "Continuer l'enregistrement"
   }
 }

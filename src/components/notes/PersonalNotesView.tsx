@@ -89,6 +89,8 @@ function makeContentHash(content: string): string {
   return String(content.length) + "-" + content.slice(0, 50);
 }
 
+type NotePatch = { title?: string; content?: string };
+
 interface PersonalNotesViewProps {
   onOpenSettings?: (section: string) => void;
   onOpenSearch?: () => void;
@@ -123,6 +125,7 @@ export default function PersonalNotesView({
   const [isCreatingNewNoteFolder, setIsCreatingNewNoteFolder] = useState(false);
   const [newNoteFolderName, setNewNoteFolderName] = useState("");
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSaveRef = useRef<{ noteId: number; updates: NotePatch } | null>(null);
   const enhancedSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeNoteRef = useRef<number | null>(null);
   const [syncedNoteId, setSyncedNoteIdState] = useState<number | null>(null);
@@ -140,6 +143,20 @@ export default function PersonalNotesView({
     activeNoteRef.current = id;
     setSyncedNoteIdState(id);
   };
+  // Write out whatever is queued right now (note switch, note cleared, unmount) so a
+  // pending edit is never dropped and never lands on the wrong note.
+  const flushPendingSave = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const entry = pendingSaveRef.current;
+    pendingSaveRef.current = null;
+    if (!entry) return;
+    window.electronAPI.updateNote(entry.noteId, entry.updates).catch((err: unknown) => {
+      logger.warn("Failed to flush note save", { error: (err as Error).message }, "notes");
+    });
+  }, []);
   const { toast } = useToast();
   const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
   const effectiveModelId = useSettingsStore((s) => selectResolvedNoteFormatting(s).model);
@@ -239,17 +256,10 @@ export default function PersonalNotesView({
   useEffect(() => {
     if (activeNote && activeNote.id !== activeNoteRef.current) {
       // --- Switching notes ---
-      // 1. Capture old note state before anything changes
-      const oldNoteId = activeNoteRef.current;
-      const oldTitle = localTitleRef.current;
-      const oldContent = localContentRef.current;
-      const hadPendingSave = !!saveTimeoutRef.current;
+      // 1. Flush the old note's queued edits before anything changes
+      flushPendingSave();
 
-      // 2. Clear all pending timers
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
+      // 2. Clear remaining timers
       if (enhancedSaveTimeoutRef.current) {
         clearTimeout(enhancedSaveTimeoutRef.current);
         enhancedSaveTimeoutRef.current = null;
@@ -263,19 +273,6 @@ export default function PersonalNotesView({
       // Also update refs directly so callbacks are correct before next render
       localTitleRef.current = activeNote.title;
       localContentRef.current = activeNote.content;
-
-      // 4. Flush old note data fire-and-forget (uses captured values, not refs)
-      if (hadPendingSave && oldNoteId) {
-        window.electronAPI
-          .updateNote(oldNoteId, { title: oldTitle, content: oldContent })
-          .catch((err: unknown) => {
-            logger.warn(
-              "Failed to flush note on switch",
-              { error: (err as Error).message },
-              "notes"
-            );
-          });
-      }
     } else if (activeNote && activeNote.id === activeNoteRef.current && !saveTimeoutRef.current) {
       // External update (e.g. AI chat tool) — resync only when no user save is pending
       if (activeNote.title !== localTitleRef.current) setLocalTitle(activeNote.title);
@@ -284,10 +281,7 @@ export default function PersonalNotesView({
         setLocalEnhancedContent(activeNote.enhanced_content ?? null);
       }
     } else if (!activeNote) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
+      flushPendingSave();
       if (enhancedSaveTimeoutRef.current) {
         clearTimeout(enhancedSaveTimeoutRef.current);
         enhancedSaveTimeoutRef.current = null;
@@ -297,35 +291,51 @@ export default function PersonalNotesView({
       setLocalContent("");
       setLocalEnhancedContent(null);
     }
-  }, [activeNote]);
+  }, [activeNote, flushPendingSave]);
 
-  const debouncedSave = useCallback((noteId: number, title: string, content: string) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(async () => {
-      saveTimeoutRef.current = null;
-      setIsSaving(true);
-      try {
-        await window.electronAPI.updateNote(noteId, { title, content });
-      } catch (err) {
-        logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
-      } finally {
-        setIsSaving(false);
+  // Only the fields the user actually edited are written. Sending title and content
+  // together let a content-only change carry a stale title ref — a meeting note opened
+  // straight from a Join prompt got its title wiped by the editor's first content event.
+  const debouncedSave = useCallback(
+    (noteId: number, updates: NotePatch) => {
+      const pending = pendingSaveRef.current;
+      if (pending && pending.noteId !== noteId) {
+        flushPendingSave();
       }
-    }, 1000);
-  }, []);
+      pendingSaveRef.current = {
+        noteId,
+        updates: { ...(pendingSaveRef.current?.updates ?? {}), ...updates },
+      };
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(async () => {
+        saveTimeoutRef.current = null;
+        const entry = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        if (!entry) return;
+        setIsSaving(true);
+        try {
+          await window.electronAPI.updateNote(entry.noteId, entry.updates);
+        } catch (err) {
+          logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
+        } finally {
+          setIsSaving(false);
+        }
+      }, 1000);
+    },
+    [flushPendingSave]
+  );
 
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      flushPendingSave();
       if (enhancedSaveTimeoutRef.current) clearTimeout(enhancedSaveTimeoutRef.current);
     };
-  }, []);
+  }, [flushPendingSave]);
 
   const handleTitleChange = useCallback(
     (title: string) => {
       setLocalTitle(title);
-      if (activeNoteRef.current)
-        debouncedSave(activeNoteRef.current, title, localContentRef.current);
+      if (activeNoteRef.current) debouncedSave(activeNoteRef.current, { title });
     },
     [debouncedSave]
   );
@@ -333,8 +343,7 @@ export default function PersonalNotesView({
   const handleContentChange = useCallback(
     (content: string) => {
       setLocalContent(content);
-      if (activeNoteRef.current)
-        debouncedSave(activeNoteRef.current, localTitleRef.current, content);
+      if (activeNoteRef.current) debouncedSave(activeNoteRef.current, { content });
     },
     [debouncedSave]
   );

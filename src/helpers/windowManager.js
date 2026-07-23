@@ -29,6 +29,11 @@ class WindowManager {
     this.transcriptionPreviewWindow = null;
     this.updateNotificationWindow = null;
     this._updateNotificationDismissed = false;
+    this.meetingEndPromptWindow = null;
+    this._pendingMeetingEndData = null;
+    this._meetingEndReadyFallback = null;
+    this._meetingEndSafetyTimeout = null;
+    this._meetingEndResolved = false;
     this.notificationPrefs = {
       notificationsEnabled: true,
       notifyMeetingDetection: true,
@@ -1352,6 +1357,112 @@ class WindowManager {
       this.updateNotificationWindow.close();
     }
     this.updateNotificationWindow = null;
+  }
+
+  // --- Meeting "ending?" prompt (silence auto-end) -------------------------
+  // Separate always-on-top overlay, modeled on the update notification (never
+  // click-through, so the "Keep recording" button is reliable on all
+  // platforms). The visible countdown is driven by the overlay renderer; this
+  // window keeps a safety timeout that force-ends if the renderer never
+  // responds.
+  async showMeetingEndPrompt({ countdownMs = 5000 } = {}) {
+    if (this.meetingEndPromptWindow && !this.meetingEndPromptWindow.isDestroyed()) {
+      this.meetingEndPromptWindow.close();
+      this.meetingEndPromptWindow = null;
+    }
+    this._clearMeetingEndTimers();
+    this._meetingEndResolved = false;
+
+    const display = screen.getPrimaryDisplay();
+    const position = WindowPositionUtil.getNotificationPosition(display);
+
+    this.meetingEndPromptWindow = new BrowserWindow({
+      ...NOTIFICATION_WINDOW_CONFIG,
+      ...position,
+    });
+
+    WindowPositionUtil.setupAlwaysOnTop(this.meetingEndPromptWindow);
+
+    this._pendingMeetingEndData = { countdownMs };
+
+    if (process.env.NODE_ENV === "development") {
+      await DevServerManager.waitForDevServer();
+      await this.meetingEndPromptWindow.loadURL(
+        `${DevServerManager.DEV_SERVER_URL}?meeting-end-prompt=true`
+      );
+    } else {
+      const fileInfo = DevServerManager.getAppFilePath(false);
+      await this.meetingEndPromptWindow.loadFile(fileInfo.path, {
+        query: { ...fileInfo.query, "meeting-end-prompt": "true" },
+      });
+    }
+
+    this._meetingEndReadyFallback = setTimeout(() => {
+      this._meetingEndReadyFallback = null;
+      if (this.meetingEndPromptWindow && !this.meetingEndPromptWindow.isDestroyed()) {
+        this.meetingEndPromptWindow.webContents.send(
+          "meeting-end-prompt-data",
+          this._pendingMeetingEndData
+        );
+        this.meetingEndPromptWindow.showInactive();
+      }
+    }, 3000);
+
+    // Safety net: if the overlay renderer never reports a decision, end anyway
+    // (comfortably after the visible countdown would have elapsed).
+    this._meetingEndSafetyTimeout = setTimeout(() => {
+      this.resolveMeetingEndPrompt("end");
+    }, countdownMs + 4000);
+
+    this.meetingEndPromptWindow.on("closed", () => {
+      this.meetingEndPromptWindow = null;
+      this._clearMeetingEndTimers();
+    });
+  }
+
+  showMeetingEndPromptWindow() {
+    if (this._meetingEndReadyFallback) {
+      clearTimeout(this._meetingEndReadyFallback);
+      this._meetingEndReadyFallback = null;
+    }
+    if (this.meetingEndPromptWindow && !this.meetingEndPromptWindow.isDestroyed()) {
+      this.meetingEndPromptWindow.showInactive();
+    }
+  }
+
+  // Resolve with a user/auto decision and notify the recording window.
+  resolveMeetingEndPrompt(action) {
+    if (this._meetingEndResolved) return;
+    this._meetingEndResolved = true;
+    this._closeMeetingEndPromptWindow();
+    this.sendToControlPanel("meeting-end-response", { action });
+  }
+
+  // Close the prompt without sending a response (used when speech resumes and
+  // the recording window has already decided to keep recording).
+  dismissMeetingEndPrompt() {
+    this._meetingEndResolved = true;
+    this._closeMeetingEndPromptWindow();
+  }
+
+  _closeMeetingEndPromptWindow() {
+    this._pendingMeetingEndData = null;
+    this._clearMeetingEndTimers();
+    if (this.meetingEndPromptWindow && !this.meetingEndPromptWindow.isDestroyed()) {
+      this.meetingEndPromptWindow.close();
+    }
+    this.meetingEndPromptWindow = null;
+  }
+
+  _clearMeetingEndTimers() {
+    if (this._meetingEndReadyFallback) {
+      clearTimeout(this._meetingEndReadyFallback);
+      this._meetingEndReadyFallback = null;
+    }
+    if (this._meetingEndSafetyTimeout) {
+      clearTimeout(this._meetingEndSafetyTimeout);
+      this._meetingEndSafetyTimeout = null;
+    }
   }
 
   sendToControlPanel(channel, data) {
