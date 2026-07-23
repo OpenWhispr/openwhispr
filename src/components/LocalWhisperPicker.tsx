@@ -94,13 +94,12 @@ export default function LocalWhisperPicker({
   }, [validateAndSelectModel]);
 
   const {
-    downloadingModel,
-    downloadProgress,
+    downloads,
     downloadModel,
     deleteModel,
     isDownloadingModel,
     cancelDownload,
-    isCancelling,
+    isCancellingModel,
   } = useModelDownload({
     modelType: "whisper",
     onDownloadComplete: () => {
@@ -112,13 +111,16 @@ export default function LocalWhisperPicker({
     onModelsCleared: loadModels,
   });
 
+  const downloadingModel = Object.keys(downloads)[0] || null;
+  const activeDownload = downloadingModel ? downloads[downloadingModel] : null;
+
   useEffect(() => {
     downloadingModelRef.current = downloadingModel;
   }, [downloadingModel]);
 
   const handleDownload = useCallback(
     (modelId: string) => {
-      downloadModel(modelId, onModelSelect);
+      downloadModel(modelId, onModelSelect, WHISPER_MODEL_INFO[modelId]?.name || modelId);
     },
     [downloadModel, onModelSelect]
   );
@@ -149,10 +151,14 @@ export default function LocalWhisperPicker({
     return (
       <DownloadProgressBar
         modelName={modelInfo?.name || downloadingModel}
-        progress={downloadProgress}
+        progress={{
+          percentage: activeDownload?.progress || 0,
+          downloadedBytes: activeDownload?.downloadedBytes || 0,
+          totalBytes: activeDownload?.totalBytes || 0,
+        }}
       />
     );
-  }, [downloadingModel, downloadProgress]);
+  }, [activeDownload, downloadingModel]);
 
   const whisperIcon = getProviderIcon("whisper");
 
@@ -181,6 +187,7 @@ export default function LocalWhisperPicker({
               recommended: info.recommended,
               isDownloaded: model.downloaded,
               isDownloading: isDownloadingModel(modelId),
+              isCancelling: isCancellingModel(modelId),
             };
           })}
           selectedModel={selectedModel}
@@ -188,7 +195,6 @@ export default function LocalWhisperPicker({
           onDownload={handleDownload}
           onDelete={handleDelete}
           onCancelDownload={cancelDownload}
-          isCancelling={isCancelling}
           colorScheme={colorScheme}
         />
       </div>

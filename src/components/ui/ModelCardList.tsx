@@ -18,6 +18,7 @@ export interface ModelCardOption {
   // Local model properties (optional)
   isDownloaded?: boolean;
   isDownloading?: boolean;
+  isCancelling?: boolean;
   recommended?: boolean;
 }
 
@@ -53,9 +54,7 @@ interface ModelCardProps {
   // Local model actions (optional - when provided, enables local model UI)
   onDownload?: (modelId: string) => void;
   onDelete?: (modelId: string) => void;
-  onCancelDownload?: () => void;
-  isCancelling?: boolean;
-  isInstalling?: boolean;
+  onCancelDownload?: (modelId: string) => void;
 }
 
 export function ModelCard({
@@ -67,14 +66,13 @@ export function ModelCard({
   onDownload,
   onDelete,
   onCancelDownload,
-  isCancelling = false,
-  isInstalling = false,
 }: ModelCardProps) {
   const { t } = useTranslation();
   const styles = COLOR_CONFIG[colorScheme];
   const isLocalMode = Boolean(onDownload);
   const isDownloaded = model.isDownloaded;
   const isDownloading = model.isDownloading;
+  const modelIsCancelling = model.isCancelling ?? false;
   const specHref = model.specUrl ? withUtm(model.specUrl, "model_spec") : undefined;
 
   const handleCardClick = () => {
@@ -194,15 +192,15 @@ export function ModelCard({
                 <Button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onCancelDownload?.();
+                    onCancelDownload?.(model.value);
                   }}
-                  disabled={isCancelling || isInstalling}
+                  disabled={modelIsCancelling}
                   size="sm"
                   variant="outline"
                   className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
                 >
                   <X size={11} className="mr-0.5" />
-                  {isCancelling ? "..." : t("common.cancel")}
+                  {modelIsCancelling ? "..." : t("common.cancel")}
                 </Button>
               ) : (
                 <Button
@@ -236,9 +234,7 @@ interface ModelCardListProps {
   // Local model actions (optional - when provided, enables local model UI)
   onDownload?: (modelId: string) => void;
   onDelete?: (modelId: string) => void;
-  onCancelDownload?: () => void;
-  isCancelling?: boolean;
-  isInstalling?: boolean;
+  onCancelDownload?: (modelId: string) => void;
 }
 
 export default function ModelCardList({
@@ -251,8 +247,6 @@ export default function ModelCardList({
   onDownload,
   onDelete,
   onCancelDownload,
-  isCancelling = false,
-  isInstalling = false,
 }: ModelCardListProps) {
   const { t } = useTranslation();
 
@@ -273,8 +267,6 @@ export default function ModelCardList({
           onDownload={onDownload}
           onDelete={onDelete}
           onCancelDownload={onCancelDownload}
-          isCancelling={isCancelling}
-          isInstalling={isInstalling}
         />
       ))}
     </div>

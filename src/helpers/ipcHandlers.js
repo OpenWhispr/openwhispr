@@ -19,6 +19,7 @@ const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
+const LocalModelDownloadStatus = require("./localModelDownloadStatus");
 
 // Tinfoil's only realtime STT model — fallback when the renderer omits one.
 const TINFOIL_REALTIME_MODEL = "voxtral-mini-4b-realtime";
@@ -432,6 +433,7 @@ class IPCHandlers {
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
     this.audioStorageManager = new AudioStorageManager();
+    this.localModelDownloadStatus = new LocalModelDownloadStatus();
     this._audioCleanupInterval = null;
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
@@ -466,6 +468,26 @@ class IPCHandlers {
       meetingSileroEnabled: current.meetingSileroEnabled !== false,
       ...sanitizeWhisperVadConfig(current),
     };
+  }
+
+  _updateNativeModelDownloadStatus(modelType, modelId, progressData) {
+    if (progressData.type === "complete") {
+      return this.localModelDownloadStatus.finish(modelType, modelId);
+    }
+
+    if (progressData.type === "installing") {
+      return this.localModelDownloadStatus.update(modelType, modelId, {
+        phase: "installing",
+        progress: progressData.percentage || 100,
+      });
+    }
+
+    return this.localModelDownloadStatus.update(modelType, modelId, {
+      phase: "downloading",
+      progress: progressData.percentage || 0,
+      downloadedBytes: progressData.downloaded_bytes || 0,
+      totalBytes: progressData.total_bytes || 0,
+    });
   }
 
   _setWhisperVadSettings(update = {}) {
@@ -2031,24 +2053,39 @@ class IPCHandlers {
     });
 
     ipcMain.handle("download-whisper-model", async (event, modelName) => {
+      const hadActiveDownload = this.localModelDownloadStatus.has("whisper", modelName);
+      this.localModelDownloadStatus.start("whisper", modelName);
       try {
         const result = await this.whisperManager.downloadWhisperModel(modelName, (progressData) => {
-          if (!event.sender.isDestroyed()) {
-            event.sender.send("whisper-download-progress", progressData);
-          }
+          const status = this._updateNativeModelDownloadStatus("whisper", modelName, progressData);
+          this.windowManager.sendToControlPanel("whisper-download-progress", {
+            ...progressData,
+            sequence: status?.sequence,
+          });
         });
+        const status = this.localModelDownloadStatus.has("whisper", modelName)
+          ? this.localModelDownloadStatus.finish("whisper", modelName)
+          : null;
+        if (status) {
+          this.windowManager.sendToControlPanel("whisper-download-progress", {
+            type: "complete",
+            model: modelName,
+            percentage: 100,
+            sequence: status.sequence,
+          });
+        }
         return result;
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("whisper-download-progress", {
+        const status = hadActiveDownload
+          ? null
+          : this.localModelDownloadStatus.finish("whisper", modelName);
+        if (!hadActiveDownload && error.code !== "DOWNLOAD_IN_PROGRESS") {
+          this.windowManager.sendToControlPanel("whisper-download-progress", {
             type: "error",
             model: modelName,
             error: error.message,
             code: error.code || "DOWNLOAD_FAILED",
+            sequence: status?.sequence,
           });
         }
         return {
@@ -2338,27 +2375,46 @@ class IPCHandlers {
     });
 
     ipcMain.handle("download-parakeet-model", async (event, modelName) => {
+      const hadActiveDownload = this.localModelDownloadStatus.has("parakeet", modelName);
+      this.localModelDownloadStatus.start("parakeet", modelName);
       try {
         const result = await this.parakeetManager.downloadParakeetModel(
           modelName,
           (progressData) => {
-            if (!event.sender.isDestroyed()) {
-              event.sender.send("parakeet-download-progress", progressData);
-            }
+            const status = this._updateNativeModelDownloadStatus(
+              "parakeet",
+              modelName,
+              progressData
+            );
+            this.windowManager.sendToControlPanel("parakeet-download-progress", {
+              ...progressData,
+              sequence: status?.sequence,
+            });
           }
         );
+        const status = this.localModelDownloadStatus.has("parakeet", modelName)
+          ? this.localModelDownloadStatus.finish("parakeet", modelName)
+          : null;
+        if (status) {
+          this.windowManager.sendToControlPanel("parakeet-download-progress", {
+            type: "complete",
+            model: modelName,
+            percentage: 100,
+            sequence: status.sequence,
+          });
+        }
         return result;
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("parakeet-download-progress", {
+        const status = hadActiveDownload
+          ? null
+          : this.localModelDownloadStatus.finish("parakeet", modelName);
+        if (!hadActiveDownload && error.code !== "DOWNLOAD_IN_PROGRESS") {
+          this.windowManager.sendToControlPanel("parakeet-download-progress", {
             type: "error",
             model: modelName,
             error: error.message,
             code: error.code || "DOWNLOAD_FAILED",
+            sequence: status?.sequence,
           });
         }
         return {
@@ -2899,56 +2955,61 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("model-get-active-downloads", async () => {
+      return this.localModelDownloadStatus.getActiveDownloads();
+    });
+
     ipcMain.handle("model-check", async (_, modelId) => {
       const modelManager = require("./modelManagerBridge").default;
       return modelManager.isModelDownloaded(modelId);
     });
 
     ipcMain.handle("model-download", async (event, modelId) => {
-      let lastProgress = {
-        progress: 0,
-        downloadedSize: 0,
-        totalSize: 0,
-      };
-
+      const hadActiveDownload = this.localModelDownloadStatus.has("llm", modelId);
+      this.localModelDownloadStatus.start("llm", modelId);
       try {
         const modelManager = require("./modelManagerBridge").default;
         const result = await modelManager.downloadModel(
           modelId,
           (progress, downloadedSize, totalSize) => {
-            lastProgress = { progress, downloadedSize, totalSize };
-            if (!event.sender.isDestroyed()) {
-              event.sender.send("model-download-progress", {
-                modelId,
-                progress,
-                downloadedSize,
-                totalSize,
-              });
-            }
+            const status = this.localModelDownloadStatus.update("llm", modelId, {
+              phase: "downloading",
+              progress,
+              downloadedBytes: downloadedSize,
+              totalBytes: totalSize,
+            });
+            this.windowManager.sendToControlPanel("model-download-progress", {
+              modelId,
+              type: "progress",
+              progress,
+              downloadedSize,
+              totalSize,
+              sequence: status.sequence,
+            });
           }
         );
-        if (!event.sender.isDestroyed()) {
-          event.sender.send("model-download-progress", {
-            type: "complete",
-            modelId,
-            progress: 100,
-            downloadedSize: lastProgress.downloadedSize,
-            totalSize: lastProgress.totalSize,
-          });
-        }
+        const status = this.localModelDownloadStatus.finish("llm", modelId);
+        this.windowManager.sendToControlPanel("model-download-progress", {
+          modelId,
+          type: "complete",
+          progress: 100,
+          downloadedSize: status?.downloadedBytes,
+          totalSize: status?.totalBytes,
+          sequence: status?.sequence,
+        });
         return { success: true, path: result };
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("model-download-progress", {
-            type: "error",
+        const status = hadActiveDownload
+          ? null
+          : this.localModelDownloadStatus.finish("llm", modelId);
+        if (!hadActiveDownload && error.code !== "DOWNLOAD_IN_PROGRESS") {
+          this.windowManager.sendToControlPanel("model-download-progress", {
             modelId,
+            type: "error",
             error: error.message,
             code: error.code,
             details: error.details,
+            sequence: status?.sequence,
           });
         }
         return {

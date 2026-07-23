@@ -227,11 +227,9 @@ class ModelManager {
       return modelPath;
     }
 
-    if (this.activeDownloads.size > 0) {
-      const activeModelId = this.activeDownloads.keys().next().value;
-      throw new ModelError("A model is already being downloaded", "DOWNLOAD_IN_PROGRESS", {
+    if (this.activeDownloads.has(modelId)) {
+      throw new ModelError("Model is already being downloaded", "DOWNLOAD_IN_PROGRESS", {
         modelId,
-        activeModelId,
       });
     }
 
