@@ -1,7 +1,7 @@
 const { app, screen, BrowserWindow, shell, dialog } = require("electron");
 const debugLogger = require("./debugLogger");
 const HotkeyManager = require("./hotkeyManager");
-const { isGlobeLikeHotkey } = HotkeyManager;
+const { isGlobeLikeHotkey, isMouseButtonHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
@@ -530,11 +530,23 @@ class WindowManager {
   reconcileNativeKeyListeners() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
-    // GNOME/KDE/Hyprland deliver hotkeys via D-Bus native shortcuts; the low-level
-    // listener would be redundant there and could double-fire, so watch nothing.
-    const keys = this.hotkeyManager.isUsingNativeShortcut()
-      ? []
-      : this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+    // GNOME/KDE/Hyprland deliver hotkeys via D-Bus native shortcuts, which emit
+    // press events only — enough for tap, but push-to-talk needs real
+    // key-down/key-up. In tap mode the low-level listener would double-fire with
+    // the D-Bus event, so watch nothing. In push mode the D-Bus dictation
+    // callback no-ops (createHotkeyCallback defers to the native listener), so
+    // watch the dictation keys here; other slots stay tap-only on D-Bus.
+    let keys;
+    if (this.hotkeyManager.isUsingNativeShortcut()) {
+      keys =
+        this.getActivationMode() === "push"
+          ? this.hotkeyManager
+              .getSlotHotkeys("dictation")
+              .filter((key) => key && !isGlobeLikeHotkey(key) && !isMouseButtonHotkey(key))
+          : [];
+    } else {
+      keys = this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+    }
     if (process.platform === "win32" && this.windowsKeyManager) {
       this.windowsKeyManager.setKeys(keys);
     } else if (process.platform === "linux" && this.linuxKeyManager) {
