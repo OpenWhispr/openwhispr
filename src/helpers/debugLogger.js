@@ -1,4 +1,5 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { app } = require("electron");
 
@@ -323,6 +324,10 @@ class DebugLogger {
         "/usr/local/bin/ffmpeg",
         "/opt/homebrew/bin/ffmpeg",
         "/usr/bin/ffmpeg",
+        // Nix / nix-darwin install locations, which a launchd PATH never sees.
+        "/run/current-system/sw/bin/ffmpeg",
+        path.join(os.homedir(), ".nix-profile", "bin", "ffmpeg"),
+        "/nix/var/nix/profiles/default/bin/ffmpeg",
       ].filter(Boolean);
     }
 

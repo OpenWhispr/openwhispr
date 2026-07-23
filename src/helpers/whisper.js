@@ -12,6 +12,7 @@ const {
 } = require("./downloadUtils");
 const WhisperServerManager = require("./whisperServer");
 const { getModelsDirForService } = require("./modelDirUtils");
+const { findSystemBinary } = require("./systemBinaryPath");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 
@@ -774,22 +775,14 @@ class WhisperManager {
       debugLogger.warn("Bundled FFmpeg not available", { error: err.message });
     }
 
-    // Try system FFmpeg paths
-    const systemCandidates =
-      process.platform === "darwin"
-        ? ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-        : process.platform === "win32"
-          ? ["C:\\ffmpeg\\bin\\ffmpeg.exe"]
-          : ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
-
-    debugLogger.debug("Trying system FFmpeg candidates", { candidates: systemCandidates });
-
-    for (const candidate of systemCandidates) {
-      if (fs.existsSync(candidate)) {
-        debugLogger.debug("Found system FFmpeg", { path: candidate });
-        this.cachedFFmpegPath = candidate;
-        return candidate;
-      }
+    // Fall back to a system FFmpeg. findSystemBinary probes the inherited PATH,
+    // the login-shell PATH, and known extra locations (Homebrew, Nix), so this
+    // works even when launchd/systemd started the app with a minimal PATH.
+    const systemFFmpeg = findSystemBinary("ffmpeg");
+    if (systemFFmpeg) {
+      debugLogger.debug("Found system FFmpeg", { path: systemFFmpeg });
+      this.cachedFFmpegPath = systemFFmpeg;
+      return systemFFmpeg;
     }
 
     debugLogger.error("FFmpeg not found anywhere");

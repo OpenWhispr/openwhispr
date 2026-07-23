@@ -3,6 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const debugLogger = require("./debugLogger");
+const { findSystemBinary } = require("./systemBinaryPath");
 
 let cachedFFmpegPath = null;
 
@@ -56,38 +57,13 @@ function getFFmpegPath() {
     debugLogger.debug("Bundled FFmpeg not available", { error: err.message });
   }
 
-  const systemCandidates =
-    process.platform === "darwin"
-      ? ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-      : process.platform === "win32"
-        ? ["C:\\ffmpeg\\bin\\ffmpeg.exe"]
-        : ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
-
-  for (const candidate of systemCandidates) {
-    if (fs.existsSync(candidate)) {
-      cachedFFmpegPath = candidate;
-      return candidate;
-    }
-  }
-
-  const pathEnv = process.env.PATH || "";
-  const pathSep = process.platform === "win32" ? ";" : ":";
-  const pathDirs = pathEnv.split(pathSep).map((entry) => entry.replace(/^"|"$/g, ""));
-  const pathBinary = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
-
-  for (const dir of pathDirs) {
-    if (!dir) continue;
-    const candidate = path.join(dir, pathBinary);
-    if (!fs.existsSync(candidate)) continue;
-    if (process.platform !== "win32") {
-      try {
-        fs.accessSync(candidate, fs.constants.X_OK);
-      } catch {
-        continue;
-      }
-    }
-    cachedFFmpegPath = candidate;
-    return candidate;
+  // Fall back to a system FFmpeg. findSystemBinary probes the inherited PATH,
+  // the login-shell PATH, and known extra locations (Homebrew, Nix), so this
+  // works even when the app was launched by launchd/systemd with a minimal PATH.
+  const systemFFmpeg = findSystemBinary("ffmpeg");
+  if (systemFFmpeg) {
+    cachedFFmpegPath = systemFFmpeg;
+    return systemFFmpeg;
   }
 
   debugLogger.debug("FFmpeg not found");
