@@ -7,6 +7,7 @@ const debugLogger = require("./debugLogger");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const { classifyAndLog } = require("./networkErrors");
+const { checkCloudPreconditions } = require("./cloudPreconditions");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
@@ -7266,13 +7267,15 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-stt-config", async (event) => {
+      const apiUrl = getApiUrl();
+      const authHeader = apiUrl ? await getAuthHeader(event) : {};
+      const gate = checkCloudPreconditions(apiUrl, authHeader);
+      if (!gate.ok) {
+        debugLogger.debug("STT config unavailable", { code: gate.result.code });
+        return gate.result;
+      }
+
       try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
         const response = await proxyFetch(`${apiUrl}/api/stt-config`, {
           headers: authHeader,
         });
@@ -7291,18 +7294,20 @@ class IPCHandlers {
         return { success: true, ...data };
       } catch (error) {
         debugLogger.error("STT config fetch error:", error);
-        return null;
+        return { success: false, error: error.message };
       }
     });
 
     ipcMain.handle("get-note-recording-config", async (event) => {
+      const apiUrl = getApiUrl();
+      const authHeader = apiUrl ? await getAuthHeader(event) : {};
+      const gate = checkCloudPreconditions(apiUrl, authHeader);
+      if (!gate.ok) {
+        debugLogger.debug("Note recording config unavailable", { code: gate.result.code });
+        return gate.result;
+      }
+
       try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
         const response = await proxyFetch(`${apiUrl}/api/note-recording-config`, {
           headers: authHeader,
         });
@@ -7318,7 +7323,7 @@ class IPCHandlers {
         return { success: true, ...data };
       } catch (error) {
         debugLogger.error("Note recording config fetch error:", error);
-        return null;
+        return { success: false, error: error.message };
       }
     });
 

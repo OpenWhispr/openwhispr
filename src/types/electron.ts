@@ -562,21 +562,27 @@ declare global {
       onStopDictation?: (callback: () => void) => () => void;
 
       // STT config
-      getSttConfig?: () => Promise<{
-        success: boolean;
-        dictation: { mode: string };
-        notes: { mode: string };
-        streamingProvider: string;
-      } | null>;
+      getSttConfig?: () => Promise<
+        | {
+            success: true;
+            dictation: { mode: string };
+            notes: { mode: string };
+            streamingProvider: string;
+          }
+        | { success: false; error: string; code?: string }
+      >;
 
-      getNoteRecordingConfig?: () => Promise<{
-        success: boolean;
-        providers: Array<{
-          id: string;
-          name: string;
-          models: Array<{ id: string; name: string; default?: boolean }>;
-        }>;
-      } | null>;
+      getNoteRecordingConfig?: () => Promise<
+        | {
+            success: true;
+            providers: Array<{
+              id: string;
+              name: string;
+              models: Array<{ id: string; name: string; default?: boolean }>;
+            }>;
+          }
+        | { success: false; error: string; code?: string }
+      >;
 
       // Database operations
       saveTranscription: (
