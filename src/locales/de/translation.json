@@ -35,7 +35,9 @@
     "openControlPanel": "Kontrollzentrum öffnen",
     "hideControlPanel": "Kontrollzentrum ausblenden",
     "quit": "OpenWhispr beenden",
-    "tooltip": "OpenWhispr – Sprachdiktat"
+    "tooltip": "OpenWhispr – Sprachdiktat",
+    "tooltipLocalColdStart": "OpenWhispr - Lokales Modell: Kaltstart bei erster Nutzung",
+    "tooltipLocalNoGpu": "OpenWhispr - Keine GPU erkannt, erste Transkription kann langsamer sein"
   },
   "menu": {
     "appLabel": "OpenWhispr",
@@ -1796,7 +1798,11 @@
             "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
           }
         }
-      }
+      },
+      "coldStartBadge": "Kaltstart",
+      "coldStartHint": "Die Vorwärmung des lokalen Modells wurde übersprungen oder läuft noch. Die erste Transkription kann einige Sekunden dauern.",
+      "noGpuBadge": "Keine GPU erkannt",
+      "noGpuHint": "Keine GPU-Beschleunigung erkannt. Die erste Transkription kann auf der CPU langsamer sein."
     },
     "intelligence": {
       "gpuDevice": {

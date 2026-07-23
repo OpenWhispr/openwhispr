@@ -35,7 +35,9 @@
     "openControlPanel": "Apri pannello di controllo",
     "hideControlPanel": "Nascondi pannello di controllo",
     "quit": "Esci da OpenWhispr",
-    "tooltip": "OpenWhispr - Dettatura vocale"
+    "tooltip": "OpenWhispr - Dettatura vocale",
+    "tooltipLocalColdStart": "OpenWhispr - Modello locale: avvio a freddo al primo uso",
+    "tooltipLocalNoGpu": "OpenWhispr - Nessuna GPU rilevata; la prima trascrizione puo essere piu lenta"
   },
   "menu": {
     "appLabel": "OpenWhispr",
@@ -1796,7 +1798,11 @@
             "info": "Audio esteso da un segmento al successivo per evitare tagli netti nella concatenazione."
           }
         }
-      }
+      },
+      "coldStartBadge": "Avvio a freddo",
+      "coldStartHint": "Il pre-riscaldamento del modello locale e stato saltato o e ancora in corso. La prima trascrizione puo richiedere alcuni secondi.",
+      "noGpuBadge": "Nessuna GPU rilevata",
+      "noGpuHint": "Nessuna accelerazione GPU rilevata. La prima trascrizione puo essere piu lenta sulla CPU."
     },
     "intelligence": {
       "gpuDevice": {

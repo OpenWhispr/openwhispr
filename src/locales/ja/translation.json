@@ -35,7 +35,9 @@
     "openControlPanel": "コントロールパネルを開く",
     "hideControlPanel": "コントロールパネルを非表示",
     "quit": "OpenWhispr を終了",
-    "tooltip": "OpenWhispr - 音声ディクテーション"
+    "tooltip": "OpenWhispr - 音声ディクテーション",
+    "tooltipLocalColdStart": "OpenWhispr - ローカルモデル: 初回はコールドスタート",
+    "tooltipLocalNoGpu": "OpenWhispr - GPU未検出。初回の文字起こしが遅くなることがあります"
   },
   "menu": {
     "appLabel": "OpenWhispr",
@@ -1796,7 +1798,11 @@
             "info": "区間を連結するときに途切れないよう、次の区間に延長する音声の長さです。"
           }
         }
-      }
+      },
+      "coldStartBadge": "コールドスタート",
+      "coldStartHint": "ローカルモデルの事前ウォームアップがスキップされたか、まだ読み込み中です。初回の文字起こしには数秒かかることがあります。",
+      "noGpuBadge": "GPU未検出",
+      "noGpuHint": "GPU加速が検出されませんでした。初回の文字起こしはCPUでは遅くなることがあります。"
     },
     "intelligence": {
       "gpuDevice": {

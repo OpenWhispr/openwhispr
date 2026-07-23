@@ -3516,6 +3516,13 @@ class IPCHandlers {
       return this.environmentManager.saveAllKeysToEnvFile();
     });
 
+    ipcMain.handle("sync-local-cold-start-hint", async (_event, payload) => {
+      const hint =
+        payload?.hint === "cold-start" || payload?.hint === "no-gpu" ? payload.hint : null;
+      this.getTrayManager?.()?.setLocalColdStartHint?.(hint);
+      return { success: true, hint };
+    });
+
     ipcMain.handle("sync-startup-preferences", async (event, prefs) => {
       const setVars = {};
       const clearVars = [];

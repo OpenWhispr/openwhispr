@@ -829,6 +829,9 @@ declare global {
         dictationAgentProvider: string;
         dictationAgentModel?: string;
       }) => Promise<void>;
+      syncLocalColdStartHint: (payload: {
+        hint: "cold-start" | "no-gpu" | null;
+      }) => Promise<{ success: boolean; hint: "cold-start" | "no-gpu" | null }>;
 
       // Clipboard operations
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;
@@ -849,6 +852,8 @@ declare global {
       ) => () => void;
       checkModelStatus: (modelName: string) => Promise<WhisperModelResult>;
       listWhisperModels: () => Promise<WhisperModelsListResult>;
+      whisperServerStatus?: () => Promise<{ running?: boolean; available?: boolean }>;
+      parakeetServerStatus?: () => Promise<{ running?: boolean; available?: boolean }>;
       deleteWhisperModel: (modelName: string) => Promise<WhisperModelDeleteResult>;
       deleteAllWhisperModels: () => Promise<{
         success: boolean;

@@ -35,7 +35,9 @@
     "openControlPanel": "開啟控制面板",
     "hideControlPanel": "隱藏控制面板",
     "quit": "結束 OpenWhispr",
-    "tooltip": "OpenWhispr - 語音輸入"
+    "tooltip": "OpenWhispr - 語音輸入",
+    "tooltipLocalColdStart": "OpenWhispr - 本機模型：首次使用需冷啟動",
+    "tooltipLocalNoGpu": "OpenWhispr - 未偵測到 GPU，首次轉錄可能較慢"
   },
   "menu": {
     "appLabel": "OpenWhispr",
@@ -1796,7 +1798,11 @@
             "info": "將每個片段延伸到下一個片段的音訊量，避免拼接時出現突兀截斷。"
           }
         }
-      }
+      },
+      "coldStartBadge": "冷啟動",
+      "coldStartHint": "本機模型預熱已略過或仍在載入中。首次轉錄可能需要幾秒。",
+      "noGpuBadge": "未偵測到 GPU",
+      "noGpuHint": "未偵測到 GPU 加速。首次轉錄在 CPU 上可能較慢。"
     },
     "intelligence": {
       "gpuDevice": {

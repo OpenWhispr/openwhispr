@@ -5,6 +5,7 @@ import AppRouter from "./AppRouter.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import CleanupFailureToastListener from "./components/CleanupFailureToastListener.tsx";
 import TinfoilModelSwitchToastListener from "./components/TinfoilModelSwitchToastListener.tsx";
+import LocalColdStartSync from "./components/LocalColdStartSync.tsx";
 import { ToastProvider } from "./components/ui/Toast.tsx";
 import { SettingsProvider } from "./hooks/useSettings";
 
@@ -20,6 +21,7 @@ root.render(
           <ToastProvider>
             <TinfoilModelSwitchToastListener />
             <CleanupFailureToastListener />
+            <LocalColdStartSync />
             <AppRouter />
           </ToastProvider>
         </SettingsProvider>
