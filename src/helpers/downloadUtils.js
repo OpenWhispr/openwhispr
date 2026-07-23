@@ -79,6 +79,7 @@ function downloadAttempt(url, tempPath, options) {
     let downloadedSize = startOffset;
     let totalSize = 0;
     let lastProgressUpdate = 0;
+    let settled = false;
 
     const cleanup = () => {
       if (stallTimer) {
@@ -89,15 +90,29 @@ function downloadAttempt(url, tempPath, options) {
         request.abort();
         request = null;
       }
-      if (activeFile) {
-        activeFile.destroy();
-        activeFile = null;
-      }
+      if (!activeFile) return Promise.resolve();
+
+      const file = activeFile;
+      activeFile = null;
+      if (file.closed) return Promise.resolve();
+
+      // createWriteStream() opens asynchronously. Wait for close so callers
+      // never unlink the temp path before a pending open can recreate it.
+      return new Promise((done) => {
+        file.once("close", done);
+        file.destroy();
+      });
+    };
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      if (signal) signal.onAbort = null;
+      cleanup().then(() => reject(error));
     };
 
     const onAbort = () => {
-      cleanup();
-      reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+      fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
     };
 
     if (signal) {
@@ -112,8 +127,7 @@ function downloadAttempt(url, tempPath, options) {
     request.on("response", (response) => {
       if (signal?.aborted) {
         response.resume();
-        cleanup();
-        reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+        fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
         return;
       }
 
@@ -140,11 +154,10 @@ function downloadAttempt(url, tempPath, options) {
         totalSize = parseInt(headerValue(response.headers, "content-length"), 10) || 0;
       } else {
         response.resume();
-        cleanup();
         const err = new Error(`HTTP ${statusCode}`);
         err.isHttpError = true;
         err.statusCode = statusCode;
-        reject(err);
+        fail(err);
         return;
       }
 
@@ -156,8 +169,7 @@ function downloadAttempt(url, tempPath, options) {
       const resetStallTimer = () => {
         if (stallTimer) clearTimeout(stallTimer);
         stallTimer = setTimeout(() => {
-          cleanup();
-          reject(
+          fail(
             Object.assign(new Error("Download stalled — no data received for 30s"), {
               code: "ETIMEDOUT",
             })
@@ -169,7 +181,7 @@ function downloadAttempt(url, tempPath, options) {
 
       response.on("data", (chunk) => {
         if (signal?.aborted) {
-          cleanup();
+          fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
           return;
         }
         downloadedSize += chunk.length;
@@ -178,6 +190,7 @@ function downloadAttempt(url, tempPath, options) {
       });
 
       pipeline(response, activeFile, (err) => {
+        if (settled) return;
         if (stallTimer) {
           clearTimeout(stallTimer);
           stallTimer = null;
@@ -185,37 +198,37 @@ function downloadAttempt(url, tempPath, options) {
         if (signal) signal.onAbort = null;
         if (err) {
           if (signal?.aborted) {
-            reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+            fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
           } else {
-            reject(err);
+            fail(err);
           }
         } else if (totalSize > 0 && downloadedSize < totalSize) {
-          reject(
+          fail(
             Object.assign(
               new Error(`Download incomplete: received ${downloadedSize} of ${totalSize} bytes`),
               { code: "ERR_DOWNLOAD_INCOMPLETE" }
             )
           );
         } else {
+          settled = true;
+          activeFile = null;
           resolve({ downloadedSize, totalSize });
         }
       });
     });
 
     request.on("error", (err) => {
-      if (signal) signal.onAbort = null;
-      cleanup();
       if (signal?.aborted) {
-        reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+        fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
       } else if (isTlsError(err)) {
-        reject(
+        fail(
           Object.assign(new Error(`Certificate error: ${err.message}`), {
             code: "TLS_ERROR",
             isTlsError: true,
           })
         );
       } else {
-        reject(err);
+        fail(err);
       }
     });
 
