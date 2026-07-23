@@ -10,6 +10,12 @@ import {
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
 import {
+  applyChineseScript,
+  mergeWhisperPrompt,
+  resolveChineseScriptTarget,
+  resolveCleanupLanguage,
+} from "../utils/chineseScript";
+import {
   createLocalSpeechGateState,
   getLocalSpeechGateDecision,
   recordLocalSpeechWindow,
@@ -421,6 +427,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   getCustomDictionaryPrompt() {
     const words = getDictionaryHintWords(getSettings());
     return words.length > 0 ? words.join(", ") : null;
+  }
+
+  // Whisper only accepts language "zh"; script (简体/繁體) is applied here. See #975.
+  getChineseScriptTarget(settings = getSettings()) {
+    return resolveChineseScriptTarget(
+      this.getEffectiveSttLanguage(settings),
+      settings.chineseScriptPreference
+    );
+  }
+
+  getWhisperPrompt(settings = getSettings()) {
+    return mergeWhisperPrompt(this.getCustomDictionaryPrompt(), this.getChineseScriptTarget(settings));
+  }
+
+  getCleanupLanguage(settings = getSettings()) {
+    return resolveCleanupLanguage(
+      this.getEffectiveSttLanguage(settings),
+      settings.chineseScriptPreference
+    );
+  }
+
+  finalizeChineseScript(text, settings = getSettings()) {
+    return applyChineseScript(text, this.getChineseScriptTarget(settings));
   }
 
   isDictionaryEcho(text) {
@@ -1366,7 +1395,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Add custom dictionary as initial prompt to help Whisper recognize specific words
-      const dictionaryPrompt = this.getCustomDictionaryPrompt();
+      const dictionaryPrompt = this.getWhisperPrompt();
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
       }
@@ -1777,7 +1806,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             promptMode: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
-            language: this.getEffectiveSttLanguage(settings) || "auto",
+            language: this.getCleanupLanguage(settings),
             locale: settings.uiLanguage || "en",
             ...(cleanup.meta || {}),
           });
@@ -1839,6 +1868,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async processTranscription(text, source) {
+    const result = await this.processTranscriptionCore(text, source);
+    return this.finalizeChineseScript(result);
+  }
+
+  async processTranscriptionCore(text, source) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
     if (!normalizedText) {
@@ -2158,7 +2192,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.sendLogs = "false";
     }
 
-    const dictionaryPrompt = this.getCustomDictionaryPrompt();
+    const dictionaryPrompt = this.getWhisperPrompt(settings);
     if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
 
     // Use withSessionRefresh to handle AUTH_EXPIRED automatically
@@ -2210,7 +2244,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
-              language: this.getEffectiveSttLanguage(settings) || "auto",
+              language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
@@ -2287,7 +2321,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     return {
       success: true,
-      text: processedText,
+      text: this.finalizeChineseScript(processedText, settings),
       rawText,
       source: "openwhispr",
       timings,
@@ -2345,7 +2379,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (!window.electronAPI?.proxyTinfoilTranscription) {
           throw new Error("Tinfoil transcription is unavailable in this window");
         }
-        const dictionaryPrompt = this.getCustomDictionaryPrompt();
+        const dictionaryPrompt = this.getWhisperPrompt(apiSettings);
         const apiCallStart = performance.now();
         const result = await window.electronAPI.proxyTinfoilTranscription({
           audioBuffer: await optimizedAudio.arrayBuffer(),
@@ -2413,7 +2447,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // 890 leaves margin for UTF-16 vs codepoint counting drift.
       const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
       const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
-      let dictionaryPrompt = this.getCustomDictionaryPrompt();
+      let dictionaryPrompt = this.getWhisperPrompt(apiSettings);
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
           const originalLength = dictionaryPrompt.length;
@@ -3803,7 +3837,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
-              language: this.getEffectiveSttLanguage(stSettings) || "auto",
+              language: this.getCleanupLanguage(stSettings),
               locale: stSettings.uiLanguage || "en",
               sttProvider: this.getStreamingProviderName(),
               sttModel: streamingSttModel,
@@ -3931,6 +3965,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (finalText) {
+      // Batch fallback already ran processTranscription (script applied). Re-applying
+      // the same target is idempotent for OpenCC cn/twp converters.
+      finalText = this.finalizeChineseScript(finalText, stSettings);
       const tBeforePaste = performance.now();
       const clientTotalMs = Math.round(tBeforePaste - t0);
       this.lastAudioMetadata = {

@@ -1,5 +1,6 @@
 import { getCleanupSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
+import { resolveCleanupLanguage } from "../utils/chineseScript";
 import { getDictionaryHintWords } from "../utils/snippets";
 
 export interface ReasoningConfig {
@@ -23,7 +24,13 @@ export abstract class BaseReasoningService {
   }
 
   protected getPreferredLanguage(): string {
-    return getSettings().preferredLanguage || "auto";
+    const settings = getSettings();
+    // When STT language is Auto, map chineseScriptPreference to zh-CN/zh-TW so
+    // cleanup prompts request the correct character set. See #975.
+    return resolveCleanupLanguage(
+      settings.preferredLanguage,
+      settings.chineseScriptPreference
+    );
   }
 
   protected getUiLanguage(): string {

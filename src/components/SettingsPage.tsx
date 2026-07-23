@@ -711,6 +711,7 @@ export default function SettingsPage({
     parakeetModel,
     uiLanguage,
     preferredLanguage,
+    chineseScriptPreference,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
@@ -2692,6 +2693,36 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                {preferredLanguage === "auto" && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settings.language.chineseScriptLabel")}
+                      description={t("settings.language.chineseScriptDescription")}
+                    >
+                      <Select
+                        value={chineseScriptPreference}
+                        onValueChange={(value: "simplified" | "traditional" | "as-transcribed") =>
+                          updateTranscriptionSettings({ chineseScriptPreference: value })
+                        }
+                      >
+                        <SelectTrigger className="h-7 w-44 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="as-transcribed">
+                            {t("settings.language.chineseScriptAsTranscribed")}
+                          </SelectItem>
+                          <SelectItem value="simplified">
+                            {t("settings.language.chineseScriptSimplified")}
+                          </SelectItem>
+                          <SelectItem value="traditional">
+                            {t("settings.language.chineseScriptTraditional")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 
