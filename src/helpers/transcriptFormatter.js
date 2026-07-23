@@ -59,7 +59,7 @@ function extractMetadata(note) {
   let participants = [];
   try {
     const parsed = JSON.parse(note.participants || "[]");
-    participants = parsed.map((p) => p.name).filter(Boolean);
+    participants = parsed.map((p) => p.displayName || p.name || p.email).filter(Boolean);
   } catch {}
 
   return { title, dateStr, participants };
