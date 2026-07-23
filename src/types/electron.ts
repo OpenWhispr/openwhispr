@@ -1255,7 +1255,7 @@ declare global {
       openAccessibilitySettings?: () => Promise<{ success: boolean; error?: string }>;
       openSystemAudioSettings?: () => Promise<{ success: boolean; error?: string }>;
       toggleMediaPlayback?: () => Promise<boolean>;
-      pauseMediaPlayback?: () => Promise<boolean>;
+      pauseMediaPlayback?: (options?: { mediaKeyFallback?: boolean }) => Promise<boolean>;
       resumeMediaPlayback?: () => Promise<boolean>;
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 

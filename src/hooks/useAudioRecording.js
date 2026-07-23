@@ -52,7 +52,9 @@ export const useAudioRecording = (toast, options = {}) => {
         // streaming stop) — don't pause media for a recording that already ended. See #1060.
         if (didStart && audioManagerRef.current.getState().isRecording) {
           if (getSettings().pauseMediaOnDictation) {
-            window.electronAPI?.pauseMediaPlayback?.();
+            window.electronAPI?.pauseMediaPlayback?.({
+              mediaKeyFallback: getSettings().pauseMediaKeyFallback,
+            });
           }
           window.electronAPI?.registerCancelHotkey?.("Escape");
           void playStartCue();

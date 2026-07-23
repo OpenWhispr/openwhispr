@@ -1446,6 +1446,8 @@
         "dictationSoundsDescription": "Tocar um som ao iniciar e parar a gravação",
         "pauseMedia": "Pausar mídia",
         "pauseMediaDescription": "Pausar a música automaticamente ao iniciar o ditado",
+        "pauseMediaKeyFallback": "Também pausar players que o Windows não vê",
+        "pauseMediaKeyFallbackDescription": "Envia a tecla de mídia play/pause quando nenhuma sessão de mídia do Windows é encontrada (ex.: Plexamp). Opcional porque a tecla é um toggle cego e pode iniciar a reprodução se nada estiver tocando.",
         "title": "Efeitos sonoros"
       },
       "notifications": {

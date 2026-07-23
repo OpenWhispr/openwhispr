@@ -1467,6 +1467,8 @@
         "dictationSoundsDescription": "Ton abspielen, wenn die Aufnahme startet und stoppt",
         "pauseMedia": "Medien pausieren",
         "pauseMediaDescription": "Musik beim Starten der Diktat automatisch pausieren",
+        "pauseMediaKeyFallback": "Auch Player pausieren, die Windows nicht sieht",
+        "pauseMediaKeyFallbackDescription": "Sendet eine Play/Pause-Medientaste, wenn keine Windows-Mediensitzung gefunden wird (z. B. Plexamp). Opt-in, weil die Taste blind umschaltet und Wiedergabe starten kann, wenn nichts läuft.",
         "title": "Soundeffekte"
       },
       "notifications": {

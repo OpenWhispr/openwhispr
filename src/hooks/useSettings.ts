@@ -317,6 +317,8 @@ function useSettingsInternal() {
     setAudioCuesEnabled: store.setAudioCuesEnabled,
     pauseMediaOnDictation: store.pauseMediaOnDictation,
     setPauseMediaOnDictation: store.setPauseMediaOnDictation,
+    pauseMediaKeyFallback: store.pauseMediaKeyFallback,
+    setPauseMediaKeyFallback: store.setPauseMediaKeyFallback,
     floatingIconAutoHide: store.floatingIconAutoHide,
     setFloatingIconAutoHide: store.setFloatingIconAutoHide,
     startMinimized: store.startMinimized,
