@@ -924,6 +924,24 @@ class DatabaseManager {
   getPendingDictionary() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Cloud batch-create needs a stable client_dict_id. Assign any that are
+      // still missing so pending rows remain uploadable after a successful sync.
+      const missingClientIds = this.db
+        .prepare(
+          `SELECT id FROM custom_dictionary
+           WHERE sync_status = 'pending' AND deleted_at IS NULL AND client_dict_id IS NULL`
+        )
+        .all();
+      if (missingClientIds.length > 0) {
+        const assignId = this.db.prepare(
+          "UPDATE custom_dictionary SET client_dict_id = ? WHERE id = ? AND client_dict_id IS NULL"
+        );
+        this.db.transaction(() => {
+          for (const row of missingClientIds) {
+            assignId.run(randomUUID(), row.id);
+          }
+        })();
+      }
       return this.db
         .prepare(
           "SELECT * FROM custom_dictionary WHERE sync_status = 'pending' AND deleted_at IS NULL"

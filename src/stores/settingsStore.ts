@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
+import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
 import whisperVadConstants from "../constants/whisperVad.json";
@@ -2322,17 +2323,23 @@ export async function initializeSettings(): Promise<void> {
       useSettingsStore.setState({ preferredLanguage: migratedLang });
     }
 
-    // Sync dictionary from SQLite <-> localStorage
+    // Sync dictionary from SQLite <-> localStorage.
+    // Prefer SQLite whenever it has entries (same policy as snippets). A stale
+    // cache used to win when both sides were non-empty; ensureAgentNameInDictionary
+    // then wrote that cache through setDictionary and wiped newer DB words (#1295).
+    let dictionarySyncSucceeded = !window.electronAPI?.getDictionary;
     try {
       if (window.electronAPI.getDictionary) {
         const currentDictionary = useSettingsStore.getState().customDictionary;
         const dbWords = await window.electronAPI.getDictionary();
-        if (dbWords.length === 0 && currentDictionary.length > 0) {
-          await window.electronAPI.setDictionary(currentDictionary);
-        } else if (dbWords.length > 0 && currentDictionary.length === 0) {
-          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(dbWords));
-          useSettingsStore.setState({ customDictionary: dbWords });
+        const decision = chooseDictionaryStartupAction(dbWords, currentDictionary);
+        if (decision.action === "push-local-to-db") {
+          await window.electronAPI.setDictionary(decision.words);
+        } else if (decision.action === "pull-db-to-local") {
+          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(decision.words));
+          useSettingsStore.setState({ customDictionary: decision.words });
         }
+        dictionarySyncSucceeded = true;
       }
     } catch (err) {
       logger.warn(
@@ -2441,7 +2448,11 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    ensureAgentNameInDictionary();
+    // Only after a successful DB↔cache reconcile. If the read failed, the cache
+    // may still be stale — writing it via setCustomDictionary would wipe SQLite.
+    if (dictionarySyncSucceeded) {
+      ensureAgentNameInDictionary();
+    }
   }
 
   // Sync Zustand store when another window writes to localStorage
