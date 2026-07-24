@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ExternalLink, Settings, Stethoscope } from "lucide-react";
 import { Button } from "../ui/button";
@@ -8,6 +8,7 @@ import { getTranscriptionProviders, modelRegistry } from "../../models/ModelRegi
 import { useSettingsStore } from "../../stores/settingsStore";
 import { buildCortiOnboardingPayloads } from "../../helpers/reasoningRouting";
 import { USE_CASE_IDS } from "./useCases";
+import type { LlmKeyValidationResult } from "../../types/electron";
 
 const CORTI_SIGNUP_URL =
   "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr";
@@ -46,10 +47,33 @@ export default function FinishStep({
   const [showCorti, setShowCorti] = useState(
     !!cortiProvider && useCases.includes(USE_CASE_IDS.healthcare)
   );
+  const [isSavingCortiApiKey, setIsSavingCortiApiKey] = useState(false);
+  const pendingCortiApiKeySaveRef = useRef<Promise<LlmKeyValidationResult> | null>(null);
   const hasCortiCredentials =
     cortiClientId.trim().length > 0 && cortiClientSecret.trim().length > 0;
 
-  const startWithCorti = () => {
+  const saveCortiApiKey = (key: string): Promise<LlmKeyValidationResult> => {
+    const pending = saveValidatedLlmApiKey("corti", key);
+    pendingCortiApiKeySaveRef.current = pending;
+    setIsSavingCortiApiKey(true);
+    const clearPending = () => {
+      if (pendingCortiApiKeySaveRef.current === pending) {
+        pendingCortiApiKeySaveRef.current = null;
+        setIsSavingCortiApiKey(false);
+      }
+    };
+    void pending.then(clearPending, clearPending);
+    return pending;
+  };
+
+  const startWithCorti = async () => {
+    const pendingSave = pendingCortiApiKeySaveRef.current;
+    if (pendingSave) {
+      const result = await pendingSave;
+      if (!result.success) return;
+    }
+
+    const latestCortiApiKey = useSettingsStore.getState().cortiApiKey;
     // Transcription always routes to Corti. Reasoning routes to Corti only in the
     // EU with an API key (Corti Models is EU-only); otherwise the HIPAA-compliant
     // OpenWhispr Cloud handles language features so PHI never reaches a third party.
@@ -58,7 +82,7 @@ export default function FinishStep({
       cortiProvider,
       reasoningProvider,
       cortiEnvironment,
-      cortiApiKey.trim().length > 0
+      latestCortiApiKey.trim().length > 0
     );
     setCloudTranscriptionForAllScopes(transcription);
     setCloudReasoningForAllScopes(reasoning);
@@ -144,7 +168,8 @@ export default function FinishStep({
               <ApiKeyInput
                 apiKey={cortiApiKey}
                 setApiKey={setCortiApiKey}
-                onSave={(key) => saveValidatedLlmApiKey("corti", key)}
+                onSave={saveCortiApiKey}
+                validationStateKey="provider:corti"
                 label=""
                 helpText=""
               />
@@ -167,8 +192,8 @@ export default function FinishStep({
             {t("onboarding.finish.corti.skip")}
           </Button>
           <Button
-            onClick={startWithCorti}
-            disabled={isFinishing || !hasCortiCredentials}
+            onClick={() => void startWithCorti()}
+            disabled={isFinishing || isSavingCortiApiKey || !hasCortiCredentials}
             className="h-8 px-6 rounded-full text-xs"
           >
             <Check className="w-3.5 h-3.5" />

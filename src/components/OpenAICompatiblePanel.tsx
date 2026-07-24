@@ -35,6 +35,7 @@ interface OpenAICompatiblePanelProps {
   apiKeyRequired?: boolean;
   getKeyUrl?: string;
   validationProvider?: LlmKeyProvider;
+  validationStateKey?: string;
 }
 
 export default function OpenAICompatiblePanel({
@@ -51,6 +52,7 @@ export default function OpenAICompatiblePanel({
   apiKeyRequired = false,
   getKeyUrl,
   validationProvider,
+  validationStateKey,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
   const [draftBase, setDraftBase] = useState(baseUrl);
@@ -375,6 +377,9 @@ export default function OpenAICompatiblePanel({
           apiKey={apiKey}
           setApiKey={setApiKey}
           onSave={validationProvider ? handleApiKeySave : undefined}
+          validationStateKey={
+            validationProvider ? validationStateKey || `provider:${validationProvider}` : undefined
+          }
           label=""
           helpText={apiKeyRequired ? "" : t("reasoning.custom.apiKeyHelp")}
         />

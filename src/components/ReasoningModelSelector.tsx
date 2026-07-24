@@ -60,6 +60,7 @@ interface ReasoningModelSelectorProps {
   setCustomReasoningApiKey?: (key: string) => void;
   setReasoningMode?: (mode: InferenceMode) => void;
   mode?: "cloud" | "local";
+  validationStateKeyPrefix?: string;
 }
 
 function GpuStatusBadge() {
@@ -324,6 +325,7 @@ export default function ReasoningModelSelector({
   setCustomReasoningApiKey,
   setReasoningMode: setReasoningModeProp,
   mode,
+  validationStateKeyPrefix = "reasoning",
 }: ReasoningModelSelectorProps) {
   const { t } = useTranslation();
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
@@ -561,6 +563,7 @@ export default function ReasoningModelSelector({
                 apiKeyRequired
                 getKeyUrl={OPENROUTER_KEYS_URL}
                 validationProvider="openrouter"
+                validationStateKey="provider:openrouter"
               />
             ) : selectedCloudProvider === "custom" ? (
               <OpenAICompatiblePanel
@@ -573,6 +576,7 @@ export default function ReasoningModelSelector({
                 setModel={setReasoningModel}
                 defaultBaseUrl={API_ENDPOINTS.OPENAI_BASE}
                 validationProvider="custom"
+                validationStateKey={`${validationStateKeyPrefix}:custom`}
               />
             ) : (
               <>
@@ -586,6 +590,7 @@ export default function ReasoningModelSelector({
                       apiKey={openaiApiKey}
                       setApiKey={setOpenaiApiKey}
                       onSave={(key) => saveValidatedLlmApiKey("openai", key)}
+                      validationStateKey="provider:openai"
                       label=""
                       helpText=""
                     />
@@ -602,6 +607,7 @@ export default function ReasoningModelSelector({
                       apiKey={anthropicApiKey}
                       setApiKey={setAnthropicApiKey}
                       onSave={(key) => saveValidatedLlmApiKey("anthropic", key)}
+                      validationStateKey="provider:anthropic"
                       label=""
                       helpText=""
                     />
@@ -618,6 +624,7 @@ export default function ReasoningModelSelector({
                       apiKey={geminiApiKey}
                       setApiKey={setGeminiApiKey}
                       onSave={(key) => saveValidatedLlmApiKey("gemini", key)}
+                      validationStateKey="provider:gemini"
                       label=""
                       helpText=""
                     />
@@ -634,6 +641,7 @@ export default function ReasoningModelSelector({
                       apiKey={groqApiKey}
                       setApiKey={setGroqApiKey}
                       onSave={(key) => saveValidatedLlmApiKey("groq", key)}
+                      validationStateKey="provider:groq"
                       label=""
                       helpText=""
                     />
@@ -650,6 +658,7 @@ export default function ReasoningModelSelector({
                       apiKey={tinfoilApiKey}
                       setApiKey={setTinfoilApiKey}
                       onSave={(key) => saveValidatedLlmApiKey("tinfoil", key)}
+                      validationStateKey="provider:tinfoil"
                       label=""
                       helpText=""
                     />
@@ -667,6 +676,7 @@ export default function ReasoningModelSelector({
                       apiKey={cortiApiKey}
                       setApiKey={setCortiApiKey}
                       onSave={(key) => saveValidatedLlmApiKey("corti", key)}
+                      validationStateKey="provider:corti"
                       label=""
                       helpText=""
                     />

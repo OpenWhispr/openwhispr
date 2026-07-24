@@ -1,3 +1,5 @@
+const { isSecureEndpoint } = require("./secureEndpoint");
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_KEY_LENGTH = 16 * 1024;
 const TINFOIL_VALIDATION_MODEL = "nomic-embed-text";
@@ -7,6 +9,7 @@ const HTTP_VALIDATORS = Object.freeze({
   openai: {
     url: "https://api.openai.com/v1/models",
     headers: (key) => ({ Authorization: `Bearer ${key}` }),
+    invalidKeyStatuses: [401],
   },
   anthropic: {
     url: "https://api.anthropic.com/v1/models?limit=1",
@@ -14,30 +17,39 @@ const HTTP_VALIDATORS = Object.freeze({
       "X-API-Key": key,
       "anthropic-version": "2023-06-01",
     }),
+    invalidKeyStatuses: [401],
   },
   gemini: {
     url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1",
     headers: (key) => ({ "x-goog-api-key": key }),
+    invalidKeyStatuses: [401],
   },
   groq: {
     url: "https://api.groq.com/openai/v1/models",
     headers: (key) => ({ Authorization: `Bearer ${key}` }),
+    invalidKeyStatuses: [401],
   },
   xai: {
     url: "https://api.x.ai/v1/models",
     headers: (key) => ({ Authorization: `Bearer ${key}` }),
+    invalidKeyStatuses: [401],
   },
   mistral: {
     url: "https://api.mistral.ai/v1/models",
     headers: (key) => ({ Authorization: `Bearer ${key}` }),
+    invalidKeyStatuses: [401],
   },
   openrouter: {
     url: "https://openrouter.ai/api/v1/key",
     headers: (key) => ({ Authorization: `Bearer ${key}` }),
+    invalidKeyStatuses: [401],
   },
   corti: {
     url: "https://ai.eu.corti.app/v1/models",
     headers: (key) => ({ Authorization: `Bearer ${key}` }),
+    // Corti's authenticated catalog currently returns an empty 400 response
+    // for malformed, unknown, and revoked bearer keys.
+    invalidKeyStatuses: [400, 401],
   },
 });
 
@@ -134,6 +146,8 @@ async function readStructuredError(response) {
 }
 
 async function isProviderInvalidKeyResponse(provider, response) {
+  const configuredStatuses = HTTP_VALIDATORS[provider]?.invalidKeyStatuses || [];
+  if (configuredStatuses.includes(response.status)) return true;
   if (provider !== "gemini" && provider !== "xai") return false;
 
   const body = await readStructuredError(response);
@@ -152,8 +166,13 @@ async function isProviderInvalidKeyResponse(provider, response) {
 }
 
 async function classifyResponse(provider, response) {
-  if (response.ok) return verified(provider);
-  if (response.status === 401 || (await isProviderInvalidKeyResponse(provider, response))) {
+  if (response.ok) {
+    // An arbitrary OpenAI-compatible /models route may be public. Reaching it
+    // proves endpoint connectivity, not that the supplied bearer key works.
+    if (provider === "custom") return unverified(provider, "VALIDATION_FAILED");
+    return verified(provider);
+  }
+  if (await isProviderInvalidKeyResponse(provider, response)) {
     return failure(provider, "INVALID_KEY");
   }
   return classifyStatus(provider, response.status);
@@ -167,6 +186,7 @@ function resolveCustomModelsUrl(baseUrl) {
     const url = new URL(baseUrl.trim());
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
     if (url.username || url.password) return null;
+    if (!isSecureEndpoint(url.toString())) return null;
     url.hash = "";
     url.search = "";
     url.pathname = `${url.pathname.replace(/\/+$/, "")}/models`;

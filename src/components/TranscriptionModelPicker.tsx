@@ -1031,6 +1031,11 @@ export default function TranscriptionModelPicker({
                         apiKey={credentialValues[field.key]}
                         setApiKey={credentialSetters[field.key]}
                         onSave={getCredentialKeySaver(field.key)}
+                        validationStateKey={
+                          LLM_VALIDATION_PROVIDER_BY_FIELD[field.key]
+                            ? `provider:${LLM_VALIDATION_PROVIDER_BY_FIELD[field.key]}`
+                            : undefined
+                        }
                         label=""
                         helpText=""
                       />

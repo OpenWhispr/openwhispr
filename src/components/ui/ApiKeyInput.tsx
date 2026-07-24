@@ -4,6 +4,11 @@ import { AlertTriangle, Check, CheckCircle, Loader2, X, KeyRound } from "lucide-
 import { Input } from "./input";
 import logger from "../../utils/logger";
 import type { LlmKeyValidationResult } from "../../types/electron";
+import {
+  clearUnverifiedLlmKeyState,
+  readUnverifiedLlmKeyState,
+  writeUnverifiedLlmKeyState,
+} from "../../utils/llmKeyValidationState";
 
 interface ApiKeyInputProps {
   apiKey: string;
@@ -15,6 +20,7 @@ interface ApiKeyInputProps {
   helpText?: React.ReactNode;
   variant?: "default" | "purple";
   onSave?: (key: string) => Promise<LlmKeyValidationResult>;
+  validationStateKey?: string;
 }
 
 function maskKey(key: string): string {
@@ -32,6 +38,7 @@ export default function ApiKeyInput({
   helpText,
   variant = "default",
   onSave,
+  validationStateKey,
 }: ApiKeyInputProps) {
   const { t } = useTranslation();
   const resolvedPlaceholder = placeholder ?? t("apiKeyInput.placeholder");
@@ -50,6 +57,18 @@ export default function ApiKeyInput({
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasKey = apiKey.length > 0;
   const variantClasses = variant === "purple" ? "border-primary focus:border-primary" : "";
+  const validationStorage = typeof window !== "undefined" ? window.localStorage : undefined;
+
+  const restorePersistedWarning = useCallback(() => {
+    const persisted = readUnverifiedLlmKeyState(validationStorage, validationStateKey);
+    if (persisted && apiKey.trim()) {
+      setSaveStatus("warning");
+      setValidationResult(persisted);
+      return;
+    }
+    setSaveStatus("idle");
+    setValidationResult(null);
+  }, [apiKey, validationStateKey, validationStorage]);
 
   useEffect(() => {
     if (isEditing) {
@@ -74,15 +93,15 @@ export default function ApiKeyInput({
     const normalized = draft.trim();
     if (normalized === apiKey.trim()) {
       setDraft("");
-      setSaveStatus("idle");
-      setValidationResult(null);
       setIsEditing(false);
+      restorePersistedWarning();
       return;
     }
 
     if (!onSave) {
       try {
         setApiKey(normalized);
+        clearUnverifiedLlmKeyState(validationStorage, validationStateKey);
         setDraft("");
         setSaveStatus("idle");
         setValidationResult(null);
@@ -112,13 +131,16 @@ export default function ApiKeyInput({
       setIsEditing(false);
       if (normalized) {
         if (result.verified === false) {
+          writeUnverifiedLlmKeyState(validationStorage, validationStateKey, result);
           setSaveStatus("warning");
           setValidationResult(result);
         } else {
+          clearUnverifiedLlmKeyState(validationStorage, validationStateKey);
           setSaveStatus("success");
           successTimerRef.current = setTimeout(() => setSaveStatus("idle"), 5000);
         }
       } else {
+        clearUnverifiedLlmKeyState(validationStorage, validationStateKey);
         setSaveStatus("idle");
       }
     } catch (err) {
@@ -136,15 +158,22 @@ export default function ApiKeyInput({
     } finally {
       if (requestId === requestIdRef.current) savingRef.current = false;
     }
-  }, [apiKey, draft, onSave, setApiKey]);
+  }, [
+    apiKey,
+    draft,
+    onSave,
+    restorePersistedWarning,
+    setApiKey,
+    validationStateKey,
+    validationStorage,
+  ]);
 
   const cancel = () => {
     if (savingRef.current) return;
     requestIdRef.current += 1;
     setDraft("");
-    setSaveStatus("idle");
-    setValidationResult(null);
     setIsEditing(false);
+    restorePersistedWarning();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -177,6 +206,12 @@ export default function ApiKeyInput({
     },
     []
   );
+
+  useEffect(() => {
+    if (isEditing) return;
+    if (saveStatus === "success" || saveStatus === "error" || saveStatus === "testing") return;
+    restorePersistedWarning();
+  }, [isEditing, restorePersistedWarning, saveStatus]);
 
   const resultMessage = validationResult?.code
     ? t(`apiKeyInput.errors.${validationResult.code}`, {

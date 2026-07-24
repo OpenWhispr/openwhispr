@@ -28,6 +28,12 @@ test("every persisted BYOK provider has an API-key validator", () => {
 
 test("HTTP validators use fixed provider endpoints and keep keys in auth headers", async () => {
   for (const [provider, expected] of Object.entries(HTTP_VALIDATORS)) {
+    assert.equal(new URL(expected.url).protocol, "https:", `${provider} uses HTTPS`);
+    assert.ok(
+      Array.isArray(expected.invalidKeyStatuses) && expected.invalidKeyStatuses.includes(401),
+      `${provider} declares its authentication rejection contract`
+    );
+
     let captured;
     const result = await validateLlmApiKey(
       { provider, key: "  secret-key  " },
@@ -123,18 +129,23 @@ test("Tinfoil rejects a key when its authenticated SDK request returns 401", asy
   assert.equal(result.code, "INVALID_KEY");
 });
 
-test("custom validation accepts only credential-free HTTP(S) base URLs", () => {
+test("custom validation accepts HTTPS and private HTTP endpoints only", () => {
   assert.equal(resolveCustomModelsUrl("https://example.com/v1/"), "https://example.com/v1/models");
   assert.equal(
     resolveCustomModelsUrl("http://127.0.0.1:11434/v1?ignored=true#fragment"),
     "http://127.0.0.1:11434/v1/models"
   );
+  assert.equal(
+    resolveCustomModelsUrl("http://192.168.1.20:11434/v1"),
+    "http://192.168.1.20:11434/v1/models"
+  );
+  assert.equal(resolveCustomModelsUrl("http://api.example.com/v1"), null);
   assert.equal(resolveCustomModelsUrl("file:///tmp/server"), null);
   assert.equal(resolveCustomModelsUrl("https://user:pass@example.com/v1"), null);
   assert.equal(resolveCustomModelsUrl("not a URL"), null);
 });
 
-test("custom validation tests the configured models endpoint without following redirects", async () => {
+test("custom validation tests the configured models endpoint without claiming the key is verified", async () => {
   let captured;
   const result = await validateLlmApiKey(
     {
@@ -151,9 +162,74 @@ test("custom validation tests the configured models endpoint without following r
   );
 
   assert.equal(result.success, true);
+  assert.equal(result.verified, false);
+  assert.equal(result.code, "VALIDATION_FAILED");
   assert.equal(captured.url, "https://llm.example/v1/models");
   assert.equal(captured.init.headers.Authorization, "Bearer custom-secret");
   assert.equal(captured.init.redirect, "manual");
+});
+
+test("custom validation never sends a key to an insecure public HTTP endpoint", async () => {
+  let fetches = 0;
+  const result = await validateLlmApiKey(
+    {
+      provider: "custom",
+      key: "custom-secret",
+      baseUrl: "http://api.example.com/v1",
+    },
+    {
+      fetchImpl: async () => {
+        fetches += 1;
+        return response(200);
+      },
+    }
+  );
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, "INVALID_ENDPOINT");
+  assert.equal(fetches, 0);
+});
+
+test("every fixed HTTP provider rejects its documented invalid-key response", async () => {
+  const invalidResponses = {
+    openai: () => response(401),
+    anthropic: () => response(401),
+    gemini: () =>
+      response(
+        400,
+        JSON.stringify({
+          error: {
+            status: "INVALID_ARGUMENT",
+            details: [{ reason: "API_KEY_INVALID" }],
+          },
+        })
+      ),
+    groq: () => response(401),
+    xai: () =>
+      response(
+        400,
+        JSON.stringify({
+          code: "invalid-argument",
+          error: "Incorrect API key provided.",
+        })
+      ),
+    mistral: () => response(401),
+    openrouter: () => response(401),
+    corti: () => response(400),
+  };
+
+  assert.deepEqual(Object.keys(invalidResponses).sort(), Object.keys(HTTP_VALIDATORS).sort());
+
+  for (const [provider, createResponse] of Object.entries(invalidResponses)) {
+    const result = await validateLlmApiKey(
+      { provider, key: "invalid-provider-key" },
+      { fetchImpl: async () => createResponse() }
+    );
+
+    assert.equal(result.success, false, `${provider} rejects the key`);
+    assert.equal(result.verified, false, `${provider} does not mark the key verified`);
+    assert.equal(result.code, "INVALID_KEY", `${provider} reports INVALID_KEY`);
+  }
 });
 
 test("only definitive authentication failures block setup", async () => {
