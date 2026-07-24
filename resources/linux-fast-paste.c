@@ -626,6 +626,70 @@ static paste_mode_t resolve_paste_mode(int force_terminal, int force_shift_inser
     return is_term ? PASTE_MODE_CTRL_SHIFT_V : PASTE_MODE_CTRL_V;
 }
 
+/* -------------------------------------------------------------------------
+ * Spoken-command keystroke injection (--key <KEY_NAME>)
+ * Supported: Return, Escape, Tab, BackSpace, Shift+Return
+ * Uses XTest on X11.  For Wayland portal mode the caller should use xdotool
+ * or ydotool as a fallback (JS layer handles that gracefully).
+ * ------------------------------------------------------------------------- */
+
+typedef struct { const char *name; KeySym sym; int shift; } LinuxKeyEntry;
+
+static const LinuxKeyEntry LINUX_KEY_TABLE[] = {
+    { "Return",       XK_Return, 0 },
+    { "Escape",       XK_Escape, 0 },
+    { "Tab",          XK_Tab,    0 },
+    { "BackSpace",    XK_BackSpace, 0 },
+    { "Shift+Return", XK_Return, 1 },
+    { NULL,           0,         0 },
+};
+
+static int send_named_key_x11(const char *keyName) {
+    const LinuxKeyEntry *entry = NULL;
+    for (int i = 0; LINUX_KEY_TABLE[i].name != NULL; i++) {
+        if (strcasecmp(keyName, LINUX_KEY_TABLE[i].name) == 0) {
+            entry = &LINUX_KEY_TABLE[i];
+            break;
+        }
+    }
+    if (!entry) {
+        fprintf(stderr, "ERROR: Unknown key name '%s'\n", keyName);
+        return 1;
+    }
+
+    Display *dpy = XOpenDisplay(NULL);
+    if (!dpy) { fprintf(stderr, "ERROR: Cannot open X display\n"); return 1; }
+
+    int event_base, error_base, major, minor;
+    if (!XTestQueryExtension(dpy, &event_base, &error_base, &major, &minor)) {
+        XCloseDisplay(dpy);
+        fprintf(stderr, "ERROR: XTest extension unavailable\n");
+        return 2;
+    }
+
+    KeyCode kc = XKeysymToKeycode(dpy, entry->sym);
+    KeyCode shift_kc = XKeysymToKeycode(dpy, XK_Shift_L);
+
+    if (entry->shift) {
+        XTestFakeKeyEvent(dpy, shift_kc, True, CurrentTime);
+        usleep(8000);
+    }
+    XTestFakeKeyEvent(dpy, kc, True, CurrentTime);
+    usleep(8000);
+    XTestFakeKeyEvent(dpy, kc, False, CurrentTime);
+    if (entry->shift) {
+        usleep(8000);
+        XTestFakeKeyEvent(dpy, shift_kc, False, CurrentTime);
+    }
+
+    XFlush(dpy);
+    usleep(20000);
+    XCloseDisplay(dpy);
+    printf("KEY_OK %s\n", keyName);
+    fflush(stdout);
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     int force_terminal = 0;
     int force_shift_insert = 0;
@@ -633,6 +697,7 @@ int main(int argc, char *argv[]) {
     int use_portal = 0;
     int media_play_pause = 0;
     const char *restore_token = NULL;
+    const char *key_name = NULL;
     Window target_window = None;
 
     for (int i = 1; i < argc; i++) {
@@ -650,11 +715,18 @@ int main(int argc, char *argv[]) {
             restore_token = argv[++i];
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
             target_window = (Window)strtoul(argv[++i], NULL, 0);
+        } else if (strcmp(argv[i], "--key") == 0 && i + 1 < argc) {
+            key_name = argv[++i];
         }
     }
 
     if (media_play_pause) {
         return send_media_play_pause();
+    }
+
+    /* Spoken-command mode: inject a named keystroke via XTest (X11 only). */
+    if (key_name != NULL) {
+        return send_named_key_x11(key_name);
     }
 
     if (use_portal) {

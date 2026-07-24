@@ -3016,6 +3016,38 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  /**
+   * Injects a named keystroke via the platform fast-paste binary.
+   * Used by the spoken-command (hands-free) feature.
+   * Fails silently if the IPC call throws — the user still gets the
+   * transcription saved, they just don't get the keystroke.
+   *
+   * @param {string} key - Return | Shift+Return | Escape | Tab | BackSpace
+   * @returns {Promise<boolean>}
+   */
+  async safeKeystroke(key) {
+    try {
+      const result = await window.electronAPI.sendKeystroke(key);
+      if (result && !result.success) {
+        this.onError?.({
+          title: "Spoken Command Error",
+          description: `Could not send keystroke "${key}": ${result.error || "unknown error"}`,
+        });
+        return false;
+      }
+      return true;
+    } catch (error) {
+      const message =
+        error?.message ??
+        (typeof error?.toString === "function" ? error.toString() : String(error));
+      this.onError?.({
+        title: "Spoken Command Error",
+        description: `Could not send keystroke "${key}": ${message}`,
+      });
+      return false;
+    }
+  }
+
   async saveTranscription(text, rawText = null, { clientTranscriptionId } = {}) {
     if (!getSettings().dataRetentionEnabled) {
       logger.debug("Skipping transcription save — data retention disabled", {}, "audio");

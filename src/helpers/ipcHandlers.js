@@ -1918,6 +1918,34 @@ class IPCHandlers {
       return result;
     });
 
+    // ---------------------------------------------------------------------------
+    // Spoken-command keystroke injection
+    // Only keys in ALLOWED_KEYSTROKE_NAMES can be injected to prevent the
+    // renderer from being used as a general-purpose keyboard injector.
+    // ---------------------------------------------------------------------------
+    const ALLOWED_KEYSTROKE_NAMES = new Set([
+      "Return",
+      "Shift+Return",
+      "Escape",
+      "Tab",
+      "BackSpace",
+    ]);
+
+    ipcMain.handle("send-keystroke", async (_event, key) => {
+      if (typeof key !== "string" || !ALLOWED_KEYSTROKE_NAMES.has(key)) {
+        debugLogger.warn("[SpokenCommands] Rejected unknown key name", { key });
+        return { success: false, error: `Key '${key}' is not in the allowed keystroke list` };
+      }
+      try {
+        await this.clipboardManager.sendKeystroke(key);
+        debugLogger.debug("[SpokenCommands] Keystroke sent", { key });
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("[SpokenCommands] sendKeystroke failed", { key, error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {
       return this.clipboardManager.checkAccessibilityPermissions(silent);
     });

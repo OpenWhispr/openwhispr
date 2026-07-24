@@ -765,6 +765,8 @@ export default function SettingsPage({
     setShowTranscriptionPreview,
     autoPasteEnabled,
     setAutoPasteEnabled,
+    spokenCommandsEnabled,
+    setSpokenCommandsEnabled,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
@@ -2545,6 +2547,14 @@ export default function SettingsPage({
                     description={t("settingsPage.general.clipboard.autoPasteDescription")}
                   >
                     <Toggle checked={autoPasteEnabled} onChange={setAutoPasteEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.clipboard.spokenCommands")}
+                    description={t("settingsPage.general.clipboard.spokenCommandsDescription")}
+                  >
+                    <Toggle checked={spokenCommandsEnabled} onChange={setSpokenCommandsEnabled} />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>
