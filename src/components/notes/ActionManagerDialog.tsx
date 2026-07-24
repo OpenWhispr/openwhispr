@@ -93,22 +93,37 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
     setIsSaving(true);
     try {
       if (editingId !== null) {
-        await window.electronAPI.updateAction(editingId, {
+        const result = await window.electronAPI.updateAction(editingId, {
           name: name.trim(),
           description: description.trim(),
           prompt: prompt.trim(),
           temperature: temperatureEnabled ? temperature : null,
         });
+        if (!result?.success) {
+          throw new Error(result?.error || "Failed to update action");
+        }
+        if (result.action) {
+          handleSelectAction(result.action);
+        }
       } else {
-        await window.electronAPI.createAction(
+        const result = await window.electronAPI.createAction(
           name.trim(),
           description.trim(),
           prompt.trim(),
           undefined,
           { temperature: temperatureEnabled ? temperature : null }
         );
+        if (!result?.success) {
+          throw new Error(result?.error || "Failed to create action");
+        }
+        if (result.action) {
+          handleSelectAction(result.action);
+        }
         setIsCreating(false);
       }
+      await initializeActions();
+    } catch (error) {
+      console.error("Failed to save action", error);
     } finally {
       setIsSaving(false);
     }
