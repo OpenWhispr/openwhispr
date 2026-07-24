@@ -465,6 +465,10 @@
       "label": "停用思考輸出",
       "help": "略過推理權杖以獲得更乾淨的輸出。建議用於清理。某些伺服器會忽略此提示。"
     },
+    "temperature": {
+      "label": "溫度",
+      "help": "控制回應的變化度。較低值更一致，較高值更具創造性。"
+    },
     "selfHosted": {
       "endpointHelp": "指向本地網路中相容 OpenAI 的伺服器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
     },

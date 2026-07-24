@@ -465,6 +465,10 @@
       "label": "禁用思考输出",
       "help": "跳过推理令牌以获得更清晰的输出。推荐用于清理。某些服务器会忽略此提示。"
     },
+    "temperature": {
+      "label": "温度",
+      "help": "控制回复的随机性。较低值更稳定，较高值更有创造性。"
+    },
     "selfHosted": {
       "endpointHelp": "指向本地网络中兼容 OpenAI 的服务器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
     },

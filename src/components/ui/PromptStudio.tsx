@@ -157,6 +157,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
             baseUrl: isCustom ? translationCloudBaseUrl || undefined : undefined,
             customApiKey:
               isCustom || isSelfHosted ? translationCustomApiKey || undefined : undefined,
+            temperature: useSettingsStore.getState().translationTemperature,
             disableThinking: translationDisableThinking,
             language: translationTargetLanguage,
             systemPrompt: resolvePrompt("translate", {
@@ -229,6 +230,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       setCustomPrompt(kind, editedPrompt);
       try {
         const result = await ReasoningService.processText(testText, modelToUse, agentName, {
+          temperature: useSettingsStore.getState().cleanupTemperature,
           disableThinking: useSettingsStore.getState().cleanupDisableThinking,
         });
         setTestResult(result);

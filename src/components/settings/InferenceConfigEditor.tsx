@@ -7,7 +7,7 @@ import {
   selectResolvedLLMConfig,
   setResolvedLLMConfig,
 } from "../../stores/settingsStore";
-import { InferenceModeSelector } from "../ui/SettingsSection";
+import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
@@ -138,6 +138,13 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
   const setMode = setField("mode");
   const setProvider = setField("provider");
   const setModel = setField("model");
+  const setTemperature = useCallback(
+    (value: number) => {
+      const next = Math.min(1, Math.max(0, Number(value.toFixed(2))));
+      setResolvedLLMConfig(scope, { temperature: next });
+    },
+    [scope]
+  );
 
   const renderModelSelector = (mode?: "cloud" | "local") => (
     <ReasoningModelSelector
@@ -161,6 +168,16 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
         config.provider === "openrouter" ||
         !!getCloudModel(config.model)?.supportsThinking)) ||
     (config.mode === "local" && !!getLocalModel(config.model)?.supportsThinking);
+
+  const showTemperatureSlider =
+    config.mode === "self-hosted" ||
+    config.mode === "enterprise" ||
+    config.mode === "local" ||
+    config.mode === "openwhispr" ||
+    (config.mode === "providers" &&
+      (config.provider === "custom" ||
+        config.provider === "openrouter" ||
+        !!getCloudModel(config.model)?.supportsTemperature));
 
   return (
     <div className="space-y-3">
@@ -187,14 +204,35 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       )}
 
       {showThinkingToggle && (
-        <div className="flex items-start justify-between gap-3 pt-1">
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-medium text-foreground">
-              {t("reasoning.disableThinking.label")}
-            </h4>
-            <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
-          </div>
+        <SettingsRow
+          label={t("reasoning.disableThinking.label")}
+          description={t("reasoning.disableThinking.help")}
+          className="pt-1"
+        >
           <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+        </SettingsRow>
+      )}
+
+      {showTemperatureSlider && (
+        <div className="pt-1 space-y-2">
+          <SettingsRow
+            label={t("reasoning.temperature.label")}
+            description={t("reasoning.temperature.help")}
+          >
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {config.temperature.toFixed(2)}
+            </span>
+          </SettingsRow>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={config.temperature}
+            onChange={(e) => setTemperature(Number(e.target.value))}
+            aria-label={t("reasoning.temperature.label")}
+            className="w-full accent-primary"
+          />
         </div>
       )}
 

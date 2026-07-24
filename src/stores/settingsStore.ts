@@ -45,6 +45,20 @@ function readBoolean(key: string, fallback: boolean): boolean {
   return stored === "true";
 }
 
+function clampTemperature(value: number): number {
+  if (!Number.isFinite(value)) return 0.3;
+  return Math.min(1, Math.max(0, Number(value.toFixed(2))));
+}
+
+function readTemperature(key: string, fallback = 0.3): number {
+  if (!isBrowser) return fallback;
+  const stored = localStorage.getItem(key);
+  if (stored === null) return fallback;
+  const parsed = Number(stored);
+  if (Number.isNaN(parsed)) return fallback;
+  return clampTemperature(parsed);
+}
+
 function readStringArray(key: string, fallback: string[]): string[] {
   if (!isBrowser) return fallback;
   const stored = localStorage.getItem(key);
@@ -156,6 +170,11 @@ const ARRAY_SETTINGS = new Set([
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
+  "cleanupTemperature",
+  "dictationAgentTemperature",
+  "noteFormattingTemperature",
+  "chatAgentTemperature",
+  "translationTemperature",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -474,6 +493,7 @@ export interface SettingsState
   noteFormattingCloudBaseUrl: string;
   noteFormattingRemoteUrl: string;
   noteFormattingCustomApiKey: string;
+  noteFormattingTemperature: number;
 
   translationMode: InferenceMode;
   translationProvider: string;
@@ -483,6 +503,7 @@ export interface SettingsState
   translationRemoteUrl: string;
   translationCustomApiKey: string;
   translationDisableThinking: boolean;
+  translationTemperature: number;
   useDictationTranslation: boolean;
   translationSourceLanguage: string;
   translationTargetLanguage: string;
@@ -495,11 +516,14 @@ export interface SettingsState
   dictationAgentCloudBaseUrl: string;
   dictationAgentRemoteUrl: string;
   dictationAgentCustomApiKey: string;
+  dictationAgentTemperature: number;
 
   cleanupDisableThinking: boolean;
+  cleanupTemperature: number;
   dictationAgentDisableThinking: boolean;
   noteFormattingDisableThinking: boolean;
   chatAgentDisableThinking: boolean;
+  chatAgentTemperature: number;
 
   customPrompts: Record<PromptKind, string>;
   setCustomPrompt: (kind: PromptKind, value: string) => void;
@@ -1146,6 +1170,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   noteFormattingCloudBaseUrl: readString("noteFormattingCloudBaseUrl", ""),
   noteFormattingRemoteUrl: readString("noteFormattingRemoteUrl", ""),
   noteFormattingCustomApiKey: readString("noteFormattingCustomApiKey", ""),
+  noteFormattingTemperature: readTemperature("noteFormattingTemperature", 0.3),
 
   translationMode: (() => {
     const v = readString("translationMode", "openwhispr");
@@ -1166,6 +1191,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   translationRemoteUrl: readString("translationRemoteUrl", ""),
   translationCustomApiKey: readString("translationCustomApiKey", ""),
   translationDisableThinking: readBoolean("translationDisableThinking", true),
+  translationTemperature: readTemperature("translationTemperature", 0.3),
   useDictationTranslation: readBoolean("useDictationTranslation", false),
   translationSourceLanguage: readString("translationSourceLanguage", "auto"),
   translationTargetLanguage: readString("translationTargetLanguage", ""),
@@ -1266,6 +1292,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   chatAgentRemoteUrl: readString("chatAgentRemoteUrl", ""),
   chatAgentCloudBaseUrl: readString("chatAgentCloudBaseUrl", ""),
   chatAgentCustomApiKey: readString("chatAgentCustomApiKey", ""),
+  chatAgentTemperature: readTemperature("chatAgentTemperature", 0.3),
 
   dictationAgentMode: (() => {
     const v = readString("dictationAgentMode", "openwhispr");
@@ -1285,8 +1312,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentCloudBaseUrl: readString("dictationAgentCloudBaseUrl", ""),
   dictationAgentRemoteUrl: readString("dictationAgentRemoteUrl", ""),
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
+  dictationAgentTemperature: readTemperature("dictationAgentTemperature", 0.3),
 
   cleanupDisableThinking: readBoolean("cleanupDisableThinking", true),
+  cleanupTemperature: readTemperature("cleanupTemperature", 0.3),
   dictationAgentDisableThinking: readBoolean("dictationAgentDisableThinking", true),
   noteFormattingDisableThinking: readBoolean("noteFormattingDisableThinking", true),
   chatAgentDisableThinking: readBoolean("chatAgentDisableThinking", true),
@@ -1993,6 +2022,7 @@ export interface ResolvedNoteFormatting {
   cloudMode: string;
   cloudBaseUrl: string;
   remoteUrl: string;
+  temperature: number;
 }
 
 export const selectResolvedNoteFormatting = (state: SettingsState): ResolvedNoteFormatting => {
@@ -2004,6 +2034,7 @@ export const selectResolvedNoteFormatting = (state: SettingsState): ResolvedNote
     cloudMode: cfg.cloudMode || "",
     cloudBaseUrl: cfg.cloudBaseUrl || "",
     remoteUrl: cfg.remoteUrl || "",
+    temperature: cfg.temperature,
   };
 };
 
@@ -2017,6 +2048,7 @@ export interface ResolvedLLMConfig {
   remoteUrl?: string;
   customApiKey?: string;
   disableThinking: boolean;
+  temperature: number;
 }
 
 export const selectResolvedLLMConfig = (
@@ -2036,6 +2068,8 @@ export const selectResolvedLLMConfig = (
 
   const disableThinkingKey = def.storeKeys.disableThinking;
   const disableThinking = disableThinkingKey ? (state[disableThinkingKey] as boolean) : true;
+  const temperatureKey = def.storeKeys.temperature;
+  const temperature = temperatureKey ? clampTemperature((state[temperatureKey] as number) ?? 0.3) : 0.3;
 
   return {
     scope,
@@ -2047,6 +2081,7 @@ export const selectResolvedLLMConfig = (
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
     customApiKey: read("customApiKey"),
     disableThinking,
+    temperature,
   };
 };
 
@@ -2070,7 +2105,11 @@ export function setResolvedLLMConfig(
     if (isBrowser) {
       localStorage.setItem(
         storeKey as string,
-        typeof value === "boolean" ? String(value) : (value as string)
+        typeof value === "boolean"
+          ? String(value)
+          : typeof value === "number"
+            ? String(value)
+            : (value as string)
       );
     }
     (updates as Record<string, unknown>)[storeKey as string] = value;
@@ -2477,9 +2516,18 @@ export async function initializeSettings(): Promise<void> {
       const parsed = Number(newValue);
       if (Number.isNaN(parsed)) {
         value =
-          key === "audioRetentionDays" ? 30 : (state as unknown as Record<string, unknown>)[key];
+          key === "audioRetentionDays"
+            ? 30
+            : key.endsWith("Temperature")
+              ? 0.3
+              : (state as unknown as Record<string, unknown>)[key];
       } else {
-        value = key === "audioRetentionDays" ? Math.round(parsed) : parsed;
+        value =
+          key === "audioRetentionDays"
+            ? Math.round(parsed)
+            : key.endsWith("Temperature")
+              ? clampTemperature(parsed)
+              : parsed;
       }
     } else {
       value = newValue;

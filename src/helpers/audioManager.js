@@ -147,6 +147,7 @@ function resolveReasoningRoute(
       config: {
         provider,
         language: settings.translationTargetLanguage,
+        temperature: settings.translationTemperature,
         lanUrl: isSelfHostedTranslation ? settings.translationRemoteUrl : undefined,
         baseUrl: isCustomTranslation ? settings.translationCloudBaseUrl || undefined : undefined,
         customApiKey:
@@ -173,6 +174,7 @@ function resolveReasoningRoute(
       model: agentModel,
       config: {
         provider,
+        temperature: settings.dictationAgentTemperature,
         lanUrl: isSelfHostedAgent ? settings.dictationAgentRemoteUrl : undefined,
         baseUrl: isCustomAgent ? settings.dictationAgentCloudBaseUrl || undefined : undefined,
         customApiKey:
@@ -192,7 +194,10 @@ function resolveReasoningRoute(
   if (kind === "cleanup") {
     return {
       kind: "cleanup",
-      config: { disableThinking: settings.cleanupDisableThinking },
+      config: {
+        disableThinking: settings.cleanupDisableThinking,
+        temperature: settings.cleanupTemperature,
+      },
     };
   }
   return { kind: "skip" };
