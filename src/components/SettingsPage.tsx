@@ -35,6 +35,7 @@ import {
   Wand2,
   Upload,
   Languages,
+  X,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
@@ -96,6 +97,10 @@ import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
+import { MAX_PREFERRED_LANGUAGES } from "../stores/settingsStore";
+import languageRegistry from "../config/languageRegistry.json";
+
+const LANGUAGE_BY_CODE = new Map(languageRegistry.languages.map((l) => [l.code, l]));
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
@@ -711,6 +716,9 @@ export default function SettingsPage({
     parakeetModel,
     uiLanguage,
     preferredLanguage,
+    preferredLanguages,
+    setPreferredLanguage,
+    setPreferredLanguages,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
@@ -808,6 +816,11 @@ export default function SettingsPage({
     whisperVadSamplesOverlap,
     setWhisperVadSamplesOverlap,
   } = useSettings();
+
+  // Effective multi-select set: falls back to the single active language for
+  // users who never selected multiple.
+  const transcriptionLanguages =
+    preferredLanguages.length > 0 ? preferredLanguages : [preferredLanguage];
 
   const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
   const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
@@ -2682,14 +2695,70 @@ export default function SettingsPage({
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settings.language.transcriptionLabel")}
-                    description={t("settings.language.transcriptionDescription")}
+                    description={t("settings.language.transcriptionDescription", {
+                      max: MAX_PREFERRED_LANGUAGES,
+                    })}
                   >
-                    <LanguageSelector
-                      value={preferredLanguage}
-                      onChange={(value) =>
-                        updateTranscriptionSettings({ preferredLanguage: value })
-                      }
-                    />
+                    <div className="flex flex-col items-end gap-2">
+                      <LanguageSelector
+                        multiple
+                        values={transcriptionLanguages}
+                        onValuesChange={(values) => {
+                          // Auto detect is exclusive: picking it replaces the
+                          // preset list; picking a language replaces auto.
+                          if (values.includes("auto") && !transcriptionLanguages.includes("auto")) {
+                            setPreferredLanguage("auto");
+                          } else {
+                            setPreferredLanguages(values.filter((v) => v !== "auto"));
+                          }
+                        }}
+                        maxValues={MAX_PREFERRED_LANGUAGES}
+                      />
+                      {transcriptionLanguages.length > 1 && (
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          {transcriptionLanguages.map((code) => {
+                            const lang = LANGUAGE_BY_CODE.get(code);
+                            const isActive = code === preferredLanguage;
+                            return (
+                              <div
+                                key={code}
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full py-0.5 pl-2 pr-1 text-xs font-medium transition-colors",
+                                  isActive
+                                    ? "bg-primary/10 text-primary ring-1 ring-primary/30"
+                                    : "bg-muted text-muted-foreground"
+                                )}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => setPreferredLanguage(code)}
+                                  aria-pressed={isActive}
+                                  aria-label={t("settings.language.activeLanguage")}
+                                  className="inline-flex items-center gap-1"
+                                >
+                                  {lang?.flag && <span aria-hidden="true">{lang.flag}</span>}
+                                  <span>{lang?.label ?? code}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPreferredLanguages(
+                                      transcriptionLanguages.filter((v) => v !== code)
+                                    )
+                                  }
+                                  aria-label={t("settings.language.removeLanguage", {
+                                    language: lang?.label ?? code,
+                                  })}
+                                  className="rounded-full p-0.5 hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>

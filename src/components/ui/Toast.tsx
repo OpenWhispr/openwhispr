@@ -120,8 +120,11 @@ const ToastViewport: React.FC<{
     <div
       className={cn(
         "fixed z-[100] flex flex-col gap-1.5 pointer-events-none",
-        isDictationPanel ? "bottom-20 right-6" : "bottom-5 right-5"
+        isDictationPanel ? "right-6" : "bottom-5 right-5"
       )}
+      // In the dictation panel an open menu raises the stack above itself
+      // via --toast-viewport-bottom (set in App.jsx); 5rem matches bottom-20
+      style={isDictationPanel ? { bottom: "var(--toast-viewport-bottom, 5rem)" } : undefined}
     >
       {toasts.map((toast) => (
         <Toast

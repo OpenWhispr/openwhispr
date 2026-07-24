@@ -6,7 +6,9 @@
       "uiLabel": "Interface language",
       "uiDescription": "Choose the language used throughout OpenWhispr's interface",
       "transcriptionLabel": "Transcription language",
-      "transcriptionDescription": "Choose the language you speak for more accurate transcription"
+      "transcriptionDescription": "Choose up to {{max}} languages you speak — switch the active one from the dictation panel",
+      "activeLanguage": "Active language",
+      "removeLanguage": "Remove {{language}}"
     },
     "noteFiles": {
       "title": "Save notes as files",
@@ -2693,7 +2695,8 @@
       "recording": "Recording...",
       "processing": "Processing...",
       "clickToSpeak": "Click to speak",
-      "waitingForMicrophone": "Waiting for microphone…"
+      "waitingForMicrophone": "Waiting for microphone…",
+      "languageTooltip": "Language: {{language}} — click to switch"
     },
     "buttons": {
       "cancelRecording": "Cancel recording",
@@ -2702,7 +2705,8 @@
     "commandMenu": {
       "stopListening": "Stop listening",
       "startListening": "Start listening",
-      "hideForNow": "Hide for now"
+      "hideForNow": "Hide for now",
+      "language": "Transcription language"
     }
   },
   "dictationTranslation": {

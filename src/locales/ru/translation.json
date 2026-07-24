@@ -6,7 +6,9 @@
       "uiLabel": "Язык интерфейса",
       "uiDescription": "Выберите язык интерфейса OpenWhispr",
       "transcriptionLabel": "Язык транскрипции",
-      "transcriptionDescription": "Выберите язык, на котором вы говорите, для более точной транскрипции"
+      "transcriptionDescription": "Выберите до {{max}} языков, на которых вы говорите — активный язык можно переключать в панели диктовки",
+      "activeLanguage": "Активный язык",
+      "removeLanguage": "Убрать {{language}}"
     },
     "noteFiles": {
       "title": "Сохранять заметки как файлы",
@@ -2561,7 +2563,8 @@
       "recording": "Запись...",
       "processing": "Обработка...",
       "clickToSpeak": "Нажмите для записи",
-      "waitingForMicrophone": "Ожидание микрофона…"
+      "waitingForMicrophone": "Ожидание микрофона…",
+      "languageTooltip": "Язык: {{language}} — нажмите, чтобы переключить"
     },
     "buttons": {
       "cancelRecording": "Отменить запись",
@@ -2570,7 +2573,8 @@
     "commandMenu": {
       "stopListening": "Остановить запись",
       "startListening": "Начать запись",
-      "hideForNow": "Скрыть"
+      "hideForNow": "Скрыть",
+      "language": "Язык транскрипции"
     }
   },
   "dictationTranslation": {

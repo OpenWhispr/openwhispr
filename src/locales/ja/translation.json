@@ -6,7 +6,9 @@
       "uiLabel": "インターフェース言語",
       "uiDescription": "OpenWhispr のインターフェースで使用する言語を選択",
       "transcriptionLabel": "文字起こし言語",
-      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択"
+      "transcriptionDescription": "話す言語を最大{{max}}言語まで選択 — 使用中の言語はディクテーションパネルで切り替えられます",
+      "activeLanguage": "使用中の言語",
+      "removeLanguage": "{{language}}を削除"
     },
     "noteFiles": {
       "title": "ノートをファイルとして保存",
@@ -2557,7 +2559,8 @@
       "recording": "録音中...",
       "processing": "処理中...",
       "clickToSpeak": "クリックして話す",
-      "waitingForMicrophone": "マイクを待っています…"
+      "waitingForMicrophone": "マイクを待っています…",
+      "languageTooltip": "言語: {{language}} — クリックで切り替え"
     },
     "buttons": {
       "cancelRecording": "録音をキャンセル",
@@ -2566,7 +2569,8 @@
     "commandMenu": {
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
-      "hideForNow": "一時的に非表示"
+      "hideForNow": "一時的に非表示",
+      "language": "文字起こし言語"
     }
   },
   "dictationTranslation": {
