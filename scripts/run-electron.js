@@ -51,18 +51,16 @@ console.log("[run-electron] Electron path:", electronPath);
 console.log("[run-electron] App dir:", appDir);
 console.log("[run-electron] Args:", args);
 
-// On KDE/GNOME Wayland, force XWayland so globalShortcut and window positioning work.
+// On Wayland, force XWayland so globalShortcut and window positioning work.
 // Adding it here avoids the self-relaunch in main.js which kills concurrently in dev mode.
+const hasExplicitOzonePlatform = args.some((arg) => arg.startsWith("--ozone-platform="));
 if (
   process.platform === "linux" &&
   process.env.XDG_SESSION_TYPE === "wayland" &&
-  !args.includes("--ozone-platform=x11")
+  !hasExplicitOzonePlatform
 ) {
-  const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
-  if (desktop.includes("kde") || /gnome|ubuntu|unity/.test(desktop)) {
-    args.push("--ozone-platform=x11");
-    console.log("[run-electron] KDE/GNOME Wayland detected, forcing XWayland");
-  }
+  args.push("--ozone-platform=x11");
+  console.log("[run-electron] Wayland detected, forcing XWayland");
 }
 
 // Chromium flags must come before the app path, app args after.
