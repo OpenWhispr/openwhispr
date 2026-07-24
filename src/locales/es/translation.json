@@ -399,6 +399,10 @@
       "retrying": "Transcribiendo de nuevo…",
       "retrySuccess": "Transcripción actualizada",
       "retryError": "Error al volver a transcribir",
+      "reprocessCleanup": "Volver a ejecutar la limpieza con IA",
+      "reprocessSuccess": "Limpieza con IA actualizada",
+      "reprocessError": "No se pudo volver a ejecutar la limpieza con IA",
+      "reprocessUnavailable": "Primero configura y activa un proveedor de limpieza con IA",
       "audioNotFound": "Archivo de audio no encontrado o expirado",
       "noAiProcessing": "No se aplicó procesamiento de IA a esta transcripción",
       "rawTranscript": "Transcripción sin procesar"
