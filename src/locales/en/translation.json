@@ -1658,6 +1658,9 @@
         "title": "Clipboard",
         "autoPaste": "Automatic pasting",
         "autoPasteDescription": "Automatically paste transcribed text into the active app when dictation finishes",
+        "voiceStopCommand": "Voice stop command",
+        "voiceStopCommandDescription": "A wake-word phrase (e.g. \"Jarvis done\") that will be automatically removed from the end of transcripts",
+        "voiceStopCommandPlaceholder": "e.g. Jarvis done",
         "keepInClipboard": "Keep transcription in clipboard",
         "keepInClipboardDescription": "Keep dictated text in your clipboard so you can paste it manually if needed"
       },

@@ -55,6 +55,7 @@ import { evaluateFinishedRecording } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
+import { stripVoiceStopCommand } from "./voiceStopCommand";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
@@ -1290,6 +1291,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: result?.source || (useLocalWhisper ? localProvider : "cloud"),
         model: activeModel || null,
       };
+
+      const { voiceStopCommand } = getSettings();
+      if (voiceStopCommand && result?.text) {
+        result.text = stripVoiceStopCommand(result.text, voiceStopCommand);
+        if (result.rawText) {
+          result.rawText = stripVoiceStopCommand(result.rawText, voiceStopCommand);
+        }
+      }
 
       this.onTranscriptionComplete?.(result);
 

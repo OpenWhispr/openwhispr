@@ -765,6 +765,8 @@ export default function SettingsPage({
     setShowTranscriptionPreview,
     autoPasteEnabled,
     setAutoPasteEnabled,
+    voiceStopCommand,
+    setVoiceStopCommand,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
@@ -2545,6 +2547,19 @@ export default function SettingsPage({
                     description={t("settingsPage.general.clipboard.autoPasteDescription")}
                   >
                     <Toggle checked={autoPasteEnabled} onChange={setAutoPasteEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.clipboard.voiceStopCommand")}
+                    description={t("settingsPage.general.clipboard.voiceStopCommandDescription")}
+                  >
+                    <Input
+                      value={voiceStopCommand}
+                      onChange={(e) => setVoiceStopCommand(e.target.value)}
+                      placeholder={t("settingsPage.general.clipboard.voiceStopCommandPlaceholder")}
+                      className="w-[180px]"
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>
