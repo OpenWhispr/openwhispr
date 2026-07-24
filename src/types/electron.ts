@@ -1405,13 +1405,20 @@ declare global {
       }>;
 
       // Cloud audio file transcription
-      transcribeAudioFileCloud?: (filePath: string) => Promise<{
+      transcribeAudioFileCloud?: (
+        filePath: string,
+        options?: { requestId?: string }
+      ) => Promise<{
         success: boolean;
         text?: string;
         warning?: string;
         error?: string;
         code?: string;
       }>;
+
+      cancelUploadTranscription?: (
+        requestId: string
+      ) => Promise<{ success: boolean; restarted?: boolean }>;
 
       onUploadTranscriptionProgress?: (
         callback: (data: { stage: string; chunksTotal: number; chunksCompleted: number }) => void

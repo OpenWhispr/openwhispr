@@ -40,10 +40,12 @@ export const useBatchQueueStore = create<BatchQueueStoreState>()(() => ({
   isProcessing: false,
 }));
 
-// Bumping the run id soft-cancels the drain loop: the in-flight transcription
-// IPC can't be aborted, so the orphaned run's late results are discarded on
-// arrival while the UI unlocks immediately.
+// Bumping the run id soft-cancels the drain loop; cloud uploads additionally
+// get a true backend abort via cancel-upload-transcription (other providers'
+// in-flight IPC still can't be aborted). Either way the orphaned run's late
+// results are discarded on arrival while the UI unlocks immediately.
 let runId = 0;
+let activeUploadRequestId: string | null = null;
 
 function updateQueue(updater: (prev: QueueItem[]) => QueueItem[]) {
   useBatchQueueStore.setState((s) => ({ queue: updater(s.queue) }));
@@ -84,6 +86,10 @@ export function removeQueueItem(id: string) {
 
 export function cancelBatch() {
   runId++;
+  if (activeUploadRequestId) {
+    window.electronAPI.cancelUploadTranscription?.(activeUploadRequestId);
+    activeUploadRequestId = null;
+  }
   window.electronAPI.cancelUrlDownload();
   useBatchQueueStore.setState((s) => ({
     isProcessing: false,
@@ -180,12 +186,20 @@ export function processBatchQueue(
 
       updateItem(item.id, { status: "transcribing", progress: 0 });
 
-      const transcriptionResult = await transcribeFileWithSpeakers(
-        filePath,
-        transcription,
-        diarization,
-        durationSeconds
-      );
+      const requestId = crypto.randomUUID();
+      activeUploadRequestId = requestId;
+      let transcriptionResult;
+      try {
+        transcriptionResult = await transcribeFileWithSpeakers(
+          filePath,
+          transcription,
+          diarization,
+          durationSeconds,
+          { requestId }
+        );
+      } finally {
+        if (activeUploadRequestId === requestId) activeUploadRequestId = null;
+      }
 
       if (run !== runId) return;
 

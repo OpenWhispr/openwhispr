@@ -3,6 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const debugLogger = require("./debugLogger");
+const { createAbortError } = require("./abortError");
 
 let cachedFFmpegPath = null;
 
@@ -266,9 +267,14 @@ function computeFloat32RMS(float32Buffer) {
 }
 
 function splitAudioFile(inputPath, outputDir, options = {}) {
-  const { segmentDuration = 600, audioBitrate = "128k" } = options;
+  const { segmentDuration = 600, audioBitrate = "128k", signal } = options;
 
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
       reject(new Error("FFmpeg not found - required for audio splitting"));
@@ -309,16 +315,32 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
     });
 
     let stderr = "";
+    let aborted = false;
+
+    const onAbort = () => {
+      aborted = true;
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        // process may already be gone
+      }
+      reject(createAbortError());
+    };
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
 
     proc.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
     proc.on("error", (error) => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      if (aborted) return;
       reject(new Error(`FFmpeg split error: ${error.message}`));
     });
 
     proc.on("close", (code) => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      if (aborted) return;
       if (code !== 0) {
         const stderrPreview = stderr.slice(-500).trim();
         debugLogger.debug("FFmpeg split failed", { code, stderr: stderrPreview });
