@@ -17,7 +17,7 @@ export type ActionProcessingState = ActionProcessingStatus;
 export function useActionProcessing(noteId: number | null) {
   const { t } = useTranslation();
 
-  const { status: state, actionName } = useActionProcessingStore(
+  const { status: state, actionName, partialText, startedAt } = useActionProcessingStore(
     useShallow((s) => selectNoteActionState(s, noteId))
   );
 
@@ -37,5 +37,5 @@ export function useActionProcessing(noteId: number | null) {
     if (noteId != null) storeCancelAction(noteId);
   }, [noteId]);
 
-  return { state, actionName, runAction, cancel };
+  return { state, actionName, partialText, startedAt, runAction, cancel };
 }

@@ -381,6 +381,53 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
+  // OpenAI-compatible SSE providers that processTextStreaming drives correctly.
+  // Others (anthropic/enterprise/openwhispr/tinfoil/lan) fall back to a single
+  // non-streaming call — they still finish, just without a live token preview.
+  static STREAMABLE_PROVIDERS = new Set([
+    "local",
+    "openai",
+    "groq",
+    "gemini",
+    "custom",
+    "openrouter",
+  ]);
+
+  /**
+   * Like processText, but streams partial output to `onToken` (cumulative text)
+   * when the resolved provider supports SSE. Returns the full text. Falls back to
+   * the plain non-streaming path for providers that can't stream.
+   */
+  async processTextWithStreaming(
+    text: string,
+    model: string,
+    config: ReasoningConfig & { systemPrompt?: string },
+    onToken: (cumulativeText: string) => void
+  ): Promise<string> {
+    const trimmedModel = model?.trim?.() || "";
+    const isLanCleanup = !!config.lanUrl || this.isLanCleanupMode();
+    const providerId = isLanCleanup ? "lan" : config.provider || getModelProvider(trimmedModel);
+
+    if (!ReasoningService.STREAMABLE_PROVIDERS.has(providerId)) {
+      return this.processText(text, model, null, config);
+    }
+
+    const messages = [{ role: "user", content: text }];
+    let acc = "";
+    for await (const chunk of this.processTextStreaming(messages, trimmedModel, providerId, {
+      ...config,
+      systemPrompt: config.systemPrompt || "",
+    })) {
+      acc += chunk;
+      try {
+        onToken(acc);
+      } catch {
+        // A failing preview callback must never break generation.
+      }
+    }
+    return acc;
+  }
+
   async *processTextStreaming(
     messages: Array<{ role: string; content: string }>,
     model: string,

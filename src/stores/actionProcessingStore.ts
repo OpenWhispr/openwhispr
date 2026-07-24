@@ -11,6 +11,9 @@ export type ActionProcessingStatus = "idle" | "processing" | "success";
 export interface NoteActionState {
   status: ActionProcessingStatus;
   actionName: string | null;
+  // Live token preview + start time for streaming-capable local/cloud generation.
+  partialText?: string;
+  startedAt?: number;
 }
 
 export interface ActionErrorEvent {
@@ -129,7 +132,12 @@ export function runBackgroundAction(
 
   cancelledFlags.set(noteId, false);
   processingFlags.set(noteId, true);
-  setNoteState(noteId, { status: "processing", actionName: action.name });
+  const actionStartedAt = Date.now();
+  setNoteState(noteId, {
+    status: "processing",
+    actionName: action.name,
+    startedAt: actionStartedAt,
+  });
 
   (async () => {
     try {
@@ -144,12 +152,31 @@ export function runBackgroundAction(
         options.isMeetingNote ? settings.customDictionary : undefined,
         settings.uiLanguage
       );
-      const enhanced = await reasoningService.processText(noteContent, modelId, null, {
-        systemPrompt,
-        temperature: 0.3,
-        disableThinking: settings.noteFormattingDisableThinking,
-        ...providerOverrides,
-      });
+      // Stream tokens into a live overlay preview (throttled) when the provider
+      // supports it; otherwise this resolves in one shot with no partial updates.
+      let lastPreviewAt = 0;
+      const enhanced = await reasoningService.processTextWithStreaming(
+        noteContent,
+        modelId,
+        {
+          systemPrompt,
+          temperature: 0.3,
+          disableThinking: settings.noteFormattingDisableThinking,
+          ...providerOverrides,
+        },
+        (partial) => {
+          if (cancelledFlags.get(noteId)) return;
+          const now = Date.now();
+          if (now - lastPreviewAt < 80) return;
+          lastPreviewAt = now;
+          setNoteState(noteId, {
+            status: "processing",
+            actionName: action.name,
+            partialText: partial,
+            startedAt: actionStartedAt,
+          });
+        }
+      );
 
       if (cancelledFlags.get(noteId)) return;
 

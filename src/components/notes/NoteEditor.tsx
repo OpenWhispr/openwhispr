@@ -161,6 +161,8 @@ interface NoteEditorProps {
   actionPicker?: React.ReactNode;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
+  actionPartialText?: string;
+  actionStartedAt?: number;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
   sessionDiarizationEnabled?: boolean;
@@ -190,6 +192,8 @@ export default function NoteEditor({
   actionPicker,
   actionProcessingState,
   actionName,
+  actionPartialText,
+  actionStartedAt,
   diarizationSessionId,
   onLiveSpeakerLock,
   sessionDiarizationEnabled,
@@ -977,6 +981,8 @@ export default function NoteEditor({
           <ActionProcessingOverlay
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
+            partialText={actionPartialText}
+            startedAt={actionStartedAt}
           />
           <div
             className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"

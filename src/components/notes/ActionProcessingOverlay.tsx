@@ -7,15 +7,34 @@ import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 interface ActionProcessingOverlayProps {
   state: ActionProcessingState;
   actionName: string | null;
+  partialText?: string;
+  startedAt?: number;
+}
+
+// m:ss elapsed clock.
+function formatElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export default function ActionProcessingOverlay({
   state,
   actionName,
+  partialText,
+  startedAt,
 }: ActionProcessingOverlayProps) {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [prevState, setPrevState] = useState(state);
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  // Tick the elapsed timer once a second while an action is generating.
+  useEffect(() => {
+    if (state !== "processing" || !startedAt) return;
+    setElapsedMs(Date.now() - startedAt);
+    const id = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000);
+    return () => clearInterval(id);
+  }, [state, startedAt]);
 
   if (state !== prevState) {
     setPrevState(state);
@@ -86,7 +105,15 @@ export default function ActionProcessingOverlay({
           </div>
         ) : (
           <>
-            <span className="text-xs font-medium text-accent/70 tracking-tight">{actionName}</span>
+            <span className="text-xs font-medium text-accent/70 tracking-tight tabular-nums">
+              {actionName}
+              {startedAt ? ` · ${formatElapsed(elapsedMs)}` : ""}
+            </span>
+            {partialText ? (
+              <div className="max-w-[280px] max-h-16 overflow-hidden text-left text-[10px] leading-snug text-accent/50 whitespace-pre-wrap break-words">
+                {partialText.slice(-220)}
+              </div>
+            ) : null}
             <div className="w-32 h-0.5 bg-accent/10 rounded-full overflow-hidden">
               <div
                 className="h-full w-1/3 bg-accent/40 rounded-full"

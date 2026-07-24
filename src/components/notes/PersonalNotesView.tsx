@@ -473,6 +473,8 @@ export default function PersonalNotesView({
   const {
     state: actionProcessingState,
     actionName,
+    partialText: actionPartialText,
+    startedAt: actionStartedAt,
     runAction,
   } = useActionProcessing(activeNoteId ?? null);
 
@@ -963,6 +965,8 @@ export default function PersonalNotesView({
               onCreateFolderAndMove={handleCreateFolderAndMove}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
+              actionPartialText={actionPartialText}
+              actionStartedAt={actionStartedAt}
               actionPicker={
                 <ActionPicker
                   onRunAction={(action) => {
