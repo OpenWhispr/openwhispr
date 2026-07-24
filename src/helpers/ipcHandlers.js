@@ -1858,6 +1858,28 @@ class IPCHandlers {
         const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
           ...options,
           ...vadOptions,
+          // Stream real decode progress (0–100) to the uploader UI for an accurate
+          // progress bar + ETA. Only local whisper emits this.
+          onProgress: (percent) => {
+            try {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send("local-transcription-progress", { percent });
+              }
+            } catch {
+              // Renderer went away mid-transcription; ignore.
+            }
+          },
+          // Emitted once when the exact audio duration is known (post-conversion),
+          // so the UI can show total length even for locally-picked files.
+          onDuration: (durationSeconds) => {
+            try {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send("local-transcription-progress", { durationSeconds });
+              }
+            } catch {
+              // Renderer went away mid-transcription; ignore.
+            }
+          },
         });
         return result;
       } catch (error) {

@@ -141,6 +141,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     chunksCompleted: number;
   } | null>(null);
   const progressCleanupRef = useRef<(() => void) | null>(null);
+  // Real local-whisper progress: smoothed ETA + a "preparing" phase before the
+  // first decode-progress tick (model load + VAD emit no percentage).
+  const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
+  const [liveDurationSeconds, setLiveDurationSeconds] = useState<number | null>(null);
+  const realProgressRef = useRef(false);
+  const progressSamplesRef = useRef<{ t: number; pct: number }[]>([]);
   const runIdRef = useRef(0);
   const mountedRef = useRef(true);
   const urlDownloadActiveRef = useRef(false);
@@ -541,6 +547,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (progressRef.current) clearInterval(progressRef.current);
     if (progressCleanupRef.current) progressCleanupRef.current();
     progressCleanupRef.current = null;
+    realProgressRef.current = false;
+    progressSamplesRef.current = [];
     if (downloadedTempPath) {
       window.electronAPI.deleteTempFile(downloadedTempPath);
       setDownloadedTempPath(null);
@@ -552,6 +560,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setNoteId(null);
     setError(null);
     setProgress(0);
+    setEtaSeconds(null);
+    setLiveDurationSeconds(null);
     setChunkProgress(null);
     setUrlInput("");
     setDownloadProgress(null);
@@ -573,9 +583,17 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setState("transcribing");
     setError(null);
     setProgress(0);
+    setEtaSeconds(null);
+    setLiveDurationSeconds(null);
     setChunkProgress(null);
+    realProgressRef.current = false;
+    progressSamplesRef.current = [];
 
+    const cfgNow = buildTranscriptionConfig();
     const useChunkProgress = isOpenWhisprCloud && isLargeFile;
+    // Local whisper.cpp reports real decode progress; Parakeet/cloud/self-hosted don't.
+    const useRealLocalProgress =
+      cfgNow.useLocalWhisper && cfgNow.localTranscriptionProvider !== "nvidia";
 
     if (useChunkProgress) {
       progressCleanupRef.current =
@@ -586,6 +604,38 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               chunksCompleted: data.chunksCompleted,
             });
             setProgress((data.chunksCompleted / data.chunksTotal) * 90);
+          }
+        }) ?? null;
+    } else if (useRealLocalProgress) {
+      realProgressRef.current = true;
+      progressCleanupRef.current =
+        window.electronAPI.onLocalTranscriptionProgress?.((data) => {
+          // The exact audio length arrives once, up front (separate from percent ticks).
+          if (typeof data?.durationSeconds === "number" && data.durationSeconds > 0) {
+            setLiveDurationSeconds(data.durationSeconds);
+            return;
+          }
+          if (typeof data?.percent !== "number") return;
+          const pct = data.percent;
+          // Hold just under 100 until the result actually returns (whisper prints
+          // 100% a beat before the HTTP response resolves).
+          setProgress(Math.min(pct, 99));
+
+          // Smoothed ETA from a sliding ~20s window of (time, percent) samples —
+          // the average rate resists the jitter of chunk-by-chunk decode ticks.
+          const now = Date.now();
+          const samples = progressSamplesRef.current;
+          samples.push({ t: now, pct });
+          const cutoff = now - 20000;
+          while (samples.length > 2 && (samples[0].t < cutoff || samples.length > 12)) {
+            samples.shift();
+          }
+          const first = samples[0];
+          const dPct = pct - first.pct;
+          const dT = now - first.t;
+          if (pct > 0 && pct < 100 && dPct > 0 && dT > 0) {
+            const remainingMs = ((100 - pct) / dPct) * dT;
+            setEtaSeconds(Math.max(0, Math.round(remainingMs / 1000)));
           }
         }) ?? null;
     } else {
@@ -1118,6 +1168,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               getTranscribingLabel={getTranscribingLabel}
               file={file}
               chunkProgress={chunkProgress}
+              durationSeconds={liveDurationSeconds ?? file?.durationSeconds ?? null}
+              etaSeconds={etaSeconds}
+              showRealProgress={realProgressRef.current}
               onCancel={cancelTranscription}
             />
           )}
@@ -1620,12 +1673,26 @@ function SelectedView({
   );
 }
 
+// mm:ss (or h:mm:ss for ≥1h). Returns "—" when the duration is unknown.
+function formatClock(totalSeconds: number | null | undefined): string {
+  if (totalSeconds == null || !isFinite(totalSeconds) || totalSeconds < 0) return "—";
+  const s = Math.round(totalSeconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
 interface TranscribingViewProps {
   t: (key: string, options?: Record<string, unknown>) => string;
   progress: number;
   getTranscribingLabel: () => string;
   file: { name: string; path: string; size: string; sizeBytes: number } | null;
   chunkProgress: { chunksTotal: number; chunksCompleted: number } | null;
+  durationSeconds: number | null;
+  etaSeconds: number | null;
+  showRealProgress: boolean;
   onCancel: () => void;
 }
 
@@ -1635,9 +1702,28 @@ function TranscribingView({
   getTranscribingLabel,
   file,
   chunkProgress,
+  durationSeconds,
+  etaSeconds,
+  showRealProgress,
   onCancel,
 }: TranscribingViewProps) {
   const hasChunkInfo = chunkProgress !== null && chunkProgress.chunksTotal > 0;
+
+  // Real local-whisper progress: "42% · 59:03 audio · ~4:10 left". Before the first
+  // decode tick (model load + VAD) there is no percentage yet, so show "Preparing…".
+  const isPreparing = showRealProgress && progress <= 0;
+  const statsParts: string[] = [];
+  if (showRealProgress && progress > 0) {
+    statsParts.push(`${Math.round(progress)}%`);
+    if (durationSeconds != null && durationSeconds > 0) {
+      statsParts.push(t("notes.upload.progressDuration", { duration: formatClock(durationSeconds) }));
+    }
+    statsParts.push(
+      etaSeconds == null
+        ? t("notes.upload.progressEtaCalculating")
+        : t("notes.upload.progressEtaValue", { time: formatClock(etaSeconds) })
+    );
+  }
 
   return (
     <div className="flex flex-col items-center" style={{ animation: "float-up 0.3s ease-out" }}>
@@ -1656,10 +1742,19 @@ function TranscribingView({
       </div>
 
       <div className="w-full max-w-[200px] h-[3px] rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden mb-3">
-        <div
-          className="h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out"
-          style={{ width: `${Math.min(progress, 100)}%` }}
-        />
+        {isPreparing ? (
+          // No percentage yet (model load + VAD emit none), so sweep an indeterminate
+          // bar instead of sitting frozen at 0% on long files.
+          <div
+            className="h-full w-1/3 rounded-full bg-primary/50"
+            style={{ animation: "indeterminate 1.2s ease-in-out infinite" }}
+          />
+        ) : (
+          <div
+            className="h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out"
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          />
+        )}
       </div>
 
       <p className="text-xs text-foreground/50 font-medium">{getTranscribingLabel()}</p>
@@ -1670,8 +1765,12 @@ function TranscribingView({
             total: chunkProgress.chunksTotal,
           })}
         </p>
+      ) : isPreparing ? (
+        <p className="text-xs text-foreground/30 mt-1">{t("notes.upload.progressPreparing")}</p>
+      ) : statsParts.length > 0 ? (
+        <p className="text-xs text-foreground/30 mt-1 tabular-nums">{statsParts.join(" · ")}</p>
       ) : null}
-      {!hasChunkInfo && file ? (
+      {!hasChunkInfo && !showRealProgress && file ? (
         <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">{file.name}</p>
       ) : null}
       <Button

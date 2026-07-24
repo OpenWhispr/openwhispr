@@ -139,6 +139,10 @@ function buildWhisperServerArgs({
   // explicitly pass "auto" to enable language auto-detection
   args.push("--language", language || "auto");
 
+  // Emit real decode progress ("progress = NN%") on stderr so the app can drive
+  // an accurate progress bar + ETA instead of a simulated timer.
+  args.push("--print-progress");
+
   if (isVadActive({ vadEnabled, vadModelPath })) {
     const cfg = sanitizeWhisperVadConfig(vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
     args.push(
@@ -536,8 +540,27 @@ class WhisperServerManager extends EventEmitter {
     });
 
     this.process.stderr.on("data", (data) => {
-      stderrBuffer += data.toString();
-      debugLogger.debug("whisper-server stderr", { data: data.toString().trim() });
+      const text = data.toString();
+      stderrBuffer += text;
+      debugLogger.debug("whisper-server stderr", { data: text.trim() });
+
+      // Forward real decode progress to the active request's listener (if any).
+      // Requests are sequential on the shared server, so the latest "progress = NN%"
+      // seen while a listener is set belongs to that in-flight transcription.
+      if (this.activeProgressListener) {
+        let lastPct = null;
+        const re = /progress\s*=\s*(\d+)\s*%/g;
+        let m;
+        while ((m = re.exec(text)) !== null) lastPct = m[1];
+        if (lastPct !== null) {
+          const pct = Math.max(0, Math.min(100, parseInt(lastPct, 10)));
+          try {
+            this.activeProgressListener(pct);
+          } catch {
+            // A failing UI listener must never break transcription.
+          }
+        }
+      }
     });
 
     this.process.on("error", (error) => {
@@ -728,6 +751,21 @@ class WhisperServerManager extends EventEmitter {
     }
     finalBuffer = await this._convertToWav(audioBuffer);
 
+    // whisper.cpp WAV is always 16 kHz mono s16 (2 bytes/sample) with a 44-byte
+    // header, so the PCM byte count gives the exact audio duration. Report it once
+    // up front so the UI can show total length + compute an ETA.
+    if (typeof options.onDuration === "function") {
+      const pcmBytes = Math.max(0, finalBuffer.length - 44);
+      const durationSeconds = pcmBytes / (16000 * 2);
+      if (durationSeconds > 0) {
+        try {
+          options.onDuration(durationSeconds);
+        } catch {
+          // Non-fatal: duration is a display nicety.
+        }
+      }
+    }
+
     const boundary = `----WhisperBoundary${Date.now()}`;
     const parts = [];
     const fileName = "audio.wav";
@@ -770,10 +808,18 @@ class WhisperServerManager extends EventEmitter {
     const generation = this.startGeneration;
     const modelPath = this.modelPath;
 
+    // Route real "progress = NN%" stderr lines to this request's callback for the
+    // duration of the call (cleared in finally, including after a CPU-fallback retry).
+    if (typeof options.onProgress === "function") {
+      this.activeProgressListener = options.onProgress;
+    }
+
     try {
       return await this._postInference(body, boundary);
     } catch (err) {
       return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
+    } finally {
+      this.activeProgressListener = null;
     }
   }
 
