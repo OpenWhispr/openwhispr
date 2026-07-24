@@ -148,11 +148,7 @@ export function runBackgroundAction(
         typeof action.temperature === "number" ? action.temperature : noteFormatting.temperature;
       const enhanced = await reasoningService.processText(noteContent, modelId, null, {
         systemPrompt,
-<<<<<<< Updated upstream
-        temperature: 0.3,
-=======
         temperature: actionTemperature,
->>>>>>> Stashed changes
         disableThinking: settings.noteFormattingDisableThinking,
         ...providerOverrides,
       });
