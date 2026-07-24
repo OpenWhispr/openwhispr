@@ -1417,6 +1417,12 @@ declare global {
         callback: (data: { stage: string; chunksTotal: number; chunksCompleted: number }) => void
       ) => () => void;
 
+      // Real local (whisper.cpp) decode progress for uploaded-file transcription.
+      // Percent ticks and the one-shot audio duration arrive on the same channel.
+      onLocalTranscriptionProgress?: (
+        callback: (data: { percent?: number; durationSeconds?: number }) => void
+      ) => () => void;
+
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;

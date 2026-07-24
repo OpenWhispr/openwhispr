@@ -560,6 +560,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, data) => callback(data)
   ),
 
+  // Real local (whisper.cpp) decode progress for uploaded-file transcription: { percent }
+  onLocalTranscriptionProgress: registerListener(
+    "local-transcription-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+
   // Referral stats
   getReferralStats: () => ipcRenderer.invoke("get-referral-stats"),
   sendReferralInvite: (email) => ipcRenderer.invoke("send-referral-invite", email),

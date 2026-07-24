@@ -122,6 +122,33 @@ function getVadSignature(options = {}) {
   return `vad:on:${options.vadModelPath}:${JSON.stringify(vadConfig)}`;
 }
 
+// Compute audio duration from a WAV buffer by reading byteRate from the `fmt `
+// chunk and the `data` chunk size — robust to non-canonical headers (extra
+// LIST/INFO chunks, non-44-byte headers) that a fixed `length - 44` would misread.
+function computeWavDurationSeconds(buf) {
+  try {
+    if (!buf || buf.length < 12 || buf.toString("ascii", 0, 4) !== "RIFF") return null;
+    let offset = 12; // skip RIFF(4) + size(4) + WAVE(4)
+    let byteRate = null;
+    let dataSize = null;
+    while (offset + 8 <= buf.length) {
+      const id = buf.toString("ascii", offset, offset + 4);
+      const size = buf.readUInt32LE(offset + 4);
+      if (id === "fmt " && offset + 8 + 16 <= buf.length) {
+        byteRate = buf.readUInt32LE(offset + 8 + 8); // byteRate is at fmt+8
+      } else if (id === "data") {
+        dataSize = Math.min(size, buf.length - (offset + 8)); // guard truncated tails
+        break; // duration comes from the audio data chunk
+      }
+      offset += 8 + size + (size % 2); // chunks are word-aligned
+    }
+    if (!byteRate || !dataSize || byteRate <= 0) return null;
+    return dataSize / byteRate;
+  } catch {
+    return null;
+  }
+}
+
 function buildWhisperServerArgs({
   modelPath,
   port,
@@ -138,6 +165,10 @@ function buildWhisperServerArgs({
   // whisper.cpp defaults to English when --language is omitted;
   // explicitly pass "auto" to enable language auto-detection
   args.push("--language", language || "auto");
+
+  // Emit real decode progress ("progress = NN%") on stderr so the app can drive
+  // an accurate progress bar + ETA instead of a simulated timer.
+  args.push("--print-progress");
 
   if (isVadActive({ vadEnabled, vadModelPath })) {
     const cfg = sanitizeWhisperVadConfig(vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
@@ -536,8 +567,27 @@ class WhisperServerManager extends EventEmitter {
     });
 
     this.process.stderr.on("data", (data) => {
-      stderrBuffer += data.toString();
-      debugLogger.debug("whisper-server stderr", { data: data.toString().trim() });
+      const text = data.toString();
+      stderrBuffer += text;
+      debugLogger.debug("whisper-server stderr", { data: text.trim() });
+
+      // Forward real decode progress to the active request's listener (if any).
+      // Requests are sequential on the shared server, so the latest "progress = NN%"
+      // seen while a listener is set belongs to that in-flight transcription.
+      if (this.activeProgressListener) {
+        let lastPct = null;
+        const re = /progress\s*=\s*(\d+)\s*%/g;
+        let m;
+        while ((m = re.exec(text)) !== null) lastPct = m[1];
+        if (lastPct !== null) {
+          const pct = Math.max(0, Math.min(100, parseInt(lastPct, 10)));
+          try {
+            this.activeProgressListener(pct);
+          } catch {
+            // A failing UI listener must never break transcription.
+          }
+        }
+      }
     });
 
     this.process.on("error", (error) => {
@@ -728,6 +778,20 @@ class WhisperServerManager extends EventEmitter {
     }
     finalBuffer = await this._convertToWav(audioBuffer);
 
+    // Report the exact audio duration once up front so the UI can show total
+    // length + compute an ETA. Parse the WAV chunks rather than assuming a fixed
+    // 44-byte header (ffmpeg may emit extra chunks).
+    if (typeof options.onDuration === "function") {
+      const durationSeconds = computeWavDurationSeconds(finalBuffer);
+      if (durationSeconds && durationSeconds > 0) {
+        try {
+          options.onDuration(durationSeconds);
+        } catch {
+          // Non-fatal: duration is a display nicety.
+        }
+      }
+    }
+
     const boundary = `----WhisperBoundary${Date.now()}`;
     const parts = [];
     const fileName = "audio.wav";
@@ -770,10 +834,23 @@ class WhisperServerManager extends EventEmitter {
     const generation = this.startGeneration;
     const modelPath = this.modelPath;
 
+    // Route real "progress = NN%" stderr lines to this request's callback for the
+    // duration of the call (cleared in finally, including after a CPU-fallback retry).
+    const progressListener = typeof options.onProgress === "function" ? options.onProgress : null;
+    if (progressListener) {
+      this.activeProgressListener = progressListener;
+    }
+
     try {
       return await this._postInference(body, boundary);
     } catch (err) {
       return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
+    } finally {
+      // Only clear if it's still ours — a concurrent request may have taken over,
+      // and we must not stop delivering progress to that other request's UI.
+      if (this.activeProgressListener === progressListener) {
+        this.activeProgressListener = null;
+      }
     }
   }
 
