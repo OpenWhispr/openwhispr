@@ -412,11 +412,18 @@ class ReasoningService extends BaseReasoningService {
       return this.processText(text, model, null, config);
     }
 
-    const messages = [{ role: "user", content: text }];
+    // processTextStreaming sends `messages` verbatim and does not inject
+    // config.systemPrompt, so the system message must be built here — otherwise
+    // streaming would drop the action's formatting instructions (unlike processText).
+    const systemPrompt = config.systemPrompt || this.getSystemPrompt(null);
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: text },
+    ];
     let acc = "";
     for await (const chunk of this.processTextStreaming(messages, trimmedModel, providerId, {
       ...config,
-      systemPrompt: config.systemPrompt || "",
+      systemPrompt,
     })) {
       acc += chunk;
       try {

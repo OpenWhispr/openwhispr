@@ -122,6 +122,33 @@ function getVadSignature(options = {}) {
   return `vad:on:${options.vadModelPath}:${JSON.stringify(vadConfig)}`;
 }
 
+// Compute audio duration from a WAV buffer by reading byteRate from the `fmt `
+// chunk and the `data` chunk size — robust to non-canonical headers (extra
+// LIST/INFO chunks, non-44-byte headers) that a fixed `length - 44` would misread.
+function computeWavDurationSeconds(buf) {
+  try {
+    if (!buf || buf.length < 12 || buf.toString("ascii", 0, 4) !== "RIFF") return null;
+    let offset = 12; // skip RIFF(4) + size(4) + WAVE(4)
+    let byteRate = null;
+    let dataSize = null;
+    while (offset + 8 <= buf.length) {
+      const id = buf.toString("ascii", offset, offset + 4);
+      const size = buf.readUInt32LE(offset + 4);
+      if (id === "fmt " && offset + 8 + 16 <= buf.length) {
+        byteRate = buf.readUInt32LE(offset + 8 + 8); // byteRate is at fmt+8
+      } else if (id === "data") {
+        dataSize = Math.min(size, buf.length - (offset + 8)); // guard truncated tails
+        break; // duration comes from the audio data chunk
+      }
+      offset += 8 + size + (size % 2); // chunks are word-aligned
+    }
+    if (!byteRate || !dataSize || byteRate <= 0) return null;
+    return dataSize / byteRate;
+  } catch {
+    return null;
+  }
+}
+
 function buildWhisperServerArgs({
   modelPath,
   port,
@@ -751,13 +778,12 @@ class WhisperServerManager extends EventEmitter {
     }
     finalBuffer = await this._convertToWav(audioBuffer);
 
-    // whisper.cpp WAV is always 16 kHz mono s16 (2 bytes/sample) with a 44-byte
-    // header, so the PCM byte count gives the exact audio duration. Report it once
-    // up front so the UI can show total length + compute an ETA.
+    // Report the exact audio duration once up front so the UI can show total
+    // length + compute an ETA. Parse the WAV chunks rather than assuming a fixed
+    // 44-byte header (ffmpeg may emit extra chunks).
     if (typeof options.onDuration === "function") {
-      const pcmBytes = Math.max(0, finalBuffer.length - 44);
-      const durationSeconds = pcmBytes / (16000 * 2);
-      if (durationSeconds > 0) {
+      const durationSeconds = computeWavDurationSeconds(finalBuffer);
+      if (durationSeconds && durationSeconds > 0) {
         try {
           options.onDuration(durationSeconds);
         } catch {
@@ -810,8 +836,9 @@ class WhisperServerManager extends EventEmitter {
 
     // Route real "progress = NN%" stderr lines to this request's callback for the
     // duration of the call (cleared in finally, including after a CPU-fallback retry).
-    if (typeof options.onProgress === "function") {
-      this.activeProgressListener = options.onProgress;
+    const progressListener = typeof options.onProgress === "function" ? options.onProgress : null;
+    if (progressListener) {
+      this.activeProgressListener = progressListener;
     }
 
     try {
@@ -819,7 +846,11 @@ class WhisperServerManager extends EventEmitter {
     } catch (err) {
       return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
     } finally {
-      this.activeProgressListener = null;
+      // Only clear if it's still ours — a concurrent request may have taken over,
+      // and we must not stop delivering progress to that other request's UI.
+      if (this.activeProgressListener === progressListener) {
+        this.activeProgressListener = null;
+      }
     }
   }
 
