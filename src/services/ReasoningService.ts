@@ -1,5 +1,5 @@
 import {
-  getModelProvider,
+  resolveInferenceProvider,
   getCloudModel,
   getOpenAiApiConfig,
   getProviderDisplayName,
@@ -334,7 +334,9 @@ class ReasoningService extends BaseReasoningService {
   ): Promise<string> {
     const trimmedModel = model?.trim?.() || "";
     const isLanCleanup = !!config.lanUrl || this.isLanCleanupMode();
-    const providerId = isLanCleanup ? "lan" : config.provider || getModelProvider(trimmedModel);
+    const providerId = isLanCleanup
+      ? "lan"
+      : resolveInferenceProvider(config.provider, trimmedModel);
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
