@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.venv-asr/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -266,6 +267,10 @@ $RECYCLE.BIN/
 *.swp
 *.swo
 *~
+
+# Local Python ASR runtime
+__pycache__/
+*.py[cod]
 
 # AI agent skills (keep local)
 .claude/

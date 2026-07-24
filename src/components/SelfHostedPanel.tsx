@@ -19,7 +19,7 @@ export default function SelfHostedPanel({
   const { t } = useTranslation();
 
   const placeholderUrl =
-    service === "transcription" ? "http://192.168.1.126:8178" : "http://192.168.1.126:8080";
+    service === "transcription" ? "http://127.0.0.1:8765" : "http://192.168.1.126:8080";
 
   return (
     <div className="border border-border rounded-lg p-3 space-y-2.5">
@@ -40,7 +40,7 @@ export default function SelfHostedPanel({
           <Input
             value={model ?? ""}
             onChange={(e) => onModelChange(e.target.value)}
-            placeholder="Whisper-Large-v3-Turbo"
+            placeholder="Qwen/Qwen3-ASR-0.6B"
             className="h-8 text-sm"
           />
         </div>

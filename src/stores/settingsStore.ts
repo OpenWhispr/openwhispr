@@ -260,6 +260,35 @@ function migrateProviderSettings() {
 
 migrateProviderSettings();
 
+// This fork can opt into a loopback Qwen3-ASR sidecar without changing the
+// upstream defaults. The preset is scoped to the isolated development profile
+// and is enabled only by `npm run dev:local-asr`.
+const LOCAL_QWEN_ASR_MODEL = "Qwen/Qwen3-ASR-0.6B";
+const LOCAL_QWEN_ASR_URL = "http://127.0.0.1:8765";
+
+function applyLocalQwenAsrPreset() {
+  if (!isBrowser || import.meta.env.VITE_LOCAL_QWEN_ASR !== "1") return;
+
+  for (const prefix of ["", "meeting", "upload"]) {
+    const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+    const key = (name: string) => (prefix ? `${prefix}${capitalize(name)}` : name);
+    localStorage.setItem(key("transcriptionMode"), "self-hosted");
+    localStorage.setItem(key("useLocalWhisper"), "false");
+    localStorage.setItem(key("cloudTranscriptionMode"), "byok");
+    localStorage.setItem(key("cloudTranscriptionProvider"), "custom");
+    localStorage.setItem(key("cloudTranscriptionBaseUrl"), LOCAL_QWEN_ASR_URL);
+    localStorage.setItem(key("cloudTranscriptionModel"), LOCAL_QWEN_ASR_MODEL);
+    localStorage.setItem(key("remoteTranscriptionType"), "lan");
+    localStorage.setItem(key("remoteTranscriptionUrl"), LOCAL_QWEN_ASR_URL);
+    localStorage.setItem(key("remoteTranscriptionModel"), LOCAL_QWEN_ASR_MODEL);
+  }
+  localStorage.setItem("allowLocalFallback", "false");
+  localStorage.setItem("allowOpenAIFallback", "false");
+  localStorage.setItem("_localQwenAsrPresetVersion", "2");
+}
+
+applyLocalQwenAsrPreset();
+
 // One-time seed of the dedicated audio-upload transcription settings. Runs
 // after migrateProviderSettings() so the `transcriptionMode` it derives and
 // persists is available to copy. Before this context existed the upload page
@@ -2085,7 +2114,26 @@ export function isCloudChatAgentMode() {
 // --- Convenience getters for non-React code ---
 
 export function getSettings() {
-  return useSettingsStore.getState();
+  const state = useSettingsStore.getState();
+  if (!isBrowser || import.meta.env.VITE_LOCAL_QWEN_ASR !== "1") return state;
+
+  // The explicit local-Qwen launch mode owns dictation routing. Returning an
+  // enforced view here prevents stale onboarding or legacy settings from ever
+  // diverting a hotkey recording into the bundled Whisper path.
+  return {
+    ...state,
+    useLocalWhisper: false,
+    allowLocalFallback: false,
+    allowOpenAIFallback: false,
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: LOCAL_QWEN_ASR_URL,
+    cloudTranscriptionModel: LOCAL_QWEN_ASR_MODEL,
+    transcriptionMode: "self-hosted" as InferenceMode,
+    remoteTranscriptionType: "lan" as SelfHostedType,
+    remoteTranscriptionUrl: LOCAL_QWEN_ASR_URL,
+    remoteTranscriptionModel: LOCAL_QWEN_ASR_MODEL,
+  };
 }
 
 export function getEffectiveCleanupModel() {

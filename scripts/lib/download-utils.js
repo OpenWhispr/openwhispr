@@ -45,6 +45,10 @@ function fetchJson(url, redirectCount = 0) {
             reject(new Error("Redirect without location header"));
             return;
           }
+          // Drain the redirect response so Node can release its keep-alive
+          // socket. Without this, download-only scripts can hang after success
+          // on newer Node releases.
+          res.resume();
           const redirectUrl = location.startsWith("/") ? new URL(location, url).href : location;
           fetchJson(redirectUrl, redirectCount + 1)
             .then(resolve)
@@ -169,6 +173,7 @@ function downloadFile(url, dest, retryCount = 0) {
             reject(new Error("Redirect without location header"));
             return;
           }
+          response.resume();
           const redirectUrl = location.startsWith("/")
             ? new URL(location, currentUrl).href
             : location;

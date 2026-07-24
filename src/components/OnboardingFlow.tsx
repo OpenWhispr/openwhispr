@@ -60,6 +60,8 @@ import { cloudPost } from "../services/cloudApi";
 
 // Highest possible step index across flow variants (skip-auth with meeting step).
 const MAX_STEP_INDEX = 7;
+const isLocalQwenAsrMode = import.meta.env.VITE_LOCAL_QWEN_ASR === "1";
+const LOCAL_QWEN_ASR_URL = "http://127.0.0.1:8765";
 
 // Steps whose primary action is optional — the user can advance without it.
 const SKIPPABLE_STEPS = new Set(["usecase", "voiceAgent", "meeting"]);
@@ -104,6 +106,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
+    setUseLocalWhisper,
+    setAllowOpenAIFallback,
+    setAllowLocalFallback,
+    setCloudTranscriptionProvider,
+    setCloudTranscriptionModel,
+    setCloudTranscriptionBaseUrl,
+    setCloudTranscriptionMode,
+    setTranscriptionMode,
+    setRemoteTranscriptionType,
+    setRemoteTranscriptionUrl,
+    setRemoteTranscriptionModel,
     openaiApiKey,
     groqApiKey,
     xaiApiKey,
@@ -117,7 +130,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     activationMode,
     setActivationMode,
     setDictationKey,
-    setUseLocalWhisper,
     updateTranscriptionSettings,
     preferredLanguage,
     onboardingUseCases,
@@ -135,7 +147,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     () => parseHotkeyList(dictationKey)[0] || getDefaultHotkey()
   );
   const [agentName, setAgentName] = useState("OpenWhispr");
-  const [skipAuth, setSkipAuth] = useState(false);
+  const [skipAuth, setSkipAuth] = useState(isLocalQwenAsrMode);
+  const [localQwenStatus, setLocalQwenStatus] = useState<"checking" | "ready" | "unavailable">(
+    "checking"
+  );
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
@@ -148,6 +163,64 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     open: boolean;
     cause: string;
   }>({ open: false, cause: "" });
+
+  useEffect(() => {
+    if (!isLocalQwenAsrMode) return;
+
+    const model = "Qwen/Qwen3-ASR-0.6B";
+    setUseLocalWhisper(false);
+    setAllowOpenAIFallback(false);
+    setAllowLocalFallback(false);
+    setCloudTranscriptionMode("byok");
+    setCloudTranscriptionProvider("custom");
+    setCloudTranscriptionBaseUrl(LOCAL_QWEN_ASR_URL);
+    setCloudTranscriptionModel(model);
+    setTranscriptionMode("self-hosted");
+    setRemoteTranscriptionType("lan");
+    setRemoteTranscriptionUrl(LOCAL_QWEN_ASR_URL);
+    setRemoteTranscriptionModel(model);
+  }, [
+    setAllowLocalFallback,
+    setAllowOpenAIFallback,
+    setCloudTranscriptionBaseUrl,
+    setCloudTranscriptionMode,
+    setCloudTranscriptionModel,
+    setCloudTranscriptionProvider,
+    setRemoteTranscriptionModel,
+    setRemoteTranscriptionType,
+    setRemoteTranscriptionUrl,
+    setTranscriptionMode,
+    setUseLocalWhisper,
+  ]);
+
+  useEffect(() => {
+    if (!isLocalQwenAsrMode) return;
+
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const checkLocalQwen = async () => {
+      try {
+        const response = await fetch(`${LOCAL_QWEN_ASR_URL}/health`);
+        const data = await response.json();
+        if (!response.ok || data?.status !== "ready") {
+          throw new Error("Local Qwen ASR is not ready");
+        }
+        if (!cancelled) setLocalQwenStatus("ready");
+      } catch {
+        if (cancelled) return;
+        setLocalQwenStatus("unavailable");
+        retryTimer = setTimeout(checkLocalQwen, 1000);
+      }
+    };
+
+    void checkLocalQwen();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, []);
 
   const autoRegisterInFlightRef = useRef(false);
   const hotkeyStepInitializedRef = useRef(false);
@@ -206,10 +279,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const steps = useMemo(() => {
     const list = [
-      { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
       { id: "usecase", title: t("onboarding.steps.useCase"), icon: Sparkles },
       { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
     ];
+    if (!isLocalQwenAsrMode) {
+      list.unshift({ id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle });
+    }
     if (!(isSignedIn && !skipAuth)) {
       list.push({ id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield });
     }
@@ -236,7 +311,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }, [currentStep, steps.length, setCurrentStep]);
 
   // Only show progress for signed-up users after account creation step
-  const showProgress = currentStep > 0;
+  const showProgress = isLocalQwenAsrMode || currentStep > 0;
 
   useEffect(() => {
     if (isUsingNativeShortcut && !supportsPushToTalk) {
@@ -380,7 +455,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
     // Non-signed-in users in cloud mode default to BYOK to avoid
     // "OpenWhispr Cloud requires sign-in" errors.
-    if (!isSignedIn && !useLocalWhisper) {
+    if (!isLocalQwenAsrMode && !isSignedIn && !useLocalWhisper) {
       updateTranscriptionSettings({ cloudTranscriptionMode: "byok" });
     }
 
@@ -558,6 +633,74 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         );
 
       case "setup": // Choose Mode & Configure (merged with permissions for signed-in users)
+        if (isLocalQwenAsrMode) {
+          const qwenReady = localQwenStatus === "ready";
+
+          return (
+            <div className="space-y-4">
+              <div className="text-center space-y-1">
+                <h2 className="text-lg font-semibold text-foreground tracking-tight">
+                  Local transcription
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Qwen3-ASR runs privately on this Mac
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                        qwenReady
+                          ? "bg-emerald-500/10 text-emerald-600"
+                          : "bg-amber-500/10 text-amber-600"
+                      }`}
+                    >
+                      {qwenReady ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-foreground">Qwen3-ASR 0.6B</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        MLX · Apple Silicon · {LOCAL_QWEN_ASR_URL}
+                      </div>
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      qwenReady
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    {qwenReady ? "Ready" : "Starting…"}
+                  </span>
+                </div>
+                <p className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+                  Audio stays on this device. No account, API key, or Whisper download is required.
+                </p>
+              </div>
+
+              <div className="space-y-2 p-3 bg-muted/50 border border-border/60 rounded">
+                <label className="block text-xs font-medium text-muted-foreground">
+                  {t("onboarding.transcription.preferredLanguage")}
+                </label>
+                <LanguageSelector
+                  value={preferredLanguage}
+                  onChange={(value) => {
+                    updateTranscriptionSettings({ preferredLanguage: value });
+                  }}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          );
+        }
+
         if (isSignedIn && !skipAuth) {
           return (
             <div className="space-y-6">
@@ -715,7 +858,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "finish":
         return (
           <FinishStep
-            isCloudUser={isSignedIn && !skipAuth && !useLocalWhisper}
+            isCloudUser={!isLocalQwenAsrMode && isSignedIn && !skipAuth && !useLocalWhisper}
             useCases={onboardingUseCases}
             onFinish={(openSettings) => void finishOnboarding(openSettings)}
             isFinishing={isFinishing}
@@ -901,6 +1044,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "usecase":
         return true; // Selection is optional — Next doubles as skip
       case "setup":
+        if (isLocalQwenAsrMode) {
+          return localQwenStatus === "ready";
+        }
+
         // For signed-in users: Setup step includes permissions
         if (isSignedIn && !skipAuth) {
           return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);

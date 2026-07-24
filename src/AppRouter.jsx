@@ -13,6 +13,7 @@ import { useTheme } from "./hooks/useTheme";
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
 const AgentOverlay = React.lazy(() => import("./components/AgentOverlay.tsx"));
+const isLocalQwenAsrMode = import.meta.env.VITE_LOCAL_QWEN_ASR === "1";
 
 export default function AppRouter() {
   useTheme();
@@ -60,7 +61,7 @@ function MainApp() {
 
     // Sync runs in every non-agent window, so tray-only sessions where the
     // control panel is never opened still stay fresh.
-    if (!isAgentPanel) {
+    if (!isAgentPanel && !isLocalQwenAsrMode) {
       import("./services/SyncService.js")
         .then(({ syncService }) => syncService.startAutoSync())
         .catch(() => {});
@@ -70,8 +71,15 @@ function MainApp() {
   useEffect(() => {
     if (!authLoaded) return;
 
+    if (isLocalQwenAsrMode) {
+      localStorage.setItem("authenticationSkipped", "true");
+      localStorage.setItem("skipAuth", "true");
+      setNeedsReauth(false);
+    }
+
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
     const authSkipped =
+      isLocalQwenAsrMode ||
       localStorage.getItem("authenticationSkipped") === "true" ||
       localStorage.getItem("skipAuth") === "true";
     const onboardingInProgress = localStorage.getItem("onboardingCurrentStep") !== null;

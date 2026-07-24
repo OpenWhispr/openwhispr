@@ -7266,6 +7266,13 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-stt-config", async (event) => {
+      // The local Qwen preset is fully configured in renderer storage and has
+      // no cloud endpoint or session. Avoid a redundant cloud request (and a
+      // misleading authentication error) in this mode.
+      if (process.env.VITE_LOCAL_QWEN_ASR === "1") {
+        return null;
+      }
+
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
