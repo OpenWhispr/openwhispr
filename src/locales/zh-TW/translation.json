@@ -1102,24 +1102,24 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "startWithSeats": "Start Business with {{count}} seats",
-      "seatUpdated": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "workspaceTitle": "工作區帳單",
+      "workspaceDescription": "每個工作區都有自己的方案、席次與帳單負責人。",
+      "billableSeat": "您的席次需計費",
+      "nonBillableSeat": "僅管理員存取 · 無付費席次",
+      "managedBy": "帳單由 {{owner}} 管理。",
+      "addSeat": "新增席次",
+      "startWithSeats": "以 {{count}} 個席次開始 Business",
+      "seatUpdated": "工作區容量已更新為 {{count}} 個席次",
+      "seatUpdateFailed": "無法更新工作區席次",
+      "businessWorkspaceOnly": "適用於工作區",
+      "personalPlanTitle": "個人方案",
+      "providedBy": "個人方案：免費 · 付費存取由 {{workspaces}} 提供",
       "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
+        "title": "要新增工作區席次嗎？",
+        "description": "將 {{workspace}} 增加至 {{count}} 個席次。Stripe 將按比例計費。",
+        "newCapacity": "新容量",
+        "chargeToday": "今日收費",
+        "confirm": "新增席次"
       }
     },
     "account": {
@@ -1168,7 +1168,6 @@
         "business": "Business",
         "trial": "試用"
       },
-      "planTitle": "方案",
       "rollingWeeklyLimit": "滾動式每週額度",
       "signOut": {
         "failedDescription": "登出時發生錯誤。請再試一次。",
@@ -1841,7 +1840,6 @@
         "general": "一般",
         "members": "成員",
         "teams": "團隊空間",
-        "billing": "帳單",
         "developer": "開發者"
       },
       "role": {
@@ -1935,19 +1933,17 @@
         }
       },
       "billing": {
-        "title": "帳單",
-        "description": "方案、席次與付款。",
         "plan": "方案",
         "seats": "席次",
         "ownerOnly": "只有工作區擁有者可以管理訂閱。",
         "nextInvoice": "下期帳單",
         "manageStripe": "在 Stripe 中管理",
-        "opening": "開啟中…",
         "startSubscription": "開始訂閱",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "免費"
+          "free": "免費",
+          "enterprise": "Enterprise"
         },
         "status": {
           "active": "使用中",

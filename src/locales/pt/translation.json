@@ -1081,24 +1081,27 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "startWithSeats": "Start Business with {{count}} seats",
-      "seatUpdated": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "workspaceTitle": "Cobrança do workspace",
+      "workspaceDescription": "Cada workspace tem seu próprio plano, assentos e responsável pela cobrança.",
+      "billableSeat": "Seu assento é faturável",
+      "nonBillableSeat": "Acesso somente de administrador · sem assento pago",
+      "managedBy": "A cobrança é gerenciada por {{owner}}.",
+      "addSeat": "Adicionar assento",
+      "startWithSeats_one": "Iniciar o Business com {{count}} assento",
+      "startWithSeats_other": "Iniciar o Business com {{count}} assentos",
+      "seatUpdated_one": "Capacidade do workspace atualizada para {{count}} assento",
+      "seatUpdated_other": "Capacidade do workspace atualizada para {{count}} assentos",
+      "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace",
+      "businessWorkspaceOnly": "Disponível para workspaces",
+      "personalPlanTitle": "Plano pessoal",
+      "providedBy": "Plano pessoal: Gratuito · Acesso pago fornecido por {{workspaces}}",
       "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
+        "title": "Adicionar um assento ao workspace?",
+        "description_one": "Aumentar {{workspace}} para {{count}} assento. O Stripe fará o rateio da alteração.",
+        "description_other": "Aumentar {{workspace}} para {{count}} assentos. O Stripe fará o rateio da alteração.",
+        "newCapacity": "Nova capacidade",
+        "chargeToday": "Cobrança de hoje",
+        "confirm": "Adicionar assento"
       }
     },
     "account": {
@@ -1147,7 +1150,6 @@
         "business": "Business",
         "trial": "Teste"
       },
-      "planTitle": "Plano",
       "rollingWeeklyLimit": "Limite semanal contínuo",
       "signOut": {
         "failedDescription": "Algo deu errado ao sair. Tente novamente.",
@@ -1820,7 +1822,6 @@
         "general": "Geral",
         "members": "Membros",
         "teams": "Espaços de equipe",
-        "billing": "Cobrança",
         "developer": "Desenvolvedor"
       },
       "role": {
@@ -1914,19 +1915,17 @@
         }
       },
       "billing": {
-        "title": "Cobrança",
-        "description": "Plano, assentos e pagamento.",
         "plan": "Plano",
         "seats": "Assentos",
         "ownerOnly": "Apenas o proprietário do espaço de trabalho pode gerenciar a assinatura.",
         "nextInvoice": "Próxima fatura",
         "manageStripe": "Gerenciar no Stripe",
-        "opening": "Abrindo…",
         "startSubscription": "Iniciar assinatura",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Gratuito"
+          "free": "Gratuito",
+          "enterprise": "Enterprise"
         },
         "status": {
           "active": "Ativa",

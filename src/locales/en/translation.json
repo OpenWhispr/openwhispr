@@ -1206,7 +1206,6 @@
         "general": "General",
         "members": "Members",
         "teams": "Team spaces",
-        "billing": "Billing",
         "developer": "Developer"
       },
       "role": {
@@ -1300,19 +1299,17 @@
         }
       },
       "billing": {
-        "title": "Billing",
-        "description": "Plan, seats, and payment.",
         "plan": "Plan",
         "seats": "Seats",
         "ownerOnly": "Only the workspace owner can manage the subscription.",
         "nextInvoice": "Next invoice",
         "manageStripe": "Manage in Stripe",
-        "opening": "Opening…",
         "startSubscription": "Start subscription",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Free"
+          "free": "Free",
+          "enterprise": "Enterprise"
         },
         "status": {
           "active": "Active",
@@ -1381,15 +1378,18 @@
       "nonBillableSeat": "Admin-only access · no paid seat",
       "managedBy": "Billing is managed by {{owner}}.",
       "addSeat": "Add seat",
-      "startWithSeats": "Start Business with {{count}} seats",
-      "seatUpdated": "Workspace capacity updated to {{count}} seats",
+      "startWithSeats_one": "Start Business with {{count}} seat",
+      "startWithSeats_other": "Start Business with {{count}} seats",
+      "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
+      "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
       "seatUpdateFailed": "Couldn't update workspace seats",
       "businessWorkspaceOnly": "Available for workspaces",
       "personalPlanTitle": "Personal plan",
       "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
       "confirmSeats": {
         "title": "Add a workspace seat?",
-        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
+        "description_one": "Increase {{workspace}} to {{count}} seat. Stripe will prorate the change.",
+        "description_other": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
         "newCapacity": "New capacity",
         "chargeToday": "Charge today",
         "confirm": "Add seat"
@@ -1441,7 +1441,6 @@
         "business": "Business",
         "trial": "Trial"
       },
-      "planTitle": "Plan",
       "pricing": {
         "title": "Plans",
         "billedYearly": "Billed yearly",

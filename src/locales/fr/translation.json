@@ -1206,7 +1206,6 @@
         "general": "Général",
         "members": "Membres",
         "teams": "Espaces d'équipe",
-        "billing": "Facturation",
         "developer": "Développeur"
       },
       "role": {
@@ -1300,19 +1299,17 @@
         }
       },
       "billing": {
-        "title": "Facturation",
-        "description": "Plan, sièges et paiement.",
         "plan": "Plan",
         "seats": "Sièges",
         "ownerOnly": "Seul le propriétaire de l'espace de travail peut gérer l'abonnement.",
         "nextInvoice": "Prochaine facture",
         "manageStripe": "Gérer dans Stripe",
-        "opening": "Ouverture…",
         "startSubscription": "Démarrer l'abonnement",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Gratuit"
+          "free": "Gratuit",
+          "enterprise": "Enterprise"
         },
         "status": {
           "active": "Actif",
@@ -1375,24 +1372,27 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "startWithSeats": "Start Business with {{count}} seats",
-      "seatUpdated": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "workspaceTitle": "Facturation de l'espace de travail",
+      "workspaceDescription": "Chaque espace de travail a son propre plan, ses sièges et son responsable de facturation.",
+      "billableSeat": "Votre siège est facturable",
+      "nonBillableSeat": "Accès administrateur uniquement · aucun siège payant",
+      "managedBy": "La facturation est gérée par {{owner}}.",
+      "addSeat": "Ajouter un siège",
+      "startWithSeats_one": "Démarrer Business avec {{count}} siège",
+      "startWithSeats_other": "Démarrer Business avec {{count}} sièges",
+      "seatUpdated_one": "Capacité de l'espace de travail mise à jour : {{count}} siège",
+      "seatUpdated_other": "Capacité de l'espace de travail mise à jour : {{count}} sièges",
+      "seatUpdateFailed": "Impossible de mettre à jour les sièges de l'espace de travail",
+      "businessWorkspaceOnly": "Disponible pour les espaces de travail",
+      "personalPlanTitle": "Plan personnel",
+      "providedBy": "Plan personnel : Gratuit · Accès payant fourni par {{workspaces}}",
       "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
+        "title": "Ajouter un siège à l'espace de travail ?",
+        "description_one": "Passer {{workspace}} à {{count}} siège. Stripe calculera le changement au prorata.",
+        "description_other": "Passer {{workspace}} à {{count}} sièges. Stripe calculera le changement au prorata.",
+        "newCapacity": "Nouvelle capacité",
+        "chargeToday": "Montant facturé aujourd'hui",
+        "confirm": "Ajouter un siège"
       }
     },
     "account": {
@@ -1441,7 +1441,6 @@
         "business": "Business",
         "trial": "Essai"
       },
-      "planTitle": "Plan",
       "pricing": {
         "title": "Forfaits",
         "billedYearly": "Facturation annuelle",

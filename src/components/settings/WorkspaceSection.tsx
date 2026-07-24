@@ -23,6 +23,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
+import { storeSeatIntent } from "../../utils/billingSeatIntent";
 import WorkspaceMembersTab from "./WorkspaceMembersTab";
 import WorkspaceTeamsTab from "./WorkspaceTeamsTab";
 import WorkspaceDeveloperTab from "./WorkspaceDeveloperTab";
@@ -60,10 +61,7 @@ export default function WorkspaceSection({ initialSubTab, onNavigateToBilling }:
 
   function navigateToBilling(workspaceId: string) {
     setActiveWorkspaceId(workspaceId);
-    localStorage.setItem(
-      "settings.billingSeatIntent",
-      JSON.stringify({ workspaceId, additionalSeats: 1 })
-    );
+    storeSeatIntent(workspaceId, 1);
     onNavigateToBilling?.();
   }
 

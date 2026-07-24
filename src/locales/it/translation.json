@@ -1102,24 +1102,27 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "startWithSeats": "Start Business with {{count}} seats",
-      "seatUpdated": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "workspaceTitle": "Fatturazione dell'area di lavoro",
+      "workspaceDescription": "Ogni area di lavoro ha il proprio piano, i propri posti e un responsabile della fatturazione.",
+      "billableSeat": "Il tuo posto è fatturabile",
+      "nonBillableSeat": "Accesso solo amministratore · nessun posto a pagamento",
+      "managedBy": "La fatturazione è gestita da {{owner}}.",
+      "addSeat": "Aggiungi posto",
+      "startWithSeats_one": "Avvia Business con {{count}} posto",
+      "startWithSeats_other": "Avvia Business con {{count}} posti",
+      "seatUpdated_one": "Capacità dell'area di lavoro aggiornata a {{count}} posto",
+      "seatUpdated_other": "Capacità dell'area di lavoro aggiornata a {{count}} posti",
+      "seatUpdateFailed": "Impossibile aggiornare i posti dell'area di lavoro",
+      "businessWorkspaceOnly": "Disponibile per le aree di lavoro",
+      "personalPlanTitle": "Piano personale",
+      "providedBy": "Piano personale: Free · Accesso a pagamento fornito da {{workspaces}}",
       "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
+        "title": "Aggiungere un posto all'area di lavoro?",
+        "description_one": "Amplia {{workspace}} a {{count}} posto. Stripe calcolerà la modifica in modo proporzionale.",
+        "description_other": "Amplia {{workspace}} a {{count}} posti. Stripe calcolerà la modifica in modo proporzionale.",
+        "newCapacity": "Nuova capacità",
+        "chargeToday": "Addebito di oggi",
+        "confirm": "Aggiungi posto"
       }
     },
     "account": {
@@ -1168,7 +1171,6 @@
         "business": "Business",
         "trial": "Prova"
       },
-      "planTitle": "Piano",
       "rollingWeeklyLimit": "Limite settimanale progressivo",
       "signOut": {
         "failedDescription": "Qualcosa è andato storto durante la disconnessione. Riprova.",
@@ -1841,7 +1843,6 @@
         "general": "Generale",
         "members": "Membri",
         "teams": "Spazi del team",
-        "billing": "Fatturazione",
         "developer": "Sviluppatore"
       },
       "role": {
@@ -1935,19 +1936,17 @@
         }
       },
       "billing": {
-        "title": "Fatturazione",
-        "description": "Piano, posti e pagamento.",
         "plan": "Piano",
         "seats": "Posti",
         "ownerOnly": "Solo il proprietario dell'area di lavoro può gestire l'abbonamento.",
         "nextInvoice": "Prossima fattura",
         "manageStripe": "Gestisci in Stripe",
-        "opening": "Apertura…",
         "startSubscription": "Avvia abbonamento",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Free"
+          "free": "Free",
+          "enterprise": "Enterprise"
         },
         "status": {
           "active": "Attivo",

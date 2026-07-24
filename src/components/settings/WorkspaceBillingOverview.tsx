@@ -2,23 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { clearSeatIntent, readSeatIntent, type SeatIntent } from "../../utils/billingSeatIntent";
 import WorkspaceBillingCard from "./WorkspaceBillingCard";
-
-const SEAT_INTENT_KEY = "settings.billingSeatIntent";
-
-interface SeatIntent {
-  workspaceId: string;
-  additionalSeats: number;
-}
-
-function readSeatIntent(): SeatIntent | null {
-  try {
-    const value = localStorage.getItem(SEAT_INTENT_KEY);
-    return value ? (JSON.parse(value) as SeatIntent) : null;
-  } catch {
-    return null;
-  }
-}
 
 export default function WorkspaceBillingOverview({
   onRefreshEntitlement,
@@ -50,8 +35,8 @@ export default function WorkspaceBillingOverview({
     });
   }, [activeWorkspaceId, workspaces]);
 
-  function clearSeatIntent() {
-    localStorage.removeItem(SEAT_INTENT_KEY);
+  function consumeSeatIntent() {
+    clearSeatIntent();
     setSeatIntent(null);
   }
 
@@ -84,7 +69,7 @@ export default function WorkspaceBillingOverview({
               seatIntent?.workspaceId === workspace.id ? seatIntent.additionalSeats : 0
             }
             onSeatIntentConsumed={
-              seatIntent?.workspaceId === workspace.id ? clearSeatIntent : undefined
+              seatIntent?.workspaceId === workspace.id ? consumeSeatIntent : undefined
             }
             onRefreshEntitlement={onRefreshEntitlement}
           />

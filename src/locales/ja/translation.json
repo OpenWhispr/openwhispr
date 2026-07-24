@@ -1102,24 +1102,24 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "startWithSeats": "Start Business with {{count}} seats",
-      "seatUpdated": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "workspaceTitle": "ワークスペースの請求",
+      "workspaceDescription": "各ワークスペースには独自のプラン、シート、請求管理者があります。",
+      "billableSeat": "あなたのシートは課金対象です",
+      "nonBillableSeat": "管理者専用アクセス · 有料シートなし",
+      "managedBy": "請求は {{owner}} が管理しています。",
+      "addSeat": "シートを追加",
+      "startWithSeats": "{{count}} シートで Business を開始",
+      "seatUpdated": "ワークスペースの容量を {{count}} シートに更新しました",
+      "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
+      "businessWorkspaceOnly": "ワークスペースで利用可能",
+      "personalPlanTitle": "個人プラン",
+      "providedBy": "個人プラン: Free · 有料アクセスは {{workspaces}} から提供",
       "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
+        "title": "ワークスペースのシートを追加しますか？",
+        "description": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
+        "newCapacity": "新しい容量",
+        "chargeToday": "本日の請求額",
+        "confirm": "シートを追加"
       }
     },
     "account": {
@@ -1168,7 +1168,6 @@
         "business": "Business",
         "trial": "トライアル"
       },
-      "planTitle": "プラン",
       "pricing": {
         "title": "プラン",
         "billedYearly": "年払い",
@@ -1841,7 +1840,6 @@
         "general": "一般",
         "members": "メンバー",
         "teams": "チームスペース",
-        "billing": "請求",
         "developer": "開発者"
       },
       "role": {
@@ -1935,19 +1933,17 @@
         }
       },
       "billing": {
-        "title": "請求",
-        "description": "プラン、シート、支払い。",
         "plan": "プラン",
         "seats": "シート",
         "ownerOnly": "サブスクリプションを管理できるのはワークスペースのオーナーのみです。",
         "nextInvoice": "次回の請求",
         "manageStripe": "Stripe で管理",
-        "opening": "開いています…",
         "startSubscription": "サブスクリプションを開始",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Free"
+          "free": "Free",
+          "enterprise": "Enterprise"
         },
         "status": {
           "active": "有効",

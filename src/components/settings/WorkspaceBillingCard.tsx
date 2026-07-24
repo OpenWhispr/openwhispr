@@ -13,6 +13,7 @@ import {
 import { useToast } from "../ui/useToast";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { formatAmount } from "../../utils/formatAmount";
 import type { Workspace } from "../../types/electron";
 
 interface SeatPreview {
@@ -29,9 +30,6 @@ interface Props {
   onSeatIntentConsumed?: () => void;
   onRefreshEntitlement?: () => Promise<void>;
 }
-
-const formatAmount = (cents: number, currency: string) =>
-  (cents / 100).toLocaleString(undefined, { style: "currency", currency });
 
 export default function WorkspaceBillingCard({
   workspace,

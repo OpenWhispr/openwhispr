@@ -1102,24 +1102,33 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "startWithSeats": "Start Business with {{count}} seats",
-      "seatUpdated": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
+      "workspaceTitle": "Оплата рабочих пространств",
+      "workspaceDescription": "У каждого рабочего пространства свой тариф, места и ответственный за оплату.",
+      "billableSeat": "Ваше место оплачивается",
+      "nonBillableSeat": "Доступ только для администратора · без платного места",
+      "managedBy": "Оплатой управляет {{owner}}.",
+      "addSeat": "Добавить место",
+      "startWithSeats_one": "Начать Business с {{count}} местом",
+      "startWithSeats_few": "Начать Business с {{count}} местами",
+      "startWithSeats_many": "Начать Business с {{count}} местами",
+      "startWithSeats_other": "Начать Business с {{count}} местами",
+      "seatUpdated_one": "Вместимость рабочего пространства обновлена до {{count}} места",
+      "seatUpdated_few": "Вместимость рабочего пространства обновлена до {{count}} мест",
+      "seatUpdated_many": "Вместимость рабочего пространства обновлена до {{count}} мест",
+      "seatUpdated_other": "Вместимость рабочего пространства обновлена до {{count}} мест",
+      "seatUpdateFailed": "Не удалось обновить места рабочего пространства",
+      "businessWorkspaceOnly": "Доступно для рабочих пространств",
+      "personalPlanTitle": "Личный тариф",
+      "providedBy": "Личный тариф: Бесплатный · Платный доступ через {{workspaces}}",
       "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
+        "title": "Добавить место в рабочее пространство?",
+        "description_one": "Увеличить {{workspace}} до {{count}} места. Stripe пересчитает стоимость пропорционально.",
+        "description_few": "Увеличить {{workspace}} до {{count}} мест. Stripe пересчитает стоимость пропорционально.",
+        "description_many": "Увеличить {{workspace}} до {{count}} мест. Stripe пересчитает стоимость пропорционально.",
+        "description_other": "Увеличить {{workspace}} до {{count}} мест. Stripe пересчитает стоимость пропорционально.",
+        "newCapacity": "Новая вместимость",
+        "chargeToday": "Списание сегодня",
+        "confirm": "Добавить место"
       }
     },
     "account": {
@@ -1168,7 +1177,6 @@
         "business": "Business",
         "trial": "Пробный"
       },
-      "planTitle": "Тариф",
       "rollingWeeklyLimit": "Скользящий недельный лимит",
       "signOut": {
         "failedDescription": "Произошла ошибка при выходе. Попробуйте ещё раз.",
@@ -1841,7 +1849,6 @@
         "general": "Общие",
         "members": "Участники",
         "teams": "Командные пространства",
-        "billing": "Оплата",
         "developer": "Разработчик"
       },
       "role": {
@@ -1943,19 +1950,17 @@
         }
       },
       "billing": {
-        "title": "Оплата",
-        "description": "Тариф, места и оплата.",
         "plan": "Тариф",
         "seats": "Места",
         "ownerOnly": "Управлять подпиской может только владелец рабочего пространства.",
         "nextInvoice": "Следующий счёт",
         "manageStripe": "Управлять в Stripe",
-        "opening": "Открытие…",
         "startSubscription": "Оформить подписку",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Бесплатный"
+          "free": "Бесплатный",
+          "enterprise": "Enterprise"
         },
         "status": {
           "active": "Активна",
