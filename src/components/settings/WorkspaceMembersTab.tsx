@@ -165,9 +165,16 @@ export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: 
   async function handleResend(inviteId: string) {
     setResendingId(inviteId);
     try {
-      await InvitationsService.resend(workspace.id, inviteId);
+      const { email_sent } = await InvitationsService.resend(workspace.id, inviteId);
       await refreshInvitations();
-      toast({ title: t("settingsPage.workspace.invites.resent") });
+      if (email_sent) {
+        toast({ title: t("settingsPage.workspace.invites.resent") });
+      } else {
+        toast({
+          title: t("settingsPage.workspace.invites.resentNoEmail"),
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       toast({
         title: t("common.error"),

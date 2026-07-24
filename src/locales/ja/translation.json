@@ -1913,6 +1913,7 @@
         "resending": "再送信中…",
         "revoke": "取り消す",
         "resent": "招待を再送信しました",
+        "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。",
         "revoked": "招待を取り消しました",
         "revokeFailed": "招待を取り消せませんでした",
         "revokeConfirm": {
@@ -3240,6 +3241,8 @@
       "submitting": "送信中…",
       "sentTitle": "招待を送信しました",
       "sentDescription": "{{email}} に招待を送信しました。",
+      "sentNoEmailTitle": "招待を作成しましたが、メールは送信されませんでした",
+      "sentNoEmailDescription": "{{email}} を招待しましたが、メールを配信できませんでした。後で再送信するか、別の方法で招待リンクを共有してください。",
       "errorTitle": "招待を送信できませんでした",
       "role": {
         "admin": "管理者",

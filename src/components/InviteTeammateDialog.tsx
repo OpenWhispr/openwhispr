@@ -95,15 +95,23 @@ export default function InviteTeammateDialog({
     setSubmitting(true);
     setSeatLimitSeats(null);
     try {
-      await InvitationsService.send(workspaceId, {
+      const result = await InvitationsService.send(workspaceId, {
         email: email.trim().toLowerCase(),
         role,
         ...(teamIds && teamIds.length > 0 ? { team_ids: teamIds } : {}),
       });
-      toast({
-        title: t("workspaces.invite.sentTitle"),
-        description: t("workspaces.invite.sentDescription", { email }),
-      });
+      if (result.email_sent) {
+        toast({
+          title: t("workspaces.invite.sentTitle"),
+          description: t("workspaces.invite.sentDescription", { email }),
+        });
+      } else {
+        toast({
+          title: t("workspaces.invite.sentNoEmailTitle"),
+          description: t("workspaces.invite.sentNoEmailDescription", { email }),
+          variant: "destructive",
+        });
+      }
       onInvited?.();
       onOpenChange(false);
     } catch (error) {

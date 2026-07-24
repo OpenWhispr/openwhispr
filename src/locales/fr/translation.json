@@ -1299,6 +1299,7 @@
         "resending": "Renvoi…",
         "revoke": "Révoquer",
         "resent": "Invitation renvoyée",
+        "resentNoEmail": "Invitation mise à jour, mais l'e-mail n'a pas pu être délivré.",
         "revoked": "Invitation révoquée",
         "revokeFailed": "Impossible de révoquer l'invitation",
         "revokeConfirm": {
@@ -2263,6 +2264,8 @@
       "submitting": "Envoi…",
       "sentTitle": "Invitation envoyée",
       "sentDescription": "Nous avons envoyé une invitation à {{email}}.",
+      "sentNoEmailTitle": "Invitation créée, mais non envoyée par e-mail",
+      "sentNoEmailDescription": "{{email}} a été invité, mais l'e-mail n'a pas pu être délivré. Renvoyez-le plus tard ou partagez le lien d'invitation autrement.",
       "errorTitle": "Impossible d'envoyer l'invitation",
       "role": {
         "admin": "Administrateur",

@@ -1892,6 +1892,7 @@
         "resending": "Reenviando…",
         "revoke": "Revogar",
         "resent": "Convite reenviado",
+        "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail.",
         "revoked": "Convite revogado",
         "revokeFailed": "Não foi possível revogar o convite",
         "revokeConfirm": {
@@ -3240,6 +3241,8 @@
       "submitting": "Enviando…",
       "sentTitle": "Convite enviado",
       "sentDescription": "Enviamos um convite para {{email}}.",
+      "sentNoEmailTitle": "Convite criado, mas não enviado por e-mail",
+      "sentNoEmailDescription": "{{email}} foi convidado, mas não foi possível entregar o e-mail. Reenvie-o mais tarde ou compartilhe o link de convite de outra forma.",
       "errorTitle": "Não foi possível enviar o convite",
       "role": {
         "admin": "Administrador",

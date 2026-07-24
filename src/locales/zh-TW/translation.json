@@ -1913,6 +1913,7 @@
         "resending": "重新傳送中…",
         "revoke": "撤銷",
         "resent": "邀請已重新傳送",
+        "resentNoEmail": "邀請已更新，但電子郵件無法送達。",
         "revoked": "邀請已撤銷",
         "revokeFailed": "無法撤銷邀請",
         "revokeConfirm": {
@@ -3240,6 +3241,8 @@
       "submitting": "傳送中…",
       "sentTitle": "邀請已傳送",
       "sentDescription": "我們已將邀請傳送至 {{email}}。",
+      "sentNoEmailTitle": "邀請已建立，但未傳送電子郵件",
+      "sentNoEmailDescription": "已邀請 {{email}}，但電子郵件無法送達。請稍後重新傳送，或以其他方式分享邀請連結。",
       "errorTitle": "無法傳送邀請",
       "role": {
         "admin": "管理員",

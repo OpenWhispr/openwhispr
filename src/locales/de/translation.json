@@ -1299,6 +1299,7 @@
         "resending": "Sende erneut…",
         "revoke": "Widerrufen",
         "resent": "Einladung erneut gesendet",
+        "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden.",
         "revoked": "Einladung widerrufen",
         "revokeFailed": "Einladung konnte nicht widerrufen werden",
         "revokeConfirm": {
@@ -2263,6 +2264,8 @@
       "submitting": "Sende…",
       "sentTitle": "Einladung gesendet",
       "sentDescription": "Einladung an {{email}} gesendet.",
+      "sentNoEmailTitle": "Einladung erstellt, aber nicht per E-Mail gesendet",
+      "sentNoEmailDescription": "{{email}} wurde eingeladen, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie später erneut oder teilen Sie den Einladungslink anders.",
       "errorTitle": "Einladung konnte nicht gesendet werden",
       "role": {
         "admin": "Administrator",

@@ -1961,6 +1961,7 @@
         "resending": "Reenviando…",
         "revoke": "Revocar",
         "resent": "Invitación reenviada",
+        "resentNoEmail": "Invitación actualizada, pero no se pudo entregar el correo.",
         "revoked": "Invitación revocada",
         "revokeFailed": "No se pudo revocar la invitación",
         "revokeConfirm": {
@@ -3240,6 +3241,8 @@
       "submitting": "Enviando…",
       "sentTitle": "Invitación enviada",
       "sentDescription": "Enviamos una invitación a {{email}}.",
+      "sentNoEmailTitle": "Invitación creada, pero no enviada por correo",
+      "sentNoEmailDescription": "Se invitó a {{email}}, pero no se pudo entregar el correo. Reenvíalo más tarde o comparte el enlace de invitación de otra forma.",
       "errorTitle": "No se pudo enviar la invitación",
       "role": {
         "admin": "Administrador",

@@ -1299,6 +1299,7 @@
         "resending": "Resending…",
         "revoke": "Revoke",
         "resent": "Invitation resent",
+        "resentNoEmail": "Invitation updated, but the email couldn't be delivered.",
         "revoked": "Invitation revoked",
         "revokeFailed": "Could not revoke invitation",
         "revokeConfirm": {
@@ -2263,6 +2264,8 @@
       "submitting": "Sending…",
       "sentTitle": "Invite sent",
       "sentDescription": "We sent an invitation to {{email}}.",
+      "sentNoEmailTitle": "Invite created, but not emailed",
+      "sentNoEmailDescription": "{{email}} was invited, but the email couldn't be delivered. Resend it later or share the invite link another way.",
       "errorTitle": "Couldn't send invitation",
       "role": {
         "admin": "Admin",

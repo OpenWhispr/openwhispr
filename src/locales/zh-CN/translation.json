@@ -1913,6 +1913,7 @@
         "resending": "重新发送中…",
         "revoke": "撤销",
         "resent": "邀请已重新发送",
+        "resentNoEmail": "邀请已更新，但邮件无法送达。",
         "revoked": "邀请已撤销",
         "revokeFailed": "无法撤销邀请",
         "revokeConfirm": {
@@ -3240,6 +3241,8 @@
       "submitting": "发送中…",
       "sentTitle": "邀请已发送",
       "sentDescription": "我们已向 {{email}} 发送邀请。",
+      "sentNoEmailTitle": "邀请已创建，但未发送邮件",
+      "sentNoEmailDescription": "已邀请 {{email}}，但邮件无法送达。请稍后重新发送，或通过其他方式分享邀请链接。",
       "errorTitle": "无法发送邀请",
       "role": {
         "admin": "管理员",

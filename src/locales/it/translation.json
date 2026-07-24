@@ -1913,6 +1913,7 @@
         "resending": "Reinvio…",
         "revoke": "Revoca",
         "resent": "Invito reinviato",
+        "resentNoEmail": "Invito aggiornato, ma non è stato possibile recapitare l'e-mail.",
         "revoked": "Invito revocato",
         "revokeFailed": "Impossibile revocare l'invito",
         "revokeConfirm": {
@@ -3240,6 +3241,8 @@
       "submitting": "Invio…",
       "sentTitle": "Invito inviato",
       "sentDescription": "Abbiamo inviato un invito a {{email}}.",
+      "sentNoEmailTitle": "Invito creato, ma non inviato via e-mail",
+      "sentNoEmailDescription": "{{email}} è stato invitato, ma non è stato possibile recapitare l'e-mail. Invialo di nuovo più tardi o condividi il link di invito in un altro modo.",
       "errorTitle": "Impossibile inviare l'invito",
       "role": {
         "admin": "Amministratore",
