@@ -1566,8 +1566,10 @@ class ClipboardManager {
 
         // KDE with XWayland: portal first because clipboard and input are both
         // on X11. uinput causes clipboard desync (X11 clipboard vs Wayland input).
-        // GNOME: uinput first because the portal often times out or shows a
-        // confusing permission dialog, causing a 10s+ delay (issue #494).
+        // GNOME Wayland: portal first (one-time dialog, reliable after approval).
+        // When two uinput devices coexist (linux-fast-paste ephemeral + ydotoold
+        // persistent), Mutter drops the modifier key from the short-lived device,
+        // causing paste to silently fail with exit 0 (issue #956).
         if (isKde && linuxFastPaste && !this.portalDenied) {
           const portalPaste = await tryPortalPaste();
           if (portalPaste) return { method: "portal", ...portalPaste };
@@ -1578,19 +1580,19 @@ class ClipboardManager {
             debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
           }
         } else if (isGnome && linuxFastPaste) {
+          if (!this.portalDenied) {
+            const portalPaste = await tryPortalPaste();
+            if (portalPaste) return { method: "portal", ...portalPaste };
+          }
           try {
             const uinputPaste = await tryUinputPaste();
             return { method: "uinput", ...uinputPaste };
           } catch (uinputError) {
             debugLogger.warn(
-              "uinput paste failed on GNOME, trying portal",
+              "uinput paste failed on GNOME",
               { error: uinputError?.message },
               "clipboard"
             );
-          }
-          if (!this.portalDenied) {
-            const portalPaste = await tryPortalPaste();
-            if (portalPaste) return { method: "portal", ...portalPaste };
           }
         } else {
           // Other compositors (wlroots, etc.): try uinput only
