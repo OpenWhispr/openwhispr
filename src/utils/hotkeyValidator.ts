@@ -69,6 +69,27 @@ const SPECIAL_KEYS = new Set(
   ].concat(Array.from({ length: 24 }, (_, i) => `F${i + 1}`))
 );
 
+const MACOS_FN_ALLOW_LIST = new Set([
+  "F1",
+  "F2",
+  "F3",
+  "F4",
+  "F5",
+  "F6",
+  "F7",
+  "F8",
+  "F9",
+  "F10",
+  "F11",
+  "F12",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+  "Delete",
+  "Insert",
+]);
+
 const MAC_RESERVED_SHORTCUTS = [
   "Command+C",
   "Command+V",
@@ -552,6 +573,33 @@ export function validateHotkey(
       };
     }
     return { valid: true };
+  }
+
+  // Restrict macOS Fn combinations to hardware-gated keys to prevent "reversed" typing behavior.
+  const partsForFn = hotkey.split("+").map((p) => p.trim());
+  const isFnCombo = partsForFn.includes("Fn") && partsForFn.length > 1;
+
+  if (platform === "darwin" && isFnCombo) {
+    const hasOtherModifiers = partsForFn.some(
+      (p) => p !== "Fn" && normalizeModifier(p, platform) !== null
+    );
+
+    if (hasOtherModifiers) {
+      return {
+        valid: false,
+        error: "Fn cannot be combined with other modifiers like Command or Control.",
+      };
+    }
+
+    const baseKey = partsForFn[partsForFn.length - 1];
+    if (!MACOS_FN_ALLOW_LIST.has(baseKey)) {
+      return {
+        valid: false,
+        error:
+          "Fn combinations are restricted on macOS. Please use Arrows, F-keys, or Navigation keys (Home/End/etc).",
+        errorCode: "INVALID_GLOBE",
+      };
+    }
   }
 
   if (isMouseButtonHotkey(hotkey)) {
