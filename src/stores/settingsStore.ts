@@ -2088,6 +2088,60 @@ export function getSettings() {
   return useSettingsStore.getState();
 }
 
+async function reconcileMissingLocalLLMSelections(): Promise<void> {
+  if (!isBrowser || !window.electronAPI?.modelGetAll) return;
+
+  let models: Array<{ id: string; isDownloaded?: boolean; isDownloading?: boolean }> = [];
+  try {
+    const result = await window.electronAPI.modelGetAll();
+    if (Array.isArray(result)) {
+      models = result as Array<{ id: string; isDownloaded?: boolean; isDownloading?: boolean }>;
+    }
+  } catch {
+    return;
+  }
+
+  const available = new Set(
+    models
+      .filter((m) => !!m.id && (m.isDownloaded || m.isDownloading))
+      .map((m) => m.id)
+  );
+
+  const state = useSettingsStore.getState();
+
+  if (state.cleanupMode === "local" && state.cleanupModel && !available.has(state.cleanupModel)) {
+    state.setCleanupModel("");
+  }
+  if (
+    state.noteFormattingMode === "local" &&
+    state.noteFormattingModel &&
+    !available.has(state.noteFormattingModel)
+  ) {
+    state.setNoteFormattingModel("");
+  }
+  if (
+    state.dictationAgentMode === "local" &&
+    state.dictationAgentModel &&
+    !available.has(state.dictationAgentModel)
+  ) {
+    state.setDictationAgentModel("");
+  }
+  if (
+    state.chatAgentMode === "local" &&
+    state.chatAgentModel &&
+    !available.has(state.chatAgentModel)
+  ) {
+    state.setChatAgentModel("");
+  }
+  if (
+    state.translationMode === "local" &&
+    state.translationModel &&
+    !available.has(state.translationModel)
+  ) {
+    state.setTranslationModel("");
+  }
+}
+
 export function getEffectiveCleanupModel() {
   const state = useSettingsStore.getState();
   if (selectIsCloudCleanupMode(state)) {
@@ -2436,6 +2490,16 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync whisper VAD config on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      await reconcileMissingLocalLLMSelections();
+    } catch (err) {
+      logger.warn(
+        "Failed to reconcile local model selections on startup",
         { error: (err as Error).message },
         "settings"
       );
