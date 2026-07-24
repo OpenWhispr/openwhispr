@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "./lib/utils";
 
 const SIZES = {
@@ -14,8 +15,20 @@ interface MemberAvatarProps {
 
 export default function MemberAvatar({ name, email, image, size = "md" }: MemberAvatarProps) {
   const { box, text } = SIZES[size];
-  if (image) {
-    return <img src={image} alt="" className={cn(box, "rounded-full object-cover shrink-0")} />;
+  // Avatar URLs go stale (OAuth-hosted images expire/rotate); tracking the
+  // failed src — rather than a boolean — retries automatically if it changes.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (image && image !== failedSrc) {
+    return (
+      <img
+        src={image}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailedSrc(image)}
+        className={cn(box, "rounded-full object-cover shrink-0")}
+      />
+    );
   }
   return (
     <span

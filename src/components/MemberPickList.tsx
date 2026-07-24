@@ -11,6 +11,8 @@ interface MemberPickListProps {
   onSelect: (member: WorkspaceMember) => void;
   /** Toggle mode: selected rows show a check and expose aria-pressed. */
   selectedIds?: Set<string>;
+  /** Marks this member's row with a "You" hint. */
+  currentUserId?: string;
   /** Rows awaiting a server round-trip: disabled with a spinner. */
   busyIds?: Set<string>;
   /** Extra classes for the scroll list (defaults the max height). */
@@ -25,6 +27,7 @@ export default function MemberPickList({
   onSearchChange,
   onSelect,
   selectedIds,
+  currentUserId,
   busyIds,
   listClassName,
   footer,
@@ -67,6 +70,11 @@ export default function MemberPickList({
               <span className="text-xs text-foreground truncate flex-1">
                 {member.name || member.email}
               </span>
+              {member.user_id === currentUserId && (
+                <span className="text-[10px] text-foreground/40 shrink-0">
+                  {t("notes.spaces.members.you")}
+                </span>
+              )}
               {isSelected && <Check size={11} className="text-primary shrink-0" />}
               {isBusy && (
                 <Loader2 className="w-3 h-3 animate-spin text-muted-foreground shrink-0" />

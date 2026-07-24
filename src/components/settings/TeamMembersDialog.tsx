@@ -44,8 +44,9 @@ export default function TeamMembersDialog({
   const isWorkspaceAdmin = workspace.role === "owner" || workspace.role === "admin";
   const myTeamRole = teamMembers.find((m) => m.user_id === user?.id)?.role ?? null;
   const canManage = canManageTeamRoster(myTeamRole, workspace.role);
-  // Explicit members can leave; implicit workspace admins have no row to drop.
-  const canLeave = myTeamRole !== null && !isWorkspaceAdmin;
+  // Anyone with an explicit membership row can drop it — including workspace
+  // admins who added themselves (their implicit admin access survives leaving).
+  const canLeave = myTeamRole !== null;
 
   useEffect(() => {
     if (open) void refreshMembers(workspace.id).catch(() => {});
@@ -105,6 +106,7 @@ export default function TeamMembersDialog({
 
           <TeamRosterSection
             teamId={team.id}
+            teamName={team.name}
             canManage={canManage}
             workspaceMembers={roster}
             currentUserId={user?.id}

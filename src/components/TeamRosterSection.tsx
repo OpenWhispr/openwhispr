@@ -8,12 +8,15 @@ import { cn } from "./lib/utils";
 import MemberAvatar from "./MemberAvatar";
 import MemberPickList from "./MemberPickList";
 import RoleBadge from "./RoleBadge";
+import { orderMemberCandidates } from "../lib/memberCandidates";
 import { TeamsService } from "../services/TeamsService";
 import { addTeamMembers, removeTeamMember, setTeamMemberRole } from "../services/spaceActions";
 import type { TeamMember, TeamRole, WorkspaceMember } from "../types/electron";
 
 interface TeamRosterSectionProps {
   teamId: string;
+  /** Names the team in the add-people label and confirmation toasts. */
+  teamName: string;
   canManage: boolean;
   /** Workspace roster: the add-people candidate pool. */
   workspaceMembers: WorkspaceMember[];
@@ -27,6 +30,7 @@ interface TeamRosterSectionProps {
 
 export default function TeamRosterSection({
   teamId,
+  teamName,
   canManage,
   workspaceMembers,
   currentUserId,
@@ -88,24 +92,30 @@ export default function TeamRosterSection({
     void withRowBusy(member.user_id, () => setTeamMemberRole(teamId, member.user_id, role));
   };
 
-  const handleAdd = (userId: string) => {
-    void withRowBusy(userId, async () => {
-      const { failures } = await addTeamMembers(teamId, [userId]);
+  const handleAdd = (member: WorkspaceMember) => {
+    void withRowBusy(member.user_id, async () => {
+      const { failures } = await addTeamMembers(teamId, [member.user_id]);
       if (failures.length > 0) throw failures[0];
+      toast({
+        title: t("notes.spaces.members.addedToTeam", {
+          name: member.name || member.email,
+          team: teamName,
+        }),
+      });
     });
   };
 
   const memberIds = useMemo(() => new Set(members.map((m) => m.user_id)), [members]);
   const addCandidates = useMemo(() => {
     const query = addSearch.trim().toLowerCase();
-    return workspaceMembers.filter(
+    const matches = workspaceMembers.filter(
       (m) =>
-        m.user_id !== currentUserId &&
         !memberIds.has(m.user_id) &&
         (!query ||
           (m.name ?? "").toLowerCase().includes(query) ||
           m.email.toLowerCase().includes(query))
     );
+    return orderMemberCandidates(matches, currentUserId);
   }, [workspaceMembers, memberIds, addSearch, currentUserId]);
 
   const searchEmail = addSearch.trim().toLowerCase();
@@ -167,10 +177,12 @@ export default function TeamRosterSection({
                     <button
                       type="button"
                       onClick={() =>
-                        removeConfirm(member, () =>
-                          void withRowBusy(member.user_id, () =>
-                            removeTeamMember(teamId, member.user_id)
-                          )
+                        removeConfirm(
+                          member,
+                          () =>
+                            void withRowBusy(member.user_id, () =>
+                              removeTeamMember(teamId, member.user_id)
+                            )
                         )
                       }
                       disabled={isBusy}
@@ -207,13 +219,14 @@ export default function TeamRosterSection({
       {canManage && (
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-foreground/50">
-            {t("notes.spaces.members.addPeople")}
+            {t("notes.spaces.members.addPeopleToTeam", { team: teamName })}
           </label>
           <MemberPickList
             members={addCandidates}
             search={addSearch}
             onSearchChange={setAddSearch}
-            onSelect={(candidate) => handleAdd(candidate.user_id)}
+            onSelect={handleAdd}
+            currentUserId={currentUserId}
             busyIds={busyUserIds}
             listClassName="max-h-32"
             footer={

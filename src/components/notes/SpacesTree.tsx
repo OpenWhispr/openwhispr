@@ -44,6 +44,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { clampEmojiInput } from "../../lib/emojiInput";
 import { canManageSpace } from "../../lib/spacePermissions";
+import { groupTeamSpacesByWorkspace } from "../../lib/workspaceSelection";
 import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { deleteSpace, renameSpace } from "../../services/spaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -1104,6 +1105,7 @@ export default function SpacesTree({
   const [renameSpaceEmoji, setRenameSpaceEmoji] = useState("");
   const [spaceRenameFocus, setSpaceRenameFocus] = useState<"name" | "emoji">("name");
   const [showCreateSpace, setShowCreateSpace] = useState(false);
+  const [createSpaceWorkspaceId, setCreateSpaceWorkspaceId] = useState<string | null>(null);
   const [membersSpaceId, setMembersSpaceId] = useState<number | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
   const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<SpaceItem | null>(null);
@@ -1121,23 +1123,17 @@ export default function SpacesTree({
     : false;
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
   const showWorkspaceGroups = workspaces.length > 1;
-  const teamSpaceGroups = useMemo(
-    () =>
-      workspaces
-        .map((workspace) => ({
-          workspace,
-          spaces: teamSpaces.filter((space) => space.workspace_id === workspace.id),
-        }))
-        .filter((group) => group.spaces.length > 0),
+  const { groups: teamSpaceGroups, ungrouped: ungroupedTeamSpaces } = useMemo(
+    () => groupTeamSpacesByWorkspace(workspaces, teamSpaces),
     [teamSpaces, workspaces]
   );
-  const ungroupedTeamSpaces = useMemo(() => {
-    const workspaceIds = new Set(workspaces.map((workspace) => workspace.id));
-    return teamSpaces.filter(
-      (space) => space.workspace_id == null || !workspaceIds.has(space.workspace_id)
-    );
-  }, [teamSpaces, workspaces]);
   const visibleSpaces = teamCapability ? spaces : privateSpaces;
+
+  // Until the workspace fetch settles, grouping is unknown — showing spaces
+  // flat and regrouping on arrival reads as a glitch, so skeleton instead.
+  // Signed-out users never load workspaces (mirrored team spaces render flat);
+  // errors still flip `loaded`, so this can't skeleton forever.
+  const workspacesPending = isSignedIn && !workspacesLoaded;
 
   // The server 403s team creation for plain members; no-workspace users get the create funnel.
   const canCreateTeamSpace =
@@ -1150,6 +1146,11 @@ export default function SpacesTree({
   const canManageTeamSpace = (space: SpaceItem): boolean =>
     !space.cloud_space_id ||
     canManageSpace(space, workspaces.find((w) => w.id === space.workspace_id)?.role ?? null);
+
+  const openCreateSpace = (workspaceId: string | null = null): void => {
+    setCreateSpaceWorkspaceId(workspaceId);
+    setShowCreateSpace(true);
+  };
 
   const targetLabel = (target: NoteMoveTarget): string => {
     if (target.folderId != null) {
@@ -1932,12 +1933,14 @@ export default function SpacesTree({
                       <Info size={11} />
                     </Button>
                   )}
-                  {canCreateTeamSpace && (
+                  {/* With one workspace the header + is unambiguous; with several,
+                      each workspace row carries its own + instead. */}
+                  {canCreateTeamSpace && !showWorkspaceGroups && (
                     <Button
                       variant="ghost"
                       size="icon"
                       aria-label={t("notes.spaces.newSpace")}
-                      onClick={() => setShowCreateSpace(true)}
+                      onClick={() => openCreateSpace()}
                       className={cn(
                         "h-5 w-5 rounded-sm opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100",
                         "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40",
@@ -1950,39 +1953,74 @@ export default function SpacesTree({
                 </div>
               }
             />
-            {showWorkspaceGroups
-              ? teamSpaceGroups.map(({ workspace, spaces: workspaceSpaces }) => (
-                  <div key={workspace.id} role="group" aria-label={workspace.name} className="mt-1">
-                    <div
-                      role="none"
-                      title={workspace.name}
-                      className="h-5 px-4 text-[10px] font-medium text-foreground/40 truncate"
-                    >
-                      {workspace.name}
-                    </div>
-                    {workspaceSpaces.map(renderSpace)}
-                  </div>
-                ))
-              : teamSpaces.map(renderSpace)}
-            {showWorkspaceGroups && ungroupedTeamSpaces.map(renderSpace)}
-            {teamSpaces.length === 0 &&
-              (canCreateTeamSpace ? (
-                <div className="pl-[18px] pr-2 py-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowCreateSpace(true)}
-                    className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
-                  >
-                    <Plus size={11} />
-                    {t("notes.spaces.newSpace")}
-                  </Button>
-                </div>
-              ) : (
-                <p className="pl-[18px] pr-2 py-1 text-xs text-foreground/40 leading-relaxed">
-                  {t("notes.spaces.emptyTeamHint")}
-                </p>
-              ))}
+            {workspacesPending ? (
+              <SkeletonRows />
+            ) : (
+              <>
+                {showWorkspaceGroups
+                  ? teamSpaceGroups.map(({ workspace, spaces: workspaceSpaces }) => (
+                      <div
+                        key={workspace.id}
+                        role="group"
+                        aria-label={workspace.name}
+                        className="mt-1 group/workspace"
+                      >
+                        <div
+                          role="none"
+                          className="flex items-center justify-between h-5 pl-4 pr-2"
+                        >
+                          <span
+                            title={workspace.name}
+                            className="min-w-0 text-[10px] font-medium text-foreground/40 truncate"
+                          >
+                            {workspace.name}
+                          </span>
+                          {(workspace.role === "owner" || workspace.role === "admin") && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t("notes.spaces.newSpaceInWorkspace", {
+                                workspace: workspace.name,
+                              })}
+                              onClick={() => openCreateSpace(workspace.id)}
+                              className={cn(
+                                "h-5 w-5 rounded-sm opacity-0 group-hover/workspace:opacity-100 focus-visible:opacity-100",
+                                "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40",
+                                "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
+                              )}
+                            >
+                              <Plus size={12} />
+                            </Button>
+                          )}
+                        </div>
+                        {workspaceSpaces.map(renderSpace)}
+                      </div>
+                    ))
+                  : teamSpaces.map(renderSpace)}
+                {showWorkspaceGroups && ungroupedTeamSpaces.map(renderSpace)}
+                {teamSpaces.length === 0 &&
+                  (canCreateTeamSpace ? (
+                    // Grouped view already offers a + on each manageable workspace row.
+                    !showWorkspaceGroups && (
+                      <div className="pl-[18px] pr-2 py-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openCreateSpace()}
+                          className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
+                        >
+                          <Plus size={11} />
+                          {t("notes.spaces.newSpace")}
+                        </Button>
+                      </div>
+                    )
+                  ) : (
+                    <p className="pl-[18px] pr-2 py-1 text-xs text-foreground/40 leading-relaxed">
+                      {t("notes.spaces.emptyTeamHint")}
+                    </p>
+                  ))}
+              </>
+            )}
           </div>
         )}
         {!teamCapability && isSignedIn && !isSubscribed && (
@@ -2005,7 +2043,14 @@ export default function SpacesTree({
         )}
       </div>
 
-      <CreateSpaceDialog open={showCreateSpace} onOpenChange={setShowCreateSpace} />
+      <CreateSpaceDialog
+        open={showCreateSpace}
+        onOpenChange={(open) => {
+          setShowCreateSpace(open);
+          if (!open) setCreateSpaceWorkspaceId(null);
+        }}
+        initialWorkspaceId={createSpaceWorkspaceId}
+      />
 
       {membersSpace && (
         <SpaceMembersDialog space={membersSpace} open={membersOpen} onOpenChange={setMembersOpen} />

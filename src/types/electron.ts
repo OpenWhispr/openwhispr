@@ -149,6 +149,10 @@ export interface SpaceTeamRef {
   name: string;
   // Explicit team membership role, if any (workspace admins may have none).
   my_role?: "admin" | "member" | null;
+  // Per-assignment cap on what the team conveys (space_teams.access): its
+  // team admins are space admins only when this is 'admin'. Absent on
+  // mirrors written before the API shipped it; those rows are 'admin'.
+  access?: "admin" | "member";
 }
 
 export interface SpaceItem {

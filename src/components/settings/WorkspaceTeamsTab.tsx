@@ -1,23 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Users, Trash2, Loader2 } from "lucide-react";
 import { deleteTeam } from "../../services/spaceActions";
 import { TeamsService } from "../../services/TeamsService";
 import { loadSpaces, useSpaces } from "../../stores/noteStore";
-import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import { useDialogs } from "../../hooks/useDialogs";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
 import { useToast } from "../ui/useToast";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  ConfirmDialog,
-} from "../ui/dialog";
+import { ConfirmDialog } from "../ui/dialog";
+import CreateTeamDialog from "../CreateTeamDialog";
 import TeamMembersDialog from "./TeamMembersDialog";
 import type { Team, Workspace } from "../../types/electron";
 
@@ -34,9 +25,6 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
   const [teamsLoaded, setTeamsLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const showCreateSpinner = useDelayedFlag(submitting);
   const [membersTeam, setMembersTeam] = useState<Team | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canManage = workspace.role === "owner" || workspace.role === "admin";
@@ -69,27 +57,6 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
     }
     return counts;
   }, [spaces]);
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed || submitting) return;
-    setSubmitting(true);
-    try {
-      await TeamsService.create(workspace.id, { name: trimmed });
-      await loadTeams();
-      setName("");
-      setCreateOpen(false);
-    } catch (error) {
-      toast({
-        title: t("settingsPage.workspace.teams.couldNotCreate"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   function confirmDelete(team: Team) {
     const backedSpaces = backedSpacesByTeam.get(team.id) ?? 0;
@@ -212,42 +179,12 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         </div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("settingsPage.workspace.teams.createTitle")}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="team-name" className="text-xs font-medium">
-                {t("settingsPage.workspace.teams.nameLabel")}
-              </Label>
-              <Input
-                id="team-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-                maxLength={80}
-                required
-              />
-            </div>
-            <DialogFooter className="pt-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setCreateOpen(false)}
-                disabled={submitting}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" disabled={!name.trim() || submitting}>
-                {showCreateSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                {submitting ? t("workspaces.create.submitting") : t("common.create")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <CreateTeamDialog
+        workspaceId={workspace.id}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => loadTeams()}
+      />
 
       {membersTeam && (
         <TeamMembersDialog

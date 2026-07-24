@@ -524,6 +524,28 @@ function TabPanel({ active, children }: { active: boolean; children: React.React
   return <div className={active ? undefined : "hidden"}>{children}</div>;
 }
 
+function AccountAvatar({ image, name }: { image?: string | null; name: string }) {
+  // Same stale-URL fallback as MemberAvatar: OAuth-hosted images expire, and a
+  // bare <img> would render the broken-image glyph instead of the icon.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  return (
+    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
+      {image && image !== failedSrc ? (
+        <img
+          src={image}
+          alt={name}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedSrc(image)}
+          className="w-10 h-10 rounded-full object-cover"
+        />
+      ) : (
+        <UserCircle className="w-5 h-5 text-primary" />
+      )}
+    </div>
+  );
+}
+
 function SpeechToTextTabs({
   initialTab,
   renderDictation,
@@ -1613,17 +1635,10 @@ export default function SettingsPage({
                 <SettingsPanel>
                   <SettingsPanelRow>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
-                        {user.image ? (
-                          <img
-                            src={user.image}
-                            alt={user.name || t("settingsPage.account.user")}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <UserCircle className="w-5 h-5 text-primary" />
-                        )}
-                      </div>
+                      <AccountAvatar
+                        image={user.image}
+                        name={user.name || t("settingsPage.account.user")}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-foreground truncate">
                           {user.name || t("settingsPage.account.user")}

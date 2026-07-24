@@ -128,6 +128,7 @@
     "pttUnavailable": "Push-to-Talk native listener not available"
   },
   "common": {
+    "add": "Add",
     "retry": "Retry",
     "back": "Back",
     "next": "Next",
@@ -1263,6 +1264,7 @@
         "new": "New team",
         "empty": "No teams yet.",
         "createFirst": "Create your first team",
+        "addMembersLabel": "Add members",
         "createTitle": "Create team",
         "nameLabel": "Team name",
         "memberCount_one": "{{count}} member",
@@ -2406,6 +2408,7 @@
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
       "newSpace": "New team space",
+      "newSpaceInWorkspace": "New team space in {{workspace}}",
       "createTitle": "Create team space",
       "createDescription": "A shared area inside a workspace, backed by one or more teams.",
       "nameLabel": "Name",
@@ -2452,7 +2455,9 @@
       "conflictKeep": "Keep editing",
       "editedBy": "Edited by {{name}} · {{time}}",
       "members": {
-        "addPeople": "Add people",
+        "addPeopleToTeam": "Add people to {{team}}",
+        "addedToTeam": "{{name}} added to {{team}}",
+        "you": "You",
         "addFailed": "{{failed}} of {{total}} people couldn't be added",
         "searchPlaceholder": "Search people…",
         "roleAdmin": "Admin",
@@ -2469,13 +2474,20 @@
         "menu": "Teams & members…",
         "title": "Teams & members of {{space}}",
         "noTeams": "No teams back this space yet. Only workspace admins can see it.",
-        "addTeam": "Add team…",
+        "addTeamLabel": "Add a team to this space",
+        "chooseTeam": "Choose team…",
+        "teamAdded": "{{team}} added to {{space}}",
         "removeTeamFromSpace": "Remove from space",
         "removeTeamConfirm": "Remove {{team}} from {{space}}?",
         "removeTeamConfirmDescription": "Its members will lose access to this space unless another assigned team includes them.",
         "lastTeamWarning": "This is the only team backing this space. After removing it, only workspace admins keep access.",
         "affectsOtherSpaces_one": "Changes to {{team}} also apply to {{count}} other space it backs.",
-        "affectsOtherSpaces_other": "Changes to {{team}} also apply to {{count}} other spaces it backs."
+        "affectsOtherSpaces_other": "Changes to {{team}} also apply to {{count}} other spaces it backs.",
+        "accessLabel": "Space access",
+        "accessAdmin": "Admin",
+        "accessMember": "Member",
+        "accessChanged": "Access for {{team}} updated",
+        "accessHint": "Admins of {{team}} manage this space only when its access is set to Admin."
       },
       "teams": {
         "assignLabel": "Teams",

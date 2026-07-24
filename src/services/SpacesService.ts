@@ -22,7 +22,12 @@ export interface MySpace {
 // Union roster entry: one row per user across all assigned teams, with
 // attribution of which team(s) grant the access.
 export interface SpaceMemberEntry extends TeamMember {
-  via_teams: { team_id: string; name: string; role: "admin" | "member" }[];
+  via_teams: {
+    team_id: string;
+    name: string;
+    role: "admin" | "member";
+    access?: "admin" | "member";
+  }[];
 }
 
 // Every space the caller can access across all their workspaces (member of any
@@ -53,8 +58,17 @@ async function remove(spaceId: string): Promise<void> {
   await cloudDelete(`/api/spaces/${spaceId}`);
 }
 
-async function assignTeam(spaceId: string, teamId: string): Promise<void> {
-  await cloudPost(`/api/spaces/${spaceId}/teams`, { team_id: teamId });
+// The teams POST upserts: with access it also updates an existing
+// assignment's cap; without it the server keeps the current value.
+async function assignTeam(
+  spaceId: string,
+  teamId: string,
+  access?: "admin" | "member"
+): Promise<void> {
+  await cloudPost(`/api/spaces/${spaceId}/teams`, {
+    team_id: teamId,
+    ...(access ? { access } : {}),
+  });
 }
 
 async function unassignTeam(spaceId: string, teamId: string): Promise<void> {

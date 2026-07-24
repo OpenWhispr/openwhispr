@@ -128,6 +128,7 @@
     "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
   },
   "common": {
+    "add": "追加",
     "retry": "再試行",
     "back": "戻る",
     "next": "次へ",
@@ -1877,6 +1878,7 @@
         "new": "新しいチーム",
         "empty": "チームはまだありません。",
         "createFirst": "最初のチームを作成",
+        "addMembersLabel": "メンバーを追加",
         "createTitle": "チームを作成",
         "nameLabel": "チーム名",
         "memberCount_one": "{{count}}人のメンバー",
@@ -2126,6 +2128,7 @@
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
       "newSpace": "新しいチームスペース",
+      "newSpaceInWorkspace": "{{workspace}} に新しいチームスペース",
       "createTitle": "チームスペースを作成",
       "createDescription": "ワークスペース内の共有エリアで、1つ以上のチームによって支えられます。",
       "nameLabel": "名前",
@@ -2172,7 +2175,9 @@
       "conflictKeep": "編集を続ける",
       "editedBy": "{{name}} が編集 · {{time}}",
       "members": {
-        "addPeople": "メンバーを追加",
+        "addPeopleToTeam": "{{team}} にメンバーを追加",
+        "addedToTeam": "{{name}} を {{team}} に追加しました",
+        "you": "自分",
         "addFailed": "{{total}}人中{{failed}}人を追加できませんでした",
         "searchPlaceholder": "メンバーを検索…",
         "roleAdmin": "管理者",
@@ -2189,13 +2194,20 @@
         "menu": "チームとメンバー…",
         "title": "{{space}} のチームとメンバー",
         "noTeams": "このスペースを支えるチームはまだありません。ワークスペース管理者のみが閲覧できます。",
-        "addTeam": "チームを追加…",
+        "addTeamLabel": "このスペースにチームを追加",
+        "chooseTeam": "チームを選択…",
+        "teamAdded": "{{team}} を {{space}} に追加しました",
         "removeTeamFromSpace": "スペースから外す",
         "removeTeamConfirm": "{{team}} を {{space}} から外しますか？",
         "removeTeamConfirmDescription": "他の割り当て済みチームに含まれていない限り、そのメンバーはこのスペースへのアクセスを失います。",
         "lastTeamWarning": "このスペースを支える唯一のチームです。外すと、ワークスペース管理者のみがアクセスを保持します。",
         "affectsOtherSpaces_one": "{{team}} への変更は、このチームが支える他 {{count}} 件のスペースにも適用されます。",
-        "affectsOtherSpaces_other": "{{team}} への変更は、このチームが支える他 {{count}} 件のスペースにも適用されます。"
+        "affectsOtherSpaces_other": "{{team}} への変更は、このチームが支える他 {{count}} 件のスペースにも適用されます。",
+        "accessLabel": "スペースへのアクセス",
+        "accessAdmin": "管理者",
+        "accessMember": "メンバー",
+        "accessChanged": "{{team}} のアクセスを更新しました",
+        "accessHint": "{{team}} の管理者は、アクセスが「管理者」に設定されている場合のみこのスペースを管理できます。"
       },
       "teams": {
         "assignLabel": "チーム",

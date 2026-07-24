@@ -128,6 +128,7 @@
     "pttUnavailable": "按住说话原生监听器不可用"
   },
   "common": {
+    "add": "添加",
     "retry": "重试",
     "back": "返回",
     "next": "下一步",
@@ -1877,6 +1878,7 @@
         "new": "新建团队",
         "empty": "还没有团队。",
         "createFirst": "创建你的第一个团队",
+        "addMembersLabel": "添加成员",
         "createTitle": "创建团队",
         "nameLabel": "团队名称",
         "memberCount_one": "{{count}} 名成员",
@@ -2198,6 +2200,7 @@
       "personal": "个人",
       "privateTooltip": "只有你可以看到你的个人空间",
       "newSpace": "新建团队空间",
+      "newSpaceInWorkspace": "在 {{workspace}} 中新建团队空间",
       "createTitle": "创建团队空间",
       "createDescription": "工作区内的共享区域，由一个或多个团队支持。",
       "nameLabel": "名称",
@@ -2244,7 +2247,9 @@
       "conflictKeep": "继续编辑",
       "editedBy": "由 {{name}} 编辑 · {{time}}",
       "members": {
-        "addPeople": "添加成员",
+        "addPeopleToTeam": "向 {{team}} 添加成员",
+        "addedToTeam": "已将 {{name}} 添加到 {{team}}",
+        "you": "你",
         "addFailed": "{{total}} 人中有 {{failed}} 人无法添加",
         "searchPlaceholder": "搜索成员…",
         "roleAdmin": "管理员",
@@ -2261,13 +2266,20 @@
         "menu": "团队与成员…",
         "title": "{{space}} 的团队与成员",
         "noTeams": "此空间尚无团队支持。只有工作区管理员可以看到它。",
-        "addTeam": "添加团队…",
+        "addTeamLabel": "向此空间添加团队",
+        "chooseTeam": "选择团队…",
+        "teamAdded": "已将 {{team}} 添加到 {{space}}",
         "removeTeamFromSpace": "从空间移除",
         "removeTeamConfirm": "将 {{team}} 从 {{space}} 移除？",
         "removeTeamConfirmDescription": "除非其他已分配的团队包含这些成员，否则他们将失去对此空间的访问权限。",
         "lastTeamWarning": "这是支持此空间的唯一团队。移除后，只有工作区管理员保留访问权限。",
         "affectsOtherSpaces_one": "对 {{team}} 的更改也会应用到它支持的另外 {{count}} 个空间。",
-        "affectsOtherSpaces_other": "对 {{team}} 的更改也会应用到它支持的另外 {{count}} 个空间。"
+        "affectsOtherSpaces_other": "对 {{team}} 的更改也会应用到它支持的另外 {{count}} 个空间。",
+        "accessLabel": "空间访问权限",
+        "accessAdmin": "管理员",
+        "accessMember": "成员",
+        "accessChanged": "已更新 {{team}} 的访问权限",
+        "accessHint": "仅当访问权限设为“管理员”时，{{team}} 的管理员才能管理此空间。"
       },
       "teams": {
         "assignLabel": "团队",

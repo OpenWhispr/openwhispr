@@ -128,6 +128,7 @@
     "pttUnavailable": "L'écouteur natif Push-to-Talk n'est pas disponible"
   },
   "common": {
+    "add": "Ajouter",
     "retry": "Réessayer",
     "back": "Retour",
     "next": "Suivant",
@@ -1263,6 +1264,7 @@
         "new": "Nouvelle équipe",
         "empty": "Pas encore d'équipes.",
         "createFirst": "Créez votre première équipe",
+        "addMembersLabel": "Ajouter des membres",
         "createTitle": "Créer une équipe",
         "nameLabel": "Nom de l'équipe",
         "memberCount_one": "{{count}} membre",
@@ -2406,6 +2408,7 @@
       "personal": "Personnel",
       "privateTooltip": "Vous seul pouvez voir votre espace personnel",
       "newSpace": "Nouvel espace d'équipe",
+      "newSpaceInWorkspace": "Nouvel espace d'équipe dans {{workspace}}",
       "createTitle": "Créer un espace d'équipe",
       "createDescription": "Un espace partagé au sein d'un workspace, porté par une ou plusieurs équipes.",
       "nameLabel": "Nom",
@@ -2452,7 +2455,9 @@
       "conflictKeep": "Continuer à modifier",
       "editedBy": "Modifié par {{name}} · {{time}}",
       "members": {
-        "addPeople": "Ajouter des personnes",
+        "addPeopleToTeam": "Ajouter des personnes à {{team}}",
+        "addedToTeam": "{{name}} ajouté à {{team}}",
+        "you": "Vous",
         "addFailed": "Impossible d'ajouter {{failed}} personnes sur {{total}}",
         "searchPlaceholder": "Rechercher des personnes…",
         "roleAdmin": "Administrateur",
@@ -2469,13 +2474,20 @@
         "menu": "Équipes et membres…",
         "title": "Équipes et membres de {{space}}",
         "noTeams": "Aucune équipe n'est encore rattachée à cet espace. Seuls les administrateurs du workspace peuvent le voir.",
-        "addTeam": "Ajouter une équipe…",
+        "addTeamLabel": "Ajouter une équipe à cet espace",
+        "chooseTeam": "Choisir une équipe…",
+        "teamAdded": "{{team}} ajoutée à {{space}}",
         "removeTeamFromSpace": "Retirer de l'espace",
         "removeTeamConfirm": "Retirer {{team}} de {{space}} ?",
         "removeTeamConfirmDescription": "Ses membres perdront l'accès à cet espace, sauf si une autre équipe rattachée les inclut.",
         "lastTeamWarning": "C'est la seule équipe rattachée à cet espace. Après son retrait, seuls les administrateurs du workspace garderont l'accès.",
         "affectsOtherSpaces_one": "Les modifications de {{team}} s'appliquent aussi à {{count}} autre espace qu'elle porte.",
-        "affectsOtherSpaces_other": "Les modifications de {{team}} s'appliquent aussi à {{count}} autres espaces qu'elle porte."
+        "affectsOtherSpaces_other": "Les modifications de {{team}} s'appliquent aussi à {{count}} autres espaces qu'elle porte.",
+        "accessLabel": "Accès à l'espace",
+        "accessAdmin": "Administrateur",
+        "accessMember": "Membre",
+        "accessChanged": "Accès de {{team}} mis à jour",
+        "accessHint": "Les administrateurs de {{team}} ne gèrent cet espace que lorsque son accès est défini sur Administrateur."
       },
       "teams": {
         "assignLabel": "Équipes",

@@ -104,8 +104,23 @@ export async function deleteSpace(
   return purgeSpace(space.id);
 }
 
+// Fresh assignments get the server-side 'member' default; promotion to admin
+// is a separate, explicit act via setSpaceTeamAccess.
 export async function assignTeamToSpace(space: SpaceItem, teamId: string): Promise<void> {
   await SpacesService.assignTeam(requireCloudSpaceId(space), teamId);
+  await refreshSpaceMirror();
+}
+
+// Changes an assignment's access cap via the upserting teams POST. May change
+// the caller's own my_role — including dropping their admin on this space —
+// which the mirror refresh picks up. Membership presence is untouched, so no
+// content re-sync is needed.
+export async function setSpaceTeamAccess(
+  space: SpaceItem,
+  teamId: string,
+  access: "admin" | "member"
+): Promise<void> {
+  await SpacesService.assignTeam(requireCloudSpaceId(space), teamId, access);
   await refreshSpaceMirror();
 }
 

@@ -25,6 +25,7 @@ import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import { clampEmojiInput } from "../../lib/emojiInput";
+import { orderMemberCandidates } from "../../lib/memberCandidates";
 import {
   manageableWorkspaces as findManageableWorkspaces,
   selectWorkspaceForSpaceCreation,
@@ -63,9 +64,15 @@ const EMOJI_CHOICES = [
 interface CreateSpaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Workspace preselected by the opener (e.g. a sidebar workspace row's + button). */
+  initialWorkspaceId?: string | null;
 }
 
-export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDialogProps) {
+export default function CreateSpaceDialog({
+  open,
+  onOpenChange,
+  initialWorkspaceId = null,
+}: CreateSpaceDialogProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -152,12 +159,15 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
     if (!open) return;
     setSelectedWorkspaceId((current) => {
       if (current && manageableWorkspaces.some((w) => w.id === current)) return current;
+      if (initialWorkspaceId && manageableWorkspaces.some((w) => w.id === initialWorkspaceId)) {
+        return initialWorkspaceId;
+      }
       return defaultWorkspace?.id ?? null;
     });
-  }, [open, manageableWorkspaces, defaultWorkspace?.id]);
+  }, [open, manageableWorkspaces, defaultWorkspace?.id, initialWorkspaceId]);
 
   const candidates = useMemo(
-    () => (rosterWorkspaceId === workspace?.id ? roster.filter((m) => m.user_id !== user?.id) : []),
+    () => (rosterWorkspaceId === workspace?.id ? orderMemberCandidates(roster, user?.id) : []),
     [roster, rosterWorkspaceId, user?.id, workspace?.id]
   );
   const filteredCandidates = useMemo(() => {
@@ -233,20 +243,24 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
   // failed — then the server-side zero-team create still lets admins proceed.
   const hasTeamSelection = selectedTeamIds.size > 0 || newTeamOpen || teamsError;
 
+  // Teams for the target workspace haven't arrived yet: skeleton the section
+  // (a bare "New team" button next to the label reads as misplaced UI).
+  const teamsLoading = !teamsError && teamsWorkspaceId !== workspace?.id;
+
   const handleCreate = async () => {
     const trimmed = name.trim();
     if (!trimmed || isCreating || !workspace || !hasTeamSelection) return;
     setIsCreating(true);
     try {
-      const memberIds = [...selectedIds];
+      // The server adds the creator to a new team as admin; re-adding them
+      // here would upsert that role back down to member.
+      const memberIds = [...selectedIds].filter((id) => id !== user?.id);
       const { space, failedMembers } = await createSpace(
         workspace.id,
         { name: trimmed, emoji: emoji.trim() || null },
         {
           existingTeamIds: [...selectedTeamIds],
-          newTeam: newTeamOpen
-            ? { name: newTeamName.trim() || trimmed, memberIds }
-            : undefined,
+          newTeam: newTeamOpen ? { name: newTeamName.trim() || trimmed, memberIds } : undefined,
         }
       );
       if (failedMembers > 0) {
@@ -313,23 +327,31 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
             </div>
           ) : (
             <>
-              {manageableWorkspaces.length > 1 && workspace && (
+              {/* Anyone in several workspaces sees the target workspace, even
+                  when only one of them is manageable (no picker to infer from).
+                  Opening from a workspace row's + already chose the target, so
+                  it renders as fixed context rather than a picker. */}
+              {workspaces.length > 1 && workspace && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground/50">
                     {t("settingsPage.workspace.title")}
                   </label>
-                  <Select value={workspace.id} onValueChange={handleWorkspaceChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {manageableWorkspaces.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {manageableWorkspaces.length > 1 && !initialWorkspaceId ? (
+                    <Select value={workspace.id} onValueChange={handleWorkspaceChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {manageableWorkspaces.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-foreground truncate">{workspace.name}</p>
+                  )}
                 </div>
               )}
 
@@ -415,6 +437,8 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
                       {t("settingsPage.workspace.loadError.retry")}
                     </Button>
                   </div>
+                ) : teamsLoading ? (
+                  <div className="h-24 rounded bg-foreground/5 dark:bg-white/5 animate-pulse" />
                 ) : (
                   <>
                     {teams.length > 0 && (
@@ -484,6 +508,7 @@ export default function CreateSpaceDialog({ open, onOpenChange }: CreateSpaceDia
                             onSearchChange={setMemberSearch}
                             onSelect={toggleMember}
                             selectedIds={selectedIds}
+                            currentUserId={user?.id}
                           />
                         ) : null}
                         {teams.length > 0 && (
