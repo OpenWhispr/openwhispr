@@ -10,6 +10,7 @@ import type {
   WhisperDownloadProgressData,
   WhisperModelResult,
 } from "../types/electron";
+import { useSettingsStore } from "../stores/settingsStore";
 import "../types/electron";
 
 const PROGRESS_THROTTLE_MS = 100;
@@ -68,6 +69,26 @@ function getDownloadErrorMessage(t: TFunction, error: string, code?: string): st
   if (error.includes("HTTP 4") || error.includes("HTTP 5"))
     return t("hooks.modelDownload.errors.server", { error });
   return t("hooks.modelDownload.errors.generic", { error });
+}
+
+function clearDeletedLocalModelFromScopes(modelId: string) {
+  const state = useSettingsStore.getState();
+
+  if (state.cleanupMode === "local" && state.cleanupModel === modelId) {
+    state.setCleanupModel("");
+  }
+  if (state.noteFormattingMode === "local" && state.noteFormattingModel === modelId) {
+    state.setNoteFormattingModel("");
+  }
+  if (state.dictationAgentMode === "local" && state.dictationAgentModel === modelId) {
+    state.setDictationAgentModel("");
+  }
+  if (state.chatAgentMode === "local" && state.chatAgentModel === modelId) {
+    state.setChatAgentModel("");
+  }
+  if (state.translationMode === "local" && state.translationModel === modelId) {
+    state.setTranslationModel("");
+  }
 }
 
 export function useModelDownload({
@@ -524,6 +545,7 @@ export function useModelDownload({
           }
         } else {
           await window.electronAPI?.modelDelete?.(modelId);
+          clearDeletedLocalModelFromScopes(modelId);
           toast({
             title: t("hooks.modelDownload.modelDeleted.title"),
             description: t("hooks.modelDownload.modelDeleted.description"),
