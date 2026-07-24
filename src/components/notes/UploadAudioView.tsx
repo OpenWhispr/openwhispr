@@ -142,6 +142,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   } | null>(null);
   const progressCleanupRef = useRef<(() => void) | null>(null);
   const runIdRef = useRef(0);
+  const activeRequestIdRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
   const urlDownloadActiveRef = useRef(false);
 
@@ -561,6 +562,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const cancelTranscription = () => {
+    // True backend abort for cloud uploads; unknown ids are a safe no-op for
+    // providers that don't register one. The run-id bump still discards any
+    // late result.
+    if (activeRequestIdRef.current) {
+      window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
+    }
     runIdRef.current++;
     reset();
   };
@@ -570,6 +577,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     const currentFile = file;
     const currentTempPath = downloadedTempPath;
     const runId = ++runIdRef.current;
+    const requestId = crypto.randomUUID();
+    activeRequestIdRef.current = requestId;
     setState("transcribing");
     setError(null);
     setProgress(0);
@@ -609,7 +618,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           localModelsReady: !!diarizationModelsReady,
           numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
         },
-        currentFile.durationSeconds
+        currentFile.durationSeconds,
+        { requestId }
       );
 
       if (runId !== runIdRef.current) return;

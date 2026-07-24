@@ -39,11 +39,15 @@ export interface FileTranscriptionConfig {
 export async function transcribeFile(
   filePath: string,
   cfg: FileTranscriptionConfig,
-  diarize: boolean
+  diarize: boolean,
+  opts: { requestId?: string } = {}
 ): Promise<FileTranscriptionResult> {
   if (cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
-      const r = await window.electronAPI.transcribeAudioFileCloud!(filePath);
+      const r = await window.electronAPI.transcribeAudioFileCloud!(
+        filePath,
+        opts.requestId ? { requestId: opts.requestId } : undefined
+      );
       if (!r.success && r.code) {
         throw Object.assign(new Error(r.error || "Cloud transcription failed"), {
           code: r.code,
@@ -101,7 +105,8 @@ export async function transcribeFileWithSpeakers(
   filePath: string,
   cfg: FileTranscriptionConfig,
   diarization: DiarizationSettings,
-  durationSeconds?: number | null
+  durationSeconds?: number | null,
+  opts: { requestId?: string } = {}
 ): Promise<FileTranscriptionResult> {
   const byokDiarize = shouldUseByokDiarize(cfg, diarization.enabled);
   const diarizePromise =
@@ -114,7 +119,7 @@ export async function transcribeFileWithSpeakers(
       : Promise.resolve(null);
 
   const [result, diar] = await Promise.all([
-    transcribeFile(filePath, cfg, byokDiarize),
+    transcribeFile(filePath, cfg, byokDiarize, opts),
     diarizePromise,
   ]);
 

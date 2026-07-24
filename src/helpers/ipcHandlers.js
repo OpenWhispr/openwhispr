@@ -1,4 +1,4 @@
-const { ipcMain, app, shell, BrowserWindow, systemPreferences, net } = require("electron");
+const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -130,7 +130,25 @@ const AUDIO_MIME_TYPES = {
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 const CLOUD_CHUNK_CONCURRENCY = 5;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
-const CLOUD_CHUNK_MAX_ATTEMPTS = 3;
+
+const { createAbortError } = require("./abortError");
+const {
+  CLOUD_UPLOAD_TIMEOUT_MS,
+  CLOUD_CHUNK_MAX_ATTEMPTS,
+  CLOUD_CHUNK_GLOBAL_CONCURRENCY,
+  isTransientChunkError,
+  isNetworkLevelFailure,
+  chunkRetryDelayMs,
+  abortableSleep,
+  createUploadSlots,
+} = require("./cloudChunkPolicy");
+
+// Chunk uploads ride a dedicated in-memory session so stalled large bodies can
+// never wedge the HTTP/2 connection the rest of the app multiplexes over, and
+// a failed attempt can drop the pool without collateral damage (#1326).
+const CLOUD_UPLOAD_SESSION_PARTITION = "ow-cloud-uploads";
+const getCloudUploadSession = () => session.fromPartition(CLOUD_UPLOAD_SESSION_PARTITION);
+const cloudUploadSlots = createUploadSlots(CLOUD_CHUNK_GLOBAL_CONCURRENCY);
 
 const {
   formatTimestamp: formatDiarTime,
@@ -208,8 +226,8 @@ function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   return { body: Buffer.concat(bodyParts), boundary };
 }
 
-async function postMultipart(url, body, boundary, headers = {}) {
-  const response = await net.fetch(url.toString(), {
+async function postMultipart(url, body, boundary, headers = {}, { signal, session: fetchSession } = {}) {
+  const response = await (fetchSession ?? net).fetch(url.toString(), {
     method: "POST",
     headers: {
       "Content-Type": `multipart/form-data; boundary=${boundary}`,
@@ -217,6 +235,7 @@ async function postMultipart(url, body, boundary, headers = {}) {
     },
     body,
     useSessionCookies: false,
+    signal,
   });
   const text = await response.text();
   try {
@@ -256,13 +275,6 @@ function interpretTranscribeResponse(data) {
   return data.data;
 }
 
-const NON_RETRYABLE_CHUNK_CODES = new Set(["AUTH_EXPIRED", "LIMIT_REACHED", "NO_SPEECH_DETECTED"]);
-
-function isTransientChunkError(err) {
-  if (NON_RETRYABLE_CHUNK_CODES.has(err.code)) return false;
-  return !err.statusCode || err.statusCode >= 500;
-}
-
 async function chunkedCloudTranscribe({
   buffer = null,
   filePath = null,
@@ -270,6 +282,7 @@ async function chunkedCloudTranscribe({
   authHeader,
   multipartFields = {},
   onProgress,
+  signal,
   concurrencyLimit = CLOUD_CHUNK_CONCURRENCY,
   segmentDuration = CLOUD_CHUNK_SEGMENT_SECONDS,
 }) {
@@ -291,7 +304,7 @@ async function chunkedCloudTranscribe({
   try {
     onProgress?.({ stage: "splitting", chunksTotal: 0, chunksCompleted: 0 });
 
-    const chunkPaths = await splitAudioFile(inputPath, chunkDir, { segmentDuration });
+    const chunkPaths = await splitAudioFile(inputPath, chunkDir, { segmentDuration, signal });
     const totalChunks = chunkPaths.length;
 
     onProgress?.({ stage: "transcribing", chunksTotal: totalChunks, chunksCompleted: 0 });
@@ -301,28 +314,57 @@ async function chunkedCloudTranscribe({
     let completedCount = 0;
 
     const transcribeChunk = async (index) => {
-      const chunkBuffer = fs.readFileSync(chunkPaths[index]);
-      const chunkName = path.basename(chunkPaths[index]);
-      const { body, boundary } = buildMultipartBody(
-        chunkBuffer,
-        chunkName,
-        "audio/mpeg",
-        multipartFields
-      );
-      const url = new URL(`${apiUrl}/api/transcribe`);
+      // Cross-job gate: at most CLOUD_CHUNK_GLOBAL_CONCURRENCY chunk bodies in
+      // flight app-wide, so a user retry can't double the load that wedges the
+      // connection (the buffer is also only read once a slot is held).
+      const releaseSlot = await cloudUploadSlots.acquire(signal);
+      try {
+        const chunkBuffer = fs.readFileSync(chunkPaths[index]);
+        const chunkName = path.basename(chunkPaths[index]);
+        const { body, boundary } = buildMultipartBody(
+          chunkBuffer,
+          chunkName,
+          "audio/mpeg",
+          multipartFields
+        );
+        const url = new URL(`${apiUrl}/api/transcribe`);
 
-      for (let attempt = 1; ; attempt++) {
-        try {
-          const data = await postMultipart(url, body, boundary, authHeader);
-          results[index] = interpretTranscribeResponse(data);
-          break;
-        } catch (err) {
-          if (attempt >= CLOUD_CHUNK_MAX_ATTEMPTS || !isTransientChunkError(err)) throw err;
-          debugLogger.warn(`Chunk ${index} attempt ${attempt} failed, retrying`, {
-            error: err.message,
-          });
-          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt + Math.random() * 500));
+        for (let attempt = 1; ; attempt++) {
+          if (signal?.aborted) throw createAbortError();
+          const timeoutSignal = AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS);
+          const attemptSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+          try {
+            const data = await postMultipart(url, body, boundary, authHeader, {
+              signal: attemptSignal,
+              session: getCloudUploadSession(),
+            });
+            results[index] = interpretTranscribeResponse(data);
+            break;
+          } catch (err) {
+            if (signal?.aborted) throw createAbortError();
+            const timedOut = timeoutSignal.aborted;
+            if (attempt >= CLOUD_CHUNK_MAX_ATTEMPTS || !(timedOut || isTransientChunkError(err))) {
+              throw err;
+            }
+            if (isNetworkLevelFailure(err, { timedOut })) {
+              // No HTTP answer ever arrived — treat the pool as wedged and drop
+              // it so the retry dials a fresh connection instead of re-entering
+              // the dying one.
+              try {
+                await getCloudUploadSession().closeAllConnections();
+              } catch {
+                // pool teardown is best-effort
+              }
+            }
+            debugLogger.warn(`Chunk ${index} attempt ${attempt} failed, retrying`, {
+              error: err.message,
+              timedOut,
+            });
+            await abortableSleep(chunkRetryDelayMs(attempt), signal);
+          }
         }
+      } finally {
+        releaseSlot();
       }
 
       completedCount++;
@@ -335,11 +377,15 @@ async function chunkedCloudTranscribe({
 
     const executing = new Set();
     for (let index = 0; index < totalChunks; index++) {
+      if (signal?.aborted) break;
       const p = transcribeChunk(index).then(
         () => executing.delete(p),
         (err) => {
           executing.delete(p);
           if (err.code === "AUTH_EXPIRED" || err.code === "LIMIT_REACHED") throw err;
+          // Abort is reported once after the loop; swallow per-chunk abort
+          // rejections so they never surface as unhandled.
+          if (err.name === "AbortError") return;
           if (err.code) failureCodes.add(err.code);
           debugLogger.warn(`Chunk ${index} failed`, { error: err.message, code: err.code });
         }
@@ -350,6 +396,10 @@ async function chunkedCloudTranscribe({
       }
     }
     await Promise.all(executing);
+
+    if (signal?.aborted) {
+      throw Object.assign(createAbortError("Upload cancelled"), { code: "UPLOAD_CANCELLED" });
+    }
 
     const succeeded = results.filter((r) => r !== null);
     if (succeeded.length === 0) {
@@ -416,6 +466,9 @@ class IPCHandlers {
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
+    // requestId -> { controller } for in-flight audio-upload transcriptions,
+    // so a generic cancel can abort the exact job.
+    this._uploadTranscriptionControllers = new Map();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
     this.cortiStreaming = null;
@@ -4266,7 +4319,9 @@ class IPCHandlers {
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const data = await postMultipart(url, body, boundary, authHeader);
+        const data = await postMultipart(url, body, boundary, authHeader, {
+          signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+        });
 
         debugLogger.debug(
           "Cloud transcribe response",
@@ -4413,7 +4468,9 @@ class IPCHandlers {
                     multipartFields
                   );
                   const url = new URL(`${apiUrl}/api/transcribe`);
-                  const data = await postMultipart(url, body, boundary, authHeader);
+                  const data = await postMultipart(url, body, boundary, authHeader, {
+                    signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+                  });
                   const responseData = interpretTranscribeResponse(data);
                   result = {
                     text: responseData.text,
@@ -7322,7 +7379,10 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
+    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
+      const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
+      const controller = new AbortController();
+      if (requestId) this._uploadTranscriptionControllers.set(requestId, { controller });
       try {
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
@@ -7357,6 +7417,7 @@ class IPCHandlers {
             authHeader,
             multipartFields,
             onProgress: (payload) => event.sender.send("upload-transcription-progress", payload),
+            signal: controller.signal,
           });
           return { success: true, text, ...(warning ? { warning } : {}) };
         }
@@ -7373,17 +7434,36 @@ class IPCHandlers {
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const data = await postMultipart(url, body, boundary, authHeader);
+        const data = await postMultipart(url, body, boundary, authHeader, {
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          ]),
+          session: getCloudUploadSession(),
+        });
         const result = interpretTranscribeResponse(data);
 
         return { success: true, text: result.text };
       } catch (error) {
+        if (controller.signal.aborted) {
+          debugLogger.debug("Cloud audio file transcription cancelled", { requestId });
+          return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+        }
         debugLogger.error("Cloud audio file transcription error", { error: error.message });
         if (error.code) {
           return { success: false, error: error.message, code: error.code, ...error };
         }
         return { success: false, error: error.message };
+      } finally {
+        if (requestId) this._uploadTranscriptionControllers.delete(requestId);
       }
+    });
+
+    ipcMain.handle("cancel-upload-transcription", async (_event, requestId) => {
+      const entry = this._uploadTranscriptionControllers.get(requestId);
+      if (!entry) return { success: false, restarted: false };
+      entry.controller.abort();
+      return { success: true, restarted: false };
     });
 
     ipcMain.handle(
