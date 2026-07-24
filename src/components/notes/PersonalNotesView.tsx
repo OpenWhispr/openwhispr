@@ -199,8 +199,9 @@ export default function PersonalNotesView({
   }, [invitationEntry, isSidePanelLayout]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
-  // space backed by an invited team appears in the local mirror, take the user
-  // to it instead of leaving the newly shared content hidden behind Personal.
+  // space an invited team can access appears in the local mirror, take the
+  // user to it instead of leaving the newly shared content hidden behind
+  // Personal.
   useEffect(() => {
     if (!invitationEntry) return;
     const invitedTeamIds = new Set(invitationEntry.teamIds);

@@ -80,6 +80,9 @@ export default function TeamMembersDialog({
         setIsLeaving(true);
         try {
           await leaveTeam(team.id, userId);
+          toast({
+            title: t("settingsPage.workspace.teams.members.leftTeam", { team: team.name }),
+          });
           onOpenChange(false);
         } catch (err) {
           toast({

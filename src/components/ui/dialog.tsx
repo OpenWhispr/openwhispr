@@ -31,19 +31,28 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, onInteractOutside, ...props }, ref) => {
-  // With a popper layer (Select/Popover/DropdownMenu) open above this dialog,
-  // an outside click dismisses that layer — never the dialog. The popper can
-  // unmount before Radix's bubble-phase dismissal handlers run (it sometimes
-  // defers to a one-time `click` listener), so the presence check must be
-  // snapshotted at pointerdown capture time, ahead of every Radix handler.
-  const popperWasOpenRef = React.useRef(false);
+  // With another layer open above this dialog — a popper (Select/Popover/
+  // DropdownMenu) or a stacked dialog — an outside click dismisses that
+  // layer, never this dialog. Radix defers outside-click dismissal to a
+  // one-time document `click` listener, and the upper layer can unmount
+  // before it runs (e.g. a stacked dialog's Cancel closes it mid-click),
+  // which un-gates this layer's own dismissal. So "was something above us"
+  // must be snapshotted at pointerdown capture time, ahead of every Radix
+  // handler.
+  const contentRef = React.useRef<React.ElementRef<typeof DialogPrimitive.Content> | null>(null);
+  const layerWasAboveRef = React.useRef(false);
   React.useEffect(() => {
-    const snapshotPopperPresence = () => {
-      popperWasOpenRef.current = !!document.querySelector("[data-radix-popper-content-wrapper]");
+    const snapshotLayersAbove = () => {
+      // Later-mounted portals stack on top, so the last open dialog in DOM
+      // order is the topmost one.
+      const openDialogs = document.querySelectorAll('[role="dialog"][data-state="open"]');
+      layerWasAboveRef.current =
+        !!document.querySelector("[data-radix-popper-content-wrapper]") ||
+        (openDialogs.length > 0 && openDialogs[openDialogs.length - 1] !== contentRef.current);
     };
-    document.addEventListener("pointerdown", snapshotPopperPresence, { capture: true });
+    document.addEventListener("pointerdown", snapshotLayersAbove, { capture: true });
     return () => {
-      document.removeEventListener("pointerdown", snapshotPopperPresence, { capture: true });
+      document.removeEventListener("pointerdown", snapshotLayersAbove, { capture: true });
     };
   }, []);
 
@@ -51,14 +60,18 @@ const DialogContent = React.forwardRef<
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
-        ref={ref}
+        ref={(node) => {
+          contentRef.current = node;
+          if (typeof ref === "function") ref(node);
+          else if (ref) ref.current = node;
+        }}
         onInteractOutside={(event) => {
           onInteractOutside?.(event);
           if (event.defaultPrevented) return;
           // Focus-outside dismissals would read a snapshot left over from the
           // last pointerdown, however long ago — the guard is pointer-only.
           if (event.detail.originalEvent.type !== "pointerdown") return;
-          if (popperWasOpenRef.current) event.preventDefault();
+          if (layerWasAboveRef.current) event.preventDefault();
         }}
         className={cn(
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border p-6 shadow-2xl duration-200 rounded-2xl",

@@ -4,11 +4,11 @@ import { markSpacePurged, readPurgedSpaceIds, syncService } from "./SyncService"
 import { loadSpaces, purgeSpace, updateSpaceMeta } from "../stores/noteStore";
 import type { SpaceItem, TeamRole } from "../types/electron";
 
-// Single mutation path for spaces and their backing teams: server call → local
+// Single mutation path for spaces and their assigned teams: server call → local
 // SQLite mirror → store refresh. Roster and team mutations are space-agnostic
-// (a team can back many spaces), so they re-mirror every cloud space rather
-// than patching one row — my_role, member_count (deduped union) and the teams
-// list are always server-computed.
+// (a team can be assigned to many spaces), so they re-mirror every cloud space
+// rather than patching one row — my_role, member_count (deduped union) and the
+// teams list are always server-computed.
 
 function requireCloudSpaceId(space: SpaceItem): string {
   if (!space.cloud_space_id) throw new Error("Not a cloud space");
@@ -156,8 +156,8 @@ export async function setTeamMemberRole(
   await refreshSpaceMirror();
 }
 
-// Self-removal from a team. Spaces backed only by this team disappear on the
-// follow-up sync pass (never purged here: other teams may still grant access).
+// Spaces accessible only through this team disappear on the follow-up sync
+// pass (never purged here: other teams may still grant access).
 export async function leaveTeam(teamId: string, userId: string): Promise<void> {
   await TeamsService.removeMember(teamId, userId);
   await refreshSpaceMirror();
@@ -170,8 +170,9 @@ export async function renameTeam(teamId: string, name: string): Promise<void> {
   await refreshSpaceMirror();
 }
 
-// Archives the team. Never marks the purge guard: spaces it backed may survive
-// via other teams — the follow-up sync pass decides what disappears.
+// Archives the team. Never marks the purge guard: spaces it granted access to
+// may survive via other teams — the follow-up sync pass decides what
+// disappears.
 export async function deleteTeam(teamId: string): Promise<void> {
   await TeamsService.remove(teamId);
   await refreshSpaceMirror();

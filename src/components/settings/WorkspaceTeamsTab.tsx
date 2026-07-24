@@ -40,7 +40,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
     }
   }, [workspace.id]);
 
-  // Spaces feed the "backs N spaces" column; the settings surface can open
+  // Spaces feed the "grants access to N spaces" column; the settings surface can open
   // before the notes tree ever loads them.
   useEffect(() => {
     void loadTeams();
@@ -64,7 +64,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
       title: t("settingsPage.workspace.teams.deleteConfirmTitle", { team: team.name }),
       description:
         backedSpaces > 0
-          ? t("settingsPage.workspace.teams.deleteConfirmBacksSpaces", { count: backedSpaces })
+          ? t("settingsPage.workspace.teams.deleteConfirmSpaceAccess", { count: backedSpaces })
           : t("settingsPage.workspace.teams.deleteConfirmDescription"),
       confirmText: t("common.delete"),
       variant: "destructive",
@@ -73,6 +73,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         try {
           await deleteTeam(team.id);
           await loadTeams();
+          toast({ title: t("settingsPage.workspace.teams.deleted", { team: team.name }) });
         } catch (error) {
           toast({
             title: t("common.error"),
@@ -140,7 +141,9 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
                   <p className="text-xs font-medium text-foreground truncate">{team.name}</p>
                   {backedSpaces > 0 && (
                     <p className="text-xs text-muted-foreground/80 truncate">
-                      {t("settingsPage.workspace.teams.backsSpaces", { count: backedSpaces })}
+                      {t("settingsPage.workspace.teams.grantsAccessToSpaces", {
+                        count: backedSpaces,
+                      })}
                     </p>
                   )}
                 </div>
@@ -183,7 +186,10 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         workspaceId={workspace.id}
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={() => loadTeams()}
+        onCreated={(team) => {
+          toast({ title: t("settingsPage.workspace.teams.created", { team: team.name }) });
+          return loadTeams();
+        }}
       />
 
       {membersTeam && (

@@ -20,3 +20,17 @@ export function canManageTeamRoster(
 ): boolean {
   return teamMyRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
 }
+
+/**
+ * Whether a note or folder may move between two spaces: anything may leave a
+ * private space, while team-space content stays within its workspace — never
+ * to another workspace and never back to private. Team spaces not linked to a
+ * workspace (legacy mirrors) never match, so nothing moves out of them.
+ */
+export function canMoveBetweenSpaces(
+  from: Pick<SpaceItem, "kind" | "workspace_id">,
+  to: Pick<SpaceItem, "kind" | "workspace_id">
+): boolean {
+  if (from.kind === "private") return true;
+  return to.kind === "team" && from.workspace_id != null && from.workspace_id === to.workspace_id;
+}

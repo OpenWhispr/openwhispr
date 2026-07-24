@@ -680,7 +680,6 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending'"
       );
 
-      // Team spaces
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS spaces (
           id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -706,9 +705,10 @@ class DatabaseManager {
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_team_id ON spaces(cloud_team_id) WHERE cloud_team_id IS NOT NULL"
       );
 
-      // First-class spaces: a space mirrors a cloud space backed by one or more
-      // teams. cloud_team_id survives only so pre-spaces rows can be adopted by
-      // upsertSpaceFromCloud (matched via the space's single backfilled team).
+      // First-class spaces: a space mirrors a cloud space with one or more
+      // assigned teams. cloud_team_id survives only so pre-spaces rows can be
+      // adopted by upsertSpaceFromCloud (matched via the space's single
+      // backfilled team).
       try {
         this.db.exec("ALTER TABLE spaces ADD COLUMN cloud_space_id TEXT");
       } catch (err) {

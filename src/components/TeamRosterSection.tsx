@@ -89,7 +89,10 @@ export default function TeamRosterSection({
 
   const handleRoleChange = (member: TeamMember, role: TeamRole) => {
     if (role === member.role) return;
-    void withRowBusy(member.user_id, () => setTeamMemberRole(teamId, member.user_id, role));
+    void withRowBusy(member.user_id, async () => {
+      await setTeamMemberRole(teamId, member.user_id, role);
+      toast({ title: t("notes.spaces.members.roleUpdated") });
+    });
   };
 
   const handleAdd = (member: WorkspaceMember) => {
@@ -180,9 +183,15 @@ export default function TeamRosterSection({
                         removeConfirm(
                           member,
                           () =>
-                            void withRowBusy(member.user_id, () =>
-                              removeTeamMember(teamId, member.user_id)
-                            )
+                            void withRowBusy(member.user_id, async () => {
+                              await removeTeamMember(teamId, member.user_id);
+                              toast({
+                                title: t("notes.spaces.members.removedFromTeam", {
+                                  name: member.name || member.email,
+                                  team: teamName,
+                                }),
+                              });
+                            })
                         )
                       }
                       disabled={isBusy}

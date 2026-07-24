@@ -122,6 +122,11 @@ export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: 
         try {
           await WorkspacesService.removeMember(workspace.id, member.user_id);
           await refreshMembers(workspace.id);
+          toast({
+            title: t("settingsPage.workspace.members.removed", {
+              name: member.name || member.email,
+            }),
+          });
         } catch (error) {
           toast({
             title: t("common.error"),
@@ -145,6 +150,7 @@ export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: 
         try {
           await InvitationsService.revoke(workspace.id, inv.id);
           await refreshInvitations();
+          toast({ title: t("settingsPage.workspace.invites.revoked") });
         } catch (error) {
           toast({
             title: t("settingsPage.workspace.invites.revokeFailed"),

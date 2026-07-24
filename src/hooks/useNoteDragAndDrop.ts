@@ -29,6 +29,8 @@ interface UseNoteDragAndDropOptions {
   onMoveToTarget: (noteId: number, target: NoteMoveTarget) => void | Promise<void>;
   /** Cross-space drops change the note's audience — the caller confirms, then calls commit(). */
   onCrossSpaceDrop: (note: DraggedNoteInfo, target: NoteMoveTarget, commit: () => void) => void;
+  /** Vetoes cross-space targets: when it returns false the row never accepts the drag. */
+  canCrossSpaceDrop?: (note: DraggedNoteInfo, target: NoteMoveTarget) => boolean;
   /** Fired after hovering a target for 500ms mid-drag (auto-expand collapsed containers). */
   onHoverTarget?: (key: string) => void;
 }
@@ -44,6 +46,7 @@ function targetKey(target: NoteMoveTarget): string {
 export function useNoteDragAndDrop({
   onMoveToTarget,
   onCrossSpaceDrop,
+  canCrossSpaceDrop,
   onHoverTarget,
 }: UseNoteDragAndDropOptions) {
   const [dragState, setDragState] = useState<DragState>({
@@ -141,6 +144,13 @@ export function useNoteDragAndDrop({
             ? note.folderId === target.folderId
             : note.folderId == null && note.spaceId === target.spaceId;
         if (isSameContainer) return false;
+        if (
+          note.spaceId !== target.spaceId &&
+          canCrossSpaceDrop &&
+          !canCrossSpaceDrop(note, target)
+        ) {
+          return false;
+        }
         // The default Meetings folder of the note's own space stays a non-target.
         const isOwnMeetings =
           !!targetInfo.isDefaultFolder &&
@@ -206,7 +216,7 @@ export function useNoteDragAndDrop({
         },
       };
     },
-    [onCrossSpaceDrop, onHoverTarget, commitDrop, clearHoverTimeout]
+    [onCrossSpaceDrop, canCrossSpaceDrop, onHoverTarget, commitDrop, clearHoverTimeout]
   );
 
   return { dragState, noteDragHandlers, dropTargetHandlers };

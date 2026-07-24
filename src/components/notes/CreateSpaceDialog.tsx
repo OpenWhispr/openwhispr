@@ -275,6 +275,7 @@ export default function CreateSpaceDialog({
       if (space) {
         revealContainer(space.id, null);
         setActiveContext(space.id, null);
+        toast({ title: t("notes.spaces.created", { space: trimmed }) });
       }
       handleOpenChange(false);
     } catch (err) {

@@ -86,7 +86,7 @@ function normalizeTimestamp(value: string | null | undefined): string {
 // local rows nothing can ever clean up. Entries are pruned once a spaces pass
 // confirms the space is gone from /api/me/spaces, or after a TTL so a failed
 // delete cannot hide a still-live space forever. Never marked on TEAM delete:
-// a space backed by other teams survives the team's archival.
+// a space still accessible via other teams survives the team's archival.
 const PURGED_SPACE_GUARD_KEY = "purgedSpaceIds";
 const PURGED_SPACE_GUARD_TTL_MS = 15 * 60 * 1000;
 // Serializes the guard's read-modify-write across windows: a prune inside a
@@ -639,7 +639,7 @@ class SyncService {
 
   // Runs first in every pass: probes spaces availability, mirrors the caller's
   // cloud spaces into local rows, purges spaces that vanished (deleted,
-  // archived, or every backing team's membership revoked) and backfills new
+  // archived, or every assigned team's membership revoked) and backfills new
   // ones.
   private async syncSpaces(): Promise<boolean> {
     if (!this.canSyncTeamSpaces()) return true;

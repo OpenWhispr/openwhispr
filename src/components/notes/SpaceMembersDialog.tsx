@@ -90,7 +90,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
     }
   }, [open, space.workspace_id, refreshMembers]);
 
-  // How many OTHER spaces each assigned team backs — roster edits ripple there.
+  // How many OTHER spaces each assigned team has access to — roster edits ripple there.
   const otherSpacesByTeam = useMemo(() => {
     const counts = new Map<string, number>();
     for (const teamRef of space.teams) {
@@ -143,6 +143,12 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
       onConfirm: async () => {
         try {
           await unassignTeamFromSpace(space, teamId);
+          toast({
+            title: t("notes.spaces.teamsMembers.teamRemoved", {
+              team: teamName,
+              space: space.name,
+            }),
+          });
         } catch (err) {
           toast({
             title: t("common.error"),

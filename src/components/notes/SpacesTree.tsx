@@ -43,7 +43,7 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { clampEmojiInput } from "../../lib/emojiInput";
-import { canManageSpace } from "../../lib/spacePermissions";
+import { canManageSpace, canMoveBetweenSpaces } from "../../lib/spacePermissions";
 import { groupTeamSpacesByWorkspace } from "../../lib/workspaceSelection";
 import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { deleteSpace, renameSpace } from "../../services/spaceActions";
@@ -1128,6 +1128,21 @@ export default function SpacesTree({
     [teamSpaces, workspaces]
   );
   const visibleSpaces = teamCapability ? spaces : privateSpaces;
+  const spacesById = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
+  // Valid move destinations per source space (the source itself stays listed —
+  // menus render it as the disabled "current" row).
+  const moveTargetsBySpace = useMemo(() => {
+    const targets = new Map<number, SpaceItem[]>();
+    for (const source of spaces) {
+      targets.set(
+        source.id,
+        visibleSpaces.filter(
+          (target) => target.id === source.id || canMoveBetweenSpaces(source, target)
+        )
+      );
+    }
+    return targets;
+  }, [spaces, visibleSpaces]);
 
   // Until the workspace fetch settles, grouping is unknown — showing spaces
   // flat and regrouping on arrival reads as a glitch, so skeleton instead.
@@ -1251,10 +1266,17 @@ export default function SpacesTree({
     }
   };
 
+  const allowsCrossSpaceMove = (fromSpaceId: number, toSpaceId: number): boolean => {
+    const from = spacesById.get(fromSpaceId);
+    const to = spacesById.get(toSpaceId);
+    return !!from && !!to && canMoveBetweenSpaces(from, to);
+  };
+
   const requestMoveNote = (noteId: number, target: NoteMoveTarget) => {
     const note = getNoteFromStore(noteId);
     if (!note) return;
     if (note.space_id !== target.spaceId) {
+      if (!allowsCrossSpaceMove(note.space_id, target.spaceId)) return;
       confirmCrossSpaceMove(
         note.space_id,
         target.spaceId,
@@ -1298,6 +1320,7 @@ export default function SpacesTree({
 
   const requestMoveFolder = (folder: FolderItem, space: SpaceItem) => {
     if (space.id === folder.space_id) return;
+    if (!allowsCrossSpaceMove(folder.space_id, space.id)) return;
     confirmCrossSpaceMove(
       folder.space_id,
       space.id,
@@ -1311,6 +1334,7 @@ export default function SpacesTree({
     onCrossSpaceDrop: (note: DraggedNoteInfo, target, commit) => {
       confirmCrossSpaceMove(note.spaceId, target.spaceId, false, commit);
     },
+    canCrossSpaceDrop: (note, target) => allowsCrossSpaceMove(note.spaceId, target.spaceId),
     onHoverTarget: (key) => setContainerExpanded(key, true),
   });
 
@@ -1598,7 +1622,9 @@ export default function SpacesTree({
         description: result.error ?? t("common.unknownError"),
         variant: "destructive",
       });
+      return;
     }
+    toast({ title: t("notes.spaces.renamed", { space: name }) });
   };
 
   const renderNote = (
@@ -1620,7 +1646,7 @@ export default function SpacesTree({
         folderId: note.folder_id,
         spaceId: note.space_id,
       })}
-      spaces={visibleSpaces}
+      spaces={moveTargetsBySpace.get(note.space_id) ?? []}
       folders={folders}
       noteFilesEnabled={noteFilesEnabled}
       fileManagerName={fileManagerName}
@@ -1669,7 +1695,7 @@ export default function SpacesTree({
         <FolderRow
           folder={folder}
           level={level}
-          spaces={visibleSpaces}
+          spaces={moveTargetsBySpace.get(folder.space_id) ?? []}
           isExpanded={isExpanded}
           isActive={activeContext?.folderId === folder.id}
           count={folderCounts[folder.id] ?? 0}

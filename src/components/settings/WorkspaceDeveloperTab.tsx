@@ -141,6 +141,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         try {
           await WorkspaceApiKeysService.revoke(workspace.id, key.id);
           await refresh();
+          toast({ title: t("settingsPage.workspace.developer.revoked", { name: key.name }) });
         } catch (error) {
           toast({
             title: t("common.error"),
