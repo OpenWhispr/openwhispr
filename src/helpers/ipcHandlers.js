@@ -18,6 +18,7 @@ const { getCortiToken } = require("./cortiAuth");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
+const { validateLlmApiKey, validateAndSaveLlmApiKey } = require("./llmKeyValidation");
 const AudioStorageManager = require("./audioStorage");
 
 // Tinfoil's only realtime STT model — fallback when the renderer omits one.
@@ -916,6 +917,32 @@ class IPCHandlers {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
     }
+
+    const llmKeyValidationDependencies = {
+      fetchImpl: (url, init = {}) => net.fetch(url, { ...init, useSessionCookies: false }),
+    };
+
+    ipcMain.handle("test-llm-api-key", (_event, request) =>
+      validateLlmApiKey(request, llmKeyValidationDependencies)
+    );
+
+    ipcMain.handle("validate-and-save-llm-api-key", (_event, request) => {
+      const secret = BYOK_API_KEYS.find((entry) => entry.base === request?.provider);
+      if (!secret) {
+        return {
+          success: false,
+          provider: request?.provider || "",
+          code: "UNSUPPORTED_PROVIDER",
+          error: "This provider does not support API-key validation.",
+          retryable: false,
+        };
+      }
+
+      return validateAndSaveLlmApiKey(request, {
+        ...llmKeyValidationDependencies,
+        saveKey: (key) => this.environmentManager.saveSecretKeyAndWait(secret.env, key),
+      });
+    });
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
       const result = this.databaseManager.saveTranscription(text, rawText, options);

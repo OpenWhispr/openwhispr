@@ -7,6 +7,50 @@ export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted"
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
+export type PersistedLlmKeyProvider =
+  | "openai"
+  | "anthropic"
+  | "gemini"
+  | "groq"
+  | "xai"
+  | "mistral"
+  | "openrouter"
+  | "tinfoil"
+  | "corti";
+
+export type LlmKeyProvider = PersistedLlmKeyProvider | "custom";
+
+export type LlmKeyValidationCode =
+  | "INVALID_KEY"
+  | "PERMISSION_DENIED"
+  | "BILLING_REQUIRED"
+  | "RATE_LIMITED"
+  | "TIMEOUT"
+  | "NETWORK_ERROR"
+  | "PROVIDER_UNAVAILABLE"
+  | "INVALID_ENDPOINT"
+  | "UNSUPPORTED_PROVIDER"
+  | "INVALID_REQUEST"
+  | "PERSISTENCE_FAILED"
+  | "VALIDATION_FAILED";
+
+export interface LlmKeyValidationRequest {
+  provider: LlmKeyProvider;
+  key: string;
+  baseUrl?: string;
+}
+
+export interface LlmKeyValidationResult {
+  success: boolean;
+  provider: string;
+  verified?: boolean;
+  code?: LlmKeyValidationCode;
+  error?: string;
+  warning?: string;
+  retryable?: boolean;
+  removed?: boolean;
+}
+
 export type TranscriptionStatus = "completed" | "failed" | "pending" | "discarded";
 
 export type TranscriptionErrorCode =
@@ -812,6 +856,10 @@ declare global {
       onTranscriptionsCleared?: (callback: (payload: { cleared: number }) => void) => () => void;
 
       // API key management
+      testLlmApiKey: (request: LlmKeyValidationRequest) => Promise<LlmKeyValidationResult>;
+      validateAndSaveLlmApiKey: (
+        request: LlmKeyValidationRequest & { provider: PersistedLlmKeyProvider }
+      ) => Promise<LlmKeyValidationResult>;
       getOpenAIKey: () => Promise<string>;
       saveOpenAIKey: (key: string) => Promise<{ success: boolean }>;
       getAnthropicKey: () => Promise<string | null>;

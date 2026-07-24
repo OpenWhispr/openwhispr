@@ -2512,7 +2512,25 @@
     "edit": "Editar",
     "add": "Adicionar",
     "editButton": "Editar",
-    "addButton": "Adicionar"
+    "addButton": "Adicionar",
+    "testing": "Verificando chave...",
+    "verified": "verificada",
+    "saved": "salva",
+    "savedUnverified": "Salva sem verificação: {{reason}} Você pode continuar a configuração.",
+    "errors": {
+      "INVALID_KEY": "O provedor rejeitou esta chave de API.",
+      "PERMISSION_DENIED": "Esta chave não tem as permissões necessárias.",
+      "BILLING_REQUIRED": "Adicione faturamento ou créditos a esta conta.",
+      "RATE_LIMITED": "O provedor limitou o teste. Tente novamente em breve.",
+      "TIMEOUT": "O provedor não respondeu a tempo.",
+      "NETWORK_ERROR": "Não foi possível acessar o provedor. Verifique sua conexão.",
+      "PROVIDER_UNAVAILABLE": "O provedor está temporariamente indisponível.",
+      "INVALID_ENDPOINT": "Insira um endpoint válido antes de testar a chave.",
+      "UNSUPPORTED_PROVIDER": "Este provedor não oferece validação de chaves.",
+      "INVALID_REQUEST": "Insira uma chave de API válida.",
+      "PERSISTENCE_FAILED": "Não foi possível salvar a chave com segurança.",
+      "VALIDATION_FAILED": "Não foi possível validar a chave de API."
+    }
   },
   "gpu": {
     "transcriptionBanner": "Acelere a transcrição com GPU",

@@ -2,10 +2,18 @@ import { create } from "zustand";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
+import { createUnverifiedLlmKeyResult, shouldBlockLlmKeySetup } from "../utils/llmKeyValidation";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
 import whisperVadConstants from "../constants/whisperVad.json";
-import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type {
+  LocalTranscriptionProvider,
+  InferenceMode,
+  SelfHostedType,
+  PersistedLlmKeyProvider,
+  LlmKeyValidationCode,
+  LlmKeyValidationResult,
+} from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
@@ -606,6 +614,10 @@ export interface SettingsState
   setTinfoilApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
+  saveValidatedLlmApiKey: (
+    provider: PersistedLlmKeyProvider,
+    key: string
+  ) => Promise<LlmKeyValidationResult>;
 
   // Corti (BYOK)
   cortiEnvironment: string;
@@ -865,7 +877,8 @@ function invalidateApiKeyCaches(
     | "tinfoil"
     | "custom"
     | "openrouter"
-    | "corti"
+    | "corti",
+  persist = true
 ) {
   if (provider) {
     if (_ReasoningService) {
@@ -880,7 +893,57 @@ function invalidateApiKeyCaches(
     }
   }
   if (isBrowser) window.dispatchEvent(new Event("api-key-changed"));
-  debouncedPersistToEnv();
+  if (persist) debouncedPersistToEnv();
+}
+
+const VALIDATED_LLM_STORE_KEYS: Record<PersistedLlmKeyProvider, keyof ApiKeySettings> = {
+  openai: "openaiApiKey",
+  anthropic: "anthropicApiKey",
+  gemini: "geminiApiKey",
+  groq: "groqApiKey",
+  xai: "xaiApiKey",
+  mistral: "mistralApiKey",
+  openrouter: "openrouterApiKey",
+  tinfoil: "tinfoilApiKey",
+  corti: "cortiApiKey",
+};
+
+const VALIDATED_LLM_CACHE_PROVIDERS: Partial<
+  Record<PersistedLlmKeyProvider, Parameters<typeof invalidateApiKeyCaches>[0]>
+> = {
+  openai: "openai",
+  anthropic: "anthropic",
+  gemini: "gemini",
+  groq: "groq",
+  mistral: "mistral",
+  openrouter: "openrouter",
+  tinfoil: "tinfoil",
+  corti: "corti",
+};
+
+const VALIDATED_LLM_SECRET_SAVERS: Record<PersistedLlmKeyProvider, SecretProvider> = {
+  openai: "openai",
+  anthropic: "anthropic",
+  gemini: "gemini",
+  groq: "groq",
+  xai: "xai",
+  mistral: "mistral",
+  openrouter: "openrouter",
+  tinfoil: "tinfoil",
+  corti: "cortiApiKey",
+};
+
+async function persistLlmKeyWithoutValidation(
+  provider: PersistedLlmKeyProvider,
+  key: string
+): Promise<void> {
+  const api = isBrowser ? window.electronAPI : undefined;
+  const save = api?.[SECRET_IPC_SAVERS[VALIDATED_LLM_SECRET_SAVERS[provider]]] as
+    ((value: string) => Promise<unknown>) | undefined;
+  if (!save) {
+    throw new Error("Secure API-key persistence is unavailable.");
+  }
+  await save(key);
 }
 
 // Uniform BYOK key setter: persist to the secure store (debounced) and clear
@@ -1426,6 +1489,79 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
+  saveValidatedLlmApiKey: async (provider, key) => {
+    const normalized = key.trim();
+    const api = isBrowser ? window.electronAPI : undefined;
+
+    const applySavedKey = () => {
+      useSettingsStore.setState({
+        [VALIDATED_LLM_STORE_KEYS[provider]]: normalized,
+      } as Partial<SettingsState>);
+      invalidateApiKeyCaches(VALIDATED_LLM_CACHE_PROVIDERS[provider], false);
+    };
+
+    const saveWithoutValidation = async (
+      code: LlmKeyValidationCode = "VALIDATION_FAILED",
+      warning?: string
+    ): Promise<LlmKeyValidationResult> => {
+      try {
+        await persistLlmKeyWithoutValidation(provider, normalized);
+        applySavedKey();
+        if (!normalized) {
+          return { success: true, provider, removed: true };
+        }
+        return createUnverifiedLlmKeyResult(
+          provider,
+          code === "PERSISTENCE_FAILED" ? "VALIDATION_FAILED" : code,
+          warning
+        );
+      } catch (error) {
+        logger.warn(
+          "Failed to persist LLM API key without validation",
+          {
+            provider,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          "settings"
+        );
+        return {
+          success: false,
+          provider,
+          verified: false,
+          code: "PERSISTENCE_FAILED",
+          error: "The API key could not be saved securely.",
+          retryable: true,
+        };
+      }
+    };
+
+    if (!api?.validateAndSaveLlmApiKey) {
+      return saveWithoutValidation(
+        "VALIDATION_FAILED",
+        "API-key validation is unavailable right now."
+      );
+    }
+
+    try {
+      const result = await api.validateAndSaveLlmApiKey({ provider, key });
+      if (result.success) {
+        applySavedKey();
+        return result;
+      }
+      if (shouldBlockLlmKeySetup(result)) return result;
+      return saveWithoutValidation(result.code, result.error || result.warning);
+    } catch (error) {
+      logger.warn(
+        "Failed to validate and persist LLM API key",
+        {
+          provider,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        "settings"
+      );
+      return saveWithoutValidation();
+    }
+  },
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);

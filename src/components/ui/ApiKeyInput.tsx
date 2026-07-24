@@ -1,8 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useId } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, X, KeyRound } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle, Loader2, X, KeyRound } from "lucide-react";
 import { Input } from "./input";
 import logger from "../../utils/logger";
+import type { LlmKeyValidationResult } from "../../types/electron";
+import {
+  clearUnverifiedLlmKeyState,
+  readUnverifiedLlmKeyState,
+  writeUnverifiedLlmKeyState,
+} from "../../utils/llmKeyValidationState";
 
 interface ApiKeyInputProps {
   apiKey: string;
@@ -13,6 +19,8 @@ interface ApiKeyInputProps {
   ariaLabel?: string;
   helpText?: React.ReactNode;
   variant?: "default" | "purple";
+  onSave?: (key: string) => Promise<LlmKeyValidationResult>;
+  validationStateKey?: string;
 }
 
 function maskKey(key: string): string {
@@ -29,16 +37,38 @@ export default function ApiKeyInput({
   ariaLabel,
   helpText,
   variant = "default",
+  onSave,
+  validationStateKey,
 }: ApiKeyInputProps) {
   const { t } = useTranslation();
   const resolvedPlaceholder = placeholder ?? t("apiKeyInput.placeholder");
   const resolvedLabel = label ?? t("apiKeyInput.label");
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "testing" | "success" | "warning" | "error"
+  >("idle");
+  const [validationResult, setValidationResult] = useState<LlmKeyValidationResult | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const errorId = useId();
+  const requestIdRef = useRef(0);
+  const savingRef = useRef(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasKey = apiKey.length > 0;
   const variantClasses = variant === "purple" ? "border-primary focus:border-primary" : "";
+  const validationStorage = typeof window !== "undefined" ? window.localStorage : undefined;
+
+  const restorePersistedWarning = useCallback(() => {
+    const persisted = readUnverifiedLlmKeyState(validationStorage, validationStateKey);
+    if (persisted && apiKey.trim()) {
+      setSaveStatus("warning");
+      setValidationResult(persisted);
+      return;
+    }
+    setSaveStatus("idle");
+    setValidationResult(null);
+  }, [apiKey, validationStateKey, validationStorage]);
 
   useEffect(() => {
     if (isEditing) {
@@ -50,22 +80,100 @@ export default function ApiKeyInput({
   }, [isEditing]);
 
   const enterEdit = () => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
     setDraft(apiKey);
+    setSaveStatus("idle");
+    setValidationResult(null);
     setIsEditing(true);
   };
 
-  const save = useCallback(() => {
-    try {
-      setApiKey(draft.trim());
-    } catch (err) {
-      logger.warn("Failed to save API key", { error: (err as Error).message }, "settings");
+  const save = useCallback(async () => {
+    if (savingRef.current) return;
+
+    const normalized = draft.trim();
+    if (normalized === apiKey.trim()) {
+      setDraft("");
+      setIsEditing(false);
+      restorePersistedWarning();
+      return;
     }
-    setIsEditing(false);
-  }, [draft, setApiKey]);
+
+    if (!onSave) {
+      try {
+        setApiKey(normalized);
+        clearUnverifiedLlmKeyState(validationStorage, validationStateKey);
+        setDraft("");
+        setSaveStatus("idle");
+        setValidationResult(null);
+        setIsEditing(false);
+      } catch (err) {
+        logger.warn("Failed to save API key", { error: (err as Error).message }, "settings");
+      }
+      return;
+    }
+
+    const requestId = ++requestIdRef.current;
+    savingRef.current = true;
+    setSaveStatus("testing");
+    setValidationResult(null);
+
+    try {
+      const result = await onSave(normalized);
+      if (requestId !== requestIdRef.current) return;
+
+      if (!result.success) {
+        setSaveStatus("error");
+        setValidationResult(result);
+        return;
+      }
+
+      setDraft("");
+      setIsEditing(false);
+      if (normalized) {
+        if (result.verified === false) {
+          writeUnverifiedLlmKeyState(validationStorage, validationStateKey, result);
+          setSaveStatus("warning");
+          setValidationResult(result);
+        } else {
+          clearUnverifiedLlmKeyState(validationStorage, validationStateKey);
+          setSaveStatus("success");
+          successTimerRef.current = setTimeout(() => setSaveStatus("idle"), 5000);
+        }
+      } else {
+        clearUnverifiedLlmKeyState(validationStorage, validationStateKey);
+        setSaveStatus("idle");
+      }
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      logger.warn("Failed to validate API key", { error: (err as Error).message }, "settings");
+      setSaveStatus("error");
+      setValidationResult({
+        success: false,
+        provider: "",
+        verified: false,
+        code: "VALIDATION_FAILED",
+        error: (err as Error).message,
+        retryable: true,
+      });
+    } finally {
+      if (requestId === requestIdRef.current) savingRef.current = false;
+    }
+  }, [
+    apiKey,
+    draft,
+    onSave,
+    restorePersistedWarning,
+    setApiKey,
+    validationStateKey,
+    validationStorage,
+  ]);
 
   const cancel = () => {
+    if (savingRef.current) return;
+    requestIdRef.current += 1;
     setDraft("");
     setIsEditing(false);
+    restorePersistedWarning();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -91,23 +199,56 @@ export default function ApiKeyInput({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isEditing, save]);
 
+  useEffect(
+    () => () => {
+      requestIdRef.current += 1;
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (isEditing) return;
+    if (saveStatus === "success" || saveStatus === "error" || saveStatus === "testing") return;
+    restorePersistedWarning();
+  }, [isEditing, restorePersistedWarning, saveStatus]);
+
+  const resultMessage = validationResult?.code
+    ? t(`apiKeyInput.errors.${validationResult.code}`, {
+        defaultValue:
+          validationResult.error ||
+          validationResult.warning ||
+          t("apiKeyInput.errors.VALIDATION_FAILED"),
+      })
+    : validationResult?.error || validationResult?.warning;
+  const warningMessage = resultMessage
+    ? t("apiKeyInput.savedUnverified", { reason: resultMessage })
+    : t("apiKeyInput.savedUnverified", {
+        reason: t("apiKeyInput.errors.VALIDATION_FAILED"),
+      });
+
   return (
-    <div className={className}>
+    <div ref={containerRef} className={className}>
       {resolvedLabel && (
         <label className="block text-xs font-medium text-foreground mb-1">{resolvedLabel}</label>
       )}
 
-      <div ref={containerRef} className="relative">
+      <div className="relative">
         {isEditing ? (
           <div className="relative">
             <Input
               ref={inputRef}
-              type="text"
+              type="password"
               placeholder={resolvedPlaceholder}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
+              disabled={saveStatus === "testing"}
               aria-label={ariaLabel || resolvedLabel || t("apiKeyInput.label")}
+              aria-invalid={saveStatus === "error"}
+              aria-describedby={
+                saveStatus === "error" || saveStatus === "warning" ? errorId : undefined
+              }
               className={`h-8 text-sm font-mono pr-16 ${variantClasses}`}
               autoComplete="off"
               spellCheck={false}
@@ -116,14 +257,22 @@ export default function ApiKeyInput({
               <button
                 type="button"
                 onClick={save}
+                disabled={saveStatus === "testing"}
                 className="h-6 w-6 flex items-center justify-center rounded text-success hover:bg-success/10 active:scale-95 transition-all"
-                aria-label={t("apiKeyInput.save")}
+                aria-label={
+                  saveStatus === "testing" ? t("apiKeyInput.testing") : t("apiKeyInput.save")
+                }
               >
-                <Check className="w-3.5 h-3.5" />
+                {saveStatus === "testing" ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
               </button>
               <button
                 type="button"
                 onClick={cancel}
+                disabled={saveStatus === "testing"}
                 className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
                 aria-label={t("apiKeyInput.cancelEdit")}
               >
@@ -144,19 +293,55 @@ export default function ApiKeyInput({
           >
             {hasKey ? (
               <span className="flex items-center gap-1.5 text-foreground/70 font-mono text-xs tracking-wide">
-                <KeyRound className="w-3 h-3 text-muted-foreground/50 shrink-0" />
+                {saveStatus === "success" ? (
+                  <CheckCircle className="w-3 h-3 text-success shrink-0" />
+                ) : saveStatus === "warning" ? (
+                  <AlertTriangle className="w-3 h-3 text-warning shrink-0" />
+                ) : (
+                  <KeyRound className="w-3 h-3 text-muted-foreground/50 shrink-0" />
+                )}
                 {maskKey(apiKey)}
               </span>
             ) : (
               <span className="text-muted-foreground/40 text-xs">{resolvedPlaceholder}</span>
             )}
             <span className="ml-auto text-muted-foreground/30 text-xs group-hover:text-muted-foreground/60 transition-colors">
-              {hasKey ? t("apiKeyInput.editButton") : t("apiKeyInput.addButton")}
+              {saveStatus === "success"
+                ? t("apiKeyInput.verified")
+                : saveStatus === "warning"
+                  ? t("apiKeyInput.saved")
+                  : hasKey
+                    ? t("apiKeyInput.editButton")
+                    : t("apiKeyInput.addButton")}
             </span>
           </button>
         )}
       </div>
 
+      {saveStatus === "error" && resultMessage && (
+        <div
+          id={errorId}
+          role="alert"
+          aria-live="polite"
+          className="flex items-center justify-between gap-2 mt-1"
+        >
+          <span className="text-xs text-destructive">{resultMessage}</span>
+          {validationResult?.retryable && (
+            <button
+              type="button"
+              onClick={save}
+              className="text-xs font-medium text-destructive hover:underline shrink-0"
+            >
+              {t("common.retry")}
+            </button>
+          )}
+        </div>
+      )}
+      {saveStatus === "warning" && (
+        <p id={errorId} role="status" aria-live="polite" className="mt-1 text-xs text-warning">
+          {warningMessage}
+        </p>
+      )}
       {helpText && <p className="text-xs text-muted-foreground/70 mt-1">{helpText}</p>}
     </div>
   );

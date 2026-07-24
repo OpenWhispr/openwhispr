@@ -168,6 +168,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                   customReasoningApiKey={cleanupCustomApiKey}
                   setCustomReasoningApiKey={setCleanupCustomApiKey}
                   setReasoningMode={setCleanupMode}
+                  validationStateKeyPrefix="notes-onboarding"
                 />
               </div>
             )}

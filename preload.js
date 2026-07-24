@@ -230,6 +230,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // BYOK API keys (get/save for every provider in the secretKeys manifest)
   ...secretKeyApi,
+  testLlmApiKey: (request) => ipcRenderer.invoke("test-llm-api-key", request),
+  validateAndSaveLlmApiKey: (request) =>
+    ipcRenderer.invoke("validate-and-save-llm-api-key", request),
 
   // Clipboard functions
   checkAccessibilityPermission: (silent) =>

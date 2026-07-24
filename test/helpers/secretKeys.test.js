@@ -63,6 +63,44 @@ test("openrouter is a first-class secret", () => {
   assert.equal(env.getOpenrouterKey(), "sk-or-abc");
 });
 
+test("awaited secret persistence durably writes plaintext fallback storage", async () => {
+  const env = new EnvironmentManager();
+  await env.saveSecretKeyAndWait("OPENAI_API_KEY", "sk-awaited");
+
+  assert.equal(env.getOpenAIKey(), "sk-awaited");
+  assert.match(
+    fs.readFileSync(path.join(tmpUserData, ".env"), "utf8"),
+    /^OPENAI_API_KEY=sk-awaited$/m
+  );
+
+  await env.saveSecretKeyAndWait("OPENAI_API_KEY", "");
+  assert.equal(env.getOpenAIKey(), "");
+  assert.doesNotMatch(fs.readFileSync(path.join(tmpUserData, ".env"), "utf8"), /^OPENAI_API_KEY=/m);
+});
+
+test("awaited secret persistence rejects non-secret environment variables", async () => {
+  const env = new EnvironmentManager();
+  await assert.rejects(
+    env.saveSecretKeyAndWait("NOT_A_REAL_SECRET", "value"),
+    /Refusing to persist unknown secret/
+  );
+});
+
+test("awaited secret persistence rolls back the in-memory key when disk persistence fails", async () => {
+  const env = new EnvironmentManager();
+  process.env.OPENAI_API_KEY = "previous-key";
+  env.saveAllKeysToEnvFile = async () => {
+    throw new Error("disk unavailable");
+  };
+
+  await assert.rejects(
+    env.saveSecretKeyAndWait("OPENAI_API_KEY", "replacement-key"),
+    /disk unavailable/
+  );
+  assert.equal(process.env.OPENAI_API_KEY, "previous-key");
+  delete process.env.OPENAI_API_KEY;
+});
+
 test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
   // preload.js can't require the manifest under sandbox, so it inlines the
   // {base, get, save} tuples. Assert they stay in lockstep with the manifest.

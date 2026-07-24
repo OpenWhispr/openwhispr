@@ -2560,7 +2560,25 @@
     "edit": "Modifier la clé API",
     "add": "Ajouter une clé API",
     "editButton": "modifier",
-    "addButton": "ajouter"
+    "addButton": "ajouter",
+    "testing": "Vérification de la clé...",
+    "verified": "vérifiée",
+    "saved": "enregistrée",
+    "savedUnverified": "Enregistrée sans vérification : {{reason}} Vous pouvez poursuivre la configuration.",
+    "errors": {
+      "INVALID_KEY": "Le fournisseur a rejeté cette clé API.",
+      "PERMISSION_DENIED": "Cette clé ne dispose pas des autorisations requises.",
+      "BILLING_REQUIRED": "Ajoutez un moyen de paiement ou des crédits à ce compte.",
+      "RATE_LIMITED": "Le fournisseur a limité le test. Réessayez dans un instant.",
+      "TIMEOUT": "Le fournisseur n'a pas répondu à temps.",
+      "NETWORK_ERROR": "Le fournisseur est inaccessible. Vérifiez votre connexion.",
+      "PROVIDER_UNAVAILABLE": "Le fournisseur est temporairement indisponible.",
+      "INVALID_ENDPOINT": "Saisissez un endpoint valide avant de tester la clé.",
+      "UNSUPPORTED_PROVIDER": "Ce fournisseur ne prend pas en charge la validation des clés.",
+      "INVALID_REQUEST": "Saisissez une clé API valide.",
+      "PERSISTENCE_FAILED": "La clé n'a pas pu être enregistrée de manière sécurisée.",
+      "VALIDATION_FAILED": "La clé API n'a pas pu être validée."
+    }
   },
   "gpu": {
     "transcriptionBanner": "Accélérez la transcription avec le GPU",

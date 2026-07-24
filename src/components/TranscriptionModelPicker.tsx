@@ -31,6 +31,7 @@ import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
 import logger from "../utils/logger";
+import type { PersistedLlmKeyProvider } from "../types/electron";
 
 interface LocalModel {
   model: string;
@@ -228,6 +229,16 @@ interface ProviderCredentialField {
   options?: Array<{ value: string; label: string }>;
 }
 
+const LLM_VALIDATION_PROVIDER_BY_FIELD: Partial<
+  Record<ProviderCredentialField["key"], PersistedLlmKeyProvider>
+> = {
+  openaiApiKey: "openai",
+  groqApiKey: "groq",
+  xaiApiKey: "xai",
+  mistralApiKey: "mistral",
+  tinfoilApiKey: "tinfoil",
+};
+
 const PROVIDER_CREDENTIALS: Record<
   string,
   { consoleUrl: string; fields: ProviderCredentialField[] }
@@ -360,6 +371,7 @@ export default function TranscriptionModelPicker({
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
+  const saveValidatedLlmApiKey = useSettingsStore((s) => s.saveValidatedLlmApiKey);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
@@ -758,6 +770,11 @@ export default function TranscriptionModelPicker({
     cortiTenant: setCortiTenant,
     tinfoilApiKey: setTinfoilApiKey,
   };
+  const getCredentialKeySaver = (fieldKey: ProviderCredentialField["key"]) => {
+    const provider = LLM_VALIDATION_PROVIDER_BY_FIELD[fieldKey];
+    if (!provider) return undefined;
+    return (key: string) => saveValidatedLlmApiKey(provider, key);
+  };
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
@@ -1013,6 +1030,12 @@ export default function TranscriptionModelPicker({
                       <ApiKeyInput
                         apiKey={credentialValues[field.key]}
                         setApiKey={credentialSetters[field.key]}
+                        onSave={getCredentialKeySaver(field.key)}
+                        validationStateKey={
+                          LLM_VALIDATION_PROVIDER_BY_FIELD[field.key]
+                            ? `provider:${LLM_VALIDATION_PROVIDER_BY_FIELD[field.key]}`
+                            : undefined
+                        }
                         label=""
                         helpText=""
                       />

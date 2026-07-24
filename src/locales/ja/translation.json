@@ -2512,7 +2512,25 @@
     "edit": "編集",
     "add": "追加",
     "editButton": "編集",
-    "addButton": "追加"
+    "addButton": "追加",
+    "testing": "キーを確認中...",
+    "verified": "確認済み",
+    "saved": "保存済み",
+    "savedUnverified": "未確認のまま保存しました: {{reason}} セットアップを続行できます。",
+    "errors": {
+      "INVALID_KEY": "プロバイダーがこの API キーを拒否しました。",
+      "PERMISSION_DENIED": "このキーには必要な権限がありません。",
+      "BILLING_REQUIRED": "このアカウントに請求設定またはクレジットを追加してください。",
+      "RATE_LIMITED": "プロバイダーによりテストが制限されました。しばらくしてから再試行してください。",
+      "TIMEOUT": "プロバイダーが時間内に応答しませんでした。",
+      "NETWORK_ERROR": "プロバイダーに接続できません。接続を確認してください。",
+      "PROVIDER_UNAVAILABLE": "プロバイダーは一時的に利用できません。",
+      "INVALID_ENDPOINT": "キーをテストする前に有効なエンドポイントを入力してください。",
+      "UNSUPPORTED_PROVIDER": "このプロバイダーはキーの検証に対応していません。",
+      "INVALID_REQUEST": "有効な API キーを入力してください。",
+      "PERSISTENCE_FAILED": "キーを安全に保存できませんでした。",
+      "VALIDATION_FAILED": "API キーを検証できませんでした。"
+    }
   },
   "gpu": {
     "transcriptionBanner": "GPU で文字起こしを高速化",

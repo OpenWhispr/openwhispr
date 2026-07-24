@@ -2560,7 +2560,25 @@
     "edit": "Editar",
     "add": "Agregar",
     "editButton": "Editar",
-    "addButton": "Agregar"
+    "addButton": "Agregar",
+    "testing": "Verificando clave...",
+    "verified": "verificada",
+    "saved": "guardada",
+    "savedUnverified": "Guardada sin verificar: {{reason}} Puedes continuar con la configuración.",
+    "errors": {
+      "INVALID_KEY": "El proveedor rechazó esta clave API.",
+      "PERMISSION_DENIED": "Esta clave no tiene los permisos necesarios.",
+      "BILLING_REQUIRED": "Añade facturación o créditos a esta cuenta.",
+      "RATE_LIMITED": "El proveedor limitó la prueba. Inténtalo de nuevo en breve.",
+      "TIMEOUT": "El proveedor no respondió a tiempo.",
+      "NETWORK_ERROR": "No se pudo contactar con el proveedor. Comprueba tu conexión.",
+      "PROVIDER_UNAVAILABLE": "El proveedor no está disponible temporalmente.",
+      "INVALID_ENDPOINT": "Introduce un endpoint válido antes de probar la clave.",
+      "UNSUPPORTED_PROVIDER": "Este proveedor no admite la validación de claves.",
+      "INVALID_REQUEST": "Introduce una clave API válida.",
+      "PERSISTENCE_FAILED": "No se pudo guardar la clave de forma segura.",
+      "VALIDATION_FAILED": "No se pudo validar la clave API."
+    }
   },
   "gpu": {
     "transcriptionBanner": "Acelera la transcripción con GPU",

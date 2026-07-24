@@ -2648,7 +2648,25 @@
     "edit": "Edit API key",
     "add": "Add API key",
     "editButton": "edit",
-    "addButton": "add"
+    "addButton": "add",
+    "testing": "Testing key...",
+    "verified": "verified",
+    "saved": "saved",
+    "savedUnverified": "Saved without verification: {{reason}} You can continue setup.",
+    "errors": {
+      "INVALID_KEY": "The provider rejected this API key.",
+      "PERMISSION_DENIED": "This key does not have the required permissions.",
+      "BILLING_REQUIRED": "Add billing or credits to this provider account.",
+      "RATE_LIMITED": "The provider rate-limited the test. Try again shortly.",
+      "TIMEOUT": "The provider did not respond in time.",
+      "NETWORK_ERROR": "The provider could not be reached. Check your connection.",
+      "PROVIDER_UNAVAILABLE": "The provider is temporarily unavailable.",
+      "INVALID_ENDPOINT": "Enter a valid endpoint before testing the key.",
+      "UNSUPPORTED_PROVIDER": "This provider does not support key validation.",
+      "INVALID_REQUEST": "Enter a valid API key.",
+      "PERSISTENCE_FAILED": "The key could not be saved securely.",
+      "VALIDATION_FAILED": "The API key could not be validated."
+    }
   },
   "gpu": {
     "transcriptionBanner": "Speed up transcription with GPU acceleration",

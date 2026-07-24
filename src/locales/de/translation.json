@@ -2512,7 +2512,25 @@
     "edit": "Bearbeiten",
     "add": "Hinzufügen",
     "editButton": "Bearbeiten",
-    "addButton": "Hinzufügen"
+    "addButton": "Hinzufügen",
+    "testing": "Schlüssel wird geprüft...",
+    "verified": "verifiziert",
+    "saved": "gespeichert",
+    "savedUnverified": "Ohne Überprüfung gespeichert: {{reason}} Du kannst mit der Einrichtung fortfahren.",
+    "errors": {
+      "INVALID_KEY": "Der Anbieter hat diesen API-Schlüssel abgelehnt.",
+      "PERMISSION_DENIED": "Dieser Schlüssel hat nicht die erforderlichen Berechtigungen.",
+      "BILLING_REQUIRED": "Füge diesem Anbieterkonto Abrechnung oder Guthaben hinzu.",
+      "RATE_LIMITED": "Der Anbieter hat den Test begrenzt. Versuche es gleich erneut.",
+      "TIMEOUT": "Der Anbieter hat nicht rechtzeitig geantwortet.",
+      "NETWORK_ERROR": "Der Anbieter konnte nicht erreicht werden. Prüfe deine Verbindung.",
+      "PROVIDER_UNAVAILABLE": "Der Anbieter ist vorübergehend nicht verfügbar.",
+      "INVALID_ENDPOINT": "Gib vor dem Testen einen gültigen Endpunkt ein.",
+      "UNSUPPORTED_PROVIDER": "Dieser Anbieter unterstützt keine Schlüsselvalidierung.",
+      "INVALID_REQUEST": "Gib einen gültigen API-Schlüssel ein.",
+      "PERSISTENCE_FAILED": "Der Schlüssel konnte nicht sicher gespeichert werden.",
+      "VALIDATION_FAILED": "Der API-Schlüssel konnte nicht validiert werden."
+    }
   },
   "gpu": {
     "transcriptionBanner": "Transkription mit GPU beschleunigen",

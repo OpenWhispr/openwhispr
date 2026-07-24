@@ -2512,7 +2512,25 @@
     "edit": "Modifica",
     "add": "Aggiungi",
     "editButton": "Modifica",
-    "addButton": "Aggiungi"
+    "addButton": "Aggiungi",
+    "testing": "Verifica della chiave...",
+    "verified": "verificata",
+    "saved": "salvata",
+    "savedUnverified": "Salvata senza verifica: {{reason}} Puoi continuare la configurazione.",
+    "errors": {
+      "INVALID_KEY": "Il provider ha rifiutato questa chiave API.",
+      "PERMISSION_DENIED": "Questa chiave non dispone delle autorizzazioni necessarie.",
+      "BILLING_REQUIRED": "Aggiungi la fatturazione o dei crediti a questo account.",
+      "RATE_LIMITED": "Il provider ha limitato il test. Riprova tra poco.",
+      "TIMEOUT": "Il provider non ha risposto in tempo.",
+      "NETWORK_ERROR": "Impossibile raggiungere il provider. Controlla la connessione.",
+      "PROVIDER_UNAVAILABLE": "Il provider è temporaneamente non disponibile.",
+      "INVALID_ENDPOINT": "Inserisci un endpoint valido prima di testare la chiave.",
+      "UNSUPPORTED_PROVIDER": "Questo provider non supporta la verifica delle chiavi.",
+      "INVALID_REQUEST": "Inserisci una chiave API valida.",
+      "PERSISTENCE_FAILED": "Non è stato possibile salvare la chiave in modo sicuro.",
+      "VALIDATION_FAILED": "Impossibile verificare la chiave API."
+    }
   },
   "gpu": {
     "transcriptionBanner": "Velocizza la trascrizione con la GPU",
