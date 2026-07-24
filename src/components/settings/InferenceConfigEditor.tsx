@@ -7,7 +7,7 @@ import {
   selectResolvedLLMConfig,
   setResolvedLLMConfig,
 } from "../../stores/settingsStore";
-import { InferenceModeSelector } from "../ui/SettingsSection";
+import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
@@ -204,30 +204,25 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       )}
 
       {showThinkingToggle && (
-        <div className="flex items-start justify-between gap-3 pt-1">
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-medium text-foreground">
-              {t("reasoning.disableThinking.label")}
-            </h4>
-            <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
-          </div>
+        <SettingsRow
+          label={t("reasoning.disableThinking.label")}
+          description={t("reasoning.disableThinking.help")}
+          className="pt-1"
+        >
           <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
-        </div>
+        </SettingsRow>
       )}
 
       {showTemperatureSlider && (
         <div className="pt-1 space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-medium text-foreground">
-                {t("reasoning.temperature.label")}
-              </h4>
-              <p className="text-xs text-muted-foreground">{t("reasoning.temperature.help")}</p>
-            </div>
-            <span className="text-xs tabular-nums text-muted-foreground mt-0.5">
+          <SettingsRow
+            label={t("reasoning.temperature.label")}
+            description={t("reasoning.temperature.help")}
+          >
+            <span className="text-xs tabular-nums text-muted-foreground">
               {config.temperature.toFixed(2)}
             </span>
-          </div>
+          </SettingsRow>
           <input
             type="range"
             min={0}
