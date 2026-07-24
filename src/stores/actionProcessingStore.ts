@@ -144,8 +144,7 @@ export function runBackgroundAction(
         options.isMeetingNote ? settings.customDictionary : undefined,
         settings.uiLanguage
       );
-      const actionTemperature =
-        typeof action.temperature === "number" ? action.temperature : noteFormatting.temperature;
+      const actionTemperature = typeof action.temperature === "number" ? action.temperature : 0.3;
       const enhanced = await reasoningService.processText(noteContent, modelId, null, {
         systemPrompt,
         temperature: actionTemperature,
