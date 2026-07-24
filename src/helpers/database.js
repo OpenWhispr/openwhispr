@@ -243,6 +243,7 @@ class DatabaseManager {
           name TEXT NOT NULL,
           description TEXT NOT NULL DEFAULT '',
           prompt TEXT NOT NULL,
+          temperature REAL,
           icon TEXT NOT NULL DEFAULT 'sparkles',
           is_builtin INTEGER NOT NULL DEFAULT 0,
           sort_order INTEGER NOT NULL DEFAULT 0,
@@ -253,6 +254,11 @@ class DatabaseManager {
 
       try {
         this.db.exec("ALTER TABLE actions ADD COLUMN translation_key TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE actions ADD COLUMN temperature REAL");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -1675,20 +1681,37 @@ class DatabaseManager {
     }
   }
 
-  createAction(name, description, prompt, icon = "sparkles") {
+  createAction(name, description, prompt, icon = "sparkles", options = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const trimmedName = (name || "").trim();
       const trimmedPrompt = (prompt || "").trim();
       if (!trimmedName) return { success: false, error: "Action name is required" };
       if (!trimmedPrompt) return { success: false, error: "Action prompt is required" };
+
+      let temperature = null;
+      if (options?.temperature !== undefined && options?.temperature !== null && options?.temperature !== "") {
+        const parsed = Number(options.temperature);
+        if (!Number.isFinite(parsed)) {
+          return { success: false, error: "Action temperature must be a valid number" };
+        }
+        temperature = Math.min(1, Math.max(0, Number(parsed.toFixed(2))));
+      }
+
       const maxOrder = this.db.prepare("SELECT MAX(sort_order) as max_order FROM actions").get();
       const sortOrder = (maxOrder?.max_order ?? 0) + 1;
       const result = this.db
         .prepare(
-          "INSERT INTO actions (name, description, prompt, icon, sort_order) VALUES (?, ?, ?, ?, ?)"
+          "INSERT INTO actions (name, description, prompt, temperature, icon, sort_order) VALUES (?, ?, ?, ?, ?, ?)"
         )
-        .run(trimmedName, (description || "").trim(), trimmedPrompt, icon || "sparkles", sortOrder);
+        .run(
+          trimmedName,
+          (description || "").trim(),
+          trimmedPrompt,
+          temperature,
+          icon || "sparkles",
+          sortOrder
+        );
       const action = this.db
         .prepare("SELECT * FROM actions WHERE id = ?")
         .get(result.lastInsertRowid);
@@ -1702,11 +1725,25 @@ class DatabaseManager {
   updateAction(id, updates) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const allowedFields = ["name", "description", "prompt", "icon", "sort_order"];
+      const allowedFields = ["name", "description", "prompt", "temperature", "icon", "sort_order"];
       const fields = [];
       const values = [];
       for (const [key, value] of Object.entries(updates)) {
         if (allowedFields.includes(key) && value !== undefined) {
+          if (key === "temperature") {
+            if (value === null || value === "") {
+              fields.push(`${key} = ?`);
+              values.push(null);
+              continue;
+            }
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) {
+              return { success: false, error: "Action temperature must be a valid number" };
+            }
+            fields.push(`${key} = ?`);
+            values.push(Math.min(1, Math.max(0, Number(parsed.toFixed(2)))));
+            continue;
+          }
           fields.push(`${key} = ?`);
           values.push(value);
         }

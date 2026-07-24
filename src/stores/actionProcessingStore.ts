@@ -133,6 +133,14 @@ export function runBackgroundAction(
 
   (async () => {
     try {
+      let effectiveAction = action;
+      try {
+        const latestAction = await window.electronAPI.getAction(action.id);
+        if (latestAction) effectiveAction = latestAction;
+      } catch {
+        // If action refresh fails, continue with the selected in-memory action.
+      }
+
       const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
       const providerOverrides = buildNoteFormattingOverrides(
         noteFormatting,
@@ -140,13 +148,15 @@ export function runBackgroundAction(
         settings.noteFormattingCustomApiKey
       );
       const systemPrompt = appendDictionarySuffix(
-        basePrompt + action.prompt,
+        basePrompt + effectiveAction.prompt,
         options.isMeetingNote ? settings.customDictionary : undefined,
         settings.uiLanguage
       );
+      const actionTemperature =
+        typeof effectiveAction.temperature === "number" ? effectiveAction.temperature : 0.3;
       const enhanced = await reasoningService.processText(noteContent, modelId, null, {
         systemPrompt,
-        temperature: 0.3,
+        temperature: actionTemperature,
         disableThinking: settings.noteFormattingDisableThinking,
         ...providerOverrides,
       });
@@ -163,7 +173,7 @@ export function runBackgroundAction(
 
       const updates: Record<string, string> = {
         enhanced_content: enhanced,
-        enhancement_prompt: action.prompt,
+        enhancement_prompt: effectiveAction.prompt,
         enhanced_at_content_hash: contentHash,
       };
       if (title) updates.title = title;

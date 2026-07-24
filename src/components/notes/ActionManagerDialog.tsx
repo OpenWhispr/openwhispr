@@ -19,6 +19,8 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [temperatureEnabled, setTemperatureEnabled] = useState(false);
+  const [temperature, setTemperature] = useState(0.3);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -29,6 +31,8 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
     setName("");
     setDescription("");
     setPrompt("");
+    setTemperatureEnabled(false);
+    setTemperature(0.3);
     setEditingId(null);
   };
 
@@ -51,6 +55,8 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
       setName(first.name);
       setDescription(first.description);
       setPrompt(first.prompt);
+      setTemperatureEnabled(first.temperature !== null && first.temperature !== undefined);
+      setTemperature(first.temperature ?? 0.3);
     }
   }, [open, actions, selectedId, isCreating]);
 
@@ -60,6 +66,8 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
     setName(action.name);
     setDescription(action.description);
     setPrompt(action.prompt);
+    setTemperatureEnabled(action.temperature !== null && action.temperature !== undefined);
+    setTemperature(action.temperature ?? 0.3);
     setIsCreating(false);
   };
 
@@ -85,15 +93,37 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
     setIsSaving(true);
     try {
       if (editingId !== null) {
-        await window.electronAPI.updateAction(editingId, {
+        const result = await window.electronAPI.updateAction(editingId, {
           name: name.trim(),
           description: description.trim(),
           prompt: prompt.trim(),
+          temperature: temperatureEnabled ? temperature : null,
         });
+        if (!result?.success) {
+          throw new Error(result?.error || "Failed to update action");
+        }
+        if (result.action) {
+          handleSelectAction(result.action);
+        }
       } else {
-        await window.electronAPI.createAction(name.trim(), description.trim(), prompt.trim());
+        const result = await window.electronAPI.createAction(
+          name.trim(),
+          description.trim(),
+          prompt.trim(),
+          undefined,
+          { temperature: temperatureEnabled ? temperature : null }
+        );
+        if (!result?.success) {
+          throw new Error(result?.error || "Failed to create action");
+        }
+        if (result.action) {
+          handleSelectAction(result.action);
+        }
         setIsCreating(false);
       }
+      await initializeActions();
+    } catch (error) {
+      console.error("Failed to save action", error);
     } finally {
       setIsSaving(false);
     }
@@ -106,7 +136,11 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
     : selectedAction
       ? name !== selectedAction.name ||
         description !== selectedAction.description ||
-        prompt !== selectedAction.prompt
+        prompt !== selectedAction.prompt ||
+        temperatureEnabled !==
+          (selectedAction.temperature !== null && selectedAction.temperature !== undefined) ||
+        (temperatureEnabled &&
+          Number(temperature.toFixed(2)) !== Number((selectedAction.temperature ?? 0.3).toFixed(2)))
       : false;
 
   return (
@@ -302,6 +336,51 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
                         "font-mono text-[13px]"
                       )}
                     />
+                  </div>
+
+                  <div className="space-y-2 rounded border border-border/60 dark:border-white/10 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-foreground/70">
+                          {t("notes.actions.temperatureLabel")}
+                        </p>
+                        <p className="text-xs text-muted-foreground/60 mt-0.5">
+                          {t("notes.actions.temperatureHelp")}
+                        </p>
+                      </div>
+                      <label className="inline-flex items-center gap-2 text-xs text-foreground/70 select-none">
+                        <input
+                          type="checkbox"
+                          checked={temperatureEnabled}
+                          onChange={(e) => setTemperatureEnabled(e.target.checked)}
+                          disabled={isSaving}
+                        />
+                        {t("notes.actions.temperatureOverride")}
+                      </label>
+                    </div>
+
+                    {temperatureEnabled && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground/70">
+                            {t("notes.actions.temperatureValue")}
+                          </span>
+                          <span className="text-xs font-medium text-foreground tabular-nums">
+                            {temperature.toFixed(2)}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={temperature}
+                          onChange={(e) => setTemperature(Number(Number(e.target.value).toFixed(2)))}
+                          disabled={isSaving}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
