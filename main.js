@@ -1512,11 +1512,19 @@ async function startApp() {
   if (process.platform === "win32" || process.platform === "linux") {
     const isWindows = process.platform === "win32";
     const nativeKeyManager = isWindows ? windowsKeyManager : linuxKeyManager;
+    const nativeKeysDown = new Set();
     debugLogger.debug("[Push-to-Talk] Native key listener setup starting");
 
     // Dictation supports push-to-talk and needs the overlay window; agent/meeting
     // drive other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
+      // Native listeners can emit key-down repeats while a key is held.
+      // Only act on the initial press edge to avoid duplicate toggles.
+      if (nativeKeysDown.has(key)) {
+        return;
+      }
+      nativeKeysDown.add(key);
+
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
@@ -1539,6 +1547,7 @@ async function startApp() {
 
     // Only dictation drives push-to-talk, so only its key-up matters.
     const dispatchNativeKeyUp = (key) => {
+      nativeKeysDown.delete(key);
       if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
         windowManager.handleWindowsPushKeyUp(key);
@@ -1550,10 +1559,34 @@ async function startApp() {
       }
     };
 
-    nativeKeyManager.on("key-down", dispatchNativeKeyDown);
-    nativeKeyManager.on("key-up", dispatchNativeKeyUp);
+    // Dev/runtime re-initialization can accidentally bind duplicate listeners;
+    // always replace previously bound routing handlers.
+    if (nativeKeyManager.__openwhisprOnKeyDown) {
+      nativeKeyManager.off("key-down", nativeKeyManager.__openwhisprOnKeyDown);
+    }
+    if (nativeKeyManager.__openwhisprOnKeyUp) {
+      nativeKeyManager.off("key-up", nativeKeyManager.__openwhisprOnKeyUp);
+    }
+    if (nativeKeyManager.__openwhisprOnError) {
+      nativeKeyManager.off("error", nativeKeyManager.__openwhisprOnError);
+    }
+    if (nativeKeyManager.__openwhisprOnUnavailable) {
+      nativeKeyManager.off("unavailable", nativeKeyManager.__openwhisprOnUnavailable);
+    }
+    if (nativeKeyManager.__openwhisprOnReady) {
+      nativeKeyManager.off("ready", nativeKeyManager.__openwhisprOnReady);
+    }
+    if (!isWindows && nativeKeyManager.__openwhisprOnPermissionDenied) {
+      nativeKeyManager.off("permission-denied", nativeKeyManager.__openwhisprOnPermissionDenied);
+    }
 
-    nativeKeyManager.on("error", (error) => {
+    nativeKeyManager.__openwhisprOnKeyDown = dispatchNativeKeyDown;
+    nativeKeyManager.__openwhisprOnKeyUp = dispatchNativeKeyUp;
+
+    nativeKeyManager.on("key-down", nativeKeyManager.__openwhisprOnKeyDown);
+    nativeKeyManager.on("key-up", nativeKeyManager.__openwhisprOnKeyUp);
+
+    const onNativeError = (error) => {
       debugLogger.warn("[Push-to-Talk] Native key listener error", { error: error.message });
       if (isWindows && isLiveWindow(windowManager.mainWindow)) {
         windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
@@ -1561,9 +1594,11 @@ async function startApp() {
           message: error.message,
         });
       }
-    });
+    };
+    nativeKeyManager.__openwhisprOnError = onNativeError;
+    nativeKeyManager.on("error", onNativeError);
 
-    nativeKeyManager.on("unavailable", () => {
+    const onNativeUnavailable = () => {
       debugLogger.debug(
         "[Push-to-Talk] Native key listener unavailable - falling back to toggle mode"
       );
@@ -1573,21 +1608,27 @@ async function startApp() {
           message: i18nMain.t("windows.pttUnavailable"),
         });
       }
-    });
+    };
+    nativeKeyManager.__openwhisprOnUnavailable = onNativeUnavailable;
+    nativeKeyManager.on("unavailable", onNativeUnavailable);
 
-    nativeKeyManager.on("ready", () => {
+    const onNativeReady = () => {
       debugLogger.debug("[Push-to-Talk] Native key listener ready and listening");
-    });
+    };
+    nativeKeyManager.__openwhisprOnReady = onNativeReady;
+    nativeKeyManager.on("ready", onNativeReady);
 
     if (!isWindows) {
-      nativeKeyManager.on("permission-denied", () => {
+      const onNativePermissionDenied = () => {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
         if (isLiveWindow(windowManager.mainWindow)) {
           windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
         }
-      });
+      };
+      nativeKeyManager.__openwhisprOnPermissionDenied = onNativePermissionDenied;
+      nativeKeyManager.on("permission-denied", onNativePermissionDenied);
     }
 
     const STARTUP_DELAY_MS = 3000;
