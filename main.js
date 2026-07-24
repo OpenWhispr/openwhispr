@@ -1512,11 +1512,19 @@ async function startApp() {
   if (process.platform === "win32" || process.platform === "linux") {
     const isWindows = process.platform === "win32";
     const nativeKeyManager = isWindows ? windowsKeyManager : linuxKeyManager;
+    const nativeKeysDown = new Set();
     debugLogger.debug("[Push-to-Talk] Native key listener setup starting");
 
     // Dictation supports push-to-talk and needs the overlay window; agent/meeting
     // drive other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
+      // Native listeners can emit key-down repeats while a key is held.
+      // Only act on the initial press edge to avoid duplicate toggles.
+      if (nativeKeysDown.has(key)) {
+        return;
+      }
+      nativeKeysDown.add(key);
+
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
@@ -1539,6 +1547,7 @@ async function startApp() {
 
     // Only dictation drives push-to-talk, so only its key-up matters.
     const dispatchNativeKeyUp = (key) => {
+      nativeKeysDown.delete(key);
       if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
         windowManager.handleWindowsPushKeyUp(key);
