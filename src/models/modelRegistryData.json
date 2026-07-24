@@ -979,6 +979,21 @@
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_31b_it_q4_k_m"
         },
         {
+          "id": "gemma-4-31b-it-qat-q4_0",
+          "name": "Gemma 4 31B QAT",
+          "size": "17.9GB",
+          "sizeBytes": 17651001568,
+          "description": "Google's official QAT build, smaller with quality preserved",
+          "fileName": "gemma-4-31B_q4_0-it.gguf",
+          "quantization": "q4_0",
+          "contextLength": 262144,
+          "hfRepo": "google/gemma-4-31B-it-qat-q4_0-gguf",
+          "draftHfRepo": "unsloth/gemma-4-31B-it-qat-GGUF",
+          "draftFileName": "mtp-gemma-4-31B-it.gguf",
+          "draftSizeBytes": 279955968,
+          "descriptionKey": "models.descriptions.local.gemma_gemma_4_31b_it_qat_q4_0"
+        },
+        {
           "id": "gemma-4-26b-a4b-it-q4_k_m",
           "name": "Gemma 4 26B MoE",
           "size": "17.0GB",
@@ -991,6 +1006,21 @@
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_26b_a4b_it_q4_k_m"
         },
         {
+          "id": "gemma-4-26b-a4b-it-qat-q4_0",
+          "name": "Gemma 4 26B MoE QAT",
+          "size": "14.7GB",
+          "sizeBytes": 14439363584,
+          "description": "Google's official QAT MoE build, smaller with quality preserved",
+          "fileName": "gemma-4-26B_q4_0-it.gguf",
+          "quantization": "q4_0",
+          "contextLength": 262144,
+          "hfRepo": "google/gemma-4-26B-A4B-it-qat-q4_0-gguf",
+          "draftHfRepo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
+          "draftFileName": "mtp-gemma-4-26B-A4B-it.gguf",
+          "draftSizeBytes": 251939328,
+          "descriptionKey": "models.descriptions.local.gemma_gemma_4_26b_a4b_it_qat_q4_0"
+        },
+        {
           "id": "gemma-4-e4b-it-q4_k_m",
           "name": "Gemma 4 E4B",
           "size": "5.4GB",
@@ -1000,8 +1030,23 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/google_gemma-4-E4B-it-GGUF",
-          "recommended": true,
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_e4b_it_q4_k_m"
+        },
+        {
+          "id": "gemma-4-e4b-it-qat-q4_0",
+          "name": "Gemma 4 E4B QAT",
+          "size": "5.2GB",
+          "sizeBytes": 5154941280,
+          "description": "Google's official QAT build, strong reasoning, smaller size",
+          "fileName": "gemma-4-E4B_q4_0-it.gguf",
+          "quantization": "q4_0",
+          "contextLength": 262144,
+          "hfRepo": "google/gemma-4-E4B-it-qat-q4_0-gguf",
+          "draftHfRepo": "unsloth/gemma-4-E4B-it-qat-GGUF",
+          "draftFileName": "mtp-gemma-4-E4B-it.gguf",
+          "draftSizeBytes": 59678016,
+          "recommended": true,
+          "descriptionKey": "models.descriptions.local.gemma_gemma_4_e4b_it_qat_q4_0"
         },
         {
           "id": "gemma-4-e2b-it-q4_k_m",
@@ -1014,6 +1059,21 @@
           "contextLength": 262144,
           "hfRepo": "bartowski/google_gemma-4-E2B-it-GGUF",
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_e2b_it_q4_k_m"
+        },
+        {
+          "id": "gemma-4-e2b-it-qat-q4_0",
+          "name": "Gemma 4 E2B QAT",
+          "size": "3.4GB",
+          "sizeBytes": 3349516256,
+          "description": "Google's official compact QAT build, quality preserved",
+          "fileName": "gemma-4-E2B_q4_0-it.gguf",
+          "quantization": "q4_0",
+          "contextLength": 262144,
+          "hfRepo": "google/gemma-4-E2B-it-qat-q4_0-gguf",
+          "draftHfRepo": "unsloth/gemma-4-E2B-it-qat-GGUF",
+          "draftFileName": "mtp-gemma-4-E2B-it.gguf",
+          "draftSizeBytes": 59235648,
+          "descriptionKey": "models.descriptions.local.gemma_gemma_4_e2b_it_qat_q4_0"
         },
         {
           "id": "gemma-3-12b-it-q4_k_m",
