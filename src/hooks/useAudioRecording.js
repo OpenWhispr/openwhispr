@@ -7,6 +7,7 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { detectSpokenCommand } from "../helpers/spokenCommands";
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -166,6 +167,27 @@ export const useAudioRecording = (toast, options = {}) => {
               variant: "default",
             });
             return;
+          }
+
+          // ------------------------------------------------------------------
+          // Spoken-command interception (hands-free mode, issue #1308).
+          // If the entire transcript matches a recognised command phrase and
+          // the feature is enabled, fire the keystroke and bail out — the
+          // literal command words are NOT pasted and NOT saved to history.
+          // ------------------------------------------------------------------
+          const { spokenCommandsEnabled } = getSettings();
+          if (spokenCommandsEnabled) {
+            const command = detectSpokenCommand(transcribedText);
+            if (command) {
+              logger.info(
+                "[SpokenCommands] Command detected, sending keystroke",
+                { phrase: transcribedText, key: command.key },
+                "audio"
+              );
+              window.electronAPI?.hideDictationPreview?.();
+              await audioManagerRef.current.safeKeystroke(command.key);
+              return;
+            }
           }
 
           result.text = expandSnippets(result.text, getSettings().snippets);

@@ -1658,6 +1658,8 @@
         "title": "Clipboard",
         "autoPaste": "Automatic pasting",
         "autoPasteDescription": "Automatically paste transcribed text into the active app when dictation finishes",
+        "spokenCommands": "Spoken commands",
+        "spokenCommandsDescription": "Say phrases like \"press Enter\" or \"submit\" to send keystrokes instead of typing the words (hands-free mode)",
         "keepInClipboard": "Keep transcription in clipboard",
         "keepInClipboardDescription": "Keep dictated text in your clipboard so you can paste it manually if needed"
       },

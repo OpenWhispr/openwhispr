@@ -743,6 +743,133 @@ class ClipboardManager {
     }
   }
 
+  /**
+   * Inject a named keystroke into the focused application without touching
+   * the clipboard.  Used by the spoken-command (hands-free) feature.
+   *
+   * @param {string} key - Platform-neutral key name: Return | Shift+Return |
+   *                        Escape | Tab | BackSpace
+   * @returns {Promise<void>}
+   */
+  async sendKeystroke(key) {
+    const platform = process.platform;
+    this.safeLog(`⌨️ sendKeystroke: ${key} (platform=${platform})`);
+
+    if (platform === "darwin") {
+      const fastPaste = this.resolveFastPasteBinary();
+      if (!fastPaste) {
+        this.safeLog("⚠️ sendKeystroke: macos-fast-paste binary unavailable");
+        return;
+      }
+      await new Promise((resolve, reject) => {
+        const proc = spawn(fastPaste, ["--key", key]);
+        let stderr = "";
+        proc.stderr.on("data", (d) => {
+          stderr += d.toString();
+        });
+        proc.on("close", (code) => {
+          proc.removeAllListeners();
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`macos-fast-paste --key exited with code ${code}: ${stderr.trim()}`));
+          }
+        });
+        proc.on("error", (err) => {
+          proc.removeAllListeners();
+          reject(err);
+        });
+      });
+      return;
+    }
+
+    if (platform === "win32") {
+      const fastPaste = this.resolveWindowsFastPasteBinary();
+      if (!fastPaste) {
+        this.safeLog("⚠️ sendKeystroke: windows-fast-paste binary unavailable");
+        return;
+      }
+      await new Promise((resolve, reject) => {
+        const proc = spawn(fastPaste, ["--key", key]);
+        let stderr = "";
+        proc.stderr.on("data", (d) => {
+          stderr += d.toString();
+        });
+        proc.on("close", (code) => {
+          proc.removeAllListeners();
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(
+              new Error(`windows-fast-paste --key exited with code ${code}: ${stderr.trim()}`)
+            );
+          }
+        });
+        proc.on("error", (err) => {
+          proc.removeAllListeners();
+          reject(err);
+        });
+      });
+      return;
+    }
+
+    if (platform === "linux") {
+      const fastPaste = this.resolveLinuxFastPasteBinary();
+      if (fastPaste && !this._isWayland()) {
+        // X11: linux-fast-paste supports --key directly
+        await new Promise((resolve, reject) => {
+          const proc = spawn(fastPaste, ["--key", key]);
+          let stderr = "";
+          proc.stderr.on("data", (d) => {
+            stderr += d.toString();
+          });
+          proc.on("close", (code) => {
+            proc.removeAllListeners();
+            if (code === 0) {
+              resolve();
+            } else {
+              reject(
+                new Error(`linux-fast-paste --key exited with code ${code}: ${stderr.trim()}`)
+              );
+            }
+          });
+          proc.on("error", (err) => {
+            proc.removeAllListeners();
+            reject(err);
+          });
+        });
+        return;
+      }
+
+      // Wayland fallback: try xdotool (available on XWayland sessions)
+      if (this.commandExists("xdotool")) {
+        // Map our canonical names to xdotool key names
+        const xdotoolKey = key === "Shift+Return" ? "shift+Return" : key;
+        const result = spawnSync("xdotool", ["key", xdotoolKey], { timeout: 2000 });
+        if (result.status === 0) return;
+        this.safeLog("⚠️ xdotool key failed", { key, stderr: result.stderr?.toString() });
+      }
+
+      // ydotool fallback (native Wayland)
+      if (this.commandExists("ydotool")) {
+        const ydotoolKey =
+          key === "Shift+Return"
+            ? "shift+enter"
+            : key === "Return"
+              ? "enter"
+              : key === "BackSpace"
+                ? "backspace"
+                : key.toLowerCase();
+        const result = spawnSync("ydotool", ["key", ydotoolKey], { timeout: 2000 });
+        if (result.status === 0) return;
+        this.safeLog("⚠️ ydotool key failed", { key, stderr: result.stderr?.toString() });
+      }
+
+      this.safeLog("⚠️ sendKeystroke: no suitable tool found on Linux");
+      return;
+    }
+  }
+
   async _pasteText(text, options = {}) {
     const startTime = Date.now();
     const platform = process.platform;
