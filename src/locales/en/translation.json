@@ -465,6 +465,10 @@
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
     },
+    "temperature": {
+      "label": "Temperature",
+      "help": "Controls response variability. Lower values are more consistent, higher values are more creative."
+    },
     "selfHosted": {
       "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
     },

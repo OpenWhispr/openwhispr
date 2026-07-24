@@ -9,6 +9,7 @@ export interface InferenceScopeStoreKeys {
   remoteUrl?: keyof SettingsState;
   customApiKey?: keyof SettingsState;
   disableThinking?: keyof SettingsState;
+  temperature?: keyof SettingsState;
 }
 
 export interface InferenceScopeDefinition {
@@ -27,6 +28,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "cleanupRemoteUrl",
       customApiKey: "cleanupCustomApiKey",
       disableThinking: "cleanupDisableThinking",
+      temperature: "cleanupTemperature",
     },
   },
   dictationAgent: {
@@ -39,6 +41,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "dictationAgentRemoteUrl",
       customApiKey: "dictationAgentCustomApiKey",
       disableThinking: "dictationAgentDisableThinking",
+      temperature: "dictationAgentTemperature",
     },
   },
   noteFormatting: {
@@ -51,6 +54,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "noteFormattingRemoteUrl",
       customApiKey: "noteFormattingCustomApiKey",
       disableThinking: "noteFormattingDisableThinking",
+      temperature: "noteFormattingTemperature",
     },
     fallbackScope: "dictationCleanup",
   },
@@ -64,6 +68,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "chatAgentRemoteUrl",
       customApiKey: "chatAgentCustomApiKey",
       disableThinking: "chatAgentDisableThinking",
+      temperature: "chatAgentTemperature",
     },
   },
   dictationTranslation: {
@@ -76,6 +81,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "translationRemoteUrl",
       customApiKey: "translationCustomApiKey",
       disableThinking: "translationDisableThinking",
+      temperature: "translationTemperature",
     },
   },
 } as const satisfies Record<string, InferenceScopeDefinition>;

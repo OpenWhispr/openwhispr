@@ -146,7 +146,7 @@ export function runBackgroundAction(
       );
       const enhanced = await reasoningService.processText(noteContent, modelId, null, {
         systemPrompt,
-        temperature: 0.3,
+        temperature: noteFormatting.temperature,
         disableThinking: settings.noteFormattingDisableThinking,
         ...providerOverrides,
       });

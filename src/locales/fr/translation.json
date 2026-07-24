@@ -465,6 +465,10 @@
       "label": "Désactiver la sortie de raisonnement",
       "help": "Ignore les jetons de raisonnement pour une sortie plus propre. Recommandé pour le nettoyage. Certains serveurs ignorent cette indication."
     },
+    "temperature": {
+      "label": "Température",
+      "help": "Contrôle la variabilité des réponses. Les valeurs basses sont plus cohérentes, les valeurs élevées plus créatives."
+    },
     "selfHosted": {
       "endpointHelp": "Pointez vers un serveur compatible OpenAI sur votre réseau local (par ex. Ollama, LM Studio, vLLM ou llama-server)."
     },

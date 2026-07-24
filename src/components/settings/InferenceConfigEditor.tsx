@@ -138,6 +138,13 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
   const setMode = setField("mode");
   const setProvider = setField("provider");
   const setModel = setField("model");
+  const setTemperature = useCallback(
+    (value: number) => {
+      const next = Math.min(1, Math.max(0, Number(value.toFixed(2))));
+      setResolvedLLMConfig(scope, { temperature: next });
+    },
+    [scope]
+  );
 
   const renderModelSelector = (mode?: "cloud" | "local") => (
     <ReasoningModelSelector
@@ -161,6 +168,16 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
         config.provider === "openrouter" ||
         !!getCloudModel(config.model)?.supportsThinking)) ||
     (config.mode === "local" && !!getLocalModel(config.model)?.supportsThinking);
+
+  const showTemperatureSlider =
+    config.mode === "self-hosted" ||
+    config.mode === "enterprise" ||
+    config.mode === "local" ||
+    config.mode === "openwhispr" ||
+    (config.mode === "providers" &&
+      (config.provider === "custom" ||
+        config.provider === "openrouter" ||
+        !!getCloudModel(config.model)?.supportsTemperature));
 
   return (
     <div className="space-y-3">
@@ -195,6 +212,32 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
             <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
           </div>
           <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+        </div>
+      )}
+
+      {showTemperatureSlider && (
+        <div className="pt-1 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-medium text-foreground">
+                {t("reasoning.temperature.label")}
+              </h4>
+              <p className="text-xs text-muted-foreground">{t("reasoning.temperature.help")}</p>
+            </div>
+            <span className="text-xs tabular-nums text-muted-foreground mt-0.5">
+              {config.temperature.toFixed(2)}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={config.temperature}
+            onChange={(e) => setTemperature(Number(e.target.value))}
+            aria-label={t("reasoning.temperature.label")}
+            className="w-full accent-primary"
+          />
         </div>
       )}
 

@@ -209,6 +209,7 @@ export function useChatStreaming({
                 isCustomAgent || isLanAgent
                   ? settings.chatAgentCustomApiKey || undefined
                   : undefined,
+              temperature: settings.chatAgentTemperature,
               disableThinking: settings.chatAgentDisableThinking,
             },
             aiTools
