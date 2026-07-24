@@ -23,6 +23,29 @@ test("loopback hosts are allowed over http", async () => {
   assert.equal(isSecureEndpoint("http://[::1]:8080"), true);
 });
 
+test("public DNS names that resemble private IP prefixes still require https", async () => {
+  const { isSecureEndpoint } = await load();
+
+  assert.equal(isSecureEndpoint("http://127.example.com/v1"), false);
+  assert.equal(isSecureEndpoint("http://10.example.com/v1"), false);
+  assert.equal(isSecureEndpoint("http://192.168.example.com/v1"), false);
+  assert.equal(isSecureEndpoint("http://172.16.example.com/v1"), false);
+  assert.equal(isSecureEndpoint("http://100.64.example.com/v1"), false);
+  assert.equal(isSecureEndpoint("http://169.254.example.com/v1"), false);
+  // Public DNS wrappers around an IP literal must still require HTTPS.
+  assert.equal(isSecureEndpoint("http://127.0.0.1.nip.io/v1"), false);
+
+  assert.equal(isSecureEndpoint("https://127.example.com/v1"), true);
+});
+
+test("URL-parser abbreviations of loopback IPv4 remain allowed over http", async () => {
+  const { isSecureEndpoint } = await load();
+
+  // WHATWG URL expands forms like 127.1 → 127.0.0.1 before our host check.
+  assert.equal(isSecureEndpoint("http://127.1/v1"), true);
+  assert.equal(isSecureEndpoint("http://127.0.1/v1"), true);
+});
+
 test("RFC 1918 private ranges are allowed over http — self-hosted LLM servers live there", async () => {
   const { isSecureEndpoint } = await load();
 
