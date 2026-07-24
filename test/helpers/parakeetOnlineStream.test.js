@@ -179,6 +179,57 @@ test("unexpected close before Done! reports an error and truncation", async () =
   }
 });
 
+test("a clean finish reports no truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { text, truncated } = await stream.finish();
+    assert.equal(truncated, false);
+    assert.equal(text, "final after 1 frames");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("a send error during the queued flush flags truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  const WebSocket = require("ws");
+  const realSend = WebSocket.prototype.send;
+  // Only client audio frames are binary; the mock server sends strings, so gate on type.
+  WebSocket.prototype.send = function (data, cb) {
+    if (typeof data !== "string") {
+      if (typeof cb === "function") cb(new Error("forced send failure"));
+      return;
+    }
+    return realSend.call(this, data, cb);
+  };
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { truncated } = await stream.finish({ idleTimeoutMs: 1000 });
+    assert.equal(truncated, true);
+  } finally {
+    WebSocket.prototype.send = realSend;
+    await mock.close();
+  }
+});
+
+test("a chunk arriving after finish flags truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const finishPromise = stream.finish({ idleTimeoutMs: 1000 });
+    // Renderer flushed a chunk after we already told the server we were done.
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { truncated } = await finishPromise;
+    assert.equal(truncated, true);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("finish is idempotent and returns the same result", async () => {
   const mock = await startMockOnlineServer({});
   try {
