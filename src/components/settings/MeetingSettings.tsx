@@ -51,6 +51,8 @@ export function MeetingTranscriptionPanel() {
     setMeetingCloudTranscriptionMode,
     meetingRemoteTranscriptionUrl,
     setMeetingRemoteTranscriptionUrl,
+    meetingRemoteTranscriptionModel,
+    setMeetingRemoteTranscriptionModel,
   } = useSettingsStore();
 
   const transcriptionModes: InferenceModeOption[] = [
@@ -142,9 +144,11 @@ export function MeetingTranscriptionPanel() {
             service="transcription"
             url={meetingRemoteTranscriptionUrl}
             onUrlChange={setMeetingRemoteTranscriptionUrl}
+            model={meetingRemoteTranscriptionModel}
+            onModelChange={setMeetingRemoteTranscriptionModel}
           />
           <p className="text-xs text-muted-foreground/80 px-1">
-            {t("settingsPage.speechToText.selfHostedStreamingNote")}
+            {t("settingsPage.speechToText.selfHostedChunkedNote")}
           </p>
         </>
       )}

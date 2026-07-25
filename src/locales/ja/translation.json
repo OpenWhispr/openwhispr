@@ -1685,7 +1685,8 @@
         "noteRecording": "ノート録音",
         "upload": "音声のアップロード"
       },
-      "selfHostedStreamingNote": "ストリーミング文字起こしに対応したサーバーが必要です。"
+      "selfHostedStreamingNote": "ストリーミング文字起こしに対応したサーバーが必要です。",
+      "selfHostedChunkedNote": "音声は短いチャンクに分割され、サーバーの /audio/transcriptions エンドポイントに送信されます — ディクテーションと同じ OpenAI 互換の仕様です。"
     },
     "llms": {
       "title": "言語モデル",

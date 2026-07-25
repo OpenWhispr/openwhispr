@@ -58,6 +58,7 @@ const STREAMING_CLIENT_BY_PROVIDER = {
 };
 const ALLOWED_MEETING_PROVIDERS = new Set([
   "local",
+  "self-hosted",
   "openai-realtime",
   "assemblyai-realtime",
   "deepgram-realtime",
@@ -5315,6 +5316,9 @@ class IPCHandlers {
     let meetingLocalModel = null;
     let meetingLocalLanguage = null;
     let meetingLocalTranscribing = false;
+    // Self-hosted note recording reuses the local-mode buffering/chunking
+    // pipeline but POSTs each chunk to {endpoint} instead of a local model.
+    let meetingSelfHostedRoute = null;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
     let meetingPendingMicFinalTimer = null;
@@ -5655,6 +5659,30 @@ class IPCHandlers {
       return started;
     };
 
+    const transcribeSelfHostedMeetingChunk = async (wav) => {
+      const formData = new FormData();
+      formData.append("file", new Blob([wav], { type: "audio/wav" }), "audio.wav");
+      if (meetingSelfHostedRoute.model) {
+        formData.append("model", meetingSelfHostedRoute.model);
+      }
+      if (meetingLocalLanguage && meetingLocalLanguage !== "auto") {
+        formData.append("language", meetingLocalLanguage);
+      }
+      if (meetingSelfHostedRoute.prompt) {
+        formData.append("prompt", meetingSelfHostedRoute.prompt);
+      }
+      const response = await proxyFetch(meetingSelfHostedRoute.endpoint, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(`Self-hosted API Error: ${response.status} ${errorText}`.trim());
+      }
+      const data = await response.json();
+      return { success: true, text: typeof data?.text === "string" ? data.text : "" };
+    };
+
     const transcribeLocalMeetingChunk = async (source) => {
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
@@ -5701,7 +5729,9 @@ class IPCHandlers {
 
       try {
         let result;
-        if (meetingLocalProvider === "nvidia") {
+        if (meetingSelfHostedRoute) {
+          result = await transcribeSelfHostedMeetingChunk(wav);
+        } else if (meetingLocalProvider === "nvidia") {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: meetingLocalModel,
           });
@@ -5883,6 +5913,7 @@ class IPCHandlers {
       meetingLocalModel = null;
       meetingLocalLanguage = null;
       meetingLocalTranscribing = false;
+      meetingSelfHostedRoute = null;
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
       meetingAecEnabled = false;
@@ -6151,7 +6182,8 @@ class IPCHandlers {
         return { success: false, error: `Unsupported provider: ${options.provider}` };
       }
 
-      if (options.provider === "local") {
+      // Local and self-hosted meeting modes have no realtime socket to pre-warm.
+      if (options.provider === "local" || options.provider === "self-hosted") {
         return { success: true };
       }
 
@@ -6234,8 +6266,14 @@ class IPCHandlers {
           this._meetingSystemStreaming = null;
         }
 
-        // If already prepared (warm connections from prepare), just re-attach handlers
-        if (!meetingLocalMode && isMeetingStreamingConnected(systemAudioMode)) {
+        // If already prepared (warm connections from prepare), just re-attach handlers.
+        // Never for self-hosted: warm sockets belong to a cloud realtime provider,
+        // and reusing them would silently send audio there after the user opted out.
+        if (
+          !meetingLocalMode &&
+          options.provider !== "self-hosted" &&
+          isMeetingStreamingConnected(systemAudioMode)
+        ) {
           debugLogger.debug("Meeting transcription start: reusing warm connections");
           const win = BrowserWindow.fromWebContents(event.sender);
           attachMeetingStreamingHandlers(this._meetingMicStreaming, win, "mic");
@@ -6258,9 +6296,32 @@ class IPCHandlers {
           };
         }
 
-        if (options.provider === "local") {
+        if (options.provider === "local" || options.provider === "self-hosted") {
+          if (options.provider === "self-hosted") {
+            // Same validation as the retry/upload self-hosted paths: fail
+            // closed with a clear error instead of falling through to OpenAI.
+            const { resolveSelfHostedRetryRoute } = await import("./retryTranscriptionRouting.js");
+            const route = resolveSelfHostedRetryRoute({
+              transcriptionMode: "self-hosted",
+              remoteTranscriptionUrl: options.url,
+              remoteTranscriptionModel: options.model,
+            });
+            if (!route || route.kind !== "self-hosted") {
+              return {
+                success: false,
+                error: route?.error || "Self-hosted transcription URL is not configured",
+              };
+            }
+            meetingSelfHostedRoute = {
+              endpoint: route.endpoint,
+              model: route.model,
+              prompt: typeof options.prompt === "string" ? options.prompt : "",
+            };
+          }
+
           meetingLocalMode = true;
-          meetingLocalProvider = options.localProvider || "whisper";
+          meetingLocalProvider =
+            options.provider === "self-hosted" ? "self-hosted" : options.localProvider || "whisper";
           meetingLocalModel = options.localModel || null;
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
@@ -6278,10 +6339,12 @@ class IPCHandlers {
             event,
             systemAudioMode,
             systemAudioStrategy,
-            "in local meeting mode"
+            options.provider === "self-hosted"
+              ? "in self-hosted meeting mode"
+              : "in local meeting mode"
           ));
 
-          debugLogger.debug("Meeting transcription started in local mode", {
+          debugLogger.debug("Meeting transcription started in chunked mode", {
             provider: meetingLocalProvider,
             systemAudioMode,
             systemAudioStrategy,

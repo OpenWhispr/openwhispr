@@ -1664,7 +1664,8 @@
         "noteRecording": "Gravação de notas",
         "upload": "Enviar áudio"
       },
-      "selfHostedStreamingNote": "Requer um servidor que suporte transcrição em streaming."
+      "selfHostedStreamingNote": "Requer um servidor que suporte transcrição em streaming.",
+      "selfHostedChunkedNote": "O áudio é enviado em trechos curtos para o endpoint /audio/transcriptions do seu servidor — o mesmo contrato compatível com OpenAI do ditado."
     },
     "llms": {
       "title": "Modelos de linguagem",

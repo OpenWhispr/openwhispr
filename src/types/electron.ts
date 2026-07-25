@@ -1782,11 +1782,15 @@ declare global {
         provider?: string;
         model?: string;
         language?: string;
+        url?: string;
+        prompt?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean; error?: string }>;
       meetingTranscriptionStart?: (options: {
         provider?: string;
         model?: string;
         language?: string;
+        url?: string;
+        prompt?: string;
         noteId?: number | null;
       }) => Promise<{
         success: boolean;

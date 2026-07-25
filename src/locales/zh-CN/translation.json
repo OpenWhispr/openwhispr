@@ -1227,12 +1227,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": [
-            "无限会议录制",
-            "代理模式",
-            "与您的数据对话",
-            "优先支持"
-          ],
+          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1685,7 +1680,8 @@
         "noteRecording": "笔记录音",
         "upload": "上传音频"
       },
-      "selfHostedStreamingNote": "需要支持流式转录的服务器。"
+      "selfHostedStreamingNote": "需要支持流式转录的服务器。",
+      "selfHostedChunkedNote": "音频将按短片段发送到服务器的 /audio/transcriptions 端点——与听写相同的 OpenAI 兼容接口。"
     },
     "llms": {
       "title": "语言模型",

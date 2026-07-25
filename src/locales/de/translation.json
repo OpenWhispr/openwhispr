@@ -1685,7 +1685,8 @@
         "noteRecording": "Notizaufnahme",
         "upload": "Audio-Upload"
       },
-      "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt."
+      "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt.",
+      "selfHostedChunkedNote": "Audio wird in kurzen Abschnitten an den /audio/transcriptions-Endpunkt deines Servers gesendet — derselbe OpenAI-kompatible Vertrag wie beim Diktat."
     },
     "llms": {
       "title": "Sprachmodelle",
