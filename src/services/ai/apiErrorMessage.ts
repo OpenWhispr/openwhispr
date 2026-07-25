@@ -12,12 +12,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** FastAPI/Pydantic validation errors: {detail: [{loc, msg}]}. */
-function fromDetailList(message: unknown): string | null {
-  if (!isRecord(message) || !Array.isArray(message.detail)) return null;
+/** FastAPI/Pydantic validation errors or detail strings: {detail: "..."} or {detail: [{loc, msg}]}. */
+function fromDetailList(container: unknown): string | null {
+  if (!isRecord(container)) return null;
+
+  const detailStr = asNonEmptyString(container.detail);
+  if (detailStr) return detailStr;
+
+  if (!Array.isArray(container.detail)) return null;
 
   const parts: string[] = [];
-  for (const entry of message.detail) {
+  for (const entry of container.detail) {
     if (!isRecord(entry)) continue;
     const msg = asNonEmptyString(entry.msg);
     if (!msg) continue;
@@ -51,8 +56,11 @@ export function extractApiErrorMessage(errorData: unknown, fallback: string): st
   const flat = asNonEmptyString(errorData.message);
   if (flat) return flat;
 
-  const detail = fromDetailList(errorData.message);
-  if (detail) return detail;
+  const topDetail = fromDetailList(errorData);
+  if (topDetail) return topDetail;
+
+  const messageDetail = fromDetailList(errorData.message);
+  if (messageDetail) return messageDetail;
 
   const errorString = asNonEmptyString(errorData.error);
   if (errorString) return errorString;

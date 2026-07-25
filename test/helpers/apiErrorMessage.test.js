@@ -135,3 +135,31 @@ test("an empty fallback still yields a non-empty message", async () => {
 
   assert.equal(extractApiErrorMessage({}, ""), "Unknown API error");
 });
+
+test("extracts a top-level detail string (FastAPI / HTTPException format)", async () => {
+  const { extractApiErrorMessage } = await load();
+
+  assert.equal(
+    extractApiErrorMessage({ detail: "Model 'llama3' not found" }, "fallback"),
+    "Model 'llama3' not found"
+  );
+});
+
+test("extracts a top-level detail validation array (Pydantic / FastAPI format)", async () => {
+  const { extractApiErrorMessage } = await load();
+
+  const body = {
+    detail: [{ loc: ["body", "model"], msg: "field required" }],
+  };
+
+  assert.equal(extractApiErrorMessage(body, "fallback"), "model: field required");
+});
+
+test("extracts a nested detail string inside message", async () => {
+  const { extractApiErrorMessage } = await load();
+
+  assert.equal(
+    extractApiErrorMessage({ message: { detail: "Rate limit exceeded" } }, "fallback"),
+    "Rate limit exceeded"
+  );
+});
