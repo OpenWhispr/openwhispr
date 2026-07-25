@@ -1,19 +1,21 @@
 # OpenWhispr Fork — Handoff
 
-_Updated 2026-07-20. Pick-up doc for the futuregerald/openwhispr fork. Full narrative in [`DECISIONS-LOG.md`](DECISIONS-LOG.md)._
+_Updated 2026-07-24. Pick-up doc for the futuregerald/openwhispr fork. Full narrative in [`DECISIONS-LOG.md`](DECISIONS-LOG.md)._
 
 ## Current state
 
-- **`main` @ `a5a84fda`**, version **1.8.0**. **PRs #1–#9 all merged. No open PRs.**
-- The fork is a fully local, private meeting transcriber: on-device **Parakeet TDT** transcription by default, **FluidAudio (ANE)** / sherpa-onnx **N-speaker diarization**, local-only onboarding (no signup), telemetry off, cloud/account UI removed, opt-in **auto-start/stop recording**, and a hardened build.
-- **PR 2 plan is written and ready to execute** at `docs/plans/2026-07-17-meeting-audio-and-retranscription.md`. Plan file is untracked (not yet committed). 18 tasks across 6 feature areas.
+- **`main` @ `99848f99`**, version **1.9.0**. **PRs #1–#10 all merged. No open PRs.**
+- The fork is a fully local, private meeting transcriber: on-device **Parakeet TDT** transcription by default, **FluidAudio (ANE)** / sherpa-onnx **N-speaker diarization**, local-only onboarding (no signup), telemetry off, cloud/account UI removed, opt-in **auto-start/stop recording**, **meeting audio saving** (Opus, retention-gated), **whisper large-v3 re-transcription**, and a hardened build.
+- **Adversarial requirements audit completed** — 22/22 requirements PASS. Full audit table in session history.
 
 ## Merged PRs (recent first)
-- **#9** diarization quality: FluidAudio → **offline** mode + **auto-detect speaker count** (max-speakers bound instead of a forced count). Fixes remote speakers collapsing into one.
-- **#8** build hardening: `verify:binaries` fails the build if a critical sidecar (e.g. llama-server) is missing.
+- **#10** meeting audio saving + whisper large-v3 re-transcription + auto-start URL-gate fix + MCP card removal + v1.9.0 bump. Plus code review fixes (opus retention cleanup, tmpWav path safety, _handleAudioRetention dedup, RMS try/catch, modelPath leak, isAvailable guard, require("os") cleanup).
+- **Post-PR-10 direct commits:** removed user profile footer + dead upgrade/limit banners from ControlPanelSidebar; fixed broken `expiredIds` variable reference in `cleanupExpiredAudio`.
+- **#9** diarization quality: FluidAudio offline mode + auto-detect speaker count.
+- **#8** build hardening: `verify:binaries` fails the build if a critical sidecar is missing.
 - **#7** dev: `npm run dev` now auto-fetches llama-server/whisper-cpp/diarization models.
-- **#6** auto-stop fix: our own recording holds the mic, so end-detection uses **camera release** (video) / **meeting-URL poll** (audio-only) + a 4h cap.
-- **#5** opt-in **auto-start** recording: native `macos-call-detector` (camera/mic device-in-use) + AppleScript meeting-URL filter + engine wiring.
+- **#6** auto-stop fix: end-detection uses camera release / meeting-URL poll + 4h cap.
+- **#5** opt-in auto-start recording: native macos-call-detector + browser URL filter.
 - #1–#4: FluidAudio backend + local-only onboarding + telemetry-off + unsigned builds; Parakeet default; local+self-hosted-only STT + removed account/plans/billing/Pro; version 1.8.0.
 
 ## Repo / environment
@@ -23,57 +25,54 @@ _Updated 2026-07-20. Pick-up doc for the futuregerald/openwhispr fork. Full narr
 ## Run / build
 ```bash
 npm install && npm run setup:fluidaudio && npm run dev   # dev
-npm run build:mac:arm64                                   # → dist/OpenWhispr-1.8.0-arm64.dmg (unsigned)
+npm run build:mac:arm64                                   # → dist/OpenWhispr-1.9.0-arm64.dmg (unsigned)
 # recipients: xattr -dr com.apple.quarantine "/Applications/OpenWhispr.app"
 ```
-Typecheck: `cd src && npx tsc --noEmit`. A freshly rebuilt working `.dmg` exists at `dist/OpenWhispr-1.8.0-arm64.dmg` (now includes llama-server; the earlier installed build was missing it due to a build-time download failure — #8 now guards that).
+Typecheck: `cd src && npx tsc --noEmit`.
 
 ## Where data/audio lives (important — confusing)
 - **Production userData: `~/Library/Application Support/open-whispr`** (lowercase, uses package `name`, NOT "OpenWhispr"). Dev build: `OpenWhispr-development`.
 - **DB:** `open-whispr/transcriptions.db` (better-sqlite3). Notes (meetings) in `notes` table, transcript = JSON in `notes.transcript`. Dictations in `transcriptions` table (`has_audio`).
-- **Dictation audio:** saved as `.webm` in `open-whispr/audio/`. **Meeting audio is NOT saved** (see PR 2).
+- **Dictation audio:** saved as `.webm` in `open-whispr/audio/`.
+- **Meeting audio (v1.9.0):** saved as `.opus` in `open-whispr/audio/` — separate mic + system tracks. Gated on `dataRetentionEnabled`. Paths in `notes.mic_audio_path` / `notes.system_audio_path`. Included in retention cleanup.
 
-## Meeting pipeline facts
-- Recording captures **mic + system as separate streams** (`meetingRecordingStore.ts`); the **system channel only** is written to a temp PCM (16-bit mono 24 kHz) for diarization (`ipcHandlers.js` ~6207–6215) and **deleted** after (`_startOrSkipDiarization` ~9075, unlink ~9269). Mic PCM is not persisted.
-- **Diarization is already POST-CALL**, system-channel only. Engine dispatch in `src/helpers/diarization.js`. After #9: FluidAudio offline + auto-count. A **live** speaker identifier (`liveSpeakerIdentifier.js`, CAM++ cosine ≥ 0.65) labels in real time during the call.
-- Common audio sink: `dispatchMeetingAudioBuffer` (`ipcHandlers.js` ~5261); stop/cleanup ~5743 and ~4685; `meeting-transcription-send` IPC ~6345.
+## Key architecture (v1.9.0)
 
-## PR 2 — Plan ready, execution pending
+### Meeting audio pipeline
+1. Recording captures mic + system as separate PCM streams
+2. System PCM written to temp file for diarization; mic PCM written to temp file for retention
+3. At stop: system PCM `copyFileSync`'d before diarization cleanup (which deletes original)
+4. Both tracks encoded to Opus via `encodePcmToOpus` (FFmpeg, 32 kbps mono voip)
+5. Paths stored in DB via `_saveMeetingAudio`; temp PCMs cleaned up
+6. `_handleAudioRetention` deduplicates this logic across local-mode and streaming-mode stop branches
 
-**Plan file:** `docs/plans/2026-07-17-meeting-audio-and-retranscription.md`
-**Execution mode:** Subagent-driven development (Opus subagents per task batch, review between batches).
+### Re-transcription
+- `retranscribe-meeting-note` IPC handler reads saved Opus, feeds whisper-server large-v3, re-runs diarization on system track, overwrites `notes.transcript`
+- UI button in NoteEditor, conditionally shown for meeting notes with saved audio
+- Checks model download via `check-whisper-model-downloaded` before attempting
 
-### 6 feature areas (18 tasks total):
-
-1. **Meeting audio saving** (Tasks 1.1–1.9): DB migration (`mic_audio_path`/`system_audio_path` on `notes`), `encodePcmToOpus` ffmpeg helper, mic PCM write stream in recording pipeline, `_saveMeetingAudio` class method, renderer passes `saveAudio` flag via IPC, wire into stop flow with system PCM copy, note audio IPC handlers.
-2. **Whisper large-v3 re-transcription** (Tasks 2.1–2.3): `retranscribe-meeting-note` IPC handler (reads saved Opus, feeds whisper-server large-v3, re-runs diarization, overwrites transcript), model download check, "Re-transcribe (high quality)" UI button.
-3. **Capture gain diagnostic** (Task 3.1): RMS level logging at system PCM write point. If dBFS < −40, add loudnorm in follow-up.
-4. **Auto-start URL-gate fix** (Tasks 4.1–4.3): `browserMeetingUrlChecker.js` now distinguishes timeout from "no meeting" via `unavailable` flag; `_handleCallActive` trusts device signal when URL check is unavailable.
-5. **MCP card removal** (Task 5.1): Remove dead `McpIntegrationCard` import/usage from `IntegrationsView.tsx`.
-6. **Version bump** (Task 6.1): 1.8.0 → 1.9.0 + CHANGELOG.
-
-### Key code facts verified during planning:
-- Main process has **no** `_getSettings()` — renderer must pass `saveAudio: dataRetentionEnabled` through `meeting-transcription-stop` IPC (update 4 files: ipcHandlers.js, preload.js, types/electron.ts, meetingRecordingStore.ts)
-- `_startOrSkipDiarization` deletes `rawPcmPath` in its `finally` block (line 9274) — must `fs.copyFileSync` before passing to both diarization and audio encoding
-- `checkForActiveMeetingUrl` returns `{ matched: false }` identically for timeout AND "no meeting found" — this is the auto-start bug root cause
-- `ipcHandlers.js` is 9300+ lines — all line numbers are approximate, re-verify before each edit
+### Auto-start fix
+- `browserMeetingUrlChecker` returns `{ matched: false, unavailable: true }` when all browsers fail
+- `meetingDetectionEngine._handleCallActive` trusts device signal when URL check is unavailable/denied
 
 ## Open findings / risks to chase
-- **Low capture gain:** saved dictation audio measured **mean −40 to −50 dB** (normal speech ~−20 to −30). Verify on a real call (Task 3.1 adds diagnostic logging).
-- **Auto-start/stop unverified on a real call.** Tasks 4.1–4.3 fix the URL-gate bug; still need a real Google Meet call to confirm.
-- Diarization real quality only judgeable on a genuine multi-party recording — which needs PR 2's audio saving to re-run/tune.
+- **Low capture gain:** saved dictation audio measured mean −40 to −50 dB. `meeting-gain` debug tag now logs RMS every 100 system chunks. Verify on a real call.
+- **Auto-start/stop unverified on a real call.** URL-gate bug is fixed; needs a real Google Meet call to confirm.
+- **Diarization accuracy** only judgeable on a genuine multi-party recording — now possible with saved audio.
+- **Dead code remains** (intentionally, for upstream merge compatibility): UpgradePrompt, account/billing settings cases in SettingsPage, cloud STT providers in modelRegistryData.json. All unreachable in the fork.
 
 ## Gotchas
 - Existing installs keep persisted localStorage; default changes apply to fresh installs. Reset dev profile: `rm -rf ~/Library/"Application Support"/OpenWhispr-development`.
 - `resources/bin/` is gitignored (binaries built/downloaded, not committed). FluidAudio auto-selects only if its binary is present.
-- `package-lock.json` has a stale diff (unrelated) — ignore or reset before committing PR 2 work.
+- `ipcHandlers.js` is 9500+ lines — always re-verify line numbers before editing.
+- `gh pr create` defaults to upstream repo for forks — always use `--repo futuregerald/openwhispr`.
 
 ---
 
 ## Resume prompt (paste into a fresh session)
 
-> I'm continuing work on my OpenWhispr fork at `~/Documents/dev/openwhispr` (a fully local, private meeting transcriber; remotes: origin = my fork futuregerald/openwhispr, upstream = OpenWhispr/openwhispr). Read `docs/HANDOFF.md` first for full context. `main` is at v1.8.0 with PRs #1–#9 merged, no open PRs. **Policy: open PRs and leave them open for me to review — never auto-merge.**
+> I'm continuing work on my OpenWhispr fork at `~/Documents/dev/openwhispr` (a fully local, private meeting transcriber; remotes: origin = my fork futuregerald/openwhispr, upstream = OpenWhispr/openwhispr). Read `docs/HANDOFF.md` first for full context. `main` is at v1.9.0 (`99848f99`) with PRs #1–#10 merged, no open PRs. **Policy: open PRs and leave them open for me to review — never auto-merge.**
 >
-> **The PR 2 implementation plan is already written** at `docs/plans/2026-07-17-meeting-audio-and-retranscription.md` — read it. It has 18 tasks across 6 feature areas: (1) save meeting audio as separate mic + system Opus tracks (retention-gated), (2) whisper.cpp large-v3 post-call re-transcription, (3) capture gain diagnostic, (4) auto-start URL-gate fix, (5) MCP card removal, (6) v1.9.0 version bump.
+> All 22 requirements from the fork have been audited and pass (privacy/local-only, diarization, auto-start/stop, meeting audio saving, re-transcription, build hardening, version). The adversarial audit caught and fixed a `cleanupExpiredAudio` variable reference bug. Dead cloud/account code is intentionally kept for upstream merge compatibility.
 >
-> **Execute the plan now using subagent-driven development.** Create a feature branch from main, commit the plan file first, then dispatch Opus subagents per task batch (the plan has a dependency graph and recommended parallel batches at the bottom). Review between batches. `ipcHandlers.js` is 9300+ lines — always re-verify line numbers before editing. After all tasks: open a PR and leave it open for me. Do not wait for my input between batches unless you hit a blocking issue.
+> **Open items needing real-device testing:** (1) meeting audio saving end-to-end, (2) auto-start with revoked Automation permission, (3) re-transcribe button with large-v3 model download, (4) capture gain diagnostic on a real call.
