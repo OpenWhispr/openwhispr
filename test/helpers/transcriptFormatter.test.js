@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { formatSrt, formatJson } = require("../../src/helpers/transcriptFormatter");
+const { formatSrt, formatJson, formatTxt, formatMd } = require("../../src/helpers/transcriptFormatter");
 
 test("merged same-speaker SRT cues keep the first segment's start time", () => {
   const output = formatSrt(
@@ -68,4 +68,24 @@ test("JSON duration reflects the last merged segment's timestamp", () => {
   );
 
   assert.equal(JSON.parse(output).metadata.duration_seconds, 3);
+});
+
+test("consecutive speaker-less segments within 2s are merged in SRT, TXT, and Markdown export", () => {
+  const segments = [
+    { timestamp: 0, text: "Hello world," },
+    { timestamp: 1, text: "this is a test." },
+    { timestamp: 5, text: "Later sentence." },
+  ];
+
+  const srtOutput = formatSrt(segments, {});
+  assert.match(srtOutput, /^1\n00:00:00,000 --> 00:00:05,000\nUnknown Speaker: Hello world, this is a test\./);
+  assert.match(srtOutput, /\n2\n00:00:05,000 --> 00:00:08,000\nUnknown Speaker: Later sentence\./);
+
+  const txtOutput = formatTxt({ title: "Test Note", created_at: "2026-01-01T00:00:00Z" }, segments, {});
+  assert.ok(txtOutput.includes("[00:00:00] Unknown Speaker:\nHello world, this is a test."));
+  assert.ok(txtOutput.includes("[00:00:05] Unknown Speaker:\nLater sentence."));
+
+  const mdOutput = formatMd({ title: "Test Note", created_at: "2026-01-01T00:00:00Z" }, segments, {});
+  assert.ok(mdOutput.includes("**Unknown Speaker** `00:00:00`\nHello world, this is a test."));
+  assert.ok(mdOutput.includes("**Unknown Speaker** `00:00:05`\nLater sentence."));
 });
