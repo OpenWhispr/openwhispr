@@ -2992,5 +2992,25 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Без типа встречи",
+      "custom": "(пользовательский)",
+      "regenerateWith": "Перегенерировать заметки как {{name}}",
+      "createNew": "Создать пользовательский тип..."
+    },
+    "editor": {
+      "createTitle": "Создать тип встречи",
+      "editTitle": "Редактировать тип встречи",
+      "nameLabel": "Название",
+      "namePlaceholder": "напр., Ретроспектива спринта",
+      "templateLabel": "Шаблон заметок",
+      "templatePlaceholder": "Инструкции о том, как ИИ должен структурировать заметки встречи...",
+      "actionItemsNote": "Раздел с пунктами действий добавляется автоматически, если ваш шаблон не упоминает его.",
+      "cancel": "Отмена",
+      "save": "Сохранить",
+      "saving": "Сохранение..."
+    }
   }
 }

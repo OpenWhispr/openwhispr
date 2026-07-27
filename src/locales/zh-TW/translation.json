@@ -2983,5 +2983,25 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "無會議類型",
+      "custom": "（自訂）",
+      "regenerateWith": "以{{name}}重新產生筆記",
+      "createNew": "建立自訂類型..."
+    },
+    "editor": {
+      "createTitle": "建立會議類型",
+      "editTitle": "編輯會議類型",
+      "nameLabel": "名稱",
+      "namePlaceholder": "例如，衝刺回顧",
+      "templateLabel": "筆記範本",
+      "templatePlaceholder": "AI應如何組織會議筆記的說明...",
+      "actionItemsNote": "如果您的範本未提及，將自動包含行動事項部分。",
+      "cancel": "取消",
+      "save": "儲存",
+      "saving": "儲存中..."
+    }
   }
 }

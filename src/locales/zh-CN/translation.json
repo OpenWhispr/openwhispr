@@ -2983,5 +2983,25 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "无会议类型",
+      "custom": "（自定义）",
+      "regenerateWith": "以{{name}}重新生成笔记",
+      "createNew": "创建自定义类型..."
+    },
+    "editor": {
+      "createTitle": "创建会议类型",
+      "editTitle": "编辑会议类型",
+      "nameLabel": "名称",
+      "namePlaceholder": "例如，冲刺回顾",
+      "templateLabel": "笔记模板",
+      "templatePlaceholder": "AI应如何组织会议笔记的说明...",
+      "actionItemsNote": "如果您的模板未提及，将自动包含行动事项部分。",
+      "cancel": "取消",
+      "save": "保存",
+      "saving": "保存中..."
+    }
   }
 }

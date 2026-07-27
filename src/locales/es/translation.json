@@ -2988,5 +2988,25 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Sin tipo de reunión",
+      "custom": "(personalizado)",
+      "regenerateWith": "Regenerar notas como {{name}}",
+      "createNew": "Crear tipo personalizado..."
+    },
+    "editor": {
+      "createTitle": "Crear tipo de reunión",
+      "editTitle": "Editar tipo de reunión",
+      "nameLabel": "Nombre",
+      "namePlaceholder": "ej., Retrospectiva de Sprint",
+      "templateLabel": "Plantilla de notas",
+      "templatePlaceholder": "Instrucciones sobre cómo la IA debe estructurar las notas de la reunión...",
+      "actionItemsNote": "Se incluye automáticamente una sección de Elementos de Acción si tu plantilla no la menciona.",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    }
   }
 }

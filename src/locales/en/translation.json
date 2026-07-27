@@ -2988,5 +2988,25 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "No meeting type",
+      "custom": "(custom)",
+      "regenerateWith": "Regenerate notes as {{name}}",
+      "createNew": "Create custom type..."
+    },
+    "editor": {
+      "createTitle": "Create Meeting Type",
+      "editTitle": "Edit Meeting Type",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g., Sprint Retrospective",
+      "templateLabel": "Note Template",
+      "templatePlaceholder": "Instructions for how AI should structure the meeting notes...",
+      "actionItemsNote": "An Action Items section is automatically included if your template doesn't mention it.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
+    }
   }
 }

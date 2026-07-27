@@ -2988,5 +2988,25 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Kein Meeting-Typ",
+      "custom": "(benutzerdefiniert)",
+      "regenerateWith": "Notizen als {{name}} neu generieren",
+      "createNew": "Benutzerdefinierten Typ erstellen..."
+    },
+    "editor": {
+      "createTitle": "Meeting-Typ erstellen",
+      "editTitle": "Meeting-Typ bearbeiten",
+      "nameLabel": "Name",
+      "namePlaceholder": "z.B. Sprint-Retrospektive",
+      "templateLabel": "Notizvorlage",
+      "templatePlaceholder": "Anweisungen, wie die KI die Meeting-Notizen strukturieren soll...",
+      "actionItemsNote": "Ein Abschnitt mit Aktionspunkten wird automatisch hinzugefügt, wenn Ihre Vorlage ihn nicht erwähnt.",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saving": "Speichern..."
+    }
   }
 }

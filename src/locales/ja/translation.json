@@ -2988,5 +2988,25 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "ミーティングタイプなし",
+      "custom": "(カスタム)",
+      "regenerateWith": "{{name}}としてノートを再生成",
+      "createNew": "カスタムタイプを作成..."
+    },
+    "editor": {
+      "createTitle": "ミーティングタイプを作成",
+      "editTitle": "ミーティングタイプを編集",
+      "nameLabel": "名前",
+      "namePlaceholder": "例：スプリント振り返り",
+      "templateLabel": "ノートテンプレート",
+      "templatePlaceholder": "AIがミーティングノートをどのように構成するかの指示...",
+      "actionItemsNote": "テンプレートに記載がない場合、アクションアイテムセクションが自動的に追加されます。",
+      "cancel": "キャンセル",
+      "save": "保存",
+      "saving": "保存中..."
+    }
   }
 }
