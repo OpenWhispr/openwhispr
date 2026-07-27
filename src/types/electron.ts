@@ -63,6 +63,7 @@ export interface NoteItem {
   client_note_id: string;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  meeting_type_id?: number | null;
   mic_audio_path?: string | null;
   system_audio_path?: string | null;
   workspace_id?: string | null;
