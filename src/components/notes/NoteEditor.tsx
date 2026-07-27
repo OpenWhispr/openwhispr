@@ -943,6 +943,7 @@ export default function NoteEditor({
           <div className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               <MeetingTranscriptChat
+                noteId={note.id}
                 segments={displaySegments}
                 micPartial={isRecording ? meetingMicPartial : undefined}
                 systemPartial={isRecording ? meetingSystemPartial : undefined}
