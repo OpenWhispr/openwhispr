@@ -654,6 +654,30 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending'"
       );
 
+      // Meeting types table
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS meeting_types (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          template TEXT NOT NULL DEFAULT '',
+          is_builtin INTEGER NOT NULL DEFAULT 0,
+          keyword_rules TEXT DEFAULT '[]',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Add meeting_type_id to notes
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN meeting_type_id INTEGER REFERENCES meeting_types(id)");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      // Seed built-in meeting types
+      const { seedMeetingTypes } = require("./meetingTypesData");
+      seedMeetingTypes(this.db);
+
       return true;
     } catch (error) {
       debugLogger.error("Database initialization failed", { error: error.message }, "database");
@@ -1512,6 +1536,7 @@ class DatabaseManager {
         "cloud_id",
         "mic_audio_path",
         "system_audio_path",
+        "meeting_type_id",
       ];
       const fields = [];
       const values = [];
@@ -3197,6 +3222,71 @@ class DatabaseManager {
       debugLogger.error("Error removing speaker mapping", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  getMeetingTypes() {
+    if (!this.db) throw new Error("Database not initialized");
+    return this.db.prepare("SELECT * FROM meeting_types ORDER BY is_builtin DESC, name ASC").all();
+  }
+
+  getMeetingType(id) {
+    if (!this.db) throw new Error("Database not initialized");
+    return this.db.prepare("SELECT * FROM meeting_types WHERE id = ?").get(id);
+  }
+
+  createMeetingType(name, template) {
+    if (!this.db) throw new Error("Database not initialized");
+    const result = this.db
+      .prepare("INSERT INTO meeting_types (name, template, is_builtin) VALUES (?, ?, 0)")
+      .run(name, template);
+    return this.getMeetingType(result.lastInsertRowid);
+  }
+
+  updateMeetingType(id, updates) {
+    if (!this.db) throw new Error("Database not initialized");
+    const type = this.getMeetingType(id);
+    if (!type) return null;
+    if (type.is_builtin) throw new Error("Cannot edit built-in meeting types");
+
+    const allowedFields = ["name", "template"];
+    const fields = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key) && value !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(value);
+      }
+    }
+    if (fields.length === 0) return type;
+    fields.push("updated_at = CURRENT_TIMESTAMP");
+    values.push(id);
+    this.db.prepare(`UPDATE meeting_types SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+    return this.getMeetingType(id);
+  }
+
+  deleteMeetingType(id) {
+    if (!this.db) throw new Error("Database not initialized");
+    const type = this.getMeetingType(id);
+    if (!type) return { success: false };
+    if (type.is_builtin) throw new Error("Cannot delete built-in meeting types");
+    this.db.prepare("UPDATE notes SET meeting_type_id = NULL WHERE meeting_type_id = ?").run(id);
+    this.db.prepare("DELETE FROM meeting_types WHERE id = ?").run(id);
+    return { success: true };
+  }
+
+  autoMapMeetingType(eventTitle) {
+    if (!eventTitle || !this.db) return null;
+    const types = this.db.prepare("SELECT * FROM meeting_types WHERE keyword_rules IS NOT NULL AND keyword_rules != '[]'").all();
+    const lowerTitle = eventTitle.toLowerCase();
+    for (const type of types) {
+      try {
+        const keywords = JSON.parse(type.keyword_rules);
+        if (keywords.some((kw) => lowerTitle.includes(kw.toLowerCase()))) {
+          return type.id;
+        }
+      } catch { continue; }
+    }
+    return null;
   }
 }
 
