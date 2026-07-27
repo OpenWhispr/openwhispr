@@ -2026,6 +2026,7 @@ declare global {
         language?: string;
         display?: boolean;
       }) => Promise<{ success: boolean }>;
+      updateDictationPreviewLanguage?: (language: string | null) => Promise<{ success: boolean }>;
       stopDictationPreview?: (opts?: {
         showCleanup?: boolean;
         flushed?: boolean;
