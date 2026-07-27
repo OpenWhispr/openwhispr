@@ -126,6 +126,14 @@ class PostCallPipelineManager {
   }
 
   async _retranscribe(noteId, audioPath, audioDurationSec) {
+    // Guard: skip if the large model hasn't been downloaded yet
+    const largeModelPath = this._whisper.getModelPath("large");
+    if (!fs.existsSync(largeModelPath)) {
+      debugLogger.warn("Pipeline: large whisper model not downloaded yet, skipping retranscribe",
+        { modelPath: largeModelPath }, "meeting");
+      return null;
+    }
+
     // Sub-stage 1: Convert Opus to WAV for whisper
     this._emitSubStage(noteId, "retranscribe", "converting");
     const tmpWav = path.join(os.tmpdir(), `ow-pipeline-${noteId}-${Date.now()}.wav`);
