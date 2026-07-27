@@ -500,6 +500,7 @@ class IPCHandlers {
     this.deepgramStreaming = null;
     this.cortiStreaming = null;
     this._dictationStreaming = null;
+    this._dictationStreamingFingerprint = null;
     this._dictationConnectPromise = null;
     this._dictationIdleTimer = null;
     this._dictationPreviewEnabled = false;
@@ -5246,7 +5247,7 @@ class IPCHandlers {
 
       const data = await postServerToken("/api/openai-realtime-token", {
         model: options.model,
-        language: options.language,
+        language: OpenAIRealtimeStreaming.normalizeLanguage(options.language),
         streams: streams || 1,
       });
       if (streams === 2) {
@@ -6154,6 +6155,19 @@ class IPCHandlers {
 
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
+    const getDictationStreamingFingerprint = (options = {}) => {
+      const provider = options.provider || "openai-realtime";
+      const isTinfoil = provider === "tinfoil-realtime";
+      const model = isTinfoil
+        ? options.model || TINFOIL_REALTIME_MODEL
+        : options.model || "gpt-4o-mini-transcribe";
+      const language = isTinfoil
+        ? undefined
+        : OpenAIRealtimeStreaming.normalizeLanguage(options.language);
+      const mode = options.mode === "byok" ? "byok" : "openwhispr";
+      return JSON.stringify([provider, mode, model, language || "auto"]);
+    };
+
     const clearDictationIdleTimer = () => {
       if (this._dictationIdleTimer) {
         clearTimeout(this._dictationIdleTimer);
@@ -6168,13 +6182,21 @@ class IPCHandlers {
           debugLogger.debug("Closing idle dictation warmup connection");
           this._dictationStreaming.disconnect().catch(() => {});
           this._dictationStreaming = null;
+          this._dictationStreamingFingerprint = null;
         }
       }, DICTATION_IDLE_TIMEOUT_MS);
     };
 
     const connectDictationStreaming = async (event, options) => {
+      const fingerprint = getDictationStreamingFingerprint(options);
       if (this._dictationConnectPromise) {
         await this._dictationConnectPromise.catch(() => {});
+      }
+      if (
+        this._dictationStreaming?.isConnected &&
+        this._dictationStreamingFingerprint === fingerprint
+      ) {
+        return;
       }
 
       clearDictationIdleTimer();
@@ -6183,6 +6205,7 @@ class IPCHandlers {
       if (this._dictationStreaming) {
         await this._dictationStreaming.disconnect().catch(() => {});
         this._dictationStreaming = null;
+        this._dictationStreamingFingerprint = null;
       }
 
       const connectInner = async () => {
@@ -6194,11 +6217,9 @@ class IPCHandlers {
         // of silently dropping the start of the recording.
         streaming.beginConnecting();
         this._dictationStreaming = streaming;
+        this._dictationStreamingFingerprint = fingerprint;
         try {
-          const apiKey = await fetchRealtimeToken(event, {
-            mode: options.mode,
-            provider: options.provider,
-          });
+          const apiKey = await fetchRealtimeToken(event, options);
           if (options.provider === "tinfoil-realtime") {
             const model = options.model || TINFOIL_REALTIME_MODEL;
             await streaming.connect({
@@ -6212,13 +6233,17 @@ class IPCHandlers {
             await streaming.connect({
               apiKey,
               model: options.model || "gpt-4o-mini-transcribe",
+              language: options.language,
               // OpenAI rejects rates below 24kHz; the 16kHz capture is upsampled instead.
               captureRate: 16000,
               preconfigured: isCloud,
             });
           }
         } catch (err) {
-          if (this._dictationStreaming === streaming) this._dictationStreaming = null;
+          if (this._dictationStreaming === streaming) {
+            this._dictationStreaming = null;
+            this._dictationStreamingFingerprint = null;
+          }
           throw err;
         }
       };
@@ -6683,7 +6708,7 @@ class IPCHandlers {
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
-        if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
+        await connectDictationStreaming(event, options);
         return { success: true };
       } catch (err) {
         return streamingStartFailure(err);
@@ -6697,10 +6722,12 @@ class IPCHandlers {
     ipcMain.handle("dictation-realtime-stop", async () => {
       clearDictationIdleTimer();
       if (!this._dictationStreaming) {
+        this._dictationStreamingFingerprint = null;
         return { success: true, text: "" };
       }
       const result = await this._dictationStreaming.disconnect().catch(() => ({ text: "" }));
       this._dictationStreaming = null;
+      this._dictationStreamingFingerprint = null;
       if (this._dictationPreviewEnabled) {
         this.windowManager.hideTranscriptionPreview();
         this._dictationPreviewEnabled = false;
