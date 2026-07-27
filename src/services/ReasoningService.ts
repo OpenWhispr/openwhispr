@@ -4,6 +4,7 @@ import {
   getOpenAiApiConfig,
   getProviderDisplayName,
   isEnterpriseProvider,
+  normalizeReasoningProviderId,
   type EnterpriseProvider,
 } from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
@@ -334,7 +335,11 @@ class ReasoningService extends BaseReasoningService {
   ): Promise<string> {
     const trimmedModel = model?.trim?.() || "";
     const isLanCleanup = !!config.lanUrl || this.isLanCleanupMode();
-    const providerId = isLanCleanup ? "lan" : config.provider || getModelProvider(trimmedModel);
+    // Local scopes persist the picker's vendor id ("llama", "qwen", …), which is
+    // not a PROVIDER_REGISTRY key — normalize before the lookup below.
+    const providerId = isLanCleanup
+      ? "lan"
+      : normalizeReasoningProviderId(config.provider || getModelProvider(trimmedModel));
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");

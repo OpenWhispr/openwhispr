@@ -1,4 +1,5 @@
 import modelDataRaw from "./modelRegistryData.json";
+import { normalizeReasoningProviderId as normalizeProviderId } from "../helpers/reasoningProviderId";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 
@@ -239,6 +240,22 @@ export type EnterpriseProvider = "bedrock" | "azure" | "vertex";
 export const ENTERPRISE_PROVIDERS: readonly EnterpriseProvider[] = ["bedrock", "azure", "vertex"];
 export function isEnterpriseProvider(value: unknown): value is EnterpriseProvider {
   return typeof value === "string" && (ENTERPRISE_PROVIDERS as readonly string[]).includes(value);
+}
+
+// Vendor ids from the local-model picker ("llama", "qwen", …). These group
+// models in the UI; they are not entries in PROVIDER_REGISTRY, which serves
+// every local model through the single `local` provider.
+const LOCAL_PROVIDER_IDS: readonly string[] = modelData.localProviders.map((p) => p.id);
+
+export function isLocalProviderId(value: unknown): boolean {
+  return typeof value === "string" && LOCAL_PROVIDER_IDS.includes(value);
+}
+
+// Map a stored provider id to the one PROVIDER_REGISTRY actually keys on.
+// Settings persist the vendor id for local scopes, so this must run before any
+// provider lookup or local inference throws "Unsupported reasoning provider".
+export function normalizeReasoningProviderId(providerId: string): string {
+  return normalizeProviderId(providerId, LOCAL_PROVIDER_IDS as string[]);
 }
 
 export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
