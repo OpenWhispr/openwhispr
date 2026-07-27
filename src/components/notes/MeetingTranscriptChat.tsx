@@ -9,6 +9,7 @@ import {
   type TranscriptSpeakerStatus,
 } from "../../utils/transcriptSpeakerState";
 import SpeakerMorphPill from "./SpeakerMorphPill";
+import SpeakerPanel from "./SpeakerPanel";
 
 const BUBBLE_STYLES = {
   mic: {
@@ -616,6 +617,7 @@ export function MeetingTranscriptChat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
   const [showSpeakerPanel, setShowSpeakerPanel] = useState(false);
+  const [activeSpeakerFilter, setActiveSpeakerFilter] = useState<string | null>(null);
 
   const speakerCount = useMemo(() => {
     const speakers = new Set(segments?.filter(s => s.speaker).map(s => s.speaker));
@@ -752,14 +754,17 @@ export function MeetingTranscriptChat({
             </div>
           );
 
+          const isFilteredOut = activeSpeakerFilter != null && segment.speaker !== activeSpeakerFilter;
+
           return (
             <div
               key={segment.id}
               className={cn(
-                "group flex flex-col",
+                "group flex flex-col transition-opacity",
                 selfSide ? "items-start" : "items-end",
                 !sameSpeaker && i > 0 && "mt-2",
-                selectable && (selfSide ? "pl-6" : "pr-6")
+                selectable && (selfSide ? "pl-6" : "pr-6"),
+                isFilteredOut && "opacity-20"
               )}
               style={{ animation: "agent-message-in 200ms ease-out both" }}
             >
@@ -827,6 +832,14 @@ export function MeetingTranscriptChat({
             )
         )}
       </div>
+      {showSpeakerPanel && (
+        <SpeakerPanel
+          noteId={noteId}
+          segments={segments}
+          onFilterSpeaker={setActiveSpeakerFilter}
+          activeSpeakerFilter={activeSpeakerFilter}
+        />
+      )}
     </div>
   );
 }
