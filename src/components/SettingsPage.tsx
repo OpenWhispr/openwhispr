@@ -98,9 +98,8 @@ import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { MAX_PREFERRED_LANGUAGES } from "../stores/settingsStore";
-import languageRegistry from "../config/languageRegistry.json";
-
-const LANGUAGE_BY_CODE = new Map(languageRegistry.languages.map((l) => [l.code, l]));
+import { resolveLanguageSelection } from "../helpers/languagePreferences";
+import { getLanguageOption } from "../utils/languageSupport";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
@@ -2706,10 +2705,11 @@ export default function SettingsPage({
                         onValuesChange={(values) => {
                           // Auto detect is exclusive: picking it replaces the
                           // preset list; picking a language replaces auto.
-                          if (values.includes("auto") && !transcriptionLanguages.includes("auto")) {
-                            setPreferredLanguage("auto");
+                          const next = resolveLanguageSelection(transcriptionLanguages, values);
+                          if (next.preferredLanguage !== undefined) {
+                            setPreferredLanguage(next.preferredLanguage);
                           } else {
-                            setPreferredLanguages(values.filter((v) => v !== "auto"));
+                            setPreferredLanguages(next.preferredLanguages);
                           }
                         }}
                         maxValues={MAX_PREFERRED_LANGUAGES}
@@ -2717,7 +2717,7 @@ export default function SettingsPage({
                       {transcriptionLanguages.length > 1 && (
                         <div className="flex flex-wrap justify-end gap-1.5">
                           {transcriptionLanguages.map((code) => {
-                            const lang = LANGUAGE_BY_CODE.get(code);
+                            const lang = getLanguageOption(code);
                             const isActive = code === preferredLanguage;
                             return (
                               <div

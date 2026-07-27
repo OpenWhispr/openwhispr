@@ -27,6 +27,10 @@ interface LanguageSelectorProps {
   onValuesChange?: (values: string[]) => void;
   /** In multiple mode, cap on how many languages can be selected. */
   maxValues?: number;
+  /** In multiple mode, values that replace the whole selection when picked
+   * (e.g. auto detect). The cap does not apply to them — the parent decides
+   * the resulting state. */
+  exclusiveValues?: string[];
   options?: LanguageOption[];
   className?: string;
   placeholder?: string;
@@ -39,6 +43,7 @@ export default function LanguageSelector({
   values,
   onValuesChange,
   maxValues,
+  exclusiveValues = ["auto"],
   options,
   className = "",
   placeholder,
@@ -167,20 +172,39 @@ export default function LanguageSelector({
 
   const selectedValues = multiple ? (values ?? []) : value ? [value] : [];
 
+  // Why a toggle in multiple mode cannot happen; used to disable the option
+  // and explain the disabled state. Null means the option is toggleable.
+  const getDisabledReason = (languageValue: string): string | null => {
+    if (!multiple) return null;
+    const isSelected = selectedValues.includes(languageValue);
+    if (isSelected && selectedValues.length <= 1) {
+      return t("languageSelector.lastLanguageHint");
+    }
+    if (
+      !isSelected &&
+      !exclusiveValues.includes(languageValue) &&
+      maxValues !== undefined &&
+      selectedValues.length >= maxValues
+    ) {
+      return t("languageSelector.maxLanguagesHint", { max: maxValues });
+    }
+    return null;
+  };
+
   const handleSelect = (languageValue: string) => {
-    if (multiple) {
-      const current = values ?? [];
-      if (current.includes(languageValue)) {
-        // Never allow deselecting the last language.
-        if (current.length > 1) onValuesChange?.(current.filter((v) => v !== languageValue));
-      } else if (!maxValues || current.length < maxValues) {
-        onValuesChange?.([...current, languageValue]);
-      }
+    if (!multiple) {
+      onChange?.(languageValue);
+      setIsOpen(false);
+      handleSearchQueryChange("");
       return;
     }
-    onChange?.(languageValue);
-    setIsOpen(false);
-    handleSearchQueryChange("");
+    if (getDisabledReason(languageValue)) return;
+    const current = values ?? [];
+    if (current.includes(languageValue)) {
+      onValuesChange?.(current.filter((v) => v !== languageValue));
+      return;
+    }
+    onValuesChange?.([...current, languageValue]);
   };
 
   const clearSearch = () => {
@@ -301,26 +325,32 @@ export default function LanguageSelector({
                       ? selectedValues.includes(language.value)
                       : language.value === value;
                     const isHighlighted = index === highlightedIndex;
+                    const disabledReason = getDisabledReason(language.value);
 
                     return (
                       <button
                         key={language.value}
                         type="button"
                         onClick={() => handleSelect(language.value)}
+                        disabled={!!disabledReason}
+                        title={disabledReason ?? undefined}
                         className={`
                           group w-full flex items-center justify-between gap-2
                           h-7 px-2.5 text-left text-xs font-medium
                           rounded transition-[background-color,color,transform] duration-150 ease-out
                           ${
-                            isSelected
-                              ? "bg-primary/15 text-primary shadow-sm"
-                              : isHighlighted
-                                ? "bg-muted/70 text-foreground"
-                                : "text-foreground hover:bg-muted/50 active:scale-[0.98]"
+                            disabledReason
+                              ? `cursor-not-allowed ${isSelected ? "bg-primary/15 text-primary/50" : "text-muted-foreground/50"}`
+                              : isSelected
+                                ? "bg-primary/15 text-primary shadow-sm"
+                                : isHighlighted
+                                  ? "bg-muted/70 text-foreground"
+                                  : "text-foreground hover:bg-muted/50 active:scale-[0.98]"
                           }
                         `}
                         role="option"
                         aria-selected={isSelected}
+                        aria-disabled={disabledReason ? true : undefined}
                       >
                         <span className="truncate">
                           <span className="mr-1.5">{language.flag}</span>

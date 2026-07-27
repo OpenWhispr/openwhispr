@@ -957,6 +957,8 @@
     "duplicate": "Уже добавлена"
   },
   "languageSelector": {
+    "lastLanguageHint": "Хотя бы один язык должен оставаться выбранным",
+    "maxLanguagesHint": "Достигнут лимит в {{max}} языков",
     "noLanguagesFound": "Языки не найдены",
     "searchPlaceholder": "Поиск..."
   },

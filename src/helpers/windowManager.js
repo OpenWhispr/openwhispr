@@ -146,6 +146,9 @@ class WindowManager {
         this.mainWindow.blur();
       }
       this.mainWindow.setFocusable(false);
+      // Toggling focusable can reset the window level on some platforms —
+      // re-assert the floating-panel/always-on-top setup.
+      this.enforceMainWindowOnTop();
     }
   }
 

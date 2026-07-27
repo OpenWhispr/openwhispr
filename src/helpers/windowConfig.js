@@ -32,8 +32,10 @@ const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
   // Wide enough for the language chip + cancel button next to the mic
   WITH_LANGUAGE: { width: 160, height: 96 },
-  // Tall enough for the command menu including the language switcher section
-  WITH_MENU: { width: 240, height: 340 },
+  WITH_MENU: { width: 240, height: 280 },
+  // Taller variant for the command menu when it includes the language section;
+  // using it only then avoids an invisible click-eating strip above the menu.
+  WITH_MENU_LANGUAGE: { width: 240, height: 340 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },
 };

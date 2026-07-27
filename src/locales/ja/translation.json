@@ -957,6 +957,8 @@
     "duplicate": "すでに追加されています"
   },
   "languageSelector": {
+    "lastLanguageHint": "少なくとも1つの言語を選択したままにしてください",
+    "maxLanguagesHint": "言語の上限（{{max}}件）に達しました",
     "noLanguagesFound": "言語が見つかりません",
     "searchPlaceholder": "検索..."
   },

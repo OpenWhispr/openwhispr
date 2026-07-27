@@ -957,6 +957,8 @@
     "duplicate": "已新增"
   },
   "languageSelector": {
+    "lastLanguageHint": "至少需要保留一種語言",
+    "maxLanguagesHint": "已達到 {{max}} 種語言的上限",
     "noLanguagesFound": "找不到語言",
     "searchPlaceholder": "搜尋..."
   },

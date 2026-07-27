@@ -10,6 +10,11 @@ import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
 import {
+  MAX_PREFERRED_LANGUAGES,
+  resolveActiveLanguageChange,
+  resolveLanguageSetChange,
+} from "../helpers/languagePreferences";
+import {
   INFERENCE_SCOPES,
   type InferenceScope,
   type InferenceScopeDefinition,
@@ -901,26 +906,24 @@ function createSecretSetter(
 }
 
 export const MAX_TRANSLATION_TARGETS = 5;
-export const MAX_PREFERRED_LANGUAGES = 5;
+export { MAX_PREFERRED_LANGUAGES };
 
-// "auto" is a detection mode, not a language preset — it never belongs in the
-// multi-select set. Also repairs values persisted before this rule existed.
-const initialPreferredLanguages = (() => {
-  const stored = readStringArray("preferredLanguages", []);
-  const sanitized = stored.filter((v) => v !== "auto").slice(0, MAX_PREFERRED_LANGUAGES);
-  if (isBrowser && sanitized.length !== stored.length) {
-    localStorage.setItem("preferredLanguages", JSON.stringify(sanitized));
+// Repair values persisted before the language-set rules existed ("auto" inside
+// the set, an active language the set no longer offers). The rules themselves
+// live in helpers/languagePreferences.js.
+const initialLanguageState = (() => {
+  const storedLanguages = readStringArray("preferredLanguages", []);
+  const storedLanguage = readString("preferredLanguage", "auto");
+  const repaired = resolveLanguageSetChange({ preferredLanguage: storedLanguage }, storedLanguages);
+  if (isBrowser) {
+    if (repaired.preferredLanguages.length !== storedLanguages.length) {
+      localStorage.setItem("preferredLanguages", JSON.stringify(repaired.preferredLanguages));
+    }
+    if (repaired.preferredLanguage !== storedLanguage) {
+      localStorage.setItem("preferredLanguage", repaired.preferredLanguage);
+    }
   }
-  return sanitized;
-})();
-
-const initialPreferredLanguage = (() => {
-  const stored = readString("preferredLanguage", "auto");
-  if (initialPreferredLanguages.length > 0 && !initialPreferredLanguages.includes(stored)) {
-    if (isBrowser) localStorage.setItem("preferredLanguage", initialPreferredLanguages[0]);
-    return initialPreferredLanguages[0];
-  }
-  return stored;
+  return repaired;
 })();
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
@@ -934,10 +937,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   allowOpenAIFallback: readBoolean("allowOpenAIFallback", false),
   allowLocalFallback: readBoolean("allowLocalFallback", false),
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
-  preferredLanguage: initialPreferredLanguage,
+  preferredLanguage: initialLanguageState.preferredLanguage,
   // Multi-select transcription languages. Empty means the user never picked
   // multiple — the effective set is then just [preferredLanguage].
-  preferredLanguages: initialPreferredLanguages,
+  preferredLanguages: initialLanguageState.preferredLanguages,
   cloudTranscriptionProvider: readString("cloudTranscriptionProvider", "openai"),
   cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
   cloudTranscriptionBaseUrl: readString(
@@ -1352,36 +1355,27 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAllowLocalFallback: createBooleanSetter("allowLocalFallback"),
   setFallbackWhisperModel: createStringSetter("fallbackWhisperModel"),
   setPreferredLanguage: (value: string) => {
-    if (isBrowser) localStorage.setItem("preferredLanguage", value);
     set((s) => {
-      // Auto detect is exclusive — choosing it drops the multi-language set.
-      if (value === "auto") {
-        if (s.preferredLanguages.length === 0) return { preferredLanguage: value };
-        if (isBrowser) localStorage.setItem("preferredLanguages", JSON.stringify([]));
-        return { preferredLanguage: value, preferredLanguages: [] };
+      const next = resolveActiveLanguageChange(s, value);
+      if (isBrowser) {
+        localStorage.setItem("preferredLanguage", next.preferredLanguage);
+        if (next.preferredLanguages !== s.preferredLanguages) {
+          localStorage.setItem("preferredLanguages", JSON.stringify(next.preferredLanguages));
+        }
       }
-      // Keep the active language inside the multi-select set (when one exists)
-      // so the dictation panel switcher always offers it.
-      if (s.preferredLanguages.length > 0 && !s.preferredLanguages.includes(value)) {
-        const languages = [...s.preferredLanguages, value].slice(0, MAX_PREFERRED_LANGUAGES);
-        if (isBrowser) localStorage.setItem("preferredLanguages", JSON.stringify(languages));
-        return { preferredLanguage: value, preferredLanguages: languages };
-      }
-      return { preferredLanguage: value };
+      return next;
     });
   },
   setPreferredLanguages: (languages: string[]) => {
-    // "auto" is a detection mode, not a preset — never part of the set.
-    const normalized = Array.from(
-      new Set(languages.filter((v) => typeof v === "string" && v.trim() && v !== "auto"))
-    ).slice(0, MAX_PREFERRED_LANGUAGES);
-    if (isBrowser) localStorage.setItem("preferredLanguages", JSON.stringify(normalized));
     set((s) => {
-      if (normalized.length > 0 && !normalized.includes(s.preferredLanguage)) {
-        if (isBrowser) localStorage.setItem("preferredLanguage", normalized[0]);
-        return { preferredLanguages: normalized, preferredLanguage: normalized[0] };
+      const next = resolveLanguageSetChange(s, languages);
+      if (isBrowser) {
+        localStorage.setItem("preferredLanguages", JSON.stringify(next.preferredLanguages));
+        if (next.preferredLanguage !== s.preferredLanguage) {
+          localStorage.setItem("preferredLanguage", next.preferredLanguage);
+        }
       }
-      return { preferredLanguages: normalized };
+      return next;
     });
   },
   setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),

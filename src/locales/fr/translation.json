@@ -1005,6 +1005,8 @@
     "duplicate": "Déjà ajouté"
   },
   "languageSelector": {
+    "lastLanguageHint": "Au moins une langue doit rester sélectionnée",
+    "maxLanguagesHint": "Limite de {{max}} langues atteinte",
     "noLanguagesFound": "Aucune langue trouvée",
     "searchPlaceholder": "Rechercher..."
   },
