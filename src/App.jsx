@@ -201,28 +201,6 @@ export default function App() {
     }
   }, [isCommandMenuOpen, isLanguageMenuOpen, isHovered, toastCount, setWindowInteractivity]);
 
-  useEffect(() => {
-    const hasMenu = isCommandMenuOpen || isLanguageMenuOpen;
-    const resizeWindow = () => {
-      if (hasMenu && toastCount > 0) {
-        window.electronAPI?.resizeMainWindow?.("EXPANDED");
-      } else if (hasMenu) {
-        // Taller only when the command menu shows its language section, so the
-        // window never extends invisibly above the menu.
-        const hasLanguageSection = isCommandMenuOpen && showLanguageSwitcher && !isRecording;
-        window.electronAPI?.resizeMainWindow?.(
-          hasLanguageSection ? "WITH_MENU_LANGUAGE" : "WITH_MENU"
-        );
-      } else if (toastCount > 0) {
-        window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
-      } else {
-        // Wider resting size so the hover language chip isn't clipped
-        window.electronAPI?.resizeMainWindow?.(showLanguageSwitcher ? "WITH_LANGUAGE" : "BASE");
-      }
-    };
-    resizeWindow();
-  }, [isCommandMenuOpen, isLanguageMenuOpen, toastCount, showLanguageSwitcher, isRecording]);
-
   // Keep toasts stacked above an open menu instead of covering it
   // (the toast viewport in Toast.tsx reads --toast-viewport-bottom)
   useLayoutEffect(() => {
@@ -275,6 +253,29 @@ export default function App() {
   useLayoutEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  // Below useAudioRecording on purpose: the deps read isRecording.
+  useEffect(() => {
+    const hasMenu = isCommandMenuOpen || isLanguageMenuOpen;
+    const resizeWindow = () => {
+      if (hasMenu && toastCount > 0) {
+        window.electronAPI?.resizeMainWindow?.("EXPANDED");
+      } else if (hasMenu) {
+        // Taller only when the command menu shows its language section, so the
+        // window never extends invisibly above the menu.
+        const hasLanguageSection = isCommandMenuOpen && showLanguageSwitcher && !isRecording;
+        window.electronAPI?.resizeMainWindow?.(
+          hasLanguageSection ? "WITH_MENU_LANGUAGE" : "WITH_MENU"
+        );
+      } else if (toastCount > 0) {
+        window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
+      } else {
+        // Wider resting size so the hover language chip isn't clipped
+        window.electronAPI?.resizeMainWindow?.(showLanguageSwitcher ? "WITH_LANGUAGE" : "BASE");
+      }
+    };
+    resizeWindow();
+  }, [isCommandMenuOpen, isLanguageMenuOpen, toastCount, showLanguageSwitcher, isRecording]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onCancelHotkeyPressed?.(() => {
