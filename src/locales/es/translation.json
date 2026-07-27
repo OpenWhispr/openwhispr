@@ -2958,5 +2958,19 @@
     },
     "start": "Empezar a grabar",
     "join": "Unirse"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalizando hablantes...",
+      "detected": "{{count}} hablantes - Ver todos",
+      "diffSummary": "Actualizados {{changed}} de {{total}} segmentos"
+    },
+    "panel": {
+      "title": "{{count}} hablantes detectados",
+      "merge": "Fusionar",
+      "clearFilter": "Borrar filtro",
+      "segments": "segmentos",
+      "selectForMerge": "Seleccionar para fusionar"
+    }
   }
 }

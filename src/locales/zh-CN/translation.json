@@ -2953,5 +2953,19 @@
     },
     "start": "开始录制",
     "join": "加入"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "正在确认说话人...",
+      "detected": "{{count}} 位说话人 - 查看全部",
+      "diffSummary": "已更新 {{total}} 个片段中的 {{changed}} 个"
+    },
+    "panel": {
+      "title": "检测到 {{count}} 位说话人",
+      "merge": "合并",
+      "clearFilter": "清除筛选",
+      "segments": "片段",
+      "selectForMerge": "选择以合并"
+    }
   }
 }

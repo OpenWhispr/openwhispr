@@ -2958,5 +2958,19 @@
     },
     "start": "Avvia registrazione",
     "join": "Partecipa"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalizzazione relatori...",
+      "detected": "{{count}} relatori - Mostra tutti",
+      "diffSummary": "Aggiornati {{changed}} di {{total}} segmenti"
+    },
+    "panel": {
+      "title": "{{count}} relatori rilevati",
+      "merge": "Unisci",
+      "clearFilter": "Cancella filtro",
+      "segments": "segmenti",
+      "selectForMerge": "Seleziona per unire"
+    }
   }
 }

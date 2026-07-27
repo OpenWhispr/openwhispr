@@ -2958,5 +2958,19 @@
     },
     "start": "Démarrer l'enregistrement",
     "join": "Rejoindre"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalisation des intervenants...",
+      "detected": "{{count}} intervenants - Tout afficher",
+      "diffSummary": "{{changed}} segments mis à jour sur {{total}}"
+    },
+    "panel": {
+      "title": "{{count}} intervenants détectés",
+      "merge": "Fusionner",
+      "clearFilter": "Effacer le filtre",
+      "segments": "segments",
+      "selectForMerge": "Sélectionner pour fusionner"
+    }
   }
 }

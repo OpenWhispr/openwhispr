@@ -2958,5 +2958,19 @@
     },
     "start": "録音を開始",
     "join": "参加"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "話者を確定中...",
+      "detected": "{{count}}人の話者 - すべて表示",
+      "diffSummary": "{{total}}件中{{changed}}件のセグメントを更新"
+    },
+    "panel": {
+      "title": "{{count}}人の話者を検出",
+      "merge": "統合",
+      "clearFilter": "フィルターを解除",
+      "segments": "セグメント",
+      "selectForMerge": "統合対象を選択"
+    }
   }
 }

@@ -2958,5 +2958,19 @@
     },
     "start": "Aufnahme starten",
     "join": "Beitreten"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Sprecher werden finalisiert...",
+      "detected": "{{count}} Sprecher - Alle anzeigen",
+      "diffSummary": "{{changed}} von {{total}} Segmenten aktualisiert"
+    },
+    "panel": {
+      "title": "{{count}} Sprecher erkannt",
+      "merge": "Zusammenführen",
+      "clearFilter": "Filter löschen",
+      "segments": "Segmente",
+      "selectForMerge": "Zum Zusammenführen auswählen"
+    }
   }
 }

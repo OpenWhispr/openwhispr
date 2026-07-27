@@ -2958,5 +2958,19 @@
     },
     "start": "Start Recording",
     "join": "Join"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalizing speakers...",
+      "detected": "{{count}} speakers - View all",
+      "diffSummary": "Updated {{changed}} of {{total}} segments"
+    },
+    "panel": {
+      "title": "{{count}} speakers detected",
+      "merge": "Merge",
+      "clearFilter": "Clear filter",
+      "segments": "segments",
+      "selectForMerge": "Select for merge"
+    }
   }
 }
