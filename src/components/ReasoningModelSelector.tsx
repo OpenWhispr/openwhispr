@@ -39,7 +39,7 @@ const OPENROUTER_TAB = "openrouter";
 const OPENROUTER_KEYS_URL = "https://openrouter.ai/keys";
 
 const VERCEL_TAB = "vercel";
-const VERCEL_KEYS_URL = "https://vercel.com/docs/ai-gateway";
+const VERCEL_KEYS_URL = "https://vercel.com/docs/ai-gateway/authentication-and-byok/api-keys";
 
 const CLOUD_PROVIDER_IDS = [
   "openai",
