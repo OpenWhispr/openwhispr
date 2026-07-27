@@ -684,7 +684,7 @@ export function MeetingTranscriptChat({
 
   return (
     <div className="h-full relative">
-      {(isRecording || isDiarizing) && !hintDismissed && (
+      {(isDiarizing || (isRecording && !hintDismissed)) && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-2.5 py-1 rounded-md border border-border bg-background/95 backdrop-blur shadow-sm text-xs text-foreground">
           {isDiarizing ? (
             <Loader2 size={12} className="animate-spin text-muted-foreground" />
@@ -734,19 +734,21 @@ export function MeetingTranscriptChat({
             </>
           )}
           {!isDiarizing && (
-            <div className="scale-75">
-              <Toggle
-                checked={sessionDiarizationEnabled}
-                onChange={(next) => onSetSessionDiarizationEnabled?.(next)}
-              />
-            </div>
+            <>
+              <div className="scale-75">
+                <Toggle
+                  checked={sessionDiarizationEnabled}
+                  onChange={(next) => onSetSessionDiarizationEnabled?.(next)}
+                />
+              </div>
+              <button
+                onClick={() => setHintDismissed(true)}
+                className="text-foreground/40 hover:text-foreground/70 transition-colors"
+              >
+                <X size={12} />
+              </button>
+            </>
           )}
-          <button
-            onClick={() => setHintDismissed(true)}
-            className="text-foreground/40 hover:text-foreground/70 transition-colors"
-          >
-            <X size={12} />
-          </button>
         </div>
       )}
       <div

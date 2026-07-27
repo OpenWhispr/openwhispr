@@ -5331,7 +5331,9 @@ class IPCHandlers {
     const resolveSessionMaxSpeakers = () => {
       const count = this.activeMeetingSpeakerConfig?.expectedCount;
       const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
-      return Math.max(1, total - 1);
+      // Don't subtract 1 — system audio never contains the local mic speaker,
+      // so the full expected count is the cap for remote speaker detection.
+      return Math.max(1, total);
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
