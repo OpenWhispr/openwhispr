@@ -1,5 +1,5 @@
-// Wayland: self-relaunch under XWayland. Chromium picks the display backend
-// before JS runs, so appendSwitch is too late.
+// Chromium picks the display backend before JS runs, so appendSwitch is too
+// late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
 
 if (shouldForceXWayland(process.argv)) {

@@ -1,9 +1,6 @@
 // Overlay positioning and globalShortcut both need X11, so every Linux Wayland
-// session runs under XWayland. An explicit --ozone-platform flag always wins so
-// native Wayland stays testable.
-//
-// Packaged builds apply the same rule from the launcher script before Electron
-// starts (scripts/lib/linux-launcher.js); keep the two in sync.
+// session runs under XWayland. Packaged builds apply the same rule from the
+// launcher script (scripts/lib/linux-launcher.js); keep the two in sync.
 
 const OZONE_PLATFORM_PREFIX = "--ozone-platform=";
 const XWAYLAND_FLAG = `${OZONE_PLATFORM_PREFIX}x11`;
