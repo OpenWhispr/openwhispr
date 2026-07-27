@@ -1103,7 +1103,8 @@
       "customEndpoint": "Endpoint personalizado",
       "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA.",
       "translationDisabled": "Activa la traducción de dictado para probar este prompt",
-      "noTargetLanguage": "Elige primero un idioma de destino"
+      "noTargetLanguage": "Elige primero un idioma de destino",
+      "agentDisabled": "Activa el agente de voz para probar este prompt"
     },
     "view": {
       "customPrompt": "Prompt personalizado",

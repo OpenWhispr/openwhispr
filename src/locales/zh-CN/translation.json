@@ -1055,7 +1055,8 @@
       "customEndpoint": "自定义端点",
       "apiKeyMissing": "未配置 {{provider}} API 密钥，请在 AI 模型设置中添加。",
       "translationDisabled": "启用听写翻译以测试此提示词",
-      "noTargetLanguage": "请先选择目标语言"
+      "noTargetLanguage": "请先选择目标语言",
+      "agentDisabled": "启用语音助手以测试此提示词"
     },
     "view": {
       "customPrompt": "自定义提示词",

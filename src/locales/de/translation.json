@@ -1055,7 +1055,8 @@
       "customEndpoint": "Benutzerdefinierter Endpoint",
       "apiKeyMissing": "{{provider}} API-Schlüssel nicht konfiguriert. Fügen Sie ihn in den KI-Modelle-Einstellungen hinzu.",
       "translationDisabled": "Aktiviere die Diktatübersetzung, um diesen Prompt zu testen",
-      "noTargetLanguage": "Wähle zuerst eine Zielsprache"
+      "noTargetLanguage": "Wähle zuerst eine Zielsprache",
+      "agentDisabled": "Aktiviere den Sprachagenten, um diesen Prompt zu testen"
     },
     "view": {
       "customPrompt": "Benutzerdefinierter Prompt",

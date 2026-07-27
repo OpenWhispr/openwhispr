@@ -1143,7 +1143,8 @@
       "customEndpoint": "Custom endpoint",
       "apiKeyMissing": "{{provider}} API key not configured. Add it in AI Models settings.",
       "translationDisabled": "Enable Dictation Translation to test this prompt",
-      "noTargetLanguage": "Pick a target language first"
+      "noTargetLanguage": "Pick a target language first",
+      "agentDisabled": "Enable the voice agent to test this prompt"
     },
     "view": {
       "customPrompt": "Custom prompt",
