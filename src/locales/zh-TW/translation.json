@@ -25,6 +25,10 @@
         "title": "辨識並標記發言者",
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
       }
+    },
+    "pipeline": {
+      "autoProcess": "自動處理會議",
+      "autoProcessDescription": "每次會議結束後自動重新轉寫、產生標題並建立筆記"
     }
   },
   "tray": {
@@ -2953,5 +2957,55 @@
     },
     "start": "開始錄製",
     "join": "加入"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "正在確認說話人...",
+      "detected": "{{count}} 位說話人 - 查看全部",
+      "diffSummary": "已更新 {{total}} 個片段中的 {{changed}} 個"
+    },
+    "panel": {
+      "title": "偵測到 {{count}} 位說話人",
+      "merge": "合併",
+      "clearFilter": "清除篩選",
+      "segments": "片段",
+      "selectForMerge": "選取以合併"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "無會議類型",
+      "custom": "（自訂）",
+      "regenerateWith": "以{{name}}重新產生筆記",
+      "createNew": "建立自訂類型..."
+    },
+    "editor": {
+      "createTitle": "建立會議類型",
+      "editTitle": "編輯會議類型",
+      "nameLabel": "名稱",
+      "namePlaceholder": "例如，衝刺回顧",
+      "templateLabel": "筆記範本",
+      "templatePlaceholder": "AI應如何組織會議筆記的說明...",
+      "actionItemsNote": "如果您的範本未提及，將自動包含行動事項部分。",
+      "cancel": "取消",
+      "save": "儲存",
+      "saving": "儲存中..."
+    }
   }
 }

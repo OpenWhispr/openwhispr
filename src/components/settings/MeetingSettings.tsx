@@ -25,6 +25,21 @@ export function MeetingSpeakerDetectionRow() {
   );
 }
 
+export function MeetingAutoProcessRow() {
+  const { t } = useTranslation();
+  const autoPostCallPipeline = useSettingsStore((s) => s.autoPostCallPipeline);
+  const setAutoPostCallPipeline = useSettingsStore((s) => s.setAutoPostCallPipeline);
+
+  return (
+    <SettingsRow
+      label={t("settings.pipeline.autoProcess")}
+      description={t("settings.pipeline.autoProcessDescription")}
+    >
+      <Toggle checked={autoPostCallPipeline} onChange={setAutoPostCallPipeline} />
+    </SettingsRow>
+  );
+}
+
 const noop = () => {};
 
 export function MeetingTranscriptionPanel() {
@@ -132,6 +147,7 @@ export function MeetingTranscriptionPanel() {
         </>
       )}
       <MeetingSpeakerDetectionRow />
+      <MeetingAutoProcessRow />
     </div>
   );
 }

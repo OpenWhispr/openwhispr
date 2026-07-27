@@ -648,7 +648,8 @@ class WhisperServerManager extends EventEmitter {
           : "too short",
     });
 
-    const { language, initialPrompt } = options;
+    const { language, initialPrompt, timeoutMs } = options;
+    const effectiveTimeout = timeoutMs || 300000; // default 5 minutes
 
     // Always convert to 16kHz mono WAV - whisper.cpp requires this exact format
     let finalBuffer = audioBuffer;
@@ -709,7 +710,7 @@ class WhisperServerManager extends EventEmitter {
             "Content-Type": `multipart/form-data; boundary=${boundary}`,
             "Content-Length": body.length,
           },
-          timeout: 300000,
+          timeout: effectiveTimeout,
         },
         (res) => {
           let data = "";

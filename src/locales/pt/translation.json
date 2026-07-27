@@ -25,6 +25,10 @@
         "title": "Identificar e rotular participantes",
         "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "Processar reuniões automaticamente",
+      "autoProcessDescription": "Re-transcrever automaticamente, gerar título e criar notas após cada reunião"
     }
   },
   "tray": {
@@ -2958,5 +2962,55 @@
     },
     "start": "Começar a gravar",
     "join": "Entrar"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalizando falantes...",
+      "detected": "{{count}} falantes - Ver todos",
+      "diffSummary": "Atualizados {{changed}} de {{total}} segmentos"
+    },
+    "panel": {
+      "title": "{{count}} falantes detectados",
+      "merge": "Mesclar",
+      "clearFilter": "Limpar filtro",
+      "segments": "segmentos",
+      "selectForMerge": "Selecionar para mesclar"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Sem tipo de reunião",
+      "custom": "(personalizado)",
+      "regenerateWith": "Regenerar notas como {{name}}",
+      "createNew": "Criar tipo personalizado..."
+    },
+    "editor": {
+      "createTitle": "Criar tipo de reunião",
+      "editTitle": "Editar tipo de reunião",
+      "nameLabel": "Nome",
+      "namePlaceholder": "ex., Retrospectiva de Sprint",
+      "templateLabel": "Modelo de notas",
+      "templatePlaceholder": "Instruções sobre como a IA deve estruturar as notas da reunião...",
+      "actionItemsNote": "Uma seção de Itens de Ação é incluída automaticamente se o seu modelo não a mencionar.",
+      "cancel": "Cancelar",
+      "save": "Salvar",
+      "saving": "Salvando..."
+    }
   }
 }

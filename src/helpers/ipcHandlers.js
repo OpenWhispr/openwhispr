@@ -4177,6 +4177,27 @@ class IPCHandlers {
     // Electron doesn't auto-attach jar cookies on top of our explicit headers.
     const proxyFetch = (url, init = {}) => net.fetch(url, { ...init, useSessionCookies: false });
 
+    // Post-call pipeline initialization
+    const { PostCallPipelineManager } = require("./postCallPipelineManager");
+    const { BackgroundJobQueue } = require("./backgroundJobQueue");
+    const { MainProcessInference } = require("./mainProcessInference");
+    const { convertToWav } = require("./ffmpegUtils");
+
+    this.backgroundJobQueue = new BackgroundJobQueue();
+    this._largeModelDownloadTriggered = false;
+    this._autoPostCallPipelineDisabled = false;
+
+    const inference = new MainProcessInference(proxyFetch, this.environmentManager);
+
+    this.postCallPipelineManager = new PostCallPipelineManager({
+      broadcast: (channel, payload) => this.broadcastToWindows(channel, payload),
+      databaseManager: this.databaseManager,
+      whisperManager: this.whisperManager,
+      diarizationManager: this.diarizationManager,
+      inference,
+      convertToWav,
+    });
+
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
@@ -5331,7 +5352,9 @@ class IPCHandlers {
     const resolveSessionMaxSpeakers = () => {
       const count = this.activeMeetingSpeakerConfig?.expectedCount;
       const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
-      return Math.max(1, total - 1);
+      // Don't subtract 1 — system audio never contains the local mic speaker,
+      // so the full expected count is the cap for remote speaker detection.
+      return Math.max(1, total);
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
@@ -8679,6 +8702,15 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("meeting-set-auto-post-call-pipeline", async (_event, payload) => {
+      try {
+        this.autoPostCallPipeline = payload?.enabled !== false;
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("whisper-vad-get-config", async () => {
       try {
         return { success: true, config: this._getWhisperVadSettings() };
@@ -8936,6 +8968,132 @@ class IPCHandlers {
       this._tryAutoLabelOneOnOne(noteId);
       return { success: true };
     });
+
+    // ── Post-call pipeline control ───────────────────────────────────────
+
+    ipcMain.handle("get-pipeline-status", async () => ({
+      queueLength: this.backgroundJobQueue?.length ?? 0,
+      activeJob: this.backgroundJobQueue?.activeJob ?? null,
+    }));
+
+    ipcMain.handle("retry-pipeline-step", async (_event, noteId, fromStep) => {
+      this.backgroundJobQueue.enqueue(
+        `post-call-retry-${noteId}`,
+        () => this.postCallPipelineManager.run(noteId, { fromStep })
+      );
+      return { success: true };
+    });
+
+    ipcMain.handle("regenerate-notes", async (_event, noteId, meetingTypeId) => {
+      if (meetingTypeId !== undefined) {
+        this.databaseManager.updateNote(noteId, { meeting_type_id: meetingTypeId });
+      }
+      this.backgroundJobQueue.enqueue(
+        `regenerate-notes-${noteId}`,
+        () => this.postCallPipelineManager.runSingleStep(noteId, "notes")
+      );
+      return { success: true };
+    });
+
+    // ── Meeting types CRUD ───────────────────────────────────────────────
+
+    ipcMain.handle("get-meeting-types", async () => this.databaseManager.getMeetingTypes());
+    ipcMain.handle("get-meeting-type", async (_event, id) => this.databaseManager.getMeetingType(id));
+    ipcMain.handle("create-meeting-type", async (_event, name, template) =>
+      this.databaseManager.createMeetingType(name, template));
+    ipcMain.handle("update-meeting-type", async (_event, id, updates) =>
+      this.databaseManager.updateMeetingType(id, updates));
+    ipcMain.handle("delete-meeting-type", async (_event, id) =>
+      this.databaseManager.deleteMeetingType(id));
+
+    ipcMain.handle("set-note-meeting-type", async (_event, noteId, meetingTypeId) => {
+      this.databaseManager.updateNote(noteId, { meeting_type_id: meetingTypeId });
+      const note = this.databaseManager.getNote(noteId);
+      this.broadcastToWindows("note-updated", note);
+      return { success: true };
+    });
+
+    // ── Pipeline settings ────────────────────────────────────────────────
+
+    ipcMain.handle("set-auto-post-call-pipeline", async (_event, enabled) => {
+      this._autoPostCallPipelineDisabled = !enabled;
+      return { success: true };
+    });
+
+    ipcMain.handle("sync-note-formatting-config", async (_event, config) => {
+      process.env.NOTE_FORMATTING_PROVIDER = config.provider || "";
+      process.env.NOTE_FORMATTING_MODEL = config.model || "";
+      this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+      return { success: true };
+    });
+
+    // ── Speaker management ───────────────────────────────────────────────
+
+    ipcMain.handle("rename-speaker", async (_event, noteId, speakerId, newName) => {
+      const note = this.databaseManager.getNote(noteId);
+      if (!note?.transcript) return { success: false };
+      try {
+        const segments = JSON.parse(note.transcript);
+        for (const seg of segments) {
+          if (seg.speaker === speakerId) {
+            seg.speakerName = newName;
+            seg.speakerIsPlaceholder = false;
+          }
+        }
+        this.databaseManager.updateNote(noteId, { transcript: JSON.stringify(segments) });
+        this.broadcastToWindows("note-updated", this.databaseManager.getNote(noteId));
+        return { success: true };
+      } catch {
+        return { success: false };
+      }
+    });
+
+    ipcMain.handle("merge-speakers", async (_event, noteId, keepId, mergeId) => {
+      const note = this.databaseManager.getNote(noteId);
+      if (!note?.transcript) return { success: false };
+      try {
+        const segments = JSON.parse(note.transcript);
+        const keepSeg = segments.find((s) => s.speaker === keepId);
+        const keepName = keepSeg?.speakerName || keepId;
+        for (const seg of segments) {
+          if (seg.speaker === mergeId) {
+            seg.speaker = keepId;
+            seg.speakerName = keepName;
+          }
+        }
+        this.databaseManager.updateNote(noteId, { transcript: JSON.stringify(segments) });
+        this.broadcastToWindows("note-updated", this.databaseManager.getNote(noteId));
+        return { success: true };
+      } catch {
+        return { success: false };
+      }
+    });
+  }
+
+  _enqueuePostCallPipeline(noteId) {
+    if (this._autoPostCallPipelineDisabled) {
+      debugLogger.info("Post-call pipeline disabled by user setting", {}, "meeting");
+      return;
+    }
+    this.backgroundJobQueue.enqueue(
+      `post-call-${noteId}`,
+      () => this.postCallPipelineManager.run(noteId)
+    );
+
+    // Auto-download large whisper model if needed
+    if (!this._largeModelDownloadTriggered) {
+      this._largeModelDownloadTriggered = true;
+      const modelPath = this.whisperManager.getModelPath("large");
+      if (modelPath && !fs.existsSync(modelPath)) {
+        debugLogger.info("Auto-downloading large whisper model for pipeline", {}, "meeting");
+        this.whisperManager.downloadWhisperModel("large", (progress) => {
+          this.broadcastToWindows("whisper-model-download-progress", progress);
+        }).catch((err) => {
+          debugLogger.warn("Auto-download of large model failed", { error: err.message }, "meeting");
+          this._largeModelDownloadTriggered = false;
+        });
+      }
+    }
   }
 
   _retroactiveMapping(profile) {
@@ -9306,6 +9464,9 @@ class IPCHandlers {
           id: segment.id || `segment-${index}`,
         })),
       });
+      if (noteId) {
+        this._enqueuePostCallPipeline(noteId);
+      }
       return;
     }
 
@@ -9476,6 +9637,9 @@ class IPCHandlers {
         }
 
         send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        if (noteId) {
+          this._enqueuePostCallPipeline(noteId);
+        }
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         send({ segments: [] });

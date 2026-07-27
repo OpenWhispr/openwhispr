@@ -59,6 +59,8 @@ unsigned, macOS Gatekeeper blocks it on first launch until each recipient clears
 ```bash
 xattr -dr com.apple.quarantine "/Applications/OpenWhispr.app"
 ```
+Alternatives: right-click the app and choose **Open**, or go to **System Settings → Privacy & Security** and click **"Open Anyway"**.
+
 To distribute without that step, set `"identity"` to your own Developer ID and `"notarize": true` in
 `electron-builder.json`, then export `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` before building.
 Note: unsigned macOS apps can't auto-update, so coworkers reinstall newer `.dmg`s manually.

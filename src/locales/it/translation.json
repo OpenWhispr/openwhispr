@@ -25,6 +25,10 @@
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "Elaborazione automatica delle riunioni",
+      "autoProcessDescription": "Ri-trascrivere automaticamente, generare titolo e creare note dopo ogni riunione"
     }
   },
   "tray": {
@@ -2958,5 +2962,55 @@
     },
     "start": "Avvia registrazione",
     "join": "Partecipa"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalizzazione relatori...",
+      "detected": "{{count}} relatori - Mostra tutti",
+      "diffSummary": "Aggiornati {{changed}} di {{total}} segmenti"
+    },
+    "panel": {
+      "title": "{{count}} relatori rilevati",
+      "merge": "Unisci",
+      "clearFilter": "Cancella filtro",
+      "segments": "segmenti",
+      "selectForMerge": "Seleziona per unire"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Nessun tipo di riunione",
+      "custom": "(personalizzato)",
+      "regenerateWith": "Rigenera le note come {{name}}",
+      "createNew": "Crea tipo personalizzato..."
+    },
+    "editor": {
+      "createTitle": "Crea tipo di riunione",
+      "editTitle": "Modifica tipo di riunione",
+      "nameLabel": "Nome",
+      "namePlaceholder": "es., Retrospettiva Sprint",
+      "templateLabel": "Modello di note",
+      "templatePlaceholder": "Istruzioni su come l'IA deve strutturare le note della riunione...",
+      "actionItemsNote": "Una sezione Azioni da compiere viene inclusa automaticamente se il modello non la menziona.",
+      "cancel": "Annulla",
+      "save": "Salva",
+      "saving": "Salvataggio..."
+    }
   }
 }

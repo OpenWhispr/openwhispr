@@ -83,11 +83,13 @@ npm run build:mac:arm64   # Apple Silicon (use build:mac:x64 for Intel Macs)
 
 `prebuild:mac` runs automatically first: it compiles the native helpers, downloads the whisper/sherpa/qdrant binaries, and **builds and bundles the FluidAudio diarization engine** — so the installed app needs no `npm run setup:fluidaudio`. Output `.dmg` and `.zip` land in `dist/`.
 
-These builds are **unsigned and un-notarized** (the fork doesn't ship an Apple Developer ID), so macOS Gatekeeper blocks the app on first launch. Each recipient clears the quarantine flag once after installing:
+These builds are **unsigned and un-notarized** (the fork doesn't ship an Apple Developer ID), so macOS Gatekeeper blocks the app on first launch. Clear the quarantine flag once after installing:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/OpenWhispr.app"
 ```
+
+Alternatively: right-click the app and choose **Open**, or go to **System Settings → Privacy & Security** and click **"Open Anyway"** next to the OpenWhispr entry.
 
 First launch downloads the default Parakeet TDT model (~680 MB; Whisper models are larger if you switch). To re-enable real signing/notarization with your own Developer ID, see [docs/FORK-SETUP.md](docs/FORK-SETUP.md).
 

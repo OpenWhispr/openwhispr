@@ -25,6 +25,10 @@
         "title": "Identifier et étiqueter les intervenants",
         "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
       }
+    },
+    "pipeline": {
+      "autoProcess": "Traitement automatique des réunions",
+      "autoProcessDescription": "Re-transcrire automatiquement, générer un titre et créer des notes après chaque réunion"
     }
   },
   "tray": {
@@ -2958,5 +2962,55 @@
     },
     "start": "Démarrer l'enregistrement",
     "join": "Rejoindre"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalisation des intervenants...",
+      "detected": "{{count}} intervenants - Tout afficher",
+      "diffSummary": "{{changed}} segments mis à jour sur {{total}}"
+    },
+    "panel": {
+      "title": "{{count}} intervenants détectés",
+      "merge": "Fusionner",
+      "clearFilter": "Effacer le filtre",
+      "segments": "segments",
+      "selectForMerge": "Sélectionner pour fusionner"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Aucun type de réunion",
+      "custom": "(personnalisé)",
+      "regenerateWith": "Régénérer les notes en tant que {{name}}",
+      "createNew": "Créer un type personnalisé..."
+    },
+    "editor": {
+      "createTitle": "Créer un type de réunion",
+      "editTitle": "Modifier le type de réunion",
+      "nameLabel": "Nom",
+      "namePlaceholder": "ex., Rétrospective de Sprint",
+      "templateLabel": "Modèle de notes",
+      "templatePlaceholder": "Instructions sur la façon dont l'IA doit structurer les notes de réunion...",
+      "actionItemsNote": "Une section Actions à suivre est automatiquement incluse si votre modèle ne la mentionne pas.",
+      "cancel": "Annuler",
+      "save": "Enregistrer",
+      "saving": "Enregistrement..."
+    }
   }
 }

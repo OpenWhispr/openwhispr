@@ -25,6 +25,10 @@
         "title": "Identificar y etiquetar participantes",
         "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "Procesamiento automático de reuniones",
+      "autoProcessDescription": "Re-transcribir automáticamente, generar título y crear notas después de cada reunión"
     }
   },
   "tray": {
@@ -2958,5 +2962,55 @@
     },
     "start": "Empezar a grabar",
     "join": "Unirse"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalizando hablantes...",
+      "detected": "{{count}} hablantes - Ver todos",
+      "diffSummary": "Actualizados {{changed}} de {{total}} segmentos"
+    },
+    "panel": {
+      "title": "{{count}} hablantes detectados",
+      "merge": "Fusionar",
+      "clearFilter": "Borrar filtro",
+      "segments": "segmentos",
+      "selectForMerge": "Seleccionar para fusionar"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Sin tipo de reunión",
+      "custom": "(personalizado)",
+      "regenerateWith": "Regenerar notas como {{name}}",
+      "createNew": "Crear tipo personalizado..."
+    },
+    "editor": {
+      "createTitle": "Crear tipo de reunión",
+      "editTitle": "Editar tipo de reunión",
+      "nameLabel": "Nombre",
+      "namePlaceholder": "ej., Retrospectiva de Sprint",
+      "templateLabel": "Plantilla de notas",
+      "templatePlaceholder": "Instrucciones sobre cómo la IA debe estructurar las notas de la reunión...",
+      "actionItemsNote": "Se incluye automáticamente una sección de Elementos de Acción si tu plantilla no la menciona.",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    }
   }
 }

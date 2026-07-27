@@ -25,6 +25,10 @@
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
       }
+    },
+    "pipeline": {
+      "autoProcess": "Meetings automatisch verarbeiten",
+      "autoProcessDescription": "Nach jedem Meeting automatisch neu transkribieren, Titel generieren und Notizen erstellen"
     }
   },
   "tray": {
@@ -2958,5 +2962,55 @@
     },
     "start": "Aufnahme starten",
     "join": "Beitreten"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Sprecher werden finalisiert...",
+      "detected": "{{count}} Sprecher - Alle anzeigen",
+      "diffSummary": "{{changed}} von {{total}} Segmenten aktualisiert"
+    },
+    "panel": {
+      "title": "{{count}} Sprecher erkannt",
+      "merge": "Zusammenführen",
+      "clearFilter": "Filter löschen",
+      "segments": "Segmente",
+      "selectForMerge": "Zum Zusammenführen auswählen"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Kein Meeting-Typ",
+      "custom": "(benutzerdefiniert)",
+      "regenerateWith": "Notizen als {{name}} neu generieren",
+      "createNew": "Benutzerdefinierten Typ erstellen..."
+    },
+    "editor": {
+      "createTitle": "Meeting-Typ erstellen",
+      "editTitle": "Meeting-Typ bearbeiten",
+      "nameLabel": "Name",
+      "namePlaceholder": "z.B. Sprint-Retrospektive",
+      "templateLabel": "Notizvorlage",
+      "templatePlaceholder": "Anweisungen, wie die KI die Meeting-Notizen strukturieren soll...",
+      "actionItemsNote": "Ein Abschnitt mit Aktionspunkten wird automatisch hinzugefügt, wenn Ihre Vorlage ihn nicht erwähnt.",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saving": "Speichern..."
+    }
   }
 }

@@ -42,6 +42,8 @@ import {
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import PostCallPipelineIndicator from "./PostCallPipelineIndicator";
+import { usePostCallPipelineListener } from "../hooks/usePostCallPipelineListener";
 import { syncService } from "../services/SyncService.js";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import {
@@ -377,6 +379,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   useEffect(() => {
     fetchStreamingProviders();
   }, []);
+
+  usePostCallPipelineListener();
 
   const handleMeetingRecordingRequestHandled = useCallback(
     () => setMeetingRecordingRequest(null),
@@ -957,6 +961,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           </div>
         </main>
       </div>
+      <PostCallPipelineIndicator
+        onNavigateToNote={(noteId) => {
+          setActiveNoteId(noteId);
+          setActiveView("personal-notes");
+        }}
+      />
       <BackgroundActionToastListener />
     </div>
   );

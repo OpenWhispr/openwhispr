@@ -25,6 +25,10 @@
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
       }
+    },
+    "pipeline": {
+      "autoProcess": "会議の自動処理",
+      "autoProcessDescription": "各会議終了後に自動的に再文字起こし、タイトル生成、ノート作成を行います"
     }
   },
   "tray": {
@@ -2958,5 +2962,55 @@
     },
     "start": "録音を開始",
     "join": "参加"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "話者を確定中...",
+      "detected": "{{count}}人の話者 - すべて表示",
+      "diffSummary": "{{total}}件中{{changed}}件のセグメントを更新"
+    },
+    "panel": {
+      "title": "{{count}}人の話者を検出",
+      "merge": "統合",
+      "clearFilter": "フィルターを解除",
+      "segments": "セグメント",
+      "selectForMerge": "統合対象を選択"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "ミーティングタイプなし",
+      "custom": "(カスタム)",
+      "regenerateWith": "{{name}}としてノートを再生成",
+      "createNew": "カスタムタイプを作成..."
+    },
+    "editor": {
+      "createTitle": "ミーティングタイプを作成",
+      "editTitle": "ミーティングタイプを編集",
+      "nameLabel": "名前",
+      "namePlaceholder": "例：スプリント振り返り",
+      "templateLabel": "ノートテンプレート",
+      "templatePlaceholder": "AIがミーティングノートをどのように構成するかの指示...",
+      "actionItemsNote": "テンプレートに記載がない場合、アクションアイテムセクションが自動的に追加されます。",
+      "cancel": "キャンセル",
+      "save": "保存",
+      "saving": "保存中..."
+    }
   }
 }

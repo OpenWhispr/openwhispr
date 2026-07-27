@@ -25,6 +25,10 @@
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "自动处理会议",
+      "autoProcessDescription": "每次会议结束后自动重新转写、生成标题并创建笔记"
     }
   },
   "tray": {
@@ -2953,5 +2957,55 @@
     },
     "start": "开始录制",
     "join": "加入"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "正在确认说话人...",
+      "detected": "{{count}} 位说话人 - 查看全部",
+      "diffSummary": "已更新 {{total}} 个片段中的 {{changed}} 个"
+    },
+    "panel": {
+      "title": "检测到 {{count}} 位说话人",
+      "merge": "合并",
+      "clearFilter": "清除筛选",
+      "segments": "片段",
+      "selectForMerge": "选择以合并"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "无会议类型",
+      "custom": "（自定义）",
+      "regenerateWith": "以{{name}}重新生成笔记",
+      "createNew": "创建自定义类型..."
+    },
+    "editor": {
+      "createTitle": "创建会议类型",
+      "editTitle": "编辑会议类型",
+      "nameLabel": "名称",
+      "namePlaceholder": "例如，冲刺回顾",
+      "templateLabel": "笔记模板",
+      "templatePlaceholder": "AI应如何组织会议笔记的说明...",
+      "actionItemsNote": "如果您的模板未提及，将自动包含行动事项部分。",
+      "cancel": "取消",
+      "save": "保存",
+      "saving": "保存中..."
+    }
   }
 }

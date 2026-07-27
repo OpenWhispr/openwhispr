@@ -332,6 +332,40 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveNoteSpeakerEmbeddings: (noteId, embeddings) =>
     ipcRenderer.invoke("save-note-speaker-embeddings", noteId, embeddings),
 
+  // Post-call pipeline
+  getPipelineStatus: () => ipcRenderer.invoke("get-pipeline-status"),
+  retryPipelineStep: (noteId, fromStep) =>
+    ipcRenderer.invoke("retry-pipeline-step", noteId, fromStep),
+  regenerateNotes: (noteId, meetingTypeId) =>
+    ipcRenderer.invoke("regenerate-notes", noteId, meetingTypeId),
+  onPostCallPipelineStatus: registerListener(
+    "post-call-pipeline-status",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Meeting types
+  getMeetingTypes: () => ipcRenderer.invoke("get-meeting-types"),
+  getMeetingType: (id) => ipcRenderer.invoke("get-meeting-type", id),
+  createMeetingType: (name, template) =>
+    ipcRenderer.invoke("create-meeting-type", name, template),
+  updateMeetingType: (id, updates) =>
+    ipcRenderer.invoke("update-meeting-type", id, updates),
+  deleteMeetingType: (id) => ipcRenderer.invoke("delete-meeting-type", id),
+  setNoteMeetingType: (noteId, meetingTypeId) =>
+    ipcRenderer.invoke("set-note-meeting-type", noteId, meetingTypeId),
+
+  // Speaker management (pipeline)
+  renameSpeaker: (noteId, speakerId, newName) =>
+    ipcRenderer.invoke("rename-speaker", noteId, speakerId, newName),
+  mergeSpeakers: (noteId, keepId, mergeId) =>
+    ipcRenderer.invoke("merge-speakers", noteId, keepId, mergeId),
+
+  // Pipeline settings
+  setAutoPostCallPipeline: (enabled) =>
+    ipcRenderer.invoke("set-auto-post-call-pipeline", enabled),
+  syncNoteFormattingConfig: (config) =>
+    ipcRenderer.invoke("sync-note-formatting-config", config),
+
   // Window control functions
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),
   windowMaximize: () => ipcRenderer.invoke("window-maximize"),
@@ -954,6 +988,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("sync-notification-preferences", prefs),
   setSpeakerDiarizationEnabled: (enabled) =>
     ipcRenderer.invoke("meeting-set-speaker-diarization-enabled", { enabled }),
+  setAutoPostCallPipeline: (enabled) =>
+    ipcRenderer.invoke("meeting-set-auto-post-call-pipeline", { enabled }),
   setMeetingSessionSpeakerConfig: (config) =>
     ipcRenderer.invoke("meeting-set-session-speaker-config", config),
   getWhisperVadConfig: () => ipcRenderer.invoke("whisper-vad-get-config"),

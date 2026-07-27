@@ -25,6 +25,10 @@
         "title": "Распознавать и подписывать участников",
         "description": "Если выключено, в транскриптах отображаются «Вы» и «Другие»"
       }
+    },
+    "pipeline": {
+      "autoProcess": "Автоматическая обработка встреч",
+      "autoProcessDescription": "Автоматически повторно транскрибировать, генерировать заголовок и создавать заметки после каждой встречи"
     }
   },
   "tray": {
@@ -2962,5 +2966,55 @@
     },
     "start": "Начать запись",
     "join": "Присоединиться"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Определение говорящих...",
+      "detected": "{{count}} говорящих - Показать всех",
+      "diffSummary": "Обновлено {{changed}} из {{total}} сегментов"
+    },
+    "panel": {
+      "title": "Обнаружено {{count}} говорящих",
+      "merge": "Объединить",
+      "clearFilter": "Сбросить фильтр",
+      "segments": "сегменты",
+      "selectForMerge": "Выбрать для объединения"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "Без типа встречи",
+      "custom": "(пользовательский)",
+      "regenerateWith": "Перегенерировать заметки как {{name}}",
+      "createNew": "Создать пользовательский тип..."
+    },
+    "editor": {
+      "createTitle": "Создать тип встречи",
+      "editTitle": "Редактировать тип встречи",
+      "nameLabel": "Название",
+      "namePlaceholder": "напр., Ретроспектива спринта",
+      "templateLabel": "Шаблон заметок",
+      "templatePlaceholder": "Инструкции о том, как ИИ должен структурировать заметки встречи...",
+      "actionItemsNote": "Раздел с пунктами действий добавляется автоматически, если ваш шаблон не упоминает его.",
+      "cancel": "Отмена",
+      "save": "Сохранить",
+      "saving": "Сохранение..."
+    }
   }
 }

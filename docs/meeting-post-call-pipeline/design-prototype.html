@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenWhispr — Meeting Post-Call UX Concepts</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #ffffff;
+    --fg: #171717;
+    --primary: #2563eb;
+    --primary-fg: #ffffff;
+    --muted: #f5f5f5;
+    --muted-fg: #737373;
+    --border: #e5e5e5;
+    --border-subtle: #f0f0f0;
+    --surface-1: #fafafa;
+    --surface-2: #f5f5f5;
+    --destructive: #dc2626;
+    --success: #16a34a;
+    --radius: 6px;
+    --radius-lg: 8px;
+    --font: 'Noto Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+    --speaker-blue: #3b82f6;
+    --speaker-green: #22c55e;
+    --speaker-purple: #a855f7;
+    --speaker-orange: #f97316;
+    --speaker-pink: #ec4899;
+    --speaker-cyan: #06b6d4;
+  }
+
+  body {
+    font-family: var(--font);
+    background: #f0f0f0;
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Layout */
+  .page-header {
+    text-align: center;
+    padding: 48px 24px 32px;
+  }
+  .page-header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--fg);
+    margin-bottom: 6px;
+  }
+  .page-header p {
+    font-size: 13px;
+    color: var(--muted-fg);
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+
+  .concepts {
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px 64px;
+  }
+
+  .concept {
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .concept-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+  }
+  .concept-label .badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--primary);
+    color: var(--primary-fg);
+  }
+  .concept-label h2 {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .concept-label .desc {
+    font-size: 12px;
+    color: var(--muted-fg);
+    margin-left: auto;
+  }
+
+  .concept-body {
+    position: relative;
+  }
+
+  /* ===== SHARED TRANSCRIPT STYLES ===== */
+  .app-shell {
+    display: flex;
+    height: 640px;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    width: 200px;
+    background: var(--surface-1);
+    border-right: 1px solid var(--border);
+    padding: 12px 0;
+    flex-shrink: 0;
+  }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    font-size: 13px;
+    color: var(--muted-fg);
+    cursor: pointer;
+  }
+  .sidebar-item.active {
+    color: var(--fg);
+    font-weight: 500;
+    background: var(--primary);
+    color: var(--primary-fg);
+    margin: 0 8px;
+    border-radius: var(--radius);
+    padding: 7px 8px;
+  }
+  .sidebar-item svg { width: 16px; height: 16px; opacity: 0.6; }
+  .sidebar-item.active svg { opacity: 1; }
+
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .note-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .note-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .note-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--muted-fg);
+  }
+  .note-meta .tag {
+    padding: 2px 8px;
+    background: var(--surface-2);
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  .tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .tab {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--muted-fg);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s;
+  }
+  .tab.active {
+    color: var(--fg);
+    font-weight: 500;
+    border-bottom-color: var(--fg);
+  }
+  .tab-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--muted-fg);
+    background: var(--bg);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-outline:hover {
+    border-color: var(--border-hover, #d4d4d4);
+    color: var(--fg);
+  }
+  .btn-outline svg { width: 14px; height: 14px; }
+
+  .transcript-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .msg {
+    max-width: 75%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .msg.self {
+    align-self: flex-start;
+  }
+  .msg.other {
+    align-self: flex-end;
+  }
+  .msg .speaker-tag {
+    font-size: 11px;
+    font-weight: 500;
+    margin-bottom: 1px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .msg.self .speaker-tag { color: var(--primary); }
+  .msg .bubble {
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .msg.self .bubble {
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-bottom-left-radius: 4px;
+  }
+  .msg.other .bubble {
+    background: var(--surface-2);
+    color: var(--fg);
+    border-bottom-right-radius: 4px;
+  }
+  .msg.other .speaker-tag {
+    text-align: right;
+    justify-content: flex-end;
+  }
+
+  /* Dimmed state for filtering */
+  .msg.dimmed .bubble {
+    opacity: 0.15;
+  }
+  .msg.dimmed .speaker-tag {
+    opacity: 0.15;
+  }
+
+  /* ===== CONCEPT A: Speaker Sidebar ===== */
+  .speaker-sidebar {
+    width: 240px;
+    border-left: 1px solid var(--border);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .speaker-sidebar-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .speaker-sidebar-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .speaker-sidebar-header .count {
+    font-size: 11px;
+    color: var(--muted-fg);
+    background: var(--surface-2);
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+  .speaker-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .speaker-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.12s;
+    position: relative;
+  }
+  .speaker-card:hover {
+    background: var(--surface-2);
+  }
+  .speaker-card.active {
+    background: var(--primary);
+    color: var(--primary-fg);
+  }
+  .speaker-card.active .speaker-card-meta { color: rgba(255,255,255,0.7); }
+  .speaker-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .speaker-card-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .speaker-card-name {
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .speaker-card-name .edit-icon {
+    opacity: 0;
+    width: 12px;
+    height: 12px;
+    color: var(--muted-fg);
+    transition: opacity 0.12s;
+  }
+  .speaker-card:hover .edit-icon { opacity: 0.6; }
+  .speaker-card.active .edit-icon { opacity: 0; }
+  .speaker-card-meta {
+    font-size: 11px;
+    color: var(--muted-fg);
+    margin-top: 1px;
+  }
+  .speaker-card-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .speaker-card-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+  .speaker-sidebar-footer {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+  }
+  .btn-sm {
+    flex: 1;
+    padding: 6px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 11px;
+    color: var(--muted-fg);
+    background: var(--bg);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .btn-sm:hover { border-color: #d4d4d4; color: var(--fg); }
+
+  /* Status banner */
+  .status-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 0.3s;
+  }
+  .status-banner.processing {
+    background: #eff6ff;
+    color: #1e40af;
+  }
+  .status-banner.complete {
+    background: #f0fdf4;
+    color: #166534;
+  }
+  .status-banner .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .status-banner .check {
+    width: 14px;
+    height: 14px;
+  }
+  .status-banner .dismiss {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: currentColor;
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 2px;
+  }
+  .status-banner .dismiss:hover { opacity: 1; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ===== CONCEPT B: Inline Speaker Chips ===== */
+  .speaker-chip-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .speaker-chip-bar-label {
+    font-size: 11px;
+    color: var(--muted-fg);
+    white-space: nowrap;
+    margin-right: 2px;
+  }
+  .speaker-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .speaker-chip:hover {
+    border-color: #d4d4d4;
+  }
+  .speaker-chip.active {
+    border-color: var(--primary);
+    background: #eff6ff;
+    color: var(--primary);
+  }
+  .speaker-chip .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .speaker-chip .seg-count {
+    font-size: 10px;
+    color: var(--muted-fg);
+    font-weight: 400;
+  }
+  .speaker-chip.active .seg-count { color: var(--primary); opacity: 0.7; }
+
+  /* Toast notification */
+  .toast-container {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+  }
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--fg);
+    color: var(--bg);
+    border-radius: var(--radius-lg);
+    font-size: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: toastIn 0.3s ease-out;
+    white-space: nowrap;
+  }
+  .toast svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .toast .toast-action {
+    color: #93c5fd;
+    cursor: pointer;
+    font-weight: 500;
+    margin-left: 4px;
+  }
+  .toast .toast-action:hover { color: #60a5fa; }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== CONCEPT C: Bottom Panel ===== */
+  .bottom-panel-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted-fg);
+    cursor: pointer;
+    background: var(--surface-1);
+    transition: background 0.12s;
+  }
+  .bottom-panel-trigger:hover { background: var(--surface-2); }
+  .bottom-panel-trigger svg { width: 14px; height: 14px; }
+  .bottom-panel-trigger .count-badge {
+    background: var(--primary);
+    color: var(--primary-fg);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+
+  .bottom-panel {
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    animation: slideUp 0.25s ease-out;
+  }
+  .bottom-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .bottom-panel-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bottom-panel-header .actions {
+    display: flex;
+    gap: 6px;
+  }
+  .speaker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    padding: 12px 20px 16px;
+  }
+  .speaker-grid-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .speaker-grid-card:hover {
+    border-color: #d4d4d4;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .speaker-grid-card.active {
+    border-color: var(--primary);
+    background: #f8faff;
+  }
+  .speaker-grid-card .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+    flex-shrink: 0;
+  }
+  .speaker-grid-card .info {
+    flex: 1;
+    min-width: 0;
+  }
+  .speaker-grid-card .name {
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .speaker-grid-card .stats {
+    font-size: 11px;
+    color: var(--muted-fg);
+    margin-top: 1px;
+  }
+  .speaker-grid-card .check-circle {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    transition: all 0.12s;
+  }
+  .speaker-grid-card.selected .check-circle {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Morph pill */
+  .morph-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.3s;
+  }
+  .morph-pill.processing {
+    background: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+  }
+  .morph-pill.complete {
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+    cursor: pointer;
+  }
+  .morph-pill.complete:hover {
+    background: #dcfce7;
+  }
+  .morph-pill .mini-spinner {
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  /* Utility */
+  .flex-1 { flex: 1; }
+  .overflow-hidden { overflow: hidden; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Meeting Post-Call UX — 3 Concepts</h1>
+  <p>Solving: completion signal, speaker management, attendee count, and speaker filtering. Each concept is interactive — click speakers to filter the transcript.</p>
+</div>
+
+<div class="concepts">
+
+  <!-- ===== CONCEPT A: Speaker Sidebar ===== -->
+  <div class="concept" id="concept-a">
+    <div class="concept-label">
+      <span class="badge">A</span>
+      <h2>Speaker Sidebar</h2>
+      <span class="desc">Persistent right panel with speaker management. Status banner for progress.</span>
+    </div>
+    <div class="concept-body">
+      <div class="app-shell">
+        <div class="sidebar">
+          <div class="sidebar-item" style="padding: 7px 16px 14px; font-size: 11px; color: var(--muted-fg); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Notes</div>
+          <div class="sidebar-item active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+            Team Standup
+          </div>
+          <div class="sidebar-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+            1:1 with Molly
+          </div>
+        </div>
+
+        <div class="main-content">
+          <!-- Status Banner: Processing -->
+          <div class="status-banner processing" id="a-status">
+            <div class="spinner"></div>
+            <span>Finalizing speaker identification — matching voice profiles...</span>
+            <button class="dismiss" onclick="completeA()">Skip</button>
+          </div>
+
+          <div class="note-header">
+            <div class="note-title">Team Standup</div>
+            <div class="note-meta">
+              <span>Jul 27</span>
+              <span class="tag">Meetings</span>
+              <span>23 min</span>
+            </div>
+          </div>
+
+          <div class="tab-bar">
+            <div class="tab active">Transcript</div>
+            <div class="tab">Notes</div>
+            <div class="tab-actions">
+              <button class="btn-outline">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="transcript-area" id="a-transcript">
+            <div class="msg self">
+              <div class="speaker-tag">You</div>
+              <div class="bubble">Alright, let's get started. What's everyone working on this week?</div>
+            </div>
+            <div class="msg other" data-speaker="1">
+              <div class="speaker-tag" style="color: var(--speaker-blue)">Speaker 1</div>
+              <div class="bubble">I'm wrapping up the API integration. Should have the PR ready by tomorrow.</div>
+            </div>
+            <div class="msg other" data-speaker="2">
+              <div class="speaker-tag" style="color: var(--speaker-green)">Speaker 2</div>
+              <div class="bubble">I've been working on the performance dashboard. The latency charts are looking really good now.</div>
+            </div>
+            <div class="msg self">
+              <div class="speaker-tag">You</div>
+              <div class="bubble">That's great. Any blockers we should talk about?</div>
+            </div>
+            <div class="msg other" data-speaker="3">
+              <div class="speaker-tag" style="color: var(--speaker-purple)">Speaker 3</div>
+              <div class="bubble">I'm blocked on the auth changes. Need someone to review my Pundit policy updates before I can merge.</div>
+            </div>
+            <div class="msg other" data-speaker="1">
+              <div class="speaker-tag" style="color: var(--speaker-blue)">Speaker 1</div>
+              <div class="bubble">I can take a look at that this afternoon. Just ping me the PR link.</div>
+            </div>
+            <div class="msg other" data-speaker="2">
+              <div class="speaker-tag" style="color: var(--speaker-green)">Speaker 2</div>
+              <div class="bubble">Also, we need to discuss the sprint planning for next week. Molly had some questions about the CPT estimates.</div>
+            </div>
+            <div class="msg self">
+              <div class="speaker-tag">You</div>
+              <div class="bubble">Good call. Let's schedule a quick grooming session tomorrow. I want to make sure we're aligned on the priorities.</div>
+            </div>
+            <div class="msg other" data-speaker="3">
+              <div class="speaker-tag" style="color: var(--speaker-purple)">Speaker 3</div>
+              <div class="bubble">Sounds good. I'll prepare the ticket breakdown for the notification system work.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Speaker Sidebar -->
+        <div class="speaker-sidebar" id="a-sidebar">
+          <div class="speaker-sidebar-header">
+            <h3>Speakers</h3>
+            <span class="count">4 detected</span>
+          </div>
+          <div class="speaker-list">
+            <div class="speaker-card" data-filter="self" onclick="filterA(this, 'self')">
+              <div class="speaker-dot" style="background: var(--primary)"></div>
+              <div class="speaker-card-info">
+                <div class="speaker-card-name">
+                  You
+                </div>
+                <div class="speaker-card-meta">3 segments · 38%</div>
+                <div class="speaker-card-bar">
+                  <div class="speaker-card-bar-fill" style="width: 38%; background: var(--primary)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="speaker-card" data-filter="1" onclick="filterA(this, '1')">
+              <div class="speaker-dot" style="background: var(--speaker-blue)"></div>
+              <div class="speaker-card-info">
+                <div class="speaker-card-name">
+                  Speaker 1
+                  <svg class="edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </div>
+                <div class="speaker-card-meta">2 segments · 24%</div>
+                <div class="speaker-card-bar">
+                  <div class="speaker-card-bar-fill" style="width: 24%; background: var(--speaker-blue)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="speaker-card" data-filter="2" onclick="filterA(this, '2')">
+              <div class="speaker-dot" style="background: var(--speaker-green)"></div>
+              <div class="speaker-card-info">
+                <div class="speaker-card-name">
+                  Speaker 2
+                  <svg class="edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </div>
+                <div class="speaker-card-meta">2 segments · 26%</div>
+                <div class="speaker-card-bar">
+                  <div class="speaker-card-bar-fill" style="width: 26%; background: var(--speaker-green)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="speaker-card" data-filter="3" onclick="filterA(this, '3')">
+              <div class="speaker-dot" style="background: var(--speaker-purple)"></div>
+              <div class="speaker-card-info">
+                <div class="speaker-card-name">
+                  Speaker 3
+                  <svg class="edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </div>
+                <div class="speaker-card-meta">2 segments · 12%</div>
+                <div class="speaker-card-bar">
+                  <div class="speaker-card-bar-fill" style="width: 12%; background: var(--speaker-purple)"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="speaker-sidebar-footer">
+            <button class="btn-sm">Merge</button>
+            <button class="btn-sm">Rename All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CONCEPT B: Inline Speaker Chips ===== -->
+  <div class="concept" id="concept-b">
+    <div class="concept-label">
+      <span class="badge">B</span>
+      <h2>Inline Speaker Chips</h2>
+      <span class="desc">Compact chip bar below tabs. Filter by clicking. Toast for completion.</span>
+    </div>
+    <div class="concept-body">
+      <div class="app-shell">
+        <div class="sidebar">
+          <div class="sidebar-item" style="padding: 7px 16px 14px; font-size: 11px; color: var(--muted-fg); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Notes</div>
+          <div class="sidebar-item active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+            Sprint Planning
+          </div>
+          <div class="sidebar-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+            Design Review
+          </div>
+        </div>
+
+        <div class="main-content" style="position: relative;">
+          <div class="note-header">
+            <div class="note-title" style="display: flex; align-items: center; gap: 10px;">
+              Sprint Planning
+              <span class="morph-pill complete" id="b-pill">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                4 speakers identified
+              </span>
+            </div>
+            <div class="note-meta">
+              <span>Jul 27</span>
+              <span class="tag">Meetings</span>
+              <span>45 min</span>
+            </div>
+          </div>
+
+          <div class="tab-bar">
+            <div class="tab active">Transcript</div>
+            <div class="tab">Notes</div>
+            <div class="tab-actions">
+              <button class="btn-outline">Re-transcribe (high quality)</button>
+              <button class="btn-outline">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Speaker Chip Bar -->
+          <div class="speaker-chip-bar" id="b-chips">
+            <span class="speaker-chip-bar-label">Filter:</span>
+            <button class="speaker-chip active" data-filter="all" onclick="filterB(this, 'all')">
+              All
+            </button>
+            <button class="speaker-chip" data-filter="self" onclick="filterB(this, 'self')">
+              <span class="dot" style="background: var(--primary)"></span>
+              You
+              <span class="seg-count">4</span>
+            </button>
+            <button class="speaker-chip" data-filter="1" onclick="filterB(this, '1')">
+              <span class="dot" style="background: var(--speaker-blue)"></span>
+              Speaker 1
+              <span class="seg-count">3</span>
+            </button>
+            <button class="speaker-chip" data-filter="2" onclick="filterB(this, '2')">
+              <span class="dot" style="background: var(--speaker-green)"></span>
+              Speaker 2
+              <span class="seg-count">2</span>
+            </button>
+            <button class="speaker-chip" data-filter="3" onclick="filterB(this, '3')">
+              <span class="dot" style="background: var(--speaker-purple)"></span>
+              Speaker 3
+              <span class="seg-count">2</span>
+            </button>
+          </div>
+
+          <div class="transcript-area" id="b-transcript">
+            <div class="msg self">
+              <div class="speaker-tag">You</div>
+              <div class="bubble">Let's go through the backlog. Molly flagged three items that need estimates.</div>
+            </div>
+            <div class="msg other" data-speaker="1">
+              <div class="speaker-tag" style="color: var(--speaker-blue)">Speaker 1</div>
+              <div class="bubble">The notifications epic is bigger than we thought. I'd say at least 8 points for the backend alone.</div>
+            </div>
+            <div class="msg other" data-speaker="2">
+              <div class="speaker-tag" style="color: var(--speaker-green)">Speaker 2</div>
+              <div class="bubble">Agreed. The frontend is another 5. We need to handle the WebSocket connection gracefully.</div>
+            </div>
+            <div class="msg self">
+              <div class="speaker-tag">You</div>
+              <div class="bubble">That's 13 total. Can we split it into smaller tickets?</div>
+            </div>
+            <div class="msg other" data-speaker="3">
+              <div class="speaker-tag" style="color: var(--speaker-purple)">Speaker 3</div>
+              <div class="bubble">I can break it down. Backend: schema, service layer, job processor. Frontend: UI components, state management.</div>
+            </div>
+            <div class="msg other" data-speaker="1">
+              <div class="speaker-tag" style="color: var(--speaker-blue)">Speaker 1</div>
+              <div class="bubble">Makes sense. Let's also add a spike for the real-time aspect. I'm not sure if we want SSE or WebSockets.</div>
+            </div>
+            <div class="msg self">
+              <div class="speaker-tag">You</div>
+              <div class="bubble">Good idea. Pedro, can you own the spike? Deadline end of this week.</div>
+            </div>
+            <div class="msg other" data-speaker="3">
+              <div class="speaker-tag" style="color: var(--speaker-purple)">Speaker 3</div>
+              <div class="bubble">On it. I'll compare both approaches and write up a quick ADR.</div>
+            </div>
+            <div class="msg self">
+              <div class="speaker-tag">You</div>
+              <div class="bubble">Perfect. Let's move to the CPT backlog items next.</div>
+            </div>
+            <div class="msg other" data-speaker="2">
+              <div class="speaker-tag" style="color: var(--speaker-green)">Speaker 2</div>
+              <div class="bubble">Before that, quick note — the staging deploy is broken. I'll fix it after this call.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CONCEPT C: Bottom Panel + Morph Pill ===== -->
+  <div class="concept" id="concept-c">
+    <div class="concept-label">
+      <span class="badge">C</span>
+      <h2>Bottom Panel + Morph Pill</h2>
+      <span class="desc">Status pill morphs from processing to done. Click to expand speaker management grid below transcript.</span>
+    </div>
+    <div class="concept-body">
+      <div class="app-shell" style="flex-direction: column;">
+        <div style="display: flex; flex: 1; overflow: hidden;">
+          <div class="sidebar">
+            <div class="sidebar-item" style="padding: 7px 16px 14px; font-size: 11px; color: var(--muted-fg); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Notes</div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+              Architecture Review
+            </div>
+          </div>
+
+          <div class="main-content">
+            <div class="note-header">
+              <div class="note-title">Architecture Review</div>
+              <div class="note-meta">
+                <span>Jul 27</span>
+                <span class="tag">Meetings</span>
+                <span>34 min</span>
+                <span>·</span>
+                <span id="c-pill-header">
+                  <span class="morph-pill complete" onclick="togglePanel()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    5 speakers · View all
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            <div class="tab-bar">
+              <div class="tab active">Transcript</div>
+              <div class="tab">Notes</div>
+              <div class="tab-actions">
+                <button class="btn-outline">Re-transcribe (high quality)</button>
+              </div>
+            </div>
+
+            <div class="transcript-area" id="c-transcript" style="flex: 1;">
+              <div class="msg self">
+                <div class="speaker-tag">You</div>
+                <div class="bubble">Let's talk about the database migration strategy. We need to move off the monolith schema.</div>
+              </div>
+              <div class="msg other" data-speaker="1">
+                <div class="speaker-tag" style="color: var(--speaker-blue)">Speaker 1</div>
+                <div class="bubble">I've been looking at Packwerk boundaries. We could start by extracting the billing domain.</div>
+              </div>
+              <div class="msg other" data-speaker="2">
+                <div class="speaker-tag" style="color: var(--speaker-green)">Speaker 2</div>
+                <div class="bubble">Billing makes sense as a first target. It's well-isolated already and has clear ownership.</div>
+              </div>
+              <div class="msg other" data-speaker="3">
+                <div class="speaker-tag" style="color: var(--speaker-purple)">Speaker 3</div>
+                <div class="bubble">What about the shared user table though? That's the hard part.</div>
+              </div>
+              <div class="msg self">
+                <div class="speaker-tag">You</div>
+                <div class="bubble">Good question. We keep users in the core package and expose read-only views to domain packages.</div>
+              </div>
+              <div class="msg other" data-speaker="4">
+                <div class="speaker-tag" style="color: var(--speaker-orange)">Speaker 4</div>
+                <div class="bubble">That's what Shopify does with their identity service. I can share their engineering blog post about it.</div>
+              </div>
+              <div class="msg other" data-speaker="1">
+                <div class="speaker-tag" style="color: var(--speaker-blue)">Speaker 1</div>
+                <div class="bubble">Let's timebox the migration to one package per sprint. Start with billing next sprint.</div>
+              </div>
+            </div>
+
+            <!-- Bottom Panel -->
+            <div class="bottom-panel" id="c-panel">
+              <div class="bottom-panel-header">
+                <h3>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  Speakers
+                  <span style="font-weight: 400; color: var(--muted-fg); font-size: 12px;">5 detected · Select two to merge</span>
+                </h3>
+                <div class="actions">
+                  <button class="btn-outline" style="font-size: 11px;">Merge Selected</button>
+                  <button class="btn-outline" onclick="togglePanel()" style="padding: 5px 7px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="speaker-grid">
+                <div class="speaker-grid-card" onclick="filterC(this, 'self')">
+                  <div class="avatar" style="background: var(--primary);">G</div>
+                  <div class="info">
+                    <div class="name">You (Gerald)</div>
+                    <div class="stats">3 segments · 28% of call</div>
+                  </div>
+                  <div class="check-circle"></div>
+                </div>
+                <div class="speaker-grid-card" onclick="filterC(this, '1')">
+                  <div class="avatar" style="background: var(--speaker-blue);">S1</div>
+                  <div class="info">
+                    <div class="name">
+                      Speaker 1
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted-fg)" stroke-width="2" style="opacity:0.5; cursor:pointer;"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                    </div>
+                    <div class="stats">2 segments · 22%</div>
+                  </div>
+                  <div class="check-circle"></div>
+                </div>
+                <div class="speaker-grid-card" onclick="filterC(this, '2')">
+                  <div class="avatar" style="background: var(--speaker-green);">S2</div>
+                  <div class="info">
+                    <div class="name">
+                      Speaker 2
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted-fg)" stroke-width="2" style="opacity:0.5; cursor:pointer;"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                    </div>
+                    <div class="stats">1 segment · 18%</div>
+                  </div>
+                  <div class="check-circle"></div>
+                </div>
+                <div class="speaker-grid-card" onclick="filterC(this, '3')">
+                  <div class="avatar" style="background: var(--speaker-purple);">S3</div>
+                  <div class="info">
+                    <div class="name">
+                      Speaker 3
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted-fg)" stroke-width="2" style="opacity:0.5; cursor:pointer;"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                    </div>
+                    <div class="stats">1 segment · 14%</div>
+                  </div>
+                  <div class="check-circle"></div>
+                </div>
+                <div class="speaker-grid-card" onclick="filterC(this, '4')">
+                  <div class="avatar" style="background: var(--speaker-orange);">S4</div>
+                  <div class="info">
+                    <div class="name">
+                      Speaker 4
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted-fg)" stroke-width="2" style="opacity:0.5; cursor:pointer;"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                    </div>
+                    <div class="stats">1 segment · 18%</div>
+                  </div>
+                  <div class="check-circle"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // === Concept A: Speaker Sidebar filtering ===
+  let activeFilterA = null;
+
+  function filterA(card, speaker) {
+    const cards = document.querySelectorAll('#a-sidebar .speaker-card');
+    const msgs = document.querySelectorAll('#a-transcript .msg');
+
+    if (activeFilterA === speaker) {
+      // Deselect
+      activeFilterA = null;
+      cards.forEach(c => c.classList.remove('active'));
+      msgs.forEach(m => m.classList.remove('dimmed'));
+      return;
+    }
+
+    activeFilterA = speaker;
+    cards.forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+
+    msgs.forEach(m => {
+      const isSelf = m.classList.contains('self');
+      const msgSpeaker = m.dataset.speaker;
+
+      if (speaker === 'self' && isSelf) {
+        m.classList.remove('dimmed');
+      } else if (speaker !== 'self' && msgSpeaker === speaker) {
+        m.classList.remove('dimmed');
+      } else {
+        m.classList.add('dimmed');
+      }
+    });
+  }
+
+  function completeA() {
+    const banner = document.getElementById('a-status');
+    banner.className = 'status-banner complete';
+    banner.innerHTML = `
+      <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      <span>Speaker identification complete — 4 speakers detected</span>
+      <button class="dismiss" onclick="this.parentElement.style.display='none'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    `;
+  }
+
+  // === Concept B: Inline chip filtering ===
+  let activeFilterB = 'all';
+
+  function filterB(chip, speaker) {
+    const chips = document.querySelectorAll('#b-chips .speaker-chip');
+    const msgs = document.querySelectorAll('#b-transcript .msg');
+
+    activeFilterB = speaker;
+    chips.forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+
+    if (speaker === 'all') {
+      msgs.forEach(m => m.classList.remove('dimmed'));
+      return;
+    }
+
+    msgs.forEach(m => {
+      const isSelf = m.classList.contains('self');
+      const msgSpeaker = m.dataset.speaker;
+
+      if (speaker === 'self' && isSelf) {
+        m.classList.remove('dimmed');
+      } else if (speaker !== 'self' && msgSpeaker === speaker) {
+        m.classList.remove('dimmed');
+      } else {
+        m.classList.add('dimmed');
+      }
+    });
+  }
+
+  // === Concept C: Bottom panel toggle + filtering ===
+  let panelOpen = true;
+
+  function togglePanel() {
+    const panel = document.getElementById('c-panel');
+    panelOpen = !panelOpen;
+    panel.style.display = panelOpen ? 'block' : 'none';
+  }
+
+  function filterC(card, speaker) {
+    const cards = document.querySelectorAll('#c-panel .speaker-grid-card');
+    const msgs = document.querySelectorAll('#c-transcript .msg');
+
+    if (card.classList.contains('active')) {
+      card.classList.remove('active');
+      msgs.forEach(m => m.classList.remove('dimmed'));
+      return;
+    }
+
+    cards.forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+
+    msgs.forEach(m => {
+      const isSelf = m.classList.contains('self');
+      const msgSpeaker = m.dataset.speaker;
+
+      if (speaker === 'self' && isSelf) {
+        m.classList.remove('dimmed');
+      } else if (speaker !== 'self' && msgSpeaker === speaker) {
+        m.classList.remove('dimmed');
+      } else {
+        m.classList.add('dimmed');
+      }
+    });
+  }
+
+  // Auto-complete Concept A after 4 seconds to demo the transition
+  setTimeout(completeA, 4000);
+</script>
+
+</body>
+</html>

@@ -123,6 +123,7 @@ const BOOLEAN_SETTINGS = new Set([
   "startMinimized",
   "meetingProcessDetection",
   "speakerDiarizationEnabled",
+  "autoPostCallPipeline",
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
   "meetingSileroEnabled",
@@ -421,6 +422,7 @@ export interface SettingsState
   gcalPrimaryOnly: boolean;
   meetingProcessDetection: boolean;
   speakerDiarizationEnabled: boolean;
+  autoPostCallPipeline: boolean;
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
   meetingSileroEnabled: boolean;
@@ -646,6 +648,7 @@ export interface SettingsState
   setGcalPrimaryOnly: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
+  setAutoPostCallPipeline: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
   setMeetingSileroEnabled: (value: boolean) => void;
@@ -1008,6 +1011,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   gcalPrimaryOnly: readBoolean("gcalPrimaryOnly", true),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
+  autoPostCallPipeline: readBoolean("autoPostCallPipeline", true),
   dictationSileroEnabled: readBoolean("dictationSileroEnabled", true),
   noteRecordingSileroEnabled: readBoolean("noteRecordingSileroEnabled", true),
   meetingSileroEnabled: readBoolean("meetingSileroEnabled", true),
@@ -1560,6 +1564,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     useSettingsStore.setState({ speakerDiarizationEnabled: value });
     if (isBrowser) {
       window.electronAPI?.setSpeakerDiarizationEnabled?.(value);
+    }
+  },
+  setAutoPostCallPipeline: (value: boolean) => {
+    if (isBrowser) localStorage.setItem("autoPostCallPipeline", String(value));
+    useSettingsStore.setState({ autoPostCallPipeline: value });
+    if (isBrowser) {
+      window.electronAPI?.setAutoPostCallPipeline?.(value);
     }
   },
   setDictationSileroEnabled: (value: boolean) => {

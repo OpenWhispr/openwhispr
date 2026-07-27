@@ -25,6 +25,10 @@
         "title": "Identify and label speakers",
         "description": "When off, transcripts show \"You\" and \"Others\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "Auto-process meetings",
+      "autoProcessDescription": "Automatically re-transcribe, generate title, and create notes after each meeting ends"
     }
   },
   "tray": {
@@ -2958,5 +2962,55 @@
     },
     "start": "Start Recording",
     "join": "Join"
+  },
+  "speakers": {
+    "pill": {
+      "finalizing": "Finalizing speakers...",
+      "detected": "{{count}} speakers - View all",
+      "diffSummary": "Updated {{changed}} of {{total}} segments"
+    },
+    "panel": {
+      "title": "{{count}} speakers detected",
+      "merge": "Merge",
+      "clearFilter": "Clear filter",
+      "segments": "segments",
+      "selectForMerge": "Select for merge"
+    }
+  },
+  "pipeline": {
+    "processing": "Processing: {{step}}...",
+    "error": "Failed: {{step}}",
+    "queued": "queued",
+    "steps": {
+      "retranscribe": "Re-transcribing",
+      "title": "Generating title",
+      "notes": "Generating notes",
+      "pipeline": "Pipeline"
+    },
+    "substages": {
+      "converting": "Converting audio",
+      "transcribing": "Transcribing (large model)",
+      "diarizing": "Re-diarizing speakers"
+    }
+  },
+  "meetingTypes": {
+    "picker": {
+      "none": "No meeting type",
+      "custom": "(custom)",
+      "regenerateWith": "Regenerate notes as {{name}}",
+      "createNew": "Create custom type..."
+    },
+    "editor": {
+      "createTitle": "Create Meeting Type",
+      "editTitle": "Edit Meeting Type",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g., Sprint Retrospective",
+      "templateLabel": "Note Template",
+      "templatePlaceholder": "Instructions for how AI should structure the meeting notes...",
+      "actionItemsNote": "An Action Items section is automatically included if your template doesn't mention it.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
+    }
   }
 }
