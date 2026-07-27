@@ -92,6 +92,7 @@ export const API_ENDPOINTS = {
   XAI_BASE: "https://api.x.ai/v1",
   MISTRAL_BASE: "https://api.mistral.ai/v1",
   OPENROUTER_BASE: "https://openrouter.ai/api/v1",
+  VERCEL_AI_GATEWAY_BASE: "https://ai-gateway.vercel.sh/v1",
   TRANSCRIPTION_BASE: DEFAULT_TRANSCRIPTION_BASE,
   TRANSCRIPTION: buildApiUrl(DEFAULT_TRANSCRIPTION_BASE, "/audio/transcriptions"),
 } as const;

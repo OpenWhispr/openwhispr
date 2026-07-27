@@ -998,6 +998,7 @@ class ReasoningService extends BaseReasoningService {
       | "custom"
       | "openrouter"
       | "corti"
+      | "vercel"
   ): void {
     if (provider) {
       if (provider !== "custom") {
