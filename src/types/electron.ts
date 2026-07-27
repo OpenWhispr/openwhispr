@@ -1883,6 +1883,9 @@ declare global {
       setSpeakerDiarizationEnabled?: (
         enabled: boolean
       ) => Promise<{ success: boolean; error?: string }>;
+      setAutoPostCallPipeline?: (
+        enabled: boolean
+      ) => Promise<{ success: boolean; error?: string }>;
       setMeetingSessionSpeakerConfig?: (config: {
         enabled: boolean;
         expectedCount: number;

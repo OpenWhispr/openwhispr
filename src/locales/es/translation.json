@@ -25,6 +25,10 @@
         "title": "Identificar y etiquetar participantes",
         "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "Procesamiento automático de reuniones",
+      "autoProcessDescription": "Re-transcribir automáticamente, generar título y crear notas después de cada reunión"
     }
   },
   "tray": {

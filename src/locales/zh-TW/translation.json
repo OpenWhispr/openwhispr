@@ -25,6 +25,10 @@
         "title": "辨識並標記發言者",
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
       }
+    },
+    "pipeline": {
+      "autoProcess": "自動處理會議",
+      "autoProcessDescription": "每次會議結束後自動重新轉寫、產生標題並建立筆記"
     }
   },
   "tray": {

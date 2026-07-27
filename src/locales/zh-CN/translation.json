@@ -25,6 +25,10 @@
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "自动处理会议",
+      "autoProcessDescription": "每次会议结束后自动重新转写、生成标题并创建笔记"
     }
   },
   "tray": {

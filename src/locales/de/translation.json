@@ -25,6 +25,10 @@
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
       }
+    },
+    "pipeline": {
+      "autoProcess": "Meetings automatisch verarbeiten",
+      "autoProcessDescription": "Nach jedem Meeting automatisch neu transkribieren, Titel generieren und Notizen erstellen"
     }
   },
   "tray": {

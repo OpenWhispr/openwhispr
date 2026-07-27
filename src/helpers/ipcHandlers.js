@@ -8702,6 +8702,15 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("meeting-set-auto-post-call-pipeline", async (_event, payload) => {
+      try {
+        this.autoPostCallPipeline = payload?.enabled !== false;
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("whisper-vad-get-config", async () => {
       try {
         return { success: true, config: this._getWhisperVadSettings() };

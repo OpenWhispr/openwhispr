@@ -25,6 +25,10 @@
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "Elaborazione automatica delle riunioni",
+      "autoProcessDescription": "Ri-trascrivere automaticamente, generare titolo e creare note dopo ogni riunione"
     }
   },
   "tray": {

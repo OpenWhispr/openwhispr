@@ -25,6 +25,10 @@
         "title": "Identifier et étiqueter les intervenants",
         "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
       }
+    },
+    "pipeline": {
+      "autoProcess": "Traitement automatique des réunions",
+      "autoProcessDescription": "Re-transcrire automatiquement, générer un titre et créer des notes après chaque réunion"
     }
   },
   "tray": {

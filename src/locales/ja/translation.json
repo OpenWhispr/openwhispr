@@ -25,6 +25,10 @@
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
       }
+    },
+    "pipeline": {
+      "autoProcess": "会議の自動処理",
+      "autoProcessDescription": "各会議終了後に自動的に再文字起こし、タイトル生成、ノート作成を行います"
     }
   },
   "tray": {

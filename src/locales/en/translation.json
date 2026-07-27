@@ -25,6 +25,10 @@
         "title": "Identify and label speakers",
         "description": "When off, transcripts show \"You\" and \"Others\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "Auto-process meetings",
+      "autoProcessDescription": "Automatically re-transcribe, generate title, and create notes after each meeting ends"
     }
   },
   "tray": {

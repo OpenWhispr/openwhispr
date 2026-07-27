@@ -25,6 +25,10 @@
         "title": "Identificar e rotular participantes",
         "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
       }
+    },
+    "pipeline": {
+      "autoProcess": "Processar reuniões automaticamente",
+      "autoProcessDescription": "Re-transcrever automaticamente, gerar título e criar notas após cada reunião"
     }
   },
   "tray": {
