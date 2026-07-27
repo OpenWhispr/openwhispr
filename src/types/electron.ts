@@ -1887,6 +1887,10 @@ declare global {
       setAutoPostCallPipeline?: (
         enabled: boolean
       ) => Promise<{ success: boolean; error?: string }>;
+      syncNoteFormattingConfig?: (config: {
+        provider: string;
+        model: string;
+      }) => Promise<{ success: boolean }>;
       setMeetingSessionSpeakerConfig?: (config: {
         enabled: boolean;
         expectedCount: number;

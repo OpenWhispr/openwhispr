@@ -785,6 +785,8 @@ export default function SettingsPage({
   const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
+  const noteFormattingProvider = useSettingsStore((s) => s.noteFormattingProvider);
+  const noteFormattingModel = useSettingsStore((s) => s.noteFormattingModel);
 
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -1050,6 +1052,15 @@ export default function SettingsPage({
       notifyUpdates,
     });
   }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders, notifyUpdates]);
+
+  // Sync noteFormatting LLM config to main process so the post-call pipeline
+  // can read NOTE_FORMATTING_PROVIDER / NOTE_FORMATTING_MODEL from process.env.
+  useEffect(() => {
+    window.electronAPI?.syncNoteFormattingConfig?.({
+      provider: noteFormattingProvider,
+      model: noteFormattingModel,
+    });
+  }, [noteFormattingProvider, noteFormattingModel]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
     if (window.electronAPI?.setAutoStartEnabled) {

@@ -171,6 +171,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     });
   }, []);
 
+  // Sync noteFormatting config to main process on startup so the post-call
+  // pipeline has the correct provider/model in process.env even before the
+  // user visits Settings.
+  useEffect(() => {
+    const { noteFormattingProvider, noteFormattingModel } = useSettingsStore.getState();
+    window.electronAPI?.syncNoteFormattingConfig?.({
+      provider: noteFormattingProvider,
+      model: noteFormattingModel,
+    });
+  }, []);
+
   useEffect(() => {
     if (platform !== "darwin") return;
     window.electronAPI?.getPostMigrationState?.().then((state) => {
