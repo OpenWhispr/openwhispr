@@ -56,6 +56,8 @@ export async function getAIModel(
         baseURL,
         ...(opts?.disableThinking ? { fetch: withDisabledReasoning } : {}),
       }).chat(model);
+    case "vercel":
+      return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.VERCEL_AI_GATEWAY_BASE }).chat(model);
     case "local":
       return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
     default:

@@ -9,6 +9,7 @@ import { lanProvider } from "./lan";
 import { openaiProvider } from "./openai";
 import { tinfoilProvider } from "./tinfoil";
 import { cortiProvider } from "./corti";
+import { vercelProvider } from "./vercel";
 
 export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Object.freeze({
   openai: openaiProvider,
@@ -25,6 +26,7 @@ export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Ob
   vertex: enterpriseProvider,
   openwhispr: openwhisprProvider,
   lan: lanProvider,
+  vercel: vercelProvider,
 });
 
 export type { InferenceProvider, ProviderContext, ProviderCallParams } from "./types";

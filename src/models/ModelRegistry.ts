@@ -324,6 +324,7 @@ export function getReasoningModelLabel(modelId: string): string {
 
 const NON_REGISTRY_PROVIDER_NAMES: Record<string, string> = {
   openrouter: "OpenRouter",
+  vercel: "Vercel AI Gateway",
   custom: "Custom",
 };
 
@@ -348,6 +349,10 @@ export function getModelProvider(modelId: string): string {
 
   if (storedProvider === "openrouter") {
     return "openrouter";
+  }
+
+  if (storedProvider === "vercel") {
+    return "vercel";
   }
 
   if (isEnterpriseProvider(storedProvider)) {
@@ -458,10 +463,11 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
     };
   }
 
-  // OpenRouter's vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) speak
-  // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
-  // custom endpoints keep the request shape they had before OpenRouter landed.
-  if (provider === "openrouter" && modelId.includes("/")) {
+  // OpenRouter's and Vercel AI Gateway's vendor-prefixed ids (openai/gpt-4o,
+  // anthropic/claude-…) speak standard Chat Completions. Scoped to the provider
+  // so vendor-prefixed ids on custom endpoints keep the request shape they had
+  // before OpenRouter landed.
+  if ((provider === "openrouter" || provider === "vercel") && modelId.includes("/")) {
     return { tokenParam: "max_tokens", supportsTemperature: true };
   }
 
