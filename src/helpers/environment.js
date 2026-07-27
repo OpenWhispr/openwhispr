@@ -55,6 +55,8 @@ const PERSISTED_KEYS = [
   "AZURE_OPENAI_API_VERSION",
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
+  "NOTE_FORMATTING_PROVIDER",
+  "NOTE_FORMATTING_MODEL",
 ];
 
 // Module-level so writes are serialized across all instances — hotkeyManager

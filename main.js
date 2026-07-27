@@ -1664,6 +1664,10 @@ function performSyncTeardown() {
   if (linuxPortalAudioManager) linuxPortalAudioManager.stop().catch(() => {});
   if (windowsLoopbackAudioManager) windowsLoopbackAudioManager.stop().catch(() => {});
   if (meetingAecManager) meetingAecManager.stop().catch(() => {});
+  // Cancel pending pipeline jobs on quit
+  if (ipcHandlers?.backgroundJobQueue) {
+    ipcHandlers.backgroundJobQueue.cancelPending();
+  }
   if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
   if (textEditMonitor) textEditMonitor.stopMonitoring();
   if (updateManager) updateManager.cleanup();
