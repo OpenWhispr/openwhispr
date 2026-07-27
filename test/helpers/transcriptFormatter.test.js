@@ -22,17 +22,17 @@ test("TXT and Markdown exports include participant display names", () => {
   assert.match(formatMd(note, [], {}), /\*\*Participants:\*\* Ada Lovelace, Grace Hopper/);
 });
 
-test("participant exports fall back to email and legacy names", () => {
+test("participants without a display name fall back to their email", () => {
   const note = {
     title: "Planning",
     created_at: "2026-01-01T00:00:00Z",
     participants: JSON.stringify([
       { displayName: null, email: "guest@example.com" },
-      { name: "Legacy Guest" },
+      { displayName: "Ada Lovelace", email: "ada@example.com" },
     ]),
   };
 
-  assert.match(formatTxt(note, [], {}), /Participants: guest@example.com, Legacy Guest/);
+  assert.match(formatTxt(note, [], {}), /Participants: guest@example.com, Ada Lovelace/);
 });
 
 test("merged same-speaker SRT cues keep the first segment's start time", () => {
