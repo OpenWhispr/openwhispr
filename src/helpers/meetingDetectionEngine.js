@@ -193,6 +193,10 @@ class MeetingDetectionEngine {
       if (calEvent?.attendees) {
         updates.participants = calEvent.attendees;
       }
+      const meetingTypeId = this.databaseManager.autoMapMeetingType(eventSummary);
+      if (meetingTypeId) {
+        updates.meeting_type_id = meetingTypeId;
+      }
       const updateResult = this.databaseManager.updateNote(noteResult.note.id, updates);
       if (updateResult?.success && updateResult?.note) {
         this.broadcastToWindows("note-updated", updateResult.note);
@@ -427,6 +431,10 @@ class MeetingDetectionEngine {
     const updates = { calendar_event_id: calEvent.id };
     if (calEvent.attendees) {
       updates.participants = calEvent.attendees;
+    }
+    const meetingTypeId = this.databaseManager.autoMapMeetingType(calEvent.summary);
+    if (meetingTypeId) {
+      updates.meeting_type_id = meetingTypeId;
     }
     const updateResult = this.databaseManager.updateNote(noteResult.note.id, updates);
 
