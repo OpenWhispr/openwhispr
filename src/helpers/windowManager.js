@@ -48,6 +48,7 @@ class WindowManager {
     this._panelStartPosition = "bottom-right";
     this._isDictatingToggle = false;
     this._pendingMeetingNoteNavigation = null;
+    this._pendingNoteNavigation = null;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -1374,6 +1375,18 @@ class WindowManager {
   consumePendingMeetingNoteNavigation() {
     const payload = this._pendingMeetingNoteNavigation;
     this._pendingMeetingNoteNavigation = null;
+    return payload;
+  }
+
+  async queueNoteNavigation(payload) {
+    this._pendingNoteNavigation = payload;
+    await this.createControlPanelWindow();
+    this.sendToControlPanel("note-navigation-pending");
+  }
+
+  consumePendingNoteNavigation() {
+    const payload = this._pendingNoteNavigation;
+    this._pendingNoteNavigation = null;
     return payload;
   }
 

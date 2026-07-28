@@ -15,6 +15,10 @@ export interface ModelDefinition {
   hfRepo: string;
   recommended?: boolean;
   supportsThinking?: boolean;
+  // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.
+  draftHfRepo?: string;
+  draftFileName?: string;
+  draftSizeBytes?: number;
 }
 
 export interface LocalProviderData {

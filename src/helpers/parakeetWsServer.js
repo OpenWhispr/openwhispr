@@ -13,14 +13,20 @@ const { getSafeTempDir } = require("./safeTempDir");
 const sidecarPidFile = require("./sidecarPidFile");
 const { parseOfflineMessage, createOnlineAccumulator } = require("./parakeetWsResult");
 const { pcm16ToFloat32 } = require("../utils/audioUtils");
+const {
+  computeTranscriptionTimeoutMs,
+  TRANSCRIPTION_TIMEOUT_FLOOR_MS,
+} = require("./transcriptionTimeout");
 
 const PORT_RANGE_START = 6006;
 const PORT_RANGE_END = 6029;
 const STARTUP_TIMEOUT_MS = 60000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
-const TRANSCRIPTION_TIMEOUT_MS = 300000;
-const ONLINE_CHUNK_BYTES = 8000 * 4;
-const FLOAT32_BYTES_PER_SECOND = 16000 * 4;
+const FLOAT32_BYTES_PER_SAMPLE = 4;
+const ONLINE_CHUNK_BYTES = 8000 * FLOAT32_BYTES_PER_SAMPLE;
+const FLOAT32_BYTES_PER_SECOND = 16000 * FLOAT32_BYTES_PER_SAMPLE;
+// Streaming decodes as the audio drains, so its hard cap is tighter than the offline budget.
+const ONLINE_TIMEOUT_PER_AUDIO_SECOND_MS = 2000;
 // After "Done" is sent, give up only after this long without any result message.
 const ONLINE_FINISH_IDLE_TIMEOUT_MS = 10000;
 // Must cover the model's 560ms chunk so the flush decodes the final words.
@@ -260,6 +266,10 @@ class ParakeetWsServer {
   }
 
   _transcribeOffline(samplesBuffer, sampleRate) {
+    const timeoutMs = computeTranscriptionTimeoutMs(
+      samplesBuffer.length / FLOAT32_BYTES_PER_SAMPLE / sampleRate
+    );
+
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
       let result = "";
@@ -269,7 +279,7 @@ class ParakeetWsServer {
           ws.close();
         } catch {}
         reject(new Error("parakeet-ws transcription timed out"));
-      }, TRANSCRIPTION_TIMEOUT_MS);
+      }, timeoutMs);
 
       const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
 
@@ -353,7 +363,7 @@ class ParakeetWsServer {
         timedOut = true;
         stream.abort();
       },
-      Math.max(TRANSCRIPTION_TIMEOUT_MS, audioSeconds * 2000)
+      Math.max(TRANSCRIPTION_TIMEOUT_FLOOR_MS, audioSeconds * ONLINE_TIMEOUT_PER_AUDIO_SECOND_MS)
     );
     try {
       const idleTimeoutMs = Math.max(ONLINE_FINISH_IDLE_TIMEOUT_MS, audioSeconds * 500);
@@ -429,10 +439,17 @@ class ParakeetWsServer {
     };
 
     const sendFloat32 = (float32Samples) => {
-      if (closed || finishResolve) return;
+      if (closed) return;
+      // A chunk after finish() means the renderer flushed late (contract broke) so the
+      // tail is lost; when only closed is set, settle already happened and a plain drop is fine.
+      if (finishResolve) {
+        truncated = true;
+        return;
+      }
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(float32Samples, (err) => {
           if (err) {
+            truncated = true;
             debugLogger.error("parakeet-ws online stream send error", { error: err.message });
           }
         });
@@ -443,7 +460,12 @@ class ParakeetWsServer {
 
     ws.on("open", () => {
       for (const chunk of pendingChunks) {
-        ws.send(chunk);
+        ws.send(chunk, (err) => {
+          if (err) {
+            truncated = true;
+            debugLogger.error("parakeet-ws online stream send error", { error: err.message });
+          }
+        });
       }
       pendingChunks.length = 0;
       if (finishResolve) ws.send("Done");

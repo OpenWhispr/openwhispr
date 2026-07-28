@@ -27,6 +27,10 @@ class LlamaServerManager {
     this.port = null;
     this.ready = false;
     this.modelPath = null;
+    // draftModelPath is the REQUESTED drafter (stable across identical requests, drives
+    // the start() restart check); activeDraftModelPath is the one that actually loaded.
+    this.draftModelPath = null;
+    this.activeDraftModelPath = null;
     this.startupPromise = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
@@ -107,7 +111,11 @@ class LlamaServerManager {
   async start(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
-    if (this.ready && this.modelPath === modelPath) return;
+    // A change in drafter presence for the same model must still restart the
+    // server so the new speculative-decoding flags take effect.
+    const requestedDraftPath = options.draftModelPath || null;
+    if (this.ready && this.modelPath === modelPath && this.draftModelPath === requestedDraftPath)
+      return;
 
     if (this.process) {
       await this.stop();
@@ -128,6 +136,10 @@ class LlamaServerManager {
 
     this.port = await this.findAvailablePort();
     this.modelPath = modelPath;
+    // Store the REQUESTED drafter so start() compares against a stable value across
+    // identical requests; activeDraftModelPath tracks what actually loaded (see ctor).
+    this.draftModelPath = options.draftModelPath || null;
+    this.activeDraftModelPath = null;
 
     const baseArgs = [
       "--model",
@@ -145,8 +157,22 @@ class LlamaServerManager {
       "--jinja",
     ];
 
+    // Draft flags stay separate from baseArgs so the fallback ladder can retry without
+    // them when a stale (pre-b9763) binary rejects the MTP args at parse time.
+    const draftArgs = options.draftModelPath
+      ? [
+          "--model-draft",
+          options.draftModelPath,
+          "--spec-type",
+          "draft-mtp",
+          "--spec-draft-n-max",
+          "3",
+        ]
+      : [];
+
     if (process.platform === "darwin") {
-      const args = [...baseArgs, "--n-gpu-layers", String(options.gpuLayers ?? 99)];
+      // The metal binary is always the bundled pin, so it never rejects the draft flags.
+      const args = [...baseArgs, "--n-gpu-layers", String(options.gpuLayers ?? 99), ...draftArgs];
       await this._startWithBinary(
         binaryPaths.default,
         args,
@@ -154,8 +180,9 @@ class LlamaServerManager {
         STARTUP_TIMEOUT_MS
       );
       this.activeBackend = "metal";
+      this.activeDraftModelPath = this.draftModelPath;
     } else {
-      await this._startWithGpuFallback(binaryPaths, baseArgs, options);
+      await this._startWithGpuFallback(binaryPaths, baseArgs, options, draftArgs);
     }
 
     this.startHealthCheck();
@@ -164,41 +191,91 @@ class LlamaServerManager {
       port: this.port,
       model: path.basename(modelPath),
       backend: this.activeBackend,
+      mtp: this.activeDraftModelPath !== null,
     });
   }
 
-  async _startWithGpuFallback(binaryPaths, baseArgs, options) {
+  async _startWithGpuFallback(binaryPaths, baseArgs, options, draftArgs = []) {
     const gpuArgs = [...baseArgs, "--n-gpu-layers", String(options.gpuLayers ?? 99)];
     const cpuArgs = baseArgs;
+    const hasDraft = draftArgs.length > 0;
 
-    if (binaryPaths.vulkan) {
+    // Degrade ladder: GPU+MTP, then GPU alone (a live GPU beats speculation), then
+    // CPU+MTP (the bundled pin normally accepts the flags), then plain CPU. The
+    // no-draft rungs collapse into their twins when no drafter is declared, so a
+    // drafterless start keeps today's exact single vulkan->cpu fallback.
+    const rungs = [
+      {
+        backend: "vulkan",
+        name: "Vulkan",
+        binary: binaryPaths.vulkan,
+        args: [...gpuArgs, ...draftArgs],
+        mtp: hasDraft,
+        timeout: VULKAN_STARTUP_TIMEOUT_MS,
+        attemptMsg: "Attempting Vulkan backend startup",
+      },
+      {
+        backend: "vulkan",
+        name: "Vulkan",
+        binary: binaryPaths.vulkan,
+        args: gpuArgs,
+        mtp: false,
+        noDraft: true,
+        timeout: VULKAN_STARTUP_TIMEOUT_MS,
+        attemptMsg: "Attempting Vulkan backend startup",
+      },
+      {
+        backend: "cpu",
+        name: "CPU",
+        binary: binaryPaths.cpu,
+        args: [...cpuArgs, ...draftArgs],
+        mtp: hasDraft,
+        timeout: STARTUP_TIMEOUT_MS,
+        attemptMsg: "Starting with CPU backend",
+      },
+      {
+        backend: "cpu",
+        name: "CPU",
+        binary: binaryPaths.cpu,
+        args: cpuArgs,
+        mtp: false,
+        noDraft: true,
+        timeout: STARTUP_TIMEOUT_MS,
+        attemptMsg: "Starting with CPU backend",
+      },
+    ];
+
+    const ladder = rungs.filter((rung) => rung.binary && !(rung.noDraft && !hasDraft));
+    if (ladder.length === 0) throw new Error("No CPU llama-server binary available");
+
+    let lastError = null;
+    for (let i = 0; i < ladder.length; i++) {
+      const rung = ladder[i];
+      const next = ladder[i + 1];
       try {
-        debugLogger.debug("Attempting Vulkan backend startup");
+        debugLogger.debug(rung.attemptMsg);
         await this._startWithBinary(
-          binaryPaths.vulkan,
-          gpuArgs,
-          this._buildEnv(binaryPaths.vulkan),
-          VULKAN_STARTUP_TIMEOUT_MS
+          rung.binary,
+          rung.args,
+          this._buildEnv(rung.binary),
+          rung.timeout
         );
-        this.activeBackend = "vulkan";
+        this.activeBackend = rung.backend;
+        this.activeDraftModelPath = rung.mtp ? this.draftModelPath : null;
         return;
       } catch (err) {
-        debugLogger.warn("Vulkan backend failed, falling back to CPU", { error: err.message });
-        await this._killCurrentProcess();
-        this.port = await this.findAvailablePort();
+        lastError = err;
+        if (next) {
+          debugLogger.warn(`${rung.name} backend failed, falling back to ${next.name}`, {
+            error: err.message,
+          });
+          await this._killCurrentProcess();
+          this.port = await this.findAvailablePort();
+        }
       }
     }
 
-    if (!binaryPaths.cpu) throw new Error("No CPU llama-server binary available");
-
-    debugLogger.debug("Starting with CPU backend");
-    await this._startWithBinary(
-      binaryPaths.cpu,
-      cpuArgs,
-      this._buildEnv(binaryPaths.cpu),
-      STARTUP_TIMEOUT_MS
-    );
-    this.activeBackend = "cpu";
+    throw lastError || new Error("No CPU llama-server binary available");
   }
 
   _buildEnv(binaryPath) {
@@ -554,6 +631,8 @@ class LlamaServerManager {
     this.ready = false;
     this.port = null;
     this.modelPath = null;
+    this.draftModelPath = null;
+    this.activeDraftModelPath = null;
     this.activeBackend = null;
   }
 

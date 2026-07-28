@@ -200,7 +200,7 @@
       "systemAudioDescription": "讓會議錄音機聽到通話另一方的聲音 — 會議、講座、Podcast。你可以稍後在「設定」中開啟。",
       "optional": "可選",
       "recommended": "建議",
-      "accessibilityTroubleshooting": "在系統設定 → 輔助使用中，將 OpenWhispr 的開關關閉再重新開啟。如果無效，請將 OpenWhispr 從清單中移除後重新加入。還是不行？請寄信至 support@openwhispr.com。"
+      "accessibilityTroubleshooting": "在系統設定 → 輔助使用中，將 OpenWhispr 的開關關閉再重新開啟。如果清單中根本沒有 OpenWhispr，請點按 + 並從「應用程式」資料夾加入。還是不行？請寄信至 support@openwhispr.com。"
     },
     "transcription": {
       "title": "轉錄設定",
@@ -379,6 +379,7 @@
       "clearAllErrorTitle": "無法清除歷史紀錄",
       "clearAllErrorDescription": "發生錯誤，請重試。",
       "copyText": "複製文字",
+      "copyRawTranscript": "複製原始轉錄",
       "deleteItem": "刪除",
       "viewRawTranscript": "檢視原始轉錄",
       "showInFolder": "在 Finder 中顯示",
@@ -1226,12 +1227,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
-          "features": [
-            "無限會議錄製",
-            "代理模式",
-            "與您的資料對話",
-            "優先支援"
-          ],
+          "features": ["無限會議錄製", "代理模式", "與您的資料對話", "優先支援"],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
         },
@@ -2002,9 +1998,13 @@
         "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 開放權重模型，適用於消費級硬體",
         "gemma_gemma_3_4b_it_q4_k_m": "Google 開放權重模型，速度與品質的絕佳平衡",
         "gemma_gemma_4_31b_it_q4_k_m": "Google 最大的 Gemma 4，最佳品質",
+        "gemma_gemma_4_31b_it_qat_q4_0": "Google 官方 QAT 建置，體積更小且品質不減",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "Google MoE Gemma 4，4B 活躍參數，速度快",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "Google 官方 QAT MoE 建置，體積更小且品質不減",
         "gemma_gemma_4_e4b_it_q4_k_m": "Google 最新多模態模型，強大推理能力",
+        "gemma_gemma_4_e4b_it_qat_q4_0": "Google 官方 QAT 建置，強大推理能力，體積更小",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google 緊湊型 Gemma 4，快速高效",
+        "gemma_gemma_4_e2b_it_qat_q4_0": "Google 官方緊湊型 QAT 建置，品質不減",
         "gemma_gemma_3_12b_it_q4_k_m": "Google 中型模型，強推理能力",
         "gemma_gemma_3_1b_it_q4_k_m": "超快 Google 模型，最適合短語音清理",
         "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AI 高效端側模型，指令遵循出色",
@@ -2376,8 +2376,8 @@
     "addPlaceholder": "用逗號分隔新增多個詞——OpenWhispr、Supabase、ARR",
     "add": "新增",
     "importWords": "匯入詞語",
-    "importPlaceholder": "貼上以逗號分隔的詞語...",
-    "separateWithCommas": "用逗號分隔",
+    "importPlaceholder": "貼上以逗號或換行分隔的詞語...",
+    "separateWithCommas": "每行一個詞，或以逗號分隔",
     "wordsReady_other": "{{count}} 個詞語就緒",
     "import": "匯入",
     "yourDictionary": "你的詞典",
