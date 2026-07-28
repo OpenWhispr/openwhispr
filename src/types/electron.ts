@@ -824,9 +824,11 @@ declare global {
         useLocalWhisper: boolean;
         localTranscriptionProvider: LocalTranscriptionProvider;
         model?: string;
-        cleanupProvider: string;
+        useCleanupModel: boolean;
+        cleanupMode: InferenceMode;
         cleanupModel?: string;
-        dictationAgentProvider: string;
+        useDictationAgent: boolean;
+        dictationAgentMode: InferenceMode;
         dictationAgentModel?: string;
       }) => Promise<void>;
 

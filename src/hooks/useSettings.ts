@@ -175,9 +175,11 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
+    useCleanupModel,
+    cleanupMode,
     cleanupModel,
-    dictationAgentProvider,
+    useDictationAgent,
+    dictationAgentMode,
     dictationAgentModel,
   } = store;
 
@@ -190,10 +192,12 @@ function useSettingsInternal() {
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
-        cleanupProvider,
-        cleanupModel: cleanupProvider === "local" ? cleanupModel : undefined,
-        dictationAgentProvider,
-        dictationAgentModel: dictationAgentProvider === "local" ? dictationAgentModel : undefined,
+        useCleanupModel,
+        cleanupMode,
+        cleanupModel,
+        useDictationAgent,
+        dictationAgentMode,
+        dictationAgentModel,
       })
       .catch((err) =>
         logger.warn(
@@ -207,9 +211,11 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
+    useCleanupModel,
+    cleanupMode,
     cleanupModel,
-    dictationAgentProvider,
+    useDictationAgent,
+    dictationAgentMode,
     dictationAgentModel,
   ]);
 
