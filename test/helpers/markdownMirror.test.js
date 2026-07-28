@@ -78,7 +78,7 @@ test("renaming a mirrored note cleans up both stale files and reveals the note",
     "42-renamed-sync.md",
   ]);
   assert.equal(markdownMirror.getNotePath(note.id), notePath);
-  assert.match(fs.readFileSync(notePath, "utf8"), /Updated notes$/);
+  assert.match(fs.readFileSync(notePath, "utf-8"), /Updated notes$/);
 });
 
 test("a note file re-saved with a BOM or CRLF is still recognised as its note", (t) => {

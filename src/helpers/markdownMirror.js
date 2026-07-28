@@ -203,9 +203,9 @@ class MarkdownMirror {
     return fs.existsSync(dirPath) ? dirPath : null;
   }
 
-  // Note markdown opens with the YAML frontmatter this mirror writes; transcript
-  // companions open with "# <title>". Tolerate a BOM and CRLF so a note an external
-  // editor re-saved is still recognised as its note's file.
+  // Note markdown opens with the frontmatter this mirror writes; transcript
+  // companions open with "# <title>". BOM and CRLF are tolerated so a note an
+  // external editor re-saved is still recognised.
   _isNoteMarkdownFile(filePath) {
     let fd;
     try {
