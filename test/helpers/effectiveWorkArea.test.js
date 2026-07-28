@@ -5,6 +5,7 @@ const {
   parsePlasmaScreens,
   matchDisplayToPlasmaScreen,
   computeEffectiveWorkArea,
+  correctionMapsEqual,
 } = require("../../src/helpers/effectiveWorkArea.js");
 
 // Live layout of the reference machine: two 1920x1080 monitors side by side, each with a
@@ -263,4 +264,48 @@ test("computeEffectiveWorkArea with no panels leaves the work area equal to boun
     width: 1920,
     height: 1080,
   });
+});
+
+// ---- correctionMapsEqual ---------------------------------------------------------------
+
+const correctionMap = (entries) => new Map(entries);
+const RECT_A = { x: 0, y: 28, width: 1920, height: 1020 };
+const RECT_B = { x: 1920, y: 28, width: 1920, height: 1020 };
+
+test("correctionMapsEqual is true for maps with the same ids and rects", () => {
+  const a = correctionMap([
+    [1, { ...RECT_A }],
+    [2, { ...RECT_B }],
+  ]);
+  const b = correctionMap([
+    [1, { ...RECT_A }],
+    [2, { ...RECT_B }],
+  ]);
+  assert.equal(correctionMapsEqual(a, b), true);
+  assert.equal(correctionMapsEqual(new Map(), new Map()), true);
+});
+
+test("correctionMapsEqual is false when the maps have different sizes", () => {
+  const a = correctionMap([[1, { ...RECT_A }]]);
+  const b = correctionMap([
+    [1, { ...RECT_A }],
+    [2, { ...RECT_B }],
+  ]);
+  assert.equal(correctionMapsEqual(a, b), false);
+  assert.equal(correctionMapsEqual(b, a), false);
+  assert.equal(correctionMapsEqual(a, new Map()), false);
+});
+
+test("correctionMapsEqual is false when a single rect field differs", () => {
+  for (const field of ["x", "y", "width", "height"]) {
+    const a = correctionMap([[1, { ...RECT_A }]]);
+    const b = correctionMap([[1, { ...RECT_A, [field]: RECT_A[field] + 1 }]]);
+    assert.equal(correctionMapsEqual(a, b), false, `expected false for differing ${field}`);
+  }
+});
+
+test("correctionMapsEqual is false when the rects match but the ids do not", () => {
+  const a = correctionMap([[1, { ...RECT_A }]]);
+  const b = correctionMap([[2, { ...RECT_A }]]);
+  assert.equal(correctionMapsEqual(a, b), false);
 });

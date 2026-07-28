@@ -126,6 +126,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **qdrantManager.js**: Qdrant vector DB sidecar process lifecycle (spawn, health check, shutdown)
 - **localEmbeddings.js**: Local text embedding via ONNX Runtime + all-MiniLM-L6-v2 (384-dim vectors)
 - **vectorIndex.js**: Qdrant collection management — upsert, delete, search, batch reindex
+- **effectiveWorkArea.js**: Per-monitor `display.workArea` correction for KDE panel struts on Linux X11/XWayland — queries Plasma panels over D-Bus (`evaluateScript`), async cached snapshot with a change callback so late corrections re-apply widget placement; identity fallback everywhere else
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
 - **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app.

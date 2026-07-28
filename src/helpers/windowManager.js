@@ -59,8 +59,22 @@ class WindowManager {
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
 
-    this._registerDisplayListeners();
+    // init() first so a display change invalidates the cache before the reposition handler runs.
     effectiveWorkArea.init();
+    this._registerDisplayListeners();
+
+    // Re-apply placement when panel corrections arrive after the window was first positioned.
+    effectiveWorkArea.setOnCorrectionsChanged(() => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+      // Never fight an in-progress user drag.
+      if (this.dragManager.isDragActive()) return;
+      this._repositionToCursorDisplay({ force: true });
+      const preview = this.transcriptionPreviewWindow;
+      if (preview && !preview.isDestroyed() && preview.isVisible()) {
+        const { width, height } = preview.getBounds();
+        this.resizeTranscriptionPreview(width, height);
+      }
+    });
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -610,9 +624,9 @@ class WindowManager {
     }
   }
 
-  // Move the widget to `targetDisplay` if it isn't already there.
-  // Returns true when the widget changed displays (caller re-asserts on-top).
-  _moveWidgetToDisplay(targetDisplay) {
+  // Move the widget to `targetDisplay` if it isn't already there; `force` re-applies the
+  // placement on the same display. Returns true when bounds were set (caller re-asserts on-top).
+  _moveWidgetToDisplay(targetDisplay, { force = false } = {}) {
     if (!this.mainWindow || this.mainWindow.isDestroyed() || !targetDisplay) return false;
 
     // Correct the target's work area for KDE panel struts (identity on Windows/macOS).
@@ -624,7 +638,7 @@ class WindowManager {
       y: currentBounds.y + currentBounds.height / 2,
     });
 
-    if (currentDisplay.id === targetDisplay.id) return false;
+    if (!force && currentDisplay.id === targetDisplay.id) return false;
 
     const newPos = WindowPositionUtil.getMainWindowPosition(
       targetDisplay,
@@ -1130,7 +1144,8 @@ class WindowManager {
     this.agentWindow.setBounds(bounds);
   }
 
-  _repositionToCursorDisplay() {
+  _repositionToCursorDisplay(options = {}) {
+    const { force = false } = options;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
 
     const cursorPos = screen.getCursorScreenPoint();
@@ -1142,7 +1157,7 @@ class WindowManager {
       cursorDisplay
     );
 
-    if (this._moveWidgetToDisplay(targetDisplay)) {
+    if (this._moveWidgetToDisplay(targetDisplay, { force })) {
       this.enforceMainWindowOnTop();
     }
   }

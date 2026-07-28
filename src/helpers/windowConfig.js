@@ -180,8 +180,8 @@ class WindowPositionUtil {
     const { width, height } = NOTIFICATION_WINDOW_CONFIG;
     const MARGIN = 16;
     const workArea = display.workArea || display.bounds;
-    const x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
-    const y = Math.max(0, workArea.y + MARGIN);
+    const x = Math.max(workArea.x, workArea.x + workArea.width - width - MARGIN);
+    const y = Math.max(workArea.y, workArea.y + MARGIN);
     return { x, y, width, height };
   }
 

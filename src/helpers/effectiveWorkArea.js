@@ -3,6 +3,8 @@
 // monitor's panel strut) and the rest keep workArea == bounds. We ask Plasma over D-Bus for
 // per-screen geometry + panel struts and recompute the real per-monitor work areas.
 
+const { isFiniteNumber, isValidBounds } = require("./displaySelection");
+
 const FETCH_TIMEOUT_MS = 400;
 const CACHE_TTL_MS = 10000;
 // Reject a computed inset that eats more than this share of the display dimension.
@@ -22,16 +24,6 @@ const PLASMA_SCRIPT = [
   "out.panels.push({screen:p.screen,location:p.location,height:p.height,width:p.width,hiding:p.hiding});}",
   "print(JSON.stringify(out));",
 ].join("");
-
-const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
-
-const isValidBounds = (bounds) =>
-  bounds !== null &&
-  typeof bounds === "object" &&
-  isFiniteNumber(bounds.x) &&
-  isFiniteNumber(bounds.y) &&
-  isFiniteNumber(bounds.width) &&
-  isFiniteNumber(bounds.height);
 
 // Parse the Plasma snapshot JSON into per-screen rects with reserved-edge insets.
 // Only always-visible panels (hiding === "none") reserve space; side-by-side panels on
@@ -219,20 +211,44 @@ function computeEffectiveWorkArea(display, screen) {
   return { x, y, width, height };
 }
 
+// Compare two displayId -> { x, y, width, height } maps: same keys, same rects.
+function correctionMapsEqual(a, b) {
+  if (a.size !== b.size) return false;
+  for (const [id, rect] of a) {
+    const other = b.get(id);
+    if (!other) return false;
+    if (
+      rect.x !== other.x ||
+      rect.y !== other.y ||
+      rect.width !== other.width ||
+      rect.height !== other.height
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // ---- Impure layer: synchronous, best-effort, stale-while-revalidate ------------------
 
 let cache = { byDisplayId: new Map() };
 let lastAttemptAt = 0;
 let fetchInFlight = false;
 let initialized = false;
+let onCorrectionsChanged = null;
+// Last map the callback was told about. Never reset by invalidate: comparing against the
+// emptied cache would fire a spurious re-apply (moving a user-dragged widget) on every event.
+let lastNotified = new Map();
 
 function isKDE() {
   if (process.platform !== "linux") return false;
-  return (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase().includes("kde");
+  // Lazy require: kdeShortcut pulls in debugLogger (electron), and unit tests load this bare.
+  return require("./kdeShortcut").isKDE();
 }
 
 function logDebug(message, meta) {
   try {
+    // Lazy require: debugLogger needs electron, and unit tests load this module bare.
     require("./debugLogger").debug(message, meta, "effectiveWorkArea");
   } catch {
     // Logging must never break placement.
@@ -304,6 +320,8 @@ function fetchPlasmaSnapshot() {
         },
         (err, reply) => {
           if (err) {
+            // evaluateScript can be blocked by kiosk restrictions; that lands here and the
+            // normal fallback (no correction) covers it.
             logDebug("evaluateScript failed", { error: err && err.message });
             return finish(null);
           }
@@ -343,17 +361,34 @@ function refreshSnapshot() {
         }
       }
       cache = { byDisplayId };
+      if (correctionMapsEqual(byDisplayId, lastNotified)) return;
+      // Sharing the reference is safe: byDisplayId is never mutated after this point.
+      lastNotified = byDisplayId;
+      if (!onCorrectionsChanged) return;
+      try {
+        onCorrectionsChanged();
+      } catch (err) {
+        logDebug("corrections callback threw", { error: err && err.message });
+      }
     })
     .catch((err) => {
       logDebug("refresh failed", { error: err && err.message });
     })
     .finally(() => {
       fetchInFlight = false;
+      // An invalidate landed mid-flight, so the snapshot we just stored is already stale.
+      if (lastAttemptAt === 0) refreshSnapshot();
     });
 }
 
 function maybeRefresh() {
   if (Date.now() - lastAttemptAt > CACHE_TTL_MS) refreshSnapshot();
+}
+
+// Register a callback fired whenever the corrections actually change, so callers can
+// re-apply placements computed before the first (async) snapshot landed.
+function setOnCorrectionsChanged(callback) {
+  onCorrectionsChanged = typeof callback === "function" ? callback : null;
 }
 
 // Register screen-change invalidation once and kick a first prefetch. Idempotent; no-op off
@@ -367,6 +402,8 @@ function init() {
   const invalidate = () => {
     cache = { byDisplayId: new Map() };
     lastAttemptAt = 0;
+    // Refetch now instead of waiting for the next resolve call.
+    refreshSnapshot();
   };
   screen.on("display-added", invalidate);
   screen.on("display-removed", invalidate);
@@ -383,13 +420,19 @@ function resolveEffectiveDisplay(display) {
   maybeRefresh();
   const corrected = cache.byDisplayId.get(display.id);
   if (!corrected) return display;
-  return { ...display, workArea: { ...corrected } };
+  return {
+    ...display,
+    workArea: { ...corrected },
+    workAreaSize: { width: corrected.width, height: corrected.height },
+  };
 }
 
 module.exports = {
   parsePlasmaScreens,
   matchDisplayToPlasmaScreen,
   computeEffectiveWorkArea,
+  correctionMapsEqual,
   resolveEffectiveDisplay,
+  setOnCorrectionsChanged,
   init,
 };
