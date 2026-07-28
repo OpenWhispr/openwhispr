@@ -1690,7 +1690,8 @@
         "noteRecording": "Registrazione note",
         "upload": "Carica audio"
       },
-      "selfHostedStreamingNote": "Richiede un server che supporti la trascrizione in streaming."
+      "selfHostedStreamingNote": "Richiede un server che supporti la trascrizione in streaming.",
+      "selfHostedChunkedNote": "L'audio viene inviato in brevi segmenti all'endpoint /audio/transcriptions del tuo server — lo stesso contratto compatibile OpenAI della dettatura."
     },
     "llms": {
       "title": "Modelli linguistici",

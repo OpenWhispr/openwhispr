@@ -1863,7 +1863,8 @@
         "noteRecording": "Note Recording",
         "upload": "Audio Upload"
       },
-      "selfHostedStreamingNote": "Requires a server that supports streaming transcription."
+      "selfHostedStreamingNote": "Requires a server that supports streaming transcription.",
+      "selfHostedChunkedNote": "Audio is sent in short chunks to your server's /audio/transcriptions endpoint — the same OpenAI-compatible contract as Dictation."
     },
     "llms": {
       "title": "Language Models",

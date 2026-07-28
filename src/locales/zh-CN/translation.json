@@ -1685,7 +1685,8 @@
         "noteRecording": "笔记录音",
         "upload": "上传音频"
       },
-      "selfHostedStreamingNote": "需要支持流式转录的服务器。"
+      "selfHostedStreamingNote": "需要支持流式转录的服务器。",
+      "selfHostedChunkedNote": "音频将按短片段发送到服务器的 /audio/transcriptions 端点——与听写相同的 OpenAI 兼容接口。"
     },
     "llms": {
       "title": "语言模型",

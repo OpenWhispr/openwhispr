@@ -8,6 +8,7 @@ import {
 } from "../helpers/micSelectionRecovery";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
+import { getDictionaryHintWords } from "../utils/snippets";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
   DEFAULT_SYSTEM_AUDIO_ACCESS,
@@ -117,6 +118,20 @@ const getMeetingTranscriptionOptions = () => {
   const state = getSettings();
   const resolved = selectResolvedMeetingTranscription(state);
   const language = getBaseLanguageCode(state.preferredLanguage);
+
+  // Self-hosted: chunked HTTP against {url}/audio/transcriptions, mirroring
+  // the dictation/upload wire contract (examples/custom-asr-shim). Checked
+  // before useLocalWhisper so the selected mode always wins.
+  if (resolved.transcriptionMode === "self-hosted") {
+    const hintWords = getDictionaryHintWords(state).filter(Boolean);
+    return {
+      provider: "self-hosted" as const,
+      url: resolved.remoteTranscriptionUrl,
+      model: resolved.remoteTranscriptionModel,
+      language,
+      prompt: hintWords.length > 0 ? hintWords.join(", ") : undefined,
+    };
+  }
 
   if (resolved.useLocalWhisper) {
     return {
