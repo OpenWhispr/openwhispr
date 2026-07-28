@@ -29,6 +29,7 @@ import {
 import { getLanguageLabel } from "../../utils/languageSupport";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { resolveDictationAgentInference } from "../../helpers/dictationAgentInference";
+import { resolveTranslationProviderId } from "../../helpers/dictationRouting";
 
 interface PromptStudioProps {
   className?: string;
@@ -151,9 +152,11 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
           return;
         }
 
-        const provider = isCloudTranslation
-          ? "openwhispr"
-          : translationProvider.trim() || undefined;
+        const provider = resolveTranslationProviderId({
+          isCloudTranslation,
+          translationMode,
+          translationProvider,
+        });
         const modelToUse = isCloudTranslation ? translationModel || "auto" : translationModel;
 
         const previous = customPrompt;

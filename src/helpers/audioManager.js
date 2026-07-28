@@ -47,6 +47,7 @@ import { detectAgentName } from "../config/agentDetection";
 import {
   resolveDictationRouteKind,
   resolveDictationTranslationReachability,
+  resolveTranslationProviderId,
 } from "./dictationRouting";
 import { resolveDictationAgentInference } from "./dictationAgentInference";
 import { resolvePrompt } from "../config/prompts";
@@ -123,9 +124,11 @@ function resolveReasoningRoute(
     );
   }
   if (kind === "translation") {
-    const provider = isCloudTranslation
-      ? "openwhispr"
-      : settings.translationProvider?.trim() || undefined;
+    const provider = resolveTranslationProviderId({
+      isCloudTranslation,
+      translationMode: settings.translationMode,
+      translationProvider: settings.translationProvider,
+    });
     const isCustomTranslation = settings.translationMode === "providers" && provider === "custom";
     return {
       kind: "translation",

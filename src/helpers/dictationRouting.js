@@ -27,6 +27,19 @@ export function resolveDictationTranslationReachability({
   return (translationModel?.trim()?.length ?? 0) > 0;
 }
 
+// Provider id the translate steps hand to ReasoningService. An empty provider
+// in local mode still routes to llama.cpp instead of cleanup-scope heuristics.
+export function resolveTranslationProviderId({
+  isCloudTranslation,
+  translationMode,
+  translationProvider,
+}) {
+  if (isCloudTranslation) return "openwhispr";
+  const provider = translationProvider?.trim();
+  if (provider) return provider;
+  return translationMode === "local" ? "local" : undefined;
+}
+
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")
 // a finished dictation takes. A recording started via the voice agent hotkey
 // always takes the agent path — no wake word needed — and never falls back to

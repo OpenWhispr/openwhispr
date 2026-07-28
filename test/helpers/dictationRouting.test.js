@@ -341,3 +341,77 @@ test("translation needs a model on model-required providers", async () => {
     true
   );
 });
+
+test("translation provider: cloud mode always routes to openwhispr", async () => {
+  const { resolveTranslationProviderId } = await load();
+
+  assert.equal(
+    resolveTranslationProviderId({
+      isCloudTranslation: true,
+      translationMode: "local",
+      translationProvider: "llama",
+    }),
+    "openwhispr"
+  );
+});
+
+test("translation provider: an explicit provider passes through trimmed", async () => {
+  const { resolveTranslationProviderId } = await load();
+
+  assert.equal(
+    resolveTranslationProviderId({
+      isCloudTranslation: false,
+      translationMode: "providers",
+      translationProvider: " groq ",
+    }),
+    "groq"
+  );
+
+  const { resolveTranslationProviderId: resolve } = await load();
+  assert.equal(
+    resolve({
+      isCloudTranslation: false,
+      translationMode: "local",
+      translationProvider: "qwen",
+    }),
+    "qwen"
+  );
+});
+
+test("translation provider: empty provider in local mode routes to llama.cpp", async () => {
+  const { resolveTranslationProviderId } = await load();
+
+  // Picking a local model without ever clicking a provider tab leaves the
+  // stored provider empty; local mode must still resolve locally.
+  assert.equal(
+    resolveTranslationProviderId({
+      isCloudTranslation: false,
+      translationMode: "local",
+      translationProvider: "",
+    }),
+    "local"
+  );
+});
+
+test("translation provider: empty provider outside local mode stays undefined", async () => {
+  const { resolveTranslationProviderId } = await load();
+
+  assert.equal(
+    resolveTranslationProviderId({
+      isCloudTranslation: false,
+      translationMode: "providers",
+      translationProvider: "  ",
+    }),
+    undefined
+  );
+
+  const { resolveTranslationProviderId: resolve } = await load();
+  assert.equal(
+    resolve({
+      isCloudTranslation: false,
+      translationMode: "self-hosted",
+      translationProvider: "",
+    }),
+    undefined
+  );
+});
