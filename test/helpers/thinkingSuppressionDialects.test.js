@@ -159,6 +159,24 @@ test("mistral tolerates a missing model without throwing", async () => {
   assert.deepEqual(body, { reasoning_effort: "none" });
 });
 
+test("deepseek strips a reasoning_effort preset by earlier request shaping", async () => {
+  const { suppressThinking } = await load();
+
+  const body = { reasoning_effort: "low" };
+  suppressThinking(body, "deepseek", "deepseek-v4-pro");
+
+  assert.deepEqual(body, { thinking: { type: "disabled" } });
+});
+
+test("deepseek tolerates a missing model without throwing", async () => {
+  const { suppressThinking } = await load();
+
+  const body = {};
+  suppressThinking(body, "deepseek", undefined);
+
+  assert.deepEqual(body, { thinking: { type: "disabled" } });
+});
+
 test("detectEndpointDialect maps the mistral api base to max_tokens and temperature", async () => {
   const { detectEndpointDialect } = await load();
 
@@ -180,12 +198,56 @@ test("detectEndpointDialect matches mistral hosts regardless of scheme, case, po
   assert.equal(detectEndpointDialect("https://api.mistral.ai/v1/chat/completions")?.key, "mistral");
 });
 
+test("detectEndpointDialect matches deepseek hosts regardless of scheme, case, port or path", async () => {
+  const { detectEndpointDialect } = await load();
+
+  assert.equal(detectEndpointDialect("api.deepseek.com")?.key, "deepseek");
+  assert.equal(detectEndpointDialect("https://deepseek.com")?.key, "deepseek");
+  assert.equal(detectEndpointDialect("https://API.DeepSeek.COM/v1/")?.key, "deepseek");
+  assert.equal(detectEndpointDialect("https://api.deepseek.com:443/v1")?.key, "deepseek");
+  assert.equal(detectEndpointDialect("https://api.deepseek.com/chat/completions")?.key, "deepseek");
+});
+
 test("detectEndpointDialect rejects lookalike hosts", async () => {
   const { detectEndpointDialect } = await load();
 
   assert.equal(detectEndpointDialect("https://api.openai.com/v1"), null);
   assert.equal(detectEndpointDialect("https://notmistral.ai"), null);
   assert.equal(detectEndpointDialect("https://mistral.ai.evil.com"), null);
+  assert.equal(detectEndpointDialect("https://notdeepseek.com"), null);
+  assert.equal(detectEndpointDialect("https://deepseek.com.evil.com"), null);
+  assert.equal(detectEndpointDialect("https://api.deepseek.evil.com"), null);
+});
+
+// The custom provider has no dialect of its own: the endpoint host decides,
+// mirroring applyThinkingSuppression's `detectEndpointDialect(url)?.key ?? provider`.
+test("custom provider pointed at the deepseek api gets the deepseek shape", async () => {
+  const { detectEndpointDialect, suppressThinking } = await load();
+
+  const providerKey = detectEndpointDialect("https://api.deepseek.com/v1")?.key ?? "custom";
+  const body = { model: "deepseek-v4-flash", messages: [] };
+  suppressThinking(body, providerKey, "deepseek-v4-flash");
+
+  assert.deepEqual(body, {
+    model: "deepseek-v4-flash",
+    messages: [],
+    thinking: { type: "disabled" },
+  });
+});
+
+test("custom provider on a non-deepseek endpoint keeps the legacy shape untouched", async () => {
+  const { detectEndpointDialect, suppressThinking } = await load();
+
+  const providerKey = detectEndpointDialect("https://llm.example.com/v1")?.key ?? "custom";
+  assert.equal(providerKey, "custom");
+
+  const body = {};
+  suppressThinking(body, providerKey, "gpt-5.2");
+
+  assert.deepEqual(body, {
+    reasoning_effort: "none",
+    chat_template_kwargs: { enable_thinking: false },
+  });
 });
 
 test("detectEndpointDialect returns null for unparseable or missing input", async () => {

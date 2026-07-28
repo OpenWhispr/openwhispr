@@ -71,6 +71,8 @@ export function suppressThinking(
   // #1260); thinking: {type} is its native switch. Family facts don't apply —
   // deepseek models on other hosts (e.g. Tinfoil) accept the generic shape.
   if (providerKey === "deepseek") {
+    // A preset effort is also a 400 alongside the thinking switch, so drop it.
+    delete requestBody.reasoning_effort;
     requestBody.thinking = { type: "disabled" };
     return;
   }
