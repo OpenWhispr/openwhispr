@@ -14,6 +14,7 @@ import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
+import { resolveGeminiThinkingConfig } from "../helpers/geminiResponse.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
@@ -164,7 +165,14 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
+      | "openai"
+      | "anthropic"
+      | "gemini"
+      | "groq"
+      | "tinfoil"
+      | "custom"
+      | "openrouter"
+      | "corti"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -392,6 +400,18 @@ class ReasoningService extends BaseReasoningService {
     if (config.requireCompleteOutput && isTruncatedFinishReason(choice?.finish_reason)) {
       throw new Error("Model output was truncated before the selection edit completed");
     }
+
+    // finish_reason "length" is a max_tokens cut; the partial text would drop the tail. See #1341.
+    if (isTruncatedFinishReason(choice?.finish_reason)) {
+      logger.logReasoning(`${providerName.toUpperCase()}_TRUNCATED_RESPONSE`, {
+        model,
+        finishReason: choice.finish_reason,
+        contentLength: choice.message?.content?.length || 0,
+        tokensUsed: response.usage?.total_tokens || 0,
+      });
+      throw new Error(`${providerName} hit the token limit and returned a truncated response`);
+    }
+
     // Reasoning models leak <think> blocks into non-streamed output; strip them
     // unless the user explicitly enabled thinking (same default as streaming).
     const rawContent = choice.message?.content?.trim() || "";
@@ -757,7 +777,12 @@ class ReasoningService extends BaseReasoningService {
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
-    const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
+    // Chat never suppresses by default, so gate on the explicit toggle; the
+    // helper picks a level the model accepts — 3.1 Pro has no "minimal". See #1341.
+    const geminiThinkingConfig =
+      provider === "gemini" && config.disableThinking === true
+        ? resolveGeminiThinkingConfig(config, modelDef)
+        : undefined;
     const providerOptions = {
       // The effort value is a family fact: gpt-oss has no "none" (#1611).
       ...(needsGroqDisableThinking
@@ -768,9 +793,7 @@ class ReasoningService extends BaseReasoningService {
             },
           }
         : {}),
-      ...(needsGeminiMinimalThinking
-        ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
-        : {}),
+      ...(geminiThinkingConfig ? { google: { thinkingConfig: geminiThinkingConfig } } : {}),
     };
     const hasProviderOptions = Object.keys(providerOptions).length > 0;
 
