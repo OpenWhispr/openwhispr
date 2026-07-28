@@ -149,7 +149,10 @@ test("matchDisplayToPlasmaScreen returns null for an empty list or invalid displ
   const display = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 } };
   assert.equal(matchDisplayToPlasmaScreen(display, []), null);
   assert.equal(matchDisplayToPlasmaScreen(display, null), null);
-  assert.equal(matchDisplayToPlasmaScreen({ id: 1, bounds: null }, [{ x: 0, y: 0, w: 1, h: 1 }]), null);
+  assert.equal(
+    matchDisplayToPlasmaScreen({ id: 1, bounds: null }, [{ x: 0, y: 0, w: 1, h: 1 }]),
+    null
+  );
   assert.equal(matchDisplayToPlasmaScreen(null, [{ x: 0, y: 0, w: 1, h: 1 }]), null);
 });
 
@@ -188,7 +191,13 @@ test("matchDisplayToPlasmaScreen refuses to guess when screen counts diverge", (
 
 test("computeEffectiveWorkArea corrects the reference machine's non-primary display", () => {
   const display = { id: 2, bounds: { x: 1920, y: 0, width: 1920, height: 1080 } };
-  const screen = { x: 1920, y: 0, w: 1920, h: 1080, insets: { top: 28, right: 0, bottom: 32, left: 0 } };
+  const screen = {
+    x: 1920,
+    y: 0,
+    w: 1920,
+    h: 1080,
+    insets: { top: 28, right: 0, bottom: 32, left: 0 },
+  };
   assert.deepEqual(computeEffectiveWorkArea(display, screen), {
     x: 1920,
     y: 28,
@@ -200,7 +209,13 @@ test("computeEffectiveWorkArea corrects the reference machine's non-primary disp
 test("computeEffectiveWorkArea replaces a bogus inherited inset with the true scaled panel", () => {
   // Reporter's 4K primary: Electron reported a bogus 236px bottom inset (height 1033).
   const display = { id: 1, bounds: { x: 1916, y: 0, width: 2256, height: 1269 } };
-  const screen = { x: 1920, y: 0, w: 2258, h: 1270, insets: { top: 0, right: 0, bottom: 46, left: 0 } };
+  const screen = {
+    x: 1920,
+    y: 0,
+    w: 2258,
+    h: 1270,
+    insets: { top: 0, right: 0, bottom: 46, left: 0 },
+  };
   const wa = computeEffectiveWorkArea(display, screen);
   const bottomInset = display.bounds.height - wa.height - (wa.y - display.bounds.y);
   assert.equal(bottomInset, 46);
@@ -211,7 +226,13 @@ test("computeEffectiveWorkArea replaces a bogus inherited inset with the true sc
 test("computeEffectiveWorkArea gives a bounds==workArea display its own panel inset", () => {
   // Reporter's 1080p: Electron had workArea == bounds (inset 0); it should gain its top panel.
   const display = { id: 2, bounds: { x: -1, y: 0, width: 1918, height: 1079 } };
-  const screen = { x: 0, y: 0, w: 1920, h: 1080, insets: { top: 26, right: 0, bottom: 0, left: 0 } };
+  const screen = {
+    x: 0,
+    y: 0,
+    w: 1920,
+    h: 1080,
+    insets: { top: 26, right: 0, bottom: 0, left: 0 },
+  };
   const wa = computeEffectiveWorkArea(display, screen);
   assert.equal(wa.x, -1); // negative origin preserved
   assert.equal(wa.y, 26); // gained the top panel instead of 0
@@ -220,7 +241,13 @@ test("computeEffectiveWorkArea gives a bounds==workArea display its own panel in
 
 test("computeEffectiveWorkArea preserves a negative origin (monitor left of primary)", () => {
   const display = { id: 3, bounds: { x: -1920, y: 0, width: 1920, height: 1080 } };
-  const screen = { x: -1920, y: 0, w: 1920, h: 1080, insets: { top: 28, right: 0, bottom: 32, left: 0 } };
+  const screen = {
+    x: -1920,
+    y: 0,
+    w: 1920,
+    h: 1080,
+    insets: { top: 28, right: 0, bottom: 32, left: 0 },
+  };
   assert.deepEqual(computeEffectiveWorkArea(display, screen), {
     x: -1920,
     y: 28,
@@ -231,12 +258,24 @@ test("computeEffectiveWorkArea preserves a negative origin (monitor left of prim
 
 test("computeEffectiveWorkArea returns null for insane insets (> 45% of the dimension)", () => {
   const display = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 } };
-  const screen = { x: 0, y: 0, w: 1920, h: 1080, insets: { top: 600, right: 0, bottom: 0, left: 0 } };
+  const screen = {
+    x: 0,
+    y: 0,
+    w: 1920,
+    h: 1080,
+    insets: { top: 600, right: 0, bottom: 0, left: 0 },
+  };
   assert.equal(computeEffectiveWorkArea(display, screen), null);
 });
 
 test("computeEffectiveWorkArea returns null for degenerate inputs", () => {
-  const screen = { x: 0, y: 0, w: 1920, h: 1080, insets: { top: 28, right: 0, bottom: 0, left: 0 } };
+  const screen = {
+    x: 0,
+    y: 0,
+    w: 1920,
+    h: 1080,
+    insets: { top: 28, right: 0, bottom: 0, left: 0 },
+  };
   assert.equal(
     computeEffectiveWorkArea({ id: 1, bounds: { x: 0, y: 0, width: 0, height: 1080 } }, screen),
     null
@@ -257,7 +296,13 @@ test("computeEffectiveWorkArea returns null for degenerate inputs", () => {
 
 test("computeEffectiveWorkArea with no panels leaves the work area equal to bounds", () => {
   const display = { id: 1, bounds: { x: 1920, y: 0, width: 1920, height: 1080 } };
-  const screen = { x: 1920, y: 0, w: 1920, h: 1080, insets: { top: 0, right: 0, bottom: 0, left: 0 } };
+  const screen = {
+    x: 1920,
+    y: 0,
+    w: 1920,
+    h: 1080,
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  };
   assert.deepEqual(computeEffectiveWorkArea(display, screen), {
     x: 1920,
     y: 0,

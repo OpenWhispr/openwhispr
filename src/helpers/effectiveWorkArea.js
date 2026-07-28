@@ -104,7 +104,12 @@ function boundingBox(rects) {
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const r of rects) {
-    if (!isFiniteNumber(r.x) || !isFiniteNumber(r.y) || !isFiniteNumber(r.w) || !isFiniteNumber(r.h)) {
+    if (
+      !isFiniteNumber(r.x) ||
+      !isFiniteNumber(r.y) ||
+      !isFiniteNumber(r.w) ||
+      !isFiniteNumber(r.h)
+    ) {
       continue;
     }
     minX = Math.min(minX, r.x);
