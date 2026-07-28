@@ -5,21 +5,49 @@ const {
   CLOUD_UPLOAD_TIMEOUT_MS,
   CLOUD_CHUNK_MAX_ATTEMPTS,
   CLOUD_CHUNK_GLOBAL_CONCURRENCY,
+  CLOUD_POOL_TEARDOWN_COOLDOWN_MS,
+  FATAL_CHUNK_CODES,
   isTransientChunkError,
   isNetworkLevelFailure,
   chunkRetryDelayMs,
   abortableSleep,
+  createTeardownGate,
   createUploadSlots,
 } = require("../../src/helpers/cloudChunkPolicy");
 const { createAbortError } = require("../../src/helpers/abortError");
 
-// The numbers are the #1326 contract: a dead upload fails within 2 minutes, three
-// attempts total, and at most 2 chunk bodies in flight across ALL jobs so a user
-// retry cannot wedge the shared HTTP/2 connection with 6 concurrent ~4MB bodies.
+// The numbers are the #1326 contract: a dead upload fails within 2 minutes and
+// three attempts, and chunk bodies are capped across ALL jobs so a user retry
+// can't run ~6 concurrent ~4MB bodies. The cap matches the old per-job limit, so
+// a lone job uploads exactly as fast as before the fix.
 test("policy constants match the issue-1326 contract", () => {
   assert.equal(CLOUD_UPLOAD_TIMEOUT_MS, 120_000);
   assert.equal(CLOUD_CHUNK_MAX_ATTEMPTS, 3);
-  assert.equal(CLOUD_CHUNK_GLOBAL_CONCURRENCY, 2);
+  assert.equal(CLOUD_CHUNK_GLOBAL_CONCURRENCY, 5);
+});
+
+// A wedge fails every in-flight chunk at once, and closeAllConnections is
+// session-wide, so an ungated teardown would let each failure abort its healthy
+// siblings — and their retries in turn.
+test("teardown gate admits one drop per cooldown window", () => {
+  let now = 0;
+  const gate = createTeardownGate(CLOUD_POOL_TEARDOWN_COOLDOWN_MS, () => now);
+
+  assert.equal(gate(), true, "first failure must drop the wedged pool");
+  assert.equal(gate(), false, "a simultaneous sibling failure must not drop it again");
+
+  now += CLOUD_POOL_TEARDOWN_COOLDOWN_MS - 1;
+  assert.equal(gate(), false);
+
+  now += 1;
+  assert.equal(gate(), true, "a later wedge must still be recoverable");
+});
+
+test("fatal codes doom the whole job, not just one chunk", () => {
+  assert.deepEqual([...FATAL_CHUNK_CODES], ["AUTH_EXPIRED", "LIMIT_REACHED"]);
+  // NO_SPEECH_DETECTED is per-chunk: silence in one segment says nothing about
+  // the rest, so the remaining chunks must keep uploading.
+  assert.equal(FATAL_CHUNK_CODES.has("NO_SPEECH_DETECTED"), false);
 });
 
 test("createAbortError mirrors the DOMException shape fetch rejects with", () => {
@@ -38,8 +66,8 @@ test("deterministic HTTP rejections are not transient", () => {
   assert.equal(isTransientChunkError(Object.assign(new Error("x"), { statusCode: 404 })), false);
 });
 
-test("terminal business codes are not transient, including a user cancel", () => {
-  for (const code of ["AUTH_EXPIRED", "LIMIT_REACHED", "NO_SPEECH_DETECTED", "UPLOAD_CANCELLED"]) {
+test("terminal business codes are not transient", () => {
+  for (const code of ["AUTH_EXPIRED", "LIMIT_REACHED", "NO_SPEECH_DETECTED"]) {
     assert.equal(isTransientChunkError(Object.assign(new Error("x"), { code })), false);
   }
 });

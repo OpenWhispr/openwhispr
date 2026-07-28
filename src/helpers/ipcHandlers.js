@@ -128,27 +128,50 @@ const AUDIO_MIME_TYPES = {
 };
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
-const CLOUD_CHUNK_CONCURRENCY = 5;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
+const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
   CLOUD_UPLOAD_TIMEOUT_MS,
   CLOUD_CHUNK_MAX_ATTEMPTS,
   CLOUD_CHUNK_GLOBAL_CONCURRENCY,
+  FATAL_CHUNK_CODES,
   isTransientChunkError,
   isNetworkLevelFailure,
   chunkRetryDelayMs,
   abortableSleep,
+  createTeardownGate,
   createUploadSlots,
 } = require("./cloudChunkPolicy");
 
-// Chunk uploads ride a dedicated in-memory session so stalled large bodies can
-// never wedge the HTTP/2 connection the rest of the app multiplexes over, and
-// a failed attempt can drop the pool without collateral damage (#1326).
+// Every cloud upload rides a dedicated in-memory session so stalled large
+// bodies can't wedge the HTTP/2 connection the rest of the app multiplexes
+// over, and a failed attempt can drop the pool without collateral damage
+// outside the upload path (#1326).
 const CLOUD_UPLOAD_SESSION_PARTITION = "ow-cloud-uploads";
-const getCloudUploadSession = () => session.fromPartition(CLOUD_UPLOAD_SESSION_PARTITION);
 const cloudUploadSlots = createUploadSlots(CLOUD_CHUNK_GLOBAL_CONCURRENCY);
+const shouldDropUploadPool = createTeardownGate();
+let cloudUploadSession = null;
+
+function getCloudUploadSession() {
+  if (!cloudUploadSession) {
+    cloudUploadSession = session.fromPartition(CLOUD_UPLOAD_SESSION_PARTITION);
+    applyOpenWhisprOriginHeader(cloudUploadSession);
+  }
+  return cloudUploadSession;
+}
+
+// Teardown is session-wide, so it also aborts healthy sibling uploads; the gate
+// collapses a wedge's simultaneous failures into a single drop.
+async function dropUploadConnections() {
+  if (!shouldDropUploadPool()) return;
+  try {
+    await getCloudUploadSession().closeAllConnections();
+  } catch {
+    // pool teardown is best-effort
+  }
+}
 
 const {
   formatTimestamp: formatDiarTime,
@@ -226,7 +249,13 @@ function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   return { body: Buffer.concat(bodyParts), boundary };
 }
 
-async function postMultipart(url, body, boundary, headers = {}, { signal, session: fetchSession } = {}) {
+async function postMultipart(
+  url,
+  body,
+  boundary,
+  headers = {},
+  { signal, session: fetchSession } = {}
+) {
   const response = await (fetchSession ?? net).fetch(url.toString(), {
     method: "POST",
     headers: {
@@ -283,10 +312,17 @@ async function chunkedCloudTranscribe({
   multipartFields = {},
   onProgress,
   signal,
-  concurrencyLimit = CLOUD_CHUNK_CONCURRENCY,
   segmentDuration = CLOUD_CHUNK_SEGMENT_SECONDS,
 }) {
   const { splitAudioFile } = require("./ffmpegUtils");
+
+  // Aborted by the caller cancelling or by the first fatal chunk error, so a
+  // doomed job stops uploading its remaining chunks immediately.
+  const jobController = new AbortController();
+  const { signal: jobSignal } = jobController;
+  const abortJob = () => jobController.abort();
+  signal?.addEventListener("abort", abortJob, { once: true });
+  if (signal?.aborted) abortJob();
 
   const jobId = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const chunkDir = path.join(os.tmpdir(), `ow-chunks-${jobId}`);
@@ -304,67 +340,62 @@ async function chunkedCloudTranscribe({
   try {
     onProgress?.({ stage: "splitting", chunksTotal: 0, chunksCompleted: 0 });
 
-    const chunkPaths = await splitAudioFile(inputPath, chunkDir, { segmentDuration, signal });
+    const chunkPaths = await splitAudioFile(inputPath, chunkDir, {
+      segmentDuration,
+      signal: jobSignal,
+    });
     const totalChunks = chunkPaths.length;
 
     onProgress?.({ stage: "transcribing", chunksTotal: totalChunks, chunksCompleted: 0 });
 
+    const url = new URL(`${apiUrl}/api/transcribe`);
     const results = new Array(totalChunks).fill(null);
     const failureCodes = new Set();
+    let fatalError = null;
     let completedCount = 0;
 
     const transcribeChunk = async (index) => {
-      // Cross-job gate: at most CLOUD_CHUNK_GLOBAL_CONCURRENCY chunk bodies in
-      // flight app-wide, so a user retry can't double the load that wedges the
-      // connection (the buffer is also only read once a slot is held).
-      const releaseSlot = await cloudUploadSlots.acquire(signal);
-      try {
-        const chunkBuffer = fs.readFileSync(chunkPaths[index]);
-        const chunkName = path.basename(chunkPaths[index]);
-        const { body, boundary } = buildMultipartBody(
-          chunkBuffer,
-          chunkName,
-          "audio/mpeg",
-          multipartFields
-        );
-        const url = new URL(`${apiUrl}/api/transcribe`);
+      for (let attempt = 1; ; attempt++) {
+        if (jobSignal.aborted) throw createAbortError();
 
-        for (let attempt = 1; ; attempt++) {
-          if (signal?.aborted) throw createAbortError();
-          const timeoutSignal = AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS);
-          const attemptSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
-          try {
-            const data = await postMultipart(url, body, boundary, authHeader, {
-              signal: attemptSignal,
-              session: getCloudUploadSession(),
-            });
-            results[index] = interpretTranscribeResponse(data);
-            break;
-          } catch (err) {
-            if (signal?.aborted) throw createAbortError();
-            const timedOut = timeoutSignal.aborted;
-            if (attempt >= CLOUD_CHUNK_MAX_ATTEMPTS || !(timedOut || isTransientChunkError(err))) {
-              throw err;
-            }
-            if (isNetworkLevelFailure(err, { timedOut })) {
-              // No HTTP answer ever arrived — treat the pool as wedged and drop
-              // it so the retry dials a fresh connection instead of re-entering
-              // the dying one.
-              try {
-                await getCloudUploadSession().closeAllConnections();
-              } catch {
-                // pool teardown is best-effort
-              }
-            }
-            debugLogger.warn(`Chunk ${index} attempt ${attempt} failed, retrying`, {
-              error: err.message,
-              timedOut,
-            });
-            await abortableSleep(chunkRetryDelayMs(attempt), signal);
-          }
+        // The slot is held only while a body is on the wire: it caps chunk
+        // uploads app-wide, so it must not be occupied by a backoff sleep, and
+        // the chunk is read from disk only once a slot is in hand.
+        const releaseSlot = await cloudUploadSlots.acquire(jobSignal);
+        const timeoutSignal = AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS);
+        let failure = null;
+        try {
+          const { body, boundary } = buildMultipartBody(
+            fs.readFileSync(chunkPaths[index]),
+            path.basename(chunkPaths[index]),
+            "audio/mpeg",
+            multipartFields
+          );
+          const data = await postMultipart(url, body, boundary, authHeader, {
+            signal: AbortSignal.any([jobSignal, timeoutSignal]),
+            session: getCloudUploadSession(),
+          });
+          results[index] = interpretTranscribeResponse(data);
+        } catch (err) {
+          failure = err;
+        } finally {
+          releaseSlot();
         }
-      } finally {
-        releaseSlot();
+        if (!failure) break;
+
+        if (jobSignal.aborted) throw createAbortError();
+        const timedOut = timeoutSignal.aborted;
+        if (attempt >= CLOUD_CHUNK_MAX_ATTEMPTS || !(timedOut || isTransientChunkError(failure))) {
+          throw failure;
+        }
+        // No HTTP answer ever arrived — treat the pool as wedged and drop it so
+        // the retry dials a fresh connection instead of re-entering the dying one.
+        if (isNetworkLevelFailure(failure, { timedOut })) await dropUploadConnections();
+        debugLogger.warn(`Chunk ${index} attempt ${attempt} failed, retrying`, {
+          error: failure.message,
+          timedOut,
+        });
+        await abortableSleep(chunkRetryDelayMs(attempt), jobSignal);
       }
 
       completedCount++;
@@ -375,31 +406,28 @@ async function chunkedCloudTranscribe({
       });
     };
 
-    const executing = new Set();
-    for (let index = 0; index < totalChunks; index++) {
-      if (signal?.aborted) break;
-      const p = transcribeChunk(index).then(
-        () => executing.delete(p),
-        (err) => {
-          executing.delete(p);
-          if (err.code === "AUTH_EXPIRED" || err.code === "LIMIT_REACHED") throw err;
-          // Abort is reported once after the loop; swallow per-chunk abort
-          // rejections so they never surface as unhandled.
-          if (err.name === "AbortError") return;
+    await Promise.all(
+      chunkPaths.map((_, index) =>
+        transcribeChunk(index).catch((err) => {
+          // Only swallow aborts the job itself caused — reported once below. An
+          // AbortError from a chunk's own upload timeout is a real failure and
+          // must still be logged and counted.
+          if (jobSignal.aborted && err.name === "AbortError") return;
+          if (FATAL_CHUNK_CODES.has(err.code)) {
+            fatalError ??= err;
+            abortJob();
+            return;
+          }
           if (err.code) failureCodes.add(err.code);
           debugLogger.warn(`Chunk ${index} failed`, { error: err.message, code: err.code });
-        }
-      );
-      executing.add(p);
-      if (executing.size >= concurrencyLimit) {
-        await Promise.race(executing);
-      }
-    }
-    await Promise.all(executing);
+        })
+      )
+    );
 
     if (signal?.aborted) {
       throw Object.assign(createAbortError("Upload cancelled"), { code: "UPLOAD_CANCELLED" });
     }
+    if (fatalError) throw fatalError;
 
     const succeeded = results.filter((r) => r !== null);
     if (succeeded.length === 0) {
@@ -426,6 +454,7 @@ async function chunkedCloudTranscribe({
       ...(failed > 0 ? { warning: `${failed} of ${totalChunks} chunks failed` } : {}),
     };
   } finally {
+    signal?.removeEventListener("abort", abortJob);
     if (tmpInputPath) {
       try {
         fs.unlinkSync(tmpInputPath);
@@ -466,8 +495,8 @@ class IPCHandlers {
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
-    // requestId -> { controller } for in-flight audio-upload transcriptions,
-    // so a generic cancel can abort the exact job.
+    // requestId -> AbortController for in-flight audio-upload transcriptions,
+    // so a cancel can abort the exact job.
     this._uploadTranscriptionControllers = new Map();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
@@ -4321,6 +4350,7 @@ class IPCHandlers {
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, authHeader, {
           signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          session: getCloudUploadSession(),
         });
 
         debugLogger.debug(
@@ -4470,6 +4500,7 @@ class IPCHandlers {
                   const url = new URL(`${apiUrl}/api/transcribe`);
                   const data = await postMultipart(url, body, boundary, authHeader, {
                     signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+                    session: getCloudUploadSession(),
                   });
                   const responseData = interpretTranscribeResponse(data);
                   result = {
@@ -7382,7 +7413,7 @@ class IPCHandlers {
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
       const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
       const controller = new AbortController();
-      if (requestId) this._uploadTranscriptionControllers.set(requestId, { controller });
+      if (requestId) this._uploadTranscriptionControllers.set(requestId, controller);
       try {
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
@@ -7459,11 +7490,12 @@ class IPCHandlers {
       }
     });
 
+    // Unknown ids are a no-op: providers other than OpenWhispr cloud don't
+    // register a controller, and the renderer fires this for every cancel.
     ipcMain.handle("cancel-upload-transcription", async (_event, requestId) => {
-      const entry = this._uploadTranscriptionControllers.get(requestId);
-      if (!entry) return { success: false, restarted: false };
-      entry.controller.abort();
-      return { success: true, restarted: false };
+      const controller = this._uploadTranscriptionControllers.get(requestId);
+      controller?.abort();
+      return { success: !!controller };
     });
 
     ipcMain.handle(

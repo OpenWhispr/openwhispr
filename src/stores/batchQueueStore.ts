@@ -188,18 +188,15 @@ export function processBatchQueue(
 
       const requestId = crypto.randomUUID();
       activeUploadRequestId = requestId;
-      let transcriptionResult;
-      try {
-        transcriptionResult = await transcribeFileWithSpeakers(
-          filePath,
-          transcription,
-          diarization,
-          durationSeconds,
-          { requestId }
-        );
-      } finally {
+      const transcriptionResult = await transcribeFileWithSpeakers(
+        filePath,
+        transcription,
+        diarization,
+        durationSeconds,
+        { requestId }
+      ).finally(() => {
         if (activeUploadRequestId === requestId) activeUploadRequestId = null;
-      }
+      });
 
       if (run !== runId) return;
 

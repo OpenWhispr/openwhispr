@@ -1416,9 +1416,7 @@ declare global {
         code?: string;
       }>;
 
-      cancelUploadTranscription?: (
-        requestId: string
-      ) => Promise<{ success: boolean; restarted?: boolean }>;
+      cancelUploadTranscription?: (requestId: string) => Promise<{ success: boolean }>;
 
       onUploadTranscriptionProgress?: (
         callback: (data: { stage: string; chunksTotal: number; chunksCompleted: number }) => void

@@ -562,11 +562,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const cancelTranscription = () => {
-    // True backend abort for cloud uploads; unknown ids are a safe no-op for
-    // providers that don't register one. The run-id bump still discards any
-    // late result.
+    // True backend abort for cloud uploads; the run-id bump still discards any
+    // late result from providers that can't be aborted.
     if (activeRequestIdRef.current) {
       window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
+      activeRequestIdRef.current = null;
     }
     runIdRef.current++;
     reset();
@@ -620,7 +620,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         },
         currentFile.durationSeconds,
         { requestId }
-      );
+      ).finally(() => {
+        if (activeRequestIdRef.current === requestId) activeRequestIdRef.current = null;
+      });
 
       if (runId !== runIdRef.current) return;
 
