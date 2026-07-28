@@ -100,7 +100,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
-import { useSettingsStore } from "../stores/settingsStore";
+import { clearMissingLocalModelSelections, useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import { WORKSPACES_ENABLED } from "../lib/features";
@@ -1283,6 +1283,8 @@ export default function SettingsPage({
               description: t("settingsPage.developer.removeModels.failedDescription"),
             });
           } else {
+            // Every local model is gone, so no local selection can still resolve.
+            clearMissingLocalModelSelections(() => false);
             window.dispatchEvent(new Event("openwhispr-models-cleared"));
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.successTitle"),

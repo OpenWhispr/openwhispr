@@ -22,7 +22,15 @@ export function buildNoteFormattingOverrides(noteFormatting, isCloudMode, custom
     };
   }
 
-  const provider = mode === "providers" ? noteFormatting?.provider || undefined : undefined;
+  // Local must pin its provider for the same reason: an empty local selection
+  // resolves to the cleanup scope's model, and processText would derive a cloud
+  // provider from that id — sending note content off-device.
+  const provider =
+    mode === "local"
+      ? "local"
+      : mode === "providers"
+        ? noteFormatting?.provider || undefined
+        : undefined;
   const isCustom = provider === "custom";
   return {
     provider,

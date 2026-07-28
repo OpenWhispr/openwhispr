@@ -72,7 +72,7 @@ test("providers with a first-party cloud provider passes provider only, no key/b
   });
 });
 
-test("local mode passes no provider overrides (uses model-derived local provider)", async () => {
+test("local mode pins the local provider and leaks no key", async () => {
   const { buildNoteFormattingOverrides } = await load();
   const overrides = buildNoteFormattingOverrides(
     { mode: "local", model: "qwen2.5-3b" },
@@ -80,9 +80,16 @@ test("local mode passes no provider overrides (uses model-derived local provider
     "irrelevant"
   );
   assert.deepEqual(overrides, {
-    provider: undefined,
+    provider: "local",
     baseUrl: undefined,
     customApiKey: undefined,
     lanUrl: undefined,
   });
+});
+
+test("local mode with no model stays local (regression: inherited cloud id hit the cloud)", async () => {
+  const { buildNoteFormattingOverrides } = await load();
+  const overrides = buildNoteFormattingOverrides({ mode: "local", model: "" }, false, "sk-cloud");
+  assert.equal(overrides.provider, "local");
+  assert.equal(overrides.customApiKey, undefined);
 });
