@@ -640,11 +640,9 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
-      // Cloud batch-create keys its response map on client_dict_id, so a row
-      // without one can never be marked synced and re-uploads on every pass.
-      // Rows written straight to SQLite (bulk imports, #1295) don't set it, so
-      // the schema assigns it rather than trusting every writer to. Explicit
-      // ids still win — the trigger only fires when one is missing.
+      // Cloud batch-create matches responses by client_dict_id, so a row
+      // without one can never be marked synced and re-uploads every pass. Rows
+      // written straight to SQLite don't set it (#1295), so the schema does.
       this.db.exec(`
         CREATE TRIGGER IF NOT EXISTS custom_dictionary_client_id_default
         AFTER INSERT ON custom_dictionary
