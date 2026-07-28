@@ -23,7 +23,7 @@ import { parseDictionaryImportText } from "../helpers/dictionaryImport";
 
 export default function DictionaryView() {
   const { t } = useTranslation();
-  const { customDictionary, setCustomDictionary } = useSettings();
+  const { customDictionary, updateCustomDictionary } = useSettings();
   const agentName = getAgentName();
   const { toast } = useToast();
 
@@ -58,11 +58,11 @@ export default function DictionaryView() {
         return true;
       });
       if (words.length > 0) {
-        setCustomDictionary([...customDictionary, ...words]);
+        updateCustomDictionary({ add: words });
       }
       return words.length;
     },
-    [customDictionary, setCustomDictionary]
+    [customDictionary, updateCustomDictionary]
   );
 
   const handleAdd = useCallback(() => {
@@ -77,9 +77,9 @@ export default function DictionaryView() {
 
   const handleRemove = useCallback(
     (word: string) => {
-      setCustomDictionary(customDictionary.filter((w) => w !== word));
+      updateCustomDictionary({ remove: [word] });
     },
-    [customDictionary, setCustomDictionary]
+    [updateCustomDictionary]
   );
 
   const startEdit = useCallback((word: string) => {
@@ -94,10 +94,10 @@ export default function DictionaryView() {
       (w) => w !== editingWord && w.toLowerCase() === trimmed.toLowerCase()
     );
     if (trimmed && trimmed !== editingWord && !isDuplicate) {
-      setCustomDictionary(customDictionary.map((w) => (w === editingWord ? trimmed : w)));
+      updateCustomDictionary({ add: [trimmed], remove: [editingWord] });
     }
     setEditingWord(null);
-  }, [editingWord, editValue, customDictionary, setCustomDictionary]);
+  }, [editingWord, editValue, customDictionary, updateCustomDictionary]);
 
   const handleExport = useCallback(async () => {
     const result = await window.electronAPI?.exportDictionary?.(customDictionary);
@@ -140,7 +140,7 @@ export default function DictionaryView() {
         onOpenChange={setConfirmClear}
         title={t("dictionary.clearTitle")}
         description={t("dictionary.clearDescription")}
-        onConfirm={() => setCustomDictionary(customDictionary.filter((w) => w === agentName))}
+        onConfirm={() => updateCustomDictionary({ remove: userWords })}
         variant="destructive"
       />
 
