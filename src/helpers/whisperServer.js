@@ -12,6 +12,10 @@ const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
 const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
+const {
+  computeTranscriptionTimeoutMs,
+  PCM16_MONO_16K_BYTES_PER_SECOND,
+} = require("./transcriptionTimeout");
 
 const PORT_RANGE_START = 8178;
 const PORT_RANGE_END = 8199;
@@ -138,6 +142,13 @@ function buildWhisperServerArgs({
   // whisper.cpp defaults to English when --language is omitted;
   // explicitly pass "auto" to enable language auto-detection
   args.push("--language", language || "auto");
+
+  // whisper.cpp v1.9.x turned token timestamps on for every request, which enables the
+  // server's 60-character segment wrap. split_on_word is off, so the wrap lands on a token
+  // boundary and breaks words mid-word ("abschalten" -> "abs" + "chalten"); we join segments
+  // into one string, so the break surfaces as a stray space. We only read `text`, never
+  // per-token timings, so turn timestamps off and the wrap goes with them. See #1348.
+  args.push("--no-timestamps");
 
   if (isVadActive({ vadEnabled, vadModelPath })) {
     const cfg = sanitizeWhisperVadConfig(vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
@@ -778,6 +789,9 @@ class WhisperServerManager extends EventEmitter {
   }
 
   _postInference(body, boundary) {
+    // Multipart boilerplate adds under a kilobyte, so body length tracks audio length.
+    const timeoutMs = computeTranscriptionTimeoutMs(body.length / PCM16_MONO_16K_BYTES_PER_SECOND);
+
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
 
@@ -791,7 +805,7 @@ class WhisperServerManager extends EventEmitter {
             "Content-Type": `multipart/form-data; boundary=${boundary}`,
             "Content-Length": body.length,
           },
-          timeout: 300000,
+          timeout: timeoutMs,
         },
         (res) => {
           let data = "";

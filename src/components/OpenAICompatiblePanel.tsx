@@ -279,7 +279,7 @@ export default function OpenAICompatiblePanel({
   }, [applyBase, isDraftDirty, trimmedDraft, loadRemoteModels]);
 
   const displayedModels = isDraftDirty ? [] : modelOptions;
-  const queryUrl = hasBase ? `${normalizedBase}/models` : `${baseUrlPlaceholder}/models`;
+  const queryUrl = buildApiUrl(hasBase ? normalizedBase : baseUrlPlaceholder, "/models");
 
   return (
     <>

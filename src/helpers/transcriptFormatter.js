@@ -13,6 +13,14 @@ function resolveSpeaker(seg, speakerMappings) {
   return "Unknown Speaker";
 }
 
+// Segments merge only when they resolve to the same display name, so the key has
+// to cover every field resolveSpeaker reads — a manually named segment would
+// otherwise absorb the un-named one beside it.
+function speakerKey(seg) {
+  const named = seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : "";
+  return [seg.speaker || "", named, seg.speaker ? "" : seg.source || ""].join("\u0000");
+}
+
 function mergeSegments(segments) {
   const merged = [];
   let lastTimestamp = null;
@@ -20,7 +28,7 @@ function mergeSegments(segments) {
     if (!seg.text?.trim()) continue;
     const ts = seg.timestamp || 0;
     const last = merged[merged.length - 1];
-    if (last && last.speaker === (seg.speaker || "") && ts - lastTimestamp < 2) {
+    if (last && speakerKey(last) === speakerKey(seg) && ts - lastTimestamp < 2) {
       last.text = last.text + " " + seg.text.trim();
       last.endTimestamp = ts;
     } else {
@@ -40,8 +48,9 @@ function formatTimestamp(seconds) {
 }
 
 function formatSrtTimestamp(seconds) {
-  const s = Math.floor(seconds);
-  const ms = Math.round((seconds - s) * 1000);
+  const totalMs = Math.round(seconds * 1000);
+  const ms = totalMs % 1000;
+  const s = Math.floor(totalMs / 1000);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
@@ -59,7 +68,7 @@ function extractMetadata(note) {
   let participants = [];
   try {
     const parsed = JSON.parse(note.participants || "[]");
-    participants = parsed.map((p) => p.name).filter(Boolean);
+    participants = parsed.map((p) => p.displayName || p.email).filter(Boolean);
   } catch {}
 
   return { title, dateStr, participants };
@@ -70,7 +79,8 @@ function formatTxt(note, segments, speakerMappings) {
   const { title, dateStr, participants } = extractMetadata(note);
 
   const lines = [title, dateStr];
-  if (participants.length) lines.push(`Participants: ${participants.join(", ")}`);
+  if (participants.length)
+    lines.push(`${i18nMain.t("notes.editor.participants")}: ${participants.join(", ")}`);
   lines.push("", "──────────────────────────────────", "");
   for (const seg of merged) {
     lines.push(`[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings)}:`);
@@ -128,7 +138,8 @@ function formatMd(note, segments, speakerMappings) {
   const { title, dateStr, participants } = extractMetadata(note);
 
   const lines = [`# ${title}`, "", `**Date:** ${dateStr}`];
-  if (participants.length) lines.push(`**Participants:** ${participants.join(", ")}`);
+  if (participants.length)
+    lines.push(`**${i18nMain.t("notes.editor.participants")}:** ${participants.join(", ")}`);
   lines.push("", "---", "");
   for (const seg of merged) {
     lines.push(`**${resolveSpeaker(seg, speakerMappings)}** \`${formatTimestamp(seg.timestamp)}\``);

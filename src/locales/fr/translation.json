@@ -200,7 +200,7 @@
       "systemAudioDescription": "Permet à l'enregistreur de réunion d'entendre vos interlocuteurs : réunions, cours, podcasts. Activable plus tard dans les Réglages.",
       "optional": "Facultatif",
       "recommended": "Recommandé",
-      "accessibilityTroubleshooting": "Dans Réglages Système → Accessibilité, désactivez le bouton d'OpenWhispr puis réactivez-le. Si ça ne marche pas, supprimez OpenWhispr de la liste et rajoutez-le. Toujours bloqué ? Écrivez à support@openwhispr.com."
+      "accessibilityTroubleshooting": "Dans Réglages Système → Accessibilité, désactivez le bouton d'OpenWhispr puis réactivez-le. Si OpenWhispr n'apparaît pas du tout dans la liste, cliquez sur + et ajoutez-le depuis le dossier Applications. Toujours bloqué ? Écrivez à support@openwhispr.com."
     },
     "transcription": {
       "title": "Configuration de la transcription",
@@ -1103,7 +1103,8 @@
       "customEndpoint": "Endpoint personnalisé",
       "apiKeyMissing": "Clé API {{provider}} non configurée. Ajoutez-la dans les paramètres Modèles IA.",
       "translationDisabled": "Activez la traduction de dictée pour tester ce prompt",
-      "noTargetLanguage": "Choisissez d’abord une langue cible"
+      "noTargetLanguage": "Choisissez d’abord une langue cible",
+      "agentDisabled": "Activez l'agent vocal pour tester ce prompt"
     },
     "view": {
       "customPrompt": "Prompt personnalisé",
@@ -1704,6 +1705,9 @@
       "usageAnalyticsDescription": "Aidez-nous à améliorer OpenWhispr en partageant des métriques de performance anonymes. Nous n'envoyons jamais le contenu de vos transcriptions — uniquement des données de performance et d'erreurs.",
       "dataRetention": "Conservation des données",
       "dataRetentionDescription": "Stocker les transcriptions et l'audio localement dans votre historique. Lorsque désactivé, les transcriptions sont collées mais pas enregistrées.",
+      "transcriptRetention": "Conservation des transcriptions",
+      "transcriptRetentionDescription": "Supprimer automatiquement les transcriptions enregistrées et leur audio après cette période.",
+      "transcriptRetentionForever": "Toujours",
       "hoursAgo": "il y a {{count}}h",
       "justNow": "à l'instant",
       "lastSynced": "Dernière synchronisation {{time}}",
@@ -1711,7 +1715,8 @@
       "audioRetention": "Conservation de l'audio",
       "audioRetentionDescription": "Stocke les enregistrements audio localement pour la retranscription et le téléchargement. Les fichiers sont automatiquement supprimés après la période de conservation.",
       "audioRetentionDisabled": "Désactivé",
-      "audioRetentionDays": "{{count}} jours",
+      "retentionDays_one": "{{count}} jour",
+      "retentionDays_other": "{{count}} jours",
       "audioStorageUsage": "Espace utilisé",
       "audioStorageUsageDescription": "Fichiers audio stockés sur cet appareil",
       "audioStorageFiles": "{{count}} fichiers, {{size}}",
@@ -2494,8 +2499,8 @@
     "clearAll": "Tout effacer",
     "add": "Ajouter",
     "importWords": "Importer des mots",
-    "importPlaceholder": "Collez des mots séparés par des virgules...",
-    "separateWithCommas": "Séparez par des virgules",
+    "importPlaceholder": "Collez des mots séparés par des virgules ou des retours à la ligne...",
+    "separateWithCommas": "Un mot par ligne, ou séparés par des virgules",
     "wordsReady_one": "{{count}} mot prêt",
     "wordsReady_other": "{{count}} mots prêts",
     "import": "Importer",

@@ -83,6 +83,7 @@ export interface PrivacySettings {
   cloudBackupEnabled: boolean;
   telemetryEnabled: boolean;
   audioRetentionDays: number;
+  transcriptRetentionDays: number;
   dataRetentionEnabled: boolean;
   saveDiscardedTranscriptions: boolean;
 }
@@ -104,8 +105,7 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { setCustomDictionary, applyCustomDictionaryFromExternal, applySnippetsFromExternal } =
-    store;
+  const { applyCustomDictionaryFromExternal, applySnippetsFromExternal } = store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -169,15 +169,23 @@ function useSettingsInternal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Retention periods are enforced by the main process cleanup sweep
+  const { audioRetentionDays, transcriptRetentionDays } = store;
+  useEffect(() => {
+    window.electronAPI?.syncRetentionSettings?.({ audioRetentionDays, transcriptRetentionDays });
+  }, [audioRetentionDays, transcriptRetentionDays]);
+
   // Sync startup pre-warming preferences to main process
   const {
     useLocalWhisper,
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
+    useCleanupModel,
+    cleanupMode,
     cleanupModel,
-    dictationAgentProvider,
+    useDictationAgent,
+    dictationAgentMode,
     dictationAgentModel,
   } = store;
 
@@ -190,10 +198,12 @@ function useSettingsInternal() {
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
-        cleanupProvider,
-        cleanupModel: cleanupProvider === "local" ? cleanupModel : undefined,
-        dictationAgentProvider,
-        dictationAgentModel: dictationAgentProvider === "local" ? dictationAgentModel : undefined,
+        useCleanupModel,
+        cleanupMode,
+        cleanupModel,
+        useDictationAgent,
+        dictationAgentMode,
+        dictationAgentModel,
       })
       .catch((err) =>
         logger.warn(
@@ -207,9 +217,11 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
+    useCleanupModel,
+    cleanupMode,
     cleanupModel,
-    dictationAgentProvider,
+    useDictationAgent,
+    dictationAgentMode,
     dictationAgentModel,
   ]);
 
@@ -282,6 +294,7 @@ function useSettingsInternal() {
     setCleanupMode: store.setCleanupMode,
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
+    updateCustomDictionary: store.updateCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,
     setUseDictationAgent: store.setUseDictationAgent,
     setCleanupModel: store.setCleanupModel,
@@ -364,6 +377,8 @@ function useSettingsInternal() {
     setTelemetryEnabled: store.setTelemetryEnabled,
     audioRetentionDays: store.audioRetentionDays,
     setAudioRetentionDays: store.setAudioRetentionDays,
+    transcriptRetentionDays: store.transcriptRetentionDays,
+    setTranscriptRetentionDays: store.setTranscriptRetentionDays,
     dataRetentionEnabled: store.dataRetentionEnabled,
     setDataRetentionEnabled: store.setDataRetentionEnabled,
     saveDiscardedTranscriptions: store.saveDiscardedTranscriptions,

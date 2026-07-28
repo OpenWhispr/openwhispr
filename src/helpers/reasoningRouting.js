@@ -7,6 +7,14 @@ export function deriveReasoningMode(cloudMode, provider) {
   return "openwhispr";
 }
 
+// Whether a scope may borrow the fallback scope's API key along with its endpoint.
+// A scope pointing somewhere of its own, or in another mode, would send that key to
+// a host it was never entered for.
+export function inheritsFallbackEndpoint(own, fallbackMode) {
+  if (own.cloudBaseUrl || own.remoteUrl) return false;
+  return !!fallbackMode && own.mode === fallbackMode;
+}
+
 // Fan a cleanup config out to all five LLM scopes; the four non-cleanup scopes
 // mirror only cloud routing plus the derived mode (each tab selects on its mode).
 export function buildReasoningScopePatches(settings, mode) {

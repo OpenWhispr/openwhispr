@@ -200,7 +200,7 @@
       "systemAudioDescription": "Permite que el grabador de reuniones escuche al resto de participantes de tus llamadas: reuniones, clases, pódcasts. Puedes activarlo más tarde en Ajustes.",
       "optional": "Opcional",
       "recommended": "Recomendado",
-      "accessibilityTroubleshooting": "En Configuración del Sistema → Accesibilidad, desactiva el interruptor de OpenWhispr y vuelve a activarlo. Si eso no funciona, elimina OpenWhispr de la lista y añádelo de nuevo. ¿Sigues con problemas? Escribe a support@openwhispr.com."
+      "accessibilityTroubleshooting": "En Configuración del Sistema → Accesibilidad, desactiva el interruptor de OpenWhispr y vuelve a activarlo. Si OpenWhispr no aparece en la lista, haz clic en + y añádelo desde la carpeta Aplicaciones. ¿Sigues con problemas? Escribe a support@openwhispr.com."
     },
     "transcription": {
       "title": "Configuración de transcripción",
@@ -1103,7 +1103,8 @@
       "customEndpoint": "Endpoint personalizado",
       "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA.",
       "translationDisabled": "Activa la traducción de dictado para probar este prompt",
-      "noTargetLanguage": "Elige primero un idioma de destino"
+      "noTargetLanguage": "Elige primero un idioma de destino",
+      "agentDisabled": "Activa el agente de voz para probar este prompt"
     },
     "view": {
       "customPrompt": "Prompt personalizado",
@@ -1704,6 +1705,9 @@
       "usageAnalyticsDescription": "Ayúdanos a mejorar OpenWhispr compartiendo métricas de rendimiento anónimas. Nunca enviamos contenido de transcripciones, solo datos de tiempo y errores.",
       "dataRetention": "Retención de datos",
       "dataRetentionDescription": "Almacenar transcripciones y audio localmente en tu historial. Cuando está desactivado, las transcripciones se pegan pero no se guardan.",
+      "transcriptRetention": "Retención de transcripciones",
+      "transcriptRetentionDescription": "Eliminar automáticamente las transcripciones guardadas y su audio después de este período.",
+      "transcriptRetentionForever": "Para siempre",
       "hoursAgo": "hace {{count}}h",
       "justNow": "ahora mismo",
       "lastSynced": "Última sincronización {{time}}",
@@ -1713,7 +1717,8 @@
       "saveDiscarded": "Guardar dictados descartados",
       "saveDiscardedDescription": "Cuando cancelas un dictado con Escape, conserva su audio en el historial para poder recuperarlo. Requiere tener activadas la retención de datos y de audio.",
       "audioRetentionDisabled": "Desactivado",
-      "audioRetentionDays": "{{count}} días",
+      "retentionDays_one": "{{count}} día",
+      "retentionDays_other": "{{count}} días",
       "audioStorageUsage": "Uso de almacenamiento",
       "audioStorageUsageDescription": "Archivos de audio almacenados en este dispositivo",
       "audioStorageFiles": "{{count}} archivos, {{size}}",
@@ -2429,8 +2434,8 @@
     "addPlaceholder": "Añade palabras separadas por comas: OpenWhispr, Supabase, John Snow, ARR",
     "add": "Añadir",
     "importWords": "Importar palabras",
-    "importPlaceholder": "Pega palabras separadas por comas...",
-    "separateWithCommas": "Separa con comas",
+    "importPlaceholder": "Pega palabras separadas por comas o saltos de línea...",
+    "separateWithCommas": "Una palabra por línea, o separadas por comas",
     "wordsReady_one": "{{count}} palabra lista",
     "wordsReady_other": "{{count}} palabras listas",
     "import": "Importar",

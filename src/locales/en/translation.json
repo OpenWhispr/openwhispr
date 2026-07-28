@@ -200,7 +200,7 @@
       "systemAudioDescription": "Lets the meeting recorder hear the other side of your calls — meetings, lectures, podcasts. You can turn this on later in Settings.",
       "optional": "Optional",
       "recommended": "Recommended",
-      "accessibilityTroubleshooting": "In System Settings → Accessibility, switch OpenWhispr's toggle off and back on. If that doesn't work, remove OpenWhispr from the list and add it back. Still stuck? Email support@openwhispr.com."
+      "accessibilityTroubleshooting": "In System Settings → Accessibility, switch OpenWhispr's toggle off and back on. If OpenWhispr isn't in the list at all, click + and add it from your Applications folder. Still stuck? Email support@openwhispr.com."
     },
     "transcription": {
       "title": "Transcription Setup",
@@ -1143,7 +1143,8 @@
       "customEndpoint": "Custom endpoint",
       "apiKeyMissing": "{{provider}} API key not configured. Add it in AI Models settings.",
       "translationDisabled": "Enable Dictation Translation to test this prompt",
-      "noTargetLanguage": "Pick a target language first"
+      "noTargetLanguage": "Pick a target language first",
+      "agentDisabled": "Enable the voice agent to test this prompt"
     },
     "view": {
       "customPrompt": "Custom prompt",
@@ -1830,7 +1831,8 @@
       "audioRetention": "Audio Retention",
       "audioRetentionDescription": "Store audio recordings locally for re-transcription and download. Files are automatically deleted after the retention period.",
       "audioRetentionDisabled": "Disabled",
-      "audioRetentionDays": "{{count}} days",
+      "retentionDays_one": "{{count}} day",
+      "retentionDays_other": "{{count}} days",
       "audioStorageUsage": "Storage Usage",
       "audioStorageUsageDescription": "Audio files stored on this device",
       "audioStorageFiles": "{{count}} files, {{size}}",
@@ -1839,6 +1841,9 @@
       "clearAllAudioConfirm": "Delete all stored audio files? This cannot be undone.",
       "dataRetention": "Data Retention",
       "dataRetentionDescription": "Store transcriptions and audio locally in your history. When disabled, transcriptions are pasted but not saved.",
+      "transcriptRetention": "Transcript Retention",
+      "transcriptRetentionDescription": "Automatically delete saved transcriptions and their audio after this period.",
+      "transcriptRetentionForever": "Forever",
       "hoursAgo": "{{count}}h ago",
       "justNow": "just now",
       "lastSynced": "Last synced {{time}}",
@@ -2582,8 +2587,8 @@
     "clearAll": "Clear all",
     "add": "Add",
     "importWords": "Import words",
-    "importPlaceholder": "Paste words separated by commas...",
-    "separateWithCommas": "Separate with commas",
+    "importPlaceholder": "Paste words separated by commas or new lines...",
+    "separateWithCommas": "One word per line, or comma-separated",
     "wordsReady_one": "{{count}} word ready",
     "wordsReady_other": "{{count}} words ready",
     "import": "Import",

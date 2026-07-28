@@ -100,7 +100,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
-import { useSettingsStore } from "../stores/settingsStore";
+import { clearMissingLocalModelSelections, useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import { WORKSPACES_ENABLED } from "../lib/features";
@@ -138,6 +138,11 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
   { value: "zh-CN", label: "简体中文", flag: "🇨🇳" },
   { value: "zh-TW", label: "繁體中文", flag: "🇹🇼" },
 ];
+
+const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
+
+const RETENTION_SELECT_CLASS =
+  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
 const noop = () => {};
 
@@ -779,12 +784,13 @@ export default function SettingsPage({
     setTelemetryEnabled,
     audioRetentionDays,
     setAudioRetentionDays,
+    transcriptRetentionDays,
+    setTranscriptRetentionDays,
     dataRetentionEnabled,
     setDataRetentionEnabled,
     saveDiscardedTranscriptions,
     setSaveDiscardedTranscriptions,
     customDictionary,
-    setCustomDictionary,
     noteFilesEnabled,
     setNoteFilesEnabled,
     noteFilesPath,
@@ -1283,6 +1289,8 @@ export default function SettingsPage({
               description: t("settingsPage.developer.removeModels.failedDescription"),
             });
           } else {
+            // Every local model is gone, so no local selection can still resolve.
+            clearMissingLocalModelSelections(() => false);
             window.dispatchEvent(new Event("openwhispr-models-cleared"));
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.successTitle"),
@@ -3547,24 +3555,14 @@ EOF`,
                     <select
                       value={audioRetentionDays}
                       onChange={(e) => setAudioRetentionDays(parseInt(e.target.value, 10))}
-                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
+                      className={RETENTION_SELECT_CLASS}
                     >
                       <option value={0}>{t("settingsPage.privacy.audioRetentionDisabled")}</option>
-                      <option value={7}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 7 })}
-                      </option>
-                      <option value={14}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 14 })}
-                      </option>
-                      <option value={30}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 30 })}
-                      </option>
-                      <option value={60}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 60 })}
-                      </option>
-                      <option value={90}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 90 })}
-                      </option>
+                      {RETENTION_DAY_OPTIONS.map((days) => (
+                        <option key={days} value={days}>
+                          {t("settingsPage.privacy.retentionDays", { count: days })}
+                        </option>
+                      ))}
                     </select>
                   </SettingsRow>
                 </SettingsPanelRow>
@@ -3603,6 +3601,28 @@ EOF`,
                     description={t("settingsPage.privacy.dataRetentionDescription")}
                   >
                     <Toggle checked={dataRetentionEnabled} onChange={setDataRetentionEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.transcriptRetention")}
+                    description={t("settingsPage.privacy.transcriptRetentionDescription")}
+                  >
+                    <select
+                      value={transcriptRetentionDays}
+                      disabled={!dataRetentionEnabled}
+                      onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
+                      className={RETENTION_SELECT_CLASS}
+                    >
+                      <option value={0}>
+                        {t("settingsPage.privacy.transcriptRetentionForever")}
+                      </option>
+                      {RETENTION_DAY_OPTIONS.map((days) => (
+                        <option key={days} value={days}>
+                          {t("settingsPage.privacy.retentionDays", { count: days })}
+                        </option>
+                      ))}
+                    </select>
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>

@@ -200,7 +200,7 @@
       "systemAudioDescription": "让会议录音机听到通话另一方的声音 — 会议、讲座、播客。你可以稍后在“设置”中开启。",
       "optional": "可选",
       "recommended": "推荐",
-      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果无效，请将 OpenWhispr 从列表中移除后重新添加。还是不行？请发邮件至 support@openwhispr.com。"
+      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果列表中根本没有 OpenWhispr，请点按 + 并从“应用程序”文件夹中添加。还是不行？请发邮件至 support@openwhispr.com。"
     },
     "transcription": {
       "title": "转录设置",
@@ -1055,7 +1055,8 @@
       "customEndpoint": "自定义端点",
       "apiKeyMissing": "未配置 {{provider}} API 密钥，请在 AI 模型设置中添加。",
       "translationDisabled": "启用听写翻译以测试此提示词",
-      "noTargetLanguage": "请先选择目标语言"
+      "noTargetLanguage": "请先选择目标语言",
+      "agentDisabled": "启用语音助手以测试此提示词"
     },
     "view": {
       "customPrompt": "自定义提示词",
@@ -1227,12 +1228,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": [
-            "无限会议录制",
-            "代理模式",
-            "与您的数据对话",
-            "优先支持"
-          ],
+          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1656,6 +1652,9 @@
       "usageAnalyticsDescription": "通过分享匿名性能数据帮助我们改进 OpenWhispr。我们绝不发送转录内容——仅发送计时和错误数据。",
       "dataRetention": "数据保留",
       "dataRetentionDescription": "将转录和音频本地保存到历史记录中。禁用后，转录内容会被粘贴但不会被保存。",
+      "transcriptRetention": "转录保留",
+      "transcriptRetentionDescription": "在此期限后自动删除已保存的转录及其音频。",
+      "transcriptRetentionForever": "永久",
       "hoursAgo": "{{count}}小时前",
       "justNow": "刚刚",
       "lastSynced": "上次同步 {{time}}",
@@ -1663,7 +1662,8 @@
       "audioRetention": "音频保留",
       "audioRetentionDescription": "在本地存储音频录制文件以便重新转录和下载。文件会在保留期过后自动删除。",
       "audioRetentionDisabled": "已禁用",
-      "audioRetentionDays": "{{count}} 天",
+      "retentionDays_one": "{{count}} 天",
+      "retentionDays_other": "{{count}} 天",
       "audioStorageUsage": "存储用量",
       "audioStorageUsageDescription": "存储在此设备上的音频文件",
       "audioStorageFiles": "{{count}} 个文件，{{size}}",
@@ -2381,8 +2381,8 @@
     "addPlaceholder": "用逗号分隔添加多个词——OpenWhispr、Supabase、ARR",
     "add": "添加",
     "importWords": "导入词语",
-    "importPlaceholder": "粘贴以逗号分隔的词语...",
-    "separateWithCommas": "用逗号分隔",
+    "importPlaceholder": "粘贴以逗号或换行分隔的词语...",
+    "separateWithCommas": "每行一个词，或用逗号分隔",
     "wordsReady_other": "{{count}} 个词语就绪",
     "import": "导入",
     "yourDictionary": "你的词典",
