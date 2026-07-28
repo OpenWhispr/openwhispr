@@ -2,6 +2,11 @@ import { getSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { resolveMicDeviceSelection } from "./micDeviceSelection";
 
+// Chromium's "default" pseudo-device is a follow-the-OS-default selection, not a pin.
+export function followsSystemDefaultMic({ preferBuiltInMic, selectedMicDeviceId }) {
+  return !preferBuiltInMic && (!selectedMicDeviceId || selectedMicDeviceId === "default");
+}
+
 /**
  * Resolve the saved mic selection against live devices, persisting a remap or
  * label backfill so the preference survives Chromium device-ID rotation.

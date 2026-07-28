@@ -200,7 +200,7 @@
       "systemAudioDescription": "会議レコーダーが通話の相手側の音声（会議、講義、ポッドキャストなど）を聴けるようにします。後から設定で有効にできます。",
       "optional": "任意",
       "recommended": "推奨",
-      "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。それでもうまくいかない場合は、リストからOpenWhisprを削除して再度追加してみてください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
+      "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。OpenWhisprがリストに表示されていない場合は、+ をクリックしてアプリケーションフォルダから追加してください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
     },
     "transcription": {
       "title": "文字起こし設定",
@@ -379,6 +379,7 @@
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
       "copyText": "テキストをコピー",
+      "copyRawTranscript": "生の文字起こしをコピー",
       "deleteItem": "削除",
       "viewRawTranscript": "生の文字起こしを表示",
       "showInFolder": "Finderで表示",
@@ -570,6 +571,15 @@
       "noAudio": {
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
+      },
+      "micDisconnected": {
+        "title": "マイクが切断されました",
+        "description": "録音は継続中です。マイクが利用可能になると自動的に再開されます。",
+        "meetingDescription": "ミーティングはシステム音声の録音を継続しており、マイクの録音は自動的に再開されます。"
+      },
+      "micRestored": {
+        "title": "マイクが復旧しました",
+        "description": "音声の録音を再開しました。"
       },
       "partialTranscription": {
         "title": "部分的な文字起こし",
@@ -1993,9 +2003,13 @@
         "openai_oss_gpt_oss_20b_mxfp4": "一般消費者向けハードウェア用 OpenAI オープンウェイトモデル",
         "gemma_gemma_3_4b_it_q4_k_m": "Google のオープンウェイトモデル、速度と品質の優れたバランス",
         "gemma_gemma_4_31b_it_q4_k_m": "Google 最大の Gemma 4、最高品質",
+        "gemma_gemma_4_31b_it_qat_q4_0": "Google 公式の QAT ビルド、品質を保ちながら軽量",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "Google の MoE Gemma 4、4B アクティブパラメータで高速",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "Google 公式の QAT MoE ビルド、品質を保ちながら軽量",
         "gemma_gemma_4_e4b_it_q4_k_m": "Google の最新マルチモーダルモデル、高度な推論",
+        "gemma_gemma_4_e4b_it_qat_q4_0": "Google 公式の QAT ビルド、高度な推論をより小さく",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google のコンパクトな Gemma 4、高速で効率的",
+        "gemma_gemma_4_e2b_it_qat_q4_0": "Google 公式のコンパクトな QAT ビルド、品質を維持",
         "gemma_gemma_3_12b_it_q4_k_m": "Google の中型モデル、強力な推論",
         "gemma_gemma_3_1b_it_q4_k_m": "超高速 Google モデル、短い口述のクリーンアップに最適",
         "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AIの高効率オンデバイスモデル、優れた指示追従性",
@@ -2211,7 +2225,8 @@
       "back": "戻る"
     },
     "meetingPill": {
-      "returnToNote": "録音に戻る"
+      "returnToNote": "録音に戻る",
+      "waitingForMicrophone": "マイクを待っています"
     },
     "onboarding": {
       "llm": {
@@ -2294,8 +2309,8 @@
     "addPlaceholder": "カンマ区切りで単語を追加 — OpenWhispr、Supabase、ARR など",
     "add": "追加",
     "importWords": "単語をインポート",
-    "importPlaceholder": "カンマ区切りの単語を貼り付け...",
-    "separateWithCommas": "カンマで区切る",
+    "importPlaceholder": "カンマまたは改行区切りの単語を貼り付け...",
+    "separateWithCommas": "1行に1語、またはカンマ区切り",
     "wordsReady_other": "{{count}} 個の単語が準備完了",
     "import": "インポート",
     "yourDictionary": "あなたの辞書",
@@ -2541,7 +2556,8 @@
       "hotkeyToSpeak": "{{hotkey}} で話す",
       "recording": "録音中...",
       "processing": "処理中...",
-      "clickToSpeak": "クリックして話す"
+      "clickToSpeak": "クリックして話す",
+      "waitingForMicrophone": "マイクを待っています…"
     },
     "buttons": {
       "cancelRecording": "録音をキャンセル",

@@ -200,7 +200,7 @@
       "systemAudioDescription": "让会议录音机听到通话另一方的声音 — 会议、讲座、播客。你可以稍后在“设置”中开启。",
       "optional": "可选",
       "recommended": "推荐",
-      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果无效，请将 OpenWhispr 从列表中移除后重新添加。还是不行？请发邮件至 support@openwhispr.com。"
+      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果列表中根本没有 OpenWhispr，请点按 + 并从“应用程序”文件夹中添加。还是不行？请发邮件至 support@openwhispr.com。"
     },
     "transcription": {
       "title": "转录设置",
@@ -379,6 +379,7 @@
       "clearAllErrorTitle": "无法清除历史记录",
       "clearAllErrorDescription": "出了点问题，请重试。",
       "copyText": "复制文本",
+      "copyRawTranscript": "复制原始转录",
       "deleteItem": "删除",
       "viewRawTranscript": "查看原始转录",
       "showInFolder": "在访达中显示",
@@ -570,6 +571,15 @@
       "noAudio": {
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"
+      },
+      "micDisconnected": {
+        "title": "麦克风已断开",
+        "description": "录音仍在进行中，麦克风可用后将自动恢复。",
+        "meetingDescription": "会议仍在录制系统音频，麦克风录制将自动恢复。"
+      },
+      "micRestored": {
+        "title": "麦克风已恢复",
+        "description": "音频采集已恢复。"
       },
       "partialTranscription": {
         "title": "部分转录",
@@ -1217,12 +1227,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": [
-            "无限会议录制",
-            "代理模式",
-            "与您的数据对话",
-            "优先支持"
-          ],
+          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1993,9 +1998,13 @@
         "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 开源模型，适用于消费级硬件",
         "gemma_gemma_3_4b_it_q4_k_m": "谷歌开放权重模型，速度与质量的绝佳平衡",
         "gemma_gemma_4_31b_it_q4_k_m": "Google 最大的 Gemma 4，最佳质量",
+        "gemma_gemma_4_31b_it_qat_q4_0": "Google 官方 QAT 构建，体积更小且质量不减",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "Google MoE Gemma 4，4B 活跃参数，速度快",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "Google 官方 QAT MoE 构建，体积更小且质量不减",
         "gemma_gemma_4_e4b_it_q4_k_m": "Google 最新多模态模型，强大推理能力",
+        "gemma_gemma_4_e4b_it_qat_q4_0": "Google 官方 QAT 构建，强大推理能力，体积更小",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google 紧凑型 Gemma 4，快速高效",
+        "gemma_gemma_4_e2b_it_qat_q4_0": "Google 官方紧凑型 QAT 构建，质量不减",
         "gemma_gemma_3_12b_it_q4_k_m": "Google 中型模型，强推理能力",
         "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理",
         "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AI 高效端侧模型，指令遵循出色",
@@ -2227,7 +2236,8 @@
       "back": "返回"
     },
     "meetingPill": {
-      "returnToNote": "返回到录音"
+      "returnToNote": "返回到录音",
+      "waitingForMicrophone": "等待麦克风"
     },
     "context": {
       "moveToFolder": "移动到文件夹",
@@ -2366,8 +2376,8 @@
     "addPlaceholder": "用逗号分隔添加多个词——OpenWhispr、Supabase、ARR",
     "add": "添加",
     "importWords": "导入词语",
-    "importPlaceholder": "粘贴以逗号分隔的词语...",
-    "separateWithCommas": "用逗号分隔",
+    "importPlaceholder": "粘贴以逗号或换行分隔的词语...",
+    "separateWithCommas": "每行一个词，或用逗号分隔",
     "wordsReady_other": "{{count}} 个词语就绪",
     "import": "导入",
     "yourDictionary": "你的词典",
@@ -2541,7 +2551,8 @@
       "hotkeyToSpeak": "{{hotkey}} 说话",
       "recording": "录音中...",
       "processing": "处理中...",
-      "clickToSpeak": "点击开始说话"
+      "clickToSpeak": "点击开始说话",
+      "waitingForMicrophone": "等待麦克风…"
     },
     "buttons": {
       "cancelRecording": "取消录音",

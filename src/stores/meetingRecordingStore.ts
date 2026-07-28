@@ -2,7 +2,11 @@ import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import { reconcileSavedMicSelection } from "../helpers/micSelectionRecovery";
+import {
+  followsSystemDefaultMic,
+  reconcileSavedMicSelection,
+} from "../helpers/micSelectionRecovery";
+import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
@@ -72,6 +76,7 @@ interface MeetingRecordingState {
   userTouchedStepper: boolean;
   error: string | null;
   currentMicLevel: number;
+  micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
 }
 
@@ -419,6 +424,7 @@ let micSource: MediaStreamAudioSourceNode | null = null;
 let micProcessor: AudioWorkletNode | null = null;
 let micStream: MediaStream | null = null;
 let micAnalyser: AnalyserNode | null = null;
+let micRecovery: ActiveMicRecoveryController | null = null;
 let systemContext: AudioContext | null = null;
 let systemSource: MediaStreamAudioSourceNode | null = null;
 let systemProcessor: AudioWorkletNode | null = null;
@@ -455,6 +461,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   userTouchedStepper: false,
   error: null,
   currentMicLevel: 0,
+  micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
 }));
 
@@ -623,6 +630,8 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
 }
 
 async function cleanup(): Promise<void> {
+  micRecovery?.stop();
+  micRecovery = null;
   await flushAndDisconnectProcessor(micProcessor);
   micProcessor = null;
 
@@ -761,6 +770,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
     systemPartialSpeakerName: null,
     diarizationSessionId: null,
     error: null,
+    micCaptureStatus: "inactive",
   });
 
   isRecordingFlag = true;
@@ -1106,6 +1116,40 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
 
     if (micPipelinePromise) {
       await micPipelinePromise;
+      micRecovery = new ActiveMicRecoveryController({
+        mediaDevices: navigator.mediaDevices,
+        acquire: async () => {
+          try {
+            return await navigator.mediaDevices.getUserMedia(await getMeetingMicConstraints());
+          } catch {
+            return navigator.mediaDevices.getUserMedia({
+              audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
+            });
+          }
+        },
+        onStatusChange: (status) => {
+          useMeetingRecordingStore.setState({
+            micCaptureStatus: status,
+            ...(status === "active" ? {} : { currentMicLevel: 0 }),
+          });
+        },
+        onRecovered: async (replacement, previous) => {
+          if (!isRecordingFlag || !micContext || !micProcessor) {
+            throw new Error("Meeting recording is no longer active");
+          }
+          const nextSource = micContext.createMediaStreamSource(replacement);
+          nextSource.connect(micProcessor);
+          if (micAnalyser) nextSource.connect(micAnalyser);
+          micSource?.disconnect();
+          previous?.getTracks().forEach((track) => track.stop());
+          micSource = nextSource;
+          micStream = replacement;
+          logger.info("Meeting microphone capture recovered", {}, "meeting");
+        },
+      });
+      await micRecovery.start(micStream, {
+        followDefault: followsSystemDefaultMic(getSettings()),
+      });
     }
 
     if (systemCaptureResult.stream) {

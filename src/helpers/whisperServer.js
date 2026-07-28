@@ -12,6 +12,10 @@ const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
 const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
+const {
+  computeTranscriptionTimeoutMs,
+  PCM16_MONO_16K_BYTES_PER_SECOND,
+} = require("./transcriptionTimeout");
 
 const PORT_RANGE_START = 8178;
 const PORT_RANGE_END = 8199;
@@ -778,6 +782,9 @@ class WhisperServerManager extends EventEmitter {
   }
 
   _postInference(body, boundary) {
+    // Multipart boilerplate adds under a kilobyte, so body length tracks audio length.
+    const timeoutMs = computeTranscriptionTimeoutMs(body.length / PCM16_MONO_16K_BYTES_PER_SECOND);
+
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
 
@@ -791,7 +798,7 @@ class WhisperServerManager extends EventEmitter {
             "Content-Type": `multipart/form-data; boundary=${boundary}`,
             "Content-Length": body.length,
           },
-          timeout: 300000,
+          timeout: timeoutMs,
         },
         (res) => {
           let data = "";

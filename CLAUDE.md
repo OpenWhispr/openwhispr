@@ -216,8 +216,8 @@ Always-on offline semantic search that finds notes by meaning, not just keywords
 
 **Storage**:
 
-- Qdrant data: `~/.cache/openwhispr/qdrant-data/`
-- Qdrant binary: `resources/bin/qdrant-{platform}-{arch}` (bundled — downloaded during `prebuild` / `predev`)
+- Qdrant data: `~/.cache/openwhispr/qdrant-data/` (`qdrant-data-dev/` in development)
+- Qdrant binary: `resources/bin/qdrant-{platform}-{arch}` (bundled — downloaded during `prebuild` / `predev:main`)
 - Embedding model: `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/` (auto-downloaded on first launch)
 
 **Dependencies**: `@qdrant/js-client-rest`, `onnxruntime-node`

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
 import {
@@ -15,6 +15,8 @@ export default function MeetingRecordingMount(): null {
   const { toast } = useToast();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const error = useMeetingRecordingStore((s) => s.error);
+  const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
+  const wasMicUnavailable = useRef(false);
 
   useEffect(() => {
     primeMeetingWorklet();
@@ -28,6 +30,26 @@ export default function MeetingRecordingMount(): null {
       variant: "destructive",
     });
   }, [error, toast, t]);
+
+  useEffect(() => {
+    if (micCaptureStatus === "unavailable" && !wasMicUnavailable.current) {
+      wasMicUnavailable.current = true;
+      toast({
+        title: t("hooks.audioRecording.micDisconnected.title"),
+        description: t("hooks.audioRecording.micDisconnected.meetingDescription"),
+        variant: "default",
+      });
+    } else if (micCaptureStatus === "active" && wasMicUnavailable.current) {
+      wasMicUnavailable.current = false;
+      toast({
+        title: t("hooks.audioRecording.micRestored.title"),
+        description: t("hooks.audioRecording.micRestored.description"),
+        variant: "default",
+      });
+    } else if (micCaptureStatus === "inactive") {
+      wasMicUnavailable.current = false;
+    }
+  }, [micCaptureStatus, toast, t]);
 
   useEffect(() => {
     if (!isRecording) return;

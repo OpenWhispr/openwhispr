@@ -200,7 +200,7 @@
       "systemAudioDescription": "Lässt den Meeting-Rekorder die Gegenseite deiner Anrufe hören — Meetings, Vorlesungen, Podcasts. Kann später in den Einstellungen aktiviert werden.",
       "optional": "Optional",
       "recommended": "Empfohlen",
-      "accessibilityTroubleshooting": "Schalte in Systemeinstellungen → Bedienungshilfen den Schalter für OpenWhispr aus und wieder ein. Wenn das nicht hilft, entferne OpenWhispr aus der Liste und füge es erneut hinzu. Klappt's immer noch nicht? Schreib an support@openwhispr.com."
+      "accessibilityTroubleshooting": "Schalte in Systemeinstellungen → Bedienungshilfen den Schalter für OpenWhispr aus und wieder ein. Wenn OpenWhispr gar nicht in der Liste steht, klicke auf + und füge es aus dem Programme-Ordner hinzu. Klappt's immer noch nicht? Schreib an support@openwhispr.com."
     },
     "transcription": {
       "title": "Transkriptions-Einrichtung",
@@ -379,6 +379,7 @@
       "clearAllErrorTitle": "Verlauf konnte nicht gelöscht werden",
       "clearAllErrorDescription": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "copyText": "Text kopieren",
+      "copyRawTranscript": "Rohtranskript kopieren",
       "deleteItem": "Löschen",
       "viewRawTranscript": "Rohtranskript anzeigen",
       "showInFolder": "Im Finder anzeigen",
@@ -570,6 +571,15 @@
       "noAudio": {
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
+      },
+      "micDisconnected": {
+        "title": "Mikrofon getrennt",
+        "description": "Die Aufnahme ist weiterhin aktiv und wird fortgesetzt, sobald ein Mikrofon verfügbar ist.",
+        "meetingDescription": "Das Meeting zeichnet weiterhin Systemaudio auf und setzt die Mikrofonaufnahme automatisch fort."
+      },
+      "micRestored": {
+        "title": "Mikrofon wiederhergestellt",
+        "description": "Die Audioaufnahme wurde fortgesetzt."
       },
       "partialTranscription": {
         "title": "Unvollständige Transkription",
@@ -1993,9 +2003,13 @@
         "openai_oss_gpt_oss_20b_mxfp4": "Open-Weight-Modell von OpenAI für Consumer-Hardware",
         "gemma_gemma_3_4b_it_q4_k_m": "Googles Open-Weight-Modell, gutes Gleichgewicht aus Geschwindigkeit und Qualität",
         "gemma_gemma_4_31b_it_q4_k_m": "Googles größtes Gemma 4, beste Qualität",
+        "gemma_gemma_4_31b_it_qat_q4_0": "Offizieller QAT-Build von Google, kleiner bei gleicher Qualität",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "Googles MoE Gemma 4, schnell mit 4B aktiven Parametern",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "Offizieller QAT-MoE-Build von Google, kleiner bei gleicher Qualität",
         "gemma_gemma_4_e4b_it_q4_k_m": "Googles neuestes multimodales Modell, starkes Reasoning",
+        "gemma_gemma_4_e4b_it_qat_q4_0": "Offizieller QAT-Build von Google, starkes Reasoning, kleinere Größe",
         "gemma_gemma_4_e2b_it_q4_k_m": "Kompaktes Gemma 4 von Google, schnell und effizient",
+        "gemma_gemma_4_e2b_it_qat_q4_0": "Kompakter offizieller QAT-Build von Google, Qualität erhalten",
         "gemma_gemma_3_12b_it_q4_k_m": "Googles Mittelklasse-Modell, starkes Reasoning",
         "gemma_gemma_3_1b_it_q4_k_m": "Ultraschnelles Google-Modell, ideal für kurze Diktat-Bereinigung",
         "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Effizientes On-Device-Modell von Liquid AI, hervorragende Anweisungsbefolgung",
@@ -2227,7 +2241,8 @@
       "back": "Zurück"
     },
     "meetingPill": {
-      "returnToNote": "Zurück zur Aufnahme"
+      "returnToNote": "Zurück zur Aufnahme",
+      "waitingForMicrophone": "Warte auf Mikrofon"
     },
     "context": {
       "moveToFolder": "In Ordner verschieben",
@@ -2366,8 +2381,8 @@
     "addPlaceholder": "Wörter durch Kommas getrennt hinzufügen – OpenWhispr, Supabase, John Snow, ARR",
     "add": "Hinzufügen",
     "importWords": "Wörter importieren",
-    "importPlaceholder": "Wörter durch Kommas getrennt einfügen...",
-    "separateWithCommas": "Mit Kommas trennen",
+    "importPlaceholder": "Wörter durch Kommas oder Zeilenumbrüche getrennt einfügen...",
+    "separateWithCommas": "Ein Wort pro Zeile oder durch Kommas getrennt",
     "wordsReady_one": "{{count}} Wort bereit",
     "wordsReady_other": "{{count}} Wörter bereit",
     "import": "Importieren",
@@ -2541,7 +2556,8 @@
       "hotkeyToSpeak": "{{hotkey}} zum Sprechen",
       "recording": "Aufnahme...",
       "processing": "Verarbeitung...",
-      "clickToSpeak": "Klicken zum Sprechen"
+      "clickToSpeak": "Klicken zum Sprechen",
+      "waitingForMicrophone": "Warte auf Mikrofon…"
     },
     "buttons": {
       "cancelRecording": "Aufnahme abbrechen",

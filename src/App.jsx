@@ -206,10 +206,16 @@ export default function App() {
     setWindowInteractivity(false);
   }, [setWindowInteractivity]);
 
-  const { isRecording, isProcessing, toggleListening, cancelRecording, cancelProcessing } =
-    useAudioRecording(toast, {
-      onToggle: handleDictationToggle,
-    });
+  const {
+    isRecording,
+    isProcessing,
+    micCaptureStatus,
+    toggleListening,
+    cancelRecording,
+    cancelProcessing,
+  } = useAudioRecording(toast, {
+    onToggle: handleDictationToggle,
+  });
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -291,6 +297,8 @@ export default function App() {
 
   // Determine current mic state
   const getMicState = () => {
+    if (isRecording && (micCaptureStatus === "reconnecting" || micCaptureStatus === "unavailable"))
+      return "unavailable";
     if (isRecording) return "recording";
     if (isProcessing) return "processing";
     if (isHovered && !isRecording && !isProcessing) return "hover";
@@ -314,6 +322,11 @@ export default function App() {
         return {
           className: `${baseClasses} bg-primary cursor-pointer`,
           tooltip: t("app.mic.recording"),
+        };
+      case "unavailable":
+        return {
+          className: `${baseClasses} bg-amber-500 cursor-pointer`,
+          tooltip: t("app.mic.waitingForMicrophone"),
         };
       case "processing":
         return {
@@ -456,11 +469,16 @@ export default function App() {
                 <LoadingDots />
               ) : micState === "processing" ? (
                 <VoiceWaveIndicator isListening={true} />
+              ) : micState === "unavailable" ? (
+                <span className="text-white text-base font-bold">!</span>
               ) : null}
 
               {/* State indicator ring for recording */}
               {micState === "recording" && (
                 <div className="absolute inset-0 rounded-full border-2 border-primary/50 animate-pulse"></div>
+              )}
+              {micState === "unavailable" && (
+                <div className="absolute inset-0 rounded-full border-2 border-amber-200/70 animate-pulse"></div>
               )}
 
               {/* State indicator ring for processing */}

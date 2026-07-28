@@ -200,7 +200,7 @@
       "systemAudioDescription": "Permette al registratore delle riunioni di sentire l'altro lato delle tue chiamate — riunioni, lezioni, podcast. Puoi attivarlo più tardi nelle Impostazioni.",
       "optional": "Facoltativo",
       "recommended": "Consigliato",
-      "accessibilityTroubleshooting": "In Impostazioni di Sistema → Accessibilità, disattiva l'interruttore di OpenWhispr e riattivalo. Se non funziona, rimuovi OpenWhispr dall'elenco e aggiungilo di nuovo. Ancora problemi? Scrivi a support@openwhispr.com."
+      "accessibilityTroubleshooting": "In Impostazioni di Sistema → Accessibilità, disattiva l'interruttore di OpenWhispr e riattivalo. Se OpenWhispr non compare nell'elenco, fai clic su + e aggiungilo dalla cartella Applicazioni. Ancora problemi? Scrivi a support@openwhispr.com."
     },
     "transcription": {
       "title": "Configurazione trascrizione",
@@ -379,6 +379,7 @@
       "clearAllErrorTitle": "Impossibile cancellare la cronologia",
       "clearAllErrorDescription": "Qualcosa è andato storto. Riprova.",
       "copyText": "Copia testo",
+      "copyRawTranscript": "Copia trascrizione grezza",
       "deleteItem": "Elimina",
       "viewRawTranscript": "Visualizza trascrizione grezza",
       "showInFolder": "Mostra nel Finder",
@@ -570,6 +571,15 @@
       "noAudio": {
         "title": "Nessun audio rilevato",
         "description": "La registrazione non contiene audio rilevabile. Riprova."
+      },
+      "micDisconnected": {
+        "title": "Microfono disconnesso",
+        "description": "La registrazione è ancora attiva e riprenderà quando sarà disponibile un microfono.",
+        "meetingDescription": "La riunione continua a registrare l'audio di sistema e riprenderà automaticamente l'acquisizione dal microfono."
+      },
+      "micRestored": {
+        "title": "Microfono ripristinato",
+        "description": "L'acquisizione audio è ripresa."
       },
       "partialTranscription": {
         "title": "Trascrizione parziale",
@@ -1993,9 +2003,13 @@
         "openai_oss_gpt_oss_20b_mxfp4": "Modello open-weight di OpenAI per hardware consumer",
         "gemma_gemma_3_4b_it_q4_k_m": "Modello open-weight di Google, ottimo equilibrio tra velocità e qualità",
         "gemma_gemma_4_31b_it_q4_k_m": "Il più grande Gemma 4 di Google, migliore qualità",
+        "gemma_gemma_4_31b_it_qat_q4_0": "Build QAT ufficiale di Google, più leggero a parità di qualità",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "Gemma 4 MoE di Google, veloce con 4B parametri attivi",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "Build QAT MoE ufficiale di Google, più leggero a parità di qualità",
         "gemma_gemma_4_e4b_it_q4_k_m": "Ultimo multimodale di Google, ragionamento avanzato",
+        "gemma_gemma_4_e4b_it_qat_q4_0": "Build QAT ufficiale di Google, ragionamento avanzato in meno spazio",
         "gemma_gemma_4_e2b_it_q4_k_m": "Gemma 4 compatto di Google, veloce ed efficiente",
+        "gemma_gemma_4_e2b_it_qat_q4_0": "Build QAT compatta ufficiale di Google, qualità preservata",
         "gemma_gemma_3_12b_it_q4_k_m": "Modello di fascia media di Google, ragionamento solido",
         "gemma_gemma_3_1b_it_q4_k_m": "Modello Google ultraveloce, ideale per la pulizia di brevi dettature",
         "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Modello efficiente di Liquid AI, eccellente nel seguire le istruzioni",
@@ -2227,7 +2241,8 @@
       "back": "Indietro"
     },
     "meetingPill": {
-      "returnToNote": "Torna alla registrazione"
+      "returnToNote": "Torna alla registrazione",
+      "waitingForMicrophone": "In attesa del microfono"
     },
     "context": {
       "moveToFolder": "Sposta nella cartella",
@@ -2366,8 +2381,8 @@
     "addPlaceholder": "Aggiungi parole separate da virgole: OpenWhispr, Supabase, John Snow, ARR",
     "add": "Aggiungi",
     "importWords": "Importa parole",
-    "importPlaceholder": "Incolla parole separate da virgole...",
-    "separateWithCommas": "Separa con virgole",
+    "importPlaceholder": "Incolla parole separate da virgole o a capo...",
+    "separateWithCommas": "Una parola per riga, oppure separate da virgole",
     "wordsReady_one": "{{count}} parola pronta",
     "wordsReady_other": "{{count}} parole pronte",
     "import": "Importa",
@@ -2541,7 +2556,8 @@
       "hotkeyToSpeak": "{{hotkey}} per parlare",
       "recording": "Registrazione...",
       "processing": "Elaborazione...",
-      "clickToSpeak": "Clicca per parlare"
+      "clickToSpeak": "Clicca per parlare",
+      "waitingForMicrophone": "In attesa del microfono…"
     },
     "buttons": {
       "cancelRecording": "Annulla registrazione",

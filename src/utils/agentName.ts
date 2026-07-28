@@ -10,17 +10,28 @@ export const getAgentName = (): string => {
 
 function syncAgentNameToDictionary(newName: string, oldName?: string): void {
   let dictionary = [...getSettings().customDictionary];
+  let changed = false;
 
   // Remove old agent name if it changed
   if (oldName && oldName !== newName) {
-    dictionary = dictionary.filter((w) => w !== oldName);
+    const next = dictionary.filter((w) => w !== oldName);
+    if (next.length !== dictionary.length) {
+      dictionary = next;
+      changed = true;
+    }
   }
 
   // Add new name at the front if not already present
   const trimmed = newName.trim();
   if (trimmed && !dictionary.includes(trimmed)) {
     dictionary = [trimmed, ...dictionary];
+    changed = true;
   }
+
+  // setCustomDictionary → setDictionary replaces the whole SQLite dictionary.
+  // Skip when the agent name is already present so startup cannot push a stale
+  // renderer cache over newer DB state (#1295).
+  if (!changed) return;
 
   useSettingsStore.getState().setCustomDictionary(dictionary);
 }

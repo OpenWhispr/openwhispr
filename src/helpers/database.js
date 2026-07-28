@@ -924,6 +924,24 @@ class DatabaseManager {
   getPendingDictionary() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Cloud batch-create needs a stable client_dict_id. Assign any that are
+      // still missing so pending rows remain uploadable after a successful sync.
+      const missingClientIds = this.db
+        .prepare(
+          `SELECT id FROM custom_dictionary
+           WHERE sync_status = 'pending' AND deleted_at IS NULL AND client_dict_id IS NULL`
+        )
+        .all();
+      if (missingClientIds.length > 0) {
+        const assignId = this.db.prepare(
+          "UPDATE custom_dictionary SET client_dict_id = ? WHERE id = ? AND client_dict_id IS NULL"
+        );
+        this.db.transaction(() => {
+          for (const row of missingClientIds) {
+            assignId.run(randomUUID(), row.id);
+          }
+        })();
+      }
       return this.db
         .prepare(
           "SELECT * FROM custom_dictionary WHERE sync_status = 'pending' AND deleted_at IS NULL"
@@ -1460,6 +1478,21 @@ class DatabaseManager {
       return stmt.get(id) || null;
     } catch (error) {
       debugLogger.error("Error getting note", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  getNoteByCloudId(cloudId) {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+      const stmt = this.db.prepare(
+        "SELECT * FROM notes WHERE cloud_id = ? AND deleted_at IS NULL LIMIT 1"
+      );
+      return stmt.get(cloudId) || null;
+    } catch (error) {
+      debugLogger.error("Error getting note by cloud_id", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -2699,6 +2732,9 @@ class DatabaseManager {
   upsertNoteFromCloud(cloudNote, localFolderId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Sync must never replace non-empty local content/enhanced_content/
+      // transcript with an empty cloud value (#1290, the #938 invariant).
+      // The enhancement prompt/hash travel with enhanced_content.
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhanced_at_content_hash, note_type, source_file,
@@ -2708,11 +2744,21 @@ class DatabaseManager {
         ON CONFLICT(client_note_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           title = excluded.title,
-          content = excluded.content,
-          enhanced_content = excluded.enhanced_content,
-          enhancement_prompt = excluded.enhancement_prompt,
-          enhanced_at_content_hash = excluded.enhanced_at_content_hash,
-          transcript = excluded.transcript,
+          content = CASE
+            WHEN COALESCE(excluded.content, '') = '' AND COALESCE(content, '') <> ''
+            THEN content ELSE excluded.content END,
+          enhanced_content = CASE
+            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            THEN enhanced_content ELSE excluded.enhanced_content END,
+          enhancement_prompt = CASE
+            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            THEN enhancement_prompt ELSE excluded.enhancement_prompt END,
+          enhanced_at_content_hash = CASE
+            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            THEN enhanced_at_content_hash ELSE excluded.enhanced_at_content_hash END,
+          transcript = CASE
+            WHEN COALESCE(excluded.transcript, '') = '' AND COALESCE(transcript, '') <> ''
+            THEN transcript ELSE excluded.transcript END,
           folder_id = excluded.folder_id,
           participants = COALESCE(excluded.participants, participants),
           calendar_event_id = COALESCE(excluded.calendar_event_id, calendar_event_id),

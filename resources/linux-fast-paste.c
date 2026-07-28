@@ -91,6 +91,8 @@ static void portal_send_paste(PortalData *app)
 {
     if (app->mode == PASTE_MODE_SHIFT_INSERT) {
         portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
+        /* let the compositor register the modifier before the key arrives */
+        usleep(20000);
         portal_emit_key(app, PORTAL_KEY_INSERT,    1, "Insert press");
         usleep(20000);
         portal_emit_key(app, PORTAL_KEY_INSERT,    0, "Insert release");
@@ -101,6 +103,7 @@ static void portal_send_paste(PortalData *app)
         portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 1, "Ctrl press");
         if (use_shift)
             portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
+        usleep(20000);
         portal_emit_key(app, PORTAL_KEY_V, 1, "V press");
         usleep(20000);
         portal_emit_key(app, PORTAL_KEY_V, 0, "V release");

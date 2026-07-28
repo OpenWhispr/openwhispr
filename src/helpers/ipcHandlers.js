@@ -966,6 +966,32 @@ class IPCHandlers {
       return result;
     });
 
+    ipcMain.handle("merge-audio-segments", async (_event, segments) => {
+      try {
+        if (!Array.isArray(segments) || segments.length < 2 || segments.length > 100) {
+          throw new Error("Invalid audio segment count");
+        }
+        const normalized = segments.map((segment) => {
+          if (!segment?.buffer || typeof segment.mimeType !== "string") {
+            throw new Error("Invalid audio segment");
+          }
+          return { buffer: Buffer.from(segment.buffer), mimeType: segment.mimeType };
+        });
+        const { mergeAudioSegments } = require("./ffmpegUtils");
+        const buffer = await mergeAudioSegments(normalized);
+        // Slice to a real ArrayBuffer: Buffers sent over IPC arrive as Uint8Array,
+        // and pooled Buffers share a larger underlying allocation.
+        return {
+          success: true,
+          buffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+          mimeType: "audio/webm",
+        };
+      } catch (error) {
+        debugLogger.error("Failed to merge recovered audio segments", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("get-audio-path", async (event, id) => {
       return this.audioStorageManager.getAudioPath(id);
     });
@@ -2013,7 +2039,11 @@ class IPCHandlers {
         });
         return result;
       } catch (error) {
-        if (!event.sender.isDestroyed()) {
+        if (
+          error.code !== "DOWNLOAD_IN_PROGRESS" &&
+          error.code !== "DOWNLOAD_CANCELLED" &&
+          !event.sender.isDestroyed()
+        ) {
           event.sender.send("whisper-download-progress", {
             type: "error",
             model: modelName,
@@ -2319,7 +2349,11 @@ class IPCHandlers {
         );
         return result;
       } catch (error) {
-        if (!event.sender.isDestroyed()) {
+        if (
+          error.code !== "DOWNLOAD_IN_PROGRESS" &&
+          error.code !== "DOWNLOAD_CANCELLED" &&
+          !event.sender.isDestroyed()
+        ) {
           event.sender.send("parakeet-download-progress", {
             type: "error",
             model: modelName,
@@ -2871,11 +2905,18 @@ class IPCHandlers {
     });
 
     ipcMain.handle("model-download", async (event, modelId) => {
+      let lastProgress = {
+        progress: 0,
+        downloadedSize: 0,
+        totalSize: 0,
+      };
+
       try {
         const modelManager = require("./modelManagerBridge").default;
         const result = await modelManager.downloadModel(
           modelId,
           (progress, downloadedSize, totalSize) => {
+            lastProgress = { progress, downloadedSize, totalSize };
             if (!event.sender.isDestroyed()) {
               event.sender.send("model-download-progress", {
                 modelId,
@@ -2886,8 +2927,30 @@ class IPCHandlers {
             }
           }
         );
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("model-download-progress", {
+            type: "complete",
+            modelId,
+            progress: 100,
+            downloadedSize: lastProgress.downloadedSize,
+            totalSize: lastProgress.totalSize,
+          });
+        }
         return { success: true, path: result };
       } catch (error) {
+        if (
+          error.code !== "DOWNLOAD_IN_PROGRESS" &&
+          error.code !== "DOWNLOAD_CANCELLED" &&
+          !event.sender.isDestroyed()
+        ) {
+          event.sender.send("model-download-progress", {
+            type: "error",
+            modelId,
+            error: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         return {
           success: false,
           error: error.message,
@@ -3661,7 +3724,10 @@ class IPCHandlers {
 
         const modelPath = require("path").join(modelManager.modelsDir, modelInfo.model.fileName);
 
-        await modelManager.serverManager.start(modelPath, modelManager.serverOptions(modelInfo));
+        await modelManager.serverManager.start(
+          modelPath,
+          await modelManager.serverStartOptions(modelInfo)
+        );
         modelManager.currentServerModelId = modelId;
 
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
@@ -6672,6 +6738,8 @@ class IPCHandlers {
       clearInterval(dictationPreviewTimer);
       dictationPreviewTimer = null;
       const display = dictationPreviewDisplay;
+      // Missing flag defaults to trusted so non-streaming callers never regress.
+      const rendererFlushOk = options.flushed !== false;
       let streamed = false;
       let streamedText = "";
       if (dictationPreviewStream) {
@@ -6684,8 +6752,8 @@ class IPCHandlers {
         }
         if (result) {
           streamedText = result.text || "";
-          // Only a clean flush is trustworthy as the final transcript.
-          streamed = !result.truncated;
+          // Trust the streamed transcript only on a clean server flush and a clean renderer flush.
+          streamed = !result.truncated && rendererFlushOk;
         }
         if (streamedText && display && dictationPreviewSessionActive) {
           this.windowManager.showTranscriptionPreview(streamedText);
@@ -6884,8 +6952,7 @@ class IPCHandlers {
     ipcMain.handle("agent-open-note", async (_event, noteId) => {
       try {
         const note = this.databaseManager.getNote(noteId);
-        await this.windowManager.createControlPanelWindow();
-        this.windowManager.sendToControlPanel("navigate-to-note", {
+        await this.windowManager.queueNoteNavigation({
           noteId,
           folderId: note?.folder_id ?? null,
         });
@@ -8741,6 +8808,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-pending-meeting-note-navigation", async () => {
       return this.windowManager?.consumePendingMeetingNoteNavigation() ?? null;
+    });
+
+    ipcMain.handle("get-pending-note-navigation", async () => {
+      return this.windowManager?.consumePendingNoteNavigation() ?? null;
     });
 
     ipcMain.handle("meeting-notification-ready", async () => {

@@ -75,7 +75,8 @@ export default function TranscriptionItem({
     item.audio_duration_ms && item.audio_duration_ms > 0
       ? formatMmSs(Math.round(item.audio_duration_ms / 1000))
       : null;
-  const hasRawText = item.raw_text !== null;
+  const rawText = item.raw_text;
+  const hasRawText = rawText !== null;
   const hasAudio = item.has_audio === 1;
   const showUtilityGroup = hasRawText || hasAudio;
 
@@ -298,23 +299,38 @@ export default function TranscriptionItem({
         </div>
       </div>
 
-      {!isFailed && !isDiscarded && (
+      {!isFailed && !isDiscarded && rawText !== null && (
         <div
+          inert={!isExpanded}
           className={cn(
-            "overflow-hidden transition-all duration-200",
-            isExpanded ? "max-h-96" : "max-h-0"
+            "grid transition-[grid-template-rows] duration-200",
+            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
           )}
         >
-          <div className="border-t border-border/20 mt-2 pt-2">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-              {t("controlPanel.history.rawTranscript")}
-            </span>
-            <p className="text-xs text-muted-foreground/80 leading-relaxed mt-1">{item.raw_text}</p>
-            {item.raw_text === item.text && (
-              <p className="text-[10px] text-muted-foreground/50 italic mt-1">
-                {t("controlPanel.history.noAiProcessing")}
-              </p>
-            )}
+          <div className="min-h-0 overflow-hidden">
+            <div className="border-t border-border/20 mt-2 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  {t("controlPanel.history.rawTranscript")}
+                </span>
+                <Tooltip content={t("controlPanel.history.copyRawTranscript")}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onCopy(rawText)}
+                    className="h-5 w-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-foreground/10"
+                  >
+                    <Copy size={10} />
+                  </Button>
+                </Tooltip>
+              </div>
+              <p className="text-xs text-muted-foreground/80 leading-relaxed mt-1">{rawText}</p>
+              {rawText === item.text && (
+                <p className="text-[10px] text-muted-foreground/50 italic mt-1">
+                  {t("controlPanel.history.noAiProcessing")}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
