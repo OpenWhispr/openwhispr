@@ -47,6 +47,8 @@ import {
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
+import MeetingTypePicker from "./MeetingTypePicker";
+import MeetingTypeEditor from "./MeetingTypeEditor";
 import type { CalendarAttendee } from "../../types/calendar";
 
 function formatNoteDate(dateStr: string): string {
@@ -156,6 +158,8 @@ export default function NoteEditor({
   const [isDiarizing, setIsDiarizing] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [retranscribing, setRetranscribing] = useState(false);
+  const [showTypeEditor, setShowTypeEditor] = useState(false);
+  const [meetingTypeKey, setMeetingTypeKey] = useState(0);
 
   const handleRetranscribe = useCallback(async () => {
     const modelCheck = await window.electronAPI?.checkWhisperModelDownloaded?.("large");
@@ -640,6 +644,20 @@ export default function NoteEditor({
               </span>
             )}
             <NoteParticipants noteId={note.id} participants={parsedParticipants} />
+            {note.note_type === "meeting" && (
+              <MeetingTypePicker
+                key={meetingTypeKey}
+                noteId={note.id}
+                currentTypeId={note.meeting_type_id ?? null}
+                onTypeChange={(typeId) => {
+                  (window as any).electronAPI?.setNoteMeetingType?.(note.id, typeId);
+                }}
+                onRegenerateNotes={(typeId) => {
+                  (window as any).electronAPI?.regenerateNotes?.(note.id, typeId);
+                }}
+                onCreateNew={() => setShowTypeEditor(true)}
+              />
+            )}
             {folders && onMoveToFolder && (
               <DropdownMenu
                 onOpenChange={(open) => {
@@ -925,6 +943,7 @@ export default function NoteEditor({
           <div className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               <MeetingTranscriptChat
+                noteId={note.id}
                 segments={displaySegments}
                 micPartial={isRecording ? meetingMicPartial : undefined}
                 systemPartial={isRecording ? meetingSystemPartial : undefined}
@@ -1026,6 +1045,11 @@ export default function NoteEditor({
       {SHARING_ENABLED && note.cloud_id && (
         <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
       )}
+      <MeetingTypeEditor
+        open={showTypeEditor}
+        onOpenChange={setShowTypeEditor}
+        onSaved={() => setMeetingTypeKey((k) => k + 1)}
+      />
     </div>
   );
 }

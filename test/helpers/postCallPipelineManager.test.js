@@ -44,7 +44,7 @@ test("runs steps in order: retranscribe -> title -> notes", async () => {
   const origExists = fs.existsSync;
   const origReadFile = fs.readFileSync;
   const origUnlink = fs.unlinkSync;
-  fs.existsSync = (p) => p === "/tmp/test.opus" ? true : origExists(p);
+  fs.existsSync = (p) => (p === "/tmp/test.opus" || p === "/tmp/model.bin") ? true : origExists(p);
   fs.readFileSync = (p) => p.includes("ow-pipeline") ? Buffer.from("fake wav") : origReadFile(p);
   fs.unlinkSync = (p) => { if (!p.includes("ow-pipeline")) origUnlink(p); };
 
@@ -94,7 +94,7 @@ test("stops pipeline on error and emits error status", async () => {
   const fs = require("fs");
   const origExists = fs.existsSync;
   const origUnlink = fs.unlinkSync;
-  fs.existsSync = (p) => p === "/tmp/test.opus" ? true : origExists(p);
+  fs.existsSync = (p) => (p === "/tmp/test.opus" || p === "/tmp/model.bin") ? true : origExists(p);
   fs.unlinkSync = () => {};
 
   process.env.NOTE_FORMATTING_PROVIDER = "openai";
@@ -241,6 +241,57 @@ test("fromStep skips earlier steps", async () => {
     assert.ok(steps.includes("notes:running"));
     assert.ok(steps.includes("notes:complete"));
   } finally {
+    delete process.env.NOTE_FORMATTING_PROVIDER;
+    delete process.env.NOTE_FORMATTING_MODEL;
+  }
+});
+
+test("skips retranscribe when large model not downloaded yet", async () => {
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = createMocks();
+  // whisperManager.getModelPath returns a path that doesn't exist on disk
+  mocks.whisperManager.getModelPath = () => "/tmp/nonexistent-model-path.bin";
+  const fs = require("fs");
+  const origExists = fs.existsSync;
+  // Audio file exists, but model file does not
+  fs.existsSync = (p) => {
+    if (p === "/tmp/test.opus") return true;
+    if (p === "/tmp/nonexistent-model-path.bin") return false;
+    return origExists(p);
+  };
+
+  process.env.NOTE_FORMATTING_PROVIDER = "openai";
+  process.env.NOTE_FORMATTING_MODEL = "gpt-5.5";
+
+  try {
+    const manager = new PostCallPipelineManager({
+      broadcast: mocks.broadcast,
+      databaseManager: mocks.databaseManager,
+      whisperManager: mocks.whisperManager,
+      diarizationManager: mocks.diarizationManager,
+      inference: mocks.inference,
+      convertToWav: mocks.convertToWav,
+    });
+
+    await manager.run(1);
+
+    const steps = mocks.events
+      .filter((e) => e.channel === "post-call-pipeline-status")
+      .map((e) => `${e.step}:${e.status}`);
+
+    // Retranscribe should complete (not error) — it returned null gracefully
+    assert.ok(steps.includes("retranscribe:running"));
+    assert.ok(steps.includes("retranscribe:complete"));
+    assert.ok(!steps.some((s) => s === "retranscribe:error"));
+
+    // Title and notes should still run using the existing transcript
+    assert.ok(steps.includes("title:running"));
+    assert.ok(steps.includes("title:complete"));
+    assert.ok(steps.includes("notes:running"));
+    assert.ok(steps.includes("notes:complete"));
+    assert.ok(steps.includes("pipeline:complete"));
+  } finally {
+    fs.existsSync = origExists;
     delete process.env.NOTE_FORMATTING_PROVIDER;
     delete process.env.NOTE_FORMATTING_MODEL;
   }
