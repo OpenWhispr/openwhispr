@@ -583,6 +583,7 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  updateCustomDictionary: (changes: { add?: string[]; remove?: string[] }) => void;
   applyCustomDictionaryFromExternal: (words: string[]) => void;
   setSnippets: (snippets: Snippet[]) => void;
   applySnippetsFromExternal: (snippets: Snippet[]) => void;
@@ -900,6 +901,13 @@ function createSecretSetter(
 }
 
 export const MAX_TRANSLATION_TARGETS = 5;
+
+// Kick the matching cloud push once a local write has landed in SQLite.
+function syncAfterLocalWrite(method: "syncDictionaryNow" | "syncSnippetsNow"): void {
+  void import("../services/SyncService.js").then(({ syncService }) => {
+    if (syncService.canSync()) void syncService[method]();
+  });
+}
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
@@ -1340,19 +1348,57 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
 
+  // Replaces the whole dictionary: anything absent from `words` is deleted.
+  // Editing specific words wants updateCustomDictionary instead (#1295).
   setCustomDictionary: (words: string[]) => {
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
     set({ customDictionary: words });
     window.electronAPI
       ?.setDictionary(words)
-      .then(() => {
-        void import("../services/SyncService.js").then(({ syncService }) => {
-          if (syncService.canSync()) void syncService.syncDictionaryNow();
-        });
-      })
+      .then(() => syncAfterLocalWrite("syncDictionaryNow"))
       .catch((err) => {
         logger.warn(
           "Failed to sync dictionary to SQLite",
+          { error: (err as Error).message },
+          "settings"
+        );
+      });
+  },
+
+  updateCustomDictionary: ({ add = [], remove = [] }) => {
+    const removeLower = new Set(remove.map((w) => w.toLowerCase()));
+    const addLower = new Set(add.map((w) => w.toLowerCase()));
+    // Optimistic so the UI updates immediately; the stored list replaces it below.
+    const optimistic = [
+      ...get().customDictionary.filter((w) => {
+        const lower = w.toLowerCase();
+        return !removeLower.has(lower) && !addLower.has(lower);
+      }),
+      ...add,
+    ];
+    if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(optimistic));
+    set({ customDictionary: optimistic });
+
+    const api = window.electronAPI;
+    if (!api) return;
+    // Older preloads have no delta channel; fall back rather than drop the edit.
+    const written = api.applyDictionaryChanges
+      ? api.applyDictionaryChanges({ add, remove })
+      : api.setDictionary(optimistic);
+
+    written
+      .then(async () => {
+        // SQLite owns ordering, casing and dedupe — adopt what it stored.
+        const stored = await api.getDictionary?.();
+        if (stored) {
+          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(stored));
+          set({ customDictionary: stored });
+        }
+        syncAfterLocalWrite("syncDictionaryNow");
+      })
+      .catch((err) => {
+        logger.warn(
+          "Failed to apply dictionary changes to SQLite",
           { error: (err as Error).message },
           "settings"
         );
@@ -1370,11 +1416,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ snippets });
     window.electronAPI
       ?.setSnippets?.(snippets)
-      .then(() => {
-        void import("../services/SyncService.js").then(({ syncService }) => {
-          if (syncService.canSync()) void syncService.syncSnippetsNow();
-        });
-      })
+      .then(() => syncAfterLocalWrite("syncSnippetsNow"))
       .catch((err) => {
         logger.warn(
           "Failed to sync snippets to SQLite",

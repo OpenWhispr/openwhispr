@@ -783,8 +783,10 @@ class IPCHandlers {
       });
 
       if (corrections.length > 0) {
-        const updatedDict = [...currentDict, ...corrections];
-        const saveResult = this.databaseManager.setDictionary(updatedDict, "learned");
+        const saveResult = this.databaseManager.applyDictionaryChanges(
+          { add: corrections },
+          "learned"
+        );
 
         if (saveResult?.success === false) {
           debugLogger.debug("[AutoLearn] Failed to save dictionary", { error: saveResult.error });
@@ -1075,6 +1077,17 @@ class IPCHandlers {
       return this.databaseManager.setDictionary(words);
     });
 
+    ipcMain.handle("db-apply-dictionary-changes", async (_event, changes) => {
+      const { add, remove } = changes ?? {};
+      if (add !== undefined && !Array.isArray(add)) {
+        throw new Error("add must be an array");
+      }
+      if (remove !== undefined && !Array.isArray(remove)) {
+        throw new Error("remove must be an array");
+      }
+      return this.databaseManager.applyDictionaryChanges({ add, remove });
+    });
+
     ipcMain.handle("db-get-pending-dictionary", async () => {
       return this.databaseManager.getPendingDictionary();
     });
@@ -1174,10 +1187,7 @@ class IPCHandlers {
         if (validWords.length === 0) {
           return { success: false };
         }
-        const currentDict = this._getDictionarySafe();
-        const removeSet = new Set(validWords.map((w) => w.toLowerCase()));
-        const updatedDict = currentDict.filter((w) => !removeSet.has(w.toLowerCase()));
-        const saveResult = this.databaseManager.setDictionary(updatedDict);
+        const saveResult = this.databaseManager.applyDictionaryChanges({ remove: validWords });
         if (saveResult?.success === false) {
           debugLogger.debug("[AutoLearn] Undo failed to save dictionary", {
             error: saveResult.error,

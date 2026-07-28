@@ -3,52 +3,54 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/helpers/agentNameDictionary.js");
 
-// The `changed` flag is what stops a startup write from replacing the whole
-// SQLite dictionary with a stale renderer cache (#1295). Guard it directly.
-test("reports no change when the agent name is already present", async () => {
-  const { applyAgentNameToDictionary } = await load();
-  const existing = ["OpenWhispr", "Alice", "Bob"];
-  const result = applyAgentNameToDictionary(existing, "OpenWhispr");
-  assert.equal(result.changed, false);
-  assert.deepEqual(result.dictionary, existing);
+// An empty delta means no write at all, which is what stops startup from
+// touching the dictionary when the renderer cache is stale (#1295).
+test("asks for no changes when the agent name is already present", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  const result = agentNameDictionaryChanges(["OpenWhispr", "Alice", "Bob"], "OpenWhispr");
+  assert.deepEqual(result, { add: [], remove: [] });
 });
 
-test("reports no change for a stale one-word cache that already has the name", async () => {
-  const { applyAgentNameToDictionary } = await load();
-  assert.equal(applyAgentNameToDictionary(["OpenWhispr"], "OpenWhispr").changed, false);
+test("asks for no changes for a stale one-word cache that already has the name", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["OpenWhispr"], "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
 });
 
-test("adds the agent name at the front when missing", async () => {
-  const { applyAgentNameToDictionary } = await load();
-  const result = applyAgentNameToDictionary(["Alice"], "OpenWhispr");
-  assert.equal(result.changed, true);
-  assert.deepEqual(result.dictionary, ["OpenWhispr", "Alice"]);
+test("adds the agent name when missing, without naming other words", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["Alice"], "OpenWhispr"), {
+    add: ["OpenWhispr"],
+    remove: [],
+  });
 });
 
-test("drops the previous agent name on rename", async () => {
-  const { applyAgentNameToDictionary } = await load();
-  const result = applyAgentNameToDictionary(["OpenWhispr", "Alice"], "Jarvis", "OpenWhispr");
-  assert.equal(result.changed, true);
-  assert.deepEqual(result.dictionary, ["Jarvis", "Alice"]);
+test("swaps the previous agent name for the new one on rename", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["OpenWhispr", "Alice"], "Jarvis", "OpenWhispr"), {
+    add: ["Jarvis"],
+    remove: ["OpenWhispr"],
+  });
 });
 
-test("reports no change when the old name was never in the dictionary", async () => {
-  const { applyAgentNameToDictionary } = await load();
-  const result = applyAgentNameToDictionary(["Jarvis", "Alice"], "Jarvis", "OpenWhispr");
-  assert.equal(result.changed, false);
-  assert.deepEqual(result.dictionary, ["Jarvis", "Alice"]);
+test("does not ask to remove an old name the dictionary never had", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["Jarvis", "Alice"], "Jarvis", "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
 });
 
 test("ignores a blank agent name", async () => {
-  const { applyAgentNameToDictionary } = await load();
-  const result = applyAgentNameToDictionary(["Alice"], "   ");
-  assert.equal(result.changed, false);
-  assert.deepEqual(result.dictionary, ["Alice"]);
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["Alice"], "   "), { add: [], remove: [] });
 });
 
-test("does not mutate the caller's array", async () => {
-  const { applyAgentNameToDictionary } = await load();
-  const original = ["Alice"];
-  applyAgentNameToDictionary(original, "OpenWhispr");
-  assert.deepEqual(original, ["Alice"]);
+test("never names a word outside the agent name itself", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  const dictionary = ["OpenWhispr", "Alice", "Bob", "Imported Term"];
+  const { add, remove } = agentNameDictionaryChanges(dictionary, "Jarvis", "OpenWhispr");
+  assert.deepEqual([...add, ...remove].sort(), ["Jarvis", "OpenWhispr"]);
 });

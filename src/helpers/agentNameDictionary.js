@@ -1,32 +1,22 @@
 /**
- * Drop a renamed-away agent name, move the current one to the front.
+ * Work out which dictionary changes an agent name requires: drop a
+ * renamed-away name, add the current one.
  *
- * `changed` is false when the snapshot already reflects the name; callers must
- * skip the write then, since setCustomDictionary replaces the whole SQLite
- * table and a stale snapshot would delete everything it omitted (#1295).
+ * Returns a delta, not a whole list. A whole-list write replaces the SQLite
+ * table, so a caller holding a stale snapshot deletes everything it omitted
+ * (#1295); a delta can only touch the words it names.
  *
- * @param {string[]} dictionary
+ * @param {string[]} dictionary current dictionary snapshot
  * @param {string} newName
  * @param {string} [oldName]
- * @returns {{ changed: boolean, dictionary: string[] }}
+ * @returns {{ add: string[], remove: string[] }}
  */
-export function applyAgentNameToDictionary(dictionary, newName, oldName) {
-  let words = Array.isArray(dictionary) ? [...dictionary] : [];
-  let changed = false;
-
-  if (oldName && oldName !== newName) {
-    const kept = words.filter((w) => w !== oldName);
-    if (kept.length !== words.length) {
-      words = kept;
-      changed = true;
-    }
-  }
-
+export function agentNameDictionaryChanges(dictionary, newName, oldName) {
+  const words = Array.isArray(dictionary) ? dictionary : [];
   const trimmed = newName.trim();
-  if (trimmed && !words.includes(trimmed)) {
-    words = [trimmed, ...words];
-    changed = true;
-  }
 
-  return { changed, dictionary: words };
+  return {
+    add: trimmed && !words.includes(trimmed) ? [trimmed] : [],
+    remove: oldName && oldName !== newName && words.includes(oldName) ? [oldName] : [],
+  };
 }

@@ -646,7 +646,12 @@ declare global {
 
       // Dictionary operations
       getDictionary: () => Promise<string[]>;
+      /** Replaces the whole dictionary — omitted words are deleted. Prefer applyDictionaryChanges. */
       setDictionary: (words: string[]) => Promise<{ success: boolean }>;
+      applyDictionaryChanges?: (changes: {
+        add?: string[];
+        remove?: string[];
+      }) => Promise<{ success: boolean; added: number; removed: number }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
       getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
       setSnippets?: (

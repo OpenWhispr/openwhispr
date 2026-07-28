@@ -857,76 +857,142 @@ class DatabaseManager {
     }
   }
 
-  // Diff-based update so unchanged rows keep their source/created_at/cloud_id.
-  // `sourceForNewWords` tags additions ('manual' for user-typed, 'learned' for auto-learn).
+  // Every dictionary mutation rule lives here once, so the whole-list and
+  // delta write paths cannot drift apart.
+  _dictionaryWriteStatements() {
+    return {
+      tombstone: this.db.prepare(
+        "UPDATE custom_dictionary SET deleted_at = datetime('now'), updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
+      ),
+      hardDelete: this.db.prepare(
+        "DELETE FROM custom_dictionary WHERE id = ? AND cloud_id IS NULL"
+      ),
+      restore: this.db.prepare(
+        "UPDATE custom_dictionary SET deleted_at = NULL, source = CASE WHEN source = 'learned' AND ? = 'manual' THEN 'manual' ELSE source END, word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+      ),
+      promoteSource: this.db.prepare(
+        "UPDATE custom_dictionary SET word = ?, source = 'manual', updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND source = 'learned'"
+      ),
+      // Guarded on word != ? so an unchanged row keeps its sync_status.
+      updateWord: this.db.prepare(
+        "UPDATE custom_dictionary SET word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND word != ?"
+      ),
+      // INSERT OR IGNORE in case a legacy case-variant row collides on the
+      // case-sensitive UNIQUE(word) that the lowercase index didn't catch.
+      insert: this.db.prepare(
+        "INSERT OR IGNORE INTO custom_dictionary (word, source, client_dict_id, sync_status, updated_at) VALUES (?, ?, ?, 'pending', datetime('now'))"
+      ),
+    };
+  }
+
+  // Dedupe by lower(word), keeping the first occurrence's casing, so no caller
+  // can present two spellings of the same word to a write loop.
+  _normalizeDictionaryWords(words) {
+    const byLower = new Map();
+    for (const raw of Array.isArray(words) ? words : []) {
+      if (typeof raw !== "string") continue;
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const lower = trimmed.toLowerCase();
+      if (!byLower.has(lower)) byLower.set(lower, trimmed);
+    }
+    return byLower;
+  }
+
+  _dictionaryRows() {
+    const rows = this.db
+      .prepare("SELECT id, word, source, deleted_at FROM custom_dictionary")
+      .all();
+    return { rows, byLower: new Map(rows.map((r) => [r.word.toLowerCase(), r])) };
+  }
+
+  // Returns true when the word became present, so callers can report how many
+  // words they actually added rather than how many they asked for.
+  _upsertDictionaryWord(stmts, word, existing, source) {
+    if (!existing) {
+      return stmts.insert.run(word, source, randomUUID()).changes > 0;
+    }
+    if (existing.deleted_at) {
+      stmts.restore.run(source, word, existing.id);
+      return true;
+    }
+    if (source === "manual" && existing.source === "learned") {
+      stmts.promoteSource.run(word, existing.id);
+    } else {
+      stmts.updateWord.run(word, existing.id, word);
+    }
+    return false;
+  }
+
+  // Hard-delete when the row never reached the cloud, else tombstone so the
+  // next push tells the server about the deletion.
+  _deleteDictionaryRow(stmts, existing) {
+    if (!existing || existing.deleted_at) return false;
+    const hardResult = stmts.hardDelete.run(existing.id);
+    if (hardResult.changes === 0) stmts.tombstone.run(existing.id);
+    return true;
+  }
+
+  // Add and/or remove specific words, leaving every other row untouched.
+  // Prefer this over setDictionary, which deletes whatever the caller omitted
+  // and so lets a stale snapshot destroy the rest (#1295).
+  // `source` tags additions ('manual' for user-typed, 'learned' for auto-learn).
+  applyDictionaryChanges({ add = [], remove = [] } = {}, source = "manual") {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+      const additions = this._normalizeDictionaryWords(add);
+      const removals = this._normalizeDictionaryWords(remove);
+      // A word on both sides is a rename to itself; adding wins.
+      for (const lower of additions.keys()) removals.delete(lower);
+      if (additions.size === 0 && removals.size === 0) {
+        return { success: true, added: 0, removed: 0 };
+      }
+
+      const { byLower } = this._dictionaryRows();
+      const stmts = this._dictionaryWriteStatements();
+      let added = 0;
+      let removed = 0;
+
+      this.db.transaction(() => {
+        for (const lower of removals.keys()) {
+          if (this._deleteDictionaryRow(stmts, byLower.get(lower))) removed += 1;
+        }
+        for (const [lower, word] of additions) {
+          if (this._upsertDictionaryWord(stmts, word, byLower.get(lower), source)) added += 1;
+        }
+      })();
+
+      return { success: true, added, removed };
+    } catch (error) {
+      debugLogger.error("Error applying dictionary changes", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Replace the entire dictionary: anything absent from `words` is deleted.
+  // Only for deliberate replace-everything callers (settings restore, clear
+  // all, first write into an empty database). Everything else wants
+  // applyDictionaryChanges.
+  //
+  // Diff-based so unchanged rows keep their source/created_at/cloud_id.
   setDictionary(words, sourceForNewWords = "manual") {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      // Dedupe input by lower(word), keeping the first occurrence's casing, so
-      // the diff loop sees at most one incoming entry per word.
-      const incomingByLower = new Map();
-      for (const raw of Array.isArray(words) ? words : []) {
-        if (typeof raw !== "string") continue;
-        const trimmed = raw.trim();
-        if (!trimmed) continue;
-        const lower = trimmed.toLowerCase();
-        if (!incomingByLower.has(lower)) incomingByLower.set(lower, trimmed);
-      }
-      const cleaned = Array.from(incomingByLower.values());
-      const incomingLower = new Set(incomingByLower.keys());
-
-      const existingRows = this.db
-        .prepare("SELECT id, word, source, deleted_at FROM custom_dictionary")
-        .all();
-      const existingByLower = new Map(existingRows.map((r) => [r.word.toLowerCase(), r]));
-
-      const tombstone = this.db.prepare(
-        "UPDATE custom_dictionary SET deleted_at = datetime('now'), updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
-      );
-      const hardDelete = this.db.prepare(
-        "DELETE FROM custom_dictionary WHERE id = ? AND cloud_id IS NULL"
-      );
-      const restore = this.db.prepare(
-        "UPDATE custom_dictionary SET deleted_at = NULL, source = CASE WHEN source = 'learned' AND ? = 'manual' THEN 'manual' ELSE source END, word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
-      );
-      const promoteSource = this.db.prepare(
-        "UPDATE custom_dictionary SET word = ?, source = 'manual', updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND source = 'learned'"
-      );
-      // Updates word casing on an active row (guarded on word != ? so an
-      // unchanged row stays untouched and keeps its sync_status).
-      const updateWord = this.db.prepare(
-        "UPDATE custom_dictionary SET word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND word != ?"
-      );
-      // INSERT OR IGNORE in case a legacy case-variant row collides on the
-      // case-sensitive UNIQUE(word) that existingByLower didn't catch.
-      const insert = this.db.prepare(
-        "INSERT OR IGNORE INTO custom_dictionary (word, source, client_dict_id, sync_status, updated_at) VALUES (?, ?, ?, 'pending', datetime('now'))"
-      );
+      const incomingByLower = this._normalizeDictionaryWords(words);
+      const { rows, byLower } = this._dictionaryRows();
+      const stmts = this._dictionaryWriteStatements();
 
       this.db.transaction(() => {
-        for (const existing of existingRows) {
-          if (incomingLower.has(existing.word.toLowerCase())) continue;
-          if (existing.deleted_at) continue;
-          // Removed word: hard-delete if never synced (no cloud_id), else
-          // tombstone so the next push tells the server about the deletion.
-          const hardResult = hardDelete.run(existing.id);
-          if (hardResult.changes === 0) tombstone.run(existing.id);
+        for (const existing of rows) {
+          if (incomingByLower.has(existing.word.toLowerCase())) continue;
+          this._deleteDictionaryRow(stmts, existing);
         }
-        for (const word of cleaned) {
-          const existing = existingByLower.get(word.toLowerCase());
-          if (existing) {
-            if (existing.deleted_at) {
-              restore.run(sourceForNewWords, word, existing.id);
-            } else if (sourceForNewWords === "manual" && existing.source === "learned") {
-              promoteSource.run(word, existing.id);
-            } else {
-              updateWord.run(word, existing.id, word);
-            }
-            continue;
-          }
-          insert.run(word, sourceForNewWords, randomUUID());
+        for (const [lower, word] of incomingByLower) {
+          this._upsertDictionaryWord(stmts, word, byLower.get(lower), sourceForNewWords);
         }
       })();
 
