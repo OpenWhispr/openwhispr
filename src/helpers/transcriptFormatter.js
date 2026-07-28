@@ -40,13 +40,12 @@ function formatTimestamp(seconds) {
 }
 
 function formatSrtTimestamp(seconds) {
-  let totalMs = Math.round(seconds * 1000);
+  const totalMs = Math.round(seconds * 1000);
   const ms = totalMs % 1000;
-  totalMs = Math.floor(totalMs / 1000);
-  const sec = totalMs % 60;
-  totalMs = Math.floor(totalMs / 60);
-  const m = totalMs % 60;
-  const h = Math.floor(totalMs / 60);
+  const s = Math.floor(totalMs / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
 }
 

@@ -89,24 +89,26 @@ test("the final merged SRT cue ends relative to its last segment, not its first"
 });
 
 test("SRT timestamps roll sub-second rounding into the next second", () => {
-  const output = formatSrt([{ speaker: "speaker_0", timestamp: 0.9995, text: "Near boundary." }], {});
+  const output = formatSrt(
+    [{ speaker: "speaker_0", timestamp: 0.9995, text: "Near boundary." }],
+    {}
+  );
 
-  assert.doesNotMatch(output, /,\d{4}/);
   assert.match(output, /^1\n00:00:01,000 --> 00:00:04,000\nSpeaker 1: Near boundary\./);
 });
 
-test("SRT timestamps stay valid for merged cues near second boundaries", () => {
+test("every cue in a multi-cue SRT rolls its own sub-second rounding", () => {
   const output = formatSrt(
     [
       { speaker: "speaker_0", timestamp: 0.9995, text: "Opening." },
-      { speaker: "speaker_0", timestamp: 1.9995, text: "Continuation." },
-      { speaker: "speaker_1", timestamp: 4, text: "Reply." },
+      { speaker: "speaker_1", timestamp: 1.9995, text: "Reply." },
     ],
     {}
   );
 
   assert.doesNotMatch(output, /,\d{4}/);
-  assert.match(output, /^1\n00:00:01,000 --> 00:00:04,000\nSpeaker 1: Opening\. Continuation\./);
+  assert.match(output, /^1\n00:00:01,000 --> 00:00:02,000\nSpeaker 1: Opening\./);
+  assert.match(output, /\n2\n00:00:02,000 --> 00:00:05,000\nSpeaker 2: Reply\./);
 });
 
 test("JSON duration reflects the last merged segment's timestamp", () => {
