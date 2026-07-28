@@ -48,7 +48,6 @@ function isNetworkLevelFailure(err, { timedOut = false } = {}) {
   return timedOut || (!err.statusCode && !err.code);
 }
 
-// Rate-limits pool teardowns to one per cooldown window.
 function createTeardownGate(cooldownMs = CLOUD_POOL_TEARDOWN_COOLDOWN_MS, now = Date.now) {
   let lastAt = -Infinity;
   return () => {

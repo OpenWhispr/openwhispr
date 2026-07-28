@@ -315,32 +315,32 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
     });
 
     let stderr = "";
-    let aborted = false;
 
     const onAbort = () => {
-      aborted = true;
       try {
         proc.kill("SIGKILL");
       } catch {
-        // process may already be gone
+        // an uncaught throw here would escape the abort dispatch
       }
       reject(createAbortError());
     };
-    if (signal) signal.addEventListener("abort", onAbort, { once: true });
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     proc.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
     proc.on("error", (error) => {
-      if (signal) signal.removeEventListener("abort", onAbort);
-      if (aborted) return;
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) return;
       reject(new Error(`FFmpeg split error: ${error.message}`));
     });
 
+    // The kill lands here as a non-zero exit; returning early keeps a cancel
+    // from being logged and reported as an ffmpeg failure.
     proc.on("close", (code) => {
-      if (signal) signal.removeEventListener("abort", onAbort);
-      if (aborted) return;
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) return;
       if (code !== 0) {
         const stderrPreview = stderr.slice(-500).trim();
         debugLogger.debug("FFmpeg split failed", { code, stderr: stderrPreview });

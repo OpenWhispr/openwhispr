@@ -162,8 +162,6 @@ function getCloudUploadSession() {
   return cloudUploadSession;
 }
 
-// Teardown is session-wide, so it also aborts healthy sibling uploads; the gate
-// collapses a wedge's simultaneous failures into a single drop.
 async function dropUploadConnections() {
   if (!shouldDropUploadPool()) return;
   try {
@@ -358,9 +356,8 @@ async function chunkedCloudTranscribe({
       for (let attempt = 1; ; attempt++) {
         if (jobSignal.aborted) throw createAbortError();
 
-        // The slot is held only while a body is on the wire: it caps chunk
-        // uploads app-wide, so it must not be occupied by a backoff sleep, and
-        // the chunk is read from disk only once a slot is in hand.
+        // Held only while a body is on the wire, so the backoff below never
+        // occupies a slot and queue time never eats the upload timeout.
         const releaseSlot = await cloudUploadSlots.acquire(jobSignal);
         const timeoutSignal = AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS);
         let failure = null;
@@ -409,9 +406,8 @@ async function chunkedCloudTranscribe({
     await Promise.all(
       chunkPaths.map((_, index) =>
         transcribeChunk(index).catch((err) => {
-          // Only swallow aborts the job itself caused — reported once below. An
-          // AbortError from a chunk's own upload timeout is a real failure and
-          // must still be logged and counted.
+          // Only aborts the job itself caused, reported once below. A chunk's
+          // own upload timeout also aborts, and that is a real failure.
           if (jobSignal.aborted && err.name === "AbortError") return;
           if (FATAL_CHUNK_CODES.has(err.code)) {
             fatalError ??= err;

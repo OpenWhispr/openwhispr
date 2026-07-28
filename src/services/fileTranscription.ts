@@ -44,10 +44,7 @@ export async function transcribeFile(
 ): Promise<FileTranscriptionResult> {
   if (cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
-      const r = await window.electronAPI.transcribeAudioFileCloud!(
-        filePath,
-        opts.requestId ? { requestId: opts.requestId } : undefined
-      );
+      const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);
       if (!r.success && r.code) {
         throw Object.assign(new Error(r.error || "Cloud transcription failed"), {
           code: r.code,

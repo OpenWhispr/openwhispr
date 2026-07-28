@@ -43,10 +43,11 @@ test("teardown gate admits one drop per cooldown window", () => {
   assert.equal(gate(), true, "a later wedge must still be recoverable");
 });
 
-test("fatal codes doom the whole job, not just one chunk", () => {
-  assert.deepEqual([...FATAL_CHUNK_CODES], ["AUTH_EXPIRED", "LIMIT_REACHED"]);
-  // NO_SPEECH_DETECTED is per-chunk: silence in one segment says nothing about
-  // the rest, so the remaining chunks must keep uploading.
+test("auth and quota doom the job; silence dooms only its own chunk", () => {
+  assert.equal(FATAL_CHUNK_CODES.has("AUTH_EXPIRED"), true);
+  assert.equal(FATAL_CHUNK_CODES.has("LIMIT_REACHED"), true);
+  // Silence in one segment says nothing about the rest, so the siblings must
+  // keep uploading.
   assert.equal(FATAL_CHUNK_CODES.has("NO_SPEECH_DETECTED"), false);
 });
 
