@@ -99,7 +99,7 @@ async function runCommand(cmd, args = [], options = {}) {
     let timer;
 
     try {
-      childProc = spawn(cmd, args, { shell });
+      childProc = spawn(cmd, args, { shell, windowsHide: true });
     } catch (error) {
       reject(error);
       return;

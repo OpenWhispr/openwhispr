@@ -247,6 +247,7 @@ class TextEditMonitor extends EventEmitter {
 
     this.process = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
 
     // Send original text via stdin
@@ -391,6 +392,7 @@ class TextEditMonitor extends EventEmitter {
 
     this.process = spawn(command, [...args, String(targetPid)], {
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
 
     this.process.stdin.write(originalText + "\n");

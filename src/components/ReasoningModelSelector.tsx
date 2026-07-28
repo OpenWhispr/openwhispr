@@ -424,8 +424,6 @@ export default function ReasoningModelSelector({
     }
   }, [localProviders, localReasoningProvider]);
 
-  const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
-
   const loadDownloadedModels = useCallback(async () => {
     try {
       const result = await window.electronAPI?.modelGetAll?.();
@@ -435,7 +433,6 @@ export default function ReasoningModelSelector({
             .filter((m: { isDownloaded?: boolean }) => m.isDownloaded)
             .map((m: { id: string }) => m.id)
         );
-        setDownloadedModels(downloaded);
         return downloaded;
       }
     } catch (error) {
@@ -443,10 +440,6 @@ export default function ReasoningModelSelector({
     }
     return new Set<string>();
   }, []);
-
-  useEffect(() => {
-    loadDownloadedModels();
-  }, [loadDownloadedModels]);
 
   const selectDefaultModelForProvider = (provider: string) => {
     // Custom/OpenRouter fetch their model list dynamically — clear instead of
@@ -711,7 +704,6 @@ export default function ReasoningModelSelector({
             onProviderSelect={handleLocalProviderChange}
             modelType="llm"
             colorScheme="purple"
-            onDownloadComplete={loadDownloadedModels}
           />
           <GpuStatusBadge />
         </>

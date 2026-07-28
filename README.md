@@ -72,6 +72,10 @@ Visit **[docs.openwhispr.com](https://docs.openwhispr.com)** for:
 - [MCP server setup](https://docs.openwhispr.com/integrations/mcp)
 - [Troubleshooting](https://docs.openwhispr.com/troubleshooting)
 
+Repo examples:
+
+- [Custom ASR shim](examples/custom-asr-shim/) for Self-Hosted transcription against non-OpenAI-compatible ASR APIs
+
 ## Tech stack
 
 React 19, TypeScript, Tailwind CSS v4, Electron 41, better-sqlite3, whisper.cpp, sherpa-onnx, shadcn/ui

@@ -33,6 +33,7 @@
       "hide": "Masquer le panneau de dictée"
     },
     "openControlPanel": "Ouvrir le panneau de contrôle",
+    "hideControlPanel": "Masquer le panneau de contrôle",
     "quit": "Quitter OpenWhispr",
     "tooltip": "OpenWhispr - Dictée vocale"
   },
@@ -199,7 +200,7 @@
       "systemAudioDescription": "Permet à l'enregistreur de réunion d'entendre vos interlocuteurs : réunions, cours, podcasts. Activable plus tard dans les Réglages.",
       "optional": "Facultatif",
       "recommended": "Recommandé",
-      "accessibilityTroubleshooting": "Dans Réglages Système → Accessibilité, désactivez le bouton d'OpenWhispr puis réactivez-le. Si ça ne marche pas, supprimez OpenWhispr de la liste et rajoutez-le. Toujours bloqué ? Écrivez à support@openwhispr.com."
+      "accessibilityTroubleshooting": "Dans Réglages Système → Accessibilité, désactivez le bouton d'OpenWhispr puis réactivez-le. Si OpenWhispr n'apparaît pas du tout dans la liste, cliquez sur + et ajoutez-le depuis le dossier Applications. Toujours bloqué ? Écrivez à support@openwhispr.com."
     },
     "transcription": {
       "title": "Configuration de la transcription",
@@ -378,6 +379,7 @@
       "clearAllErrorTitle": "Impossible d'effacer l'historique",
       "clearAllErrorDescription": "Une erreur est survenue. Veuillez réessayer.",
       "copyText": "Copier le texte",
+      "copyRawTranscript": "Copier la transcription brute",
       "deleteItem": "Supprimer",
       "viewRawTranscript": "Voir la transcription brute",
       "showInFolder": "Afficher dans le Finder",
@@ -569,6 +571,15 @@
       "noAudio": {
         "title": "Aucun audio détecté",
         "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."
+      },
+      "micDisconnected": {
+        "title": "Microphone déconnecté",
+        "description": "L'enregistrement est toujours actif et reprendra dès qu'un microphone sera disponible.",
+        "meetingDescription": "La réunion continue d'enregistrer l'audio système et reprendra automatiquement la capture du microphone."
+      },
+      "micRestored": {
+        "title": "Microphone rétabli",
+        "description": "La capture audio a repris."
       },
       "partialTranscription": {
         "title": "Transcription partielle",
@@ -2040,9 +2051,13 @@
         "openai_oss_gpt_oss_20b_mxfp4": "Modèle open-weight d'OpenAI pour matériel grand public",
         "gemma_gemma_3_4b_it_q4_k_m": "Modèle open-weight de Google, excellent équilibre vitesse/qualité",
         "gemma_gemma_4_31b_it_q4_k_m": "Le plus grand Gemma 4 de Google, meilleure qualité",
+        "gemma_gemma_4_31b_it_qat_q4_0": "Build QAT officiel de Google, plus léger à qualité égale",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "Gemma 4 MoE de Google, rapide avec 4B paramètres actifs",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "Build QAT MoE officiel de Google, plus léger à qualité égale",
         "gemma_gemma_4_e4b_it_q4_k_m": "Dernier multimodal de Google, raisonnement avancé",
+        "gemma_gemma_4_e4b_it_qat_q4_0": "Build QAT officiel de Google, raisonnement avancé en moins d'espace",
         "gemma_gemma_4_e2b_it_q4_k_m": "Gemma 4 compact de Google, rapide et efficace",
+        "gemma_gemma_4_e2b_it_qat_q4_0": "Build QAT compact officiel de Google, qualité préservée",
         "gemma_gemma_3_12b_it_q4_k_m": "Modèle milieu de gamme de Google, raisonnement solide",
         "gemma_gemma_3_1b_it_q4_k_m": "Modèle Google ultra-rapide, idéal pour le nettoyage de courtes dictées",
         "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Modèle efficace de Liquid AI, excellent suivi des instructions",
@@ -2260,7 +2275,7 @@
       "title": "Téléverser un fichier audio",
       "using": "Utilisation de {{model}}",
       "dropOrBrowse": "Déposez un fichier audio ou cliquez pour parcourir",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "Déposez pour téléverser",
       "transcribe": "Transcrire",
       "cancel": "Annuler",
@@ -2339,7 +2354,8 @@
       "back": "Retour"
     },
     "meetingPill": {
-      "returnToNote": "Revenir à l'enregistrement"
+      "returnToNote": "Revenir à l'enregistrement",
+      "waitingForMicrophone": "En attente du microphone"
     },
     "empty": {
       "title": "Aucune note ici pour l'instant",
@@ -2478,8 +2494,8 @@
     "clearAll": "Tout effacer",
     "add": "Ajouter",
     "importWords": "Importer des mots",
-    "importPlaceholder": "Collez des mots séparés par des virgules...",
-    "separateWithCommas": "Séparez par des virgules",
+    "importPlaceholder": "Collez des mots séparés par des virgules ou des retours à la ligne...",
+    "separateWithCommas": "Un mot par ligne, ou séparés par des virgules",
     "wordsReady_one": "{{count}} mot prêt",
     "wordsReady_other": "{{count}} mots prêts",
     "import": "Importer",
@@ -2588,7 +2604,8 @@
       "hotkeyToSpeak": "{{hotkey}} pour parler",
       "recording": "Enregistrement...",
       "processing": "Traitement...",
-      "clickToSpeak": "Cliquez pour parler"
+      "clickToSpeak": "Cliquez pour parler",
+      "waitingForMicrophone": "En attente du microphone…"
     },
     "buttons": {
       "cancelRecording": "Annuler l’enregistrement",

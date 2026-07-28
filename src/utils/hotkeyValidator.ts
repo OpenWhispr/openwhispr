@@ -3,7 +3,7 @@ import {
   isGlobeLikeHotkey,
   isMouseButtonHotkey,
   parseHotkeyList,
-} from "./hotkeys";
+} from "./hotkeys.ts";
 
 export type Platform = "darwin" | "win32" | "linux";
 

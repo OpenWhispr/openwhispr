@@ -12,12 +12,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** FastAPI/Pydantic validation errors: {detail: [{loc, msg}]}. */
-function fromDetailList(message: unknown): string | null {
-  if (!isRecord(message) || !Array.isArray(message.detail)) return null;
+/** FastAPI/Pydantic error payloads: {detail: "..."} or {detail: [{loc, msg}]}. */
+function fromDetail(container: unknown): string | null {
+  if (!isRecord(container)) return null;
+
+  const direct = asNonEmptyString(container.detail);
+  if (direct) return direct;
+
+  if (!Array.isArray(container.detail)) return null;
 
   const parts: string[] = [];
-  for (const entry of message.detail) {
+  for (const entry of container.detail) {
     if (!isRecord(entry)) continue;
     const msg = asNonEmptyString(entry.msg);
     if (!msg) continue;
@@ -51,19 +56,19 @@ export function extractApiErrorMessage(errorData: unknown, fallback: string): st
   const flat = asNonEmptyString(errorData.message);
   if (flat) return flat;
 
-  const detail = fromDetailList(errorData.message);
-  if (detail) return detail;
+  // Nested containers first: a top-level detail usually just restates the HTTP status,
+  // while the wrapped payload carries the upstream error.
+  for (const container of [errorData.message, errorData.error, errorData]) {
+    const detail = fromDetail(container);
+    if (detail) return detail;
+  }
 
   const errorString = asNonEmptyString(errorData.error);
   if (errorString) return errorString;
 
-  if (isRecord(errorData.message) || Array.isArray(errorData.message)) {
-    const stringified = stringify(errorData.message);
-    if (stringified) return stringified;
-  }
-
-  if (isRecord(errorData.error) || Array.isArray(errorData.error)) {
-    const stringified = stringify(errorData.error);
+  for (const value of [errorData.message, errorData.detail, errorData.error]) {
+    if (!isRecord(value) && !Array.isArray(value)) continue;
+    const stringified = stringify(value);
     if (stringified) return stringified;
   }
 

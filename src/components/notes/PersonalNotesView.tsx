@@ -152,17 +152,11 @@ export default function PersonalNotesView({
   const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
 
   const isTranscribing = useMeetingRecordingStore((s) => s.isRecording);
-  const realtimeTranscript = useMeetingRecordingStore((s) => s.transcript);
-  const realtimeSegments = useMeetingRecordingStore((s) => s.segments);
-  const micPartial = useMeetingRecordingStore((s) => s.micPartial);
-  const systemPartial = useMeetingRecordingStore((s) => s.systemPartial);
-  const systemPartialSpeakerId = useMeetingRecordingStore((s) => s.systemPartialSpeakerId);
-  const systemPartialSpeakerName = useMeetingRecordingStore((s) => s.systemPartialSpeakerName);
   const diarizationSessionId = useMeetingRecordingStore((s) => s.diarizationSessionId);
+  const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
   const sessionDiarizationEnabled = useMeetingRecordingStore((s) => s.sessionDiarizationEnabled);
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
-  const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
 
   const {
     folders,
@@ -482,9 +476,11 @@ export default function PersonalNotesView({
     runAction,
   } = useActionProcessing(activeNoteId ?? null);
 
-  // The realtime transcript outlives its recording — only use it for the note it was recorded on.
-  const activeNoteRawTranscript =
-    (recordingNoteId === activeNote?.id ? realtimeTranscript : "") || activeNote?.transcript || "";
+  // Boolean flag so actions enable during recording without re-rendering on every transcript update.
+  const hasLiveTranscript = useMeetingRecordingStore(
+    (s) => s.recordingNoteId === activeNote?.id && !!s.transcript
+  );
+  const activeNoteRawTranscript = activeNote?.transcript || "";
 
   const isEnhancementStale = useMemo(() => {
     if (!activeNote?.enhanced_content || !activeNote?.enhanced_at_content_hash) return false;
@@ -531,11 +527,9 @@ export default function PersonalNotesView({
   const prevTranscribingRef = useRef(false);
 
   useEffect(() => {
-    if (
-      prevTranscribingRef.current &&
-      !isTranscribing &&
-      (realtimeTranscript || realtimeSegments.length > 0)
-    ) {
+    if (prevTranscribingRef.current && !isTranscribing) {
+      const { transcript: realtimeTranscript, segments: realtimeSegments } =
+        useMeetingRecordingStore.getState();
       const transcript =
         realtimeSegments.length > 0
           ? serializeTranscriptSegments(realtimeSegments)
@@ -546,20 +540,22 @@ export default function PersonalNotesView({
       }
     }
     prevTranscribingRef.current = isTranscribing;
-  }, [isTranscribing, realtimeTranscript, realtimeSegments, recordingNoteId]);
+  }, [isTranscribing, recordingNoteId]);
 
   useEffect(() => {
     if (!isTranscribing) return;
 
     const interval = setInterval(() => {
-      if (!recordingNoteId || realtimeSegments.length === 0) return;
-      window.electronAPI.updateNote(recordingNoteId, {
+      const { recordingNoteId: currentRecordingNoteId, segments: realtimeSegments } =
+        useMeetingRecordingStore.getState();
+      if (!currentRecordingNoteId || realtimeSegments.length === 0) return;
+      window.electronAPI.updateNote(currentRecordingNoteId, {
         transcript: serializeTranscriptSegments(realtimeSegments),
       });
     }, 30_000);
 
     return () => clearInterval(interval);
-  }, [isTranscribing, realtimeSegments, recordingNoteId]);
+  }, [isTranscribing]);
 
   const isLocalSynced = syncedNoteId === activeNote?.id;
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
@@ -954,18 +950,7 @@ export default function PersonalNotesView({
                   : undefined
               }
               diarizationSessionId={diarizationSessionId}
-              meetingTranscript={isActiveNoteRecording ? realtimeTranscript : ""}
-              meetingSegments={isActiveNoteRecording ? realtimeSegments : []}
-              meetingMicPartial={isActiveNoteRecording ? micPartial : ""}
-              meetingSystemPartial={isActiveNoteRecording ? systemPartial : ""}
-              meetingSystemPartialSpeakerId={
-                isActiveNoteRecording ? systemPartialSpeakerId : undefined
-              }
-              meetingSystemPartialSpeakerName={
-                isActiveNoteRecording ? systemPartialSpeakerName : undefined
-              }
               onLiveSpeakerLock={lockSpeaker}
-              liveTranscript={isActiveNoteRecording ? realtimeTranscript : ""}
               sessionDiarizationEnabled={sessionDiarizationEnabled}
               sessionExpectedCount={sessionExpectedCount}
               userTouchedStepper={userTouchedStepper}
@@ -982,14 +967,19 @@ export default function PersonalNotesView({
                 <ActionPicker
                   onRunAction={(action) => {
                     if (!editorNote) return;
+                    const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
+                      useMeetingRecordingStore.getState();
+                    const rawTranscript =
+                      (liveNoteId === activeNote?.id ? liveTranscript : "") ||
+                      activeNoteRawTranscript;
                     const noteContent = editorNote.content;
                     const hasNotes = !!noteContent.trim();
-                    if (!hasNotes && !activeNoteRawTranscript) return;
+                    if (!hasNotes && !rawTranscript) return;
 
                     let formattedTranscript = "";
                     let isMeetingNote = false;
-                    if (activeNoteRawTranscript) {
-                      const segments = parseTranscriptSegments(activeNoteRawTranscript);
+                    if (rawTranscript) {
+                      const segments = parseTranscriptSegments(rawTranscript);
                       if (segments.length > 0) {
                         isMeetingNote = true;
                         formattedTranscript = segments
@@ -1000,7 +990,7 @@ export default function PersonalNotesView({
                           .join("\n");
                       }
                       if (!formattedTranscript) {
-                        formattedTranscript = activeNoteRawTranscript;
+                        formattedTranscript = rawTranscript;
                       }
                     }
 
@@ -1010,31 +1000,26 @@ export default function PersonalNotesView({
                     ]
                       .filter(Boolean)
                       .join("\n\n");
-                    runAction(
-                      action,
-                      parts,
-                      makeContentHash(`${noteContent}\n${activeNoteRawTranscript}`),
-                      {
-                        isCloudMode,
-                        modelId: effectiveModelId,
-                        isMeetingNote,
-                        allowTitleGeneration: isRegenerableNoteTitle(
-                          editorNote.title,
-                          [
-                            t("notes.list.untitledNote"),
-                            t("notes.list.newNote"),
-                            t("notes.sidebar.newNote"),
-                          ],
-                          calendarEventName
-                        ),
-                      }
-                    );
+                    runAction(action, parts, makeContentHash(`${noteContent}\n${rawTranscript}`), {
+                      isCloudMode,
+                      modelId: effectiveModelId,
+                      isMeetingNote,
+                      allowTitleGeneration: isRegenerableNoteTitle(
+                        editorNote.title,
+                        [
+                          t("notes.list.untitledNote"),
+                          t("notes.list.newNote"),
+                          t("notes.sidebar.newNote"),
+                        ],
+                        calendarEventName
+                      ),
+                    });
                   }}
                   onManageActions={() => setShowActionManager(true)}
                   disabled={
                     (!editorNote?.content?.trim() &&
-                      !realtimeTranscript &&
-                      !activeNote?.transcript) ||
+                      !hasLiveTranscript &&
+                      !activeNoteRawTranscript) ||
                     actionProcessingState === "processing"
                   }
                 />

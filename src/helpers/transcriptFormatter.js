@@ -59,7 +59,7 @@ function extractMetadata(note) {
   let participants = [];
   try {
     const parsed = JSON.parse(note.participants || "[]");
-    participants = parsed.map((p) => p.name).filter(Boolean);
+    participants = parsed.map((p) => p.displayName || p.email).filter(Boolean);
   } catch {}
 
   return { title, dateStr, participants };
@@ -70,7 +70,8 @@ function formatTxt(note, segments, speakerMappings) {
   const { title, dateStr, participants } = extractMetadata(note);
 
   const lines = [title, dateStr];
-  if (participants.length) lines.push(`Participants: ${participants.join(", ")}`);
+  if (participants.length)
+    lines.push(`${i18nMain.t("notes.editor.participants")}: ${participants.join(", ")}`);
   lines.push("", "──────────────────────────────────", "");
   for (const seg of merged) {
     lines.push(`[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings)}:`);
@@ -128,7 +129,8 @@ function formatMd(note, segments, speakerMappings) {
   const { title, dateStr, participants } = extractMetadata(note);
 
   const lines = [`# ${title}`, "", `**Date:** ${dateStr}`];
-  if (participants.length) lines.push(`**Participants:** ${participants.join(", ")}`);
+  if (participants.length)
+    lines.push(`**${i18nMain.t("notes.editor.participants")}:** ${participants.join(", ")}`);
   lines.push("", "---", "");
   for (const seg of merged) {
     lines.push(`**${resolveSpeaker(seg, speakerMappings)}** \`${formatTimestamp(seg.timestamp)}\``);

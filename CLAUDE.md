@@ -61,6 +61,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **database.js**: SQLite operations for transcription history
 - **debugLogger.js**: Debug logging system with file output
 - **devServerManager.js**: Vite dev server integration
+- **dockManager.js**: Single owner of the macOS Dock icon
+  - The icon follows the control panel: it appears when the panel opens and goes away when the panel closes to the tray, so no other caller (in particular the dictation panel's hide path) can resurrect it
+  - Every path that surfaces or hides the control panel (tray, app menu, deep links, `activate`, `ready-to-show`, `hideControlPanelToTray`) reports that state explicitly
+  - Never derive that state from the window's `show`/`hide` events: on macOS those are occlusion events, so they also fire when the panel is merely covered by another window, minimized, or on another Space, and the icon flickers as the user switches windows
+  - Decision logic lives in `dockPolicy.js` (pure, unit-tested in `test/helpers/dockPolicy.test.js`)
 - **dragManager.js**: Window dragging functionality
 - **environment.js**: Environment variable and OpenAI API management
 - **hotkeyManager.js**: Global hotkey registration and management
@@ -211,8 +216,8 @@ Always-on offline semantic search that finds notes by meaning, not just keywords
 
 **Storage**:
 
-- Qdrant data: `~/.cache/openwhispr/qdrant-data/`
-- Qdrant binary: `resources/bin/qdrant-{platform}-{arch}` (bundled — downloaded during `prebuild` / `predev`)
+- Qdrant data: `~/.cache/openwhispr/qdrant-data/` (`qdrant-data-dev/` in development)
+- Qdrant binary: `resources/bin/qdrant-{platform}-{arch}` (bundled — downloaded during `prebuild` / `predev:main`)
 - Embedding model: `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/` (auto-downloaded on first launch)
 
 **Dependencies**: `@qdrant/js-client-rest`, `onnxruntime-node`

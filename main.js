@@ -1,19 +1,14 @@
-// KDE/GNOME Wayland: self-relaunch with --ozone-platform=x11 to force XWayland.
-// Chromium picks the display backend before JS runs, so appendSwitch is too late.
-if (
-  process.platform === "linux" &&
-  process.env.XDG_SESSION_TYPE === "wayland" &&
-  !process.argv.includes("--ozone-platform=x11")
-) {
-  const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
-  if (desktop.includes("kde") || /gnome|ubuntu|unity|cosmic/.test(desktop)) {
-    const { spawn } = require("child_process");
-    spawn(process.execPath, [...process.argv.slice(1), "--ozone-platform=x11"], {
-      stdio: "inherit",
-      detached: true,
-    }).unref();
-    process.exit(0);
-  }
+// Chromium picks the display backend before JS runs, so appendSwitch is too
+// late — the flag has to come from a relaunch.
+const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
+
+if (shouldForceXWayland(process.argv)) {
+  const { spawn } = require("child_process");
+  spawn(process.execPath, [...process.argv.slice(1), XWAYLAND_FLAG], {
+    stdio: "inherit",
+    detached: true,
+  }).unref();
+  process.exit(0);
 }
 
 const {
@@ -270,6 +265,7 @@ const WhisperManager = require("./src/helpers/whisper");
 const ParakeetManager = require("./src/helpers/parakeet");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
+const dockManager = require("./src/helpers/dockManager");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
 const CliBridge = require("./src/helpers/cliBridge");
 const UpdateManager = require("./src/updater");
@@ -322,6 +318,9 @@ let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
+let pendingNoteCloudId = null;
+let pendingNoteRetryTimer = null;
+let pendingNoteRetryCount = 0;
 const WHISPER_WAKE_REWARM_DELAY_MS = 3000;
 let wakeRewarmTimer = null;
 
@@ -516,6 +515,11 @@ app.on("open-url", (event, url) => {
     return;
   }
 
+  if (isNoteDeepLink(url)) {
+    void handleNoteDeepLink(url);
+    return;
+  }
+
   if (isInvitationDeepLink(url)) {
     handleInvitationDeepLink(url);
     return;
@@ -526,11 +530,85 @@ app.on("open-url", (event, url) => {
   if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
     windowManager.controlPanelWindow.show();
     windowManager.controlPanelWindow.focus();
+    dockManager.setControlPanelVisible(true);
   }
 });
 
 function isInvitationDeepLink(url) {
   return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
+}
+
+function isNoteDeepLink(url) {
+  return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("notes/");
+}
+
+function parseNoteCloudId(deepLinkUrl) {
+  try {
+    const match = deepLinkUrl.match(/notes\/([^/?#]+)/);
+    const cloudId = match?.[1] ? decodeURIComponent(match[1]) : "";
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cloudId)
+      ? cloudId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingNoteDeepLink() {
+  clearTimeout(pendingNoteRetryTimer);
+  pendingNoteRetryTimer = null;
+  pendingNoteCloudId = null;
+  pendingNoteRetryCount = 0;
+}
+
+async function flushPendingNoteDeepLink() {
+  if (!pendingNoteCloudId || !windowManager || !databaseManager) return;
+
+  try {
+    // Surface the panel on the first attempt only; retries just poll the
+    // database so they can't repeatedly steal focus.
+    if (pendingNoteRetryCount === 0) {
+      await windowManager.createControlPanelWindow();
+    }
+
+    const note = databaseManager.getNoteByCloudId(pendingNoteCloudId);
+    if (!note) {
+      // Cloud sync may still be hydrating during a cold launch. Retry briefly so
+      // the handoff can resolve a note pulled after the protocol event arrived.
+      pendingNoteRetryCount += 1;
+      if (pendingNoteRetryCount <= 10) {
+        clearTimeout(pendingNoteRetryTimer);
+        pendingNoteRetryTimer = setTimeout(() => {
+          void flushPendingNoteDeepLink();
+        }, 1000);
+      } else {
+        console.warn("Note deep link could not resolve a local note", {
+          cloudId: pendingNoteCloudId,
+        });
+        clearPendingNoteDeepLink();
+      }
+      return;
+    }
+
+    const payload = { noteId: note.id, folderId: note.folder_id ?? null };
+    clearPendingNoteDeepLink();
+    await windowManager.queueNoteNavigation(payload);
+  } catch (error) {
+    console.error("Note deep link failed:", error);
+    clearPendingNoteDeepLink();
+  }
+}
+
+async function handleNoteDeepLink(deepLinkUrl) {
+  const cloudId = parseNoteCloudId(deepLinkUrl);
+  if (!cloudId) {
+    console.warn("Invalid note deep link");
+    return;
+  }
+
+  clearPendingNoteDeepLink();
+  pendingNoteCloudId = cloudId;
+  await flushPendingNoteDeepLink();
 }
 
 function handleInvitationDeepLink(deepLinkUrl) {
@@ -541,6 +619,7 @@ function handleInvitationDeepLink(deepLinkUrl) {
     if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
       windowManager.controlPanelWindow.show();
       windowManager.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
       windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
     } else if (windowManager) {
       windowManager.createControlPanelWindow();
@@ -657,6 +736,7 @@ async function applySessionTokenAndRefresh(token) {
   }
   windowManager.controlPanelWindow.show();
   windowManager.controlPanelWindow.focus();
+  dockManager.setControlPanelVisible(true);
 }
 
 async function handleOAuthDeepLink(deepLinkUrl) {
@@ -683,6 +763,7 @@ function handleUpgradeDeepLink() {
     );
     windowManager.controlPanelWindow.show();
     windowManager.controlPanelWindow.focus();
+    dockManager.setControlPanelVisible(true);
   }
 }
 
@@ -843,9 +924,7 @@ async function startApp() {
     environmentManager.savePanelStartPosition(position);
   });
 
-  if (process.platform === "darwin") {
-    app.setActivationPolicy("regular");
-  }
+  dockManager.init();
 
   // In development, wait for Vite dev server to be ready
   if (process.env.NODE_ENV === "development") {
@@ -858,6 +937,13 @@ async function startApp() {
   await windowManager.createMainWindow();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
+  }
+
+  const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
+  if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
+    await handleNoteDeepLink(initialProtocolUrl);
+  } else {
+    await flushPendingNoteDeepLink();
   }
 
   // Create agent window (hidden) and set up agent hotkey
@@ -1535,6 +1621,7 @@ if (gotSingleInstanceLock) {
       }
       windowManager.controlPanelWindow.show();
       windowManager.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
       if (windowManager.controlPanelWindow.webContents.isCrashed()) {
         windowManager.loadControlPanel();
       }
@@ -1553,6 +1640,8 @@ if (gotSingleInstanceLock) {
     if (url) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
+      } else if (isNoteDeepLink(url)) {
+        await handleNoteDeepLink(url);
       } else if (isInvitationDeepLink(url)) {
         handleInvitationDeepLink(url);
       } else {
@@ -1633,15 +1722,12 @@ if (gotSingleInstanceLock) {
     } else {
       // Show control panel when dock icon is clicked (most common user action)
       if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-        // Ensure dock icon is visible when control panel opens
-        if (process.platform === "darwin" && app.dock) {
-          app.dock.show();
-        }
         if (windowManager.controlPanelWindow.isMinimized()) {
           windowManager.controlPanelWindow.restore();
         }
         windowManager.controlPanelWindow.show();
         windowManager.controlPanelWindow.focus();
+        dockManager.setControlPanelVisible(true);
       } else if (windowManager) {
         // If control panel doesn't exist, create it
         windowManager.createControlPanelWindow();
@@ -1676,6 +1762,7 @@ function performSyncTeardown() {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;
   }
+  clearPendingNoteDeepLink();
   if (authBridgeServer) {
     authBridgeServer.close();
     authBridgeServer = null;
