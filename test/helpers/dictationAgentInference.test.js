@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = () => import("../../src/helpers/promptTestConfig.js");
+const load = () => import("../../src/helpers/dictationAgentInference.js");
 
 const baseSettings = {
   useDictationAgent: true,
@@ -15,9 +15,9 @@ const baseSettings = {
 };
 
 test("uses the dictation agent scope, not the cleanup scope", async () => {
-  const { resolveDictationAgentTestConfig } = await load();
+  const { resolveDictationAgentInference } = await load();
 
-  const result = resolveDictationAgentTestConfig({
+  const result = resolveDictationAgentInference({
     ...baseSettings,
     // Cleanup is configured completely differently; it must not leak through.
     cleanupProvider: "openai",
@@ -29,21 +29,17 @@ test("uses the dictation agent scope, not the cleanup scope", async () => {
 });
 
 test("a local agent is unreachable without an explicit model", async () => {
-  const { resolveDictationAgentTestConfig } = await load();
+  const { resolveDictationAgentInference } = await load();
 
-  const result = resolveDictationAgentTestConfig({
-    ...baseSettings,
-    dictationAgentModel: "",
-  });
+  const result = resolveDictationAgentInference({ ...baseSettings, dictationAgentModel: "" });
 
-  assert.equal(result.enabled, true);
   assert.equal(result.reachable, false);
 });
 
 test("self-hosted is reachable with no model and forwards the LAN url", async () => {
-  const { resolveDictationAgentTestConfig } = await load();
+  const { resolveDictationAgentInference } = await load();
 
-  const result = resolveDictationAgentTestConfig({
+  const result = resolveDictationAgentInference({
     ...baseSettings,
     dictationAgentMode: "self-hosted",
     dictationAgentModel: "",
@@ -56,23 +52,23 @@ test("self-hosted is reachable with no model and forwards the LAN url", async ()
   assert.equal(result.config.customApiKey, "test-key");
 });
 
-test("cloud is reachable with no model and falls back to auto", async () => {
-  const { resolveDictationAgentTestConfig } = await load();
+test("cloud is reachable with no model", async () => {
+  const { resolveDictationAgentInference } = await load();
 
-  const result = resolveDictationAgentTestConfig(
+  const result = resolveDictationAgentInference(
     { ...baseSettings, dictationAgentModel: "" },
     { isCloudAgent: true }
   );
 
   assert.equal(result.reachable, true);
-  assert.equal(result.model, "auto");
+  assert.equal(result.model, "");
   assert.equal(result.config.provider, "openwhispr");
 });
 
 test("a custom provider forwards its base url and api key", async () => {
-  const { resolveDictationAgentTestConfig } = await load();
+  const { resolveDictationAgentInference } = await load();
 
-  const result = resolveDictationAgentTestConfig({
+  const result = resolveDictationAgentInference({
     ...baseSettings,
     dictationAgentProvider: "custom",
     dictationAgentCloudBaseUrl: "https://example.test/v1",
@@ -84,9 +80,9 @@ test("a custom provider forwards its base url and api key", async () => {
 });
 
 test("a non-custom provider leaks neither base url nor api key", async () => {
-  const { resolveDictationAgentTestConfig } = await load();
+  const { resolveDictationAgentInference } = await load();
 
-  const result = resolveDictationAgentTestConfig({
+  const result = resolveDictationAgentInference({
     ...baseSettings,
     dictationAgentCloudBaseUrl: "https://example.test/v1",
     dictationAgentCustomApiKey: "sk-test",
@@ -96,14 +92,10 @@ test("a non-custom provider leaks neither base url nor api key", async () => {
   assert.equal(result.config.customApiKey, undefined);
 });
 
-test("a disabled agent is neither enabled nor reachable", async () => {
-  const { resolveDictationAgentTestConfig } = await load();
+test("a disabled agent is unreachable", async () => {
+  const { resolveDictationAgentInference } = await load();
 
-  const result = resolveDictationAgentTestConfig({
-    ...baseSettings,
-    useDictationAgent: false,
-  });
+  const result = resolveDictationAgentInference({ ...baseSettings, useDictationAgent: false });
 
-  assert.equal(result.enabled, false);
   assert.equal(result.reachable, false);
 });

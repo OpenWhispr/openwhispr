@@ -46,9 +46,9 @@ import {
 import { detectAgentName } from "../config/agentDetection";
 import {
   resolveDictationRouteKind,
-  resolveDictationAgentReachability,
   resolveDictationTranslationReachability,
 } from "./dictationRouting";
+import { resolveDictationAgentInference } from "./dictationAgentInference";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording } from "./recordingValidation";
@@ -63,13 +63,8 @@ const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
 function dictationAgentReachable(settings) {
-  return resolveDictationAgentReachability({
-    useDictationAgent: settings.useDictationAgent,
-    dictationAgentModel: settings.dictationAgentModel,
-    isCloudAgent: isCloudDictationAgentMode(),
-    isSelfHostedAgent:
-      settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim(),
-  });
+  return resolveDictationAgentInference(settings, { isCloudAgent: isCloudDictationAgentMode() })
+    .reachable;
 }
 
 function translationChainReachable(settings) {
@@ -93,15 +88,8 @@ function resolveReasoningRoute(
 ) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
-  const agentModel = settings.dictationAgentModel?.trim() || "";
-  const isCloudAgent = isCloudDictationAgentMode();
-  const isSelfHostedAgent =
-    settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim();
-  const agentReachable = resolveDictationAgentReachability({
-    useDictationAgent: settings.useDictationAgent,
-    dictationAgentModel: agentModel,
-    isCloudAgent,
-    isSelfHostedAgent,
+  const agent = resolveDictationAgentInference(settings, {
+    isCloudAgent: isCloudDictationAgentMode(),
   });
 
   const isCloudTranslation = isCloudTranslationMode();
@@ -117,7 +105,7 @@ function resolveReasoningRoute(
 
   const kind = resolveDictationRouteKind({
     cleanupReachable,
-    agentReachable,
+    agentReachable: agent.reachable,
     agentInvoked: !!agentName && detectAgentName(text, agentName),
     voiceAgentRequested,
     translationRequested,
@@ -164,22 +152,11 @@ function resolveReasoningRoute(
     };
   }
   if (kind === "agent") {
-    const provider = isCloudAgent
-      ? "openwhispr"
-      : settings.dictationAgentProvider?.trim() || undefined;
-    const isCustomAgent = settings.dictationAgentMode === "providers" && provider === "custom";
     return {
       kind: "agent",
-      model: agentModel,
+      model: agent.model,
       config: {
-        provider,
-        lanUrl: isSelfHostedAgent ? settings.dictationAgentRemoteUrl : undefined,
-        baseUrl: isCustomAgent ? settings.dictationAgentCloudBaseUrl || undefined : undefined,
-        customApiKey:
-          isCustomAgent || isSelfHostedAgent
-            ? settings.dictationAgentCustomApiKey || undefined
-            : undefined,
-        disableThinking: settings.dictationAgentDisableThinking,
+        ...agent.config,
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,

@@ -28,7 +28,7 @@ import {
 } from "../../stores/settingsStore";
 import { getLanguageLabel } from "../../utils/languageSupport";
 import { getDictionaryHintWords } from "../../utils/snippets";
-import { resolveDictationAgentTestConfig } from "../../helpers/promptTestConfig";
+import { resolveDictationAgentInference } from "../../helpers/dictationAgentInference";
 
 interface PromptStudioProps {
   className?: string;
@@ -181,23 +181,20 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         return;
       }
 
-      // The dictation agent runs on its own inference scope and its own prompt.
-      // Falling through to the cleanup branch below would test the cleanup
-      // provider/model and — because that branch sends no systemPrompt —
-      // ReasoningService would take its cleanup path (transcript wrapper,
-      // temperature 0), so the model returns the input unchanged instead of
-      // executing the instruction being tested.
+      // The agent runs on its own inference scope; falling through to the cleanup
+      // branch would test the cleanup provider with the cleanup prompt.
       if (isAgent) {
-        const settings = useSettingsStore.getState();
-        const agentTest = resolveDictationAgentTestConfig(settings, {
-          isCloudAgent: isCloudDictationAgent,
-        });
-
-        if (!agentTest.enabled) {
+        if (!useDictationAgent) {
           setTestResult(t("promptStudio.test.agentDisabled"));
           return;
         }
-        if (!agentTest.reachable) {
+
+        const settings = useSettingsStore.getState();
+        const agent = resolveDictationAgentInference(settings, {
+          isCloudAgent: isCloudDictationAgent,
+        });
+
+        if (!agent.reachable) {
           setTestResult(t("promptStudio.test.noModelSelected"));
           return;
         }
@@ -205,10 +202,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         const previous = customPrompt;
         setCustomPrompt(kind, editedPrompt);
         try {
-          const result = await ReasoningService.processText(testText, agentTest.model, agentName, {
-            ...agentTest.config,
-            // Required: without it ReasoningService takes the cleanup path and
-            // the model echoes the input instead of running the instruction.
+          const result = await ReasoningService.processText(testText, agent.model, agentName, {
+            ...agent.config,
             systemPrompt: resolvePrompt("dictationAgent", {
               agentName,
               language: settings.preferredLanguage,
@@ -434,8 +429,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         {/* ── Test Tab ── */}
         {activeTab === "test" &&
           (() => {
-            // Each prompt kind reports the scope that actually runs it; showing
-            // the cleanup model here made a misconfigured agent look wired up.
+            // Each kind reports the scope that actually runs it.
             const testIsCloud = isTranslate
               ? isCloudTranslation
               : isAgent
@@ -468,7 +462,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
             return (
               <div className="divide-y divide-border/40 dark:divide-border-subtle">
-                {!isTranslate && !(isAgent ? useDictationAgent : useCleanupModel) && (
+                {!isTranslate && !isAgent && !useCleanupModel && (
                   <div className="px-5 py-4">
                     <div className="rounded-lg border border-warning/20 bg-warning/5 dark:bg-warning/10 px-4 py-3">
                       <div className="flex items-start gap-2.5">
@@ -513,14 +507,14 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     {testText && (
                       <span
                         className={`text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
-                          isTranslate || isAgentAddressed
+                          isTranslate || isAgent || isAgentAddressed
                             ? "bg-primary/10 text-primary dark:bg-primary/15"
                             : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {isTranslate
                           ? t("promptStudio.test.translation")
-                          : isAgentAddressed
+                          : isAgent || isAgentAddressed
                             ? t("promptStudio.test.instruction")
                             : t("promptStudio.test.cleanup")}
                       </span>
@@ -533,13 +527,16 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     className="text-xs"
                     placeholder={t("promptStudio.test.inputPlaceholder")}
                   />
-                  <p className="text-xs text-muted-foreground/40 mt-1.5">
-                    {isTranslate
-                      ? t("promptStudio.test.translateHint", {
-                          language: getLanguageLabel(translationTargetLanguage),
-                        })
-                      : t("promptStudio.test.addressHint", { agentName })}
-                  </p>
+                  {/* The agent tab always runs the agent prompt, addressed or not. */}
+                  {!isAgent && (
+                    <p className="text-xs text-muted-foreground/40 mt-1.5">
+                      {isTranslate
+                        ? t("promptStudio.test.translateHint", {
+                            language: getLanguageLabel(translationTargetLanguage),
+                          })
+                        : t("promptStudio.test.addressHint", { agentName })}
+                    </p>
+                  )}
                 </div>
 
                 <div className="px-5 py-4">
@@ -548,7 +545,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     disabled={
                       !testText.trim() ||
                       isLoading ||
-                      (!isTranslate && !(isAgent ? useDictationAgent : useCleanupModel))
+                      (!isTranslate && !isAgent && !useCleanupModel)
                     }
                     size="sm"
                     className="w-full"
