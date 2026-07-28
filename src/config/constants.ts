@@ -62,17 +62,14 @@ export const buildApiUrl = (base: string, path: string): string => {
   }
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const { path: originAndPath, query, hash } = splitUrlDecorators(normalizedBase);
-  return joinUrlDecorators(`${originAndPath.replace(/\/+$/, "")}${normalizedPath}`, query, hash);
+  return joinUrlDecorators(`${originAndPath}${normalizedPath}`, query, hash);
 };
 
 export const ensureV1Suffix = (base: string): string => {
   if (!base) return base;
   const normalized = normalizeBaseUrl(base) || base;
   const { path, query, hash } = splitUrlDecorators(normalized);
-  if (path.endsWith("/v1")) {
-    return joinUrlDecorators(path, query, hash);
-  }
-  return joinUrlDecorators(`${path}/v1`, query, hash);
+  return joinUrlDecorators(path.endsWith("/v1") ? path : `${path}/v1`, query, hash);
 };
 
 // Ordered bases to try when listing models from an OpenAI-compatible server.
@@ -85,14 +82,12 @@ export const getModelListBaseCandidates = (base: string): string[] => {
   const { path, query, hash } = splitUrlDecorators(normalized);
   const nativeApiMatch = path.match(/^(.+?)\/api\/v[01]$/i);
   if (nativeApiMatch) {
-    return [
-      joinUrlDecorators(path, query, hash),
-      joinUrlDecorators(`${nativeApiMatch[1]}/v1`, query, hash),
-    ];
+    return [normalized, joinUrlDecorators(`${nativeApiMatch[1]}/v1`, query, hash)];
   }
   const withV1 = ensureV1Suffix(normalized);
   return withV1 === normalized ? [normalized] : [normalized, withV1];
 };
+
 const env = (typeof import.meta !== "undefined" && (import.meta as any).env) || {};
 
 const computeBaseUrl = (candidates: Array<string | undefined>, fallback: string): string => {
