@@ -102,7 +102,7 @@ test("JSON duration reflects the last merged segment's timestamp", () => {
   assert.equal(JSON.parse(output).metadata.duration_seconds, 3);
 });
 
-test("consecutive speaker-less segments within 2s are merged in SRT, TXT, and Markdown export", () => {
+test("consecutive speaker-less segments within 2s merge across SRT, TXT and Markdown exports", () => {
   const segments = [
     { timestamp: 0, text: "Hello world," },
     { timestamp: 1, text: "this is a test." },
