@@ -104,8 +104,7 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { setCustomDictionary, applyCustomDictionaryFromExternal, applySnippetsFromExternal } =
-    store;
+  const { applyCustomDictionaryFromExternal, applySnippetsFromExternal } = store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -175,9 +174,11 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
+    useCleanupModel,
+    cleanupMode,
     cleanupModel,
-    dictationAgentProvider,
+    useDictationAgent,
+    dictationAgentMode,
     dictationAgentModel,
   } = store;
 
@@ -190,10 +191,12 @@ function useSettingsInternal() {
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
-        cleanupProvider,
-        cleanupModel: cleanupProvider === "local" ? cleanupModel : undefined,
-        dictationAgentProvider,
-        dictationAgentModel: dictationAgentProvider === "local" ? dictationAgentModel : undefined,
+        useCleanupModel,
+        cleanupMode,
+        cleanupModel,
+        useDictationAgent,
+        dictationAgentMode,
+        dictationAgentModel,
       })
       .catch((err) =>
         logger.warn(
@@ -207,9 +210,11 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
+    useCleanupModel,
+    cleanupMode,
     cleanupModel,
-    dictationAgentProvider,
+    useDictationAgent,
+    dictationAgentMode,
     dictationAgentModel,
   ]);
 
@@ -282,6 +287,7 @@ function useSettingsInternal() {
     setCleanupMode: store.setCleanupMode,
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
+    updateCustomDictionary: store.updateCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,
     setUseDictationAgent: store.setUseDictationAgent,
     setCleanupModel: store.setCleanupModel,
