@@ -950,7 +950,7 @@
           "size": "12.1GB",
           "sizeBytes": 12999763968,
           "description": "OpenAI's open-weight model for consumer hardware",
-          "fileName": "gpt-oss-20b-mxfp4.gguf",
+          "fileName": "gpt-oss-20b-MXFP4.gguf",
           "quantization": "mxfp4",
           "contextLength": 128000,
           "hfRepo": "ggml-org/gpt-oss-20b-GGUF",

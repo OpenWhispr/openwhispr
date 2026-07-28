@@ -200,7 +200,7 @@
       "systemAudioDescription": "会議レコーダーが通話の相手側の音声（会議、講義、ポッドキャストなど）を聴けるようにします。後から設定で有効にできます。",
       "optional": "任意",
       "recommended": "推奨",
-      "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。それでもうまくいかない場合は、リストからOpenWhisprを削除して再度追加してみてください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
+      "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。OpenWhisprがリストに表示されていない場合は、+ をクリックしてアプリケーションフォルダから追加してください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
     },
     "transcription": {
       "title": "文字起こし設定",
@@ -2309,8 +2309,8 @@
     "addPlaceholder": "カンマ区切りで単語を追加 — OpenWhispr、Supabase、ARR など",
     "add": "追加",
     "importWords": "単語をインポート",
-    "importPlaceholder": "カンマ区切りの単語を貼り付け...",
-    "separateWithCommas": "カンマで区切る",
+    "importPlaceholder": "カンマまたは改行区切りの単語を貼り付け...",
+    "separateWithCommas": "1行に1語、またはカンマ区切り",
     "wordsReady_other": "{{count}} 個の単語が準備完了",
     "import": "インポート",
     "yourDictionary": "あなたの辞書",
