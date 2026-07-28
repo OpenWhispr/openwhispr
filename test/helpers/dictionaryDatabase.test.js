@@ -87,24 +87,53 @@ test("startup reconcile preserves DB words that a stale renderer cache omitted (
   assert.deepEqual(db.getDictionary(), ["OpenWhispr", "Alice", "Bob", "Imported Term"]);
 });
 
-test("getPendingDictionary backfills missing client_dict_id before sync", (t) => {
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+// The reporter's scenario: a bulk import writing straight to the table, with no
+// knowledge of the sync columns. Those rows still have to be uploadable (#1295).
+test("rows inserted outside the app get a client_dict_id from the schema", (t) => {
   const db = createDb(t);
   if (!db) return;
 
-  db.setDictionary(["OpenWhispr", "Alice"]);
-  db.db.prepare("UPDATE custom_dictionary SET client_dict_id = NULL WHERE word = 'Alice'").run();
+  db.setDictionary(["OpenWhispr"]);
+  db.db.prepare("INSERT INTO custom_dictionary (word) VALUES (?)").run("Contact Name");
 
-  const before = db.db
-    .prepare("SELECT client_dict_id FROM custom_dictionary WHERE word = 'Alice'")
+  const row = db.db
+    .prepare("SELECT * FROM custom_dictionary WHERE word = 'Contact Name'")
     .get();
-  assert.equal(before.client_dict_id, null);
+  assert.match(row.client_dict_id, UUID_V4);
 
-  const pending = db.getPendingDictionary();
-  const alice = pending.find((row) => row.word === "Alice");
-  assert.ok(alice);
-  assert.ok(alice.client_dict_id);
-  assert.equal(alice.cloud_id, null);
-  assert.equal(alice.sync_status, "pending");
+  const pending = db.getPendingDictionary().find((r) => r.word === "Contact Name");
+  assert.ok(pending, "externally inserted row should be uploadable");
+  assert.equal(pending.cloud_id, null);
+  assert.equal(pending.sync_status, "pending");
+});
+
+test("externally inserted rows get distinct client_dict_ids", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const insert = db.db.prepare("INSERT INTO custom_dictionary (word) VALUES (?)");
+  for (const word of ["Alpha", "Beta", "Gamma"]) insert.run(word);
+
+  const ids = db.db
+    .prepare("SELECT client_dict_id FROM custom_dictionary WHERE word IN ('Alpha','Beta','Gamma')")
+    .all()
+    .map((r) => r.client_dict_id);
+  assert.equal(ids.length, 3);
+  assert.equal(new Set(ids).size, 3);
+});
+
+test("an explicitly supplied client_dict_id is preserved", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.db
+    .prepare("INSERT INTO custom_dictionary (word, client_dict_id) VALUES (?, ?)")
+    .run("Delta", "supplied-id");
+
+  const row = db.db.prepare("SELECT * FROM custom_dictionary WHERE word = 'Delta'").get();
+  assert.equal(row.client_dict_id, "supplied-id");
 });
 
 test("cloud pull upserts remotes without deleting local-only pending rows", (t) => {

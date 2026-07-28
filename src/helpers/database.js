@@ -640,6 +640,24 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
+      // Cloud batch-create keys its response map on client_dict_id, so a row
+      // without one can never be marked synced and re-uploads on every pass.
+      // Rows written straight to SQLite (bulk imports, #1295) don't set it, so
+      // the schema assigns it rather than trusting every writer to. Explicit
+      // ids still win — the trigger only fires when one is missing.
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS custom_dictionary_client_id_default
+        AFTER INSERT ON custom_dictionary
+        WHEN new.client_dict_id IS NULL
+        BEGIN
+          UPDATE custom_dictionary SET client_dict_id =
+            lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' ||
+            substr(lower(hex(randomblob(2))), 2) || '-' ||
+            substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) ||
+            '-' || lower(hex(randomblob(6)))
+          WHERE id = new.id;
+        END
+      `);
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_snippets_client_id ON snippets(client_snippet_id) WHERE client_snippet_id IS NOT NULL"
       );
@@ -924,24 +942,6 @@ class DatabaseManager {
   getPendingDictionary() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      // Cloud batch-create needs a stable client_dict_id. Assign any that are
-      // still missing so pending rows remain uploadable after a successful sync.
-      const missingClientIds = this.db
-        .prepare(
-          `SELECT id FROM custom_dictionary
-           WHERE sync_status = 'pending' AND deleted_at IS NULL AND client_dict_id IS NULL`
-        )
-        .all();
-      if (missingClientIds.length > 0) {
-        const assignId = this.db.prepare(
-          "UPDATE custom_dictionary SET client_dict_id = ? WHERE id = ? AND client_dict_id IS NULL"
-        );
-        this.db.transaction(() => {
-          for (const row of missingClientIds) {
-            assignId.run(randomUUID(), row.id);
-          }
-        })();
-      }
       return this.db
         .prepare(
           "SELECT * FROM custom_dictionary WHERE sync_status = 'pending' AND deleted_at IS NULL"
