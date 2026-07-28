@@ -784,7 +784,6 @@ export default function SettingsPage({
     saveDiscardedTranscriptions,
     setSaveDiscardedTranscriptions,
     customDictionary,
-    setCustomDictionary,
     noteFilesEnabled,
     setNoteFilesEnabled,
     noteFilesPath,
