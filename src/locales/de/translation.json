@@ -2984,6 +2984,7 @@
     "steps": {
       "retranscribe": "Re-transcribing",
       "title": "Generating title",
+      "classify": "Detecting meeting type",
       "notes": "Generating notes",
       "pipeline": "Pipeline"
     },
@@ -2998,7 +2999,8 @@
       "none": "Kein Meeting-Typ",
       "custom": "(benutzerdefiniert)",
       "regenerateWith": "Notizen als {{name}} neu generieren",
-      "createNew": "Benutzerdefinierten Typ erstellen..."
+      "createNew": "Benutzerdefinierten Typ erstellen...",
+      "autoDetected": "Automatisch erkannt"
     },
     "editor": {
       "createTitle": "Meeting-Typ erstellen",
