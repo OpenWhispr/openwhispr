@@ -14,6 +14,7 @@ import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
+import { truncatedResponseError } from "../helpers/completionTruncation.js";
 import { resolveGeminiThinkingConfig } from "../helpers/geminiResponse.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
@@ -165,14 +166,7 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      | "openai"
-      | "anthropic"
-      | "gemini"
-      | "groq"
-      | "tinfoil"
-      | "custom"
-      | "openrouter"
-      | "corti"
+      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -401,15 +395,15 @@ class ReasoningService extends BaseReasoningService {
       throw new Error("Model output was truncated before the selection edit completed");
     }
 
-    // finish_reason "length" is a max_tokens cut; the partial text would drop the tail. See #1341.
+    // A token-limit finish_reason means the partial text would drop the tail. See #1341.
     if (isTruncatedFinishReason(choice?.finish_reason)) {
       logger.logReasoning(`${providerName.toUpperCase()}_TRUNCATED_RESPONSE`, {
         model,
         finishReason: choice.finish_reason,
-        contentLength: choice.message?.content?.length || 0,
+        responseLength: choice.message?.content?.length || 0,
         tokensUsed: response.usage?.total_tokens || 0,
       });
-      throw new Error(`${providerName} hit the token limit and returned a truncated response`);
+      throw truncatedResponseError(providerName);
     }
 
     // Reasoning models leak <think> blocks into non-streamed output; strip them

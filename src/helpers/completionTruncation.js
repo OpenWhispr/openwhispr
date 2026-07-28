@@ -8,3 +8,8 @@ export function isTruncatedResponsesPayload(response) {
     response?.incomplete_details?.reason === "max_output_tokens"
   );
 }
+
+// One error shape for every provider's token-limit failure. See #1341.
+export function truncatedResponseError(providerLabel) {
+  return new Error(`${providerLabel} hit the token limit and returned a truncated response`);
+}

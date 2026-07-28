@@ -28,26 +28,27 @@ test("completed or otherwise-incomplete responses payloads are not truncated", a
   assert.ok(!isTruncatedResponsesPayload(undefined));
 });
 
-// The providers are TypeScript, so node --test can't require them. Assert the
-// wiring from source the way inferenceProviderIds.test.js parses PROVIDER_REGISTRY.
-test("chat-completions and openai providers fail truncated replies", () => {
-  const reasoningSrc = fs.readFileSync(
-    path.join(__dirname, "../../src/services/ReasoningService.ts"),
-    "utf8"
-  );
-  const reasoningGuard = reasoningSrc.match(
-    /if \(isTruncatedFinishReason\(choice\?\.finish_reason\)\) \{[\s\S]*?throw new Error/
-  );
-  assert.ok(reasoningGuard, "callChatCompletionsApi must throw on finish_reason length");
+test("truncatedResponseError names the provider and the token limit", async () => {
+  const { truncatedResponseError } = await load();
+  const error = truncatedResponseError("Groq");
+  assert.ok(error instanceof Error);
+  assert.equal(error.message, "Groq hit the token limit and returned a truncated response");
+});
 
-  const openaiSrc = fs.readFileSync(
-    path.join(__dirname, "../../src/services/ai/inferenceProviders/openai.ts"),
-    "utf8"
-  );
-  assert.match(openaiSrc, /isTruncatedFinishReason\(response\.choices\?\.\[0\]\?\.finish_reason\)/);
-  assert.match(openaiSrc, /isTruncatedResponsesPayload/);
-  const openaiGuard = openaiSrc.match(
-    /isTruncatedResponsesPayload\(response\)\)?[\s\S]*?throw new Error/
-  );
-  assert.ok(openaiGuard, "openai provider must throw on truncated chat or responses payloads");
+// Source-level wiring asserts; the TS call sites are not requirable here. See #1341.
+test("every guarded provider wires the truncation check and shared failure", () => {
+  const read = (rel) => fs.readFileSync(path.join(__dirname, "../..", rel), "utf8");
+
+  const reasoning = read("src/services/ReasoningService.ts");
+  assert.match(reasoning, /isTruncatedFinishReason\(choice\?\.finish_reason\)/);
+  assert.match(reasoning, /truncatedResponseError\(providerName\)/);
+
+  const openai = read("src/services/ai/inferenceProviders/openai.ts");
+  assert.match(openai, /isTruncatedFinishReason\(choice\?\.finish_reason\)/);
+  assert.match(openai, /isTruncatedResponsesPayload\(response\)/);
+  assert.match(openai, /truncatedResponseError\(providerLabel\)/);
+
+  const tinfoil = read("src/services/ai/inferenceProviders/tinfoil.ts");
+  assert.match(tinfoil, /isTruncatedFinishReason\(choice\?\.finish_reason\)/);
+  assert.match(tinfoil, /truncatedResponseError\("Tinfoil"\)/);
 });

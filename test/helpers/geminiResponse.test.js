@@ -32,34 +32,46 @@ test("thought parts are excluded from the visible text", async () => {
   assert.equal(text, "Cleaned text.");
 });
 
-test("empty candidate keeps the #938 empty guard reachable", async () => {
-  const { extractGeminiCandidateText } = await load();
-  assert.equal(extractGeminiCandidateText(makeResponse({ finishReason: "STOP" })).text, "");
-  assert.equal(extractGeminiCandidateText({}).text, "");
-  assert.equal(extractGeminiCandidateText({}).finishReason, "");
-  assert.equal(extractGeminiCandidateText(undefined).text, "");
-});
-
-test("truncated candidate reports MAX_TOKENS alongside its partial text", async () => {
-  const { extractGeminiCandidateText, isGeminiTokenLimitHit } = await load();
-  const { text, finishReason, usage } = extractGeminiCandidateText(
-    makeResponse({
-      parts: [{ text: "Ya tengo una pestaña abierta y he hecho una prueba en" }],
-      finishReason: "MAX_TOKENS",
-      usage: { totalTokenCount: 2000, thoughtsTokenCount: 1894, candidatesTokenCount: 106 },
-    })
-  );
-  assert.ok(text.length > 0);
-  assert.ok(isGeminiTokenLimitHit(finishReason));
-  assert.equal(usage.thoughtsTokenCount, 1894);
-});
-
 test("isGeminiTokenLimitHit flags only MAX_TOKENS", async () => {
   const { isGeminiTokenLimitHit } = await load();
   assert.ok(isGeminiTokenLimitHit("MAX_TOKENS"));
   assert.ok(!isGeminiTokenLimitHit("STOP"));
   assert.ok(!isGeminiTokenLimitHit(""));
   assert.ok(!isGeminiTokenLimitHit(undefined));
+});
+
+test("assess: a normal response is ok and keeps its text", async () => {
+  const { assessGeminiResponse } = await load();
+  const result = assessGeminiResponse(
+    makeResponse({ parts: [{ text: "Cleaned text." }], finishReason: "STOP" })
+  );
+  assert.equal(result.kind, "ok");
+  assert.equal(result.text, "Cleaned text.");
+});
+
+test("assess: partial text with MAX_TOKENS is truncated, never ok", async () => {
+  const { assessGeminiResponse } = await load();
+  const result = assessGeminiResponse(
+    makeResponse({
+      parts: [{ text: "Ya tengo una pestaña abierta y he hecho una prueba en" }],
+      finishReason: "MAX_TOKENS",
+      usage: { totalTokenCount: 2000, thoughtsTokenCount: 1894, candidatesTokenCount: 106 },
+    })
+  );
+  assert.equal(result.kind, "truncated");
+  assert.ok(result.text.length > 0);
+  assert.equal(result.usage.thoughtsTokenCount, 1894);
+});
+
+test("assess: empty candidates keep the #938 empty guard reachable", async () => {
+  const { assessGeminiResponse } = await load();
+  assert.equal(assessGeminiResponse(makeResponse({ finishReason: "STOP" })).kind, "empty");
+  assert.equal(assessGeminiResponse({}).kind, "empty");
+  assert.equal(assessGeminiResponse(undefined).kind, "empty");
+  assert.equal(
+    assessGeminiResponse(makeResponse({ finishReason: "MAX_TOKENS" })).kind,
+    "empty_token_limit"
+  );
 });
 
 test("cleanup suppresses thinking on thinking-capable models", async () => {
@@ -79,12 +91,11 @@ test("cleanup honors the model's minimum thinking level", async () => {
 });
 
 test("unknown minimum thinking level falls back to minimal", async () => {
-  const { resolveGeminiThinkingConfig } = await load();
-  assert.equal(
-    resolveGeminiThinkingConfig({}, { supportsThinking: true, minThinkingLevel: "bogus" })
-      .thinkingLevel,
-    "minimal"
-  );
+  const { geminiSuppressedThinkingLevel } = await load();
+  assert.equal(geminiSuppressedThinkingLevel({ minThinkingLevel: "bogus" }), "minimal");
+  assert.equal(geminiSuppressedThinkingLevel({}), "minimal");
+  assert.equal(geminiSuppressedThinkingLevel(undefined), "minimal");
+  assert.equal(geminiSuppressedThinkingLevel({ minThinkingLevel: "low" }), "low");
 });
 
 test("agent prompts keep thinking unless the user disabled it", async () => {
@@ -131,18 +142,15 @@ test("registry marks the thinking-by-default Gemini 3 models", () => {
   }
 });
 
-// gemini.ts is TypeScript, so node --test can't require it. Assert the wiring
-// from source the way inferenceProviderIds.test.js parses PROVIDER_REGISTRY.
-test("gemini provider fails truncated candidates instead of returning them", () => {
+// Source-level wiring assert; the TS provider is not requirable here. See #1341.
+test("gemini provider wires the response assessment and truncation failure", () => {
   const src = fs.readFileSync(
     path.join(__dirname, "../../src/services/ai/inferenceProviders/gemini.ts"),
     "utf8"
   );
-  assert.match(src, /extractGeminiCandidateText\(response\)/);
+  assert.match(src, /assessGeminiResponse\(response\)/);
   assert.match(src, /GEMINI_EMPTY_RESPONSE/);
-  const truncationGuard = src.match(
-    /if \(isGeminiTokenLimitHit\(finishReason\)\) \{[\s\S]*?GEMINI_TRUNCATED_RESPONSE[\s\S]*?throw new Error/
-  );
-  assert.ok(truncationGuard, "truncated candidates must throw so the raw transcription survives");
+  assert.match(src, /GEMINI_TRUNCATED_RESPONSE/);
+  assert.match(src, /truncatedResponseError\("Gemini"\)/);
   assert.match(src, /resolveGeminiThinkingConfig\(config, modelDef\)/);
 });

@@ -3,6 +3,7 @@ import { TOKEN_LIMITS } from "../../../config/constants";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { applyChatCompletionsParams, isTruncatedFinishReason } from "../chatRequestBody";
+import { truncatedResponseError } from "../../../helpers/completionTruncation.js";
 import { getTinfoilChatClient } from "../tinfoilClient";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 
@@ -62,6 +63,20 @@ export const tinfoilProvider: InferenceProvider = {
       response.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason))
     ) {
       throw new Error("Model output was truncated before the selection edit completed");
+    }
+
+    // A token-limit cut means partial text; fail instead of pasting a clipped reply. See #1341.
+    const truncatedChoice = response.choices?.find((choice: any) =>
+      isTruncatedFinishReason(choice?.finish_reason)
+    );
+    if (truncatedChoice) {
+      logger.logReasoning("TINFOIL_TRUNCATED_RESPONSE", {
+        model,
+        finishReason: truncatedChoice.finish_reason,
+        responseLength: responseText.length,
+        tokensUsed: response.usage?.total_tokens || 0,
+      });
+      throw truncatedResponseError("Tinfoil");
     }
 
     logger.logReasoning("TINFOIL_RESPONSE", {

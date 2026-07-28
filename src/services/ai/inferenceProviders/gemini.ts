@@ -6,10 +6,10 @@ import { wrapCleanupTranscript } from "../../../config/prompts";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import logger from "../../../utils/logger";
 import {
-  extractGeminiCandidateText,
-  isGeminiTokenLimitHit,
+  assessGeminiResponse,
   resolveGeminiThinkingConfig,
 } from "../../../helpers/geminiResponse.js";
+import { truncatedResponseError } from "../../../helpers/completionTruncation.js";
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -144,18 +144,18 @@ export const geminiProvider: InferenceProvider = {
       }
     }, createApiRetryStrategy());
 
-    const { text: responseText, finishReason, usage } = extractGeminiCandidateText(response);
+    const { kind, text: responseText, finishReason, usage } = assessGeminiResponse(response);
 
-    if (config.requireCompleteOutput && isGeminiTokenLimitHit(finishReason)) {
+    if (config.requireCompleteOutput && (kind === "truncated" || kind === "empty_token_limit")) {
       throw new Error("Model output was truncated before the selection edit completed");
     }
 
-    if (!responseText) {
+    if (kind === "empty" || kind === "empty_token_limit") {
       logger.logReasoning("GEMINI_EMPTY_RESPONSE", {
         model,
         finishReason,
       });
-      if (isGeminiTokenLimitHit(finishReason)) {
+      if (kind === "empty_token_limit") {
         throw new Error(
           "Gemini reached token limit before generating response. Try a shorter input or increase max tokens."
         );
@@ -163,8 +163,8 @@ export const geminiProvider: InferenceProvider = {
       throw new Error("Gemini returned empty response");
     }
 
-    // A MAX_TOKENS candidate is a reply cut mid-sentence; fail it so the raw transcription survives. See #1341.
-    if (isGeminiTokenLimitHit(finishReason)) {
+    // A truncated candidate is a reply cut mid-sentence; fail it so the raw transcription survives. See #1341.
+    if (kind === "truncated") {
       logger.logReasoning("GEMINI_TRUNCATED_RESPONSE", {
         model,
         finishReason,
@@ -173,7 +173,7 @@ export const geminiProvider: InferenceProvider = {
         candidatesTokenCount: usage.candidatesTokenCount ?? 0,
         totalTokenCount: usage.totalTokenCount ?? 0,
       });
-      throw new Error("Gemini hit the output token limit and returned a truncated response");
+      throw truncatedResponseError("Gemini");
     }
 
     logger.logReasoning("GEMINI_RESPONSE", {

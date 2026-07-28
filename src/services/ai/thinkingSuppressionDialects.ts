@@ -46,7 +46,8 @@ export function suppressThinking(
   const family = getModelFamilyConstraints(model);
 
   if (providerKey === "gemini") {
-    requestBody.reasoning_effort = "minimal";
+    // Gemini 3 Pro models reject "minimal"; "low" is their floor. See #1341.
+    requestBody.reasoning_effort = (model || "").toLowerCase().includes("pro") ? "low" : "minimal";
     return;
   }
 

@@ -13,7 +13,10 @@ import {
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
-import { isTruncatedResponsesPayload } from "../../../helpers/completionTruncation.js";
+import {
+  isTruncatedResponsesPayload,
+  truncatedResponseError,
+} from "../../../helpers/completionTruncation.js";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -387,11 +390,12 @@ export const openaiProvider: InferenceProvider = {
       }
     }
 
-    // A token-limit cut means partial text; fail instead of pasting a clipped reply. See #1341.
-    if (
-      (isChatCompletions && isTruncatedFinishReason(response.choices?.[0]?.finish_reason)) ||
-      (isResponsesApi && isTruncatedResponsesPayload(response))
-    ) {
+    // A token-limit cut means partial text; fail instead of pasting a clipped reply. The
+    // extraction above scans every choice, so the guard must too. See #1341.
+    const truncatedChoice = isChatCompletions
+      ? response.choices.find((choice: any) => isTruncatedFinishReason(choice?.finish_reason))
+      : undefined;
+    if (truncatedChoice || (isResponsesApi && isTruncatedResponsesPayload(response))) {
       const providerLabel = isCustomProvider
         ? "Custom endpoint"
         : isOpenRouter
@@ -399,11 +403,11 @@ export const openaiProvider: InferenceProvider = {
           : "OpenAI";
       logger.logReasoning("OPENAI_TRUNCATED_RESPONSE", {
         model,
-        finishReason: isChatCompletions ? response.choices?.[0]?.finish_reason : response.status,
+        finishReason: truncatedChoice ? truncatedChoice.finish_reason : response.status,
         responseLength: responseText.length,
         tokensUsed: response.usage?.total_tokens || 0,
       });
-      throw new Error(`${providerLabel} hit the token limit and returned a truncated response`);
+      throw truncatedResponseError(providerLabel);
     }
 
     logger.logReasoning("OPENAI_RESPONSE", {

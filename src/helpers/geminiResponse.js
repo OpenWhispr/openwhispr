@@ -22,7 +22,24 @@ export function isGeminiTokenLimitHit(finishReason) {
   return finishReason === "MAX_TOKENS";
 }
 
+// Classifies a generateContent response so the provider maps kinds to outcomes. See #1341.
+export function assessGeminiResponse(response) {
+  const { text, finishReason, usage } = extractGeminiCandidateText(response);
+  const tokenLimitHit = isGeminiTokenLimitHit(finishReason);
+  if (!text) {
+    return { kind: tokenLimitHit ? "empty_token_limit" : "empty", text, finishReason, usage };
+  }
+  return { kind: tokenLimitHit ? "truncated" : "ok", text, finishReason, usage };
+}
+
 const THINKING_LEVELS = ["minimal", "low", "medium", "high"];
+
+// Lowest thinking level the model accepts when suppressing; Gemini 3 Pro rejects "minimal".
+export function geminiSuppressedThinkingLevel(modelDef) {
+  return THINKING_LEVELS.includes(modelDef?.minThinkingLevel)
+    ? modelDef.minThinkingLevel
+    : "minimal";
+}
 
 // Cleanup always suppresses thinking to the lowest level the model accepts;
 // agent prompts only when the user disabled it. See #1341.
@@ -30,8 +47,5 @@ export function resolveGeminiThinkingConfig(config, modelDef) {
   if (!modelDef?.supportsThinking) return undefined;
   const isCleanup = !config?.systemPrompt;
   if (!isCleanup && config?.disableThinking !== true) return undefined;
-  const thinkingLevel = THINKING_LEVELS.includes(modelDef.minThinkingLevel)
-    ? modelDef.minThinkingLevel
-    : "minimal";
-  return { thinkingLevel, includeThoughts: false };
+  return { thinkingLevel: geminiSuppressedThinkingLevel(modelDef), includeThoughts: false };
 }
