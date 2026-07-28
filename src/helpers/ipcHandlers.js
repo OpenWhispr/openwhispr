@@ -6215,6 +6215,9 @@ class IPCHandlers {
               // OpenAI rejects rates below 24kHz; the 16kHz capture is upsampled instead.
               captureRate: 16000,
               preconfigured: isCloud,
+              // Route realtime at the same OpenAI-compatible server the batch
+              // path already uses for `custom`; empty means OpenAI.
+              baseUrl: options.baseUrl,
             });
           }
         } catch (err) {
