@@ -514,6 +514,7 @@ class IPCHandlers {
     this.audioStorageManager = new AudioStorageManager();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
+    this._retentionSettingsSynced = false;
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
@@ -785,8 +786,17 @@ class IPCHandlers {
 
   _setupRetentionCleanup() {
     const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-    this._runRetentionCleanup();
-    this._retentionCleanupInterval = setInterval(() => this._runRetentionCleanup(), SIX_HOURS_MS);
+    this._retentionCleanupInterval = setInterval(() => {
+      if (this._retentionSettingsSynced) this._runRetentionCleanup();
+    }, SIX_HOURS_MS);
+  }
+
+  _syncRetentionSettings(incoming) {
+    const firstSync = !this._retentionSettingsSynced;
+    const { changed, settings } = applyRetentionSettings(this._retentionSettings, incoming);
+    this._retentionSettings = settings;
+    this._retentionSettingsSynced = true;
+    if (firstSync || changed) this._runRetentionCleanup();
   }
 
   _runRetentionCleanup() {
@@ -1109,10 +1119,7 @@ class IPCHandlers {
     });
 
     ipcMain.on("retention-settings-changed", (_event, incoming) => {
-      const { changed, settings } = applyRetentionSettings(this._retentionSettings, incoming);
-      if (!changed) return;
-      this._retentionSettings = settings;
-      this._runRetentionCleanup();
+      this._syncRetentionSettings(incoming);
     });
 
     ipcMain.handle("delete-all-audio", async () => {
