@@ -8,15 +8,20 @@ function parseOfflineMessage(message) {
   }
 }
 
-// Dedupes finalized segments by id; text() is finalized text plus the trailing partial.
+// Latest-wins per finalized segment id (the server refines a segment before its
+// endpoint); text() joins segments in first-arrival order plus the trailing partial.
 function createOnlineAccumulator() {
-  const finalizedSegments = new Set();
-  let finalizedText = "";
+  const finalizedSegments = new Map();
   let partialText = "";
+  let partialSegment = null;
   let fallbackKey = 0;
 
-  const text = () =>
-    finalizedText && partialText ? `${finalizedText} ${partialText}` : finalizedText || partialText;
+  const text = () => {
+    const finalizedText = Array.from(finalizedSegments.values()).join(" ");
+    return finalizedText && partialText
+      ? `${finalizedText} ${partialText}`
+      : finalizedText || partialText;
+  };
 
   return {
     push(message) {
@@ -33,15 +38,16 @@ function createOnlineAccumulator() {
 
       if (!parsed.is_final) {
         partialText = finalizedSegments.has(parsed.segment) ? "" : messageText;
+        partialSegment = parsed.segment ?? null;
         return text();
       }
 
       const segment = parsed.segment ?? `fallback:${fallbackKey++}`;
-      if (!finalizedSegments.has(segment)) {
-        finalizedSegments.add(segment);
-        finalizedText = finalizedText ? `${finalizedText} ${messageText}` : messageText;
+      finalizedSegments.set(segment, messageText);
+      if (partialSegment === null || partialSegment === segment) {
+        partialText = "";
+        partialSegment = null;
       }
-      partialText = "";
       return text();
     },
     text,

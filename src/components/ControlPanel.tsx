@@ -372,14 +372,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, []);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onNavigateToNote?.((data) => {
+    const drain = async () => {
+      const data = await window.electronAPI?.getPendingNoteNavigation?.();
+      if (!data) return;
       if (data.folderId) {
         setActiveFolderId(data.folderId);
         initializeNotes(null, 50, data.folderId);
       }
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
-    });
+    };
+    drain();
+    const cleanup = window.electronAPI?.onNoteNavigationPending?.(drain);
     return () => cleanup?.();
   }, []);
 

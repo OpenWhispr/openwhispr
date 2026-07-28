@@ -981,9 +981,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-note-navigation-pending",
     (callback) => () => callback()
   ),
-  onNavigateToNote: registerListener(
-    "navigate-to-note",
-    (callback) => (_event, data) => callback(data)
+  getPendingNoteNavigation: () => ipcRenderer.invoke("get-pending-note-navigation"),
+  onNoteNavigationPending: registerListener(
+    "note-navigation-pending",
+    (callback) => () => callback()
   ),
 
   onUpdateNotificationData: registerListener(
