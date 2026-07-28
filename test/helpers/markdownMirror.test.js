@@ -80,3 +80,26 @@ test("renaming a mirrored note cleans up both stale files and reveals the note",
   assert.equal(markdownMirror.getNotePath(note.id), notePath);
   assert.match(fs.readFileSync(notePath, "utf8"), /Updated notes$/);
 });
+
+test("a note file re-saved with a BOM or CRLF is still recognised as its note", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+
+  const note = {
+    id: 11,
+    title: "Quarterly plan",
+    content: "Body",
+    created_at: "2026-07-21T12:00:00Z",
+  };
+
+  markdownMirror.init(basePath);
+  markdownMirror.writeNote(note, "Personal");
+
+  const notePath = path.join(basePath, "Personal", "11-quarterly-plan.md");
+  const original = fs.readFileSync(notePath, "utf-8");
+
+  for (const rewritten of [original.replace(/\n/g, "\r\n"), `\uFEFF${original}`]) {
+    fs.writeFileSync(notePath, rewritten, "utf-8");
+    assert.equal(markdownMirror.getNotePath(note.id), notePath);
+  }
+});
