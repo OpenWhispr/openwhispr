@@ -1,19 +1,14 @@
-// KDE/GNOME Wayland: self-relaunch with --ozone-platform=x11 to force XWayland.
-// Chromium picks the display backend before JS runs, so appendSwitch is too late.
-if (
-  process.platform === "linux" &&
-  process.env.XDG_SESSION_TYPE === "wayland" &&
-  !process.argv.includes("--ozone-platform=x11")
-) {
-  const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
-  if (desktop.includes("kde") || /gnome|ubuntu|unity|cosmic/.test(desktop)) {
-    const { spawn } = require("child_process");
-    spawn(process.execPath, [...process.argv.slice(1), "--ozone-platform=x11"], {
-      stdio: "inherit",
-      detached: true,
-    }).unref();
-    process.exit(0);
-  }
+// Chromium picks the display backend before JS runs, so appendSwitch is too
+// late — the flag has to come from a relaunch.
+const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
+
+if (shouldForceXWayland(process.argv)) {
+  const { spawn } = require("child_process");
+  spawn(process.execPath, [...process.argv.slice(1), XWAYLAND_FLAG], {
+    stdio: "inherit",
+    detached: true,
+  }).unref();
+  process.exit(0);
 }
 
 const {

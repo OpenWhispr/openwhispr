@@ -19,12 +19,7 @@ import { useToast } from "./ui/useToast";
 import SnippetsView from "./SnippetsView";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
-
-const parseWords = (text: string): string[] =>
-  text
-    .split(/[,\n]/)
-    .map((w) => w.trim())
-    .filter(Boolean);
+import { parseDictionaryImportText } from "../helpers/dictionaryImport";
 
 export default function DictionaryView() {
   const { t } = useTranslation();
@@ -40,7 +35,7 @@ export default function DictionaryView() {
   const [confirmClear, setConfirmClear] = useState(false);
   const addInputRef = useRef<HTMLInputElement>(null);
 
-  const pendingImportCount = useMemo(() => parseWords(bulkText).length, [bulkText]);
+  const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
 
   const userWords = useMemo(
     () => customDictionary.filter((w) => w !== agentName),
@@ -57,7 +52,7 @@ export default function DictionaryView() {
   const addWords = useCallback(
     (text: string): number => {
       const existing = new Set(customDictionary.map((w) => w.toLowerCase()));
-      const words = parseWords(text).filter((w) => {
+      const words = parseDictionaryImportText(text).filter((w) => {
         if (existing.has(w.toLowerCase())) return false;
         existing.add(w.toLowerCase());
         return true;
