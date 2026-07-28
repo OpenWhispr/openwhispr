@@ -51,6 +51,12 @@ function readBoolean(key: string, fallback: boolean): boolean {
   return stored === "true";
 }
 
+function readNumber(key: string, fallback: number): number {
+  if (!isBrowser) return fallback;
+  const parsed = parseInt(localStorage.getItem(key) ?? "", 10);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
 function readStringArray(key: string, fallback: string[]): string[] {
   if (!isBrowser) return fallback;
   const stored = localStorage.getItem(key);
@@ -162,6 +168,7 @@ const ARRAY_SETTINGS = new Set([
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
+  "transcriptRetentionDays",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -667,6 +674,7 @@ export interface SettingsState
   setCloudBackupEnabled: (value: boolean) => void;
   setTelemetryEnabled: (value: boolean) => void;
   setAudioRetentionDays: (days: number) => void;
+  setTranscriptRetentionDays: (days: number) => void;
   setDataRetentionEnabled: (value: boolean) => void;
   setSaveDiscardedTranscriptions: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
@@ -729,6 +737,13 @@ export function setStringSetting(key: keyof SettingsState, value: string): void 
 
 function createBooleanSetter(key: string) {
   return (value: boolean) => {
+    if (isBrowser) localStorage.setItem(key, String(value));
+    useSettingsStore.setState({ [key]: value });
+  };
+}
+
+function createNumberSetter(key: string) {
+  return (value: number) => {
     if (isBrowser) localStorage.setItem(key, String(value));
     useSettingsStore.setState({ [key]: value });
   };
@@ -1011,13 +1026,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   cloudBackupEnabled: readBoolean("cloudBackupEnabled", false),
   telemetryEnabled: readBoolean("telemetryEnabled", false),
-  audioRetentionDays: (() => {
-    if (!isBrowser) return 30;
-    const stored = localStorage.getItem("audioRetentionDays");
-    if (stored === null) return 30;
-    const parsed = parseInt(stored, 10);
-    return isNaN(parsed) ? 30 : parsed;
-  })(),
+  audioRetentionDays: readNumber("audioRetentionDays", 30),
+  transcriptRetentionDays: readNumber("transcriptRetentionDays", 0),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   saveDiscardedTranscriptions: readBoolean("saveDiscardedTranscriptions", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
@@ -1621,10 +1631,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setCloudBackupEnabled: createBooleanSetter("cloudBackupEnabled"),
   setTelemetryEnabled: createBooleanSetter("telemetryEnabled"),
-  setAudioRetentionDays: (days: number) => {
-    if (isBrowser) localStorage.setItem("audioRetentionDays", String(days));
-    set({ audioRetentionDays: days });
-  },
+  setAudioRetentionDays: createNumberSetter("audioRetentionDays"),
+  setTranscriptRetentionDays: createNumberSetter("transcriptRetentionDays"),
   setDataRetentionEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("dataRetentionEnabled", String(value));
     set({ dataRetentionEnabled: value });

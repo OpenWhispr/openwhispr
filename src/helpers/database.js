@@ -747,6 +747,44 @@ class DatabaseManager {
     }
   }
 
+  /** Purges transcriptions older than the retention window. Returns the affected ids so
+   *  callers can drop the matching audio files. */
+  deleteTranscriptionsExpiredBefore(retentionDays) {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+      // Resolve the cutoff once so the ids we report are exactly the rows we purge.
+      const cutoff = this.db
+        .prepare("SELECT datetime('now', ?) AS cutoff")
+        .get(`-${retentionDays} days`).cutoff;
+      const expired = this.db
+        .prepare("SELECT id FROM transcriptions WHERE deleted_at IS NULL AND created_at < ?")
+        .all(cutoff)
+        .map((row) => row.id);
+      if (expired.length === 0) return { ids: [] };
+
+      const tombstone = this.db.prepare(
+        "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND created_at < ?"
+      );
+      const hardDelete = this.db.prepare(
+        "DELETE FROM transcriptions WHERE cloud_id IS NULL AND created_at < ?"
+      );
+      this.db.transaction(() => {
+        tombstone.run(cutoff);
+        hardDelete.run(cutoff);
+      })();
+      return { ids: expired };
+    } catch (error) {
+      debugLogger.error(
+        "Error purging expired transcriptions",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   deleteTranscription(id) {
     try {
       if (!this.db) {

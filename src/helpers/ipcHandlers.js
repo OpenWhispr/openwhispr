@@ -28,6 +28,7 @@ const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const { partitionPendingMicFinals, isWithinRetractWindow } = require("./meetingMicHoldback");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
+const { DEFAULT_RETENTION_SETTINGS, applyRetentionSettings } = require("./retentionSettings");
 const {
   transcriptsOverlap,
   transcriptsLooselyOverlap,
@@ -511,7 +512,8 @@ class IPCHandlers {
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
     this.audioStorageManager = new AudioStorageManager();
-    this._audioCleanupInterval = null;
+    this._retentionCleanupInterval = null;
+    this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
@@ -523,7 +525,7 @@ class IPCHandlers {
     };
     liveSpeakerIdentifier.setDiarizationManager(this.diarizationManager);
     this._setupTextEditMonitor();
-    this._setupAudioCleanup();
+    this._setupRetentionCleanup();
     this._logDetectedGpus();
     this.setupHandlers();
 
@@ -781,29 +783,29 @@ class IPCHandlers {
     }
   }
 
-  _setupAudioCleanup() {
-    const DEFAULT_RETENTION_DAYS = 30;
+  _setupRetentionCleanup() {
     const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+    this._runRetentionCleanup();
+    this._retentionCleanupInterval = setInterval(() => this._runRetentionCleanup(), SIX_HOURS_MS);
+  }
 
-    // Run initial cleanup with default retention
+  _runRetentionCleanup() {
+    const { audioRetentionDays, transcriptRetentionDays } = this._retentionSettings;
     try {
-      this.audioStorageManager.cleanupExpiredAudio(DEFAULT_RETENTION_DAYS, this.databaseManager);
-    } catch (error) {
-      debugLogger.error("Initial audio cleanup failed", { error: error.message }, "audio-storage");
-    }
-
-    // Set up periodic cleanup every 6 hours
-    this._audioCleanupInterval = setInterval(() => {
-      try {
-        this.audioStorageManager.cleanupExpiredAudio(DEFAULT_RETENTION_DAYS, this.databaseManager);
-      } catch (error) {
-        debugLogger.error(
-          "Periodic audio cleanup failed",
-          { error: error.message },
-          "audio-storage"
-        );
+      if (transcriptRetentionDays > 0) {
+        const { ids } =
+          this.databaseManager.deleteTranscriptionsExpiredBefore(transcriptRetentionDays);
+        for (const id of ids) {
+          this.audioStorageManager.deleteAudio(id);
+          this.broadcastToWindows("transcription-deleted", { id });
+        }
       }
-    }, SIX_HOURS_MS);
+      if (audioRetentionDays > 0) {
+        this.audioStorageManager.cleanupExpiredAudio(audioRetentionDays, this.databaseManager);
+      }
+    } catch (error) {
+      debugLogger.error("Retention cleanup failed", { error: error.message }, "audio-storage");
+    }
   }
 
   _setupTextEditMonitor() {
@@ -1104,6 +1106,13 @@ class IPCHandlers {
 
     ipcMain.handle("get-audio-storage-usage", async () => {
       return this.audioStorageManager.getStorageUsage();
+    });
+
+    ipcMain.on("retention-settings-changed", (_event, incoming) => {
+      const { changed, settings } = applyRetentionSettings(this._retentionSettings, incoming);
+      if (!changed) return;
+      this._retentionSettings = settings;
+      this._runRetentionCleanup();
     });
 
     ipcMain.handle("delete-all-audio", async () => {

@@ -615,6 +615,10 @@ declare global {
       deleteTranscriptionAudio: (id: number) => Promise<{ success: boolean }>;
       getAudioStorageUsage: () => Promise<{ fileCount: number; totalBytes: number }>;
       deleteAllAudio: () => Promise<{ deleted: number }>;
+      syncRetentionSettings?: (settings: {
+        audioRetentionDays: number;
+        transcriptRetentionDays: number;
+      }) => void;
       retryTranscription: (
         id: number,
         settings?: {

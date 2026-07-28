@@ -83,6 +83,7 @@ export interface PrivacySettings {
   cloudBackupEnabled: boolean;
   telemetryEnabled: boolean;
   audioRetentionDays: number;
+  transcriptRetentionDays: number;
   dataRetentionEnabled: boolean;
   saveDiscardedTranscriptions: boolean;
 }
@@ -167,6 +168,12 @@ function useSettingsInternal() {
     window.electronAPI?.setAutoLearnEnabled?.(autoLearnCorrections);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Retention periods are enforced by the main process cleanup sweep
+  const { audioRetentionDays, transcriptRetentionDays } = store;
+  useEffect(() => {
+    window.electronAPI?.syncRetentionSettings?.({ audioRetentionDays, transcriptRetentionDays });
+  }, [audioRetentionDays, transcriptRetentionDays]);
 
   // Sync startup pre-warming preferences to main process
   const {
@@ -370,6 +377,8 @@ function useSettingsInternal() {
     setTelemetryEnabled: store.setTelemetryEnabled,
     audioRetentionDays: store.audioRetentionDays,
     setAudioRetentionDays: store.setAudioRetentionDays,
+    transcriptRetentionDays: store.transcriptRetentionDays,
+    setTranscriptRetentionDays: store.setTranscriptRetentionDays,
     dataRetentionEnabled: store.dataRetentionEnabled,
     setDataRetentionEnabled: store.setDataRetentionEnabled,
     saveDiscardedTranscriptions: store.saveDiscardedTranscriptions,
