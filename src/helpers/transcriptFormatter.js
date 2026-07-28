@@ -48,8 +48,9 @@ function formatTimestamp(seconds) {
 }
 
 function formatSrtTimestamp(seconds) {
-  const s = Math.floor(seconds);
-  const ms = Math.round((seconds - s) * 1000);
+  const totalMs = Math.round(seconds * 1000);
+  const ms = totalMs % 1000;
+  const s = Math.floor(totalMs / 1000);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;

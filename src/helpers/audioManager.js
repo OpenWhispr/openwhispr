@@ -2955,12 +2955,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // shape returns DeploymentNotFound. Build the deployment-style URL.
         // The api-version defaults to a transcribe-capable preview; a user can
         // override it by appending ?api-version=... to their endpoint URL.
-        const azureUrl = buildAzureTranscriptionUrl(normalizedBase, deployment);
+        // Built from the raw base — normalization strips the /audio/transcriptions
+        // suffix that marks a deployment the user pinned.
+        const azureUrl = buildAzureTranscriptionUrl(base, deployment);
         if (azureUrl) {
           endpoint = azureUrl;
           logger.debug(
             "STT endpoint: built Azure deployment URL",
-            { base: normalizedBase, deployment, endpoint },
+            { base, deployment, endpoint },
             "transcription"
           );
         } else {
