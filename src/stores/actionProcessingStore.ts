@@ -134,11 +134,7 @@ export function runBackgroundAction(
   (async () => {
     try {
       const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
-      const providerOverrides = buildNoteFormattingOverrides(
-        noteFormatting,
-        options.isCloudMode,
-        settings.noteFormattingCustomApiKey
-      );
+      const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(
         basePrompt + action.prompt,
         options.isMeetingNote ? settings.customDictionary : undefined,

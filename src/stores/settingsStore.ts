@@ -9,7 +9,11 @@ import whisperVadConstants from "../constants/whisperVad.json";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
-import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
+import {
+  deriveReasoningMode,
+  buildReasoningScopePatches,
+  inheritsFallbackEndpoint,
+} from "../helpers/reasoningRouting";
 import { findStaleLocalModelKeys } from "../helpers/localModelSelections";
 import {
   INFERENCE_SCOPES,
@@ -1995,10 +1999,22 @@ export interface ResolvedNoteFormatting {
   cloudMode: string;
   cloudBaseUrl: string;
   remoteUrl: string;
+  customApiKey: string;
 }
 
 export const selectResolvedNoteFormatting = (state: SettingsState): ResolvedNoteFormatting => {
   const cfg = selectResolvedLLMConfig(state, "noteFormatting");
+  const cleanup = selectResolvedLLMConfig(state, "dictationCleanup");
+  // The endpoint falls back to dictation cleanup, so the key that opens it must too,
+  // or an inherited endpoint gets called with no credential.
+  const borrowsEndpoint = inheritsFallbackEndpoint(
+    {
+      mode: cfg.mode,
+      cloudBaseUrl: state.noteFormattingCloudBaseUrl,
+      remoteUrl: state.noteFormattingRemoteUrl,
+    },
+    cleanup.mode
+  );
   return {
     provider: cfg.provider,
     model: cfg.model,
@@ -2006,6 +2022,7 @@ export const selectResolvedNoteFormatting = (state: SettingsState): ResolvedNote
     cloudMode: cfg.cloudMode || "",
     cloudBaseUrl: cfg.cloudBaseUrl || "",
     remoteUrl: cfg.remoteUrl || "",
+    customApiKey: cfg.customApiKey || (borrowsEndpoint ? cleanup.customApiKey || "" : ""),
   };
 };
 
@@ -2047,6 +2064,9 @@ export const selectResolvedLLMConfig = (
     cloudMode: read("cloudMode") || fallback?.cloudMode,
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
+    // Not inherited here: the settings editor renders this field, and a borrowed key
+    // in it would be committed to this scope's storage by an idle edit. Inheritance
+    // belongs on the request path — see selectResolvedNoteFormatting.
     customApiKey: read("customApiKey"),
     disableThinking,
   };
