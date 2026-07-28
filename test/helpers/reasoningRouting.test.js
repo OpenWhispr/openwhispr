@@ -164,3 +164,40 @@ test("corti reasoning provider with empty models routes reasoning to openwhispr 
   );
   assert.deepEqual(reasoning, OPENWHISPR_REASONING);
 });
+
+test("a scope inherits the fallback key when it inherits the endpoint", async () => {
+  const { inheritsFallbackEndpoint } = await load();
+  assert.equal(inheritsFallbackEndpoint({ mode: "self-hosted" }, "self-hosted"), true);
+});
+
+test("a scope on its own remote url keeps its own key", async () => {
+  const { inheritsFallbackEndpoint } = await load();
+  assert.equal(
+    inheritsFallbackEndpoint(
+      { mode: "self-hosted", remoteUrl: "http://host:8080/v1" },
+      "self-hosted"
+    ),
+    false
+  );
+});
+
+test("a scope on its own cloud base url keeps its own key", async () => {
+  const { inheritsFallbackEndpoint } = await load();
+  assert.equal(
+    inheritsFallbackEndpoint(
+      { mode: "providers", cloudBaseUrl: "https://api.example.com/v1" },
+      "providers"
+    ),
+    false
+  );
+});
+
+test("a differing mode never borrows the key (regression: key sent to the wrong host)", async () => {
+  const { inheritsFallbackEndpoint } = await load();
+  assert.equal(inheritsFallbackEndpoint({ mode: "providers" }, "self-hosted"), false);
+});
+
+test("no fallback scope means nothing to inherit", async () => {
+  const { inheritsFallbackEndpoint } = await load();
+  assert.equal(inheritsFallbackEndpoint({ mode: "providers" }, undefined), false);
+});

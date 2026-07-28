@@ -1,4 +1,4 @@
-const { ipcMain, app, shell, BrowserWindow, systemPreferences, net } = require("electron");
+const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -7,6 +7,7 @@ const debugLogger = require("./debugLogger");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const { classifyAndLog } = require("./networkErrors");
+const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
@@ -128,9 +129,48 @@ const AUDIO_MIME_TYPES = {
 };
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
-const CLOUD_CHUNK_CONCURRENCY = 5;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
-const CLOUD_CHUNK_MAX_ATTEMPTS = 3;
+
+const { createAbortError } = require("./abortError");
+const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
+const {
+  CLOUD_UPLOAD_TIMEOUT_MS,
+  CLOUD_CHUNK_MAX_ATTEMPTS,
+  CLOUD_CHUNK_GLOBAL_CONCURRENCY,
+  FATAL_CHUNK_CODES,
+  isTransientChunkError,
+  isNetworkLevelFailure,
+  chunkRetryDelayMs,
+  abortableSleep,
+  createTeardownGate,
+  createUploadSlots,
+} = require("./cloudChunkPolicy");
+
+// Every cloud upload rides a dedicated in-memory session so stalled large
+// bodies can't wedge the HTTP/2 connection the rest of the app multiplexes
+// over, and a failed attempt can drop the pool without collateral damage
+// outside the upload path (#1326).
+const CLOUD_UPLOAD_SESSION_PARTITION = "ow-cloud-uploads";
+const cloudUploadSlots = createUploadSlots(CLOUD_CHUNK_GLOBAL_CONCURRENCY);
+const shouldDropUploadPool = createTeardownGate();
+let cloudUploadSession = null;
+
+function getCloudUploadSession() {
+  if (!cloudUploadSession) {
+    cloudUploadSession = session.fromPartition(CLOUD_UPLOAD_SESSION_PARTITION);
+    applyOpenWhisprOriginHeader(cloudUploadSession);
+  }
+  return cloudUploadSession;
+}
+
+async function dropUploadConnections() {
+  if (!shouldDropUploadPool()) return;
+  try {
+    await getCloudUploadSession().closeAllConnections();
+  } catch {
+    // pool teardown is best-effort
+  }
+}
 
 const {
   formatTimestamp: formatDiarTime,
@@ -208,8 +248,14 @@ function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   return { body: Buffer.concat(bodyParts), boundary };
 }
 
-async function postMultipart(url, body, boundary, headers = {}) {
-  const response = await net.fetch(url.toString(), {
+async function postMultipart(
+  url,
+  body,
+  boundary,
+  headers = {},
+  { signal, session: fetchSession } = {}
+) {
+  const response = await (fetchSession ?? net).fetch(url.toString(), {
     method: "POST",
     headers: {
       "Content-Type": `multipart/form-data; boundary=${boundary}`,
@@ -217,6 +263,7 @@ async function postMultipart(url, body, boundary, headers = {}) {
     },
     body,
     useSessionCookies: false,
+    signal,
   });
   const text = await response.text();
   try {
@@ -256,13 +303,6 @@ function interpretTranscribeResponse(data) {
   return data.data;
 }
 
-const NON_RETRYABLE_CHUNK_CODES = new Set(["AUTH_EXPIRED", "LIMIT_REACHED", "NO_SPEECH_DETECTED"]);
-
-function isTransientChunkError(err) {
-  if (NON_RETRYABLE_CHUNK_CODES.has(err.code)) return false;
-  return !err.statusCode || err.statusCode >= 500;
-}
-
 async function chunkedCloudTranscribe({
   buffer = null,
   filePath = null,
@@ -270,10 +310,18 @@ async function chunkedCloudTranscribe({
   authHeader,
   multipartFields = {},
   onProgress,
-  concurrencyLimit = CLOUD_CHUNK_CONCURRENCY,
+  signal,
   segmentDuration = CLOUD_CHUNK_SEGMENT_SECONDS,
 }) {
   const { splitAudioFile } = require("./ffmpegUtils");
+
+  // Aborted by the caller cancelling or by the first fatal chunk error, so a
+  // doomed job stops uploading its remaining chunks immediately.
+  const jobController = new AbortController();
+  const { signal: jobSignal } = jobController;
+  const abortJob = () => jobController.abort();
+  signal?.addEventListener("abort", abortJob, { once: true });
+  if (signal?.aborted) abortJob();
 
   const jobId = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const chunkDir = path.join(os.tmpdir(), `ow-chunks-${jobId}`);
@@ -291,38 +339,61 @@ async function chunkedCloudTranscribe({
   try {
     onProgress?.({ stage: "splitting", chunksTotal: 0, chunksCompleted: 0 });
 
-    const chunkPaths = await splitAudioFile(inputPath, chunkDir, { segmentDuration });
+    const chunkPaths = await splitAudioFile(inputPath, chunkDir, {
+      segmentDuration,
+      signal: jobSignal,
+    });
     const totalChunks = chunkPaths.length;
 
     onProgress?.({ stage: "transcribing", chunksTotal: totalChunks, chunksCompleted: 0 });
 
+    const url = new URL(`${apiUrl}/api/transcribe`);
     const results = new Array(totalChunks).fill(null);
     const failureCodes = new Set();
+    let fatalError = null;
     let completedCount = 0;
 
     const transcribeChunk = async (index) => {
-      const chunkBuffer = fs.readFileSync(chunkPaths[index]);
-      const chunkName = path.basename(chunkPaths[index]);
-      const { body, boundary } = buildMultipartBody(
-        chunkBuffer,
-        chunkName,
-        "audio/mpeg",
-        multipartFields
-      );
-      const url = new URL(`${apiUrl}/api/transcribe`);
-
       for (let attempt = 1; ; attempt++) {
+        if (jobSignal.aborted) throw createAbortError();
+
+        // Held only while a body is on the wire, so the backoff below never
+        // occupies a slot and queue time never eats the upload timeout.
+        const releaseSlot = await cloudUploadSlots.acquire(jobSignal);
+        const timeoutSignal = AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS);
+        let failure = null;
         try {
-          const data = await postMultipart(url, body, boundary, authHeader);
-          results[index] = interpretTranscribeResponse(data);
-          break;
-        } catch (err) {
-          if (attempt >= CLOUD_CHUNK_MAX_ATTEMPTS || !isTransientChunkError(err)) throw err;
-          debugLogger.warn(`Chunk ${index} attempt ${attempt} failed, retrying`, {
-            error: err.message,
+          const { body, boundary } = buildMultipartBody(
+            fs.readFileSync(chunkPaths[index]),
+            path.basename(chunkPaths[index]),
+            "audio/mpeg",
+            multipartFields
+          );
+          const data = await postMultipart(url, body, boundary, authHeader, {
+            signal: AbortSignal.any([jobSignal, timeoutSignal]),
+            session: getCloudUploadSession(),
           });
-          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt + Math.random() * 500));
+          results[index] = interpretTranscribeResponse(data);
+        } catch (err) {
+          failure = err;
+        } finally {
+          releaseSlot();
         }
+        if (!failure) break;
+
+        if (jobSignal.aborted) throw createAbortError();
+        const timedOut = timeoutSignal.aborted;
+        if (attempt >= CLOUD_CHUNK_MAX_ATTEMPTS || !(timedOut || isTransientChunkError(failure))) {
+          throw failure;
+        }
+        // No HTTP answer ever arrived — treat the pool as wedged and drop it so
+        // the retry dials a fresh connection instead of re-entering the dying one.
+        if (isNetworkLevelFailure(failure, { timedOut })) await dropUploadConnections();
+        debugLogger.warn(`Chunk ${index} attempt ${attempt} failed, retrying`, {
+          error: failure.message,
+          timedOut,
+        });
+        await abortableSleep(chunkRetryDelayMs(attempt), jobSignal);
       }
 
       completedCount++;
@@ -333,23 +404,27 @@ async function chunkedCloudTranscribe({
       });
     };
 
-    const executing = new Set();
-    for (let index = 0; index < totalChunks; index++) {
-      const p = transcribeChunk(index).then(
-        () => executing.delete(p),
-        (err) => {
-          executing.delete(p);
-          if (err.code === "AUTH_EXPIRED" || err.code === "LIMIT_REACHED") throw err;
+    await Promise.all(
+      chunkPaths.map((_, index) =>
+        transcribeChunk(index).catch((err) => {
+          // Only aborts the job itself caused, reported once below. A chunk's
+          // own upload timeout also aborts, and that is a real failure.
+          if (jobSignal.aborted && err.name === "AbortError") return;
+          if (FATAL_CHUNK_CODES.has(err.code)) {
+            fatalError ??= err;
+            abortJob();
+            return;
+          }
           if (err.code) failureCodes.add(err.code);
           debugLogger.warn(`Chunk ${index} failed`, { error: err.message, code: err.code });
-        }
-      );
-      executing.add(p);
-      if (executing.size >= concurrencyLimit) {
-        await Promise.race(executing);
-      }
+        })
+      )
+    );
+
+    if (signal?.aborted) {
+      throw Object.assign(createAbortError("Upload cancelled"), { code: "UPLOAD_CANCELLED" });
     }
-    await Promise.all(executing);
+    if (fatalError) throw fatalError;
 
     const succeeded = results.filter((r) => r !== null);
     if (succeeded.length === 0) {
@@ -376,6 +451,7 @@ async function chunkedCloudTranscribe({
       ...(failed > 0 ? { warning: `${failed} of ${totalChunks} chunks failed` } : {}),
     };
   } finally {
+    signal?.removeEventListener("abort", abortJob);
     if (tmpInputPath) {
       try {
         fs.unlinkSync(tmpInputPath);
@@ -416,6 +492,9 @@ class IPCHandlers {
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
+    // requestId -> AbortController for in-flight audio-upload transcriptions,
+    // so a cancel can abort the exact job.
+    this._uploadTranscriptionControllers = new Map();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
     this.cortiStreaming = null;
@@ -783,8 +862,10 @@ class IPCHandlers {
       });
 
       if (corrections.length > 0) {
-        const updatedDict = [...currentDict, ...corrections];
-        const saveResult = this.databaseManager.setDictionary(updatedDict, "learned");
+        const saveResult = this.databaseManager.applyDictionaryChanges(
+          { add: corrections },
+          "learned"
+        );
 
         if (saveResult?.success === false) {
           debugLogger.debug("[AutoLearn] Failed to save dictionary", { error: saveResult.error });
@@ -1075,6 +1156,17 @@ class IPCHandlers {
       return this.databaseManager.setDictionary(words);
     });
 
+    ipcMain.handle("db-apply-dictionary-changes", async (_event, changes) => {
+      const { add, remove } = changes ?? {};
+      if (add !== undefined && !Array.isArray(add)) {
+        throw new Error("add must be an array");
+      }
+      if (remove !== undefined && !Array.isArray(remove)) {
+        throw new Error("remove must be an array");
+      }
+      return this.databaseManager.applyDictionaryChanges({ add, remove });
+    });
+
     ipcMain.handle("db-get-pending-dictionary", async () => {
       return this.databaseManager.getPendingDictionary();
     });
@@ -1174,10 +1266,7 @@ class IPCHandlers {
         if (validWords.length === 0) {
           return { success: false };
         }
-        const currentDict = this._getDictionarySafe();
-        const removeSet = new Set(validWords.map((w) => w.toLowerCase()));
-        const updatedDict = currentDict.filter((w) => !removeSet.has(w.toLowerCase()));
-        const saveResult = this.databaseManager.setDictionary(updatedDict);
+        const saveResult = this.databaseManager.applyDictionaryChanges({ remove: validWords });
         if (saveResult?.success === false) {
           debugLogger.debug("[AutoLearn] Undo failed to save dictionary", {
             error: saveResult.error,
@@ -3558,41 +3647,28 @@ class IPCHandlers {
         });
       }
 
+      const localServer = resolveLocalServerNeeds(prefs);
+
+      if (localServer.cleanup) {
+        setVars.CLEANUP_PROVIDER = "local";
+        setVars.LOCAL_CLEANUP_MODEL = localServer.cleanup;
+      } else {
+        clearVars.push("CLEANUP_PROVIDER", "LOCAL_CLEANUP_MODEL");
+      }
       // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL clears once
       // the read fallback is removed (~2 releases after this lands).
-      if (prefs.cleanupProvider === "local" && prefs.cleanupModel) {
-        setVars.CLEANUP_PROVIDER = "local";
-        setVars.LOCAL_CLEANUP_MODEL = prefs.cleanupModel;
-        clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
-      } else if (prefs.cleanupProvider && prefs.cleanupProvider !== "local") {
-        clearVars.push(
-          "CLEANUP_PROVIDER",
-          "LOCAL_CLEANUP_MODEL",
-          "REASONING_PROVIDER",
-          "LOCAL_REASONING_MODEL"
-        );
-      }
+      clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
 
-      const dictationAgentLocal =
-        prefs.dictationAgentProvider === "local" && prefs.dictationAgentModel;
-      if (dictationAgentLocal) {
+      if (localServer.dictationAgent) {
         setVars.DICTATION_AGENT_PROVIDER = "local";
-        setVars.LOCAL_DICTATION_AGENT_MODEL = prefs.dictationAgentModel;
-      } else if (prefs.dictationAgentProvider && prefs.dictationAgentProvider !== "local") {
+        setVars.LOCAL_DICTATION_AGENT_MODEL = localServer.dictationAgent;
+      } else {
         clearVars.push("DICTATION_AGENT_PROVIDER", "LOCAL_DICTATION_AGENT_MODEL");
       }
 
-      // Stop the local llama-server only when neither cleanup nor dictation-agent
-      // still need a local model. Otherwise the still-active scope would lose
-      // its server on the next provider switch of the other scope.
-      const cleanupNeedsLocal = setVars.CLEANUP_PROVIDER === "local";
-      const dictationAgentNeedsLocal = setVars.DICTATION_AGENT_PROVIDER === "local";
-      if (
-        prefs.cleanupProvider &&
-        prefs.cleanupProvider !== "local" &&
-        !cleanupNeedsLocal &&
-        !dictationAgentNeedsLocal
-      ) {
+      // Stop the shared llama-server only when neither scope still needs it, so
+      // the active scope keeps its server when the other one switches away.
+      if (localServer.stopServer) {
         const modelManager = require("./modelManagerBridge").default;
         modelManager.stopServer().catch((err) => {
           debugLogger.error("Failed to stop llama-server on provider switch", {
@@ -4266,7 +4342,10 @@ class IPCHandlers {
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const data = await postMultipart(url, body, boundary, authHeader);
+        const data = await postMultipart(url, body, boundary, authHeader, {
+          signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          session: getCloudUploadSession(),
+        });
 
         debugLogger.debug(
           "Cloud transcribe response",
@@ -4413,7 +4492,10 @@ class IPCHandlers {
                     multipartFields
                   );
                   const url = new URL(`${apiUrl}/api/transcribe`);
-                  const data = await postMultipart(url, body, boundary, authHeader);
+                  const data = await postMultipart(url, body, boundary, authHeader, {
+                    signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+                    session: getCloudUploadSession(),
+                  });
                   const responseData = interpretTranscribeResponse(data);
                   result = {
                     text: responseData.text,
@@ -7322,7 +7404,10 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
+    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
+      const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
+      const controller = new AbortController();
+      if (requestId) this._uploadTranscriptionControllers.set(requestId, controller);
       try {
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
@@ -7357,6 +7442,7 @@ class IPCHandlers {
             authHeader,
             multipartFields,
             onProgress: (payload) => event.sender.send("upload-transcription-progress", payload),
+            signal: controller.signal,
           });
           return { success: true, text, ...(warning ? { warning } : {}) };
         }
@@ -7373,17 +7459,37 @@ class IPCHandlers {
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const data = await postMultipart(url, body, boundary, authHeader);
+        const data = await postMultipart(url, body, boundary, authHeader, {
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          ]),
+          session: getCloudUploadSession(),
+        });
         const result = interpretTranscribeResponse(data);
 
         return { success: true, text: result.text };
       } catch (error) {
+        if (controller.signal.aborted) {
+          debugLogger.debug("Cloud audio file transcription cancelled", { requestId });
+          return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+        }
         debugLogger.error("Cloud audio file transcription error", { error: error.message });
         if (error.code) {
           return { success: false, error: error.message, code: error.code, ...error };
         }
         return { success: false, error: error.message };
+      } finally {
+        if (requestId) this._uploadTranscriptionControllers.delete(requestId);
       }
+    });
+
+    // Unknown ids are a no-op: providers other than OpenWhispr cloud don't
+    // register a controller, and the renderer fires this for every cancel.
+    ipcMain.handle("cancel-upload-transcription", async (_event, requestId) => {
+      const controller = this._uploadTranscriptionControllers.get(requestId);
+      controller?.abort();
+      return { success: !!controller };
     });
 
     ipcMain.handle(

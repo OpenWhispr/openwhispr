@@ -262,6 +262,16 @@ class CliBridge {
       return id;
     };
 
+    const requireWordList = (value, field) => {
+      if (value === undefined || value === null) return [];
+      if (!Array.isArray(value) || value.some((w) => typeof w !== "string")) {
+        const err = new Error(`'${field}' must be an array of strings`);
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return value;
+    };
+
     const requireSuccess = (result, message) => {
       if (!result?.success) {
         const err = new Error(result?.error || message);
@@ -349,6 +359,25 @@ class CliBridge {
         },
         201
       ),
+      exact("GET", "/v1/dictionary/list", () => {
+        return { data: db.getDictionary(), has_more: false, next_cursor: null };
+      }),
+      // Bulk edits without writing to SQLite by hand, which lost rows on the
+      // next launch and never reached the cloud (#1295). Takes a delta, so an
+      // import cannot delete words it didn't name.
+      exact("POST", "/v1/dictionary/update", ({ body }) => {
+        const add = requireWordList(body?.add, "add");
+        const remove = requireWordList(body?.remove, "remove");
+        if (add.length === 0 && remove.length === 0) {
+          const err = new Error("Provide at least one word in 'add' or 'remove'");
+          err.code = "VALIDATION";
+          throw err;
+        }
+        const result = db.applyDictionaryChanges({ add, remove });
+        const words = db.getDictionary();
+        setImmediate(() => ipc.broadcastToWindows("dictionary-updated", words));
+        return { data: { words, added: result.added, removed: result.removed } };
+      }),
       exact("GET", "/v1/transcriptions/list", ({ query }) => {
         const limit = query.get("limit") ? Number(query.get("limit")) : 50;
         return {

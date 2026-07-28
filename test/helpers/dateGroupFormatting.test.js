@@ -27,6 +27,15 @@ test("SQLite timestamps without a zone are treated as UTC", async () => {
   assert.equal(alreadyUtc.toISOString(), "2024-01-15T10:30:00.000Z");
 });
 
+test("database timestamps with an explicit numeric offset keep that offset", async () => {
+  const { normalizeDbDate } = await load();
+
+  assert.equal(
+    normalizeDbDate("2024-01-15T10:30:00+02:00").toISOString(),
+    "2024-01-15T08:30:00.000Z"
+  );
+});
+
 test("history groups label today's and yesterday's dates by calendar day", async (t2) => {
   const { formatDateGroup } = await load();
   t2.mock.timers.enable({ apis: ["Date"], now: NOON_JUNE_15 });
@@ -49,8 +58,24 @@ test("string dates are accepted", async (t2) => {
   const { formatDateGroup } = await load();
   t2.mock.timers.enable({ apis: ["Date"], now: NOON_JUNE_15 });
 
-  // No zone suffix: parsed as local time, same day as the mocked clock.
-  assert.equal(formatDateGroup("2024-06-15T08:00:00", t), "Today");
+  // Serializing the local mocked time gives an explicit-zone string for any host timezone.
+  assert.equal(formatDateGroup(new Date(NOON_JUNE_15).toISOString(), t), "Today");
+});
+
+test("history groups zone-less SQLite timestamps as UTC near a local day boundary", async (t2) => {
+  const { formatDateGroup } = await load();
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+
+  try {
+    t2.mock.timers.enable({ apis: ["Date"], now: new Date("2024-06-15T01:00:00Z") });
+
+    // 00:30 UTC is 17:30 on June 14 in Los Angeles, thirty minutes before now.
+    assert.equal(formatDateGroup("2024-06-15 00:30:00", t), "Today");
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
 });
 
 test("upcoming groups label today and tomorrow by calendar day", async (t2) => {
