@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { WindowPositionUtil, WINDOW_SIZES } = require("../../src/helpers/windowConfig.js");
+const {
+  WindowPositionUtil,
+  WINDOW_SIZES,
+  NOTIFICATION_WINDOW_CONFIG,
+} = require("../../src/helpers/windowConfig.js");
 
 // Regression guard for monitor pinning: getMainWindowPosition must floor the widget on
 // each display's own work area (workArea.x / workArea.y), never on 0. A naive Math.max(0, x)
@@ -69,4 +73,24 @@ test("falls back to display.bounds when workArea is absent", () => {
     "bottom-right"
   );
   assert.equal(pos.x, -100);
+});
+
+// getNotificationPosition needs the same floors: a negative-origin display must keep the
+// notification on its own work area instead of snapping to the primary monitor.
+
+const NOTIFICATION_MARGIN = 16;
+
+test("notification on a monitor left of and above primary stays on that monitor", () => {
+  const { width: NW } = NOTIFICATION_WINDOW_CONFIG;
+  const pos = WindowPositionUtil.getNotificationPosition(wa(-1920, -1080, 1920, 1080));
+  assert.equal(pos.x, -1920 + 1920 - NW - NOTIFICATION_MARGIN);
+  assert.equal(pos.y, -1080 + NOTIFICATION_MARGIN);
+  assert.ok(pos.x < 0 && pos.y < 0, "must not clamp to the primary monitor's origin");
+});
+
+test("notification on primary with a top panel is unchanged", () => {
+  const { width: NW } = NOTIFICATION_WINDOW_CONFIG;
+  const pos = WindowPositionUtil.getNotificationPosition(wa(0, 28, 1920, 1020));
+  assert.equal(pos.x, 1920 - NW - NOTIFICATION_MARGIN);
+  assert.equal(pos.y, 28 + NOTIFICATION_MARGIN);
 });

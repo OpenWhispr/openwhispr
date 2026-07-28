@@ -95,6 +95,8 @@ function resolveTargetDisplay(value, allDisplays, fallbackDisplay) {
 
 module.exports = {
   AUTO_DISPLAY,
+  isFiniteNumber,
+  isValidBounds,
   decodeDisplayChoice,
   sanitizePanelDisplayValue,
   resolveTargetDisplay,
