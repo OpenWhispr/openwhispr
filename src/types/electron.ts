@@ -646,7 +646,12 @@ declare global {
 
       // Dictionary operations
       getDictionary: () => Promise<string[]>;
+      /** Replaces the whole dictionary — omitted words are deleted. Prefer applyDictionaryChanges. */
       setDictionary: (words: string[]) => Promise<{ success: boolean }>;
+      applyDictionaryChanges?: (changes: {
+        add?: string[];
+        remove?: string[];
+      }) => Promise<{ success: boolean; added: number; removed: number }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
       getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
       setSnippets?: (
@@ -824,9 +829,11 @@ declare global {
         useLocalWhisper: boolean;
         localTranscriptionProvider: LocalTranscriptionProvider;
         model?: string;
-        cleanupProvider: string;
+        useCleanupModel: boolean;
+        cleanupMode: InferenceMode;
         cleanupModel?: string;
-        dictationAgentProvider: string;
+        useDictationAgent: boolean;
+        dictationAgentMode: InferenceMode;
         dictationAgentModel?: string;
       }) => Promise<void>;
 
@@ -1405,13 +1412,18 @@ declare global {
       }>;
 
       // Cloud audio file transcription
-      transcribeAudioFileCloud?: (filePath: string) => Promise<{
+      transcribeAudioFileCloud?: (
+        filePath: string,
+        options?: { requestId?: string }
+      ) => Promise<{
         success: boolean;
         text?: string;
         warning?: string;
         error?: string;
         code?: string;
       }>;
+
+      cancelUploadTranscription?: (requestId: string) => Promise<{ success: boolean }>;
 
       onUploadTranscriptionProgress?: (
         callback: (data: { stage: string; chunksTotal: number; chunksCompleted: number }) => void
