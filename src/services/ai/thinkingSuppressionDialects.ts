@@ -3,7 +3,7 @@
  * imports so the dialect table stays unit-testable on its own.
  */
 export interface EndpointDialect {
-  key: "mistral";
+  key: "mistral" | "deepseek";
   tokenParam: "max_tokens" | "max_completion_tokens";
   supportsTemperature: boolean;
 }
@@ -22,6 +22,10 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
 
   if (host === "mistral.ai" || host.endsWith(".mistral.ai")) {
     return { key: "mistral", tokenParam: "max_tokens", supportsTemperature: true };
+  }
+
+  if (host === "deepseek.com" || host.endsWith(".deepseek.com")) {
+    return { key: "deepseek", tokenParam: "max_tokens", supportsTemperature: true };
   }
 
   return null;
@@ -63,6 +67,14 @@ export function suppressThinking(
     // Legacy magistral models reason natively and may reject reasoning_effort.
     if ((model || "").toLowerCase().includes("magistral")) return;
     requestBody.reasoning_effort = "none";
+    return;
+  }
+
+  // DeepSeek rejects reasoning_effort "none" with a 400, and errors when any
+  // reasoning_effort is combined with its native thinking switch. See #1260.
+  if (providerKey === "deepseek") {
+    delete requestBody.reasoning_effort;
+    requestBody.thinking = { type: "disabled" };
     return;
   }
 
