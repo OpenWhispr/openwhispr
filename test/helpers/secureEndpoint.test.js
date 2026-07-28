@@ -32,7 +32,6 @@ test("public DNS names that resemble private IP prefixes still require https", a
   assert.equal(isSecureEndpoint("http://172.16.example.com/v1"), false);
   assert.equal(isSecureEndpoint("http://100.64.example.com/v1"), false);
   assert.equal(isSecureEndpoint("http://169.254.example.com/v1"), false);
-  // Public DNS wrappers around an IP literal must still require HTTPS.
   assert.equal(isSecureEndpoint("http://127.0.0.1.nip.io/v1"), false);
 
   assert.equal(isSecureEndpoint("https://127.example.com/v1"), true);

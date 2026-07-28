@@ -1,7 +1,7 @@
 // Require a real dotted-quad before applying IPv4 private-range checks so
 // public DNS names like "127.example.com" / "10.example.com" cannot bypass
 // the HTTPS requirement via string-prefix matching.
-function parseIPv4Literal(hostname: string): [number, number, number, number] | null {
+function parseIPv4Literal(hostname: string): number[] | null {
   const parts = hostname.split(".");
   if (parts.length !== 4) return null;
 
@@ -10,11 +10,11 @@ function parseIPv4Literal(hostname: string): [number, number, number, number] | 
     // Reject empty labels, leading zeros ("01"), and non-decimal forms.
     if (!/^(0|[1-9]\d{0,2})$/.test(part)) return null;
     const value = Number(part);
-    if (!Number.isInteger(value) || value < 0 || value > 255) return null;
+    if (value > 255) return null;
     octets.push(value);
   }
 
-  return octets as [number, number, number, number];
+  return octets;
 }
 
 function isPrivateHost(hostname: string): boolean {
