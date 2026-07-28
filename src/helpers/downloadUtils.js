@@ -211,7 +211,6 @@ function downloadAttempt(url, tempPath, options) {
           );
         } else {
           settled = true;
-          activeFile = null;
           resolve({ downloadedSize, totalSize });
         }
       });
