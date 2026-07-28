@@ -13,6 +13,15 @@ function resolveSpeaker(seg, speakerMappings) {
   return "Unknown Speaker";
 }
 
+// Segments may only merge when they resolve to the same display name. Comparing
+// raw `speaker` is not enough: resolveSpeaker also keys off speakerName and, for
+// un-diarized segments, source — so a manually named segment would otherwise
+// absorb the adjacent un-named one and export it under the wrong person.
+function speakerKey(seg) {
+  const named = seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : "";
+  return [seg.speaker || "", named, seg.speaker ? "" : seg.source || ""].join("\u0000");
+}
+
 function mergeSegments(segments) {
   const merged = [];
   let lastTimestamp = null;
@@ -20,7 +29,7 @@ function mergeSegments(segments) {
     if (!seg.text?.trim()) continue;
     const ts = seg.timestamp || 0;
     const last = merged[merged.length - 1];
-    if (last && (last.speaker || "") === (seg.speaker || "") && ts - lastTimestamp < 2) {
+    if (last && speakerKey(last) === speakerKey(seg) && ts - lastTimestamp < 2) {
       last.text = last.text + " " + seg.text.trim();
       last.endTimestamp = ts;
     } else {

@@ -110,14 +110,47 @@ test("consecutive speaker-less segments within 2s are merged in SRT, TXT, and Ma
   ];
 
   const srtOutput = formatSrt(segments, {});
-  assert.match(srtOutput, /^1\n00:00:00,000 --> 00:00:05,000\nUnknown Speaker: Hello world, this is a test\./);
+  assert.match(
+    srtOutput,
+    /^1\n00:00:00,000 --> 00:00:05,000\nUnknown Speaker: Hello world, this is a test\./
+  );
   assert.match(srtOutput, /\n2\n00:00:05,000 --> 00:00:08,000\nUnknown Speaker: Later sentence\./);
 
-  const txtOutput = formatTxt({ title: "Test Note", created_at: "2026-01-01T00:00:00Z" }, segments, {});
+  const txtOutput = formatTxt(
+    { title: "Test Note", created_at: "2026-01-01T00:00:00Z" },
+    segments,
+    {}
+  );
   assert.ok(txtOutput.includes("[00:00:00] Unknown Speaker:\nHello world, this is a test."));
   assert.ok(txtOutput.includes("[00:00:05] Unknown Speaker:\nLater sentence."));
 
-  const mdOutput = formatMd({ title: "Test Note", created_at: "2026-01-01T00:00:00Z" }, segments, {});
+  const mdOutput = formatMd(
+    { title: "Test Note", created_at: "2026-01-01T00:00:00Z" },
+    segments,
+    {}
+  );
   assert.ok(mdOutput.includes("**Unknown Speaker** `00:00:00`\nHello world, this is a test."));
   assert.ok(mdOutput.includes("**Unknown Speaker** `00:00:05`\nLater sentence."));
+});
+
+test("a manually named segment does not absorb the adjacent un-named one", () => {
+  const segments = [
+    {
+      source: "mic",
+      timestamp: 0,
+      text: "Alice said this.",
+      speakerName: "Alice",
+      speakerIsPlaceholder: false,
+    },
+    { source: "mic", timestamp: 1, text: "And this is me talking." },
+  ];
+
+  const txtOutput = formatTxt(
+    { title: "Test Note", created_at: "2026-01-01T00:00:00Z" },
+    segments,
+    {}
+  );
+
+  assert.ok(txtOutput.includes("[00:00:00] Alice:\nAlice said this."));
+  assert.ok(txtOutput.includes("[00:00:01] You:\nAnd this is me talking."));
 });
