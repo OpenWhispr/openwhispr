@@ -6,6 +6,8 @@ const TRANSCRIPTION_TIMEOUT_PER_AUDIO_SECOND_MS = 10000;
 const UNKNOWN_DURATION_TIMEOUT_MS = 3600000;
 // 24-hour ceiling keeps the scaled value well under the 32-bit setTimeout limit.
 const TRANSCRIPTION_TIMEOUT_CEILING_MS = 86400000;
+// Every local engine is fed 16 kHz mono s16le, so byte length is a duration estimate.
+const PCM16_MONO_16K_BYTES_PER_SECOND = 16000 * 2;
 
 function computeTranscriptionTimeoutMs(estimatedDurationSeconds) {
   if (!Number.isFinite(estimatedDurationSeconds) || estimatedDurationSeconds <= 0) {
@@ -25,5 +27,6 @@ module.exports = {
   TRANSCRIPTION_TIMEOUT_PER_AUDIO_SECOND_MS,
   UNKNOWN_DURATION_TIMEOUT_MS,
   TRANSCRIPTION_TIMEOUT_CEILING_MS,
+  PCM16_MONO_16K_BYTES_PER_SECOND,
   computeTranscriptionTimeoutMs,
 };
