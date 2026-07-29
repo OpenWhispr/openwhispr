@@ -271,15 +271,15 @@ Reply with ONLY the numeric id of the best matching meeting type. If none match 
           temperature: 0,
         });
 
-        const cleaned = result.trim().replace(/[^0-9]/g, "");
-        const matchedId = parseInt(cleaned, 10);
+        const match = result.trim().match(/^\d+$/);
+        const matchedId = match ? parseInt(match[0], 10) : NaN;
         if (!isNaN(matchedId) && types.some((t) => t.id === matchedId)) {
           debugLogger.info("Pipeline: LLM classified meeting type",
             { noteId, meetingTypeId: matchedId }, "meeting");
           return matchedId;
         }
         debugLogger.info("Pipeline: LLM returned no match or invalid id",
-          { noteId, raw: result.trim() }, "meeting");
+          { noteId, raw: result.trim().slice(0, 50) }, "meeting");
       } catch (llmErr) {
         debugLogger.warn("Pipeline: LLM classification failed, falling back to keywords",
           { noteId, error: llmErr.message }, "meeting");

@@ -19,6 +19,7 @@ function createMocks() {
       }),
       updateNote: () => ({ success: true }),
       getMeetingType: () => null,
+      getMeetingTypes: () => [],
     },
     whisperManager: {
       transcribeLocalWhisper: async () => ({ text: "hello world", segments: [] }),
