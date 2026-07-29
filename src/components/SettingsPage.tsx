@@ -98,7 +98,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
-import { useSettingsStore } from "../stores/settingsStore";
+import { useSettingsStore, selectResolvedNoteFormatting } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import { WORKSPACES_ENABLED } from "../lib/features";
@@ -1055,10 +1055,13 @@ export default function SettingsPage({
 
   // Sync noteFormatting LLM config to main process so the post-call pipeline
   // can read NOTE_FORMATTING_PROVIDER / NOTE_FORMATTING_MODEL from process.env.
+  // Uses selectResolvedNoteFormatting to apply the fallback chain so the
+  // pipeline works even when noteFormatting isn't explicitly configured.
   useEffect(() => {
+    const resolved = selectResolvedNoteFormatting(useSettingsStore.getState());
     window.electronAPI?.syncNoteFormattingConfig?.({
-      provider: noteFormattingProvider,
-      model: noteFormattingModel,
+      provider: resolved.provider,
+      model: resolved.model,
     });
   }, [noteFormattingProvider, noteFormattingModel]);
 

@@ -11,6 +11,7 @@ import {
 const STEP_LABELS: Record<PipelineStep, string> = {
   retranscribe: "pipeline.steps.retranscribe",
   title: "pipeline.steps.title",
+  classify: "pipeline.steps.classify",
   notes: "pipeline.steps.notes",
   pipeline: "pipeline.steps.pipeline",
 };

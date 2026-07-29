@@ -20,7 +20,7 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import { useSettingsStore } from "../stores/settingsStore";
+import { useSettingsStore, selectResolvedNoteFormatting } from "../stores/settingsStore";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -175,12 +175,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   // Sync noteFormatting config to main process on startup so the post-call
   // pipeline has the correct provider/model in process.env even before the
-  // user visits Settings.
+  // user visits Settings. Uses selectResolvedNoteFormatting to apply the
+  // fallback chain (noteFormatting → dictationCleanup) so the pipeline works
+  // even if the user never explicitly configured a note formatting model.
   useEffect(() => {
-    const { noteFormattingProvider, noteFormattingModel } = useSettingsStore.getState();
+    const state = useSettingsStore.getState();
+    const resolved = selectResolvedNoteFormatting(state);
     window.electronAPI?.syncNoteFormattingConfig?.({
-      provider: noteFormattingProvider,
-      model: noteFormattingModel,
+      provider: resolved.provider,
+      model: resolved.model,
     });
   }, []);
 
