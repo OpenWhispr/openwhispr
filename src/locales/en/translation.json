@@ -424,13 +424,14 @@
     },
     "modelDownload": {
       "title": "Downloading transcription model",
-      "description": "To run completely offline, OpenWhispr is downloading the Parakeet model (~680 MB). Please leave the app open while it downloads.",
+      "description": "To run completely offline, OpenWhispr is downloading {{modelName}} (~{{sizeMb}} GB). Please leave the app open while it downloads.",
       "progress": "{{downloaded}} / {{total}} ({{percentage}}%)",
       "starting": "Starting download...",
       "cancel": "Cancel",
       "dismiss": "Dismiss",
       "errorTitle": "Model download failed",
-      "complete": "Transcription model ready — you're all set for offline use."
+      "complete": "Transcription model ready — you're all set for offline use.",
+      "fallbackModelName": "the model"
     },
     "backToNotes": "Back to notes"
   },
@@ -1483,13 +1484,13 @@
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud Providers",
-        "local": "Local",
-        "selfHosted": "Self-Hosted",
+        "local": "Built-in Model",
+        "selfHosted": "Remote API",
         "enterprise": "Enterprise",
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
         "providersDesc": "Bring your own API key.",
-        "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network.",
+        "localDesc": "Gemma 4 E4B — runs fully offline on your device",
+        "selfHostedDesc": "Connect to any OpenAI or Anthropic-compatible endpoint",
         "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
@@ -1520,6 +1521,13 @@
           "title": "Enterprise",
           "description": "Using your organization's cloud account."
         }
+      },
+      "gemmaCard": {
+        "ready": "Downloaded",
+        "downloading": "Downloading… {{percentage}}%",
+        "notDownloaded": "Not downloaded",
+        "download": "Download",
+        "error": "Download failed"
       }
     },
     "developer": {
@@ -2691,10 +2699,10 @@
       "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
       "providers": "Bring your own key",
       "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "local": "Built-in Model",
+      "localDesc": "Gemma 4 E4B — runs fully offline on your device",
+      "selfHosted": "Remote API",
+      "selfHostedDesc": "Connect to any OpenAI or Anthropic-compatible endpoint",
       "enterprise": "Enterprise",
       "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
@@ -2715,13 +2723,13 @@
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud Providers",
-        "local": "Local",
-        "selfHosted": "Self-Hosted",
+        "local": "Built-in Model",
+        "selfHosted": "Remote API",
         "enterprise": "Enterprise",
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
         "providersDesc": "Bring your own API key.",
-        "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network.",
+        "localDesc": "Gemma 4 E4B — runs fully offline on your device",
+        "selfHostedDesc": "Connect to any OpenAI or Anthropic-compatible endpoint",
         "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
@@ -3025,5 +3033,11 @@
       "save": "Save",
       "saving": "Saving..."
     }
+  },
+  "gemmaPrompt": {
+    "title": "Download Gemma 4 E4B for meeting notes?",
+    "description": "OpenWhispr uses Gemma 4 E4B (~5.4 GB) as a fully local AI model to auto-generate meeting titles, detect meeting types, and create structured meeting notes. Without it, these features won't be available. You can also connect your own remote API endpoint instead.",
+    "accept": "Download Gemma (5.4 GB)",
+    "decline": "Not now"
   }
 }

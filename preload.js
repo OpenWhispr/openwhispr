@@ -369,6 +369,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("set-auto-post-call-pipeline", enabled),
   syncNoteFormattingConfig: (config) =>
     ipcRenderer.invoke("sync-note-formatting-config", config),
+  onNoteFormattingAutoConfigured: registerListener("note-formatting-auto-configured"),
 
   // Window control functions
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),

@@ -424,13 +424,14 @@
     },
     "modelDownload": {
       "title": "正在下载转录模型",
-      "description": "为了实现完全离线运行，OpenWhispr 正在下载 Parakeet 模型（约 680 MB）。请在下载期间保持应用打开。",
+      "description": "为了完全离线运行，OpenWhispr 正在下载 {{modelName}}（约 {{sizeMb}} GB）。下载期间请保持应用打开。",
       "progress": "{{downloaded}} / {{total}} ({{percentage}}%)",
       "starting": "正在开始下载...",
       "cancel": "取消",
       "dismiss": "关闭",
       "errorTitle": "模型下载失败",
-      "complete": "转录模型已就绪 — 一切准备就绪，可以离线使用。"
+      "complete": "转录模型已就绪 — 一切准备就绪，可以离线使用。",
+      "fallbackModelName": "模型"
     },
     "backToNotes": "返回笔记"
   },
@@ -1219,7 +1220,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1305,12 +1311,12 @@
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "云服务商",
-        "local": "本地",
-        "selfHosted": "自托管",
+        "local": "内置模型",
+        "selfHosted": "远程 API",
         "openwhisprDesc": "准确可靠，无需设置。",
         "providersDesc": "使用你自己的 API Key。",
-        "localDesc": "设备端模型，完全私密。",
-        "selfHostedDesc": "你的服务器，在你的网络上。",
+        "localDesc": "Gemma 4 E4B — 在您的设备上完全离线运行",
+        "selfHostedDesc": "连接到任何兼容 OpenAI 或 Anthropic 的端点",
         "enterprise": "企业级",
         "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
       },
@@ -1342,6 +1348,13 @@
           "title": "企业级",
           "description": "正在使用你组织的云账号。"
         }
+      },
+      "gemmaCard": {
+        "ready": "已下载",
+        "downloading": "下载中… {{percentage}}%",
+        "notDownloaded": "未下载",
+        "download": "下载",
+        "error": "下载失败"
       }
     },
     "developer": {
@@ -2550,10 +2563,10 @@
       "openwhisprDesc": "使用 OpenWhispr 托管的助手，无需 API Key。",
       "providers": "使用自己的 API Key",
       "providersDesc": "用你自己的 API Key 连接 OpenAI、Anthropic、Gemini 或 Groq。",
-      "local": "本地",
-      "localDesc": "在你的设备上运行本地 LLM，完全私密。",
-      "selfHosted": "自托管",
-      "selfHostedDesc": "指向兼容 OpenAI 的自托管端点。",
+      "local": "内置模型",
+      "localDesc": "Gemma 4 E4B — 在您的设备上完全离线运行",
+      "selfHosted": "远程 API",
+      "selfHostedDesc": "连接到任何兼容 OpenAI 或 Anthropic 的端点",
       "enterprise": "企业级",
       "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
     },
@@ -2574,12 +2587,12 @@
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "云服务商",
-        "local": "本地",
-        "selfHosted": "自托管",
+        "local": "内置模型",
+        "selfHosted": "远程 API",
         "openwhisprDesc": "准确可靠，无需设置。",
         "providersDesc": "使用自己的 API 密钥。",
-        "localDesc": "设备端模型，完全私密。",
-        "selfHostedDesc": "你自己网络上的服务器。",
+        "localDesc": "Gemma 4 E4B — 在您的设备上完全离线运行",
+        "selfHostedDesc": "连接到任何兼容 OpenAI 或 Anthropic 的端点",
         "enterprise": "企业级",
         "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
       },
@@ -3020,5 +3033,11 @@
       "save": "保存",
       "saving": "保存中..."
     }
+  },
+  "gemmaPrompt": {
+    "title": "下载 Gemma 4 E4B 用于会议记录？",
+    "description": "OpenWhispr 使用 Gemma 4 E4B（约 5.4 GB）作为完全本地的 AI 模型，用于自动生成会议标题、检测会议类型并创建结构化会议记录。没有它，这些功能将不可用。您也可以改为连接自己的远程 API 端点。",
+    "accept": "下载 Gemma（5.4 GB）",
+    "decline": "暂不"
   }
 }

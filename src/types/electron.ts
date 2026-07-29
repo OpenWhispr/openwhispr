@@ -1899,6 +1899,9 @@ declare global {
         provider: string;
         model: string;
       }) => Promise<{ success: boolean }>;
+      onNoteFormattingAutoConfigured?: (
+        callback: (event: unknown, data: { provider: string; model: string }) => void
+      ) => (() => void);
       setMeetingSessionSpeakerConfig?: (config: {
         enabled: boolean;
         expectedCount: number;

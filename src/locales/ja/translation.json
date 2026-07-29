@@ -424,13 +424,14 @@
     },
     "modelDownload": {
       "title": "文字起こしモデルをダウンロード中",
-      "description": "完全にオフラインで動作するため、OpenWhispr は Parakeet モデル（約680 MB）をダウンロードしています。ダウンロードが完了するまでアプリを開いたままにしてください。",
+      "description": "完全にオフラインで動作させるため、OpenWhispr は {{modelName}}（約 {{sizeMb}} GB）をダウンロードしています。ダウンロード中はアプリを開いたままにしてください。",
       "progress": "{{downloaded}} / {{total}} ({{percentage}}%)",
       "starting": "ダウンロードを開始しています...",
       "cancel": "キャンセル",
       "dismiss": "閉じる",
       "errorTitle": "モデルのダウンロードに失敗しました",
-      "complete": "文字起こしモデルの準備完了 — オフライン使用の準備が整いました。"
+      "complete": "文字起こしモデルの準備完了 — オフライン使用の準備が整いました。",
+      "fallbackModelName": "モデル"
     },
     "backToNotes": "ノートに戻る"
   },
@@ -1310,12 +1311,12 @@
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "クラウドプロバイダー",
-        "local": "ローカル",
-        "selfHosted": "セルフホスト",
+        "local": "内蔵モデル",
+        "selfHosted": "リモート API",
         "openwhisprDesc": "信頼できる精度。設定不要。",
         "providersDesc": "自分のAPIキーを使用。",
-        "localDesc": "端末上のモデル。完全プライベート。",
-        "selfHostedDesc": "自前サーバーをネットワーク上に。",
+        "localDesc": "Gemma 4 E4B — デバイス上で完全にオフラインで動作します",
+        "selfHostedDesc": "OpenAI または Anthropic 互換のエンドポイントに接続します",
         "enterprise": "エンタープライズ",
         "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。"
       },
@@ -1347,6 +1348,13 @@
           "title": "エンタープライズ",
           "description": "組織のクラウドアカウントを使用しています。"
         }
+      },
+      "gemmaCard": {
+        "ready": "ダウンロード済み",
+        "downloading": "ダウンロード中… {{percentage}}%",
+        "notDownloaded": "未ダウンロード",
+        "download": "ダウンロード",
+        "error": "ダウンロードに失敗しました"
       }
     },
     "developer": {
@@ -2555,10 +2563,10 @@
       "openwhisprDesc": "OpenWhispr が管理するエージェントを使用。API キーは不要です。",
       "providers": "自分の API キーを使用",
       "providersDesc": "自分の API キーで OpenAI、Anthropic、Gemini、Groq に接続します。",
-      "local": "ローカル",
-      "localDesc": "端末上でローカル LLM を実行。完全プライベート。",
-      "selfHosted": "セルフホスト",
-      "selfHostedDesc": "セルフホストの OpenAI 互換エンドポイントを指定します。",
+      "local": "内蔵モデル",
+      "localDesc": "Gemma 4 E4B — デバイス上で完全にオフラインで動作します",
+      "selfHosted": "リモート API",
+      "selfHostedDesc": "OpenAI または Anthropic 互換のエンドポイントに接続します",
       "enterprise": "エンタープライズ",
       "enterpriseDesc": "AWS Bedrock、Azure OpenAI、Google Vertex を使用します。"
     },
@@ -2579,12 +2587,12 @@
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "クラウドプロバイダー",
-        "local": "ローカル",
-        "selfHosted": "セルフホスト",
+        "local": "内蔵モデル",
+        "selfHosted": "リモート API",
         "openwhisprDesc": "信頼できる精度。設定不要。",
         "providersDesc": "独自のAPIキーを使用。",
-        "localDesc": "デバイス上のモデル。完全プライベート。",
-        "selfHostedDesc": "ネットワーク上の自分のサーバー。",
+        "localDesc": "Gemma 4 E4B — デバイス上で完全にオフラインで動作します",
+        "selfHostedDesc": "OpenAI または Anthropic 互換のエンドポイントに接続します",
         "enterprise": "エンタープライズ",
         "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。"
       },
@@ -3025,5 +3033,11 @@
       "save": "保存",
       "saving": "保存中..."
     }
+  },
+  "gemmaPrompt": {
+    "title": "会議メモ用に Gemma 4 E4B をダウンロードしますか？",
+    "description": "OpenWhispr は Gemma 4 E4B（約 5.4 GB）を完全にローカルな AI モデルとして使用し、会議タイトルの生成、会議タイプの判定、構造化された会議メモの作成を行います。これがないとこれらの機能は利用できません。代わりに独自のリモート API エンドポイントを接続することもできます。",
+    "accept": "Gemma をダウンロード（5.4 GB）",
+    "decline": "後で"
   }
 }

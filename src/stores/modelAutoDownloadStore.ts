@@ -128,5 +128,11 @@ export function dismissAutoDownloadBanner(): void {
 }
 
 export async function cancelAutoDownload(): Promise<void> {
-  await window.electronAPI?.cancelParakeetDownload?.();
+  const { modelId } = useModelAutoDownloadStore.getState();
+  if (modelId === "parakeet-tdt-0.6b-v3") {
+    await window.electronAPI?.cancelParakeetDownload?.();
+  } else if (modelId) {
+    // Gemma (and any future generic model) cancel via the LLM download bridge.
+    await window.electronAPI?.modelCancelDownload?.(modelId);
+  }
 }

@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap, ChevronLeft } from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
+import GemmaDownloadPrompt from "./GemmaDownloadPrompt";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useHotkey } from "../hooks/useHotkey";
@@ -181,10 +182,44 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   useEffect(() => {
     const state = useSettingsStore.getState();
     const resolved = selectResolvedNoteFormatting(state);
+
+    if (!resolved.provider) {
+      // No LLM resolved yet — if the built-in Gemma model is already on disk,
+      // adopt it as the note-formatting default so the pipeline works offline
+      // without the user visiting Settings.
+      window.electronAPI?.modelCheck?.("gemma-4-e4b-it-q4_k_m").then((downloaded) => {
+        if (!downloaded) return;
+        const s = useSettingsStore.getState();
+        s.setNoteFormattingMode("local");
+        s.setNoteFormattingProvider("local");
+        s.setNoteFormattingModel("gemma-4-e4b-it-q4_k_m");
+        window.electronAPI?.syncNoteFormattingConfig?.({
+          provider: "local",
+          model: "gemma-4-e4b-it-q4_k_m",
+        });
+      });
+      return;
+    }
+
     window.electronAPI?.syncNoteFormattingConfig?.({
       provider: resolved.provider,
       model: resolved.model,
     });
+  }, []);
+
+  // When the main process auto-configures noteFormatting after a Gemma
+  // download completes, mirror it into the settings store so the UI reflects
+  // the change without a reload.
+  useEffect(() => {
+    const dispose = window.electronAPI?.onNoteFormattingAutoConfigured?.(
+      (_event: unknown, data: { provider: string; model: string }) => {
+        const s = useSettingsStore.getState();
+        s.setNoteFormattingMode("local");
+        s.setNoteFormattingProvider(data.provider);
+        s.setNoteFormattingModel(data.model);
+      }
+    );
+    return () => dispose?.();
   }, []);
 
   useEffect(() => {
@@ -707,6 +742,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onOpenChange={setShowPostMigration}
         onDone={dismissPostMigrationPermanently}
       />
+
+      <GemmaDownloadPrompt />
 
       {showSettings && (
         <Suspense fallback={null}>
