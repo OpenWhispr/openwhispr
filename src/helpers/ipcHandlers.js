@@ -1258,6 +1258,25 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("db-get-dictionary-replacements", async () => {
+      return this.databaseManager.getDictionaryReplacements();
+    });
+
+    ipcMain.handle("db-set-dictionary-replacements", async (_event, rules) => {
+      if (!Array.isArray(rules)) {
+        throw new Error("rules must be an array");
+      }
+      const result = this.databaseManager.setDictionaryReplacements(rules);
+      if (result?.success) {
+        // Broadcast the stored list so every window adopts the post-sanitize truth.
+        this.broadcastToWindows(
+          "dictionary-replacements-updated",
+          this.databaseManager.getDictionaryReplacements()
+        );
+      }
+      return result;
+    });
+
     ipcMain.handle("db-get-snippets", async () => {
       return this.databaseManager.getSnippets();
     });

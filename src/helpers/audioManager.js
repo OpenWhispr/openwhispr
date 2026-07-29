@@ -61,6 +61,7 @@ import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValida
 import { isEmptyRecording } from "./recordingGuard";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
+import { applyTranscriptReplacements } from "../utils/textReplacements.js";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
@@ -1891,15 +1892,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async processTranscriptionCore(text, source) {
-    const normalizedText = typeof text === "string" ? text.trim() : "";
+    const trimmedText = typeof text === "string" ? text.trim() : "";
 
-    if (!normalizedText) {
+    if (!trimmedText) {
       logger.logReasoning("TRANSCRIPTION_EMPTY_SKIPPING_REASONING", {
         source,
         reason: "Empty text after normalization",
       });
-      return normalizedText;
+      return trimmedText;
     }
+
+    // User replacements run before any AI step so cleanup and the agent see corrected words.
+    const normalizedText = applyTranscriptReplacements(trimmedText, getSettings());
 
     if (this.skipReasoning) {
       logger.logReasoning("REASONING_SKIPPED_AGENT_MODE", {
@@ -2230,7 +2234,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this.isDictionaryEcho(rawText)) {
       throw new Error("No audio detected");
     }
-    let processedText = result.text;
+    // User replacements run before the reasoning route, same as processTranscription.
+    let processedText = applyTranscriptReplacements(result.text, settings);
     if (processedText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
@@ -3819,6 +3824,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingSttLanguage =
       getBaseLanguageCode(this.getEffectiveSttLanguage(stSettings)) || undefined;
     const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
+
+    // User replacements run before the reasoning route, same as processTranscription.
+    finalText = applyTranscriptReplacements(finalText, stSettings);
 
     let usedCloudReasoning = false;
     if (finalText && !this.skipReasoning) {

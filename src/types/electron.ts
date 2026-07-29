@@ -827,6 +827,13 @@ declare global {
         remove?: string[];
       }) => Promise<{ success: boolean; added: number; removed: number }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
+      getDictionaryReplacements?: () => Promise<Array<{ from: string; to: string }>>;
+      setDictionaryReplacements?: (
+        rules: Array<{ from: string; to: string }>
+      ) => Promise<{ success: boolean; count?: number; error?: string }>;
+      onDictionaryReplacementsUpdated?: (
+        callback: (rules: Array<{ from: string; to: string }>) => void
+      ) => () => void;
       getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
       setSnippets?: (
         snippets: Array<{ trigger: string; replacement: string }>
