@@ -10,6 +10,10 @@
  *   1. Window class name (fast, works for native terminals)
  *   2. Executable name (fallback, catches Electron-based terminals like Termius)
  *
+ * Spoken-command mode (--key <KEY_NAME>):
+ *   Skips clipboard entirely and injects a single keystroke.  Accepted keys:
+ *   Return, Escape, Tab, BackSpace, Shift+Return.
+ *
  * Compile with: cl /O2 windows-fast-paste.c /Fe:windows-fast-paste.exe user32.lib
  * Or with MinGW: gcc -O2 windows-fast-paste.c -o windows-fast-paste.exe -luser32
  */
@@ -159,13 +163,81 @@ static int SendPasteTerminal(void) {
     return (sent == 6) ? 0 : 1;
 }
 
+/* -------------------------------------------------------------------------
+ * Spoken-command keystroke injection (--key <KEY_NAME>)
+ * Supported keys: Return, Escape, Tab, BackSpace, Shift+Return
+ * ------------------------------------------------------------------------- */
+
+typedef struct { const char* name; WORD vk; BOOL shift; } KeyEntry;
+
+static const KeyEntry KEY_TABLE[] = {
+    { "Return",       VK_RETURN,    FALSE },
+    { "Escape",       VK_ESCAPE,    FALSE },
+    { "Tab",          VK_TAB,       FALSE },
+    { "BackSpace",    VK_BACK,      FALSE },
+    { "Shift+Return", VK_RETURN,    TRUE  },
+    { NULL,           0,            FALSE },
+};
+
+static int SendNamedKey(const char* keyName) {
+    const KeyEntry* entry = NULL;
+    for (int i = 0; KEY_TABLE[i].name != NULL; i++) {
+        if (_stricmp(keyName, KEY_TABLE[i].name) == 0) {
+            entry = &KEY_TABLE[i];
+            break;
+        }
+    }
+    if (!entry) {
+        fprintf(stderr, "ERROR: Unknown key name '%s'\n", keyName);
+        return 1;
+    }
+
+    /* Build: [Shift down,] key down, key up [, Shift up] */
+    INPUT inputs[4];
+    ZeroMemory(inputs, sizeof(inputs));
+    int n = 0;
+
+    if (entry->shift) {
+        SetKey(&inputs[n++], VK_LSHIFT, 0);
+    }
+    SetKey(&inputs[n++], entry->vk, 0);
+    SetKey(&inputs[n++], entry->vk, KEYEVENTF_KEYUP);
+    if (entry->shift) {
+        SetKey(&inputs[n++], VK_LSHIFT, KEYEVENTF_KEYUP);
+    }
+
+    UINT sent = SendInput((UINT)n, inputs, sizeof(INPUT));
+    if (sent != (UINT)n) {
+        fprintf(stderr, "ERROR: SendInput failed (error %lu)\n", GetLastError());
+        return 1;
+    }
+    printf("KEY_OK %s\n", keyName);
+    fflush(stdout);
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     BOOL detectOnly = FALSE;
+    const char* keyName = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--detect-only") == 0) {
             detectOnly = TRUE;
+        } else if (strcmp(argv[i], "--key") == 0 && i + 1 < argc) {
+            keyName = argv[++i];
         }
+    }
+
+    /* Spoken-command mode: inject a named keystroke, no clipboard involved. */
+    if (keyName != NULL) {
+        Sleep(10);
+        INPUT releasedInputs[NUM_MODIFIERS];
+        WORD  releasedVKs[NUM_MODIFIERS];
+        ZeroMemory(releasedInputs, sizeof(releasedInputs));
+        int releasedCount = ReleaseModifiers(releasedInputs, releasedVKs);
+        int result = SendNamedKey(keyName);
+        RestoreModifiers(releasedVKs, releasedCount);
+        return result;
     }
 
     HWND hwnd = GetForegroundWindow();

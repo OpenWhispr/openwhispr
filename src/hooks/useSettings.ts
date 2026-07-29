@@ -347,6 +347,8 @@ function useSettingsInternal() {
     setShowTranscriptionPreview: store.setShowTranscriptionPreview,
     autoPasteEnabled: store.autoPasteEnabled,
     setAutoPasteEnabled: store.setAutoPasteEnabled,
+    spokenCommandsEnabled: store.spokenCommandsEnabled,
+    setSpokenCommandsEnabled: store.setSpokenCommandsEnabled,
     keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard: store.setKeepTranscriptionInClipboard,
     noteFilesEnabled: store.noteFilesEnabled,
