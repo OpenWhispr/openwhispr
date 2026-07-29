@@ -259,3 +259,88 @@ test("pasteMacOSWithOsascript fallback uses the short macOS restore delay", asyn
     expectedText: "dictated text",
   });
 });
+
+test("windows paste settle and restore delays scale with transcript length (#829)", () => {
+  assert.equal(ClipboardManager.windowsPasteSettleMs(50), 10);
+  assert.equal(ClipboardManager.windowsPasteSettleMs(150), 10);
+  assert.equal(ClipboardManager.windowsPasteSettleMs(151), 80);
+  assert.equal(ClipboardManager.windowsPasteSettleMs(400), 80);
+  assert.equal(ClipboardManager.windowsPasteSettleMs(401), 120);
+  assert.equal(ClipboardManager.windowsPasteSettleMs(520), 120);
+
+  assert.equal(ClipboardManager.windowsRestoreDelayMs(50), 500);
+  assert.equal(ClipboardManager.windowsRestoreDelayMs(151), 800);
+  assert.equal(ClipboardManager.windowsRestoreDelayMs(520), 1000);
+});
+
+test("pasteWithFastPaste uses length-scaled settle and restore delays (#829)", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  const originalClipboard = { type: "text", data: "previous clipboard" };
+  const longText = "x".repeat(520);
+  let restoreCall;
+  let observedPasteDelayMs;
+
+  const originalSetTimeout = global.setTimeout;
+  global.setTimeout = (fn, ms, ...args) => {
+    if (typeof ms === "number" && ms >= 10 && ms <= 200 && observedPasteDelayMs === undefined) {
+      observedPasteDelayMs = ms;
+    }
+    return originalSetTimeout(fn, ms, ...args);
+  };
+
+  manager._restoreClipboardAfterDelay = (original, options) => {
+    restoreCall = { original, options };
+    return Promise.resolve();
+  };
+
+  try {
+    const result = await manager.pasteWithFastPaste("/tmp/windows-fast-paste.exe", originalClipboard, {
+      expectedClipboardText: longText,
+      pasteDelayMs: TestClipboardManager.windowsPasteSettleMs(longText.length),
+      restoreDelayMs: TestClipboardManager.windowsRestoreDelayMs(longText.length),
+    });
+    await result.restoreComplete;
+  } finally {
+    global.setTimeout = originalSetTimeout;
+  }
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "/tmp/windows-fast-paste.exe");
+  assert.equal(observedPasteDelayMs, 120);
+  assert.equal(restoreCall.original, originalClipboard);
+  assert.deepEqual(restoreCall.options, {
+    delayMs: 1000,
+    expectedText: longText,
+  });
+});
+
+test("_ensureClipboardText retries until the clipboard matches (#829)", async () => {
+  resetClipboard();
+  const manager = new ClipboardManager();
+  let writes = 0;
+  const originalWrite = fakeClipboard.writeText.bind(fakeClipboard);
+  fakeClipboard.writeText = (text) => {
+    writes += 1;
+    if (writes < 3) {
+      fakeClipboard.text = "stale";
+      return;
+    }
+    originalWrite(text);
+  };
+
+  try {
+    const ok = await manager._ensureClipboardText("fresh dictation", {
+      attempts: 5,
+      gapMs: 0,
+    });
+    assert.equal(ok, true);
+    assert.equal(fakeClipboard.text, "fresh dictation");
+    assert.ok(writes >= 3);
+  } finally {
+    fakeClipboard.writeText = originalWrite;
+  }
+});

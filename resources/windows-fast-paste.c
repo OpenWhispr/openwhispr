@@ -200,7 +200,11 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    Sleep(10);
+    /* Give the clipboard a moment to settle after Electron's writeText.
+       Long Unicode payloads previously raced SendInput on some Windows 11
+       setups (#829). A short floor here complements the length-scaled delay
+       in clipboard.js; keep it small so short dictation stays snappy. */
+    Sleep(40);
 
     /* Release any modifier keys held by the user's hotkey so they don't
        contaminate the paste keystroke (e.g. Ctrl+Win held → Ctrl+Win+V). */
