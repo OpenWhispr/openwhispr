@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
+const { countDictionaryTermOccurrences } = require("./dictionaryUsage");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { app } = require("electron");
 
@@ -750,6 +751,20 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      // Device-local usage counters, deliberately absent from the sync
+      // push/pull field lists so increments never travel or mark rows pending.
+      try {
+        this.db.exec(
+          "ALTER TABLE custom_dictionary ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0"
+        );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE custom_dictionary ADD COLUMN last_used_at DATETIME");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       // Backfill client IDs for existing rows
       const syncTables = [
@@ -1209,13 +1224,71 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
+      // Most-used first, so downstream prompt truncation drops the least-used tail.
       const rows = this.db
-        .prepare("SELECT word FROM custom_dictionary WHERE deleted_at IS NULL ORDER BY id ASC")
+        .prepare(
+          "SELECT word FROM custom_dictionary WHERE deleted_at IS NULL ORDER BY usage_count DESC, id ASC"
+        )
         .all();
       return rows.map((row) => row.word);
     } catch (error) {
       debugLogger.error("Error getting dictionary", { error: error.message }, "database");
       throw error;
+    }
+  }
+
+  getDictionaryEntries() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT id, word, source, usage_count, last_used_at, created_at FROM custom_dictionary WHERE deleted_at IS NULL ORDER BY usage_count DESC, id ASC"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error("Error getting dictionary entries", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Fire-and-forget from the save path: never throws, and leaves updated_at /
+  // sync_status alone so counting a dictation can't re-push rows to the cloud.
+  recordDictionaryUsage(text) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (typeof text !== "string" || !text.trim()) return { success: true, matched: 0 };
+      const rows = this.db
+        .prepare("SELECT id, word FROM custom_dictionary WHERE deleted_at IS NULL ORDER BY id ASC")
+        .all();
+      if (rows.length === 0) return { success: true, matched: 0 };
+
+      const counts = countDictionaryTermOccurrences(
+        text,
+        rows.map((row) => row.word)
+      );
+      if (counts.size === 0) return { success: true, matched: 0 };
+
+      const bump = this.db.prepare(
+        "UPDATE custom_dictionary SET usage_count = usage_count + ?, last_used_at = datetime('now') WHERE id = ?"
+      );
+      // Legacy case-variant duplicates share a lowercased key; credit only the
+      // first row so one occurrence never bumps two rows.
+      const credited = new Set();
+      let matched = 0;
+      this.db.transaction(() => {
+        for (const row of rows) {
+          const lower = row.word.trim().toLowerCase();
+          const hits = counts.get(lower);
+          if (!hits || credited.has(lower)) continue;
+          credited.add(lower);
+          bump.run(hits, row.id);
+          matched += 1;
+        }
+      })();
+      return { success: true, matched };
+    } catch (error) {
+      debugLogger.error("Error recording dictionary usage", { error: error.message }, "database");
+      return { success: false, matched: 0 };
     }
   }
 
