@@ -6,6 +6,10 @@ const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
+const {
+  parseControlPanelWindowState,
+  serializeControlPanelWindowState,
+} = require("./controlPanelWindowState");
 
 const SECRET_KEYS = [
   ...BYOK_API_KEYS.map((k) => k.env),
@@ -43,6 +47,7 @@ const PERSISTED_KEYS = [
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
   "PANEL_START_POSITION",
+  "CONTROL_PANEL_WINDOW_STATE",
   "START_MINIMIZED",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
@@ -485,6 +490,19 @@ class EnvironmentManager {
 
   savePanelStartPosition(position) {
     const result = this._saveKey("PANEL_START_POSITION", position);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getControlPanelWindowState() {
+    return parseControlPanelWindowState(this._getKey("CONTROL_PANEL_WINDOW_STATE"));
+  }
+
+  saveControlPanelWindowState(state) {
+    const result = this._saveKey(
+      "CONTROL_PANEL_WINDOW_STATE",
+      serializeControlPanelWindowState(state)
+    );
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }
