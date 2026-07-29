@@ -29,20 +29,26 @@ async function findAvailablePort() {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = "";
-    // Count wire bytes per chunk: string concatenation decodes each Buffer
-    // chunk, so measuring the decoded string would rescan the whole body on
-    // every chunk and miscount sequences split across chunk boundaries.
+    // Buffer the raw chunks and decode once at the end: decoding per chunk
+    // corrupts multibyte sequences split across chunk boundaries.
+    const chunks = [];
     let receivedBytes = 0;
+    let rejected = false;
     req.on("data", (chunk) => {
-      raw += chunk;
-      receivedBytes += Buffer.byteLength(chunk);
+      if (rejected) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      receivedBytes += buffer.length;
       if (receivedBytes > MAX_REQUEST_BODY_BYTES) {
+        rejected = true;
         reject(new Error("Request body too large"));
         req.destroy();
+        return;
       }
+      chunks.push(buffer);
     });
     req.on("end", () => {
+      if (rejected) return;
+      const raw = Buffer.concat(chunks, receivedBytes).toString("utf8");
       if (!raw) return resolve({});
       try {
         resolve(JSON.parse(raw));
