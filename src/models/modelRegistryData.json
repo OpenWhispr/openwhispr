@@ -1182,6 +1182,39 @@
           "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_230m_q8_0"
         }
       ]
+    },
+    {
+      "id": "tii",
+      "name": "TII",
+      "baseUrl": "https://huggingface.co",
+      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
+      "models": [
+        {
+          "id": "falcon-h1-1.5b-deep-instruct-q4_k_m",
+          "name": "Falcon-H1 1.5B Deep",
+          "size": "0.94GB",
+          "sizeBytes": 938465920,
+          "description": "Hybrid attention/Mamba model, strongest sub-2B option for transcript cleanup",
+          "fileName": "Falcon-H1-1.5B-Deep-Instruct-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 131072,
+          "hfRepo": "tiiuae/Falcon-H1-1.5B-Deep-Instruct-GGUF",
+          "recommended": true,
+          "descriptionKey": "models.descriptions.local.tii_falcon_h1_1_5b_deep_instruct_q4_k_m"
+        },
+        {
+          "id": "falcon-h1-1.5b-instruct-q4_k_m",
+          "name": "Falcon-H1 1.5B",
+          "size": "0.94GB",
+          "sizeBytes": 944786656,
+          "description": "Hybrid attention/Mamba model, faster sibling of Falcon-H1 1.5B Deep",
+          "fileName": "Falcon-H1-1.5B-Instruct-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 131072,
+          "hfRepo": "tiiuae/Falcon-H1-1.5B-Instruct-GGUF",
+          "descriptionKey": "models.descriptions.local.tii_falcon_h1_1_5b_instruct_q4_k_m"
+        }
+      ]
     }
   ],
   "openwhisprCloudModels": {
