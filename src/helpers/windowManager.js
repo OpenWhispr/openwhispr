@@ -18,6 +18,7 @@ const {
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
+const { resolveControlPanelWindowState } = require("./controlPanelWindowState");
 
 class WindowManager {
   constructor() {
@@ -49,6 +50,9 @@ class WindowManager {
     this._isDictatingToggle = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
+    this._controlPanelStateStore = null;
+    this._controlPanelNormalBounds = null;
+    this._controlPanelSaveTimer = null;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -564,6 +568,10 @@ class WindowManager {
     }
   }
 
+  setControlPanelStateStore(store) {
+    this._controlPanelStateStore = store;
+  }
+
   setHotkeyListeningMode(enabled) {
     this.hotkeyManager.setListeningMode(enabled);
   }
@@ -628,7 +636,11 @@ class WindowManager {
       return;
     }
 
-    this.controlPanelWindow = new BrowserWindow(CONTROL_PANEL_CONFIG);
+    const restored = this._resolveControlPanelRestoreState();
+    this.controlPanelWindow = new BrowserWindow(
+      restored.bounds ? { ...CONTROL_PANEL_CONFIG, ...restored.bounds } : CONTROL_PANEL_CONFIG
+    );
+    this._controlPanelNormalBounds = restored.bounds;
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
       const appUrl = DevServerManager.getAppUrl(true);
@@ -675,20 +687,35 @@ class WindowManager {
 
     this.controlPanelWindow.once("ready-to-show", () => {
       clearVisibilityTimer();
+      this._trackControlPanelNormalBounds();
+      // Normal bounds are already applied, so unmaximize returns to the saved rect.
+      if (restored.maximize) {
+        this.controlPanelWindow.maximize();
+      }
       this.controlPanelWindow.show();
       this.controlPanelWindow.focus();
       dockManager.setControlPanelVisible(true);
     });
 
+    const schedulePanelStatePersist = () => this._scheduleControlPanelStatePersist();
+    this.controlPanelWindow.on("resize", schedulePanelStatePersist);
+    this.controlPanelWindow.on("move", schedulePanelStatePersist);
+    this.controlPanelWindow.on("maximize", schedulePanelStatePersist);
+    this.controlPanelWindow.on("unmaximize", schedulePanelStatePersist);
+
     this.controlPanelWindow.on("close", (event) => {
       if (!this.isQuitting) {
         event.preventDefault();
         this.hideControlPanelToTray();
+        return;
       }
+      this._persistControlPanelState();
     });
 
     this.controlPanelWindow.on("closed", () => {
       clearVisibilityTimer();
+      clearTimeout(this._controlPanelSaveTimer);
+      this._controlPanelSaveTimer = null;
       this.controlPanelWindow = null;
       dockManager.setControlPanelVisible(false);
     });
@@ -741,6 +768,67 @@ class WindowManager {
 
   async loadControlPanel() {
     await this.loadWindowContent(this.controlPanelWindow, true);
+  }
+
+  _resolveControlPanelRestoreState() {
+    // Restore must never prevent the panel from opening.
+    try {
+      const saved = this._controlPanelStateStore ? this._controlPanelStateStore.get() : null;
+      return resolveControlPanelWindowState(
+        saved,
+        screen.getAllDisplays(),
+        screen.getPrimaryDisplay()
+      );
+    } catch (error) {
+      debugLogger.error(
+        "Failed to resolve control panel window state",
+        { error: error.message },
+        "window"
+      );
+      return { bounds: null, maximize: false };
+    }
+  }
+
+  _trackControlPanelNormalBounds() {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    // Meeting-mode snap is transient programmatic placement, not user intent.
+    if (this._preMeetingBounds) return;
+    if (win.isMaximized() || win.isMinimized() || win.isFullScreen()) return;
+    this._controlPanelNormalBounds = win.getNormalBounds();
+  }
+
+  _scheduleControlPanelStatePersist() {
+    if (!this._controlPanelStateStore) return;
+    clearTimeout(this._controlPanelSaveTimer);
+    // Debounced so a crash loses at most the last half second of movement.
+    this._controlPanelSaveTimer = setTimeout(() => this._persistControlPanelState(), 500);
+  }
+
+  _persistControlPanelState() {
+    clearTimeout(this._controlPanelSaveTimer);
+    this._controlPanelSaveTimer = null;
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed() || !this._controlPanelStateStore) return;
+    this._trackControlPanelNormalBounds();
+    const bounds = this._controlPanelNormalBounds;
+    if (!bounds) return;
+    let displayId = null;
+    try {
+      // Best-effort display hint; null only skips the clamp-to-display fallback.
+      displayId = screen.getDisplayMatching(bounds)?.id ?? null;
+    } catch {
+      displayId = null;
+    }
+    try {
+      this._controlPanelStateStore.save({ ...bounds, isMaximized: win.isMaximized(), displayId });
+    } catch (error) {
+      debugLogger.error(
+        "Failed to persist control panel window state",
+        { error: error.message },
+        "window"
+      );
+    }
   }
 
   async createAgentWindow() {
@@ -1098,6 +1186,7 @@ class WindowManager {
       return;
     }
 
+    this._persistControlPanelState();
     this.controlPanelWindow.hide();
     dockManager.setControlPanelVisible(false);
   }

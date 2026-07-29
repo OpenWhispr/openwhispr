@@ -880,6 +880,10 @@ async function startApp() {
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
+  windowManager.setControlPanelStateStore({
+    get: () => environmentManager.getControlPanelWindowState(),
+    save: (state) => environmentManager.saveControlPanelWindowState(state),
+  });
 
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     windowManager.setActivationModeCache(mode);
