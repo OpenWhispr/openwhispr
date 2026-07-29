@@ -49,7 +49,14 @@ class PostCallPipelineManager {
           this._retranscribe(noteId, audioPath, note.audio_duration_seconds)
         );
         if (result.error) return;
-        if (result.value) transcript = result.value;
+        if (result.value) {
+          transcript = result.value;
+        } else {
+          // retranscribe returned null — model not downloaded, mark as pending
+          this._broadcast("post-call-pipeline-status", {
+            noteId, step: "retranscribe", status: "pending",
+          });
+        }
       } else {
         this._emitStatus(noteId, "retranscribe", "skipped");
       }

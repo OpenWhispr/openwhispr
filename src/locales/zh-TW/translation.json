@@ -208,7 +208,8 @@
     "transcription": {
       "title": "轉錄設定",
       "description": "選擇模式和服務供應商",
-      "preferredLanguage": "偏好語言"
+      "preferredLanguage": "偏好語言",
+      "downloading": "轉錄模型正在背景下載中。您可以繼續進行設定。"
     },
     "activation": {
       "title": "聽寫設定",
@@ -420,6 +421,16 @@
       "bannerDescription": "啟用 GPU 加速以獲得更快的效能。",
       "enableButton": "啟用 GPU",
       "dismissButton": "暫時不要"
+    },
+    "modelDownload": {
+      "title": "正在下載轉錄模型",
+      "description": "為了實現完全離線運行，OpenWhispr 正在下載 Parakeet 模型（約 680 MB）。請在下載期間保持應用程式開啟。",
+      "progress": "{{downloaded}} / {{total}} ({{percentage}}%)",
+      "starting": "正在開始下載...",
+      "cancel": "取消",
+      "dismiss": "關閉",
+      "errorTitle": "模型下載失敗",
+      "complete": "轉錄模型已就緒 — 一切準備就緒，可以離線使用。"
     },
     "backToNotes": "返回筆記"
   },

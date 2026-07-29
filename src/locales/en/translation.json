@@ -208,7 +208,8 @@
     "transcription": {
       "title": "Transcription Setup",
       "description": "Choose your mode and provider",
-      "preferredLanguage": "Preferred Language"
+      "preferredLanguage": "Preferred Language",
+      "downloading": "The transcription model is downloading in the background. You can continue setup."
     },
     "activation": {
       "title": "Dictation Setup",
@@ -420,6 +421,16 @@
       "bannerDescription": "Enable GPU acceleration for faster performance.",
       "enableButton": "Enable GPU",
       "dismissButton": "Not now"
+    },
+    "modelDownload": {
+      "title": "Downloading transcription model",
+      "description": "To run completely offline, OpenWhispr is downloading the Parakeet model (~680 MB). Please leave the app open while it downloads.",
+      "progress": "{{downloaded}} / {{total}} ({{percentage}}%)",
+      "starting": "Starting download...",
+      "cancel": "Cancel",
+      "dismiss": "Dismiss",
+      "errorTitle": "Model download failed",
+      "complete": "Transcription model ready — you're all set for offline use."
     },
     "backToNotes": "Back to notes"
   },
