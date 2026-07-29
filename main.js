@@ -1042,6 +1042,11 @@ async function startApp() {
     });
   }
 
+  // Auto-download default Parakeet model for offline transcription
+  if (ipcHandlers) {
+    ipcHandlers._autoDownloadParakeetModel();
+  }
+
   if (process.platform === "win32") {
     const nircmdStatus = clipboardManager.getNircmdStatus();
     debugLogger.debug("Windows paste tool status", nircmdStatus);
