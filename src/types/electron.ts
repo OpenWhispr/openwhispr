@@ -857,6 +857,13 @@ declare global {
         error?: string;
       }>;
       getParakeetDiagnostics: () => Promise<ParakeetDiagnosticsResult>;
+      onParakeetAutoDownloadStatus?: (callback: (event: unknown, data: {
+        type: string; modelId: string; modelName?: string; sizeMb?: number; error?: string;
+      }) => void) => (() => void);
+      onParakeetAutoDownloadProgress?: (callback: (event: unknown, data: {
+        type: string; percentage?: number; downloaded_bytes?: number; total_bytes?: number;
+      }) => void) => (() => void);
+      getParakeetAutoDownloadStatus?: () => Promise<{ active: boolean; modelId: string } | undefined>;
 
       // Local AI model management
       modelGetAll: () => Promise<any[]>;

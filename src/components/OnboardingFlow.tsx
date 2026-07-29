@@ -630,6 +630,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               variant="onboarding"
             />
 
+            {useLocalWhisper && !isModelDownloaded && (
+              <p className="text-xs text-muted-foreground text-center animate-pulse">
+                {t("onboarding.transcription.downloading")}
+              </p>
+            )}
+
             {/* Language Selection - shown for both modes */}
             <div className="space-y-2 p-3 bg-muted/50 border border-border/60 rounded">
               <label className="block text-xs font-medium text-muted-foreground">
@@ -884,7 +890,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         if (useLocalWhisper) {
           const modelToCheck =
             localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;
-          return modelToCheck !== "" && isModelDownloaded;
+          return modelToCheck !== "";
         } else {
           // Fork: only the self-hosted (custom) provider remains; it works
           // without an API key (points at your own endpoint).

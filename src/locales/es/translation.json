@@ -208,7 +208,8 @@
     "transcription": {
       "title": "Configuración de transcripción",
       "description": "Elige tu modo y proveedor",
-      "preferredLanguage": "Idioma preferido"
+      "preferredLanguage": "Idioma preferido",
+      "downloading": "El modelo de transcripción se está descargando en segundo plano. Puedes continuar con la configuración."
     },
     "activation": {
       "title": "Configuración de dictado",
@@ -420,6 +421,16 @@
       "bannerDescription": "Activa la aceleración GPU para un rendimiento más rápido.",
       "enableButton": "Activar GPU",
       "dismissButton": "Ahora no"
+    },
+    "modelDownload": {
+      "title": "Descargando modelo de transcripción",
+      "description": "Para funcionar completamente sin conexión, OpenWhispr está descargando el modelo Parakeet (~680 MB). Por favor, deja la aplicación abierta mientras se descarga.",
+      "progress": "{{downloaded}} / {{total}} ({{percentage}}%)",
+      "starting": "Iniciando descarga...",
+      "cancel": "Cancelar",
+      "dismiss": "Cerrar",
+      "errorTitle": "Error al descargar el modelo",
+      "complete": "Modelo de transcripción listo — todo preparado para uso sin conexión."
     },
     "backToNotes": "Volver a notas"
   },

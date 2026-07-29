@@ -208,7 +208,8 @@
     "transcription": {
       "title": "文字起こし設定",
       "description": "モードとプロバイダーを選択してください",
-      "preferredLanguage": "優先言語"
+      "preferredLanguage": "優先言語",
+      "downloading": "文字起こしモデルをバックグラウンドでダウンロード中です。セットアップを続けることができます。"
     },
     "activation": {
       "title": "ディクテーション設定",
@@ -420,6 +421,16 @@
       "bannerDescription": "GPU アクセラレーションを有効にしてパフォーマンスを向上させましょう。",
       "enableButton": "GPU を有効化",
       "dismissButton": "後で"
+    },
+    "modelDownload": {
+      "title": "文字起こしモデルをダウンロード中",
+      "description": "完全にオフラインで動作するため、OpenWhispr は Parakeet モデル（約680 MB）をダウンロードしています。ダウンロードが完了するまでアプリを開いたままにしてください。",
+      "progress": "{{downloaded}} / {{total}} ({{percentage}}%)",
+      "starting": "ダウンロードを開始しています...",
+      "cancel": "キャンセル",
+      "dismiss": "閉じる",
+      "errorTitle": "モデルのダウンロードに失敗しました",
+      "complete": "文字起こしモデルの準備完了 — オフライン使用の準備が整いました。"
     },
     "backToNotes": "ノートに戻る"
   },

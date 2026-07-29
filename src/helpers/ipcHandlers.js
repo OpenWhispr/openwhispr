@@ -2347,6 +2347,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("download-parakeet-model", async (event, modelName) => {
+      if (this._parakeetAutoDownloadActive) {
+        return { success: false, error: "Auto-download in progress. Cancel it first or wait for it to complete." };
+      }
       try {
         const result = await this.parakeetManager.downloadParakeetModel(
           modelName,
@@ -2392,6 +2395,13 @@ class IPCHandlers {
 
     ipcMain.handle("cancel-parakeet-download", async () => {
       return this.parakeetManager.cancelDownload();
+    });
+
+    ipcMain.handle("get-parakeet-auto-download-status", async () => {
+      return {
+        active: this._parakeetAutoDownloadActive,
+        modelId: "parakeet-tdt-0.6b-v3",
+      };
     });
 
     ipcMain.handle("get-parakeet-diagnostics", async () => {
@@ -4186,6 +4196,8 @@ class IPCHandlers {
     this.backgroundJobQueue = new BackgroundJobQueue();
     this._largeModelDownloadTriggered = false;
     this._autoPostCallPipelineDisabled = false;
+    this._parakeetAutoDownloadActive = false;
+    this._pendingRetranscriptionNoteIds = new Set();
 
     const inference = new MainProcessInference(proxyFetch, this.environmentManager);
 
@@ -4197,6 +4209,20 @@ class IPCHandlers {
       inference,
       convertToWav,
     });
+
+    // Observe pipeline status events for pending retranscription tracking
+    const originalBroadcast = this.postCallPipelineManager._broadcast.bind(this.postCallPipelineManager);
+    this.postCallPipelineManager._broadcast = (channel, data) => {
+      originalBroadcast(channel, data);
+      if (channel === "post-call-pipeline-status") {
+        if (data.step === "retranscribe" && data.status === "pending") {
+          this._pendingRetranscriptionNoteIds.add(data.noteId);
+        }
+        if (data.step === "pipeline" && data.status === "complete") {
+          this._pendingRetranscriptionNoteIds.delete(data.noteId);
+        }
+      }
+    };
 
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
@@ -9070,6 +9096,103 @@ class IPCHandlers {
     });
   }
 
+  /**
+   * Auto-download the default Parakeet model on first launch.
+   * Broadcasts progress to all renderer windows via a dedicated channel
+   * (separate from manual downloads which use event.sender.send).
+   * Non-blocking, non-fatal.
+   */
+  async _autoDownloadParakeetModel() {
+    if (this._parakeetAutoDownloadActive) return;
+
+    const defaultModel = "parakeet-tdt-0.6b-v3";
+
+    // Use synchronous check — checkModelStatus() is async and overkill here
+    if (this.parakeetManager.serverManager.isModelDownloaded(defaultModel)) {
+      this.broadcastToWindows("parakeet-auto-download-status", {
+        type: "not-needed",
+        modelId: defaultModel,
+      });
+      return;
+    }
+
+    this._parakeetAutoDownloadActive = true;
+    this.broadcastToWindows("parakeet-auto-download-status", {
+      type: "started",
+      modelId: defaultModel,
+      modelName: "Parakeet TDT 0.6B",
+      sizeMb: 680,
+    });
+
+    debugLogger.info("Auto-downloading Parakeet model for offline transcription",
+      { model: defaultModel }, "startup");
+
+    try {
+      const result = await this.parakeetManager.downloadParakeetModel(
+        defaultModel,
+        (progress) => {
+          this.broadcastToWindows("parakeet-auto-download-progress", progress);
+        }
+      );
+      this._parakeetAutoDownloadActive = false;
+      if (result?.success) {
+        debugLogger.info("Parakeet auto-download complete", { model: defaultModel }, "startup");
+        this.broadcastToWindows("parakeet-auto-download-status", {
+          type: "complete",
+          modelId: defaultModel,
+        });
+      }
+    } catch (err) {
+      this._parakeetAutoDownloadActive = false;
+      if (
+        err.message?.includes("interrupted by user") ||
+        err.message?.includes("cancelled by user") ||
+        err.message?.includes("DOWNLOAD_CANCELLED")
+      ) {
+        debugLogger.info("Parakeet auto-download cancelled by user", {}, "startup");
+        this.broadcastToWindows("parakeet-auto-download-status", {
+          type: "cancelled",
+          modelId: defaultModel,
+        });
+      } else {
+        debugLogger.warn("Parakeet auto-download failed",
+          { error: err.message }, "startup");
+        this.broadcastToWindows("parakeet-auto-download-status", {
+          type: "error",
+          modelId: defaultModel,
+          error: err.message,
+        });
+      }
+    }
+  }
+
+  /**
+   * Re-run the post-call pipeline for notes that were recorded while
+   * the Whisper large model was still downloading. Called when the
+   * large model download completes.
+   */
+  _drainPendingRetranscriptions() {
+    const pending = [...this._pendingRetranscriptionNoteIds];
+    this._pendingRetranscriptionNoteIds.clear();
+
+    if (pending.length === 0) return;
+
+    debugLogger.info("Draining pending retranscriptions after model download",
+      { count: pending.length }, "meeting");
+
+    for (const noteId of pending) {
+      const note = this.databaseManager.getNote(noteId);
+      if (!note) continue;
+      const audioPath = note.system_audio_path || note.mic_audio_path;
+      if (!audioPath || !fs.existsSync(audioPath)) continue;
+
+      this.backgroundJobQueue.enqueue(
+        `post-call-retry-${noteId}`,
+        () => this.postCallPipelineManager.run(noteId)
+      );
+    }
+  }
+
   _enqueuePostCallPipeline(noteId) {
     if (this._autoPostCallPipelineDisabled) {
       debugLogger.info("Post-call pipeline disabled by user setting", {}, "meeting");
@@ -9088,6 +9211,9 @@ class IPCHandlers {
         debugLogger.info("Auto-downloading large whisper model for pipeline", {}, "meeting");
         this.whisperManager.downloadWhisperModel("large", (progress) => {
           this.broadcastToWindows("whisper-model-download-progress", progress);
+        }).then(() => {
+          debugLogger.info("Large whisper model download complete, draining pending retranscriptions", {}, "meeting");
+          this._drainPendingRetranscriptions();
         }).catch((err) => {
           debugLogger.warn("Auto-download of large model failed", { error: err.message }, "meeting");
           this._largeModelDownloadTriggered = false;
