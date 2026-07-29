@@ -1,7 +1,7 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, Building2 } from "lucide-react";
+import { Cpu, Network } from "lucide-react";
 import {
   useSettingsStore,
   selectResolvedLLMConfig,
@@ -9,35 +9,14 @@ import {
 } from "../../stores/settingsStore";
 import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
-import ReasoningModelSelector from "../ReasoningModelSelector";
-import EnterpriseSection from "../EnterpriseSection";
 import OpenAICompatiblePanel from "../OpenAICompatiblePanel";
+import GemmaModelCard from "./GemmaModelCard";
 import { Toggle } from "../ui/toggle";
 import type { InferenceMode } from "../../types/electron";
 import type { InferenceScope } from "../../config/inferenceScopes";
-import {
-  modelRegistry,
-  isEnterpriseProvider,
-  getCloudModel,
-  getLocalModel,
-} from "../../models/ModelRegistry";
+import { getLocalModel } from "../../models/ModelRegistry";
 
-function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
-  switch (mode) {
-    case "providers":
-      return (
-        provider === "custom" ||
-        provider === "openrouter" ||
-        modelRegistry.getCloudProviders().some((p) => p.id === provider)
-      );
-    case "local":
-      return modelRegistry.getAllProviders().some((p) => p.id === provider);
-    case "enterprise":
-      return isEnterpriseProvider(provider);
-    default:
-      return true;
-  }
-}
+const GEMMA_MODEL_ID = "gemma-4-e4b-it-q4_k_m";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -45,13 +24,6 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationAgent: "dictationAgent.modes",
   chatIntelligence: "agentMode.settings.modes",
 };
-
-function startCloudOnboarding() {
-  localStorage.setItem("pendingCloudMigration", "true");
-  localStorage.setItem("onboardingCurrentStep", "0");
-  localStorage.removeItem("onboardingCompleted");
-  window.location.reload();
-}
 
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
@@ -61,24 +33,9 @@ interface InferenceConfigEditorProps {
 export default function InferenceConfigEditor({ scope, onModeChange }: InferenceConfigEditorProps) {
   const { t } = useTranslation();
   const config = useSettingsStore(useShallow((s) => selectResolvedLLMConfig(s, scope)));
-  const isSignedIn = useSettingsStore((s) => s.isSignedIn);
 
   const prefix = MODE_LABEL_PREFIX[scope];
   const modes: InferenceModeOption[] = [
-    {
-      id: "openwhispr",
-      label: t(`${prefix}.openwhispr`),
-      description: t(`${prefix}.openwhisprDesc`),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
-    },
-    {
-      id: "providers",
-      label: t(`${prefix}.providers`),
-      description: t(`${prefix}.providersDesc`),
-      icon: <Key className="w-4 h-4" />,
-    },
     {
       id: "local",
       label: t(`${prefix}.local`),
@@ -90,12 +47,6 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       label: t(`${prefix}.selfHosted`),
       description: t(`${prefix}.selfHostedDesc`),
       icon: <Network className="w-4 h-4" />,
-    },
-    {
-      id: "enterprise",
-      label: t(`${prefix}.enterprise`),
-      description: t(`${prefix}.enterpriseDesc`),
-      icon: <Building2 className="w-4 h-4" />,
     },
   ];
 
@@ -109,64 +60,56 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
 
   const handleModeSelect = useCallback(
     (mode: InferenceMode) => {
-      if (mode === "openwhispr" && !isSignedIn) {
-        startCloudOnboarding();
-        return;
-      }
       if (mode === config.mode) return;
 
       const patch: Parameters<typeof setResolvedLLMConfig>[1] = {
         mode,
-        cloudMode: mode === "openwhispr" ? "openwhispr" : "byok",
+        cloudMode: "byok",
       };
-      if (!isProviderValidForMode(config.provider, mode)) {
-        patch.provider = "";
-        patch.model = "";
+      // Built-in mode always resolves to the bundled Gemma model.
+      if (mode === "local") {
+        patch.provider = "local";
+        patch.model = GEMMA_MODEL_ID;
+      } else if (mode === "self-hosted") {
+        // Remote endpoint owns its own model field; clear the stale local one.
+        if (config.provider === "local") {
+          patch.provider = "";
+          patch.model = "";
+        }
       }
       setResolvedLLMConfig(scope, patch);
 
-      if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
+      // Remote endpoints don't use the bundled llama server.
+      if (mode === "self-hosted") {
         window.electronAPI?.llamaServerStop?.();
       }
 
       onModeChange?.(mode);
     },
-    [scope, config.mode, config.provider, isSignedIn, onModeChange]
+    [scope, config.mode, config.provider, onModeChange]
   );
 
-  const setMode = setField("mode");
-  const setProvider = setField("provider");
   const setModel = setField("model");
 
-  const renderModelSelector = (mode?: "cloud" | "local") => (
-    <ReasoningModelSelector
-      reasoningModel={config.model}
-      setReasoningModel={setModel}
-      localReasoningProvider={config.provider}
-      setLocalReasoningProvider={setProvider}
-      cloudReasoningBaseUrl={config.cloudBaseUrl ?? ""}
-      setCloudReasoningBaseUrl={setField("cloudBaseUrl")}
-      customReasoningApiKey={config.customApiKey ?? ""}
-      setCustomReasoningApiKey={setField("customApiKey")}
-      setReasoningMode={setMode}
-      mode={mode}
-    />
-  );
+  // In the simplified UI, "local" means the bundled Gemma model. If a user is
+  // already on local mode but has no model set (e.g. migrated from a removed
+  // hosted-cloud mode), point them at Gemma so inference resolves. An existing
+  // non-empty local model choice is left untouched.
+  useEffect(() => {
+    if (config.mode === "local" && !config.model) {
+      setResolvedLLMConfig(scope, { provider: "local", model: GEMMA_MODEL_ID });
+    }
+  }, [scope, config.mode, config.model]);
 
   const showThinkingToggle =
     config.mode === "self-hosted" ||
-    (config.mode === "providers" &&
-      (config.provider === "custom" ||
-        config.provider === "openrouter" ||
-        !!getCloudModel(config.model)?.supportsThinking)) ||
     (config.mode === "local" && !!getLocalModel(config.model)?.supportsThinking);
 
   return (
     <div className="space-y-3">
       <InferenceModeSelector modes={modes} activeMode={config.mode} onSelect={handleModeSelect} />
 
-      {config.mode === "providers" && renderModelSelector("cloud")}
-      {config.mode === "local" && renderModelSelector("local")}
+      {config.mode === "local" && <GemmaModelCard />}
 
       {config.mode === "self-hosted" && (
         <OpenAICompatiblePanel
@@ -195,15 +138,6 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
           </div>
           <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
         </div>
-      )}
-
-      {config.mode === "enterprise" && (
-        <EnterpriseSection
-          currentProvider={config.provider}
-          reasoningModel={config.model}
-          setReasoningModel={setModel}
-          setLocalReasoningProvider={setProvider}
-        />
       )}
     </div>
   );
