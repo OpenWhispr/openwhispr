@@ -89,6 +89,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Dictionary functions
   getDictionary: () => ipcRenderer.invoke("db-get-dictionary"),
+  getDictionaryEntries: () => ipcRenderer.invoke("db-get-dictionary-entries"),
   setDictionary: (words) => ipcRenderer.invoke("db-set-dictionary", words),
   applyDictionaryChanges: (changes) => ipcRenderer.invoke("db-apply-dictionary-changes", changes),
   onDictionaryUpdated: (callback) => {

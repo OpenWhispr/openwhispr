@@ -536,9 +536,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.workletBlobUrl;
   }
 
-  getCustomDictionaryPrompt() {
+  getCustomDictionaryPrompt({ mostUsedLast = false } = {}) {
     const words = getDictionaryHintWords(getSettings());
-    return words.length > 0 ? words.join(", ") : null;
+    if (words.length === 0) return null;
+    // Words arrive most-used first (SQLite order), which is what head-truncating
+    // cloud providers need; mostUsedLast flips that for tail-keeping decoders.
+    return (mostUsedLast ? [...words].reverse() : words).join(", ");
   }
 
   // Script conversion targets whatever the user ends up pasting: the translation
@@ -559,9 +562,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Whisper only accepts language "zh"; script (简体/繁體) is applied here. See #975.
   // No transcript exists yet, so only an explicit zh-CN/zh-TW may bias the prompt.
-  getWhisperPrompt(settings = getSettings()) {
+  getWhisperPrompt(settings = getSettings(), { mostUsedLast = false } = {}) {
     return mergeWhisperPrompt(
-      this.getCustomDictionaryPrompt(),
+      this.getCustomDictionaryPrompt({ mostUsedLast }),
       resolveChineseScriptTarget(
         this.getEffectiveSttLanguage(settings),
         settings.chineseScriptPreference
@@ -1800,8 +1803,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         options.language = language;
       }
 
-      // Add custom dictionary as initial prompt to help Whisper recognize specific words
-      const dictionaryPrompt = this.getWhisperPrompt();
+      // Add custom dictionary as initial prompt to help Whisper recognize specific
+      // words. whisper.cpp keeps only the last ~224 prompt tokens, so most-used last.
+      const dictionaryPrompt = this.getWhisperPrompt(getSettings(), { mostUsedLast: true });
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
       }

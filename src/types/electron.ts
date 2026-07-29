@@ -311,6 +311,18 @@ export interface DictionaryEntryItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  usage_count: number;
+  last_used_at: string | null;
+}
+
+/** Active dictionary rows with device-local usage counters, most-used first. */
+export interface DictionaryUsageEntry {
+  id: number;
+  word: string;
+  source: "manual" | "learned";
+  usage_count: number;
+  last_used_at: string | null;
+  created_at: string;
 }
 
 export interface SnippetEntryItem {
@@ -980,6 +992,7 @@ declare global {
 
       // Dictionary operations
       getDictionary: () => Promise<string[]>;
+      getDictionaryEntries?: () => Promise<DictionaryUsageEntry[]>;
       /** Replaces the whole dictionary — omitted words are deleted. Prefer applyDictionaryChanges. */
       setDictionary: (words: string[]) => Promise<{ success: boolean }>;
       applyDictionaryChanges?: (changes: {
