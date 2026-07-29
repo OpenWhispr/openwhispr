@@ -2397,11 +2397,26 @@ class IPCHandlers {
       return this.parakeetManager.cancelDownload();
     });
 
-    ipcMain.handle("get-parakeet-auto-download-status", async () => {
-      return {
-        active: this._parakeetAutoDownloadActive,
-        modelId: "parakeet-tdt-0.6b-v3",
-      };
+    ipcMain.handle("get-model-auto-download-status", async () => {
+      // Report whichever auto-download is currently active so a renderer that
+      // reconnects mid-download can restore the banner with the right label.
+      if (this._parakeetAutoDownloadActive) {
+        return {
+          active: true,
+          modelId: "parakeet-tdt-0.6b-v3",
+          modelName: "Parakeet TDT 0.6B",
+          sizeMb: 680,
+        };
+      }
+      if (this._gemmaAutoDownloadActive) {
+        return {
+          active: true,
+          modelId: "gemma-4-e4b-it-q4_k_m",
+          modelName: "Gemma 4 E4B",
+          sizeMb: 5812,
+        };
+      }
+      return { active: false, modelId: null, modelName: null, sizeMb: null };
     });
 
     ipcMain.handle("get-parakeet-diagnostics", async () => {
@@ -9105,7 +9120,7 @@ class IPCHandlers {
 
     // Use synchronous check — checkModelStatus() is async and overkill here
     if (this.parakeetManager.serverManager.isModelDownloaded(defaultModel)) {
-      this.broadcastToWindows("parakeet-auto-download-status", {
+      this.broadcastToWindows("model-auto-download-status", {
         type: "not-needed",
         modelId: defaultModel,
       });
@@ -9113,7 +9128,7 @@ class IPCHandlers {
     }
 
     this._parakeetAutoDownloadActive = true;
-    this.broadcastToWindows("parakeet-auto-download-status", {
+    this.broadcastToWindows("model-auto-download-status", {
       type: "started",
       modelId: defaultModel,
       modelName: "Parakeet TDT 0.6B",
@@ -9127,13 +9142,13 @@ class IPCHandlers {
       const result = await this.parakeetManager.downloadParakeetModel(
         defaultModel,
         (progress) => {
-          this.broadcastToWindows("parakeet-auto-download-progress", progress);
+          this.broadcastToWindows("model-auto-download-progress", progress);
         }
       );
       this._parakeetAutoDownloadActive = false;
       if (result?.success) {
         debugLogger.info("Parakeet auto-download complete", { model: defaultModel }, "startup");
-        this.broadcastToWindows("parakeet-auto-download-status", {
+        this.broadcastToWindows("model-auto-download-status", {
           type: "complete",
           modelId: defaultModel,
         });
@@ -9146,14 +9161,14 @@ class IPCHandlers {
         err.message?.includes("DOWNLOAD_CANCELLED")
       ) {
         debugLogger.info("Parakeet auto-download cancelled by user", {}, "startup");
-        this.broadcastToWindows("parakeet-auto-download-status", {
+        this.broadcastToWindows("model-auto-download-status", {
           type: "cancelled",
           modelId: defaultModel,
         });
       } else {
         debugLogger.warn("Parakeet auto-download failed",
           { error: err.message }, "startup");
-        this.broadcastToWindows("parakeet-auto-download-status", {
+        this.broadcastToWindows("model-auto-download-status", {
           type: "error",
           modelId: defaultModel,
           error: err.message,

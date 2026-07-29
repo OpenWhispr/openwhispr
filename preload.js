@@ -289,9 +289,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkParakeetInstallation: () => ipcRenderer.invoke("check-parakeet-installation"),
   downloadParakeetModel: (modelName) => ipcRenderer.invoke("download-parakeet-model", modelName),
   onParakeetDownloadProgress: registerListener("parakeet-download-progress"),
-  onParakeetAutoDownloadStatus: registerListener("parakeet-auto-download-status"),
-  onParakeetAutoDownloadProgress: registerListener("parakeet-auto-download-progress"),
-  getParakeetAutoDownloadStatus: () => ipcRenderer.invoke("get-parakeet-auto-download-status"),
+  onModelAutoDownloadStatus: registerListener("model-auto-download-status"),
+  onModelAutoDownloadProgress: registerListener("model-auto-download-progress"),
+  getModelAutoDownloadStatus: () => ipcRenderer.invoke("get-model-auto-download-status"),
   checkParakeetModelStatus: (modelName) =>
     ipcRenderer.invoke("check-parakeet-model-status", modelName),
   listParakeetModels: () => ipcRenderer.invoke("list-parakeet-models"),

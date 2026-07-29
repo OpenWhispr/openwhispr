@@ -51,7 +51,7 @@ export function initAutoDownloadListeners(): () => void {
   const disposers: Array<(() => void) | undefined> = [];
 
   // Status events from main process
-  const statusDispose = window.electronAPI?.onParakeetAutoDownloadStatus?.(
+  const statusDispose = window.electronAPI?.onModelAutoDownloadStatus?.(
     (_event: unknown, data: { type: string; modelId: string; modelName?: string; sizeMb?: number; error?: string }) => {
       const store = useModelAutoDownloadStore;
       switch (data.type) {
@@ -86,7 +86,7 @@ export function initAutoDownloadListeners(): () => void {
   disposers.push(statusDispose);
 
   // Progress events on dedicated auto-download channel
-  const progressDispose = window.electronAPI?.onParakeetAutoDownloadProgress?.(
+  const progressDispose = window.electronAPI?.onModelAutoDownloadProgress?.(
     (_event: unknown, data: { type: string; percentage?: number; downloaded_bytes?: number; total_bytes?: number }) => {
       if (data.type !== "progress") return;
       const now = Date.now();
@@ -104,14 +104,14 @@ export function initAutoDownloadListeners(): () => void {
   disposers.push(progressDispose);
 
   // Check if auto-download is already in progress (renderer loaded after it started)
-  window.electronAPI?.getParakeetAutoDownloadStatus?.().then(
-    (status: { active: boolean; modelId: string } | undefined) => {
+  window.electronAPI?.getModelAutoDownloadStatus?.().then(
+    (status: { active: boolean; modelId: string | null; modelName?: string | null; sizeMb?: number | null } | undefined) => {
       if (status?.active) {
         useModelAutoDownloadStore.setState({
           isActive: true,
           modelId: status.modelId,
-          modelName: "Parakeet TDT 0.6B",
-          sizeMb: 680,
+          modelName: status.modelName || null,
+          sizeMb: status.sizeMb || null,
           isDismissed: false,
         });
       }
