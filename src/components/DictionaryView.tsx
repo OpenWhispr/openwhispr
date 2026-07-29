@@ -46,10 +46,18 @@ function PruneUnusedDialog({
 }) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const wasOpen = useRef(false);
 
+  // Snapshot only on the open transition: a background refetch changing
+  // `candidates` must not silently re-check words the user unchecked.
   useEffect(() => {
-    if (open) setSelected(new Set(candidates.map((c) => c.word)));
+    if (open && !wasOpen.current) {
+      setSelected(new Set(candidates.map((c) => c.word)));
+    }
+    wasOpen.current = open;
   }, [open, candidates]);
+
+  const selectedCandidates = candidates.filter((c) => selected.has(c.word));
 
   const toggleWord = (word: string) => {
     setSelected((prev) => {
@@ -106,10 +114,10 @@ function PruneUnusedDialog({
           <Button
             variant="destructive"
             size="sm"
-            disabled={selected.size === 0}
-            onClick={() => onConfirm(Array.from(selected))}
+            disabled={selectedCandidates.length === 0}
+            onClick={() => onConfirm(selectedCandidates.map((c) => c.word))}
           >
-            {t("dictionary.pruneConfirm", { count: selected.size })}
+            {t("dictionary.pruneConfirm", { count: selectedCandidates.length })}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -135,20 +143,24 @@ export default function DictionaryView() {
   const addInputRef = useRef<HTMLInputElement>(null);
 
   // Usage metadata is display-only: on old preloads (or a failed load) entries
-  // stays null and the list falls back to the plain word order.
+  // stays null and the list falls back to the plain word order. The short
+  // delay collapses the optimistic and post-write triggers into one fetch.
   useEffect(() => {
     const api = window.electronAPI?.getDictionaryEntries;
     if (!api) return;
     let cancelled = false;
-    api()
-      .then((rows) => {
-        if (!cancelled) setEntries(Array.isArray(rows) ? rows : null);
-      })
-      .catch(() => {
-        if (!cancelled) setEntries(null);
-      });
+    const timer = window.setTimeout(() => {
+      api()
+        .then((rows) => {
+          if (!cancelled) setEntries(Array.isArray(rows) ? rows : null);
+        })
+        .catch(() => {
+          if (!cancelled) setEntries(null);
+        });
+    }, 150);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [customDictionary]);
 
@@ -159,10 +171,17 @@ export default function DictionaryView() {
     [customDictionary, agentName]
   );
 
-  const entryByLower = useMemo(
-    () => (entries ? new Map(entries.map((e) => [e.word.toLowerCase(), e])) : null),
-    [entries]
-  );
+  // Entries arrive most-used first, so first-wins keeps the credited row when
+  // legacy case-variant duplicates share a key.
+  const entryByLower = useMemo(() => {
+    if (!entries) return null;
+    const byLower = new Map<string, DictionaryUsageEntry>();
+    for (const entry of entries) {
+      const key = entry.word.toLowerCase();
+      if (!byLower.has(key)) byLower.set(key, entry);
+    }
+    return byLower;
+  }, [entries]);
 
   const searchQuery = newWord.trim().toLowerCase();
   const visibleWords = useMemo(() => {

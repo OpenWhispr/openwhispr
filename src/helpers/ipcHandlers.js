@@ -4912,6 +4912,10 @@ class IPCHandlers {
             broadcastToWindows("transcription-updated", updated);
           });
         }
+        // Retry finalizes outside db-save-transcription, so count usage here too.
+        setImmediate(() => {
+          this.databaseManager.recordDictionaryUsage(result.text);
+        });
         return { success: true, transcription: updated };
       } catch (error) {
         debugLogger.error(

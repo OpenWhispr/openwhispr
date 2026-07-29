@@ -60,6 +60,7 @@ import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
+import { buildDictionaryPrompt, truncateDictionaryPromptTail } from "./dictionaryPrompt.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -403,11 +404,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getCustomDictionaryPrompt({ mostUsedLast = false } = {}) {
-    const words = getDictionaryHintWords(getSettings());
-    if (words.length === 0) return null;
-    // Words arrive most-used first (SQLite order), which is what head-truncating
-    // cloud providers need; mostUsedLast flips that for tail-keeping decoders.
-    return (mostUsedLast ? [...words].reverse() : words).join(", ");
+    const settings = getSettings();
+    return buildDictionaryPrompt(
+      settings.customDictionary,
+      settings.snippets.map((s) => s.trigger),
+      { mostUsedLast }
+    );
   }
 
   // Script conversion targets whatever the user ends up pasting: the translation
@@ -2401,7 +2403,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (!window.electronAPI?.proxyTinfoilTranscription) {
           throw new Error("Tinfoil transcription is unavailable in this window");
         }
-        const dictionaryPrompt = this.getWhisperPrompt(apiSettings);
+        // Tinfoil runs whisper: tail-keeping decoder, most-used goes last.
+        const dictionaryPrompt = this.getWhisperPrompt(apiSettings, { mostUsedLast: true });
         const apiCallStart = performance.now();
         const result = await window.electronAPI.proxyTinfoilTranscription({
           audioBuffer: await optimizedAudio.arrayBuffer(),
@@ -2469,13 +2472,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // 890 leaves margin for UTF-16 vs codepoint counting drift.
       const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
       const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
-      let dictionaryPrompt = this.getWhisperPrompt(apiSettings);
+      // Whisper-style endpoints keep the final ~224 prompt tokens, so send
+      // most-used last and trim from the head when over the provider cap.
+      let dictionaryPrompt = this.getWhisperPrompt(apiSettings, { mostUsedLast: true });
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
           const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+          dictionaryPrompt = truncateDictionaryPromptTail(dictionaryPrompt, MAX_PROMPT_CHARS);
           logger.debug(
             "Custom dictionary prompt truncated",
             {
@@ -2509,7 +2512,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const proxyData = { audioBuffer, model, language };
 
         if (dictionaryPrompt) {
-          const tokens = dictionaryPrompt
+          // Mistral biases on the FIRST 100 tokens, so most-used goes first.
+          const tokens = (this.getCustomDictionaryPrompt() || "")
             .split(",")
             .flatMap((entry) => entry.trim().split(/\s+/))
             .filter(Boolean)

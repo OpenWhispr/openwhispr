@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
-const { countDictionaryTermOccurrences } = require("./dictionaryUsage");
+const { countDictionaryTermOccurrences, canonicalTermKey } = require("./dictionaryUsage");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { app } = require("electron");
 
@@ -1277,10 +1277,10 @@ class DatabaseManager {
       let matched = 0;
       this.db.transaction(() => {
         for (const row of rows) {
-          const lower = row.word.trim().toLowerCase();
-          const hits = counts.get(lower);
-          if (!hits || credited.has(lower)) continue;
-          credited.add(lower);
+          const key = canonicalTermKey(row.word);
+          const hits = counts.get(key);
+          if (!hits || credited.has(key)) continue;
+          credited.add(key);
           bump.run(hits, row.id);
           matched += 1;
         }

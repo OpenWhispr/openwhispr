@@ -100,3 +100,18 @@ test("occurrences beyond the scan cap are not counted", () => {
   const counts = countDictionaryTermOccurrences(text, ["Kubernetes"]);
   assert.equal(counts.get("kubernetes"), undefined);
 });
+
+test("decomposed accents in the transcript match a composed dictionary term", () => {
+  const counts = countDictionaryTermOccurrences("Un café al volo", ["café"]);
+  assert.equal(counts.get("café"), 1);
+});
+
+test("a decomposed dictionary term matches composed text under the composed key", () => {
+  const counts = countDictionaryTermOccurrences("Un café al volo", ["café"]);
+  assert.equal(counts.get("café"), 1);
+});
+
+test("terms with irregular inner whitespace count under a collapsed key", () => {
+  const counts = countDictionaryTermOccurrences("machine learning rocks", ["machine  learning"]);
+  assert.equal(counts.get("machine learning"), 1);
+});
