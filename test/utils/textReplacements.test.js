@@ -8,10 +8,7 @@ const load = () => import("../../src/utils/textReplacements.js");
 test("replaces a whole word anywhere in the transcript", async () => {
   const { applyTextReplacements } = await load();
   const rules = [{ from: "wheels", to: "views" }];
-  assert.equal(
-    applyTextReplacements("the wheels look great", rules),
-    "the views look great"
-  );
+  assert.equal(applyTextReplacements("the wheels look great", rules), "the views look great");
   assert.equal(applyTextReplacements("wheels", rules), "views");
   assert.equal(applyTextReplacements("love my wheels", rules), "love my views");
 });
@@ -35,10 +32,7 @@ test("never replaces inside a longer word", async () => {
 test("matches next to punctuation and symbols", async () => {
   const { applyTextReplacements } = await load();
   const rules = [{ from: "wheels", to: "views" }];
-  assert.equal(
-    applyTextReplacements("wheels, wheels. (wheels)", rules),
-    "views, views. (views)"
-  );
+  assert.equal(applyTextReplacements("wheels, wheels. (wheels)", rules), "views, views. (views)");
 });
 
 test("adjacent digits block the match (still inside a word)", async () => {
@@ -107,13 +101,22 @@ test("regex metacharacters in the source are matched literally", async () => {
     applyTextReplacements("version 1.5 shipped", [{ from: "1.5", to: "one-point-five" }]),
     "version one-point-five shipped"
   );
-  assert.equal(applyTextReplacements("value 125 stays", [{ from: "1.5", to: "x" }]), "value 125 stays");
-  assert.equal(applyTextReplacements("(a|b) chosen", [{ from: "(a|b)", to: "both" }]), "both chosen");
+  assert.equal(
+    applyTextReplacements("value 125 stays", [{ from: "1.5", to: "x" }]),
+    "value 125 stays"
+  );
+  assert.equal(
+    applyTextReplacements("(a|b) chosen", [{ from: "(a|b)", to: "both" }]),
+    "both chosen"
+  );
 });
 
 test("dollar patterns in the target are inserted literally", async () => {
   const { applyTextReplacements } = await load();
-  assert.equal(applyTextReplacements("say foo now", [{ from: "foo", to: "$&bar" }]), "say $&bar now");
+  assert.equal(
+    applyTextReplacements("say foo now", [{ from: "foo", to: "$&bar" }]),
+    "say $&bar now"
+  );
   assert.equal(applyTextReplacements("say foo now", [{ from: "foo", to: "$1" }]), "say $1 now");
 });
 
@@ -130,6 +133,12 @@ test("decomposed input matches an NFC rule", async () => {
   const { applyTextReplacements } = await load();
   const rules = [{ from: "café", to: "bar" }];
   assert.equal(applyTextReplacements("at the café now", rules), "at the bar now");
+});
+
+test("a decomposed rule source matches composed text", async () => {
+  const { applyTextReplacements } = await load();
+  const rules = [{ from: "cafe\u0301", to: "bar" }];
+  assert.equal(applyTextReplacements("at the caf\u00e9 now", rules), "at the bar now");
 });
 
 test("cyrillic words replace with case adaptation", async () => {
@@ -251,6 +260,15 @@ test("normalize returns empty for non-array input", async () => {
   const { normalizeReplacementRules } = await load();
   assert.deepEqual(normalizeReplacementRules(undefined), []);
   assert.deepEqual(normalizeReplacementRules("wheels"), []);
+});
+
+test("normalize caps the rule list at 1000, keeping the first entries", async () => {
+  const { normalizeReplacementRules } = await load();
+  const rules = Array.from({ length: 1001 }, (_, i) => ({ from: `word${i}`, to: `fixed${i}` }));
+  const normalized = normalizeReplacementRules(rules);
+  assert.equal(normalized.length, 1000);
+  assert.equal(normalized[0].from, "word0");
+  assert.equal(normalized[999].from, "word999");
 });
 
 // ─── applyTranscriptReplacements (the audioManager seam) ───
