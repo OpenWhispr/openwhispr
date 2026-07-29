@@ -5316,15 +5316,13 @@ class IPCHandlers {
     let meetingReclusterTimer = null;
     let meetingSpeakerRemapper = (id) => id;
 
-    const createSpeakerRemapper = (maxSpeakers) => {
-      const cap = Math.max(1, Math.floor(maxSpeakers) || 1);
+    const createSpeakerRemapper = () => {
       const map = new Map();
       return (internalId) => {
         if (!internalId) return internalId;
         const existing = map.get(internalId);
         if (existing !== undefined) return existing;
-        const index = map.size < cap ? map.size : cap - 1;
-        const label = `speaker_${index}`;
+        const label = `speaker_${map.size}`;
         map.set(internalId, label);
         return label;
       };
@@ -5376,12 +5374,9 @@ class IPCHandlers {
       (this.activeMeetingSpeakerConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
     const resolveSessionMaxSpeakers = () => {
-      const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
-      // Subtract 1: expectedCount is TOTAL attendees (including local user), but
-      // system audio only captures remote speakers. The local user is on the mic
-      // channel. A 2-person meeting → 1 remote speaker on system audio.
-      return Math.max(1, total - 1);
+      // Live diarization should freely detect speakers as they appear.
+      // Use MAX_SPEAKER_COUNT as the ceiling — no artificial cap.
+      return MAX_SPEAKER_COUNT;
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
@@ -5594,7 +5589,7 @@ class IPCHandlers {
 
       meetingLiveSpeakerState = null;
       meetingLiveSpeakerStartedAt = Date.now();
-      meetingSpeakerRemapper = createSpeakerRemapper(resolveSessionMaxSpeakers());
+      meetingSpeakerRemapper = createSpeakerRemapper();
       const started = await liveSpeakerIdentifier.start(
         (identification) => {
           if (!win || win.isDestroyed()) {
@@ -5644,7 +5639,7 @@ class IPCHandlers {
         },
         {
           getSpeakerProfiles: getLiveSpeakerProfiles,
-          maxSpeakers: resolveSessionMaxSpeakers(),
+          maxSpeakers: MAX_SPEAKER_COUNT,
           enabled: true,
         }
       );
@@ -8769,7 +8764,7 @@ class IPCHandlers {
         liveSpeakerIdentifier.setEnabled(enabled);
         // Live identification only labels other speakers (the mic track is "you"),
         // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
-        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+        liveSpeakerIdentifier.setMaxSpeakers(MAX_SPEAKER_COUNT);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -9467,42 +9462,11 @@ class IPCHandlers {
   }
 
   _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
-    // System audio only captures REMOTE participants — the local user's voice
-    // is on the mic channel. So all counts need to subtract 1 for the local user
-    // to avoid over-splitting (e.g., a 2-person meeting has 1 remote speaker).
-
-    if (sessionConfig?.expectedCount) {
-      const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
-      const numSpeakers = Math.max(1, total - 1);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    let attendees = [];
-    if (noteId) {
-      try {
-        const note = this.databaseManager.getNote(noteId);
-        attendees = parseAttendees(note?.participants);
-      } catch (_) {
-        attendees = [];
-      }
-    }
-    if (attendees.length >= 2) {
-      // Subtract 1: attendees includes the local user who is on mic, not system audio
-      const remoteCount = Math.max(1, attendees.length - 1);
-      const numSpeakers = Math.min(remoteCount, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    if (observedSpeakerIds.size >= 2) {
-      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    // Default: let the model auto-detect (numSpeakers=-1) with a reasonable cap.
-    // DEFAULT_EXPECTED_SPEAKER_COUNT=2 allows detecting up to 2 remote speakers
-    // without calendar data. Group calls with 3+ people should have calendar or
-    // live observation data that overrides this.
-    return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+    // Let the diarization model auto-detect the number of speakers.
+    // No artificial caps — speakers are detected as they appear.
+    // The observedSpeakerIds from live identification can serve as a hint
+    // (not a hard cap) but we default to unconstrained auto-detection.
+    return { numSpeakers: -1, cap: null };
   }
 
   /**

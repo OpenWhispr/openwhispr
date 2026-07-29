@@ -722,13 +722,9 @@ class LiveSpeakerIdentifier {
   }
 
   _assignOrForceCluster(embedding) {
-    if (this.transientEmbeddings.size >= this.maxSpeakers) {
-      const nearest = this._findNearestTransient(embedding);
-      if (nearest) {
-        this._updateCentroid(nearest, embedding);
-        return nearest;
-      }
-    }
+    // No artificial speaker cap — freely detect new speakers as they appear.
+    // The similarity threshold in _assignSpeakerId handles merging voices
+    // that sound alike; we don't force-merge just because a count is exceeded.
     return this._assignSpeakerId(embedding);
   }
 
