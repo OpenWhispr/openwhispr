@@ -5378,9 +5378,10 @@ class IPCHandlers {
     const resolveSessionMaxSpeakers = () => {
       const count = this.activeMeetingSpeakerConfig?.expectedCount;
       const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
-      // Don't subtract 1 — system audio never contains the local mic speaker,
-      // so the full expected count is the cap for remote speaker detection.
-      return Math.max(1, total);
+      // Subtract 1: expectedCount is TOTAL attendees (including local user), but
+      // system audio only captures remote speakers. The local user is on the mic
+      // channel. A 2-person meeting → 1 remote speaker on system audio.
+      return Math.max(1, total - 1);
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
@@ -9466,6 +9467,10 @@ class IPCHandlers {
   }
 
   _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
+    // System audio only captures REMOTE participants — the local user's voice
+    // is on the mic channel. So all counts need to subtract 1 for the local user
+    // to avoid over-splitting (e.g., a 2-person meeting has 1 remote speaker).
+
     if (sessionConfig?.expectedCount) {
       const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
       const numSpeakers = Math.max(1, total - 1);
@@ -9482,7 +9487,9 @@ class IPCHandlers {
       }
     }
     if (attendees.length >= 2) {
-      const numSpeakers = Math.min(attendees.length, MAX_SPEAKER_COUNT);
+      // Subtract 1: attendees includes the local user who is on mic, not system audio
+      const remoteCount = Math.max(1, attendees.length - 1);
+      const numSpeakers = Math.min(remoteCount, MAX_SPEAKER_COUNT);
       return { numSpeakers, cap: numSpeakers };
     }
 
@@ -9491,6 +9498,10 @@ class IPCHandlers {
       return { numSpeakers, cap: numSpeakers };
     }
 
+    // Default: let the model auto-detect (numSpeakers=-1) with a reasonable cap.
+    // DEFAULT_EXPECTED_SPEAKER_COUNT=2 allows detecting up to 2 remote speakers
+    // without calendar data. Group calls with 3+ people should have calendar or
+    // live observation data that overrides this.
     return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
   }
 
