@@ -4,7 +4,7 @@ const os = require("os");
 const debugLogger = require("./debugLogger");
 const { computeTranscriptDiff } = require("./transcriptDiff");
 
-const STEP_ORDER = ["retranscribe", "title", "notes"];
+const STEP_ORDER = ["retranscribe", "title", "classify", "notes"];
 
 const GENERIC_NOTES_PROMPT = `You are a professional meeting notes assistant. You will receive a transcript with speaker labels.
 
@@ -67,8 +67,24 @@ class PostCallPipelineManager {
       }
     }
 
-    // Step 3: Generate notes
+    // Step 3: Classify meeting type (non-fatal — errors don't halt pipeline)
     if (fromIndex <= 2) {
+      try {
+        const classifyResult = await this._runStep(noteId, "classify", () =>
+          this._classifyMeetingType(noteId, transcript)
+        );
+        if (!classifyResult.error && classifyResult.value) {
+          this._db.updateNote(noteId, { meeting_type_id: classifyResult.value });
+          this._broadcastNoteUpdate(noteId);
+        }
+      } catch (err) {
+        debugLogger.warn("Pipeline: classify step failed (non-fatal)", { noteId, error: err.message }, "meeting");
+        this._emitStatus(noteId, "classify", "error", err.message);
+      }
+    }
+
+    // Step 4: Generate notes
+    if (fromIndex <= 3) {
       const notesResult = await this._runStep(noteId, "notes", () =>
         this._generateNotes(noteId, transcript)
       );
@@ -97,6 +113,14 @@ class PostCallPipelineManager {
       );
       if (!result.error && result.value) {
         this._db.updateNote(noteId, { enhanced_content: result.value });
+        this._broadcastNoteUpdate(noteId);
+      }
+    } else if (step === "classify") {
+      const result = await this._runStep(noteId, "classify", () =>
+        this._classifyMeetingType(noteId, transcript)
+      );
+      if (!result.error && result.value) {
+        this._db.updateNote(noteId, { meeting_type_id: result.value });
         this._broadcastNoteUpdate(noteId);
       }
     } else if (step === "title") {
@@ -214,6 +238,70 @@ class PostCallPipelineManager {
 
     const cleaned = title.trim().replace(/^["']|["']$/g, "");
     return cleaned.length > 0 && cleaned.length < 100 ? cleaned : null;
+  }
+
+  async _classifyMeetingType(noteId, transcript) {
+    // Skip if meeting_type_id is already set (calendar auto-map or user selection)
+    const note = this._db.getNote(noteId);
+    if (note?.meeting_type_id) {
+      debugLogger.info("Pipeline: classify skipped — meeting_type_id already set",
+        { noteId, meetingTypeId: note.meeting_type_id }, "meeting");
+      return null;
+    }
+
+    const types = this._db.getMeetingTypes();
+    if (!types || types.length === 0) return null;
+
+    const text = this._flattenTranscript(transcript);
+
+    // Try LLM classification first
+    const config = this._getInferenceConfig();
+    if (config) {
+      try {
+        const typeList = types.map((t) => `- "${t.name}" (id: ${t.id})`).join("\n");
+        const classifyPrompt = `You are a meeting classifier. Given the transcript excerpt below, determine which meeting type it best matches from this list:
+
+${typeList}
+
+Reply with ONLY the numeric id of the best matching meeting type. If none match well, reply with "none".`;
+
+        const result = await this._inference.processText(text.slice(0, 2000), {
+          ...config,
+          systemPrompt: classifyPrompt,
+          temperature: 0,
+        });
+
+        const cleaned = result.trim().replace(/[^0-9]/g, "");
+        const matchedId = parseInt(cleaned, 10);
+        if (!isNaN(matchedId) && types.some((t) => t.id === matchedId)) {
+          debugLogger.info("Pipeline: LLM classified meeting type",
+            { noteId, meetingTypeId: matchedId }, "meeting");
+          return matchedId;
+        }
+        debugLogger.info("Pipeline: LLM returned no match or invalid id",
+          { noteId, raw: result.trim() }, "meeting");
+      } catch (llmErr) {
+        debugLogger.warn("Pipeline: LLM classification failed, falling back to keywords",
+          { noteId, error: llmErr.message }, "meeting");
+      }
+    }
+
+    // Fallback: keyword_rules matching against transcript content
+    const lowerText = text.toLowerCase();
+    for (const type of types) {
+      if (!type.keyword_rules) continue;
+      try {
+        const keywords = JSON.parse(type.keyword_rules);
+        if (Array.isArray(keywords) && keywords.some((kw) => lowerText.includes(kw.toLowerCase()))) {
+          debugLogger.info("Pipeline: keyword-matched meeting type",
+            { noteId, meetingTypeId: type.id, typeName: type.name }, "meeting");
+          return type.id;
+        }
+      } catch { continue; }
+    }
+
+    debugLogger.info("Pipeline: no meeting type matched", { noteId }, "meeting");
+    return null;
   }
 
   async _generateNotes(noteId, transcript) {

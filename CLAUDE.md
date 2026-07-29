@@ -124,6 +124,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
 - **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app.
+- **postCallPipelineManager.js**: Post-call processing pipeline for meeting notes. Runs 4 steps in order: retranscribe (large Whisper model), title (LLM-generated), classify (auto-detect meeting type via LLM with keyword fallback), notes (LLM-generated with meeting-type-specific templates). Classification is non-fatal — errors do not halt the pipeline. Skips classification when `meeting_type_id` is already set by calendar auto-map or user selection.
 - **postMigrationDetector.js**: Detects users returning from the pre-Gizmo bundle ID via a `.bundle-migrated` sentinel in userData; consumed by `ipcHandlers.js` to drive the `PostMigrationOnboarding` modal
 
 ### React Components (src/components/)
