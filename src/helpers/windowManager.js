@@ -53,9 +53,12 @@ class WindowManager {
     this._controlPanelStateStore = null;
     this._controlPanelNormalBounds = null;
     this._controlPanelSaveTimer = null;
+    this._lastPersistedControlPanelState = null;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
+      // The normal quit path exits via app.exit(), which skips window close events.
+      this._persistControlPanelState();
       this.hotkeyManager.unregisterAll();
     });
   }
@@ -716,6 +719,8 @@ class WindowManager {
       clearVisibilityTimer();
       clearTimeout(this._controlPanelSaveTimer);
       this._controlPanelSaveTimer = null;
+      // Snap state dies with its window; a stale flag would freeze bounds tracking.
+      this._preMeetingBounds = null;
       this.controlPanelWindow = null;
       dockManager.setControlPanelVisible(false);
     });
@@ -820,8 +825,13 @@ class WindowManager {
     } catch {
       displayId = null;
     }
+    const payload = { ...bounds, isMaximized: win.isMaximized(), displayId };
+    const payloadKey = JSON.stringify(payload);
+    // Close and quit paths often persist right after a debounce flush; skip identical writes.
+    if (payloadKey === this._lastPersistedControlPanelState) return;
     try {
-      this._controlPanelStateStore.save({ ...bounds, isMaximized: win.isMaximized(), displayId });
+      this._controlPanelStateStore.save(payload);
+      this._lastPersistedControlPanelState = payloadKey;
     } catch (error) {
       debugLogger.error(
         "Failed to persist control panel window state",

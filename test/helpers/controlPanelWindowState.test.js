@@ -44,11 +44,21 @@ test("parse rejects malformed JSON, wrong shapes, and non-finite numbers", async
   }
 });
 
-test("parse drops zero and negative sizes", async () => {
+test("parse drops zero, negative, and below-floor sizes", async () => {
   const { parseControlPanelWindowState } = await load();
 
   assert.equal(parseControlPanelWindowState('{"x":0,"y":0,"width":0,"height":800}'), null);
   assert.equal(parseControlPanelWindowState('{"x":0,"y":0,"width":1200,"height":-1}'), null);
+  assert.equal(parseControlPanelWindowState('{"x":0,"y":0,"width":319,"height":800}'), null);
+  assert.equal(parseControlPanelWindowState('{"x":0,"y":0,"width":1200,"height":239}'), null);
+  assert.deepEqual(parseControlPanelWindowState('{"x":0,"y":0,"width":320,"height":240}'), {
+    x: 0,
+    y: 0,
+    width: 320,
+    height: 240,
+    isMaximized: false,
+    displayId: null,
+  });
 });
 
 test("serialize returns empty string for invalid state so the store key is deleted", async () => {
