@@ -292,6 +292,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onModelAutoDownloadStatus: registerListener("model-auto-download-status"),
   onModelAutoDownloadProgress: registerListener("model-auto-download-progress"),
   getModelAutoDownloadStatus: () => ipcRenderer.invoke("get-model-auto-download-status"),
+  downloadGemmaBuiltin: () => ipcRenderer.invoke("download-gemma-builtin"),
   checkParakeetModelStatus: (modelName) =>
     ipcRenderer.invoke("check-parakeet-model-status", modelName),
   listParakeetModels: () => ipcRenderer.invoke("list-parakeet-models"),

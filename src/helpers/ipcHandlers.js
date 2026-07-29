@@ -432,6 +432,8 @@ class IPCHandlers {
     this.audioStorageManager = new AudioStorageManager();
     this._audioCleanupInterval = null;
     this._noteFilesEnabled = false;
+    this._parakeetAutoDownloadActive = false;
+    this._gemmaAutoDownloadActive = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
     this.whisperVadSettings = {
@@ -2419,6 +2421,12 @@ class IPCHandlers {
       return { active: false, modelId: null, modelName: null, sizeMb: null };
     });
 
+    ipcMain.handle("download-gemma-builtin", async () => {
+      // Fire-and-forget: progress/status flow over model-auto-download-* events.
+      this._downloadGemmaModel();
+      return { success: true };
+    });
+
     ipcMain.handle("get-parakeet-diagnostics", async () => {
       return this.parakeetManager.getDiagnostics();
     });
@@ -2931,6 +2939,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("model-download", async (event, modelId) => {
+      if (this._gemmaAutoDownloadActive && modelId === "gemma-4-e4b-it-q4_k_m") {
+        return { success: false, error: "Download already in progress." };
+      }
       try {
         const modelManager = require("./modelManagerBridge").default;
         const result = await modelManager.downloadModel(
@@ -9175,6 +9186,110 @@ class IPCHandlers {
         });
       }
     }
+  }
+
+  /**
+   * Download the built-in Gemma local LLM for offline note generation.
+   * Triggered by the renderer after the user accepts the one-time prompt
+   * (not automatically at startup, unlike Parakeet). Uses the generic
+   * model-auto-download channels for progress/status. Non-blocking, non-fatal.
+   */
+  async _downloadGemmaModel() {
+    if (this._gemmaAutoDownloadActive) return;
+
+    const defaultModel = "gemma-4-e4b-it-q4_k_m";
+    const modelName = "Gemma 4 E4B";
+    const sizeMb = 5812; // sizeBytes (5_812_137_984) / 1_000_000, rounded
+
+    const modelManager = require("./modelManagerBridge").default;
+    const isDownloaded = await modelManager.isModelDownloaded(defaultModel);
+    if (isDownloaded) {
+      this.broadcastToWindows("model-auto-download-status", {
+        type: "not-needed",
+        modelId: defaultModel,
+      });
+      this._ensureNoteFormattingConfigured(defaultModel);
+      return;
+    }
+
+    this._gemmaAutoDownloadActive = true;
+    this.broadcastToWindows("model-auto-download-status", {
+      type: "started",
+      modelId: defaultModel,
+      modelName,
+      sizeMb,
+    });
+
+    debugLogger.info(
+      "Downloading Gemma model for offline note generation",
+      { model: defaultModel },
+      "startup"
+    );
+
+    try {
+      const result = await modelManager.downloadModel(
+        defaultModel,
+        (progress, downloadedBytes, totalBytes) => {
+          this.broadcastToWindows("model-auto-download-progress", {
+            type: "progress",
+            percentage: Math.round(progress),
+            downloaded_bytes: downloadedBytes,
+            total_bytes: totalBytes,
+          });
+        }
+      );
+      this._gemmaAutoDownloadActive = false;
+      // downloadModel resolves to the model file path (string) on success.
+      if (result) {
+        debugLogger.info("Gemma download complete", { model: defaultModel }, "startup");
+        this.broadcastToWindows("model-auto-download-status", {
+          type: "complete",
+          modelId: defaultModel,
+        });
+        this._ensureNoteFormattingConfigured(defaultModel);
+      }
+    } catch (err) {
+      this._gemmaAutoDownloadActive = false;
+      if (err.message?.includes("aborted") || err.code === "DOWNLOAD_CANCELLED") {
+        debugLogger.info("Gemma download cancelled by user", {}, "startup");
+        this.broadcastToWindows("model-auto-download-status", {
+          type: "cancelled",
+          modelId: defaultModel,
+        });
+      } else {
+        debugLogger.warn("Gemma download failed", { error: err.message }, "startup");
+        this.broadcastToWindows("model-auto-download-status", {
+          type: "error",
+          modelId: defaultModel,
+          error: err.message,
+        });
+      }
+    }
+  }
+
+  /**
+   * Auto-configure noteFormatting to use the built-in Gemma model when no
+   * provider is currently set. Never overrides a user's existing choice
+   * (e.g. a configured remote endpoint). Persists to .env and broadcasts to
+   * the renderer so the settings store reflects the change without a reload.
+   */
+  _ensureNoteFormattingConfigured(modelId) {
+    const currentProvider = process.env.NOTE_FORMATTING_PROVIDER;
+    const currentModel = process.env.NOTE_FORMATTING_MODEL;
+    if (currentProvider && currentModel) return;
+
+    process.env.NOTE_FORMATTING_PROVIDER = "local";
+    process.env.NOTE_FORMATTING_MODEL = modelId;
+    this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+    this.broadcastToWindows("note-formatting-auto-configured", {
+      provider: "local",
+      model: modelId,
+    });
+    debugLogger.info(
+      "Auto-configured noteFormatting to local Gemma",
+      { provider: "local", model: modelId },
+      "startup"
+    );
   }
 
   /**
