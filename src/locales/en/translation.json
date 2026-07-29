@@ -2115,7 +2115,8 @@
         "liquidai_lfm2_5_350m_q8_0": "Ultra-light model for fast dictation cleanup",
         "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware",
         "tii_falcon_h1_1_5b_deep_instruct_q4_k_m": "Hybrid attention/Mamba model, strongest sub-2B option for transcript cleanup",
-        "tii_falcon_h1_1_5b_instruct_q4_k_m": "Hybrid attention/Mamba model, faster sibling of Falcon-H1 1.5B Deep"
+        "tii_falcon_h1_1_5b_instruct_q4_k_m": "Hybrid attention/Mamba model, faster sibling of Falcon-H1 1.5B Deep",
+        "ibm_granite_granite_4_0_h_tiny_q4_k_m": "Hybrid Mamba MoE, 7B total with 1B active, robust across prompt styles"
       }
     }
   },
