@@ -4,7 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
-const { BYOK_API_KEYS } = require("../config/secretKeys");
+const { BYOK_API_KEYS, SCOPE_CUSTOM_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const { classifyAndLog } = require("./networkErrors");
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
@@ -998,6 +998,17 @@ class IPCHandlers {
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
+    }
+
+    for (const k of SCOPE_CUSTOM_API_KEYS) {
+      ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
+      ipcMain.handle(`save-${k.base}-key`, (event, key) => {
+        const result = this.environmentManager[k.save](key);
+        // These used to live in localStorage, which kept every window in sync.
+        // The secure store is main-process state, so push the change out instead.
+        this.broadcastToWindows("secret-changed", { storeKey: k.storeKey, value: key });
+        return result;
+      });
     }
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {

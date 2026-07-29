@@ -66,4 +66,38 @@ const BYOK_API_KEYS = [
   },
 ];
 
-module.exports = { BYOK_API_KEYS };
+// Per-scope keys for user-supplied custom / self-hosted endpoints, plumbed the
+// same way as BYOK_API_KEYS. dictationCleanup is absent on purpose: it predates
+// this list and keeps a hand-written accessor for its legacy env var name.
+const SCOPE_CUSTOM_API_KEYS = [
+  {
+    base: "note-formatting-custom",
+    env: "CUSTOM_NOTE_FORMATTING_API_KEY",
+    get: "getNoteFormattingCustomKey",
+    save: "saveNoteFormattingCustomKey",
+    storeKey: "noteFormattingCustomApiKey",
+  },
+  {
+    base: "dictation-agent-custom",
+    env: "CUSTOM_DICTATION_AGENT_API_KEY",
+    get: "getDictationAgentCustomKey",
+    save: "saveDictationAgentCustomKey",
+    storeKey: "dictationAgentCustomApiKey",
+  },
+  {
+    base: "chat-agent-custom",
+    env: "CUSTOM_CHAT_AGENT_API_KEY",
+    get: "getChatAgentCustomKey",
+    save: "saveChatAgentCustomKey",
+    storeKey: "chatAgentCustomApiKey",
+  },
+  {
+    base: "translation-custom",
+    env: "CUSTOM_TRANSLATION_API_KEY",
+    get: "getTranslationCustomKey",
+    save: "saveTranslationCustomKey",
+    storeKey: "translationCustomApiKey",
+  },
+];
+
+module.exports = { BYOK_API_KEYS, SCOPE_CUSTOM_API_KEYS };

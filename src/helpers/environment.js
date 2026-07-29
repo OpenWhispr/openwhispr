@@ -5,10 +5,11 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
-const { BYOK_API_KEYS } = require("../config/secretKeys");
+const { BYOK_API_KEYS, SCOPE_CUSTOM_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
   ...BYOK_API_KEYS.map((k) => k.env),
+  ...SCOPE_CUSTOM_API_KEYS.map((k) => k.env),
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CORTI_CLIENT_ID",
@@ -506,9 +507,9 @@ class EnvironmentManager {
   }
 }
 
-// Generate the uniform BYOK key accessors (getOpenAIKey/saveOpenAIKey/…) from
-// the shared manifest so each provider is defined in exactly one place.
-for (const k of BYOK_API_KEYS) {
+// Generate the manifest-driven key accessors (getOpenAIKey/saveOpenAIKey/…) so
+// each secret is defined in exactly one place.
+for (const k of [...BYOK_API_KEYS, ...SCOPE_CUSTOM_API_KEYS]) {
   EnvironmentManager.prototype[k.get] = function () {
     return this._getKey(k.env);
   };

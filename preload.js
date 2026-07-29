@@ -15,8 +15,23 @@ const BYOK_KEY_BRIDGES = [
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
 ];
+// Per-scope custom/self-hosted endpoint keys; mirrors SCOPE_CUSTOM_API_KEYS.
+const SCOPE_KEY_BRIDGES = [
+  {
+    base: "note-formatting-custom",
+    get: "getNoteFormattingCustomKey",
+    save: "saveNoteFormattingCustomKey",
+  },
+  {
+    base: "dictation-agent-custom",
+    get: "getDictationAgentCustomKey",
+    save: "saveDictationAgentCustomKey",
+  },
+  { base: "chat-agent-custom", get: "getChatAgentCustomKey", save: "saveChatAgentCustomKey" },
+  { base: "translation-custom", get: "getTranslationCustomKey", save: "saveTranslationCustomKey" },
+];
 const secretKeyApi = {};
-for (const k of BYOK_KEY_BRIDGES) {
+for (const k of [...BYOK_KEY_BRIDGES, ...SCOPE_KEY_BRIDGES]) {
   secretKeyApi[k.get] = () => ipcRenderer.invoke(`get-${k.base}-key`);
   secretKeyApi[k.save] = (key) => ipcRenderer.invoke(`save-${k.base}-key`, key);
 }
@@ -425,6 +440,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
   getCleanupCustomKey: () => ipcRenderer.invoke("get-cleanup-custom-key"),
   saveCleanupCustomKey: (key) => ipcRenderer.invoke("save-cleanup-custom-key", key),
+  onSecretChanged: registerListener(
+    "secret-changed",
+    (callback) => (_event, data) => callback(data)
+  ),
 
   // Enterprise provider key management
   getBedrockRegion: () => ipcRenderer.invoke("get-bedrock-region"),

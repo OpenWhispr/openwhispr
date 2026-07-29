@@ -21,12 +21,13 @@ Module._load = function (request, ...rest) {
   return origLoad.call(this, request, ...rest);
 };
 
-const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
+const { BYOK_API_KEYS, SCOPE_CUSTOM_API_KEYS } = require("../../src/config/secretKeys");
+const ALL_KEYS = [...BYOK_API_KEYS, ...SCOPE_CUSTOM_API_KEYS];
 const EnvironmentManager = require("../../src/helpers/environment");
 
 test("manifest entries are unique and complete", () => {
   const seen = { base: new Set(), env: new Set(), storeKey: new Set() };
-  for (const k of BYOK_API_KEYS) {
+  for (const k of ALL_KEYS) {
     for (const field of ["base", "env", "get", "save", "storeKey"]) {
       assert.ok(k[field], `${field} present on ${k.base}`);
     }
@@ -37,9 +38,9 @@ test("manifest entries are unique and complete", () => {
   }
 });
 
-test("every BYOK key round-trips through the generated accessors", () => {
+test("every manifest key round-trips through the generated accessors", () => {
   const env = new EnvironmentManager();
-  for (const k of BYOK_API_KEYS) {
+  for (const k of ALL_KEYS) {
     assert.equal(typeof env[k.get], "function", `${k.get} generated`);
     assert.equal(typeof env[k.save], "function", `${k.save} generated`);
 
@@ -63,18 +64,23 @@ test("openrouter is a first-class secret", () => {
   assert.equal(env.getOpenrouterKey(), "sk-or-abc");
 });
 
-test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
-  // preload.js can't require the manifest under sandbox, so it inlines the
-  // {base, get, save} tuples. Assert they stay in lockstep with the manifest.
-  const preloadSrc = fs.readFileSync(path.join(__dirname, "../../preload.js"), "utf8");
-  const block = preloadSrc.match(/BYOK_KEY_BRIDGES = \[([\s\S]*?)\];/);
-  assert.ok(block, "BYOK_KEY_BRIDGES declared in preload.js");
-  for (const k of BYOK_API_KEYS) {
-    const entry = new RegExp(
-      `\\{\\s*base:\\s*"${k.base}",\\s*get:\\s*"${k.get}",\\s*save:\\s*"${k.save}"\\s*\\}`
-    );
-    assert.match(block[1], entry, `preload mirrors ${k.base}`);
-  }
-  const bridgeCount = (block[1].match(/base:/g) || []).length;
-  assert.equal(bridgeCount, BYOK_API_KEYS.length, "no extra/missing preload bridges");
-});
+// preload.js can't require the manifest under sandbox, so it inlines the
+// {base, get, save} tuples. Assert they stay in lockstep with the manifest.
+for (const [name, manifest] of [
+  ["BYOK_KEY_BRIDGES", BYOK_API_KEYS],
+  ["SCOPE_KEY_BRIDGES", SCOPE_CUSTOM_API_KEYS],
+]) {
+  test(`preload ${name} mirrors its manifest exactly`, () => {
+    const preloadSrc = fs.readFileSync(path.join(__dirname, "../../preload.js"), "utf8");
+    const block = preloadSrc.match(new RegExp(`${name} = \\[([\\s\\S]*?)\\];`));
+    assert.ok(block, `${name} declared in preload.js`);
+    for (const k of manifest) {
+      const entry = new RegExp(
+        `\\{\\s*base:\\s*"${k.base}",\\s*get:\\s*"${k.get}",\\s*save:\\s*"${k.save}",?\\s*\\}`
+      );
+      assert.match(block[1], entry, `preload mirrors ${k.base}`);
+    }
+    const bridgeCount = (block[1].match(/base:/g) || []).length;
+    assert.equal(bridgeCount, manifest.length, "no extra/missing preload bridges");
+  });
+}
