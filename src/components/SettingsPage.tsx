@@ -770,6 +770,8 @@ export default function SettingsPage({
     setShowTranscriptionPreview,
     autoPasteEnabled,
     setAutoPasteEnabled,
+    submitAfterPasteEnabled,
+    setSubmitAfterPasteEnabled,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
@@ -2553,6 +2555,18 @@ export default function SettingsPage({
                     description={t("settingsPage.general.clipboard.autoPasteDescription")}
                   >
                     <Toggle checked={autoPasteEnabled} onChange={setAutoPasteEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.clipboard.submitAfterPaste")}
+                    description={t("settingsPage.general.clipboard.submitAfterPasteDescription")}
+                  >
+                    <Toggle
+                      checked={submitAfterPasteEnabled}
+                      onChange={setSubmitAfterPasteEnabled}
+                      disabled={!autoPasteEnabled}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>

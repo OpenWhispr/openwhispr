@@ -61,6 +61,9 @@ const RESTORE_DELAYS = {
   linux_kde_wayland: 1200,
 };
 
+// Fixed settle after paste keystroke before Enter — gives async UIs time to apply Ctrl+V.
+const SUBMIT_AFTER_PASTE_DELAY_MS = 250;
+
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
     return Promise.reject(new Error("Invalid webContents for clipboard write"));
@@ -427,10 +430,14 @@ class ClipboardManager {
     }
   }
 
-  _runPortalPaste(fastPasteBinary, { shiftInsert = false, terminal = false } = {}) {
+  _runPortalPaste(
+    fastPasteBinary,
+    { shiftInsert = false, terminal = false, pressEnter = false } = {}
+  ) {
     return new Promise((resolve, reject) => {
       const args = ["--portal"];
-      if (shiftInsert) args.push("--shift-insert");
+      if (pressEnter) args.push("--press-enter");
+      else if (shiftInsert) args.push("--shift-insert");
       else if (terminal) args.push("--terminal");
 
       const restoreToken = this._readPortalToken();
@@ -440,7 +447,7 @@ class ClipboardManager {
 
       debugLogger.debug(
         "Attempting linux-fast-paste --portal (RemoteDesktop D-Bus)",
-        { binary: fastPasteBinary, hasToken: !!restoreToken },
+        { binary: fastPasteBinary, args, hasToken: !!restoreToken },
         "clipboard"
       );
 
@@ -724,6 +731,246 @@ class ClipboardManager {
     }
   }
 
+  _spawnAndWait(cmd, args, { timeoutMs = 2000 } = {}) {
+    return new Promise((resolve, reject) => {
+      let hasTimedOut = false;
+      let stdout = "";
+      const proc = spawn(cmd, args, {
+        windowsHide: process.platform === "win32",
+      });
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      proc.on("close", (code) => {
+        if (hasTimedOut) return;
+        clearTimeout(timeoutId);
+        if (code === 0) resolve(stdout);
+        else reject(new Error(`${cmd} exited with code ${code}`));
+      });
+
+      proc.on("error", (error) => {
+        if (hasTimedOut) return;
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+
+      const timeoutId = setTimeout(() => {
+        hasTimedOut = true;
+        killProcess(proc, "SIGKILL");
+        reject(new Error(`${cmd} timed out`));
+      }, timeoutMs);
+    });
+  }
+
+  async _pressEnterLinux(pasteMethod) {
+    const { isWayland, xwaylandAvailable, isWlroots } = getLinuxSessionInfo();
+    const pasteTool = pasteMethod === "xdotool-type" ? "xdotool" : pasteMethod;
+    const pasteUsedExternalTool = ["xdotool", "wtype", "ydotool"].includes(pasteTool);
+
+    // Route Enter through the channel that just delivered the paste keystroke:
+    // it's proven to reach the target window, while other channels can report
+    // success without delivery (e.g. XTest keystrokes never reach native
+    // Wayland windows, but the XTest calls still "succeed").
+    const linuxFastPaste = this.resolveLinuxFastPasteBinary();
+    if (linuxFastPaste && !pasteUsedExternalTool) {
+      if (pasteMethod === "portal") {
+        try {
+          await this._runPortalPaste(linuxFastPaste, { pressEnter: true });
+          return;
+        } catch (error) {
+          this.safeLog("⚠️ Portal Enter failed, falling back to system tools", {
+            error: error?.message || String(error),
+          });
+        }
+      } else {
+        // On Wayland restrict to uinput unless XTest is the channel that
+        // delivered the paste; on X11 the plain uinput → XTest chain is safe.
+        const xtestDelivered = pasteMethod === "xtest" || pasteMethod === "xtest-xwayland";
+        const args =
+          isWayland && !xtestDelivered ? ["--press-enter", "--uinput"] : ["--press-enter"];
+        try {
+          await this._spawnAndWait(linuxFastPaste, args);
+          return;
+        } catch (error) {
+          this.safeLog("⚠️ linux-fast-paste Enter failed, falling back to system tools", {
+            error: error?.message || String(error),
+          });
+        }
+      }
+    }
+
+    const xdotoolExists = this.commandExists("xdotool");
+    const wtypeExists = this.commandExists("wtype");
+    const canUseWtype = isWayland && isWlroots && wtypeExists;
+    const canUseXdotool = isWayland ? xwaylandAvailable && xdotoolExists : xdotoolExists;
+    const canUseYdotool = this.commandExists("ydotool") && this._isYdotoolDaemonRunning();
+
+    // ydotool 0.1.x resolves names against evdev KEY_* constants ("enter" → KEY_ENTER);
+    // 1.0.x uses raw keycodes (28 = KEY_ENTER)
+    const ydotoolEntry = canUseYdotool
+      ? [
+          {
+            cmd: "ydotool",
+            args: this._isYdotoolLegacy() ? ["key", "enter"] : ["key", "28:1", "28:0"],
+          },
+        ]
+      : [];
+    const wtypeEntry = canUseWtype ? [{ cmd: "wtype", args: ["-k", "Return"] }] : [];
+    // --clearmodifiers strips hotkey modifiers the user may still hold, so the
+    // submit is a bare Enter (wtype/ydotool have no equivalent).
+    const xdotoolEntry = canUseXdotool
+      ? [{ cmd: "xdotool", args: ["key", "--clearmodifiers", "Return"] }]
+      : [];
+
+    // Same compositor-aware priority ordering as the paste fallback chain
+    let candidates;
+    if (!isWayland) {
+      candidates = [...xdotoolEntry, ...ydotoolEntry];
+    } else if (isWlroots) {
+      candidates = [...wtypeEntry, ...xdotoolEntry, ...ydotoolEntry];
+    } else {
+      candidates = [...ydotoolEntry, ...xdotoolEntry, ...wtypeEntry];
+    }
+
+    // The tool that delivered the paste is proven to reach the target window.
+    const pasteToolIndex = candidates.findIndex((c) => c.cmd === pasteTool);
+    if (pasteToolIndex > 0) {
+      candidates.unshift(candidates.splice(pasteToolIndex, 1)[0]);
+    }
+
+    if (candidates.length === 0) {
+      throw new Error("No tool available to send Enter on Linux");
+    }
+
+    let lastError;
+    for (const { cmd, args } of candidates) {
+      try {
+        await this._spawnAndWait(cmd, args);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error("Failed to send Enter on Linux");
+  }
+
+  // The submit must be a bare Enter: the user's dictation hotkey modifiers
+  // (e.g. Ctrl+Super) are often still physically held when it fires, and the
+  // OS merges them into synthetic keystrokes — Ctrl+Enter etc. trigger very
+  // different actions in many apps (issue observed: Cursor broadcasting the
+  // prompt to all agent tabs). Each path below clears held modifiers first.
+  async _pressEnter(pasteMethod) {
+    const platform = process.platform;
+
+    if (platform === "darwin") {
+      // The native binary posts a CGEvent with flags explicitly cleared.
+      const fastPasteBinary = this.resolveFastPasteBinary();
+      if (fastPasteBinary) {
+        try {
+          await this._spawnAndWait(fastPasteBinary, ["--press-enter"]);
+          return;
+        } catch (error) {
+          this.safeLog("⚠️ macos-fast-paste Enter failed, falling back to osascript", {
+            error: error?.message || String(error),
+          });
+        }
+      }
+
+      // System Events merges physically held modifiers into synthetic keys,
+      // so release them first (releases of unheld keys are no-ops).
+      await this._spawnAndWait("osascript", [
+        "-e",
+        'tell application "System Events"',
+        "-e",
+        "key up control",
+        "-e",
+        "key up command",
+        "-e",
+        "key up option",
+        "-e",
+        "key up shift",
+        "-e",
+        "key code 36",
+        "-e",
+        "end tell",
+      ]);
+      return;
+    }
+
+    if (platform === "win32") {
+      // The native binary releases held modifiers, sends Enter, and restores them.
+      const winFastPaste = this.resolveWindowsFastPasteBinary();
+      if (winFastPaste && (await this._windowsFastPasteSupportsPressEnter(winFastPaste))) {
+        try {
+          await this._spawnAndWait(winFastPaste, ["--press-enter"]);
+          return;
+        } catch (error) {
+          this.safeLog("⚠️ windows-fast-paste Enter failed, falling back", {
+            error: error?.message || String(error),
+          });
+        }
+      }
+
+      const nircmdPath = this.getNircmdPath();
+      if (nircmdPath) {
+        // nircmd cannot query key state, so blindly release the modifiers
+        // (no-ops when unheld; no restore possible).
+        for (const key of ["ctrl", "shift", "alt", "lwin", "rwin"]) {
+          try {
+            await this._spawnAndWait(nircmdPath, ["sendkey", key, "up"]);
+          } catch {}
+        }
+        await this._spawnAndWait(nircmdPath, ["sendkeypress", "enter"]);
+        return;
+      }
+
+      // Release held modifiers via keybd_event, send Enter, restore them.
+      await this._spawnAndWait(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-WindowStyle",
+          "Hidden",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "$sig='[DllImport(\"user32.dll\")]public static extern void keybd_event(byte bVk,byte bScan,uint dwFlags,UIntPtr dwExtraInfo);[DllImport(\"user32.dll\")]public static extern short GetAsyncKeyState(int vKey);';" +
+            "Add-Type -MemberDefinition $sig -Name NativeKey -Namespace Win32;" +
+            "$mods=@(0xA2,0xA3,0xA0,0xA1,0xA4,0xA5,0x5B,0x5C);" +
+            "$held=@($mods|Where-Object{[Win32.NativeKey]::GetAsyncKeyState($_) -band 0x8000});" +
+            "$held|ForEach-Object{[Win32.NativeKey]::keybd_event([byte]$_,0,2,[UIntPtr]::Zero)};" +
+            "Start-Sleep -Milliseconds 15;" +
+            "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');" +
+            "[System.Windows.Forms.SendKeys]::SendWait('{ENTER}');" +
+            "$held|ForEach-Object{[Win32.NativeKey]::keybd_event([byte]$_,0,0,[UIntPtr]::Zero)}",
+        ],
+        { timeoutMs: 5000 }
+      );
+      return;
+    }
+
+    await this._pressEnterLinux(pasteMethod);
+  }
+
+  // Older prebuilt windows-fast-paste binaries ignore unknown flags and would
+  // paste when given --press-enter, so probe for the capability marker once.
+  async _windowsFastPasteSupportsPressEnter(binaryPath) {
+    if (this._winFastPasteEnterSupport?.path === binaryPath) {
+      return this._winFastPasteEnterSupport.supported;
+    }
+    let supported = false;
+    try {
+      const output = await this._spawnAndWait(binaryPath, ["--detect-only"]);
+      supported = typeof output === "string" && output.includes("SUPPORTS press-enter");
+    } catch {}
+    this._winFastPasteEnterSupport = { path: binaryPath, supported };
+    return supported;
+  }
+
   async pasteText(text, options = {}) {
     const previousPaste = this.pasteQueue.catch(() => {});
     let markRestoreComplete;
@@ -820,6 +1067,20 @@ class ClipboardManager {
           expectedClipboardText: text,
         });
         method = pasteResult?.method || "linux-tools";
+      }
+
+      if (options.submitAfterPaste) {
+        await new Promise((resolve) => setTimeout(resolve, SUBMIT_AFTER_PASTE_DELAY_MS));
+        try {
+          await this._pressEnter(method);
+          this.safeLog("✅ Submit key sent after paste", {
+            settleMs: SUBMIT_AFTER_PASTE_DELAY_MS,
+          });
+        } catch (enterError) {
+          this.safeLog("⚠️ Submit after paste failed (non-fatal)", {
+            error: enterError?.message || String(enterError),
+          });
+        }
       }
 
       this.safeLog("✅ Paste operation complete", {
