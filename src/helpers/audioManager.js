@@ -43,6 +43,7 @@ import {
   resolveTranslatedText,
   shouldRunTranslateStep,
 } from "./translationChain";
+import { resolveCleanupText } from "./cleanupAnswerGuard";
 import { detectAgentName } from "../config/agentDetection";
 import {
   resolveDictationRouteKind,
@@ -1765,7 +1766,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           return res;
         });
-        return reasonResult.success && reasonResult.text ? reasonResult.text : null;
+        if (!reasonResult.success || !reasonResult.text) return null;
+        return resolveCleanupText(currentText, reasonResult.text, {
+          hasCustomPrompt: !!this.getCustomPrompt(),
+          onSuspect: (metrics) =>
+            logger.logReasoning("CLEANUP_ANSWER_GUARD", { site: "translation-chain", ...metrics }),
+        });
       }
       const cleanupModel = cleanup.model;
       if (cleanupModel) {
@@ -2208,7 +2214,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
           // Cloud cleanup can return success with empty text; keep the raw transcription instead of wiping it.
           if (reasonResult.success && reasonResult.text) {
-            processedText = reasonResult.text;
+            processedText = resolveCleanupText(processedText, reasonResult.text, {
+              hasCustomPrompt: !!this.getCustomPrompt(),
+              onSuspect: (metrics) =>
+                logger.logReasoning("CLEANUP_ANSWER_GUARD", { site: "cloud-batch", ...metrics }),
+            });
           }
         } else if (route.kind === "cleanup") {
           const effectiveModel = getEffectiveCleanupModel();
@@ -3802,7 +3812,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           });
 
           if (reasonResult.success && reasonResult.text) {
-            finalText = reasonResult.text;
+            finalText = resolveCleanupText(finalText, reasonResult.text, {
+              hasCustomPrompt: !!this.getCustomPrompt(),
+              onSuspect: (metrics) =>
+                logger.logReasoning("CLEANUP_ANSWER_GUARD", {
+                  site: "cloud-streaming",
+                  ...metrics,
+                }),
+            });
           }
           usedCloudReasoning = true;
 
