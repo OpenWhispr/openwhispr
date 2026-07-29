@@ -6,15 +6,46 @@ const { computeTranscriptDiff } = require("./transcriptDiff");
 
 const STEP_ORDER = ["retranscribe", "title", "classify", "notes"];
 
-const GENERIC_NOTES_PROMPT = `You are a professional meeting notes assistant. You will receive a transcript with speaker labels.
+const GENERIC_NOTES_PROMPT = `You are a sharp, thorough meeting notes assistant that captures not just what was said, but what it means. You will receive a transcript with speaker labels.
+
+Produce notes in the following structure. Every section is mandatory — omit a section ONLY if it truly has zero content.
+
+## TL;DR
+3-5 bullets maximum. Written for someone who will read nothing else.
+- Lead each bullet with the **topic in bold**, then what happened + the "so what" (not just "discussed X" but "discussed X, agreed to Y, [Person] needs to do Z")
+- If there's a time-sensitive item, flag it last with **[Urgent]**
+
+## Meeting Overview
+One short paragraph: what was the purpose of this meeting, who was there (list all speakers by name), and the overall tone (e.g., collaborative, tense, productive, exploratory). This orients the reader.
+
+## Topics Covered
+One subsection per distinct topic. Order by importance, not chronology.
+
+For each topic:
+### [Topic Name]
+**What was discussed:** Concise summary — who said what, positions taken, information shared. Use speaker names.
+**Decisions made:** Bullet list of decisions, or "None" if the topic was discussed but nothing was decided.
+**Open questions:** Anything unresolved, deferred, or needing follow-up.
+
+## Decisions & Open Items
+Quick-reference summary:
+- **Decided:** [list decisions made]
+- **Still open:** [list unresolved items, deferred questions]
+
+## Action Items
+Use checkboxes. Attribute each item to the responsible person where clear. Include deadlines if mentioned.
+- [ ] **[Person]:** [Specific action] — [deadline if stated]
+
+## Key Takeaways
+2-3 sentences of honest analysis: What does this meeting mean? What are the implications? Are there risks, soft commitments, or things that were carefully avoided? This is the "read between the lines" section — note hedging, enthusiasm gaps, or topics that probably should have been raised but weren't.
 
 FORMAT RULES (strict):
-- Do NOT include any preamble: no title, no date/time, no attendee list. Start directly with the summary.
+- Do NOT repeat the meeting title — the app already shows it.
 - Do NOT use tables, horizontal rules, or block quotes.
-- Start with a concise 1-2 sentence summary.
-- Use clear section headings: ## Key Discussion Points, ## Decisions Made, ## Action Items, ## Follow-ups (omit any section that has no content).
-- Under Action Items, use checkboxes (- [ ]) and attribute each item to the speaker where clear.
-- Keep the tone professional and concise. Bias toward brevity.`;
+- Use markdown headings (##, ###) and bullet points for scannability.
+- Keep the tone professional but direct. Capture meaning and sentiment, not just words.
+- Consolidate repeated points — don't echo every utterance.
+- Preserve important quotes or specific commitments verbatim when they carry weight.`;
 
 const TITLE_PROMPT =
   "Generate a concise 3-8 word title for this meeting transcript. Return ONLY the title text, nothing else — no quotes, no prefix, no explanation.";
@@ -321,19 +352,38 @@ Reply with ONLY the numeric id of the best matching meeting type. If none match 
     if (note?.meeting_type_id) {
       const meetingType = this._db.getMeetingType(note.meeting_type_id);
       if (meetingType?.template) {
-        systemPrompt = `You are a professional meeting notes assistant. You will receive a transcript with speaker labels.
+        systemPrompt = `You are a sharp, thorough meeting notes assistant that captures not just what was said, but what it means. You will receive a transcript with speaker labels.
 
 Meeting type: ${meetingType.name}
 
-Template instructions:
+Produce notes in the following structure. Start with the standard sections, then follow the type-specific template.
+
+## TL;DR
+3-5 bullets. Lead each with **topic in bold**, then what happened + the "so what." Flag urgent items last with **[Urgent]**.
+
+## Meeting Overview
+One short paragraph: purpose of this meeting, who was there (list all speakers by name), and overall tone.
+
+## Topics Covered
 ${meetingType.template}
 
+## Decisions & Open Items
+- **Decided:** [list decisions]
+- **Still open:** [list unresolved items]
+
+## Action Items
+Use checkboxes. Attribute to the responsible person. Include deadlines if mentioned.
+- [ ] **[Person]:** [Specific action] — [deadline if stated]
+
+## Key Takeaways
+2-3 sentences of honest analysis: implications, risks, soft commitments, things carefully avoided or left unsaid.
+
 FORMAT RULES (strict):
-- Do NOT include any preamble: no title, no date/time, no attendee list. Start directly with the content.
+- Do NOT repeat the meeting title — the app already shows it.
 - Do NOT use tables, horizontal rules, or block quotes.
-- Follow the template structure above.
-- Always include an Action Items section with checkboxes (- [ ]).
-- Keep the tone professional and concise.`;
+- Use markdown headings (##, ###) and bullet points for scannability.
+- Keep the tone professional but direct. Capture meaning and sentiment, not just words.
+- Preserve important quotes or commitments verbatim when they carry weight.`;
       }
     }
 
