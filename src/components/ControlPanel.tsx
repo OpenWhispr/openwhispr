@@ -51,6 +51,8 @@ import {
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
 import { WORKSPACES_ENABLED } from "../lib/features";
+import ModelDownloadBanner from "./ModelDownloadBanner";
+import { initAutoDownloadListeners } from "../stores/modelAutoDownloadStore";
 
 const platform = getCachedPlatform();
 
@@ -389,6 +391,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   useEffect(() => {
     fetchStreamingProviders();
+  }, []);
+
+  useEffect(() => {
+    const cleanup = initAutoDownloadListeners();
+    return cleanup;
   }, []);
 
   usePostCallPipelineListener();
@@ -852,6 +859,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 </div>
               </div>
             )}
+            {activeView === "home" && <ModelDownloadBanner />}
             {(gpuAccelAvailable.cuda || gpuAccelAvailable.vulkan) &&
               activeView === "home" &&
               !gpuBannerDismissed && (

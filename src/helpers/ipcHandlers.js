@@ -4199,6 +4199,20 @@ class IPCHandlers {
       convertToWav,
     });
 
+    // Wrap _broadcast to observe pipeline status events for pending retranscription tracking
+    const originalBroadcast = this.postCallPipelineManager._broadcast.bind(this.postCallPipelineManager);
+    this.postCallPipelineManager._broadcast = (channel, data) => {
+      originalBroadcast(channel, data);
+      if (channel === "post-call-pipeline-status") {
+        if (data.step === "retranscribe" && data.status === "pending") {
+          this._pendingRetranscriptionNoteIds.add(data.noteId);
+        }
+        if (data.step === "pipeline" && data.status === "complete") {
+          this._pendingRetranscriptionNoteIds.delete(data.noteId);
+        }
+      }
+    };
+
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
@@ -9071,33 +9085,6 @@ class IPCHandlers {
     });
   }
 
-  /**
-   * Re-run the post-call pipeline for notes that were recorded while
-   * the Whisper large model was still downloading. Called when the
-   * large model download completes.
-   */
-  _drainPendingRetranscriptions() {
-    const pending = [...this._pendingRetranscriptionNoteIds];
-    this._pendingRetranscriptionNoteIds.clear();
-
-    if (pending.length === 0) return;
-
-    debugLogger.info("Draining pending retranscriptions after model download",
-      { count: pending.length }, "meeting");
-
-    for (const noteId of pending) {
-      const note = this.databaseManager.getNote(noteId);
-      if (!note) continue;
-      const audioPath = note.system_audio_path || note.mic_audio_path;
-      if (!audioPath || !fs.existsSync(audioPath)) continue;
-
-      this.backgroundJobQueue.enqueue(
-        `post-call-retry-${noteId}`,
-        () => this.postCallPipelineManager.run(noteId)
-      );
-    }
-  }
-
   _enqueuePostCallPipeline(noteId) {
     if (this._autoPostCallPipelineDisabled) {
       debugLogger.info("Post-call pipeline disabled by user setting", {}, "meeting");
@@ -9116,9 +9103,6 @@ class IPCHandlers {
         debugLogger.info("Auto-downloading large whisper model for pipeline", {}, "meeting");
         this.whisperManager.downloadWhisperModel("large", (progress) => {
           this.broadcastToWindows("whisper-model-download-progress", progress);
-        }).then(() => {
-          debugLogger.info("Large whisper model download complete, draining pending retranscriptions", {}, "meeting");
-          this._drainPendingRetranscriptions();
         }).catch((err) => {
           debugLogger.warn("Auto-download of large model failed", { error: err.message }, "meeting");
           this._largeModelDownloadTriggered = false;
