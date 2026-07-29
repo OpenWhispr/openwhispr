@@ -9196,6 +9196,16 @@ class IPCHandlers {
    */
   async _downloadGemmaModel() {
     if (this._gemmaAutoDownloadActive) return;
+    // The auto-download banner/store is single-slot — don't start Gemma while
+    // Parakeet's first-launch download is still running.
+    if (this._parakeetAutoDownloadActive) {
+      this.broadcastToWindows("model-auto-download-status", {
+        type: "error",
+        modelId: "gemma-4-e4b-it-q4_k_m",
+        error: "Another model is currently downloading. Please wait for it to finish.",
+      });
+      return;
+    }
 
     const defaultModel = "gemma-4-e4b-it-q4_k_m";
     const modelName = "Gemma 4 E4B";

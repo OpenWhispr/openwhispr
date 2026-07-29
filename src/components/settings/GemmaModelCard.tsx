@@ -3,10 +3,10 @@ import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cpu, Check, Download, Loader2 } from "lucide-react";
 import { Button } from "../ui/button";
-import { getLocalModel } from "../../models/ModelRegistry";
+import { getLocalModel, BUILTIN_LOCAL_MODEL_ID } from "../../models/ModelRegistry";
 import { useModelAutoDownloadStore } from "../../stores/modelAutoDownloadStore";
 
-const GEMMA_MODEL_ID = "gemma-4-e4b-it-q4_k_m";
+const GEMMA_MODEL_ID = BUILTIN_LOCAL_MODEL_ID;
 
 /**
  * Built-in local model card shown for the "local" inference mode. Replaces the
@@ -35,6 +35,10 @@ export default function GemmaModelCard() {
 
   const isThisModel = auto.modelId === GEMMA_MODEL_ID;
   const isDownloading = isThisModel && auto.isActive;
+  // The auto-download store is single-slot: block starting Gemma while ANY
+  // model (e.g. Parakeet on first launch) is downloading, or their progress
+  // and cancel routing would collide.
+  const anotherDownloadActive = auto.isActive && !isThisModel;
 
   // Initial + on-complete status check.
   useEffect(() => {
@@ -106,7 +110,12 @@ export default function GemmaModelCard() {
           <div className="mt-0.5">{checked || isDownloading ? statusNode() : null}</div>
         </div>
         {!isDownloaded && !isDownloading && (
-          <Button size="sm" onClick={handleDownload} className="text-xs shrink-0">
+          <Button
+            size="sm"
+            onClick={handleDownload}
+            disabled={anotherDownloadActive}
+            className="text-xs shrink-0"
+          >
             <Download size={13} className="mr-1" />
             {t("settingsPage.aiModels.gemmaCard.download")}
           </Button>

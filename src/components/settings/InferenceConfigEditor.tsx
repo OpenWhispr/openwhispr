@@ -14,9 +14,9 @@ import GemmaModelCard from "./GemmaModelCard";
 import { Toggle } from "../ui/toggle";
 import type { InferenceMode } from "../../types/electron";
 import type { InferenceScope } from "../../config/inferenceScopes";
-import { getLocalModel } from "../../models/ModelRegistry";
+import { getLocalModel, BUILTIN_LOCAL_MODEL_ID } from "../../models/ModelRegistry";
 
-const GEMMA_MODEL_ID = "gemma-4-e4b-it-q4_k_m";
+const GEMMA_MODEL_ID = BUILTIN_LOCAL_MODEL_ID;
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",

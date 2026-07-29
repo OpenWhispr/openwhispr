@@ -3,9 +3,10 @@ import { useTranslation } from "react-i18next";
 import { Cpu, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { useModelAutoDownloadStore } from "../stores/modelAutoDownloadStore";
+import { BUILTIN_LOCAL_MODEL_ID } from "../models/ModelRegistry";
 
 const GEMMA_PROMPT_KEY = "gemmaDownloadPromptDismissed";
-const GEMMA_MODEL_ID = "gemma-4-e4b-it-q4_k_m";
+const GEMMA_MODEL_ID = BUILTIN_LOCAL_MODEL_ID;
 
 /**
  * One-time modal that offers to download the built-in Gemma model for offline

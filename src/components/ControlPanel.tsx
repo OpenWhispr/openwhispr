@@ -22,6 +22,7 @@ import {
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
 import { useSettingsStore, selectResolvedNoteFormatting } from "../stores/settingsStore";
+import { BUILTIN_LOCAL_MODEL_ID } from "../models/ModelRegistry";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -183,19 +184,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     const state = useSettingsStore.getState();
     const resolved = selectResolvedNoteFormatting(state);
 
-    if (!resolved.provider) {
-      // No LLM resolved yet — if the built-in Gemma model is already on disk,
-      // adopt it as the note-formatting default so the pipeline works offline
-      // without the user visiting Settings.
-      window.electronAPI?.modelCheck?.("gemma-4-e4b-it-q4_k_m").then((downloaded) => {
+    if (!resolved.model) {
+      // No usable model resolved (provider spuriously falls back to the
+      // dictationCleanup default "openai", so key off model, not provider).
+      // If the built-in Gemma model is already on disk, adopt it as the
+      // note-formatting default so the pipeline works offline without the
+      // user visiting Settings — this also re-homes users migrated off a
+      // removed hosted-cloud mode who never configured a local model.
+      window.electronAPI?.modelCheck?.(BUILTIN_LOCAL_MODEL_ID).then((downloaded) => {
         if (!downloaded) return;
         const s = useSettingsStore.getState();
         s.setNoteFormattingMode("local");
         s.setNoteFormattingProvider("local");
-        s.setNoteFormattingModel("gemma-4-e4b-it-q4_k_m");
+        s.setNoteFormattingModel(BUILTIN_LOCAL_MODEL_ID);
         window.electronAPI?.syncNoteFormattingConfig?.({
           provider: "local",
-          model: "gemma-4-e4b-it-q4_k_m",
+          model: BUILTIN_LOCAL_MODEL_ID,
         });
       });
       return;
