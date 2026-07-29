@@ -5,6 +5,9 @@
 // saved state against the currently attached displays. Electron touchpoints
 // stay thin in windowManager.js so this module is testable without a window.
 
+// Below this the panel is unusable, so a broken store falls back to the default size.
+const MIN_RESTORABLE_SIZE = { width: 320, height: 240 };
+
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -21,9 +24,15 @@ function rectsOverlap(a, b) {
   return overlapWidth > 0 && overlapHeight > 0;
 }
 
+function fitSizeToWorkArea(rect, workArea) {
+  return {
+    width: Math.min(rect.width, workArea.width),
+    height: Math.min(rect.height, workArea.height),
+  };
+}
+
 function clampIntoWorkArea(rect, workArea) {
-  const width = Math.min(rect.width, workArea.width);
-  const height = Math.min(rect.height, workArea.height);
+  const { width, height } = fitSizeToWorkArea(rect, workArea);
   return {
     x: clampNumber(rect.x, workArea.x, workArea.x + workArea.width - width),
     y: clampNumber(rect.y, workArea.y, workArea.y + workArea.height - height),
@@ -33,8 +42,7 @@ function clampIntoWorkArea(rect, workArea) {
 }
 
 function centerInWorkArea(rect, workArea) {
-  const width = Math.min(rect.width, workArea.width);
-  const height = Math.min(rect.height, workArea.height);
+  const { width, height } = fitSizeToWorkArea(rect, workArea);
   return {
     x: Math.round(workArea.x + (workArea.width - width) / 2),
     y: Math.round(workArea.y + (workArea.height - height) / 2),
@@ -67,7 +75,9 @@ export function normalizeControlPanelWindowState(candidate) {
   }
   const roundedWidth = Math.round(width);
   const roundedHeight = Math.round(height);
-  if (roundedWidth < 1 || roundedHeight < 1) return null;
+  if (roundedWidth < MIN_RESTORABLE_SIZE.width || roundedHeight < MIN_RESTORABLE_SIZE.height) {
+    return null;
+  }
   return {
     x: Math.round(x),
     y: Math.round(y),
