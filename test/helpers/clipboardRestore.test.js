@@ -198,6 +198,101 @@ test("pasteText waits for prior clipboard restoration before starting the next p
   assert.deepEqual(events, ["start:first", "end:first", "start:second", "end:second"]);
 });
 
+test("pasteWithFastPaste restores the captured target window before pasting (#859)", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager._restoreClipboardAfterDelay = () => Promise.resolve();
+
+  const result = await manager.pasteWithFastPaste(
+    "/tmp/windows-fast-paste.exe",
+    { type: "text", data: "previous clipboard" },
+    { expectedClipboardText: "dictated text", targetWindow: "12345" }
+  );
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "/tmp/windows-fast-paste.exe");
+  assert.deepEqual(spawnCalls[0].args, ["--restore-window", "12345"]);
+});
+
+test("pasteWithFastPaste sends no window arg when nothing was captured", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager._restoreClipboardAfterDelay = () => Promise.resolve();
+
+  const result = await manager.pasteWithFastPaste(
+    "/tmp/windows-fast-paste.exe",
+    { type: "text", data: "previous clipboard" },
+    { expectedClipboardText: "dictated text" }
+  );
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.deepEqual(spawnCalls[0].args, []);
+});
+
+const textEditMonitorPath = require.resolve("../../src/helpers/textEditMonitor");
+
+function loadTextEditMonitor({ execFile } = {}) {
+  delete require.cache[textEditMonitorPath];
+
+  Module._load = function loadWithMocks(request, parent, isMain) {
+    if (request === "child_process" && execFile) {
+      return { ...childProcess, execFile };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+
+  try {
+    return require("../../src/helpers/textEditMonitor");
+  } finally {
+    Module._load = originalLoad;
+  }
+}
+
+test("windows capture uses the old-binary-safe detect-only flag (no premature paste, #859 regression)", () => {
+  const execFileCalls = [];
+  const TextEditMonitor = loadTextEditMonitor({
+    execFile: (command, args, options, cb) => {
+      execFileCalls.push({ command, args });
+      // Simulate a current binary answering in capture mode.
+      cb(null, "FOREGROUND 4242\n");
+    },
+  });
+
+  const monitor = new TextEditMonitor();
+  monitor._findFile = () => "/tmp/windows-fast-paste.exe";
+  monitor._captureWindowsForegroundWindow();
+
+  assert.equal(execFileCalls.length, 1);
+  assert.equal(execFileCalls[0].command, "/tmp/windows-fast-paste.exe");
+  // --detect-only makes an OLD binary hit its detect early-return instead of
+  // pasting; --print-foreground makes a current binary report the handle.
+  assert.deepEqual(execFileCalls[0].args, ["--detect-only", "--print-foreground"]);
+  assert.equal(monitor.lastForegroundWindow, "4242");
+});
+
+test("windows capture yields no handle when the binary prints no FOREGROUND line (old-binary degradation)", () => {
+  const TextEditMonitor = loadTextEditMonitor({
+    execFile: (command, args, options, cb) => {
+      // An OLD binary in --detect-only mode prints window-class info, not FOREGROUND.
+      cb(null, "WINDOW_CLASS Notepad\nIS_TERMINAL false\n");
+    },
+  });
+
+  const monitor = new TextEditMonitor();
+  monitor._findFile = () => "/tmp/windows-fast-paste.exe";
+  monitor._captureWindowsForegroundWindow();
+
+  assert.equal(monitor.lastForegroundWindow, null);
+});
+
 test("pasteMacOS restores clipboard after the short macOS delay on successful fast paste", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({

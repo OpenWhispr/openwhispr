@@ -82,20 +82,63 @@ class TextEditMonitor extends EventEmitter {
     this._lastValue = null;
     this._stdoutBuffer = "";
     this.lastTargetPid = null;
+    this.lastForegroundWindow = null;
   }
 
   /**
-   * macOS: capture the active app's PID via NSWorkspace before the overlay steals focus.
+   * Capture the active target before the overlay/transcription can steal focus.
    * Must be called at hotkey press time, BEFORE showDictationPanel()/mainWindow.show().
-   * NSWorkspace.frontmostApplication correctly identifies the key window owner,
-   * ignoring panel-type windows like the OpenWhispr overlay.
+   * macOS: the frontmost app's PID via NSWorkspace (re-activated by PID before paste).
+   * Windows: the foreground window handle via windows-fast-paste (restored before
+   * paste, issue #859). NSWorkspace.frontmostApplication and GetForegroundWindow
+   * both ignore the focusable:false OpenWhispr overlay, so they name the real target.
    */
   captureTargetPid() {
-    if (process.platform !== "darwin") return;
-    this._readFrontmostPid().then((pid) => {
-      this.lastTargetPid = pid;
-      debugLogger.debug("[TextEditMonitor] Captured target PID", { pid });
-    });
+    if (process.platform === "darwin") {
+      this._readFrontmostPid().then((pid) => {
+        this.lastTargetPid = pid;
+        debugLogger.debug("[TextEditMonitor] Captured target PID", { pid });
+      });
+      return;
+    }
+    if (process.platform === "win32") {
+      this._captureWindowsForegroundWindow();
+    }
+  }
+
+  /**
+   * Windows: read the current foreground window handle via the fast-paste helper
+   * so it can be restored before the paste keystroke. Best-effort: if the binary
+   * is missing or fails, we clear the handle and the paste falls back to whatever
+   * is foreground at paste time (the pre-#859 behavior).
+   *
+   * We pass BOTH --detect-only and --print-foreground. A current binary checks
+   * --print-foreground first and prints "FOREGROUND <hwnd>". An OLD binary
+   * (shipped before #859, commonly cached from a separate release) does not know
+   * --print-foreground, but it does know --detect-only, so it takes its detect
+   * early-return and prints window-class info WITHOUT injecting a paste. Without
+   * --detect-only the old binary would ignore the unknown flag and fall through
+   * to Ctrl+V, pasting the clipboard at record start. The extra flag makes the
+   * old binary degrade to no capture (no FOREGROUND line -> null handle -> no
+   * restore) instead of pasting.
+   */
+  _captureWindowsForegroundWindow() {
+    const binary = this._findFile("windows-fast-paste.exe");
+    if (!binary) {
+      this.lastForegroundWindow = null;
+      return;
+    }
+    execFile(
+      binary,
+      ["--detect-only", "--print-foreground"],
+      { timeout: 2000, windowsHide: true },
+      (err, stdout) => {
+        const match = err ? null : /FOREGROUND\s+(\d+)/.exec(stdout || "");
+        const handle = match && match[1] !== "0" ? match[1] : null;
+        this.lastForegroundWindow = handle;
+        debugLogger.debug("[TextEditMonitor] Captured foreground window", { handle });
+      }
+    );
   }
 
   /**

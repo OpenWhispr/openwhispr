@@ -10,6 +10,14 @@
  *   1. Window class name (fast, works for native terminals)
  *   2. Executable name (fallback, catches Electron-based terminals like Termius)
  *
+ * Focus restore (issue #859): the caller captures the target window handle at
+ * record start with --print-foreground, then passes it back as
+ * --restore-window <hwnd> at paste time. We re-activate that window before
+ * sending the keystroke so dictation lands in the field the user was in, even
+ * when something (a subprocess console flash, Chromium moving focus to its
+ * toolbar) stole the foreground during transcription. This mirrors the macOS
+ * PID capture/activate path and the Linux --window path.
+ *
  * Compile with: cl /O2 windows-fast-paste.c /Fe:windows-fast-paste.exe user32.lib
  * Or with MinGW: gcc -O2 windows-fast-paste.c -o windows-fast-paste.exe -luser32
  */
@@ -17,6 +25,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 static const char* TERMINAL_CLASSES[] = {
@@ -144,6 +154,45 @@ static int SendPasteNormal(void) {
     return (sent == 4) ? 0 : 1;
 }
 
+/* Bring a captured target window back to the foreground before pasting.
+   SetForegroundWindow alone is blocked by Windows' foreground lock when the
+   calling process isn't the current foreground owner, so we attach this
+   thread's input queue to both the current foreground thread and the target
+   thread first — the standard workaround, and what nircmd's "win activate"
+   does internally. Returns TRUE if the target ended up foreground. */
+static BOOL RestoreForegroundWindow(HWND target) {
+    if (!target || !IsWindow(target)) return FALSE;
+
+    if (GetForegroundWindow() == target) return TRUE;
+
+    if (IsIconic(target)) {
+        ShowWindow(target, SW_RESTORE);
+    }
+
+    HWND fg = GetForegroundWindow();
+    DWORD thisThread = GetCurrentThreadId();
+    DWORD targetThread = GetWindowThreadProcessId(target, NULL);
+    DWORD fgThread = fg ? GetWindowThreadProcessId(fg, NULL) : 0;
+
+    BOOL attachedTarget = FALSE;
+    BOOL attachedFg = FALSE;
+    if (targetThread && targetThread != thisThread) {
+        attachedTarget = AttachThreadInput(thisThread, targetThread, TRUE);
+    }
+    if (fgThread && fgThread != thisThread && fgThread != targetThread) {
+        attachedFg = AttachThreadInput(thisThread, fgThread, TRUE);
+    }
+
+    BringWindowToTop(target);
+    BOOL ok = SetForegroundWindow(target);
+    SetFocus(target);
+
+    if (attachedFg) AttachThreadInput(thisThread, fgThread, FALSE);
+    if (attachedTarget) AttachThreadInput(thisThread, targetThread, FALSE);
+
+    return ok && GetForegroundWindow() == target;
+}
+
 static int SendPasteTerminal(void) {
     INPUT inputs[6];
     ZeroMemory(inputs, sizeof(inputs));
@@ -161,11 +210,33 @@ static int SendPasteTerminal(void) {
 
 int main(int argc, char* argv[]) {
     BOOL detectOnly = FALSE;
+    BOOL printForeground = FALSE;
+    HWND restoreWindow = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--detect-only") == 0) {
             detectOnly = TRUE;
+        } else if (strcmp(argv[i], "--print-foreground") == 0) {
+            printForeground = TRUE;
+        } else if (strcmp(argv[i], "--restore-window") == 0 && i + 1 < argc) {
+            restoreWindow = (HWND)(uintptr_t)strtoull(argv[++i], NULL, 10);
         }
+    }
+
+    /* Capture mode: report the current foreground window handle so the caller
+       can stash it before the overlay/transcription can change focus. */
+    if (printForeground) {
+        HWND fg = GetForegroundWindow();
+        printf("FOREGROUND %llu\n", (unsigned long long)(uintptr_t)fg);
+        fflush(stdout);
+        return fg ? 0 : 2;
+    }
+
+    /* Restore the captured target to the foreground before pasting. If it is
+       gone or can't be restored we fall through to whatever is foreground now,
+       which is the pre-#859 behavior. */
+    if (restoreWindow && RestoreForegroundWindow(restoreWindow)) {
+        Sleep(20);
     }
 
     HWND hwnd = GetForegroundWindow();
