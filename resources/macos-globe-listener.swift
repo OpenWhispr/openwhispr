@@ -2,7 +2,7 @@ import Cocoa
 import Darwin
 
 var fnIsDown = false
-var fnInterrupted = false
+var fnWasUsedWithNonModifierKey = false
 var lastModifierFlags: NSEvent.ModifierFlags = []
 
 let suppressedMouseButtons = Set(
@@ -98,12 +98,13 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
 
     if containsFn && !fnIsDown {
         fnIsDown = true
-        fnInterrupted = false
+        fnWasUsedWithNonModifierKey = false
         emit("FN_DOWN")
     } else if !containsFn && fnIsDown {
+        let wasChorded = fnWasUsedWithNonModifierKey
         fnIsDown = false
-        fnInterrupted = false
-        emit("FN_UP")
+        fnWasUsedWithNonModifierKey = false
+        emit(wasChorded ? "FN_UP_CHORDED" : "FN_UP")
     }
 
     let keyCode = event.keyCode
@@ -131,20 +132,22 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
 
 // Detect another key pressed while Fn is held (e.g. Fn+Arrow → Home) so the
 // JS side can cancel an in-progress bare-Fn push-to-talk instead of transcribing noise.
-let keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { _ in
-    if fnIsDown && !fnInterrupted {
-        fnInterrupted = true
+guard let keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { _ in
+    if fnIsDown && !fnWasUsedWithNonModifierKey {
+        fnWasUsedWithNonModifierKey = true
         emit("FN_INTERRUPTED")
     }
+}) else {
+    NSEvent.removeMonitor(monitor)
+    FileHandle.standardError.write("Failed to create key monitor\n".data(using: .utf8)!)
+    exit(1)
 }
 
 let signalSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 signal(SIGTERM, SIG_IGN)
 signalSource.setEventHandler {
     NSEvent.removeMonitor(monitor)
-    if let keyMonitor {
-        NSEvent.removeMonitor(keyMonitor)
-    }
+    NSEvent.removeMonitor(keyMonitor)
     if let mouseEventTap {
         CGEvent.tapEnable(tap: mouseEventTap, enable: false)
     }
