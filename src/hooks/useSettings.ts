@@ -36,7 +36,6 @@ export interface CleanupSettings {
   cleanupModel: string;
   cleanupProvider: string;
   cleanupCloudBaseUrl?: string;
-  cleanupCloudMode: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
 }
@@ -95,7 +94,6 @@ export interface ChatAgentSettings {
   chatAgentModel: string;
   chatAgentProvider: string;
   chatAgentKey: string;
-  chatAgentCloudMode: string;
   chatAgentMode: InferenceMode;
   chatAgentCloudBaseUrl: string;
   chatAgentRemoteUrl: string;
@@ -228,7 +226,6 @@ function useSettingsInternal() {
     cloudTranscriptionBaseUrl: store.cloudTranscriptionBaseUrl,
     cleanupCloudBaseUrl: store.cleanupCloudBaseUrl,
     cloudTranscriptionMode: store.cloudTranscriptionMode,
-    cleanupCloudMode: store.cleanupCloudMode,
     transcriptionMode: store.transcriptionMode,
     remoteTranscriptionType: store.remoteTranscriptionType,
     remoteTranscriptionUrl: store.remoteTranscriptionUrl,
@@ -274,7 +271,6 @@ function useSettingsInternal() {
     setCloudTranscriptionBaseUrl: store.setCloudTranscriptionBaseUrl,
     setCloudTranscriptionMode: store.setCloudTranscriptionMode,
     setCleanupCloudBaseUrl: store.setCleanupCloudBaseUrl,
-    setCleanupCloudMode: store.setCleanupCloudMode,
     setTranscriptionMode: store.setTranscriptionMode,
     setRemoteTranscriptionType: store.setRemoteTranscriptionType,
     setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,

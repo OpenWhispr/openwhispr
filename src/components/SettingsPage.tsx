@@ -278,10 +278,9 @@ function TranscriptionSection({
     setTranscriptionMode(mode);
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
-    setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    setCloudTranscriptionMode("byok");
 
     const toastKey = {
-      openwhispr: "switchedCloud",
       providers: "switchedProviders",
       local: "switchedLocal",
       "self-hosted": "switchedSelfHosted",
@@ -388,11 +387,9 @@ interface AiModelsSectionProps {
 }
 
 const CLEANUP_MODE_TOAST_KEY: Record<InferenceMode, string> = {
-  openwhispr: "switchedCloud",
   providers: "switchedProviders",
   local: "switchedLocal",
   "self-hosted": "switchedSelfHosted",
-  enterprise: "switchedEnterprise",
 };
 
 function NoteFormattingSettings() {

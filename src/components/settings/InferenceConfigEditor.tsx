@@ -62,10 +62,7 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
     (mode: InferenceMode) => {
       if (mode === config.mode) return;
 
-      const patch: Parameters<typeof setResolvedLLMConfig>[1] = {
-        mode,
-        cloudMode: "byok",
-      };
+      const patch: Parameters<typeof setResolvedLLMConfig>[1] = { mode };
       // Built-in mode always resolves to the bundled Gemma model.
       if (mode === "local") {
         patch.provider = "local";

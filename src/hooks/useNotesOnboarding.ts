@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useSettingsStore, selectIsCloudCleanupMode } from "../stores/settingsStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import { useUsage } from "./useUsage";
 
 interface UseNotesOnboardingReturn {
@@ -16,13 +16,12 @@ export function useNotesOnboarding(): UseNotesOnboardingReturn {
   const isProLoading = usage !== null && !usage.hasLoaded;
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
   const effectiveModel = useSettingsStore((s) => s.cleanupModel);
-  const isCloudCleanup = useSettingsStore(selectIsCloudCleanupMode);
 
   const [isComplete, setIsComplete] = useState(
     () => localStorage.getItem("notesOnboardingComplete") === "true"
   );
 
-  const isLLMConfigured = isCloudCleanup || (useCleanupModel && !!effectiveModel);
+  const isLLMConfigured = useCleanupModel && !!effectiveModel;
 
   const complete = useCallback(() => {
     localStorage.setItem("notesOnboardingComplete", "true");

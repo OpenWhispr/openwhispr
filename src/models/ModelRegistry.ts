@@ -1,5 +1,5 @@
 import modelDataRaw from "./modelRegistryData.json";
-import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
+import { getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 
 export interface ModelDefinition {
@@ -332,10 +332,6 @@ export function getProviderDisplayName(provider: string): string {
 }
 
 export function getModelProvider(modelId: string): string {
-  if (isCloudCleanupMode()) {
-    return "openwhispr";
-  }
-
   const storedProvider = getSettings().cleanupProvider;
 
   if (storedProvider === "custom") {

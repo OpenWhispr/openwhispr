@@ -38,7 +38,6 @@ import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import { getAllReasoningModels, getBatchTranscriptionModel } from "../../models/ModelRegistry";
 import {
   useSettingsStore,
-  selectIsCloudCleanupMode,
   selectResolvedUploadTranscription,
   getSettings,
 } from "../../stores/settingsStore";
@@ -262,10 +261,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
   const cortiTenant = useSettingsStore((s) => s.cortiTenant);
   const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
-  const isCloudCleanup = useSettingsStore(selectIsCloudCleanupMode);
-  const effectiveCleanupModel = useSettingsStore((s) =>
-    selectIsCloudCleanupMode(s) ? "" : s.cleanupModel
-  );
+  const effectiveCleanupModel = useSettingsStore((s) => s.cleanupModel);
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
 
   const isOpenWhisprCloud =
@@ -470,8 +466,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const generateTitle = async (text: string): Promise<string> => {
     if (!useCleanupModel) return "";
     if (!getSettings().autoGenerateNoteTitle) return "";
-    const model = isCloudCleanup ? "" : effectiveCleanupModel || getAllReasoningModels()[0]?.value;
-    if (!model && !isCloudCleanup) return "";
+    const model = effectiveCleanupModel || getAllReasoningModels()[0]?.value;
+    if (!model) return "";
     return generateNoteTitle(text, model);
   };
 
@@ -837,12 +833,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const handleCreateAccount = useStartOnboarding();
 
-  const switchToCloud = () => {
-    setUploadTranscriptionMode("openwhispr");
-    setUploadCloudTranscriptionMode("openwhispr");
-    setUploadUseLocalWhisper(false);
-  };
-
   const getTranscribingLabel = (): string => {
     if (isOpenWhisprCloud) return t("notes.upload.transcribingCloud");
     if (useLocalWhisper) return t("notes.upload.transcribingLocal");
@@ -1047,7 +1037,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               isProUser={!!isProUser}
               onUpgrade={() => usage?.openCheckout()}
               onCreateAccount={handleCreateAccount}
-              onSwitchToCloud={switchToCloud}
             />
           )}
 
@@ -1466,7 +1455,6 @@ interface SelectedViewProps {
   isProUser: boolean;
   onUpgrade: () => void;
   onCreateAccount: () => void;
-  onSwitchToCloud: () => void;
 }
 
 function SelectedView({
@@ -1485,7 +1473,6 @@ function SelectedView({
   isProUser,
   onUpgrade,
   onCreateAccount,
-  onSwitchToCloud,
 }: SelectedViewProps) {
   const canTranscribe = !fileTooLarge && !requiresUpgrade && !byokTooLarge;
 
@@ -1531,9 +1518,7 @@ function SelectedView({
           <p className="text-xs text-foreground/50 leading-relaxed mt-1.5 font-medium">
             {requiresAccount
               ? t("notes.upload.byokTooLargeNeedsAccount")
-              : isProUser
-                ? t("notes.upload.switchToCloudForLargeFiles")
-                : t("notes.upload.byokTooLargeNeedsUpgrade")}
+              : t("notes.upload.byokTooLargeNeedsUpgrade")}
           </p>
         </div>
       )}
@@ -1564,18 +1549,6 @@ function SelectedView({
             className="h-8 text-xs px-5"
           >
             {t("notes.upload.createAccount")}
-          </Button>
-        )}
-
-        {/* BYOK too large — signed in, Pro: Switch to Cloud */}
-        {byokTooLarge && !requiresAccount && isProUser && (
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onSwitchToCloud}
-            className="h-8 text-xs px-5"
-          >
-            {t("notes.upload.switchToCloud")}
           </Button>
         )}
 

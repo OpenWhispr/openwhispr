@@ -572,7 +572,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // OpenWhispr Cloud API
   cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
-  cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
@@ -843,19 +842,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   sendDictationPreviewAudio: (data) => ipcRenderer.send("dictation-preview-audio", data),
   acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
   releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
-
-  // Agent cloud streaming (event-based for real-time chunks)
-  startAgentStream: (messages, opts) =>
-    ipcRenderer.send("cloud-agent-stream-start", messages, opts),
-  onAgentStreamChunk: registerListener(
-    "cloud-agent-stream-chunk",
-    (callback) => (_event, chunk) => callback(chunk)
-  ),
-  onAgentStreamError: registerListener(
-    "cloud-agent-stream-error",
-    (callback) => (_event, error) => callback(error)
-  ),
-  onAgentStreamEnd: registerListener("cloud-agent-stream-end", (callback) => () => callback()),
 
   // Agent cloud tools
   agentWebSearch: (query, numResults) => ipcRenderer.invoke("agent-web-search", query, numResults),

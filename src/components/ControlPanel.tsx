@@ -596,16 +596,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           // Apply AI reasoning if enabled
           if (useCleanupModel) {
             try {
-              const [
-                { default: ReasoningService },
-                { getEffectiveCleanupModel, isCloudCleanupMode, getSettings },
-              ] = await Promise.all([
-                import("../services/ReasoningService"),
-                import("../stores/settingsStore"),
-              ]);
+              const [{ default: ReasoningService }, { getEffectiveCleanupModel, getSettings }] =
+                await Promise.all([
+                  import("../services/ReasoningService"),
+                  import("../stores/settingsStore"),
+                ]);
               const model = getEffectiveCleanupModel();
-              const isCloud = isCloudCleanupMode();
-              if (model || isCloud) {
+              if (model) {
                 const agentName = localStorage.getItem("agentName") || null;
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,

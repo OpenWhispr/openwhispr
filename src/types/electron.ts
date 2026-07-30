@@ -2,7 +2,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
-export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
+export type InferenceMode = "providers" | "local" | "self-hosted";
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
@@ -1232,28 +1232,6 @@ declare global {
         error?: string;
         code?: string;
       }>;
-      cloudReason?: (
-        text: string,
-        opts: {
-          model?: string;
-          agentName?: string;
-          customDictionary?: string[];
-          customPrompt?: string;
-          systemPrompt?: string;
-          promptMode?: "cleanup";
-          language?: string;
-          locale?: string;
-        }
-      ) => Promise<{
-        success: boolean;
-        text?: string;
-        model?: string;
-        provider?: string;
-        promptMode?: string;
-        matchType?: string;
-        error?: string;
-        code?: string;
-      }>;
       cloudStreamingUsage?: (
         text: string,
         audioDurationSeconds: number,
@@ -1634,29 +1612,6 @@ declare global {
       onAgentStartRecording?: (callback: () => void) => () => void;
       onAgentStopRecording?: (callback: () => void) => () => void;
       onAgentToggleRecording?: (callback: () => void) => () => void;
-
-      // Agent cloud streaming (event-based)
-      startAgentStream?: (
-        messages: Array<{ role: string; content: string | Array<unknown> }>,
-        opts?: {
-          systemPrompt?: string;
-          tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
-        }
-      ) => void;
-      onAgentStreamChunk?: (
-        callback: (chunk: {
-          type: "content" | "tool_call" | "done";
-          text?: string;
-          id?: string;
-          name?: string;
-          arguments?: string;
-          finishReason?: string;
-        }) => void
-      ) => () => void;
-      onAgentStreamError?: (
-        callback: (error: { error: string; code?: string }) => void
-      ) => () => void;
-      onAgentStreamEnd?: (callback: () => void) => () => void;
 
       // Agent cloud tools
       agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;

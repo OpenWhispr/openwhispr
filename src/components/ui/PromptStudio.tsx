@@ -20,7 +20,7 @@ import ReasoningService from "../../services/ReasoningService";
 import { getModelProvider } from "../../models/ModelRegistry";
 import logger from "../../utils/logger";
 import { getDefaultPromptText, type PromptKind } from "../../config/prompts";
-import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 interface PromptStudioProps {
   className?: string;
@@ -61,7 +61,6 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const { agentName } = useAgentName();
   const uiLanguage = useSettingsStore((s) => s.uiLanguage);
 
-  const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
   const cleanupModel = useSettingsStore((s) => s.cleanupModel);
 
@@ -100,17 +99,12 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
     setTestResult("");
 
     try {
-      const cleanupProvider = isCloudMode
-        ? "openwhispr"
-        : cleanupModel
-          ? getModelProvider(cleanupModel)
-          : "openai";
+      const cleanupProvider = cleanupModel ? getModelProvider(cleanupModel) : "openai";
 
       logger.debug(
         "PromptStudio test starting",
         {
           useCleanupModel,
-          isCloudMode,
           cleanupModel,
           cleanupProvider,
           testTextLength: testText.length,
@@ -124,33 +118,31 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         return;
       }
 
-      if (!isCloudMode && !cleanupModel) {
+      if (!cleanupModel) {
         setTestResult(t("promptStudio.test.noModelSelected"));
         return;
       }
 
-      if (!isCloudMode) {
-        const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
-          label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
-        };
+      const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
+        label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
+      };
 
-        if (providerConfig.baseStorageKey) {
-          const baseUrl = (useSettingsStore.getState().cleanupCloudBaseUrl || "").trim();
-          if (!baseUrl) {
-            setTestResult(
-              t("promptStudio.test.baseUrlMissing", {
-                provider:
-                  cleanupProvider === "custom"
-                    ? t("promptStudio.test.customEndpoint")
-                    : providerConfig.label,
-              })
-            );
-            return;
-          }
+      if (providerConfig.baseStorageKey) {
+        const baseUrl = (useSettingsStore.getState().cleanupCloudBaseUrl || "").trim();
+        if (!baseUrl) {
+          setTestResult(
+            t("promptStudio.test.baseUrlMissing", {
+              provider:
+                cleanupProvider === "custom"
+                  ? t("promptStudio.test.customEndpoint")
+                  : providerConfig.label,
+            })
+          );
+          return;
         }
       }
 
-      const modelToUse = isCloudMode ? cleanupModel || "auto" : cleanupModel;
+      const modelToUse = cleanupModel;
 
       const previous = customPrompt;
       setCustomPrompt(kind, editedPrompt);
@@ -311,18 +303,12 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         {/* ── Test Tab ── */}
         {activeTab === "test" &&
           (() => {
-            const cleanupProvider = isCloudMode
-              ? "openwhispr"
-              : cleanupModel
-                ? getModelProvider(cleanupModel)
-                : "openai";
+            const cleanupProvider = cleanupModel ? getModelProvider(cleanupModel) : "openai";
             const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
               label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
             };
 
-            const displayModel = isCloudMode
-              ? t("promptStudio.test.openwhisprCloud")
-              : cleanupModel || t("promptStudio.test.none");
+            const displayModel = cleanupModel || t("promptStudio.test.none");
             const displayProvider =
               cleanupProvider === "custom"
                 ? t("promptStudio.test.customEndpoint")

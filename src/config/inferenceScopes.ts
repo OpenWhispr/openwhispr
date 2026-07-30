@@ -4,7 +4,6 @@ export interface InferenceScopeStoreKeys {
   mode: keyof SettingsState;
   provider: keyof SettingsState;
   model: keyof SettingsState;
-  cloudMode?: keyof SettingsState;
   cloudBaseUrl?: keyof SettingsState;
   remoteUrl?: keyof SettingsState;
   customApiKey?: keyof SettingsState;
@@ -22,7 +21,6 @@ export const INFERENCE_SCOPES = {
       mode: "cleanupMode",
       provider: "cleanupProvider",
       model: "cleanupModel",
-      cloudMode: "cleanupCloudMode",
       cloudBaseUrl: "cleanupCloudBaseUrl",
       remoteUrl: "cleanupRemoteUrl",
       customApiKey: "cleanupCustomApiKey",
@@ -34,7 +32,6 @@ export const INFERENCE_SCOPES = {
       mode: "dictationAgentMode",
       provider: "dictationAgentProvider",
       model: "dictationAgentModel",
-      cloudMode: "dictationAgentCloudMode",
       cloudBaseUrl: "dictationAgentCloudBaseUrl",
       remoteUrl: "dictationAgentRemoteUrl",
       customApiKey: "dictationAgentCustomApiKey",
@@ -46,7 +43,6 @@ export const INFERENCE_SCOPES = {
       mode: "noteFormattingMode",
       provider: "noteFormattingProvider",
       model: "noteFormattingModel",
-      cloudMode: "noteFormattingCloudMode",
       cloudBaseUrl: "noteFormattingCloudBaseUrl",
       remoteUrl: "noteFormattingRemoteUrl",
       customApiKey: "noteFormattingCustomApiKey",
@@ -59,7 +55,6 @@ export const INFERENCE_SCOPES = {
       mode: "chatAgentMode",
       provider: "chatAgentProvider",
       model: "chatAgentModel",
-      cloudMode: "chatAgentCloudMode",
       cloudBaseUrl: "chatAgentCloudBaseUrl",
       remoteUrl: "chatAgentRemoteUrl",
       customApiKey: "chatAgentCustomApiKey",

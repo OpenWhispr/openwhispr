@@ -1,21 +1,20 @@
-// Map a reasoning cloud routing to the InferenceMode its Settings tab selects on.
-// Mirrors deriveTranscriptionMode (byok custom → self-hosted, other cloud → providers).
-export function deriveReasoningMode(cloudMode, provider) {
-  if (cloudMode === "byok") {
-    return provider === "custom" ? "self-hosted" : "providers";
-  }
-  return "openwhispr";
+// Map a reasoning provider to the InferenceMode its Settings tab selects on.
+// Mirrors deriveTranscriptionMode (custom → self-hosted, built-in → local).
+export function deriveReasoningMode(provider) {
+  if (provider === "custom") return "self-hosted";
+  if (provider === "local") return "local";
+  return "providers";
 }
 
 // Fan a cleanup config out to all four LLM scopes; the three non-cleanup scopes
-// mirror only cloud routing plus the derived mode (each tab selects on its mode).
+// mirror only the provider routing plus the derived mode (each tab selects on
+// its own mode).
 export function buildReasoningScopePatches(settings, mode) {
   const dictationCleanup = { ...settings, cleanupMode: mode };
-  // The three non-cleanup scopes mirror only the cloud routing fields that are set.
+  // The three non-cleanup scopes mirror only the routing fields that are set.
   const routing = {
     ...(settings.cleanupProvider !== undefined ? { provider: settings.cleanupProvider } : {}),
     ...(settings.cleanupModel !== undefined ? { model: settings.cleanupModel } : {}),
-    ...(settings.cleanupCloudMode !== undefined ? { cloudMode: settings.cleanupCloudMode } : {}),
   };
   return {
     dictationCleanup,
@@ -28,8 +27,10 @@ export function buildReasoningScopePatches(settings, mode) {
 // Onboarding "use Corti everywhere" payloads. Transcription always routes to
 // Corti. Reasoning routes to Corti only in the EU region with an API key, since
 // Corti Models is EU-only and needs its own key; otherwise it routes to the
-// HIPAA-compliant OpenWhispr Cloud so clinical text never reaches a third party.
-// useCleanupModel is forced true either way so the routing sticks.
+// built-in local model so clinical text never leaves the machine. The model id
+// is left unset on that path — startup auto-adopts the bundled Gemma build for
+// any local scope without one. useCleanupModel is forced true either way so the
+// routing sticks.
 export function buildCortiOnboardingPayloads(
   transcriptionProvider,
   reasoningProvider,
@@ -49,8 +50,7 @@ export function buildCortiOnboardingPayloads(
           useCleanupModel: true,
           cleanupProvider: "corti",
           cleanupModel: cortiModel,
-          cleanupCloudMode: "byok",
         }
-      : { useCleanupModel: true, cleanupCloudMode: "openwhispr" };
+      : { useCleanupModel: true, cleanupProvider: "local" };
   return { transcription, reasoning };
 }

@@ -49,7 +49,6 @@ import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import {
   useSettingsStore,
-  selectIsCloudNoteFormattingMode,
   selectResolvedNoteFormatting,
 } from "../../stores/settingsStore";
 import { useFolderManagement } from "../../hooks/useFolderManagement";
@@ -142,7 +141,6 @@ export default function PersonalNotesView({
     setSyncedNoteIdState(id);
   };
   const { toast } = useToast();
-  const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
   const effectiveModelId = useSettingsStore((s) => selectResolvedNoteFormatting(s).model);
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const fileManagerName = navigator.platform.startsWith("Mac")
@@ -1062,7 +1060,6 @@ export default function PersonalNotesView({
                       parts,
                       makeContentHash(`${noteContent}\n${activeNoteRawTranscript}`),
                       {
-                        isCloudMode,
                         modelId: effectiveModelId,
                         isMeetingNote,
                         allowTitleGeneration: isRegenerableNoteTitle(
