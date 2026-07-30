@@ -1198,10 +1198,10 @@
           "title": "Prossimo al limite settimanale"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "Crea account gratuito",
-        "description": "Trascrizioni illimitate, elaborazione prioritaria e altro ancora.",
-        "title": "Prova Pro gratis per 7 giorni"
+        "description": "2.000 parole a settimana nel cloud e dettatura illimitata con un modello locale.",
+        "title": "Gratis per sempre, senza carta"
       },
       "pricing": {
         "title": "Piani",

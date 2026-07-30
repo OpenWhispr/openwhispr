@@ -1343,10 +1343,10 @@
           "title": "Cerca del límite semanal"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "Crear cuenta gratuita",
-        "description": "Transcripciones ilimitadas, procesamiento prioritario y más.",
-        "title": "Prueba Pro gratis por 7 días"
+        "description": "2.000 palabras por semana en la nube y dictado ilimitado con un modelo local.",
+        "title": "Gratis para siempre, sin tarjeta"
       },
       "user": "Usuario",
       "wordsRemaining": "{{remaining}} restantes",

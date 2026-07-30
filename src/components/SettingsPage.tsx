@@ -1723,15 +1723,15 @@ export default function SettingsPage({
                     <div className="min-w-0 flex-1 space-y-2.5">
                       <div>
                         <p className="text-xs font-medium text-foreground">
-                          {t("settingsPage.account.trialCta.title")}
+                          {t("settingsPage.account.freePlanCta.title")}
                         </p>
                         <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
-                          {t("settingsPage.account.trialCta.description")}
+                          {t("settingsPage.account.freePlanCta.description")}
                         </p>
                       </div>
                       <Button onClick={startOnboarding} size="sm" className="w-full">
                         <UserCircle className="mr-1.5 h-3.5 w-3.5" />
-                        {t("settingsPage.account.trialCta.button")}
+                        {t("settingsPage.account.freePlanCta.button")}
                       </Button>
                     </div>
                   </div>

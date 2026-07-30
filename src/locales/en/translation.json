@@ -1570,10 +1570,10 @@
           "title": "Approaching weekly limit"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "Create Free Account",
-        "description": "Unlimited transcriptions, priority processing, and more.",
-        "title": "Try Pro free for 7 days"
+        "description": "2,000 words a week in the cloud, and unlimited dictation with a local model.",
+        "title": "Free forever — no card needed"
       },
       "signedOutPlans": {
         "button": "Create Free Account"

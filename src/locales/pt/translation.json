@@ -1177,10 +1177,10 @@
           "title": "Aproximando-se do limite semanal"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "Criar conta gratuita",
-        "description": "Transcrições ilimitadas, processamento prioritário e muito mais.",
-        "title": "Experimente o Pro grátis por 7 dias"
+        "description": "2.000 palavras por semana na nuvem e ditado ilimitado com um modelo local.",
+        "title": "Grátis para sempre, sem cartão"
       },
       "pricing": {
         "title": "Planos",

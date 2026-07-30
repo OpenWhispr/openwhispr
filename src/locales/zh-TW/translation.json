@@ -1198,10 +1198,10 @@
           "title": "即將達到每週上限"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "建立免費帳號",
-        "description": "無限轉錄、優先處理等更多功能。",
-        "title": "免費試用 Pro 7 天"
+        "description": "雲端每週 2,000 字，使用本地模型則可無限聽寫。",
+        "title": "永久免費，無需信用卡"
       },
       "pricing": {
         "title": "方案",

@@ -1570,10 +1570,10 @@
           "title": "Wochenlimit fast erreicht"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "Kostenloses Konto erstellen",
-        "description": "Unbegrenzte Transkriptionen, bevorzugte Verarbeitung und mehr.",
-        "title": "Pro 7 Tage kostenlos testen"
+        "description": "2.000 Wörter pro Woche in der Cloud und unbegrenztes Diktieren mit einem lokalen Modell.",
+        "title": "Für immer kostenlos – keine Karte nötig"
       },
       "signedOutPlans": {
         "button": "Kostenloses Konto erstellen"

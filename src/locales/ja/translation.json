@@ -1295,10 +1295,10 @@
           "title": "週間利用上限に近づいています"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "無料アカウントを作成",
-        "description": "無制限の文字起こし、優先処理など。",
-        "title": "Pro を 7 日間無料でお試し"
+        "description": "クラウドでは週 2,000 語、ローカルモデルなら文字起こしは無制限です。",
+        "title": "ずっと無料 — カード登録不要"
       },
       "user": "ユーザー",
       "wordsRemaining": "残り {{remaining}}",

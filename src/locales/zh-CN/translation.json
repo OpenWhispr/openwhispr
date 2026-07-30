@@ -1198,10 +1198,10 @@
           "title": "即将达到周限额"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "免费创建账户",
-        "description": "无限转录、优先处理等更多功能。",
-        "title": "免费试用 Pro 版 7 天"
+        "description": "云端每周 2,000 字，使用本地模型则可无限听写。",
+        "title": "永久免费，无需银行卡"
       },
       "pricing": {
         "title": "套餐",

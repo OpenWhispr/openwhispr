@@ -1570,10 +1570,10 @@
           "title": "Limite hebdomadaire bientôt atteinte"
         }
       },
-      "trialCta": {
+      "freePlanCta": {
         "button": "Créer un compte gratuit",
-        "description": "Transcriptions illimitées, traitement prioritaire et plus encore.",
-        "title": "Essayez Pro gratuitement pendant 7 jours"
+        "description": "2 000 mots par semaine dans le cloud et dictée illimitée avec un modèle local.",
+        "title": "Gratuit pour toujours, sans carte bancaire"
       },
       "signedOutPlans": {
         "button": "Créer un compte gratuit"
