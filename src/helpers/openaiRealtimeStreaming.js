@@ -47,6 +47,8 @@ class OpenAIRealtimeStreaming {
     this.isDisconnecting = false;
     this.audioBytesSent = 0;
     this.model = "gpt-4o-mini-transcribe";
+    this.label = null;
+    this.language = null;
     this.inputRate = SAMPLE_RATE;
     this.captureRate = SAMPLE_RATE;
     this.coldStartBuffer = [];
@@ -70,7 +72,17 @@ class OpenAIRealtimeStreaming {
   }
 
   async connect(options = {}) {
-    const { apiKey, model, preconfigured, inputRate, captureRate, createSocket } = options;
+    const {
+      apiKey,
+      model,
+      language,
+      label,
+      preconfigured,
+      sampleRate,
+      inputRate = sampleRate,
+      captureRate,
+      createSocket,
+    } = options;
     if (!apiKey) throw new Error("OpenAI API key is required");
 
     if (this.isConnected || this.isConnecting) {
@@ -84,6 +96,8 @@ class OpenAIRealtimeStreaming {
 
     this.isConnecting = true;
     this.model = model || "gpt-4o-mini-transcribe";
+    this.label = label || null;
+    this.language = language && language !== "auto" ? language : null;
     this.preconfigured = !!preconfigured;
     this.inputRate = inputRate || SAMPLE_RATE;
     this.captureRate = captureRate || this.inputRate;
@@ -94,7 +108,11 @@ class OpenAIRealtimeStreaming {
     this._sessionExpired = false;
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
-    debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
+    debugLogger.debug("OpenAI Realtime connecting", {
+      model: this.model,
+      stream: this.label,
+      language: this.language,
+    });
 
     // Attested providers (Tinfoil) supply their socket via an async factory.
     let ws;
@@ -121,7 +139,7 @@ class OpenAIRealtimeStreaming {
       this.ws = ws;
 
       this.ws.on("open", () => {
-        debugLogger.debug("OpenAI Realtime WebSocket opened");
+        debugLogger.debug("OpenAI Realtime WebSocket opened", { stream: this.label });
       });
 
       this.ws.on("message", (data) => {
@@ -147,6 +165,7 @@ class OpenAIRealtimeStreaming {
           code,
           reason: reason?.toString(),
           wasActive,
+          stream: this.label,
         });
         if (this.pendingReject) {
           this.pendingReject(new Error(`WebSocket closed before ready (code: ${code})`));
@@ -187,7 +206,10 @@ class OpenAIRealtimeStreaming {
                   audio: {
                     input: {
                       format: { type: "audio/pcm", rate: this.inputRate },
-                      transcription: { model: this.model },
+                      transcription: {
+                        model: this.model,
+                        ...(this.language ? { language: this.language } : {}),
+                      },
                       turn_detection: {
                         type: "server_vad",
                         threshold: 0.6,
@@ -407,6 +429,7 @@ class OpenAIRealtimeStreaming {
       segments: this.completedSegments.length,
       textLength: this.getFullTranscript().length,
       readyState: this.ws?.readyState,
+      stream: this.label,
     });
 
     if (!this.ws) return { text: this.getFullTranscript() };

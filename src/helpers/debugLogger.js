@@ -1,4 +1,5 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { app } = require("electron");
 
@@ -72,6 +73,11 @@ class DebugLogger {
       this.debug("Debug logging enabled", { logFile: this.logFile });
       this.info("System Info", {
         platform: process.platform,
+        // OS build decides which native capture APIs are usable (Windows
+        // process loopback, macOS audio tap), so it belongs in every report.
+        osRelease: os.release(),
+        osVersion: os.version(),
+        arch: process.arch,
         nodeVersion: process.version,
         electronVersion: process.versions.electron,
         appPath: app.getAppPath(),

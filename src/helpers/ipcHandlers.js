@@ -27,6 +27,11 @@ const TINFOIL_REALTIME_MODEL = "voxtral-mini-4b-realtime";
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const { partitionPendingMicFinals, isWithinRetractWindow } = require("./meetingMicHoldback");
+const {
+  requiresMicReferenceAlignment,
+  SystemAudioSilenceMonitor,
+  SYSTEM_AUDIO_SILENCE_GRACE_MS,
+} = require("./meetingSystemAudio");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const { DEFAULT_RETENTION_SETTINGS, applyRetentionSettings } = require("./retentionSettings");
@@ -5384,16 +5389,22 @@ class IPCHandlers {
         if (newSystem) {
           const secrets = await fetchRealtimeToken(tokenEvent, options, { streams: 2 });
           pairs = [
-            { streaming: newMic, secret: secrets[0] },
-            { streaming: newSystem, secret: secrets[1] },
+            { streaming: newMic, secret: secrets[0], source: "mic" },
+            { streaming: newSystem, secret: secrets[1], source: "system" },
           ];
         } else {
-          pairs = [{ streaming: newMic, secret: await fetchRealtimeToken(tokenEvent, options) }];
+          pairs = [
+            {
+              streaming: newMic,
+              secret: await fetchRealtimeToken(tokenEvent, options),
+              source: "mic",
+            },
+          ];
         }
 
         await Promise.all(
-          pairs.map(({ streaming, secret }) =>
-            streaming.connect({ apiKey: secret, token: secret, ...connectOpts })
+          pairs.map(({ streaming, secret, source }) =>
+            streaming.connect({ apiKey: secret, token: secret, ...connectOpts, label: source })
           )
         );
 
@@ -5556,10 +5567,8 @@ class IPCHandlers {
       return "unsupported";
     };
 
-    const getMeetingSystemAudioMode = () => getMeetingSystemAudioCapabilityMode();
-
     const getMeetingSystemAudioPlan = async () => {
-      const mode = getMeetingSystemAudioMode();
+      const mode = getMeetingSystemAudioCapabilityMode();
       if (mode === "unsupported") {
         return { mode, strategy: "unsupported" };
       }
@@ -5586,7 +5595,8 @@ class IPCHandlers {
       return { mode, strategy: "unsupported" };
     };
 
-    const hasNativeMeetingSystemAudio = () => getMeetingSystemAudioMode() === "native";
+    const meetingMicNeedsReferenceAlignment = () =>
+      requiresMicReferenceAlignment(meetingSystemAudioStrategy);
 
     const isMeetingStreamingConnected = (systemAudioMode = getMeetingSystemAudioCapabilityMode()) =>
       !!this._meetingMicStreaming?.isConnected &&
@@ -5638,8 +5648,8 @@ class IPCHandlers {
       }
 
       await Promise.all(
-        pairs.map(({ ref, secret }) =>
-          this[ref].connect({ apiKey: secret, token: secret, ...connectOpts })
+        pairs.map(({ ref, secret, source }) =>
+          this[ref].connect({ apiKey: secret, token: secret, ...connectOpts, label: source })
         )
       );
 
@@ -5656,6 +5666,8 @@ class IPCHandlers {
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
+    const meetingSystemAudioSilence = new SystemAudioSilenceMonitor();
+    let meetingSystemAudioStrategy = null;
     let meetingReconnecting = false;
     let meetingReconnectCount = 0;
     const MAX_MEETING_RECONNECTS = 5;
@@ -6268,7 +6280,9 @@ class IPCHandlers {
       resetPendingMicFinals();
       meetingAecEnabled = false;
       meetingStartedAt = null;
+      meetingSystemAudioStrategy = null;
       meetingEchoLeakDetector.reset();
+      meetingSystemAudioSilence.reset();
     };
 
     let dictationPreviewMode = false;
@@ -6378,11 +6392,14 @@ class IPCHandlers {
       this._meetingMicStreaming = null;
       this._meetingSystemStreaming = null;
       meetingSendCounts = { mic: 0, system: 0 };
+      meetingMicStatsLogCount = 0;
+      meetingSystemAudioStrategy = null;
       meetingLiveSpeakerStartedAt = null;
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
       meetingAecEnabled = false;
       meetingEchoLeakDetector.reset();
+      meetingSystemAudioSilence.reset();
       meetingReconnecting = false;
       meetingReconnectCount = 0;
       meetingConnectionOptions = null;
@@ -6600,6 +6617,7 @@ class IPCHandlers {
         const systemAudioPlan = await getMeetingSystemAudioPlan();
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         meetingEchoLeakDetector.reset();
+        meetingSystemAudioSilence.reset();
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;
         meetingNoteId = options.noteId ?? null;
@@ -6711,7 +6729,18 @@ class IPCHandlers {
 
       if (source === "system") {
         const receivedAt = Date.now();
-        meetingEchoLeakDetector.recordSystemChunk(outboundBuffer, receivedAt);
+        const systemRms = meetingEchoLeakDetector.recordSystemChunk(outboundBuffer, receivedAt);
+        if (meetingSystemAudioSilence.record(systemRms, receivedAt)) {
+          debugLogger.warn(
+            "Meeting system audio has been silent since capture started",
+            {
+              strategy: meetingSystemAudioStrategy,
+              graceMs: SYSTEM_AUDIO_SILENCE_GRACE_MS,
+              chunks: meetingSendCounts.system,
+            },
+            "meeting"
+          );
+        }
         if (meetingAecEnabled && !this.meetingAecManager?.processSystemBuffer(outboundBuffer)) {
           meetingAecEnabled = false;
         }
@@ -6737,7 +6766,7 @@ class IPCHandlers {
           return;
         }
 
-        if (!hasNativeMeetingSystemAudio()) {
+        if (!meetingMicNeedsReferenceAlignment()) {
           const analysis = meetingEchoLeakDetector.analyzeMicChunk(outboundBuffer);
           if (analysis?.shouldMute && !meetingAecEnabled) {
             if (!meetingLocalMode) {
@@ -6800,6 +6829,13 @@ class IPCHandlers {
       systemAudioStrategy,
       context
     ) => {
+      // The mic path reads the strategy that capture actually settled on, so
+      // every exit — including the fallbacks — has to record it.
+      const settle = (mode, strategy) => {
+        meetingSystemAudioStrategy = strategy;
+        return { systemAudioMode: mode, systemAudioStrategy: strategy };
+      };
+
       if (systemAudioMode === "native") {
         try {
           await startManagedMeetingSystemAudio(
@@ -6807,7 +6843,7 @@ class IPCHandlers {
             this.audioTapManager,
             "macOS system audio tap warning"
           );
-          return { systemAudioMode, systemAudioStrategy };
+          return settle(systemAudioMode, systemAudioStrategy);
         } catch (error) {
           debugLogger.warn(
             `Native system audio tap failed ${context}, falling back to mic-only`,
@@ -6815,7 +6851,7 @@ class IPCHandlers {
             "meeting"
           );
           await fallBackToMicOnly("native");
-          return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
+          return settle("unsupported", "unsupported");
         }
       }
 
@@ -6826,7 +6862,7 @@ class IPCHandlers {
             this.windowsLoopbackAudioManager,
             "Windows system audio warning"
           );
-          return { systemAudioMode, systemAudioStrategy };
+          return settle(systemAudioMode, systemAudioStrategy);
         } catch (error) {
           debugLogger.warn(
             `Windows system audio helper failed ${context}, falling back to renderer loopback`,
@@ -6835,12 +6871,12 @@ class IPCHandlers {
           );
           // The renderer captures via Chromium's display-media loopback when
           // it sees the downgraded strategy in the start result.
-          return { systemAudioMode, systemAudioStrategy: "loopback" };
+          return settle(systemAudioMode, "loopback");
         }
       }
 
       if (systemAudioStrategy !== "pipewire-loopback") {
-        return { systemAudioMode, systemAudioStrategy };
+        return settle(systemAudioMode, systemAudioStrategy);
       }
 
       try {
@@ -6849,7 +6885,7 @@ class IPCHandlers {
           this.linuxPortalAudioManager,
           "Linux PipeWire system audio warning"
         );
-        return { systemAudioMode, systemAudioStrategy };
+        return settle(systemAudioMode, systemAudioStrategy);
       } catch (error) {
         debugLogger.warn(
           `Linux PipeWire helper failed ${context}, falling back to mic-only`,
@@ -6857,7 +6893,7 @@ class IPCHandlers {
           "meeting"
         );
         await fallBackToMicOnly("PipeWire");
-        return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
+        return settle("unsupported", "unsupported");
       }
     };
 
