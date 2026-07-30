@@ -14,13 +14,11 @@ interface ConversationItem {
 interface ChatState {
   conversations: ConversationItem[];
   activeConversationId: number | null;
-  migration: { total: number; done: number } | null;
 }
 
 const useChatStore = create<ChatState>()(() => ({
   conversations: [],
   activeConversationId: null,
-  migration: null,
 }));
 
 export async function initializeConversations(limit = 50): Promise<ConversationItem[]> {
@@ -82,45 +80,3 @@ export function useActiveConversation(): ConversationItem | null {
   });
 }
 
-export function useChatMigration(): { total: number; done: number } | null {
-  return useChatStore((state) => state.migration);
-}
-
-export async function startConversationMigration(): Promise<void> {
-  const allConversations = (await window.electronAPI?.getAgentConversations?.(9999)) ?? [];
-  const unsynced = allConversations.filter((c) => !c.cloud_id);
-  if (unsynced.length === 0) return;
-
-  useChatStore.setState({ migration: { total: unsynced.length, done: 0 } });
-
-  const { ConversationsService } = await import("../services/ConversationsService.js");
-
-  for (const conv of unsynced) {
-    try {
-      const messages = (await window.electronAPI?.getAgentMessages?.(conv.id)) ?? [];
-      const cloudConv = await ConversationsService.create({
-        client_conversation_id: conv.client_conversation_id ?? String(conv.id),
-        title: conv.title,
-        created_at: conv.created_at,
-        updated_at: conv.updated_at,
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-      });
-      updateConversation({ ...conv, cloud_id: cloudConv.id });
-      useChatStore.setState((s) => ({
-        migration: s.migration
-          ? {
-              total: s.migration.total,
-              done: Math.min(s.migration.done + 1, s.migration.total),
-            }
-          : null,
-      }));
-    } catch (err) {
-      console.error("Conversation migration failed:", err);
-    }
-  }
-
-  useChatStore.setState({ migration: null });
-}

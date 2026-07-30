@@ -117,14 +117,13 @@ export function useChatStreaming({
 
       let registry: ToolRegistry | null = null;
       if (supportsTools) {
-        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}-${settings.cloudBackupEnabled}`;
+        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
           registry = createToolRegistry({
             isSignedIn: settings.isSignedIn,
             gcalConnected: settings.gcalConnected,
-            cloudBackupEnabled: settings.cloudBackupEnabled,
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }

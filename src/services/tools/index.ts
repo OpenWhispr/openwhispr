@@ -14,14 +14,12 @@ export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 interface ToolRegistrySettings {
   isSignedIn: boolean;
   gcalConnected: boolean;
-  cloudBackupEnabled: boolean;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
   const registry = new ToolRegistry();
 
-  const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
-  registry.register(createSearchNotesTool({ useCloudSearch }));
+  registry.register(createSearchNotesTool());
   registry.register(getNoteTool);
   registry.register(createNoteTool);
   registry.register(updateNoteTool);
