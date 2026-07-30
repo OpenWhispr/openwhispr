@@ -440,6 +440,13 @@ export function getLocalModel(modelId: string): ModelDefinition | undefined {
   return modelRegistry.getModel(modelId)?.model;
 }
 
+/**
+ * The bundled local LLM offered as the "Built-in Model" option and
+ * auto-downloaded for offline note generation. Single source of truth for the
+ * renderer so the id doesn't drift across components.
+ */
+export const BUILTIN_LOCAL_MODEL_ID = "gemma-4-e4b-it-q4_k_m";
+
 export interface OpenAiApiConfig {
   tokenParam: "max_tokens" | "max_completion_tokens";
   supportsTemperature: boolean;

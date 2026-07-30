@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap, ChevronLeft } from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
+import GemmaDownloadPrompt from "./GemmaDownloadPrompt";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useHotkey } from "../hooks/useHotkey";
@@ -20,7 +21,14 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import { useSettingsStore, selectResolvedNoteFormatting } from "../stores/settingsStore";
+import {
+  useSettingsStore,
+  selectResolvedNoteFormatting,
+  selectResolvedLLMConfig,
+  setResolvedLLMConfig,
+} from "../stores/settingsStore";
+import { BUILTIN_LOCAL_MODEL_ID } from "../models/ModelRegistry";
+import type { InferenceScope } from "../config/inferenceScopes";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -173,18 +181,65 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     });
   }, []);
 
-  // Sync noteFormatting config to main process on startup so the post-call
-  // pipeline has the correct provider/model in process.env even before the
-  // user visits Settings. Uses selectResolvedNoteFormatting to apply the
-  // fallback chain (noteFormatting → dictationCleanup) so the pipeline works
-  // even if the user never explicitly configured a note formatting model.
+  // On startup, adopt the built-in Gemma model for any LLM scope that has no
+  // usable model, then sync noteFormatting to the main process so the post-call
+  // pipeline has the correct provider/model in process.env before the user
+  // visits Settings. Keying off the resolved *model* (not provider, which
+  // spuriously falls back to the dictationCleanup default "openai") re-homes
+  // users migrated off a removed hosted-cloud mode who never configured a
+  // local model. Scopes that already resolve to a model (e.g. the chat agent's
+  // default) are left untouched.
   useEffect(() => {
-    const state = useSettingsStore.getState();
-    const resolved = selectResolvedNoteFormatting(state);
-    window.electronAPI?.syncNoteFormattingConfig?.({
-      provider: resolved.provider,
-      model: resolved.model,
+    const syncNoteFormatting = () => {
+      const resolved = selectResolvedNoteFormatting(useSettingsStore.getState());
+      window.electronAPI?.syncNoteFormattingConfig?.({
+        provider: resolved.provider,
+        model: resolved.model,
+      });
+    };
+
+    const scopes: InferenceScope[] = [
+      "dictationCleanup",
+      "dictationAgent",
+      "noteFormatting",
+      "chatIntelligence",
+    ];
+    const unconfigured = scopes.filter(
+      (scope) => !selectResolvedLLMConfig(useSettingsStore.getState(), scope).model
+    );
+
+    if (unconfigured.length === 0) {
+      syncNoteFormatting();
+      return;
+    }
+
+    window.electronAPI?.modelCheck?.(BUILTIN_LOCAL_MODEL_ID).then((downloaded) => {
+      if (downloaded) {
+        for (const scope of unconfigured) {
+          setResolvedLLMConfig(scope, {
+            mode: "local",
+            provider: "local",
+            model: BUILTIN_LOCAL_MODEL_ID,
+          });
+        }
+      }
+      syncNoteFormatting();
     });
+  }, []);
+
+  // When the main process auto-configures noteFormatting after a Gemma
+  // download completes, mirror it into the settings store so the UI reflects
+  // the change without a reload.
+  useEffect(() => {
+    const dispose = window.electronAPI?.onNoteFormattingAutoConfigured?.(
+      (_event: unknown, data: { provider: string; model: string }) => {
+        const s = useSettingsStore.getState();
+        s.setNoteFormattingMode("local");
+        s.setNoteFormattingProvider(data.provider);
+        s.setNoteFormattingModel(data.model);
+      }
+    );
+    return () => dispose?.();
   }, []);
 
   useEffect(() => {
@@ -707,6 +762,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onOpenChange={setShowPostMigration}
         onDone={dismissPostMigrationPermanently}
       />
+
+      <GemmaDownloadPrompt />
 
       {showSettings && (
         <Suspense fallback={null}>

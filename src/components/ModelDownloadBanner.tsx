@@ -15,7 +15,7 @@ function formatBytes(bytes: number): string {
 
 export default function ModelDownloadBanner() {
   const { t } = useTranslation();
-  const { isActive, isComplete, isCancelled, error, isDismissed, progress, sizeMb } =
+  const { isActive, isComplete, isCancelled, error, isDismissed, progress, sizeMb, modelName } =
     useModelAutoDownloadStore();
 
   // Don't show if dismissed, complete, cancelled, or not active
@@ -57,7 +57,10 @@ export default function ModelDownloadBanner() {
                   {t("controlPanel.modelDownload.title")}
                 </p>
                 <p className="text-xs text-muted-foreground mb-2">
-                  {t("controlPanel.modelDownload.description")}
+                  {t("controlPanel.modelDownload.description", {
+                    modelName: modelName || t("controlPanel.modelDownload.fallbackModelName"),
+                    sizeMb: sizeMb ? Math.round((sizeMb / 1000) * 10) / 10 : "?",
+                  })}
                 </p>
                 {/* Progress bar */}
                 <div className="w-full bg-muted rounded-full h-1.5 mb-1.5">

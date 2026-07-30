@@ -857,13 +857,14 @@ declare global {
         error?: string;
       }>;
       getParakeetDiagnostics: () => Promise<ParakeetDiagnosticsResult>;
-      onParakeetAutoDownloadStatus?: (callback: (event: unknown, data: {
+      onModelAutoDownloadStatus?: (callback: (event: unknown, data: {
         type: string; modelId: string; modelName?: string; sizeMb?: number; error?: string;
       }) => void) => (() => void);
-      onParakeetAutoDownloadProgress?: (callback: (event: unknown, data: {
+      onModelAutoDownloadProgress?: (callback: (event: unknown, data: {
         type: string; percentage?: number; downloaded_bytes?: number; total_bytes?: number;
       }) => void) => (() => void);
-      getParakeetAutoDownloadStatus?: () => Promise<{ active: boolean; modelId: string } | undefined>;
+      getModelAutoDownloadStatus?: () => Promise<{ active: boolean; modelId: string | null; modelName?: string | null; sizeMb?: number | null } | undefined>;
+      downloadGemmaBuiltin?: () => Promise<{ success: boolean }>;
 
       // Local AI model management
       modelGetAll: () => Promise<any[]>;
@@ -1898,6 +1899,9 @@ declare global {
         provider: string;
         model: string;
       }) => Promise<{ success: boolean }>;
+      onNoteFormattingAutoConfigured?: (
+        callback: (event: unknown, data: { provider: string; model: string }) => void
+      ) => (() => void);
       setMeetingSessionSpeakerConfig?: (config: {
         enabled: boolean;
         expectedCount: number;

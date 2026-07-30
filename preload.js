@@ -289,9 +289,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkParakeetInstallation: () => ipcRenderer.invoke("check-parakeet-installation"),
   downloadParakeetModel: (modelName) => ipcRenderer.invoke("download-parakeet-model", modelName),
   onParakeetDownloadProgress: registerListener("parakeet-download-progress"),
-  onParakeetAutoDownloadStatus: registerListener("parakeet-auto-download-status"),
-  onParakeetAutoDownloadProgress: registerListener("parakeet-auto-download-progress"),
-  getParakeetAutoDownloadStatus: () => ipcRenderer.invoke("get-parakeet-auto-download-status"),
+  onModelAutoDownloadStatus: registerListener("model-auto-download-status"),
+  onModelAutoDownloadProgress: registerListener("model-auto-download-progress"),
+  getModelAutoDownloadStatus: () => ipcRenderer.invoke("get-model-auto-download-status"),
+  downloadGemmaBuiltin: () => ipcRenderer.invoke("download-gemma-builtin"),
   checkParakeetModelStatus: (modelName) =>
     ipcRenderer.invoke("check-parakeet-model-status", modelName),
   listParakeetModels: () => ipcRenderer.invoke("list-parakeet-models"),
@@ -368,6 +369,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("set-auto-post-call-pipeline", enabled),
   syncNoteFormattingConfig: (config) =>
     ipcRenderer.invoke("sync-note-formatting-config", config),
+  onNoteFormattingAutoConfigured: registerListener("note-formatting-auto-configured"),
 
   // Window control functions
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),
@@ -991,8 +993,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("sync-notification-preferences", prefs),
   setSpeakerDiarizationEnabled: (enabled) =>
     ipcRenderer.invoke("meeting-set-speaker-diarization-enabled", { enabled }),
-  setAutoPostCallPipeline: (enabled) =>
-    ipcRenderer.invoke("meeting-set-auto-post-call-pipeline", { enabled }),
   setMeetingSessionSpeakerConfig: (config) =>
     ipcRenderer.invoke("meeting-set-session-speaker-config", config),
   getWhisperVadConfig: () => ipcRenderer.invoke("whisper-vad-get-config"),

@@ -424,13 +424,14 @@
     },
     "modelDownload": {
       "title": "Descargando modelo de transcripción",
-      "description": "Para funcionar completamente sin conexión, OpenWhispr está descargando el modelo Parakeet (~680 MB). Por favor, deja la aplicación abierta mientras se descarga.",
+      "description": "Para funcionar completamente sin conexión, OpenWhispr está descargando {{modelName}} (~{{sizeMb}} GB). Deja la aplicación abierta mientras se descarga.",
       "progress": "{{downloaded}} / {{total}} ({{percentage}}%)",
       "starting": "Iniciando descarga...",
       "cancel": "Cancelar",
       "dismiss": "Cerrar",
       "errorTitle": "Error al descargar el modelo",
-      "complete": "Modelo de transcripción listo — todo preparado para uso sin conexión."
+      "complete": "Modelo de transcripción listo — todo preparado para uso sin conexión.",
+      "fallbackModelName": "el modelo"
     },
     "backToNotes": "Volver a notas"
   },
@@ -1358,12 +1359,12 @@
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Proveedores en la nube",
-        "local": "Local",
-        "selfHosted": "Autoalojado",
+        "local": "Modelo integrado",
+        "selfHosted": "API remota",
         "openwhisprDesc": "Resultados fiables. Sin configuración.",
         "providersDesc": "Usa tu propia clave API.",
-        "localDesc": "Modelos en el dispositivo. Privado.",
-        "selfHostedDesc": "Tu servidor en tu red.",
+        "localDesc": "Gemma 4 E4B: funciona totalmente sin conexión en tu dispositivo",
+        "selfHostedDesc": "Conéctate a cualquier endpoint compatible con OpenAI o Anthropic",
         "enterprise": "Empresarial",
         "enterpriseDesc": "Usa la cuenta en la nube de tu organización (AWS, Azure, GCP)."
       },
@@ -1395,6 +1396,13 @@
           "title": "Empresarial",
           "description": "Usando la cuenta en la nube de tu organización."
         }
+      },
+      "gemmaCard": {
+        "ready": "Descargado",
+        "downloading": "Descargando… {{percentage}} %",
+        "notDownloaded": "No descargado",
+        "download": "Descargar",
+        "error": "Error de descarga"
       }
     },
     "developer": {
@@ -2603,10 +2611,10 @@
       "openwhisprDesc": "Usa el agente gestionado por OpenWhispr, sin necesidad de clave API.",
       "providers": "Usa tu propia clave API",
       "providersDesc": "Conéctate a OpenAI, Anthropic, Gemini o Groq con tu propia clave API.",
-      "local": "Local",
-      "localDesc": "Ejecuta un LLM local en tu dispositivo, totalmente privado.",
-      "selfHosted": "Autoalojado",
-      "selfHostedDesc": "Apunta a un endpoint autoalojado compatible con OpenAI.",
+      "local": "Modelo integrado",
+      "localDesc": "Gemma 4 E4B: funciona totalmente sin conexión en tu dispositivo",
+      "selfHosted": "API remota",
+      "selfHostedDesc": "Conéctate a cualquier endpoint compatible con OpenAI o Anthropic",
       "enterprise": "Empresarial",
       "enterpriseDesc": "Usa AWS Bedrock, Azure OpenAI o Google Vertex."
     },
@@ -2627,12 +2635,12 @@
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Proveedores Cloud",
-        "local": "Local",
-        "selfHosted": "Autoalojado",
+        "local": "Modelo integrado",
+        "selfHosted": "API remota",
         "openwhisprDesc": "Resultados fiables. Sin configuración.",
         "providersDesc": "Trae tu propia clave API.",
-        "localDesc": "Modelos en el dispositivo. Totalmente privado.",
-        "selfHostedDesc": "Tu propio servidor en tu red.",
+        "localDesc": "Gemma 4 E4B: funciona totalmente sin conexión en tu dispositivo",
+        "selfHostedDesc": "Conéctate a cualquier endpoint compatible con OpenAI o Anthropic",
         "enterprise": "Empresarial",
         "enterpriseDesc": "Usa la cuenta en la nube de tu organización (AWS, Azure, GCP)."
       },
@@ -3025,5 +3033,11 @@
       "save": "Guardar",
       "saving": "Guardando..."
     }
+  },
+  "gemmaPrompt": {
+    "title": "¿Descargar Gemma 4 E4B para las notas de reuniones?",
+    "description": "OpenWhispr usa Gemma 4 E4B (~5,4 GB) como modelo de IA totalmente local para generar títulos de reuniones, detectar el tipo de reunión y crear notas estructuradas. Sin él, estas funciones no estarán disponibles. También puedes conectar tu propio endpoint de API remota.",
+    "accept": "Descargar Gemma (5,4 GB)",
+    "decline": "Ahora no"
   }
 }

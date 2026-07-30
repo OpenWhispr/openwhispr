@@ -37,6 +37,18 @@ function readString(key: string, fallback: string): string {
   return localStorage.getItem(key) ?? fallback;
 }
 
+/**
+ * Read a stored LLM inference mode and coerce it to the simplified 2-option
+ * set used by the fork: "local" (built-in Gemma) or "self-hosted" (remote
+ * OpenAI/Anthropic-compatible endpoint). Legacy hosted-cloud modes
+ * ("openwhispr", "providers", "enterprise") map to "local" so existing users
+ * don't land on a mode tab that no longer renders.
+ */
+function readLlmInferenceMode(key: string): InferenceMode {
+  const v = readString(key, "local");
+  return v === "self-hosted" ? "self-hosted" : ("local" as InferenceMode);
+}
+
 function readBoolean(key: string, fallback: boolean): boolean {
   if (!isBrowser) return fallback;
   const stored = localStorage.getItem(key);
@@ -1057,18 +1069,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
   remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
-  cleanupMode: (() => {
-    const v = readString("cleanupMode", "openwhispr");
-    if (
-      v === "openwhispr" ||
-      v === "providers" ||
-      v === "local" ||
-      v === "self-hosted" ||
-      v === "enterprise"
-    )
-      return v;
-    return "openwhispr" as InferenceMode;
-  })(),
+  cleanupMode: readLlmInferenceMode("cleanupMode"),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
 
   meetingTranscriptionMode: (() => {
@@ -1112,18 +1113,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uploadCloudTranscriptionBaseUrl: readString("uploadCloudTranscriptionBaseUrl", ""),
   uploadCloudTranscriptionMode: readString("uploadCloudTranscriptionMode", ""),
 
-  noteFormattingMode: (() => {
-    const v = readString("noteFormattingMode", "openwhispr");
-    if (
-      v === "openwhispr" ||
-      v === "providers" ||
-      v === "local" ||
-      v === "self-hosted" ||
-      v === "enterprise"
-    )
-      return v;
-    return "openwhispr" as InferenceMode;
-  })(),
+  noteFormattingMode: readLlmInferenceMode("noteFormattingMode"),
   noteFormattingProvider: readString("noteFormattingProvider", ""),
   noteFormattingModel: readString("noteFormattingModel", ""),
   noteFormattingCloudMode: readString("noteFormattingCloudMode", ""),
@@ -1186,34 +1176,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   chatAgentProvider: readString("chatAgentProvider", "groq"),
   chatAgentKey: readString("chatAgentKey", ""),
   chatAgentCloudMode: readString("chatAgentCloudMode", "openwhispr"),
-  chatAgentMode: (() => {
-    const v = readString("chatAgentMode", "openwhispr");
-    if (
-      v === "openwhispr" ||
-      v === "providers" ||
-      v === "local" ||
-      v === "self-hosted" ||
-      v === "enterprise"
-    )
-      return v;
-    return "openwhispr" as InferenceMode;
-  })(),
+  chatAgentMode: readLlmInferenceMode("chatAgentMode"),
   chatAgentRemoteUrl: readString("chatAgentRemoteUrl", ""),
   chatAgentCloudBaseUrl: readString("chatAgentCloudBaseUrl", ""),
   chatAgentCustomApiKey: readString("chatAgentCustomApiKey", ""),
 
-  dictationAgentMode: (() => {
-    const v = readString("dictationAgentMode", "openwhispr");
-    if (
-      v === "openwhispr" ||
-      v === "providers" ||
-      v === "local" ||
-      v === "self-hosted" ||
-      v === "enterprise"
-    )
-      return v;
-    return "openwhispr" as InferenceMode;
-  })(),
+  dictationAgentMode: readLlmInferenceMode("dictationAgentMode"),
   dictationAgentProvider: readString("dictationAgentProvider", ""),
   dictationAgentModel: readString("dictationAgentModel", ""),
   dictationAgentCloudMode: readString("dictationAgentCloudMode", "openwhispr"),
