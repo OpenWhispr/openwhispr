@@ -2566,6 +2566,21 @@
         "othersInCall_one": "{{count}} other in call",
         "othersInCall_other": "{{count}} others in call"
       }
+    },
+    "reprocess": {
+      "title": "Reprocess meeting — regenerate notes from the recording",
+      "label": "Reprocess",
+      "confirm": "Overwrite notes?",
+      "inProgress": "Reprocessing…",
+      "started": "Reprocessing started — it runs in the background.",
+      "failed": "Reprocess failed: {{error}}",
+      "downloadNeeded": "Downloading the transcription model first…"
+    },
+    "reprocessAll": {
+      "label": "Reprocess all meetings",
+      "confirm": "Reprocess all meetings? This overwrites existing notes.",
+      "queued": "Queued {{count}} meetings for reprocessing",
+      "none": "No meetings with saved audio to reprocess"
     }
   },
   "dictionary": {

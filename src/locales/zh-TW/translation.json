@@ -2367,6 +2367,21 @@
         "othersInCall_one": "通話中還有 {{count}} 人",
         "othersInCall_other": "通話中還有 {{count}} 人"
       }
+    },
+    "reprocess": {
+      "title": "重新處理會議 — 從錄音重新產生筆記",
+      "label": "重新處理",
+      "confirm": "覆寫筆記？",
+      "inProgress": "重新處理中…",
+      "started": "已開始重新處理 — 將在背景執行。",
+      "failed": "重新處理失敗：{{error}}",
+      "downloadNeeded": "正在先下載轉錄模型…"
+    },
+    "reprocessAll": {
+      "label": "重新處理所有會議",
+      "confirm": "重新處理所有會議？這將覆寫現有筆記。",
+      "queued": "已將 {{count}} 個會議加入重新處理佇列",
+      "none": "沒有可重新處理的已儲存音訊會議"
     }
   },
   "dictionary": {

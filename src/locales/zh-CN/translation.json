@@ -2367,6 +2367,21 @@
         "othersInCall_one": "通话中还有 {{count}} 人",
         "othersInCall_other": "通话中还有 {{count}} 人"
       }
+    },
+    "reprocess": {
+      "title": "重新处理会议 — 从录音重新生成笔记",
+      "label": "重新处理",
+      "confirm": "覆盖笔记？",
+      "inProgress": "重新处理中…",
+      "started": "已开始重新处理 — 将在后台运行。",
+      "failed": "重新处理失败：{{error}}",
+      "downloadNeeded": "正在先下载转录模型…"
+    },
+    "reprocessAll": {
+      "label": "重新处理所有会议",
+      "confirm": "重新处理所有会议？这将覆盖现有笔记。",
+      "queued": "已将 {{count}} 个会议加入重新处理队列",
+      "none": "没有可重新处理的已保存音频会议"
     }
   },
   "dictionary": {

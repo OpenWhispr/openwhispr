@@ -12,6 +12,7 @@ import {
   Search,
   Sparkles,
   ExternalLink,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -204,6 +205,27 @@ export default function PersonalNotesView({
     },
     [folderCounts, handleDeleteFolder, showConfirmDialog, t]
   );
+
+  // Re-run the post-call pipeline on every meeting note that still has saved
+  // audio. Overwrites existing generated notes, so it goes through a confirm.
+  const requestReprocessAllMeetings = useCallback(() => {
+    showConfirmDialog({
+      title: t("notes.reprocessAll.label"),
+      description: t("notes.reprocessAll.confirm"),
+      confirmText: t("notes.reprocessAll.label"),
+      variant: "destructive",
+      onConfirm: async () => {
+        const result = await window.electronAPI?.reprocessAllMeetings?.();
+        const count = result?.count ?? 0;
+        toast({
+          title:
+            count > 0
+              ? t("notes.reprocessAll.queued", { count })
+              : t("notes.reprocessAll.none"),
+        });
+      },
+    });
+  }, [showConfirmDialog, toast, t]);
 
   const activeNote = notes.find((n) => n.id === activeNoteId) ?? null;
 
@@ -735,7 +757,7 @@ export default function PersonalNotesView({
                       {count > 0 ? count : ""}
                     </span>
                   )}
-                  {(!folder.is_default || noteFilesEnabled) && (
+                  {(!folder.is_default || noteFilesEnabled || isMeetings) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <span
@@ -748,6 +770,21 @@ export default function PersonalNotesView({
                         </span>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" sideOffset={4} className="min-w-32">
+                        {isMeetings && (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              requestReprocessAllMeetings();
+                            }}
+                            className="text-xs gap-2 rounded-md px-2 py-1"
+                          >
+                            <RotateCcw size={11} className="text-muted-foreground/60" />
+                            {t("notes.reprocessAll.label")}
+                          </DropdownMenuItem>
+                        )}
+                        {isMeetings && (noteFilesEnabled || !folder.is_default) && (
+                          <DropdownMenuSeparator />
+                        )}
                         {noteFilesEnabled && (
                           <DropdownMenuItem
                             onClick={(e) => {

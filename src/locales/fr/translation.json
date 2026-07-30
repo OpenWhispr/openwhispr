@@ -2478,6 +2478,21 @@
         "othersInCall_one": "{{count}} autre dans l'appel",
         "othersInCall_other": "{{count}} autres dans l'appel"
       }
+    },
+    "reprocess": {
+      "title": "Retraiter la réunion — régénérer les notes à partir de l'enregistrement",
+      "label": "Retraiter",
+      "confirm": "Écraser les notes ?",
+      "inProgress": "Retraitement…",
+      "started": "Retraitement lancé — il s'exécute en arrière-plan.",
+      "failed": "Échec du retraitement : {{error}}",
+      "downloadNeeded": "Téléchargement du modèle de transcription d'abord…"
+    },
+    "reprocessAll": {
+      "label": "Retraiter toutes les réunions",
+      "confirm": "Retraiter toutes les réunions ? Cela écrase les notes existantes.",
+      "queued": "{{count}} réunions mises en file pour retraitement",
+      "none": "Aucune réunion avec audio enregistré à retraiter"
     }
   },
   "dictionary": {

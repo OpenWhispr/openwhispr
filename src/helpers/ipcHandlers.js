@@ -9032,6 +9032,20 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("reprocess-all-meetings", async () => {
+      // Re-run the full post-call pipeline for every meeting note that still
+      // has saved audio on disk. Each is enqueued on the single-slot background
+      // job queue, so they process one at a time behind the pipeline indicator.
+      const { enqueueMeetingReprocess } = require("./reprocessMeetings");
+      const count = enqueueMeetingReprocess({
+        db: this.databaseManager.db,
+        backgroundJobQueue: this.backgroundJobQueue,
+        postCallPipelineManager: this.postCallPipelineManager,
+      });
+      debugLogger.info("Queued all meetings for reprocessing", { count }, "meeting");
+      return { success: true, count };
+    });
+
     ipcMain.handle("regenerate-notes", async (_event, noteId, meetingTypeId) => {
       if (meetingTypeId !== undefined) {
         this.databaseManager.updateNote(noteId, { meeting_type_id: meetingTypeId });

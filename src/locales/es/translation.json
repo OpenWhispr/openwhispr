@@ -2415,6 +2415,21 @@
         "othersInCall_one": "{{count}} otra persona en la llamada",
         "othersInCall_other": "{{count}} otras personas en la llamada"
       }
+    },
+    "reprocess": {
+      "title": "Reprocesar reunión: regenerar notas desde la grabación",
+      "label": "Reprocesar",
+      "confirm": "¿Sobrescribir notas?",
+      "inProgress": "Reprocesando…",
+      "started": "Reprocesamiento iniciado: se ejecuta en segundo plano.",
+      "failed": "Error al reprocesar: {{error}}",
+      "downloadNeeded": "Descargando primero el modelo de transcripción…"
+    },
+    "reprocessAll": {
+      "label": "Reprocesar todas las reuniones",
+      "confirm": "¿Reprocesar todas las reuniones? Esto sobrescribe las notas existentes.",
+      "queued": "{{count}} reuniones en cola para reprocesar",
+      "none": "No hay reuniones con audio guardado para reprocesar"
     }
   },
   "dictionary": {

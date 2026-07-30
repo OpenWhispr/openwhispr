@@ -2367,6 +2367,21 @@
         "othersInCall_one": "{{count}} altra persona in chiamata",
         "othersInCall_other": "{{count}} altre persone in chiamata"
       }
+    },
+    "reprocess": {
+      "title": "Rielabora riunione — rigenera le note dalla registrazione",
+      "label": "Rielabora",
+      "confirm": "Sovrascrivere le note?",
+      "inProgress": "Rielaborazione…",
+      "started": "Rielaborazione avviata — viene eseguita in background.",
+      "failed": "Rielaborazione non riuscita: {{error}}",
+      "downloadNeeded": "Download del modello di trascrizione in corso…"
+    },
+    "reprocessAll": {
+      "label": "Rielabora tutte le riunioni",
+      "confirm": "Rielaborare tutte le riunioni? Le note esistenti verranno sovrascritte.",
+      "queued": "{{count}} riunioni in coda per la rielaborazione",
+      "none": "Nessuna riunione con audio salvato da rielaborare"
     }
   },
   "dictionary": {

@@ -560,6 +560,8 @@ declare global {
       getNoteAudioPaths?: (noteId: number) => Promise<{ micPath: string | null; systemPath: string | null }>;
       deleteNoteAudio?: (noteId: number) => Promise<{ success: boolean }>;
       retranscribeMeetingNote?: (noteId: number, options?: { model?: string; language?: string }) => Promise<{ success: boolean; error?: string; noteId?: number }>;
+      retryPipelineStep?: (noteId: number, fromStep: string) => Promise<{ success: boolean; error?: string }>;
+      reprocessAllMeetings?: () => Promise<{ success: boolean; count: number; error?: string }>;
       checkWhisperModelDownloaded?: (model: string) => Promise<{ downloaded: boolean }>;
       retryTranscription: (
         id: number,

@@ -2367,6 +2367,21 @@
         "othersInCall_one": "{{count}} weitere Person im Gespräch",
         "othersInCall_other": "{{count}} weitere Personen im Gespräch"
       }
+    },
+    "reprocess": {
+      "title": "Meeting neu verarbeiten – Notizen aus der Aufnahme neu erzeugen",
+      "label": "Neu verarbeiten",
+      "confirm": "Notizen überschreiben?",
+      "inProgress": "Wird neu verarbeitet…",
+      "started": "Neuverarbeitung gestartet – läuft im Hintergrund.",
+      "failed": "Neuverarbeitung fehlgeschlagen: {{error}}",
+      "downloadNeeded": "Transkriptionsmodell wird zuerst heruntergeladen…"
+    },
+    "reprocessAll": {
+      "label": "Alle Meetings neu verarbeiten",
+      "confirm": "Alle Meetings neu verarbeiten? Vorhandene Notizen werden überschrieben.",
+      "queued": "{{count}} Meetings zur Neuverarbeitung eingereiht",
+      "none": "Keine Meetings mit gespeichertem Audio zum Neuverarbeiten"
     }
   },
   "dictionary": {
