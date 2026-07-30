@@ -1284,7 +1284,6 @@ export default function SettingsPage({
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const startOnboarding = useCallback(() => {
-    localStorage.setItem("pendingCloudMigration", "true");
     localStorage.setItem("onboardingCurrentStep", "0");
     localStorage.removeItem("onboardingCompleted");
     window.location.reload();

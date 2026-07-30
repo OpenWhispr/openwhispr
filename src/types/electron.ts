@@ -509,23 +509,6 @@ declare global {
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
-      // STT config
-      getSttConfig?: () => Promise<{
-        success: boolean;
-        dictation: { mode: string };
-        notes: { mode: string };
-        streamingProvider: string;
-      } | null>;
-
-      getNoteRecordingConfig?: () => Promise<{
-        success: boolean;
-        providers: Array<{
-          id: string;
-          name: string;
-          models: Array<{ id: string; name: string; default?: boolean }>;
-        }>;
-      } | null>;
-
       // Database operations
       saveTranscription: (
         text: string,
@@ -1218,47 +1201,6 @@ declare global {
       authSetToken?: (token: string) => Promise<void>;
 
       // OpenWhispr Cloud API
-      cloudTranscribe?: (
-        audioBuffer: ArrayBuffer,
-        opts: { language?: string; prompt?: string; useCase?: string; diarization?: boolean }
-      ) => Promise<{
-        success: boolean;
-        text?: string;
-        warning?: string;
-        clientTranscriptionId?: string;
-        wordsUsed?: number;
-        wordsRemaining?: number;
-        limitReached?: boolean;
-        error?: string;
-        code?: string;
-      }>;
-      cloudStreamingUsage?: (
-        text: string,
-        audioDurationSeconds: number,
-        opts?: {
-          sendLogs?: boolean;
-          sttProvider?: string;
-          sttModel?: string;
-          sttProcessingMs?: number;
-          sttLanguage?: string;
-          audioSizeBytes?: number;
-          audioFormat?: string;
-          clientTotalMs?: number;
-        }
-      ) => Promise<{
-        success: boolean;
-        wordsUsed?: number;
-        wordsRemaining?: number;
-        limitReached?: boolean;
-        error?: string;
-        code?: string;
-      }>;
-      cloudHealthCheck?: () => Promise<{
-        ok: boolean;
-        status?: number;
-        code?: string;
-        messageKey?: string;
-      }>;
       cloudUsage?: () => Promise<{
         success: boolean;
         wordsUsed?: number;
@@ -1322,19 +1264,6 @@ declare global {
         code?: string;
       }>;
 
-      // Cloud audio file transcription
-      transcribeAudioFileCloud?: (filePath: string) => Promise<{
-        success: boolean;
-        text?: string;
-        warning?: string;
-        error?: string;
-        code?: string;
-      }>;
-
-      onUploadTranscriptionProgress?: (
-        callback: (data: { stage: string; chunksTotal: number; chunksCompleted: number }) => void
-      ) => () => void;
-
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
@@ -1365,39 +1294,6 @@ declare global {
       // Workspace invitation deep link
       onWorkspaceInvitationToken?: (callback: (token: string) => void) => () => void;
 
-      // AssemblyAI Streaming
-      assemblyAiStreamingWarmup?: (options?: {
-        sampleRate?: number;
-        language?: string;
-      }) => Promise<{
-        success: boolean;
-        alreadyWarm?: boolean;
-        error?: string;
-        code?: string;
-      }>;
-      assemblyAiStreamingStart?: (options?: { sampleRate?: number; language?: string }) => Promise<{
-        success: boolean;
-        usedWarmConnection?: boolean;
-        error?: string;
-        code?: string;
-      }>;
-      assemblyAiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
-      assemblyAiStreamingForceEndpoint?: () => void;
-      assemblyAiStreamingStop?: () => Promise<{
-        success: boolean;
-        text?: string;
-        error?: string;
-      }>;
-      assemblyAiStreamingStatus?: () => Promise<{
-        isConnected: boolean;
-        sessionId: string | null;
-      }>;
-      onAssemblyAiPartialTranscript?: (callback: (text: string) => void) => () => void;
-      onAssemblyAiFinalTranscript?: (callback: (text: string) => void) => () => void;
-      onAssemblyAiError?: (callback: (error: string) => void) => () => void;
-      onAssemblyAiSessionEnd?: (
-        callback: (data: { audioDuration?: number; text?: string }) => void
-      ) => () => void;
 
       // Referral stats
       getReferralStats?: () => Promise<{
@@ -1535,41 +1431,6 @@ declare global {
         query: string,
         limit?: number
       ) => Promise<ConversationPreview[]>;
-
-      // Deepgram Streaming
-      deepgramStreamingWarmup?: (options?: { sampleRate?: number; language?: string }) => Promise<{
-        success: boolean;
-        alreadyWarm?: boolean;
-        error?: string;
-        code?: string;
-      }>;
-      deepgramStreamingStart?: (options?: {
-        sampleRate?: number;
-        language?: string;
-        forceNew?: boolean;
-      }) => Promise<{
-        success: boolean;
-        usedWarmConnection?: boolean;
-        error?: string;
-        code?: string;
-      }>;
-      deepgramStreamingSend?: (audioBuffer: ArrayBuffer) => void;
-      deepgramStreamingFinalize?: () => void;
-      deepgramStreamingStop?: () => Promise<{
-        success: boolean;
-        text?: string;
-        error?: string;
-      }>;
-      deepgramStreamingStatus?: () => Promise<{
-        isConnected: boolean;
-        sessionId: string | null;
-      }>;
-      onDeepgramPartialTranscript?: (callback: (text: string) => void) => () => void;
-      onDeepgramFinalTranscript?: (callback: (text: string) => void) => () => void;
-      onDeepgramError?: (callback: (error: string) => void) => () => void;
-      onDeepgramSessionEnd?: (
-        callback: (data: { audioDuration?: number; text?: string }) => void
-      ) => () => void;
 
       // Corti streaming (BYOK)
       cortiStreamingWarmup?: (options?: {
@@ -1822,11 +1683,9 @@ declare global {
       // Dictation realtime streaming
       dictationRealtimeWarmup?: (options: {
         model?: string;
-        mode?: "byok" | "openwhispr";
       }) => Promise<{ success: boolean; error?: string }>;
       dictationRealtimeStart?: (options: {
         model?: string;
-        mode?: "byok" | "openwhispr";
       }) => Promise<{ success: boolean; error?: string }>;
       dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;

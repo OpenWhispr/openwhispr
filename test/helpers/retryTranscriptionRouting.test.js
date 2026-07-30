@@ -12,7 +12,7 @@ test("selects self-hosted retry routing over stale cloud settings", async () => 
       remoteTranscriptionUrl: "http://localhost:5001/v1",
       remoteTranscriptionModel: "  self-hosted-model  ",
       useLocalWhisper: true,
-      cloudTranscriptionMode: "openwhispr",
+      cloudTranscriptionMode: "byok",
       cloudTranscriptionProvider: provider,
       cloudTranscriptionModel: "stale-cloud-model",
     });
@@ -74,7 +74,7 @@ test("fails closed for missing, malformed, or unsupported self-hosted URLs", asy
         transcriptionMode: "self-hosted",
         remoteTranscriptionUrl,
         useLocalWhisper: true,
-        cloudTranscriptionMode: "openwhispr",
+        cloudTranscriptionMode: "byok",
         cloudTranscriptionProvider: "groq",
       }),
       {
@@ -90,7 +90,7 @@ test("does not intercept non-self-hosted retry modes", async () => {
 
   for (const settings of [
     { transcriptionMode: "local", useLocalWhisper: true },
-    { transcriptionMode: "openwhispr", cloudTranscriptionMode: "openwhispr" },
+    { transcriptionMode: "providers", cloudTranscriptionMode: "byok" },
     { transcriptionMode: "providers", cloudTranscriptionProvider: "tinfoil" },
     { transcriptionMode: "providers", cloudTranscriptionProvider: "groq" },
     {},

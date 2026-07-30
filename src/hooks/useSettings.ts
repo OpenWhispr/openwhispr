@@ -25,7 +25,6 @@ export interface TranscriptionSettings {
   remoteTranscriptionModel: string;
   customDictionary: string[];
   snippets: Snippet[];
-  assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }
 
@@ -235,8 +234,6 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     snippets: store.snippets,
     setSnippets: store.setSnippets,
-    assemblyAiStreaming: store.assemblyAiStreaming,
-    setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
     setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,

@@ -120,7 +120,6 @@ const BOOLEAN_SETTINGS = new Set([
   "uploadUseLocalWhisper",
   "allowOpenAIFallback",
   "allowLocalFallback",
-  "assemblyAiStreaming",
   "autoGenerateNoteTitle",
   "useCleanupModel",
   "useDictationAgent",
@@ -578,7 +577,6 @@ export interface SettingsState
   applyCustomDictionaryFromExternal: (words: string[]) => void;
   setSnippets: (snippets: Snippet[]) => void;
   applySnippetsFromExternal: (snippets: Snippet[]) => void;
-  setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
   setUseDictationAgent: (value: boolean) => void;
@@ -930,8 +928,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       return [];
     }
   })(),
-  assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
-
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
   useCleanupModel: readBoolean("useCleanupModel", true),
   useDictationAgent: readBoolean("useDictationAgent", true),
@@ -1233,7 +1229,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
   setCloudTranscriptionMode: createStringSetter("cloudTranscriptionMode"),
   setCleanupCloudBaseUrl: createStringSetter("cleanupCloudBaseUrl"),
-  setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
   setAutoGenerateNoteTitle: createBooleanSetter("autoGenerateNoteTitle"),
   setUseCleanupModel: createBooleanSetter("useCleanupModel"),
   setUseDictationAgent: createBooleanSetter("useDictationAgent"),
@@ -1667,8 +1662,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setCloudTranscriptionMode(settings.cloudTranscriptionMode);
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);
     if (settings.snippets !== undefined) s.setSnippets(settings.snippets);
-    if (settings.assemblyAiStreaming !== undefined)
-      s.setAssemblyAiStreaming(settings.assemblyAiStreaming);
     if (settings.showTranscriptionPreview !== undefined)
       s.setShowTranscriptionPreview(settings.showTranscriptionPreview);
   },
@@ -1790,9 +1783,11 @@ export const selectResolvedMeetingTranscription = (
   state: SettingsState
 ): ResolvedMeetingTranscription => {
   const catalog = useStreamingProvidersStore.getState().providers;
-  // TODO(1.8.0): Catalog has one cloud entry today (OpenAI Realtime).
-  // When a second is added, resolve as `meetingCloudTranscriptionProvider || cloudTranscriptionProvider || catalog[0]?.id`, then validate against catalog.
-  const cloudTranscriptionProvider = catalog?.[0]?.id ?? "";
+  // Honour the user's pick when the bundled catalog actually offers it; otherwise
+  // fall back to the first realtime-capable provider.
+  const preferred = state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider;
+  const cloudTranscriptionProvider =
+    (catalog?.some((p) => p.id === preferred) ? preferred : catalog?.[0]?.id) ?? "";
 
   return {
     useLocalWhisper: state.meetingUseLocalWhisper,
