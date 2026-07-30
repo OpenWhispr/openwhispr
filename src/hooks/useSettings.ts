@@ -26,6 +26,7 @@ export interface TranscriptionSettings {
   snippets: Snippet[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
+  maxRecordingDurationSec: number;
 }
 
 export interface CleanupSettings {
@@ -319,6 +320,8 @@ function useSettingsInternal() {
     setWhisperVadSpeechPadMs: store.setWhisperVadSpeechPadMs,
     whisperVadSamplesOverlap: store.whisperVadSamplesOverlap,
     setWhisperVadSamplesOverlap: store.setWhisperVadSamplesOverlap,
+    maxRecordingDurationSec: store.maxRecordingDurationSec,
+    setMaxRecordingDurationSec: store.setMaxRecordingDurationSec,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,

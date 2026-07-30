@@ -456,6 +456,10 @@
         "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
         "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan."
+      },
+      "maxDuration": {
+        "title": "Aufnahmelimit erreicht",
+        "description": "Die Aufnahme wurde nach {{seconds}} Sekunden automatisch beendet."
       }
     },
     "clipboard": {
@@ -1633,6 +1637,10 @@
             "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
           }
         }
+      },
+      "maxRecordingDuration": {
+        "label": "Maximale Aufnahmedauer (Sekunden)",
+        "description": "Aufnahme nach dieser Anzahl von Sekunden automatisch beenden. Auf 0 setzen, um zu deaktivieren."
       }
     },
     "intelligence": {

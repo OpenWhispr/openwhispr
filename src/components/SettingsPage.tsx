@@ -203,6 +203,8 @@ interface TranscriptionSectionProps {
   setRemoteTranscriptionUrl: (url: string) => void;
   showTranscriptionPreview: boolean;
   setShowTranscriptionPreview: (value: boolean) => void;
+  maxRecordingDurationSec: number;
+  setMaxRecordingDurationSec: (value: number) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -237,6 +239,8 @@ function TranscriptionSection({
   setRemoteTranscriptionUrl,
   showTranscriptionPreview,
   setShowTranscriptionPreview,
+  maxRecordingDurationSec,
+  setMaxRecordingDurationSec,
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
@@ -369,6 +373,23 @@ function TranscriptionSection({
           onUrlChange={setRemoteTranscriptionUrl}
         />
       )}
+
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.maxRecordingDuration.label")}
+            description={t("settingsPage.transcription.maxRecordingDuration.description")}
+          >
+            <Input
+              type="number"
+              step="10"
+              min="0"
+              value={maxRecordingDurationSec}
+              onChange={(e) => setMaxRecordingDurationSec(Number(e.target.value))}
+            />
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
 
       <GpuDeviceSelector purpose="transcription" />
     </div>
@@ -723,6 +744,8 @@ export default function SettingsPage({
     setPauseMediaOnDictation,
     showTranscriptionPreview,
     setShowTranscriptionPreview,
+    maxRecordingDurationSec,
+    setMaxRecordingDurationSec,
     autoPasteEnabled,
     setAutoPasteEnabled,
     keepTranscriptionInClipboard,
@@ -3919,6 +3942,8 @@ EOF`,
                   setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
                   showTranscriptionPreview={showTranscriptionPreview}
                   setShowTranscriptionPreview={setShowTranscriptionPreview}
+                  maxRecordingDurationSec={maxRecordingDurationSec}
+                  setMaxRecordingDurationSec={setMaxRecordingDurationSec}
                   toast={toast}
                 />
                 {transcriptionMode === "local" &&

@@ -456,6 +456,10 @@
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
         "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。"
+      },
+      "maxDuration": {
+        "title": "已達錄音時長上限",
+        "description": "錄音在 {{seconds}} 秒後自動停止。"
       }
     },
     "clipboard": {
@@ -1628,6 +1632,10 @@
             "info": "將每個片段延伸到下一個片段的音訊量，避免拼接時出現突兀截斷。"
           }
         }
+      },
+      "maxRecordingDuration": {
+        "label": "最長錄音時長(秒)",
+        "description": "超過設定的秒數後自動停止錄音。設為 0 可停用此功能。"
       }
     },
     "intelligence": {

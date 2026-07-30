@@ -144,6 +144,7 @@ const ARRAY_SETTINGS = new Set(["customDictionary", "snippets", "gcalAccounts"])
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
+  "maxRecordingDurationSec",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -549,6 +550,7 @@ export interface SettingsState
   setCloudBackupEnabled: (value: boolean) => void;
   setTelemetryEnabled: (value: boolean) => void;
   setAudioRetentionDays: (days: number) => void;
+  setMaxRecordingDurationSec: (value: number) => void;
   setDataRetentionEnabled: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
@@ -797,6 +799,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (stored === null) return 30;
     const parsed = parseInt(stored, 10);
     return isNaN(parsed) ? 30 : parsed;
+  })(),
+  maxRecordingDurationSec: (() => {
+    const fallback = 180;
+    if (!isBrowser) return fallback;
+    const stored = localStorage.getItem("maxRecordingDurationSec");
+    if (stored === null) return fallback;
+    const parsed = parseInt(stored, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
   })(),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
@@ -1252,6 +1262,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAudioRetentionDays: (days: number) => {
     if (isBrowser) localStorage.setItem("audioRetentionDays", String(days));
     set({ audioRetentionDays: days });
+  },
+  setMaxRecordingDurationSec: (value: number) => {
+    const next = Number.isFinite(value) && value >= 0 ? Math.round(value) : 180;
+    if (isBrowser) localStorage.setItem("maxRecordingDurationSec", String(next));
+    set({ maxRecordingDurationSec: next });
   },
   setDataRetentionEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("dataRetentionEnabled", String(value));

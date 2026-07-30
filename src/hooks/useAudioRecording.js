@@ -18,44 +18,18 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
+  const maxDurationTimerRef = useRef(null);
   const { onToggle } = options;
 
-  const performStartRecording = useCallback(async () => {
-    if (startLockRef.current) return false;
-    startLockRef.current = true;
-    try {
-      if (!audioManagerRef.current) return false;
-
-      const currentState = audioManagerRef.current.getState();
-      if (currentState.isRecording || currentState.isProcessing) return false;
-
-      // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
-      if (!audioManagerRef.current.sttConfig) {
-        const config = await window.electronAPI.getSttConfig?.();
-        if (config?.success) {
-          audioManagerRef.current.setSttConfig(config);
-        }
-      }
-
-      const didStart = audioManagerRef.current.shouldUseStreaming()
-        ? await audioManagerRef.current.startStreamingRecording()
-        : await audioManagerRef.current.startRecording();
-
-      if (didStart) {
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.pauseMediaPlayback?.();
-        }
-        window.electronAPI?.registerCancelHotkey?.("Escape");
-        void playStartCue();
-      }
-
-      return didStart;
-    } finally {
-      startLockRef.current = false;
+  const clearMaxDurationTimer = useCallback(() => {
+    if (maxDurationTimerRef.current) {
+      clearTimeout(maxDurationTimerRef.current);
+      maxDurationTimerRef.current = null;
     }
   }, []);
 
   const performStopRecording = useCallback(async () => {
+    clearMaxDurationTimer();
     if (stopLockRef.current) return false;
     stopLockRef.current = true;
     try {
@@ -81,7 +55,57 @@ export const useAudioRecording = (toast, options = {}) => {
     } finally {
       stopLockRef.current = false;
     }
-  }, []);
+  }, [clearMaxDurationTimer]);
+
+  const performStartRecording = useCallback(async () => {
+    if (startLockRef.current) return false;
+    startLockRef.current = true;
+    try {
+      if (!audioManagerRef.current) return false;
+
+      const currentState = audioManagerRef.current.getState();
+      if (currentState.isRecording || currentState.isProcessing) return false;
+
+      // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
+      if (!audioManagerRef.current.sttConfig) {
+        const config = await window.electronAPI.getSttConfig?.();
+        if (config?.success) {
+          audioManagerRef.current.setSttConfig(config);
+        }
+      }
+
+      const didStart = audioManagerRef.current.shouldUseStreaming()
+        ? await audioManagerRef.current.startStreamingRecording()
+        : await audioManagerRef.current.startRecording();
+
+      if (didStart) {
+        clearMaxDurationTimer(); // re-arm safety guard
+        if (getSettings().pauseMediaOnDictation) {
+          window.electronAPI?.pauseMediaPlayback?.();
+        }
+        window.electronAPI?.registerCancelHotkey?.("Escape");
+        void playStartCue();
+
+        const { maxRecordingDurationSec } = getSettings();
+        if (maxRecordingDurationSec > 0) {
+          maxDurationTimerRef.current = setTimeout(() => {
+            void performStopRecording();
+            toast({
+              title: t("hooks.audioRecording.maxDuration.title"),
+              description: t("hooks.audioRecording.maxDuration.description", {
+                seconds: maxRecordingDurationSec,
+              }),
+              variant: "default",
+            });
+          }, maxRecordingDurationSec * 1000);
+        }
+      }
+
+      return didStart;
+    } finally {
+      startLockRef.current = false;
+    }
+  }, [performStopRecording, toast, t, clearMaxDurationTimer]);
 
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
@@ -97,6 +121,7 @@ export const useAudioRecording = (toast, options = {}) => {
         }
       },
       onError: (error) => {
+        clearMaxDurationTimer();
         if (error?.title !== "Paste Error") {
           window.electronAPI?.hideDictationPreview?.();
         }
@@ -255,13 +280,15 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeStart?.();
       disposeStop?.();
       disposeNoAudio?.();
+      clearMaxDurationTimer();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
       }
     };
-  }, [toast, onToggle, performStartRecording, performStopRecording, t]);
+  }, [toast, onToggle, performStartRecording, performStopRecording, t, clearMaxDurationTimer]);
 
   const cancelRecording = useCallback(async () => {
+    clearMaxDurationTimer();
     if (audioManagerRef.current) {
       window.electronAPI?.unregisterCancelHotkey?.();
       const state = audioManagerRef.current.getState();
@@ -274,7 +301,7 @@ export const useAudioRecording = (toast, options = {}) => {
       return audioManagerRef.current.cancelRecording();
     }
     return false;
-  }, []);
+  }, [clearMaxDurationTimer]);
 
   const cancelProcessing = () => {
     if (audioManagerRef.current) {

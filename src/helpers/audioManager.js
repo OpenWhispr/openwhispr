@@ -17,6 +17,7 @@ import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
+import { detectHallucination } from "../utils/hallucinationFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -663,6 +664,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: result?.source || (useLocalWhisper ? localProvider : "cloud"),
         model: activeModel || null,
       };
+
+      const rawForCheck = result?.rawText ?? result?.text ?? "";
+      const halluc = detectHallucination(rawForCheck);
+      if (halluc.isHallucination) {
+        logger.info(
+          "Hallucination filter discarded transcription",
+          { reason: halluc.reason, textLength: rawForCheck.length, source: result?.source },
+          "audio"
+        );
+        this.isProcessing = false;
+        this.onStateChange?.({ isRecording: false, isProcessing: false });
+        this.onTranscriptionComplete?.({ success: true, text: "" });
+        return;
+      }
 
       this.onTranscriptionComplete?.(result);
 

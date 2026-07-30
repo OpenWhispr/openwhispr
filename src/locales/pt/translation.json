@@ -428,6 +428,10 @@
         "sessionExpired": "Sua sessão do OpenWhispr Cloud está indisponível. Entre novamente nas Configurações.",
         "offline": "Você está offline. A transcrição na nuvem exige conexão com a internet.",
         "dailyLimitReached": "Você atingiu o limite de transcrições de hoje. Tente novamente amanhã ou faça upgrade do seu plano."
+      },
+      "maxDuration": {
+        "title": "Limite de gravação atingido",
+        "description": "A gravação parou automaticamente após {{seconds}} segundos."
       }
     },
     "clipboard": {
@@ -1605,6 +1609,10 @@
             "info": "Áudio estendido de um segmento para o próximo, evitando cortes bruscos na concatenação."
           }
         }
+      },
+      "maxRecordingDuration": {
+        "label": "Duração máxima de gravação (segundos)",
+        "description": "Parar a gravação automaticamente após esse número de segundos. Defina como 0 para desativar."
       }
     },
     "intelligence": {
