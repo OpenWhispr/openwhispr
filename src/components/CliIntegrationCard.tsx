@@ -11,14 +11,8 @@ import logo from "../assets/logo.svg";
 const CLI_DOCS_URL = "https://docs.openwhispr.com/cli/install";
 const INSTALL_CMD = "npm install -g @openwhispr/cli";
 const LOCAL_EXAMPLE = "openwhispr --local notes list";
-const CLOUD_LOGIN_CMD = "openwhispr auth login";
 
-interface CliIntegrationCardProps {
-  isPaid: boolean;
-  onUpgrade: () => void;
-}
-
-export default function CliIntegrationCard({ isPaid, onUpgrade }: CliIntegrationCardProps) {
+export default function CliIntegrationCard() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [docsLinkCopied, setDocsLinkCopied] = useState(false);
@@ -78,44 +72,14 @@ export default function CliIntegrationCard({ isPaid, onUpgrade }: CliIntegration
         </Button>
       </div>
 
-      <div className="mb-4">
-        <div className="flex items-center gap-1.5 mb-1">
-          <h4 className="text-xs font-semibold text-foreground">
-            {t("integrations.cli.local.label")}
-          </h4>
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-            {t("integrations.cli.local.freeBadge")}
-          </Badge>
-        </div>
+      <div>
+        <h4 className="text-xs font-semibold text-foreground mb-1">
+          {t("integrations.cli.local.label")}
+        </h4>
         <p className="text-xs text-muted-foreground/70 mb-2 leading-relaxed">
           {t("integrations.cli.local.description")}
         </p>
         <CopyableCommand command={LOCAL_EXAMPLE} />
-      </div>
-
-      <div>
-        <div className="flex items-center gap-1.5 mb-1">
-          <h4 className="text-xs font-semibold text-foreground">
-            {t("integrations.cli.cloud.label")}
-          </h4>
-          {!isPaid && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-              {t("integrations.plan.pro")}
-            </Badge>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground/70 mb-2 leading-relaxed">
-          {isPaid
-            ? t("integrations.cli.cloud.description")
-            : t("integrations.cli.cloud.proRequired")}
-        </p>
-        {isPaid ? (
-          <CopyableCommand command={CLOUD_LOGIN_CMD} />
-        ) : (
-          <Button size="sm" onClick={onUpgrade}>
-            {t("integrations.cli.viewPlans")}
-          </Button>
-        )}
       </div>
     </div>
   );

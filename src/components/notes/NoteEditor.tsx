@@ -17,9 +17,10 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useToast } from "../ui/useToast";
-import ShareNoteDialog from "./ShareNoteDialog";
-import { useShareCacheEntry } from "../../stores/noteStore";
-import { SHARING_ENABLED } from "../../lib/features";
+import {
+  usePostCallPipelineStore,
+  selectPipelineForNote,
+} from "../../stores/postCallPipelineStore";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
@@ -156,33 +157,41 @@ export default function NoteEditor({
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isDiarizing, setIsDiarizing] = useState(false);
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [retranscribing, setRetranscribing] = useState(false);
   const [showTypeEditor, setShowTypeEditor] = useState(false);
   const [meetingTypeKey, setMeetingTypeKey] = useState(0);
 
-  const handleRetranscribe = useCallback(async () => {
-    const modelCheck = await window.electronAPI?.checkWhisperModelDownloaded?.("large");
-    if (!modelCheck?.downloaded) {
-      toast({ title: t("notes.retranscribe.downloadNeeded"), variant: "default" });
+  // Full re-process: re-run the whole post-call pipeline (retranscribe → title →
+  // classify → notes) with current settings/models. Runs in the background job
+  // queue; the pipeline indicator shows progress. Overwrites the generated
+  // notes, so a two-click inline confirm guards notes that already have AI
+  // content. Superset of the transcription-only retranscribe above.
+  const [pendingReprocess, setPendingReprocess] = useState(false);
+  const notePipeline = usePostCallPipelineStore((s) => selectPipelineForNote(s, note.id));
+  const isReprocessing = notePipeline?.currentStatus === "running";
+
+  const startReprocess = useCallback(async () => {
+    setPendingReprocess(false);
+    const large = await window.electronAPI?.checkWhisperModelDownloaded?.("large");
+    if (!large?.downloaded) {
+      toast({ title: t("notes.reprocess.downloadNeeded"), variant: "default" });
       await window.electronAPI?.downloadWhisperModel?.("large");
       return;
     }
-
-    setRetranscribing(true);
-    try {
-      const result = await window.electronAPI?.retranscribeMeetingNote?.(note.id, { model: "large" });
-      if (!result?.success) {
-        toast({ title: t("notes.retranscribe.failed", { error: result?.error }), variant: "destructive" });
-      } else {
-        toast({ title: t("notes.retranscribe.success") });
-      }
-    } finally {
-      setRetranscribing(false);
+    const result = await window.electronAPI?.retryPipelineStep?.(note.id, "retranscribe");
+    if (result && result.success === false) {
+      toast({ title: t("notes.reprocess.failed", { error: result.error }), variant: "destructive" });
+    } else {
+      toast({ title: t("notes.reprocess.started") });
     }
   }, [note.id, t, toast]);
-  const shareCache = useShareCacheEntry(note.cloud_id);
-  const isShared = (shareCache?.share.visibility ?? "private") !== "private";
+
+  const handleReprocessClick = useCallback(() => {
+    if (note.enhanced_content && !pendingReprocess) {
+      setPendingReprocess(true);
+      return;
+    }
+    void startReprocess();
+  }, [note.enhanced_content, pendingReprocess, startReprocess]);
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerProfiles, setSpeakerProfiles] = useState<
@@ -828,48 +837,26 @@ export default function NoteEditor({
                   )}
                 </div>
               )}
-              {SHARING_ENABLED && note.cloud_id && (
-                <button
-                  type="button"
-                  onClick={() => setShareDialogOpen(true)}
-                  className={cn(
-                    "shrink-0 h-6 w-6 flex items-center justify-center rounded-md",
-                    "bg-foreground/4 dark:bg-white/5",
-                    "hover:bg-foreground/8 dark:hover:bg-white/10",
-                    "active:bg-foreground/12 dark:active:bg-white/15",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                    "transition-colors duration-150"
-                  )}
-                  aria-label={t("noteEditor.share.button")}
-                >
-                  <Share2
-                    size={11}
-                    className={cn(
-                      "transition-colors",
-                      isShared
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-foreground/50 dark:text-foreground/40"
-                    )}
-                  />
-                </button>
-              )}
               {note.note_type === "meeting" &&
                 !isRecording &&
                 (note.system_audio_path || note.mic_audio_path) && (
                   <button
                     className="shrink-0 h-6 flex items-center gap-1 px-1.5 rounded-md bg-foreground/4 dark:bg-white/5 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:bg-foreground/8 dark:hover:text-foreground/60 dark:hover:bg-white/8 transition-colors duration-150 text-[11px] disabled:opacity-40 disabled:pointer-events-none"
-                    onClick={handleRetranscribe}
-                    disabled={retranscribing}
-                    title={t("notes.retranscribe.label")}
+                    onClick={handleReprocessClick}
+                    onBlur={() => setPendingReprocess(false)}
+                    disabled={isReprocessing}
+                    title={t("notes.reprocess.title")}
                   >
-                    {retranscribing ? (
+                    {isReprocessing ? (
                       <Loader2 size={11} className="animate-spin" />
                     ) : (
                       <RotateCcw size={11} />
                     )}
-                    {retranscribing
-                      ? t("notes.retranscribe.inProgress")
-                      : t("notes.retranscribe.label")}
+                    {isReprocessing
+                      ? t("notes.reprocess.inProgress")
+                      : pendingReprocess
+                        ? t("notes.reprocess.confirm")
+                        : t("notes.reprocess.label")}
                   </button>
                 )}
               {(onExportNote || onExportTranscript) && (
@@ -1041,9 +1028,6 @@ export default function NoteEditor({
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
         />
-      )}
-      {SHARING_ENABLED && note.cloud_id && (
-        <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
       )}
       <MeetingTypeEditor
         open={showTypeEditor}

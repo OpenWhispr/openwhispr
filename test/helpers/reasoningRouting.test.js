@@ -3,19 +3,19 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/helpers/reasoningRouting.js");
 
-test("byok cloud provider maps to the providers mode", async () => {
+test("a cloud provider maps to the providers mode", async () => {
   const { deriveReasoningMode } = await load();
-  assert.equal(deriveReasoningMode("byok", "corti"), "providers");
+  assert.equal(deriveReasoningMode("corti"), "providers");
 });
 
-test("byok custom provider maps to the self-hosted mode", async () => {
+test("the custom provider maps to the self-hosted mode", async () => {
   const { deriveReasoningMode } = await load();
-  assert.equal(deriveReasoningMode("byok", "custom"), "self-hosted");
+  assert.equal(deriveReasoningMode("custom"), "self-hosted");
 });
 
-test("openwhispr cloud mode maps to the openwhispr mode", async () => {
+test("the built-in provider maps to the local mode", async () => {
   const { deriveReasoningMode } = await load();
-  assert.equal(deriveReasoningMode("openwhispr", "corti"), "openwhispr");
+  assert.equal(deriveReasoningMode("local"), "local");
 });
 
 test("fan-out routes provider, model and mode to all four scopes", async () => {
@@ -26,7 +26,6 @@ test("fan-out routes provider, model and mode to all four scopes", async () => {
         useCleanupModel: true,
         cleanupProvider: "corti",
         cleanupModel: "corti-s1-instant",
-        cleanupCloudMode: "byok",
       },
       "providers"
     );
@@ -38,7 +37,6 @@ test("fan-out routes provider, model and mode to all four scopes", async () => {
   for (const scope of [noteFormatting, dictationAgent, chatIntelligence]) {
     assert.equal(scope.provider, "corti");
     assert.equal(scope.model, "corti-s1-instant");
-    assert.equal(scope.cloudMode, "byok");
     assert.equal(scope.mode, "providers");
   }
 });
@@ -46,21 +44,22 @@ test("fan-out routes provider, model and mode to all four scopes", async () => {
 test("fan-out with partial settings only mirrors the provided routing fields", async () => {
   const { buildReasoningScopePatches } = await load();
   const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence } =
-    buildReasoningScopePatches({ useCleanupModel: true }, "openwhispr");
+    buildReasoningScopePatches({ useCleanupModel: true }, "local");
 
   assert.equal(dictationCleanup.useCleanupModel, true);
-  assert.equal(dictationCleanup.cleanupMode, "openwhispr");
+  assert.equal(dictationCleanup.cleanupMode, "local");
   assert.equal("cleanupProvider" in dictationCleanup, false);
 
   for (const scope of [noteFormatting, dictationAgent, chatIntelligence]) {
-    assert.equal(scope.mode, "openwhispr");
+    assert.equal(scope.mode, "local");
     assert.equal("provider" in scope, false);
     assert.equal("model" in scope, false);
-    assert.equal("cloudMode" in scope, false);
   }
 });
 
-const OPENWHISPR_REASONING = { useCleanupModel: true, cleanupCloudMode: "openwhispr" };
+// Every non-EU / no-key Corti path falls back to the built-in local model so
+// clinical text never leaves the machine.
+const LOCAL_REASONING = { useCleanupModel: true, cleanupProvider: "local" };
 
 test("onboarding routes transcription and reasoning to corti in the eu region with an api key", async () => {
   const { buildCortiOnboardingPayloads } = await load();
@@ -81,7 +80,6 @@ test("onboarding routes transcription and reasoning to corti in the eu region wi
     useCleanupModel: true,
     cleanupProvider: "corti",
     cleanupModel: "corti-s1-instant",
-    cleanupCloudMode: "byok",
   });
 });
 
@@ -96,7 +94,7 @@ test("onboarding forces cleanup enabled on the corti path", async () => {
   assert.equal(reasoning.useCleanupModel, true);
 });
 
-test("us data region routes reasoning to openwhispr cloud, transcription stays corti", async () => {
+test("us data region routes reasoning to the local model, transcription stays corti", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { transcription, reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
@@ -105,11 +103,11 @@ test("us data region routes reasoning to openwhispr cloud, transcription stays c
     true
   );
 
-  assert.deepEqual(reasoning, OPENWHISPR_REASONING);
+  assert.deepEqual(reasoning, LOCAL_REASONING);
   assert.equal(transcription.cloudTranscriptionProvider, "corti");
 });
 
-test("eu region without an api key routes reasoning to openwhispr cloud", async () => {
+test("eu region without an api key routes reasoning to the local model", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
@@ -117,10 +115,10 @@ test("eu region without an api key routes reasoning to openwhispr cloud", async 
     "eu",
     false
   );
-  assert.deepEqual(reasoning, OPENWHISPR_REASONING);
+  assert.deepEqual(reasoning, LOCAL_REASONING);
 });
 
-test("undefined data region routes reasoning to openwhispr cloud", async () => {
+test("undefined data region routes reasoning to the local model", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
@@ -128,10 +126,10 @@ test("undefined data region routes reasoning to openwhispr cloud", async () => {
     undefined,
     true
   );
-  assert.deepEqual(reasoning, OPENWHISPR_REASONING);
+  assert.deepEqual(reasoning, LOCAL_REASONING);
 });
 
-test("missing corti reasoning provider routes reasoning to openwhispr cloud", async () => {
+test("missing corti reasoning provider routes reasoning to the local model", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { transcription, reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
@@ -140,11 +138,11 @@ test("missing corti reasoning provider routes reasoning to openwhispr cloud", as
     true
   );
 
-  assert.deepEqual(reasoning, OPENWHISPR_REASONING);
+  assert.deepEqual(reasoning, LOCAL_REASONING);
   assert.equal(transcription.cloudTranscriptionProvider, "corti");
 });
 
-test("corti reasoning provider with empty models routes reasoning to openwhispr cloud", async () => {
+test("corti reasoning provider with empty models routes reasoning to the local model", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
@@ -152,5 +150,5 @@ test("corti reasoning provider with empty models routes reasoning to openwhispr 
     "eu",
     true
   );
-  assert.deepEqual(reasoning, OPENWHISPR_REASONING);
+  assert.deepEqual(reasoning, LOCAL_REASONING);
 });

@@ -25,7 +25,6 @@ export interface TranscriptionSettings {
   remoteTranscriptionModel: string;
   customDictionary: string[];
   snippets: Snippet[];
-  assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }
 
@@ -36,7 +35,6 @@ export interface CleanupSettings {
   cleanupModel: string;
   cleanupProvider: string;
   cleanupCloudBaseUrl?: string;
-  cleanupCloudMode: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
 }
@@ -77,10 +75,11 @@ export interface ApiKeySettings {
   tinfoilApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
+  /** Brave Search API key — powers the chat agent's web_search tool. */
+  braveApiKey: string;
 }
 
 export interface PrivacySettings {
-  cloudBackupEnabled: boolean;
   telemetryEnabled: boolean;
   audioRetentionDays: number;
   dataRetentionEnabled: boolean;
@@ -95,7 +94,6 @@ export interface ChatAgentSettings {
   chatAgentModel: string;
   chatAgentProvider: string;
   chatAgentKey: string;
-  chatAgentCloudMode: string;
   chatAgentMode: InferenceMode;
   chatAgentCloudBaseUrl: string;
   chatAgentRemoteUrl: string;
@@ -228,7 +226,6 @@ function useSettingsInternal() {
     cloudTranscriptionBaseUrl: store.cloudTranscriptionBaseUrl,
     cleanupCloudBaseUrl: store.cleanupCloudBaseUrl,
     cloudTranscriptionMode: store.cloudTranscriptionMode,
-    cleanupCloudMode: store.cleanupCloudMode,
     transcriptionMode: store.transcriptionMode,
     remoteTranscriptionType: store.remoteTranscriptionType,
     remoteTranscriptionUrl: store.remoteTranscriptionUrl,
@@ -238,8 +235,6 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     snippets: store.snippets,
     setSnippets: store.setSnippets,
-    assemblyAiStreaming: store.assemblyAiStreaming,
-    setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
     setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,
@@ -274,7 +269,6 @@ function useSettingsInternal() {
     setCloudTranscriptionBaseUrl: store.setCloudTranscriptionBaseUrl,
     setCloudTranscriptionMode: store.setCloudTranscriptionMode,
     setCleanupCloudBaseUrl: store.setCleanupCloudBaseUrl,
-    setCleanupCloudMode: store.setCleanupCloudMode,
     setTranscriptionMode: store.setTranscriptionMode,
     setRemoteTranscriptionType: store.setRemoteTranscriptionType,
     setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
@@ -360,8 +354,6 @@ function useSettingsInternal() {
     setWhisperVadSpeechPadMs: store.setWhisperVadSpeechPadMs,
     whisperVadSamplesOverlap: store.whisperVadSamplesOverlap,
     setWhisperVadSamplesOverlap: store.setWhisperVadSamplesOverlap,
-    cloudBackupEnabled: store.cloudBackupEnabled,
-    setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,
     setTelemetryEnabled: store.setTelemetryEnabled,
     audioRetentionDays: store.audioRetentionDays,

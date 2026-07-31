@@ -1,16 +1,7 @@
 // Provider overrides for note-formatting ReasoningService.processText calls.
 // Self-hosted must forward remoteUrl as lanUrl — without it, processText
 // guesses the provider from the model and can silently hit a cloud API.
-export function buildNoteFormattingOverrides(noteFormatting, isCloudMode, customApiKey) {
-  if (isCloudMode) {
-    return {
-      provider: "openwhispr",
-      baseUrl: undefined,
-      customApiKey: undefined,
-      lanUrl: undefined,
-    };
-  }
-
+export function buildNoteFormattingOverrides(noteFormatting, customApiKey) {
   const mode = noteFormatting?.mode;
 
   if (mode === "self-hosted") {

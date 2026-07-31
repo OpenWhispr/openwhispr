@@ -1,14 +1,13 @@
 // Whether the dictation agent can actually run. Mirrors ReasoningService.processText,
-// which accepts an empty model only for the cloud ("openwhispr") and self-hosted ("lan")
-// providers; every other mode (BYOK, local, enterprise) requires an explicit model.
+// which accepts an empty model only for the self-hosted ("lan") provider; every
+// other mode (BYOK, local, enterprise) requires an explicit model.
 export function resolveDictationAgentReachability({
   useDictationAgent,
   dictationAgentModel,
-  isCloudAgent,
   isSelfHostedAgent,
 }) {
   if (!useDictationAgent) return false;
-  if (isCloudAgent || isSelfHostedAgent) return true;
+  if (isSelfHostedAgent) return true;
   return (dictationAgentModel?.trim()?.length ?? 0) > 0;
 }
 

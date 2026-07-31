@@ -103,6 +103,22 @@ class EnvironmentManager {
       await this._migrateToSecureStorage();
     }
     await this._loadAllSecrets();
+    await this._purgeRemovedCloudCredentials();
+  }
+
+  // Accounts were removed, and with them the tokenStore that owned
+  // auth-token.bin. Users upgrading from a signed-in build would otherwise keep
+  // an encrypted bearer token on disk forever with no code left to read, rotate
+  // or revoke it. Delete it once, on the first launch that reaches this code.
+  async _purgeRemovedCloudCredentials() {
+    const stalePath = path.join(app.getPath("userData"), "auth-token.bin");
+    try {
+      await fsPromises.rm(stalePath, { force: true });
+    } catch (error) {
+      debugLogger.warn("Failed to remove stale auth token (non-fatal)", {
+        error: error?.message,
+      });
+    }
   }
 
   _getMigrationSentinelPath() {

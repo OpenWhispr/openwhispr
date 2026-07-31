@@ -11,7 +11,7 @@ import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
 import logger from "../utils/logger";
-import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
+import { getSettings } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
 import { streamText, stepCountIs } from "ai";
@@ -335,7 +335,7 @@ class ReasoningService extends BaseReasoningService {
     const isLanCleanup = !!config.lanUrl || this.isLanCleanupMode();
     const providerId = isLanCleanup ? "lan" : config.provider || getModelProvider(trimmedModel);
 
-    if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
+    if (!trimmedModel && providerId !== "lan") {
       throw new Error("No reasoning model selected");
     }
 
@@ -744,176 +744,8 @@ class ReasoningService extends BaseReasoningService {
     this.streamAbortController = null;
   }
 
-  private streamFromIPC(
-    messages: Array<{ role: string; content: string | Array<unknown> }>,
-    opts: {
-      systemPrompt?: string;
-      tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
-    }
-  ): AsyncGenerator<
-    {
-      type: string;
-      text?: string;
-      id?: string;
-      name?: string;
-      arguments?: string;
-      finishReason?: string;
-    },
-    void,
-    unknown
-  > {
-    type StreamEvent = {
-      type: string;
-      text?: string;
-      id?: string;
-      name?: string;
-      arguments?: string;
-      finishReason?: string;
-    };
-    const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
-    let resolve: (() => void) | null = null;
-
-    const cleanupChunk = window.electronAPI?.onAgentStreamChunk?.((chunk) => {
-      queue.push(chunk);
-      resolve?.();
-    });
-    const cleanupError = window.electronAPI?.onAgentStreamError?.((err) => {
-      queue.push({ type: "__error", error: err.error });
-      resolve?.();
-    });
-    const cleanupEnd = window.electronAPI?.onAgentStreamEnd?.(() => {
-      queue.push({ type: "__end" });
-      resolve?.();
-    });
-
-    const cleanup = () => {
-      cleanupChunk?.();
-      cleanupError?.();
-      cleanupEnd?.();
-    };
-
-    window.electronAPI?.startAgentStream?.(messages, opts);
-
-    const generator = async function* () {
-      try {
-        while (true) {
-          if (queue.length === 0) {
-            await new Promise<void>((r) => {
-              resolve = r;
-            });
-            resolve = null;
-          }
-
-          while (queue.length > 0) {
-            const item = queue.shift()!;
-            if (item.type === "__end") return;
-            if (item.type === "__error") throw new Error((item as { error: string }).error);
-            yield item as StreamEvent;
-          }
-        }
-      } finally {
-        cleanup();
-      }
-    };
-
-    return generator();
-  }
-
-  async *processTextStreamingCloud(
-    messages: Array<{ role: string; content: string | Array<unknown> }>,
-    config: {
-      systemPrompt: string;
-      tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
-      executeToolCall?: (
-        name: string,
-        args: string
-      ) => Promise<{ data: string; displayText: string; metadata?: Record<string, unknown> }>;
-    }
-  ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
-    let currentMessages = [...messages];
-
-    for (let step = 0; step < maxSteps; step++) {
-      const stream = this.streamFromIPC(currentMessages, {
-        systemPrompt: config.systemPrompt,
-        tools: config.tools,
-      });
-
-      const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
-
-      for await (const ev of stream) {
-        if (ev.type === "content") {
-          yield { type: "content", text: ev.text as string };
-        } else if (ev.type === "tool_call") {
-          const call = {
-            id: ev.id as string,
-            name: ev.name as string,
-            arguments: ev.arguments as string,
-          };
-          pendingToolCalls.push(call);
-          yield { type: "tool_calls", calls: [call] };
-        }
-      }
-
-      if (pendingToolCalls.length === 0 || !config.executeToolCall) {
-        yield { type: "done", finishReason: "stop" };
-        return;
-      }
-
-      for (const call of pendingToolCalls) {
-        let toolResult: { data: string; displayText: string; metadata?: Record<string, unknown> };
-        try {
-          toolResult = await config.executeToolCall(call.name, call.arguments);
-        } catch (error) {
-          const errMsg = `Error: ${(error as Error).message}`;
-          toolResult = { data: errMsg, displayText: errMsg };
-        }
-        yield {
-          type: "tool_result",
-          callId: call.id,
-          toolName: call.name,
-          displayText: toolResult.displayText,
-          ...(toolResult.metadata ? { metadata: toolResult.metadata } : {}),
-        };
-
-        currentMessages = [
-          ...currentMessages,
-          {
-            role: "assistant",
-            content: [
-              {
-                type: "tool-call",
-                toolCallId: call.id,
-                toolName: call.name,
-                input: JSON.parse(call.arguments),
-              },
-            ],
-          },
-          {
-            role: "tool",
-            content: [
-              {
-                type: "tool-result",
-                toolCallId: call.id,
-                toolName: call.name,
-                output: { type: "text", value: toolResult.data },
-              },
-            ],
-          },
-        ];
-      }
-    }
-
-    yield { type: "done", finishReason: "stop" };
-  }
-
   async isAvailable(): Promise<boolean> {
     try {
-      if (isCloudCleanupMode()) {
-        logger.logReasoning("API_KEY_CHECK", { cloudCleanupMode: true });
-        return true;
-      }
-
       if (this.isLanCleanupMode()) {
         logger.logReasoning("API_KEY_CHECK", { lanCleanup: true });
         return true;

@@ -106,21 +106,6 @@
     "accessibility": "Accessibility settings are not available on this platform.",
     "systemAudio": "System audio settings are not available on this platform."
   },
-  "upgradePrompt": {
-    "paymentFailed": "We couldn't process your payment",
-    "weeklyLimit": "You've reached your weekly limit",
-    "pastDueDescription": "You're on the free plan for now — don't worry, you still get {{limit}} words per week.\nUpdate your payment method to get back to unlimited Pro.",
-    "limitDescription": "{{used}} of {{limit}} words used.\nYour transcription was saved and pasted.",
-    "updatePayment": "Update payment method",
-    "updatePaymentDescription": "Get back to unlimited Pro transcriptions.",
-    "upgradeToPro": "Upgrade to Pro",
-    "upgradeDescription": "Get unlimited transcriptions from as little as $8/month.",
-    "useApiKey": "Use your own API key",
-    "useApiKeyDescription": "Bring your own key for unlimited use.",
-    "switchToLocal": "Switch to local",
-    "switchToLocalDescription": "Offline transcription. No limits.",
-    "rollingWeeklyLimit": "Rolling weekly limit"
-  },
   "windowControls": {
     "minimize": "Minimize",
     "maximize": "Maximize",
@@ -239,12 +224,6 @@
       ],
       "optionalNote": "Optional — you can set or change it anytime in Settings."
     },
-    "connectivity": {
-      "title": "We can't reach OpenWhispr Cloud from this network",
-      "body": "{{cause}} You can switch to the local engine, or continue and try again later.",
-      "useLocal": "Use local engine",
-      "continue": "Continue anyway"
-    },
     "useCase": {
       "title": "Why are you here?",
       "description": "We're a small team shipping every week. What you pick sets up the app for you — and tells us what to build next.",
@@ -336,19 +315,9 @@
       "installButton": "Install Update",
       "availableButton": "Update Available"
     },
-    "limit": {
-      "weeklyTitle": "Weekly limit reached",
-      "weeklyDescription": "Your limit resets on a rolling basis. Upgrade to Pro or use your own API key for unlimited use."
-    },
     "accessibilityMissing": {
       "title": "Accessibility permissions needed",
       "description": "We've detected that OpenWhispr needs accessibility permissions to work properly. Please enable them below."
-    },
-    "billing": {
-      "pastDueTitle": "We couldn't process your payment",
-      "pastDueDescription": "Don't worry - you're on the free plan for now. Update your payment in Settings to get back to Pro.",
-      "bannerDescription": "You're on the free plan for now - you still get {{limit}} words per week. Update your payment to get back to Pro.",
-      "updatePayment": "Update Payment"
     },
     "history": {
       "couldNotLoadTitle": "Couldn't load your history",
@@ -404,11 +373,6 @@
         "recover": "Recover",
         "recovered": "Recovered"
       }
-    },
-    "cloudMigration": {
-      "title": "Welcome to OpenWhispr Cloud",
-      "description": "We've switched your transcription to OpenWhispr Cloud for faster, more accurate results. Your previous settings are saved — switch back anytime in Settings.",
-      "viewSettings": "View Settings"
     },
     "aiCta": {
       "title": "Enhance your transcriptions with AI",
@@ -715,75 +679,6 @@
       }
     }
   },
-  "auth": {
-    "cloudNotConfigured": "Cloud Not Configured",
-    "common": {
-      "back": "Back",
-      "continue": "Continue",
-      "or": "or"
-    },
-    "emailStep": {
-      "continueWithEmail": "Continue with email",
-      "continueWithoutAccount": "Continue without account",
-      "emailPlaceholder": "you@example.com"
-    },
-    "errors": {
-      "accountExistsSignIn": "An account with this email already exists. Please sign in.",
-      "accountNotFoundCreate": "No account found with this email. Please create an account.",
-      "authNotConfigured": "Authentication is not configured",
-      "createAccountFailed": "Failed to create account",
-      "failedProviderSignIn": "Failed to sign in with {{provider}}",
-      "failedUserCheck": "Failed to check user account",
-      "generic": "Something went wrong. Please try again.",
-      "invalidCredentials": "Invalid email or password",
-      "plusAliasUnsupported": "Email aliases with '+' are not supported"
-    },
-    "getStarted": "Get Started",
-    "legal": {
-      "and": "and",
-      "prefix": "By continuing, you agree to our",
-      "privacy": "Privacy Policy",
-      "suffix": "",
-      "terms": "Terms of Service"
-    },
-    "passwordForm": {
-      "createAccount": "Create an account",
-      "createAccountButton": "Create Account",
-      "createAccountLink": "Create account",
-      "createPasswordPlaceholder": "Create a password",
-      "creatingAccount": "Creating account...",
-      "enterPasswordPlaceholder": "Enter your password",
-      "forgotPassword": "Forgot password?",
-      "fullNamePlaceholder": "Full name",
-      "haveAccount": "Already have an account?",
-      "newHere": "New here?",
-      "passwordMinLength": "Password must be at least 8 characters",
-      "signIn": "Sign In",
-      "signInLink": "Sign in",
-      "signingIn": "Signing in...",
-      "welcomeBack": "Welcome back"
-    },
-    "signedIn": {
-      "ready": "Ready",
-      "welcomeBack": "Welcome back",
-      "welcomeBackName": "Welcome back, {{name}}"
-    },
-    "sso": {
-      "continueWithSSO": "Sign in with SSO",
-      "emailRequired": "Enter your work email to use SSO.",
-      "failed": "Single sign-on failed. Please try again."
-    },
-    "social": {
-      "completeInBrowser": "Complete sign-in in your browser",
-      "continueWithApple": "Continue with Apple",
-      "continueWithGoogle": "Continue with Google",
-      "continueWithMicrosoft": "Continue with Microsoft",
-      "protocolUnavailable": "Browser sign-in unavailable — re-register the openwhispr:// protocol in your system's Default Apps settings."
-    },
-    "welcomeSubtitle": "Dictate anywhere using your voice",
-    "welcomeTitle": "Welcome to OpenWhispr",
-    "sessionExpired": "Session expired. Please restart the sign-up process."
-  },
   "calendar": {
     "title": "Google Calendar",
     "status": "Status",
@@ -817,8 +712,6 @@
     "untitledEvent": "Untitled Event",
     "systemAudioRequired": "System Audio permission is needed to capture other participants' audio.",
     "openSettings": "Open System Settings",
-    "signInRequired": "Sign in to use meeting recording",
-    "signInDescription": "Create an account or sign in to record and transcribe meetings.",
     "connectCalendar": "Connect your calendar",
     "connectCalendarDescription": "Link your Google Calendar to see upcoming meetings and automatically record notes.",
     "notABot": "OpenWhispr records using your system audio — it never joins meetings as a bot.",
@@ -890,54 +783,6 @@
       "title": "What gets logged"
     }
   },
-  "apiKeysSection": {
-    "title": "API Keys",
-    "description": "Create keys to access the OpenWhispr API programmatically.",
-    "docsLink": "API Docs",
-    "empty": "No API keys yet",
-    "createButton": "Create API Key",
-    "create": {
-      "title": "Create API Key",
-      "nameLabel": "Key Name",
-      "namePlaceholder": "e.g. My Integration",
-      "scopesLabel": "Permissions",
-      "expiryLabel": "Expiration",
-      "expiryOptions": {
-        "never": "Never expires",
-        "30days": "30 days",
-        "60days": "60 days",
-        "90days": "90 days",
-        "1year": "1 year"
-      },
-      "submit": "Create",
-      "cancel": "Cancel"
-    },
-    "created": {
-      "title": "API Key Created",
-      "warning": "Copy this key now. It won't be shown again.",
-      "copied": "Copied!",
-      "copyButton": "Copy to Clipboard",
-      "done": "Done"
-    },
-    "scopes": {
-      "notesRead": "Read notes",
-      "notesWrite": "Create & edit notes",
-      "transcriptionsRead": "Read transcriptions"
-    },
-    "revoke": {
-      "button": "Revoke",
-      "confirm": "Revoke this key? Any integrations using it will stop working.",
-      "success": "API key revoked"
-    },
-    "neverUsed": "Never used",
-    "lastUsed": "Last used {{time}}",
-    "maxKeysReached": "Maximum {{max}} keys allowed",
-    "errors": {
-      "loadFailed": "Failed to load API keys",
-      "createFailed": "Failed to create API key",
-      "revokeFailed": "Failed to revoke API key"
-    }
-  },
   "dictionarySuffix": "Dictionary Suffix",
   "emailVerification": {
     "checkEmailDescription": "We sent a verification link to",
@@ -957,23 +802,6 @@
     "description": "An unexpected error occurred. Please reload to try again.",
     "reload": "Reload",
     "title": "Something went wrong"
-  },
-  "forgotPassword": {
-    "back": "Back",
-    "backToSignIn": "Back to sign in",
-    "emailPlaceholder": "Enter your email",
-    "goBack": "Go Back",
-    "notConfigured": "Authentication isn't set up yet.",
-    "sendResetLink": "Send Reset Link",
-    "sending": "Sending...",
-    "subtitle": "Enter your email and we'll send you a reset link",
-    "success": {
-      "description": "We sent a password reset link to",
-      "help": "Didn't receive the email? Check your spam folder or try again.",
-      "title": "Check your email",
-      "tryAnother": "Try another email"
-    },
-    "title": "Reset your password"
   },
   "actionPrompt": "Action Prompt",
   "hotkeyGuidance": {
@@ -1275,183 +1103,6 @@
         "neverUsed": "Never used",
         "keyCreatedTitle": "API key created",
         "keyCreatedDescription": "Copy this key now — you won't be able to see it again."
-      }
-    },
-    "account": {
-      "badges": {
-        "free": "Free",
-        "limitReached": "Limit reached",
-        "pastDue": "Past due",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Trial"
-      },
-      "billing": {
-        "couldNotOpenDescription": "We had trouble opening the billing page. Please try again.",
-        "couldNotOpenTitle": "Couldn't open billing",
-        "manageBilling": "Manage Billing",
-        "opening": "Opening...",
-        "updatePaymentMethod": "Update Payment Method"
-      },
-      "checkout": {
-        "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
-        "couldNotOpenTitle": "Couldn't open checkout",
-        "opening": "Opening...",
-        "upgradeToPro": "Upgrade to Pro"
-      },
-      "disabled": "Disabled",
-      "featuresDisabled": "Account Features Disabled",
-      "featuresDisabledDescription": "Set VITE_AUTH_URL in your .env file to enable account features.",
-      "notConfigured": "Authentication is not configured",
-      "notSignedIn": "Not signed in",
-      "notSignedInDescription": "Create an account to unlock premium features.",
-      "offline": "Offline",
-      "pastDue": {
-        "description": "You're on the free plan for now. Update your payment method to get back to Pro.",
-        "title": "We couldn't process your payment"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} words this week",
-        "nextBilling": "Next billing: {{date}}",
-        "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
-        "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited"
-      },
-      "planLabels": {
-        "free": "Free",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Trial"
-      },
-      "planTitle": "Plan",
-      "pricing": {
-        "title": "Plans",
-        "billedYearly": "Billed yearly",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "forever",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$80",
-          "annualPeriod": "/yr",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "All Free features +",
-          "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Sync across devices",
-            "Personal API access",
-            "MCP integration in all your apps",
-            "Mobile app (iOS Coming Soon)",
-            "Email support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$20",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$200",
-          "annualPeriod": "/yr",
-          "annualEquivalent": "$16.67",
-          "includesPrefix": "All Pro features +",
-          "badge": "Most Popular",
-          "features": [
-            "Unlimited meeting recordings",
-            "Agent mode",
-            "Chat over your data",
-            "Priority support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "Custom",
-          "subtitle": "For advanced security & support",
-          "includesPrefix": "All Business features +",
-          "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
-          ],
-          "cta": "Contact Sales"
-        },
-        "currentPlan": "Current plan",
-        "upgrade": "Upgrade",
-        "downgrade": "Downgrade",
-        "planSwitched": "Plan updated successfully",
-        "confirmSwitch": {
-          "title": "Confirm plan change",
-          "description": "Switch to {{plan}} ({{interval}})",
-          "monthly": "monthly",
-          "yearly": "yearly",
-          "chargeToday": "Charge today",
-          "accountCredit": "Account credit",
-          "newPrice": "New price",
-          "nextBilling": "Next billing",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "Cancel",
-          "confirm": "Confirm"
-        }
-      },
-      "rollingWeeklyLimit": "Rolling weekly limit",
-      "signOut": {
-        "failedDescription": "Something went wrong signing out. Please try again.",
-        "failedTitle": "Couldn't sign out",
-        "signOut": "Sign Out",
-        "signingOut": "Signing out..."
-      },
-      "signedIn": "Signed in",
-      "title": "Account",
-      "toasts": {
-        "approachingLimit": {
-          "description": "You've used {{used}} of {{limit}} free words this week. Upgrade to Pro for unlimited use.",
-          "title": "Approaching weekly limit"
-        }
-      },
-      "trialCta": {
-        "button": "Create Free Account",
-        "description": "Unlimited transcriptions, priority processing, and more.",
-        "title": "Try Pro free for 7 days"
-      },
-      "signedOutPlans": {
-        "button": "Create Free Account"
-      },
-      "user": "User",
-      "wordsRemaining": "{{remaining}} remaining",
-      "deleteAccount": {
-        "label": "Delete Account",
-        "labelDescription": "Permanently delete your account, all cloud data, and local data. This action cannot be undone.",
-        "button": "Delete My Account",
-        "deleting": "Deleting...",
-        "title": "Delete Your Account?",
-        "description": "This will permanently delete your OpenWhispr account, all cloud-synced notes, and all local data including transcriptions, audio recordings, downloaded models, calendar connections, and settings. This action cannot be undone.",
-        "confirmText": "Delete Everything",
-        "successTitle": "Account Deleted",
-        "successDescription": "Your account and all data have been deleted. The app will now reload.",
-        "failedTitle": "Deletion Failed",
-        "failedDescription": "Something went wrong deleting your account. Your local data may have been partially removed. Please try again."
       }
     },
     "agentConfig": {
@@ -2108,7 +1759,6 @@
     "notes": "Notes",
     "upload": "Upload",
     "dictionary": "Dictionary",
-    "referral": "Get a free month",
     "settings": "Settings",
     "support": "Support",
     "limitReached": "Weekly limit reached",
@@ -2120,57 +1770,7 @@
     "integrations": "Integrations",
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
-    "chat": "Chat",
-    "inviteTeammate": "Invite teammate",
-    "createWorkspace": "Create workspace"
-  },
-  "workspaces": {
-    "switcher": {
-      "personal": "Personal",
-      "workspaces": "Workspaces",
-      "empty": "No workspaces yet",
-      "create": "Create workspace…"
-    },
-    "create": {
-      "title": "Create workspace",
-      "description": "Workspaces let you collaborate, share notes, and manage billing in one place.",
-      "nameLabel": "Workspace name",
-      "namePlaceholder": "Acme Corp",
-      "submit": "Create workspace",
-      "submitting": "Creating…",
-      "errorTitle": "Couldn't create workspace"
-    },
-    "created": {
-      "title": "Workspace created",
-      "description": "You're now the owner of {{name}}."
-    },
-    "invite": {
-      "title": "Invite to {{workspace}}",
-      "description": "Add teammates by email. They'll get a link to join.",
-      "emailLabel": "Email",
-      "roleLabel": "Role",
-      "teamsLabel": "Add to teams",
-      "submit": "Send invite",
-      "submitting": "Sending…",
-      "sentTitle": "Invite sent",
-      "sentDescription": "We sent an invitation to {{email}}.",
-      "errorTitle": "Couldn't send invitation",
-      "role": {
-        "admin": "Admin",
-        "member": "Member"
-      }
-    },
-    "accept": {
-      "title": "Join workspace",
-      "description": "{{inviter}} invited you to join {{workspace}} as a {{role}}.",
-      "loading": "Loading invitation…",
-      "accept": "Accept invitation",
-      "accepting": "Accepting…",
-      "signInToAccept": "Sign in to accept",
-      "successTitle": "You're in",
-      "successDescription": "Welcome to {{name}}.",
-      "errorTitle": "Couldn't accept invitation"
-    }
+    "chat": "Chat"
   },
   "chat": {
     "newChat": "New chat",
@@ -2193,98 +1793,6 @@
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
     "newChatEmpty": "Ask about your notes, transcripts, or anything else"
-  },
-  "referral": {
-    "title": "Refer and earn rewards",
-    "modalTitle": "Refer and earn rewards",
-    "subtitle": "Give a month. Get a month.",
-    "tabs": {
-      "refer": "Refer",
-      "pastInvites": "Past invites"
-    },
-    "howItWorks": {
-      "shareLink": "Share your invite link",
-      "theySignUp": "They sign up and get a ",
-      "freeMonthOfPro": "free month of Pro",
-      "youGet": "You get a ",
-      "freeMonth": "free month",
-      "whenTheyDictate": " when they dictate 2,000 words"
-    },
-    "inviteLink": {
-      "title": "Your invite link",
-      "copy": "Copy",
-      "copied": "Copied"
-    },
-    "sendInvites": {
-      "title": "Send invites",
-      "placeholder": "friend@example.com",
-      "send": "Send",
-      "sending": "Sending"
-    },
-    "stats": {
-      "referred": "Referred",
-      "converted": "Converted",
-      "monthsEarned": "Months earned"
-    },
-    "status": {
-      "converted": "Converted",
-      "opened": "Opened",
-      "failed": "Failed",
-      "sent": "Sent"
-    },
-    "friends": {
-      "title": "Friends",
-      "completed": "Completed",
-      "sentInvites": "Sent invites"
-    },
-    "empty": {
-      "title": "No invites sent yet",
-      "description": "Share your link or send an invite to get started"
-    },
-    "toasts": {
-      "copiedTitle": "Copied!",
-      "copiedDescription": "Referral link copied to clipboard",
-      "copyFailedTitle": "Copy Failed",
-      "copyFailedDescription": "Failed to copy link to clipboard",
-      "invalidEmailTitle": "Invalid Email",
-      "invalidEmailDescription": "Please enter a valid email address",
-      "inviteSentTitle": "Invite Sent!",
-      "inviteSentDescription": "Invitation sent to {{email}}",
-      "sendFailedTitle": "Send Failed",
-      "sendFailedDescription": "Failed to send invitation. Please try again."
-    },
-    "errors": {
-      "unableToLoad": "Unable to load referral data",
-      "unableToLoadStats": "Unable to load referral stats. Please try again later."
-    },
-    "tryAgain": "Try Again",
-    "card": {
-      "brand": "OpenWhispr",
-      "signalId": "Signal ID",
-      "audioSignature": "Your audio signature",
-      "stop": "Stop",
-      "playSignal": "Play signal"
-    }
-  },
-  "usage": {
-    "approachingLimit": "Approaching Weekly Limit",
-    "approachingLimitDescription": "You've used {{wordsUsed}} of {{limit}} free words this week.",
-    "yourPlan": "Your Plan",
-    "trial": "Trial ({{days}} day left)",
-    "trial_other": "Trial ({{days}} days left)",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "Unlimited transcriptions during your trial",
-    "unlimited": "Unlimited transcriptions",
-    "manageSubscription": "Manage Subscription",
-    "weeklyUsage": "Weekly Usage",
-    "limitReached": "Limit reached",
-    "free": "Free",
-    "wordsRemaining": "{{remaining}} words remaining",
-    "rollingLimit": "Rolling weekly limit",
-    "upgradeToPro": "Upgrade to Pro",
-    "useYourOwnKey": "Use Your Own Key",
-    "upgradeUnlimited": "Upgrade to Pro — unlimited transcriptions"
   },
   "notes": {
     "sidebar": {
@@ -2566,6 +2074,21 @@
         "othersInCall_one": "{{count}} other in call",
         "othersInCall_other": "{{count}} others in call"
       }
+    },
+    "reprocess": {
+      "title": "Reprocess meeting — regenerate notes from the recording",
+      "label": "Reprocess",
+      "confirm": "Overwrite notes?",
+      "inProgress": "Reprocessing…",
+      "started": "Reprocessing started — it runs in the background.",
+      "failed": "Reprocess failed: {{error}}",
+      "downloadNeeded": "Downloading the transcription model first…"
+    },
+    "reprocessAll": {
+      "label": "Reprocess all meetings",
+      "confirm": "Reprocess all meetings? This overwrites existing notes.",
+      "queued": "Queued {{count}} meetings for reprocessing",
+      "none": "No meetings with saved audio to reprocess"
     }
   },
   "dictionary": {
@@ -2735,7 +2258,11 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
       "customSetup": "Custom Setup (BYOK)",
-      "customSetupDescription": "Use your own API keys and choose your preferred model"
+      "customSetupDescription": "Use your own API keys and choose your preferred model",
+      "webSearch": "Web Search (Brave)",
+      "webSearchDescription": "Let the agent search the web. Bring your own Brave Search API key — it stays on this device.",
+      "webSearchPlaceholder": "Add a Brave Search API key",
+      "webSearchGetKey": "Get a free Brave Search API key"
     },
     "chat": {
       "placeholder": "Press {{hotkey}} to speak",
@@ -2810,26 +2337,6 @@
       "mcp": "MCP",
       "cli": "CLI"
     },
-    "api": {
-      "title": "API keys",
-      "description": "Manage API keys for programmatic access",
-      "proRequired": "Upgrade to a paid plan to access the API",
-      "manage": "Manage keys",
-      "viewPlans": "View Plans",
-      "dialogTitle": "API keys"
-    },
-    "mcp": {
-      "title": "Bring your notes to your AI tools",
-      "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
-      "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
-      "step2": "Create an API key above with the scopes you need.",
-      "step3": "Paste the key as the Authorization header to connect.",
-      "learnMore": "Learn more",
-      "viewPlans": "View Plans",
-      "copyUrl": "Copy MCP URL",
-      "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
-      "copied": "Copied"
-    },
     "cli": {
       "title": "Command-line access",
       "description": "Give your agent access to your notes from the terminal.",
@@ -2837,28 +2344,10 @@
       "learnMore": "Read the docs",
       "copyDocsLink": "Copy docs link",
       "docsLinkCopied": "Docs link copied",
-      "viewPlans": "View Plans",
       "local": {
         "label": "Local",
-        "freeBadge": "Free",
         "description": "Read your local notes directly. No login or API key — works while OpenWhispr is running."
-      },
-      "cloud": {
-        "label": "Cloud",
-        "description": "Sync across machines using your API key.",
-        "proRequired": "Upgrade to a paid plan to use the CLI in cloud mode."
       }
-    },
-    "plan": {
-      "title": "Your Plan",
-      "current": "Current",
-      "free": "Free",
-      "freeLimit": "5 meetings / month",
-      "essential": "Essential",
-      "essentialLimit": "20 meetings / month",
-      "pro": "Pro",
-      "proLimit": "Unlimited",
-      "upgrade": "Upgrade"
     },
     "notABot": {
       "title": "OpenWhispr is a meeting recorder, not a bot",
@@ -2887,37 +2376,7 @@
     "deleteNote": "Delete note",
     "deleteConfirmTitle": "Delete note?",
     "deleteConfirmDescription": "This note will be permanently deleted and cannot be recovered.",
-    "deleteConfirm": "Delete",
-    "share": {
-      "button": "Share",
-      "dialog": {
-        "title": "Share note",
-        "searchPlaceholder": "Add people by email",
-        "emailLabel": "Recipient email",
-        "shareButton": "Share",
-        "copyLink": "Copy link",
-        "copied": "Copied",
-        "owner": "Owner",
-        "pending": "Pending",
-        "accepted": "Has access",
-        "resend": "Resend invite",
-        "revoke": "Remove",
-        "invitationActions": "Invitation actions",
-        "permissionRequired": "Only the note owner can change sharing.",
-        "visibility": {
-          "label": "Visibility",
-          "link": "Anyone with the link",
-          "domain": "Everyone at {{domain}} with the link",
-          "invited": "Only people invited"
-        },
-        "error": {
-          "invalidEmail": "Enter a valid email address",
-          "alreadyInvited": "{{email}} is already invited",
-          "inviteFailed": "Couldn't send the invitation. Try again.",
-          "linkUnavailable": "Generate or rotate the link to copy it"
-        }
-      }
-    }
+    "deleteConfirm": "Delete"
   },
   "commandSearch": {
     "title": "Search",

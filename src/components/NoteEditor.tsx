@@ -5,7 +5,6 @@ import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/dialog.js";
 import { cn } from "./lib/utils";
 import type { NoteItem } from "../types/electron.js";
-import { syncService } from "../services/SyncService.js";
 
 const NOTE_TYPE_COLORS: Record<NoteItem["note_type"], string> = {
   personal: "bg-foreground/5 text-foreground/50",
@@ -63,7 +62,6 @@ export default function NoteEditor({ note, cloudEnabled, onDelete, onUpdate }: N
           await window.electronAPI.updateNote(note.id, updates);
           const updated = { ...note, ...updates };
           onUpdate(updated);
-          syncService.debouncedPush("note", note.id);
           setSaveState("saved");
           fadeTimerRef.current = setTimeout(() => setSaveState("idle"), 2000);
         } catch {

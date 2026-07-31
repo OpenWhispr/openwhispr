@@ -28,16 +28,33 @@ export const webSearchTool: ToolDefinition = {
     try {
       const raw = await window.electronAPI.agentWebSearch!(query, numResults);
 
-      const results = Array.isArray(raw?.results)
+      // The IPC layer resolves (never rejects) on failure, so an unchecked
+      // `raw` would hand the agent a `{ success: false, error }` object framed
+      // as search results. Missing/rejected/rate-limited keys are routine now
+      // that every user supplies their own.
+      if (!raw?.success) {
+        return {
+          success: false,
+          data: null,
+          displayText: `Web search failed: ${raw?.error || "unknown error"}`,
+        };
+      }
+
+      const results = Array.isArray(raw.results)
         ? raw.results.map(
-            (r: { title?: string; url?: string; text?: string; publishedDate?: string }) => ({
+            (r: {
+              title?: string;
+              url?: string;
+              text?: string;
+              publishedDate?: string | null;
+            }) => ({
               title: r.title || "",
               url: r.url || "",
               text: r.text ? r.text.slice(0, 500) : "",
               publishedDate: r.publishedDate || null,
             })
           )
-        : raw;
+        : [];
 
       return {
         success: true,

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import logger from "../utils/logger";
+import { getStreamingTranscriptionProviders } from "../models/ModelRegistry";
 
 export interface NoteRecordingProviderModel {
   id: string;
@@ -17,32 +17,22 @@ interface StreamingProvidersState {
   providers: NoteRecordingProvider[] | null;
 }
 
+// The realtime-capable provider catalog comes from the bundled model registry —
+// every provider here is BYOK, so there is no server to ask.
+function readProviders(): NoteRecordingProvider[] {
+  return getStreamingTranscriptionProviders().map((p) => ({
+    id: p.id,
+    name: p.name,
+    models: p.models.map((m) => ({ id: m.id, name: m.name })),
+  }));
+}
+
 export const useStreamingProvidersStore = create<StreamingProvidersState>()(() => ({
-  providers: null,
+  providers: readProviders(),
 }));
 
-let inFlight: Promise<NoteRecordingProvider[] | null> | null = null;
-
-export async function fetchProviders(): Promise<NoteRecordingProvider[] | null> {
-  if (inFlight) return inFlight;
-  if (!window.electronAPI?.getNoteRecordingConfig) return null;
-
-  inFlight = (async () => {
-    try {
-      const data = await window.electronAPI.getNoteRecordingConfig!();
-      if (!data?.success) {
-        throw new Error("Note recording config unavailable");
-      }
-      const providers = Array.isArray(data.providers) ? data.providers : [];
-      useStreamingProvidersStore.setState({ providers });
-      return providers;
-    } catch (err) {
-      logger.warn("Failed to fetch note recording providers", err, "streamingProviders");
-      return null;
-    } finally {
-      inFlight = null;
-    }
-  })();
-
-  return inFlight;
+export async function fetchProviders(): Promise<NoteRecordingProvider[]> {
+  const providers = readProviders();
+  useStreamingProvidersStore.setState({ providers });
+  return providers;
 }
