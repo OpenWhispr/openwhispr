@@ -12,7 +12,8 @@ export { ToolRegistry } from "./ToolRegistry";
 export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
-  isSignedIn: boolean;
+  /** Web search runs on the user's own Brave Search key — no account involved. */
+  webSearchEnabled: boolean;
   gcalConnected: boolean;
 }
 
@@ -26,7 +27,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   registry.register(listFoldersTool);
   registry.register(clipboardTool);
 
-  if (settings.isSignedIn) {
+  if (settings.webSearchEnabled) {
     registry.register(webSearchTool);
   }
 

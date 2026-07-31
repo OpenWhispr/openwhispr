@@ -2750,7 +2750,11 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
       "customSetup": "Custom Setup (BYOK)",
-      "customSetupDescription": "Use your own API keys and choose your preferred model"
+      "customSetupDescription": "Use your own API keys and choose your preferred model",
+      "webSearch": "Web Search (Brave)",
+      "webSearchDescription": "Let the agent search the web. Bring your own Brave Search API key — it stays on this device.",
+      "webSearchPlaceholder": "Add a Brave Search API key",
+      "webSearchGetKey": "Get a free Brave Search API key"
     },
     "chat": {
       "placeholder": "Press {{hotkey}} to speak",

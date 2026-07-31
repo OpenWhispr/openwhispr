@@ -19,6 +19,7 @@ const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
+const { braveWebSearch } = require("./braveSearch");
 
 // Tinfoil's only realtime STT model — fallback when the renderer omits one.
 const TINFOIL_REALTIME_MODEL = "voxtral-mini-4b-realtime";
@@ -6269,82 +6270,16 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("agent-web-search", async (event, query, numResults = 5) => {
+    ipcMain.handle("agent-web-search", async (_event, query, numResults = 5) => {
       try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        debugLogger.debug("Agent web search request", { query, numResults }, "cloud-api");
-
-        const response = await proxyFetch(`${apiUrl}/api/agent/web-search`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...authHeader,
-          },
-          body: JSON.stringify({ query, numResults }),
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-          }
-          if (response.status === 503) {
-            return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-          }
-          const errorData = await response.json().catch(() => ({}));
-          return {
-            success: false,
-            error: errorData.error || `API error: ${response.status}`,
-          };
-        }
-
-        const data = await response.json();
-        return { success: true, ...data };
+        const apiKey = this.environmentManager.getBraveKey();
+        debugLogger.debug("Agent web search request", { query, numResults }, "agent");
+        return await braveWebSearch({ query, numResults, apiKey, fetchImpl: proxyFetch });
       } catch (error) {
         debugLogger.error("Agent web search error:", error);
         return { success: false, error: error.message };
       }
     });
-
-    const fetchStripeUrl = async (event, endpoint, errorPrefix, body) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        const headers = { ...authHeader };
-        const fetchOpts = { method: "POST", headers };
-        if (body) {
-          headers["Content-Type"] = "application/json";
-          fetchOpts.body = JSON.stringify(body);
-        }
-
-        const response = await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-          }
-          if (response.status === 503) {
-            return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-          }
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return { success: true, url: data.url };
-      } catch (error) {
-        debugLogger.error(`${errorPrefix}: ${error.message}`);
-        return { success: false, error: error.message };
-      }
-    };
 
     ipcMain.handle(
       "transcribe-audio-file-byok",

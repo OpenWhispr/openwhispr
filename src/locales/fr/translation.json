@@ -2662,7 +2662,11 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
       "customSetup": "Configuration personnalisée (BYOK)",
-      "customSetupDescription": "Utiliser vos propres clés API et choisir votre modèle préféré"
+      "customSetupDescription": "Utiliser vos propres clés API et choisir votre modèle préféré",
+      "webSearch": "Recherche web (Brave)",
+      "webSearchDescription": "Permettez à l'agent de chercher sur le web. Utilisez votre propre clé d'API Brave Search : elle reste sur cet appareil.",
+      "webSearchPlaceholder": "Ajouter une clé d'API Brave Search",
+      "webSearchGetKey": "Obtenir une clé d'API Brave Search gratuite"
     },
     "chat": {
       "placeholder": "Appuyez sur {{hotkey}} pour parler",

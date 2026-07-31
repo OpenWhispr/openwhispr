@@ -2614,7 +2614,11 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "信頼できる精度。設定不要。",
       "customSetup": "カスタム設定 (BYOK)",
-      "customSetupDescription": "自分のAPIキーを使用してお好みのモデルを選択する"
+      "customSetupDescription": "自分のAPIキーを使用してお好みのモデルを選択する",
+      "webSearch": "ウェブ検索 (Brave)",
+      "webSearchDescription": "エージェントにウェブ検索を許可します。ご自身の Brave Search API キーを使用します — キーはこのデバイスに保存されます。",
+      "webSearchPlaceholder": "Brave Search API キーを追加",
+      "webSearchGetKey": "無料の Brave Search API キーを取得"
     },
     "chat": {
       "placeholder": "{{hotkey}}を押して話す",

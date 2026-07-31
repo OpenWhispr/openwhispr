@@ -64,6 +64,16 @@ const BYOK_API_KEYS = [
     save: "saveCortiKey",
     storeKey: "cortiApiKey",
   },
+  // Not an LLM provider: powers the agent's web_search tool via the Brave
+  // Search API. It rides the same BYOK plumbing so it gets safeStorage
+  // encryption and the uniform get/save IPC for free.
+  {
+    base: "brave",
+    env: "BRAVE_SEARCH_API_KEY",
+    get: "getBraveKey",
+    save: "saveBraveKey",
+    storeKey: "braveApiKey",
+  },
 ];
 
 module.exports = { BYOK_API_KEYS };

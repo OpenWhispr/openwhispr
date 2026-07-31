@@ -991,6 +991,8 @@ declare global {
       saveCortiClientSecret?: (key: string) => Promise<void>;
       getCortiKey?: () => Promise<string | null>;
       saveCortiKey?: (key: string) => Promise<void>;
+      getBraveKey?: () => Promise<string | null>;
+      saveBraveKey?: (key: string) => Promise<void>;
       proxyCortiTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language: string;
@@ -1268,7 +1270,7 @@ declare global {
       onAgentStopRecording?: (callback: () => void) => () => void;
       onAgentToggleRecording?: (callback: () => void) => () => void;
 
-      // Agent cloud tools
+      // Agent tools
       agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
       agentWebSearch?: (
         query: string,
@@ -1279,9 +1281,10 @@ declare global {
           title: string;
           url: string;
           text: string;
-          publishedDate?: string;
+          publishedDate?: string | null;
         }>;
         error?: string;
+        code?: string;
       }>;
 
       // Google Calendar

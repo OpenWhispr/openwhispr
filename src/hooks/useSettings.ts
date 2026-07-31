@@ -75,6 +75,8 @@ export interface ApiKeySettings {
   tinfoilApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
+  /** Brave Search API key — powers the chat agent's web_search tool. */
+  braveApiKey: string;
 }
 
 export interface PrivacySettings {

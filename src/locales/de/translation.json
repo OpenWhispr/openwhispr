@@ -2614,7 +2614,11 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
       "customSetup": "Eigene Konfiguration (BYOK)",
-      "customSetupDescription": "Eigene API-Schlüssel verwenden und bevorzugtes Modell auswählen"
+      "customSetupDescription": "Eigene API-Schlüssel verwenden und bevorzugtes Modell auswählen",
+      "webSearch": "Websuche (Brave)",
+      "webSearchDescription": "Lass den Agenten im Web suchen. Verwende deinen eigenen Brave-Search-API-Schlüssel — er bleibt auf diesem Gerät.",
+      "webSearchPlaceholder": "Brave-Search-API-Schlüssel hinzufügen",
+      "webSearchGetKey": "Kostenlosen Brave-Search-API-Schlüssel holen"
     },
     "chat": {
       "placeholder": "Drücke {{hotkey}} zum Sprechen",

@@ -117,12 +117,13 @@ export function useChatStreaming({
 
       let registry: ToolRegistry | null = null;
       if (supportsTools) {
-        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}`;
+        const webSearchEnabled = !!settings.braveApiKey;
+        const cacheKey = `${webSearchEnabled}-${settings.gcalConnected}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
           registry = createToolRegistry({
-            isSignedIn: settings.isSignedIn,
+            webSearchEnabled,
             gcalConnected: settings.gcalConnected,
           });
           toolRegistryRef.current = { key: cacheKey, registry };

@@ -594,6 +594,7 @@ export interface SettingsState
   setCortiClientSecret: (key: string) => void;
   setCortiApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
+  setBraveApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -790,6 +791,7 @@ const SECRET_IPC_SAVERS = {
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
   cortiApiKey: "saveCortiKey",
+  brave: "saveBraveKey",
   tinfoil: "saveTinfoilKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
@@ -833,6 +835,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "cortiClientSecret",
   "cortiApiKey",
   "tinfoilApiKey",
+  "braveApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
@@ -944,6 +947,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiClientSecret: "",
   cortiApiKey: "",
   tinfoilApiKey: "",
+  braveApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -1235,15 +1239,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCustomDictionary: (words: string[]) => {
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
     set({ customDictionary: words });
-    window.electronAPI
-      ?.setDictionary(words)
-      .catch((err) => {
-        logger.warn(
-          "Failed to sync dictionary to SQLite",
-          { error: (err as Error).message },
-          "settings"
-        );
-      });
+    window.electronAPI?.setDictionary(words).catch((err) => {
+      logger.warn(
+        "Failed to sync dictionary to SQLite",
+        { error: (err as Error).message },
+        "settings"
+      );
+    });
   },
 
   // For broadcasts from main process — DB is already authoritative, only update UI.
@@ -1255,15 +1257,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setSnippets: (snippets: Snippet[]) => {
     if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
     set({ snippets });
-    window.electronAPI
-      ?.setSnippets?.(snippets)
-      .catch((err) => {
-        logger.warn(
-          "Failed to sync snippets to SQLite",
-          { error: (err as Error).message },
-          "settings"
-        );
-      });
+    window.electronAPI?.setSnippets?.(snippets).catch((err) => {
+      logger.warn(
+        "Failed to sync snippets to SQLite",
+        { error: (err as Error).message },
+        "settings"
+      );
+    });
   },
 
   // For broadcasts from main process — DB is already authoritative, only update UI.
@@ -1309,6 +1309,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
+  // No cacheProvider: Brave is not an LLM provider, so there is no scoped key cache.
+  setBraveApiKey: createSecretSetter("braveApiKey", "brave"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -1735,6 +1737,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
+    if (keys.braveApiKey !== undefined) s.setBraveApiKey(keys.braveApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -1952,6 +1955,7 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken,
         azureApiKey,
         vertexApiKey,
+        brave,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -1971,6 +1975,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getBedrockSessionToken?.(),
         window.electronAPI.getAzureApiKey?.(),
         window.electronAPI.getVertexApiKey?.(),
+        window.electronAPI.getBraveKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -1992,6 +1997,7 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
         vertexApiKey: vertexApiKey || "",
+        braveApiKey: brave || "",
       });
 
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {

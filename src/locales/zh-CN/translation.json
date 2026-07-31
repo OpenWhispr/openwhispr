@@ -1220,12 +1220,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": [
-            "无限会议录制",
-            "代理模式",
-            "与您的数据对话",
-            "优先支持"
-          ],
+          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -2614,7 +2609,11 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",
       "customSetup": "自定义配置 (BYOK)",
-      "customSetupDescription": "使用自己的 API 密钥并选择偏好的模型"
+      "customSetupDescription": "使用自己的 API 密钥并选择偏好的模型",
+      "webSearch": "网页搜索 (Brave)",
+      "webSearchDescription": "允许智能体搜索网页。使用你自己的 Brave Search API 密钥——密钥仅保存在本设备上。",
+      "webSearchPlaceholder": "添加 Brave Search API 密钥",
+      "webSearchGetKey": "获取免费的 Brave Search API 密钥"
     },
     "chat": {
       "placeholder": "按 {{hotkey}} 开始说话",

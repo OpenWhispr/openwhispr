@@ -2614,7 +2614,11 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Risultati affidabili. Nessuna configurazione necessaria.",
       "customSetup": "Configurazione personalizzata (BYOK)",
-      "customSetupDescription": "Usa le tue chiavi API e scegli il modello che preferisci"
+      "customSetupDescription": "Usa le tue chiavi API e scegli il modello che preferisci",
+      "webSearch": "Ricerca web (Brave)",
+      "webSearchDescription": "Consenti all'agente di cercare sul web. Usa la tua chiave API di Brave Search: resta su questo dispositivo.",
+      "webSearchPlaceholder": "Aggiungi una chiave API di Brave Search",
+      "webSearchGetKey": "Ottieni una chiave API gratuita di Brave Search"
     },
     "chat": {
       "placeholder": "Premi {{hotkey}} per parlare",
