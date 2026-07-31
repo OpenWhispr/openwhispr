@@ -9,7 +9,8 @@ const { resolveBinaryPath, gracefulStopProcess } = require("../utils/serverUtils
 const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
-const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
+const { applyConfirmedSpeaker, applyProvisionalSpeaker } = require("./speakerAssignmentPolicy");
+const speakerEmbeddings = require("./speakerEmbeddings");
 const sidecarPidFile = require("./sidecarPidFile");
 const {
   transcriptsOverlap,
@@ -24,6 +25,14 @@ const {
 const DIARIZATION_TIMEOUT_MS = 3600000; // 60 minutes
 const POST_MERGE_CONTEXT_WINDOW_MS = 6000;
 const POST_MERGE_CONTEXT_MERGE_LIMIT = 3;
+// Folding one cluster into another needs real voice agreement, not just proximity.
+const CLUSTER_MERGE_MIN_SIMILARITY = 0.5;
+// Rough speaking rate used to bound how long a transcript line was actually spoken.
+const CHARS_PER_SECOND = 15;
+const MIN_LINE_SECONDS = 0.6;
+const MAX_LINE_SECONDS = 30;
+// A line whose span is shared this evenly between two speakers is not trustworthy.
+const AMBIGUOUS_OVERLAP_RATIO = 0.65;
 
 const dedupeMicAgainstSystem = (segments) => {
   const systemSegments = segments.filter((seg) => seg.source === "system" && seg.text);
@@ -49,6 +58,55 @@ const dedupeMicAgainstSystem = (segments) => {
     });
     return !candidates.some((candidateText) => matcher(seg.text, candidateText));
   });
+};
+
+/**
+ * Where a transcript line stops being spoken. The gap to the next line is an upper
+ * bound only: silence, or a turn the transcriber dropped, would otherwise stretch a
+ * short line across somebody else's whole turn.
+ */
+const estimateLineEnd = (segment, start, nextStart) => {
+  const spoken = Math.min(
+    MAX_LINE_SECONDS,
+    Math.max(MIN_LINE_SECONDS, (segment.text?.trim().length || 0) / CHARS_PER_SECOND)
+  );
+  const bound = nextStart != null && nextStart > start ? nextStart - start : spoken;
+  return start + Math.min(spoken, bound);
+};
+
+/** Speaker covering most of [start, end), flagged when a second speaker rivals it. */
+const matchSpeakerForSpan = (diarizationSegments, start, end) => {
+  const coverage = new Map();
+  let nearestSpeaker = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  const midpoint = start + (end - start) / 2;
+
+  for (const dSeg of diarizationSegments) {
+    const overlap = Math.min(end, dSeg.end) - Math.max(start, dSeg.start);
+    if (overlap > 0) {
+      coverage.set(dSeg.speaker, (coverage.get(dSeg.speaker) || 0) + overlap);
+    }
+
+    const distance =
+      midpoint < dSeg.start ? dSeg.start - midpoint : midpoint > dSeg.end ? midpoint - dSeg.end : 0;
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestSpeaker = dSeg.speaker;
+    }
+  }
+
+  if (coverage.size === 0) {
+    return { speaker: nearestSpeaker, ambiguous: false };
+  }
+
+  const ranked = [...coverage.entries()].sort((a, b) => b[1] - a[1]);
+  const [best, bestOverlap] = ranked[0];
+  const runnerUpOverlap = ranked[1]?.[1] ?? 0;
+
+  return {
+    speaker: best,
+    ambiguous: runnerUpOverlap > 0 && runnerUpOverlap / bestOverlap >= AMBIGUOUS_OVERLAP_RATIO,
+  };
 };
 
 const SEGMENTATION_MODEL_URL =
@@ -416,7 +474,13 @@ class DiarizationManager {
     return segments;
   }
 
-  capSpeakerClusters(segments, cap) {
+  /**
+   * Trims the cluster count towards `cap`, but only ever folds a cluster into one
+   * that actually sounds like it. The count is a hint (attendee lists and manual
+   * counts are routinely wrong), so an extra speaker label is preferable to
+   * merging two different people under one name.
+   */
+  capSpeakerClusters(segments, cap, embeddings = null) {
     if (!cap || !segments?.length) return segments;
     const totals = new Map();
     for (const s of segments) {
@@ -425,9 +489,38 @@ class DiarizationManager {
     if (totals.size <= cap) return segments;
 
     const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-    const keep = new Set(ranked.slice(0, cap).map(([sp]) => sp));
-    const primary = ranked[0][0];
-    return segments.map((s) => (keep.has(s.speaker) ? s : { ...s, speaker: primary }));
+    const keep = ranked.slice(0, cap).map(([speaker]) => speaker);
+    const dropped = ranked.slice(cap).map(([speaker]) => speaker);
+
+    const remap = new Map();
+    for (const speaker of dropped) {
+      const target = this._mostSimilarSpeaker(speaker, keep, embeddings);
+      if (target) remap.set(speaker, target);
+    }
+
+    if (remap.size === 0) return segments;
+    return segments.map((s) =>
+      remap.has(s.speaker) ? { ...s, speaker: remap.get(s.speaker) } : s
+    );
+  }
+
+  _mostSimilarSpeaker(speaker, candidates, embeddings) {
+    const source = embeddings?.[speaker];
+    if (!source) return null;
+
+    let best = null;
+    let bestSimilarity = -Infinity;
+    for (const candidate of candidates) {
+      const target = embeddings[candidate];
+      if (!target) continue;
+      const similarity = speakerEmbeddings.cosineSimilarity(source, target);
+      if (similarity > bestSimilarity) {
+        bestSimilarity = similarity;
+        best = candidate;
+      }
+    }
+
+    return bestSimilarity >= CLUSTER_MERGE_MIN_SIMILARITY ? best : null;
   }
 
   mergeWithTranscript(transcriptSegments, diarizationSegments) {
@@ -469,37 +562,18 @@ class DiarizationManager {
 
       if (seg.source === "system" && seg.timestamp != null) {
         const segStart = seg.timestamp;
-        const segEnd = nextSystemTimestampAt(index) ?? segStart + 2.5;
-        const midpoint = segStart + (segEnd - segStart) / 2;
-        let bestSpeaker = null;
-        let bestOverlap = 0;
-        let bestDistance = Number.POSITIVE_INFINITY;
+        const segEnd = estimateLineEnd(seg, segStart, nextSystemTimestampAt(index));
+        const match = matchSpeakerForSpan(diarizationSegments, segStart, segEnd);
 
-        for (const dSeg of diarizationSegments) {
-          const overlap = Math.min(segEnd, dSeg.end) - Math.max(segStart, dSeg.start);
-          if (overlap > bestOverlap) {
-            bestOverlap = overlap;
-            bestSpeaker = dSeg.speaker;
-          }
-
-          const distance =
-            midpoint < dSeg.start
-              ? dSeg.start - midpoint
-              : midpoint > dSeg.end
-                ? midpoint - dSeg.end
-                : 0;
-
-          if (!bestSpeaker && distance < bestDistance) {
-            bestDistance = distance;
-            bestSpeaker = dSeg.speaker;
-          }
-        }
-
-        if (bestSpeaker) {
-          applyConfirmedSpeaker(enriched, {
-            speaker: speakerMap.get(bestSpeaker) || bestSpeaker,
+        if (match.speaker) {
+          const patch = {
+            speaker: speakerMap.get(match.speaker) || match.speaker,
             speakerIsPlaceholder: false,
-          });
+          };
+          // Two speakers sharing this line means the boundary is unreliable, so
+          // surface it as a guess instead of a decision the user has to hunt down.
+          if (match.ambiguous) applyProvisionalSpeaker(enriched, patch);
+          else applyConfirmedSpeaker(enriched, patch);
         }
       }
 

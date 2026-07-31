@@ -1,8 +1,16 @@
 const { i18nMain } = require("./i18nMain");
 
+function isUserLocked(seg) {
+  return !!seg.speakerLocked || seg.speakerLockSource === "user" || seg.speakerStatus === "locked";
+}
+
+// Mirrors resolveSegmentSpeakerName in src/utils/speakerNameResolution.ts: a name
+// the user pinned to this segment outranks the note-level cluster mapping.
 function resolveSpeaker(seg, speakerMappings) {
-  if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
+  const ownName = seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : null;
+  if (ownName && isUserLocked(seg)) return ownName;
   if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
+  if (ownName) return ownName;
   if (seg.speaker === "you") return "You";
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);

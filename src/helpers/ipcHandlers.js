@@ -48,6 +48,7 @@ const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
+const { resolveSpeakerExpectation } = require("./speakerExpectation");
 const {
   DEFAULT_WHISPER_VAD_CONFIG,
   sanitizeWhisperVadConfig,
@@ -9769,33 +9770,56 @@ class IPCHandlers {
     return reconciledSpeakers;
   }
 
-  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
-    if (sessionConfig?.expectedCount) {
-      const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
-      const numSpeakers = Math.max(1, total - 1);
-      return { numSpeakers, cap: numSpeakers };
+  /** Voice centroid per raw diarization cluster, keyed by the id sherpa emitted. */
+  async _extractClusterEmbeddings(wavPath, diarizationSegments) {
+    const speakerEmb = require("./speakerEmbeddings");
+    if (!wavPath || !diarizationSegments?.length || !speakerEmb.isAvailable()) {
+      return null;
     }
 
-    let attendees = [];
+    try {
+      const centroids = {};
+      for (const speakerId of new Set(diarizationSegments.map((s) => s.speaker))) {
+        const longest = diarizationSegments
+          .filter((s) => s.speaker === speakerId)
+          .sort((a, b) => b.end - b.start - (a.end - a.start))
+          .slice(0, 3);
+
+        const embeddings = [];
+        for (const seg of longest) {
+          if (seg.end - seg.start < 1.5) continue;
+          const emb = await speakerEmb.extractEmbedding(wavPath, seg.start, seg.end);
+          if (emb) embeddings.push(emb);
+        }
+        if (embeddings.length > 0) {
+          centroids[speakerId] = speakerEmb.computeCentroid(embeddings);
+        }
+      }
+      return centroids;
+    } catch (err) {
+      debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
+      return null;
+    }
+  }
+
+  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
+    let note = null;
     if (noteId) {
       try {
-        const note = this.databaseManager.getNote(noteId);
-        attendees = parseAttendees(note?.participants);
+        note = this.databaseManager.getNote(noteId);
       } catch (_) {
-        attendees = [];
+        note = null;
       }
     }
-    if (attendees.length >= 2) {
-      const numSpeakers = Math.min(attendees.length, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
-    }
 
-    if (observedSpeakerIds.size >= 2) {
-      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+    return resolveSpeakerExpectation({
+      // Only the speaker stepper writes this column, so its presence means the
+      // user stated the count and we can force the cluster count.
+      storedTotal: note?.expected_speaker_count,
+      sessionTotal: sessionConfig?.expectedCount,
+      attendeeTotal: parseAttendees(note?.participants).length,
+      observedOtherSpeakers: observedSpeakerIds?.size,
+    });
   }
 
   _startOrSkipDiarization(
@@ -9856,10 +9880,13 @@ class IPCHandlers {
           tmpWav,
           numSpeakers > 0 ? { numSpeakers } : {}
         );
+        // Centroids come first: capping may only fold clusters that sound alike.
+        const clusterEmbeddings = await this._extractClusterEmbeddings(tmpWav, diarizationSegments);
         if (cap != null) {
           diarizationSegments = this.diarizationManager.capSpeakerClusters(
             diarizationSegments,
-            cap
+            cap,
+            clusterEmbeddings
           );
         }
 
@@ -9893,30 +9920,14 @@ class IPCHandlers {
         }
 
         let speakerEmbeddingsMap = null;
-        const speakerEmb = require("./speakerEmbeddings");
-        try {
-          if (speakerEmb.isAvailable() && tmpWav) {
-            const speakerIds = [...new Set(diarizationSegments.map((s) => s.speaker))];
-            speakerEmbeddingsMap = {};
-
-            for (const spk of speakerIds) {
-              const segs = diarizationSegments.filter((s) => s.speaker === spk);
-              const sorted = segs.sort((a, b) => b.end - b.start - (a.end - a.start)).slice(0, 3);
-              const embeddings = [];
-              for (const seg of sorted) {
-                if (seg.end - seg.start < 1.5) continue;
-                const emb = await speakerEmb.extractEmbedding(tmpWav, seg.start, seg.end);
-                if (emb) embeddings.push(emb);
-              }
-              if (embeddings.length > 0) {
-                const centroid = speakerEmb.computeCentroid(embeddings);
-                const mappedId = speakerRenumber.get(spk) || spk;
-                speakerEmbeddingsMap[mappedId] = Array.from(centroid);
-              }
-            }
+        if (clusterEmbeddings) {
+          speakerEmbeddingsMap = {};
+          for (const rawSpeakerId of speakerSet) {
+            const centroid = clusterEmbeddings[rawSpeakerId];
+            if (!centroid) continue;
+            const mappedId = speakerRenumber.get(rawSpeakerId) || rawSpeakerId;
+            speakerEmbeddingsMap[mappedId] = Array.from(centroid);
           }
-        } catch (err) {
-          debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
         }
 
         const reconciledSpeakers = this._reconcileLiveSpeakerState(

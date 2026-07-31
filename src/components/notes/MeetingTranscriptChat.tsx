@@ -10,6 +10,10 @@ import {
   isTranscriptSpeakerLocked,
   type TranscriptSpeakerStatus,
 } from "../../utils/transcriptSpeakerState";
+import {
+  getSpeakerDisplayNumber,
+  resolveSegmentSpeakerName,
+} from "../../utils/speakerNameResolution";
 
 const BUBBLE_STYLES = {
   mic: {
@@ -56,17 +60,13 @@ const getEffectiveSpeakerKey = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string => {
-  const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
-  if (mapped) return `name:${mapped.toLowerCase()}`;
-  if (segment.speakerName) return `name:${segment.speakerName.toLowerCase()}`;
+  const { name } = resolveSegmentSpeakerName(segment, speakerMappings);
+  if (name) return `name:${name.toLowerCase()}`;
   if (segment.speaker) return `id:${segment.speaker}`;
   return `src:${segment.source}`;
 };
 
-const getSpeakerNumber = (speakerId: string) => {
-  const match = speakerId.match(/speaker_(\d+)/);
-  return match ? Number(match[1]) + 1 : 1;
-};
+const getSpeakerNumber = getSpeakerDisplayNumber;
 
 const getSpeakerStateLabel = (state: TranscriptSpeakerStatus, t: (key: string) => string) => {
   switch (state) {
@@ -376,7 +376,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
 function SpeakerLabel({
   speakerId,
   segment,
-  mappedName,
+  resolvedName,
   speakerProfiles,
   participants,
   colorIdx,
@@ -388,7 +388,7 @@ function SpeakerLabel({
 }: {
   speakerId: string;
   segment: TranscriptSegment;
-  mappedName?: string;
+  resolvedName?: string;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   colorIdx: number;
@@ -403,15 +403,15 @@ function SpeakerLabel({
     segment.speakerLocked || isTranscriptSpeakerLocked(segment)
       ? "locked"
       : segment.speakerStatus ||
-        (segment.suggestedName && !mappedName
+        (segment.suggestedName && !resolvedName
           ? "suggested"
-          : segment.speakerName || mappedName
+          : resolvedName
             ? "confirmed"
             : segment.speakerIsPlaceholder
               ? "provisional"
               : undefined);
 
-  const hasSuggestion = !!segment.suggestedName && !mappedName;
+  const hasSuggestion = !!segment.suggestedName && !resolvedName;
 
   if (hasSuggestion) {
     return (
@@ -438,12 +438,11 @@ function SpeakerLabel({
   }
 
   const displayLabel =
-    mappedName ||
-    segment.speakerName ||
+    resolvedName ||
     (isOriginallyYou
       ? t("notes.speaker.you")
       : t("notes.speaker.label", { n: getSpeakerNumber(speakerId) }));
-  const isUnmapped = !mappedName && !segment.speakerName;
+  const isUnmapped = !resolvedName;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -673,10 +672,9 @@ export function MeetingTranscriptChat({
   }
 
   const isSelfSide = (segment: TranscriptSegment): boolean => {
-    const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
-    if (mapped) return mapped.trim().toLowerCase() === t("notes.speaker.you").toLowerCase();
+    const { name } = resolveSegmentSpeakerName(segment, speakerMappings);
+    if (name) return name.trim().toLowerCase() === t("notes.speaker.you").toLowerCase();
     if (segment.speaker === "you") return true;
-    if (segment.speakerName) return false;
     return segment.source === "mic";
   };
 
@@ -768,7 +766,7 @@ export function MeetingTranscriptChat({
           const isSelected = selectedSegmentIds?.has(segment.id) ?? false;
           const selectable = !!onToggleSelect;
 
-          const activeName = speakerMappings?.[segment.speaker!] || segment.speakerName;
+          const activeName = resolveSegmentSpeakerName(segment, speakerMappings).name;
           const matchedProfile =
             activeName && speakerProfiles
               ? speakerProfiles.find((p) => p.id != null && p.display_name === activeName)
@@ -784,7 +782,7 @@ export function MeetingTranscriptChat({
               <SpeakerLabel
                 speakerId={segment.speaker!}
                 segment={segment}
-                mappedName={speakerMappings?.[segment.speaker!]}
+                resolvedName={activeName ?? undefined}
                 speakerProfiles={speakerProfiles}
                 participants={participants}
                 colorIdx={colorIdx}

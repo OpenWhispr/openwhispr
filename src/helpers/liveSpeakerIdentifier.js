@@ -29,6 +29,15 @@ const SILENCE_WINDOWS_TO_END = 24;
 const MATCH_THRESHOLD = 0.65;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
+// Below this, two embeddings are different people: never fold them together, and
+// treat it as proof that the voice inside an utterance has changed.
+const SPEAKER_MATCH_FLOOR = 0.5;
+// Speakers talk over each other, so mid-utterance decisions look at a short
+// trailing window; a longer one is dominated by whoever spoke first.
+const LIVE_IDENTIFICATION_WINDOW_SECONDS = 2.5;
+const LIVE_IDENTIFICATION_WINDOW_SAMPLES = Math.round(
+  SAMPLE_RATE * LIVE_IDENTIFICATION_WINDOW_SECONDS
+);
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
 
 function appendFloat32(existing, next) {
@@ -137,6 +146,8 @@ class LiveSpeakerIdentifier {
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentHadSpeakerChange = false;
+    this.currentSpeakerStartSample = 0;
     this.lastLiveIdentificationSample = 0;
     this._diarizationManager = null;
     this.maxSpeakers = MAX_SPEAKER_COUNT;
@@ -385,6 +396,8 @@ class LiveSpeakerIdentifier {
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentHadSpeakerChange = false;
+    this.currentSpeakerStartSample = 0;
     this.lastLiveIdentificationSample = 0;
     this._resetVadRuntimeState();
   }
@@ -458,6 +471,8 @@ class LiveSpeakerIdentifier {
     this.silenceWindows = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentHadSpeakerChange = false;
+    this.currentSpeakerStartSample = windowStartSample;
     this.lastLiveIdentificationSample = 0;
   }
 
@@ -532,8 +547,8 @@ class LiveSpeakerIdentifier {
       return;
     }
     const currentSamples =
-      allSamples.length > MAX_EMBEDDING_SAMPLES
-        ? allSamples.subarray(allSamples.length - MAX_EMBEDDING_SAMPLES)
+      allSamples.length > LIVE_IDENTIFICATION_WINDOW_SAMPLES
+        ? allSamples.subarray(allSamples.length - LIVE_IDENTIFICATION_WINDOW_SAMPLES)
         : allSamples;
 
     if (
@@ -550,23 +565,28 @@ class LiveSpeakerIdentifier {
       return;
     }
 
-    const resolved = this._resolveSpeakerForEmbedding(embedding, { updateCentroid: false });
+    const previousSpeakerId = this.currentSegmentSpeakerId;
+    const resolved = this._resolveSpeakerForEmbedding(embedding, {
+      updateCentroid: false,
+      allowSpeakerChange: true,
+    });
     if (!resolved?.speakerId) {
       return;
+    }
+
+    if (previousSpeakerId && resolved.speakerId !== previousSpeakerId) {
+      // The new speaker owns only the window we just judged, not the whole utterance.
+      this.currentSpeakerStartSample = Math.max(
+        this.segmentStartSample,
+        this.segmentEndSample - currentSamples.length
+      );
     }
 
     this.currentSegmentSpeakerId = resolved.speakerId;
     this.currentSegmentSpeakerName = resolved.displayName || null;
     this.lastLiveIdentificationSample = this.segmentEndSample;
 
-    if (!this.enabled) return;
-
-    this.onSpeakerIdentified?.({
-      speakerId: resolved.speakerId,
-      displayName: resolved.displayName || null,
-      startTime: Math.max(0, this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS),
-      endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
-    });
+    this._emitSpeaker(resolved.speakerId, resolved.displayName || null);
   }
 
   async _finalizeSpeechSegment() {
@@ -579,14 +599,22 @@ class LiveSpeakerIdentifier {
       return;
     }
 
-    const embedding = await speakerEmbeddings.extractEmbeddingFromSamples(
-      selectBestEmbeddingWindow(samples)
-    );
+    // A segment that changed hands is not one voice, so judge (and learn from)
+    // only its tail.
+    const hadSpeakerChange = this.currentSegmentHadSpeakerChange;
+    const embeddingSamples = hadSpeakerChange
+      ? samples.subarray(Math.max(0, samples.length - LIVE_IDENTIFICATION_WINDOW_SAMPLES))
+      : selectBestEmbeddingWindow(samples);
+
+    const embedding = await speakerEmbeddings.extractEmbeddingFromSamples(embeddingSamples);
     if (!embedding) {
       return;
     }
 
-    const resolved = this._resolveSpeakerForEmbedding(embedding, { updateCentroid: true });
+    const resolved = this._resolveSpeakerForEmbedding(embedding, {
+      updateCentroid: !hadSpeakerChange,
+      allowSpeakerChange: true,
+    });
     if (!resolved?.speakerId) {
       return;
     }
@@ -598,18 +626,28 @@ class LiveSpeakerIdentifier {
       this.transientDisplayNames.get(speakerId) ||
       null;
 
-    if (this.enabled) {
-      this.onSpeakerIdentified?.({
-        speakerId,
-        displayName,
-        startTime: Math.max(0, this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS),
-        endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
-      });
-    }
+    this._emitSpeaker(speakerId, displayName);
 
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentHadSpeakerChange = false;
     this.lastLiveIdentificationSample = 0;
+  }
+
+  _emitSpeaker(speakerId, displayName) {
+    if (!this.enabled) return;
+
+    const startSample = this.currentSpeakerStartSample ?? this.segmentStartSample;
+    // Padding widens the window so transcript timestamps land inside it, but it
+    // must never reach back into the previous speaker's audio.
+    const padding = this.currentSegmentHadSpeakerChange ? 0 : LIVE_WINDOW_PADDING_SECONDS;
+
+    this.onSpeakerIdentified?.({
+      speakerId,
+      displayName: displayName || null,
+      startTime: Math.max(0, startSample / SAMPLE_RATE - padding),
+      endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
+    });
   }
 
   _findTransientMatch(embedding) {
@@ -677,25 +715,53 @@ class LiveSpeakerIdentifier {
   }
 
   _resolveSpeakerForEmbedding(embedding, options = {}) {
-    const { updateCentroid = false } = options;
+    const { updateCentroid = false, allowSpeakerChange = false } = options;
 
-    let speakerId = this.currentSegmentSpeakerId || this._findTransientMatch(embedding);
-    let displayName = this.currentSegmentSpeakerName || null;
+    const current = this.currentSegmentSpeakerId;
+    if (current) {
+      const centroid = this.transientEmbeddings.get(current);
+      const similarity = centroid ? speakerEmbeddings.cosineSimilarity(embedding, centroid) : 0;
+      const keepCurrent =
+        similarity >= MATCH_THRESHOLD ||
+        !allowSpeakerChange ||
+        !this._shouldReleaseCurrentSpeaker(embedding, current, similarity);
 
-    if (speakerId) {
-      if (updateCentroid) {
-        this._updateCentroid(speakerId, embedding);
+      if (keepCurrent) {
+        // Only a confident match may teach the centroid; otherwise a segment that
+        // caught two voices drags the cluster towards the wrong person.
+        if (updateCentroid && similarity >= MATCH_THRESHOLD) {
+          this._updateCentroid(current, embedding);
+        }
+        return {
+          speakerId: current,
+          displayName:
+            this.currentSegmentSpeakerName || this.transientDisplayNames.get(current) || null,
+        };
       }
 
+      debugLogger.info("Live speaker changed mid-utterance", {
+        from: current,
+        similarity: similarity.toFixed(3),
+      });
+      this.currentSegmentSpeakerId = null;
+      this.currentSegmentSpeakerName = null;
+      this.currentSegmentHadSpeakerChange = true;
+    }
+
+    const matched = this._findTransientMatch(embedding);
+    if (matched) {
+      if (updateCentroid) {
+        this._updateCentroid(matched, embedding);
+      }
       return {
-        speakerId,
-        displayName: displayName || this.transientDisplayNames.get(speakerId) || null,
+        speakerId: matched,
+        displayName: this.transientDisplayNames.get(matched) || null,
       };
     }
 
     const matchedProfile = this._findStoredProfileMatch(embedding);
     if (matchedProfile) {
-      speakerId = this._findTransientSpeakerForProfile(matchedProfile.id);
+      let speakerId = this._findTransientSpeakerForProfile(matchedProfile.id);
       if (!speakerId) {
         speakerId = this._assignOrForceCluster(embedding);
       } else if (updateCentroid) {
@@ -710,39 +776,52 @@ class LiveSpeakerIdentifier {
       };
     }
 
-    speakerId = this.currentSegmentSpeakerId || this._assignOrForceCluster(embedding);
-    if (updateCentroid && this.currentSegmentSpeakerId) {
-      this._updateCentroid(speakerId, embedding);
-    }
-
+    const speakerId = this._assignOrForceCluster(embedding);
     return {
       speakerId,
       displayName: this.transientDisplayNames.get(speakerId) || null,
     };
   }
 
+  /** True when the voice now speaking is no longer the one this segment started with. */
+  _shouldReleaseCurrentSpeaker(embedding, currentSpeakerId, currentSimilarity) {
+    if (currentSimilarity < SPEAKER_MATCH_FLOOR) return true;
+
+    const challenger = this._findNearestTransient(embedding, currentSpeakerId);
+    return (
+      !!challenger &&
+      challenger.similarity >= MATCH_THRESHOLD &&
+      challenger.similarity - currentSimilarity >= MATCH_MARGIN
+    );
+  }
+
   _assignOrForceCluster(embedding) {
     if (this.transientEmbeddings.size >= this.maxSpeakers) {
       const nearest = this._findNearestTransient(embedding);
-      if (nearest) {
-        this._updateCentroid(nearest, embedding);
-        return nearest;
+      // The expected-speaker count is a guess. Rather than file a clearly
+      // different voice under an existing speaker, exceed the guess and let the
+      // post-meeting pass reconcile, up to the hard ceiling.
+      const atCeiling = this.transientEmbeddings.size >= MAX_SPEAKER_COUNT;
+      if (nearest && (atCeiling || nearest.similarity >= SPEAKER_MATCH_FLOOR)) {
+        this._updateCentroid(nearest.speakerId, embedding);
+        return nearest.speakerId;
       }
     }
     return this._assignSpeakerId(embedding);
   }
 
-  _findNearestTransient(embedding) {
+  _findNearestTransient(embedding, excludeSpeakerId = null) {
     let bestSpeakerId = null;
     let bestSimilarity = -Infinity;
     for (const [speakerId, centroid] of this.transientEmbeddings.entries()) {
+      if (speakerId === excludeSpeakerId) continue;
       const similarity = speakerEmbeddings.cosineSimilarity(embedding, centroid);
       if (similarity > bestSimilarity) {
         bestSimilarity = similarity;
         bestSpeakerId = speakerId;
       }
     }
-    return bestSpeakerId;
+    return bestSpeakerId ? { speakerId: bestSpeakerId, similarity: bestSimilarity } : null;
   }
 
   _findTransientSpeakerForProfile(profileId) {

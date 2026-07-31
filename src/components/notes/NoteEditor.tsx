@@ -71,10 +71,15 @@ import { normalizeDbDate, formatRelativeTime, formatShortDate } from "../../util
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
+  isTranscriptSpeakerLocked,
   lockTranscriptSpeaker,
   mergeTranscriptSegments,
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
+import {
+  assignSegmentsToSpeaker,
+  resolveSegmentSpeakerName,
+} from "../../utils/speakerNameResolution";
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
 
@@ -118,7 +123,7 @@ function buildKnownSpeakers(
   }
   for (const segment of segments) {
     if (!segment.speaker) continue;
-    const name = mappings[segment.speaker] || segment.speakerName;
+    const name = resolveSegmentSpeakerName(segment, mappings).name;
     if (!name) continue;
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
@@ -603,8 +608,11 @@ export default function NoteEditor({
         return;
       }
 
+      // Segments the user pinned to somebody else stay put: relabelling a cluster
+      // must not silently undo an explicit per-segment assignment.
       const currentSegments = displaySegments.map((s) =>
-        s.speaker === speakerId
+        s.speaker === speakerId &&
+        !(isTranscriptSpeakerLocked(s) && s.speakerName && s.speakerName !== displayName)
           ? lockTranscriptSpeaker(s, {
               speakerName: displayName,
               speaker: speakerId,
@@ -691,22 +699,38 @@ export default function NoteEditor({
   }, [selectedSegmentIds.size, handleClearSelection]);
 
   const handleBulkAssignName = useCallback(
-    async (displayName: string, _email?: string | null, profileId?: number) => {
+    async (displayName: string, email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
-      const nextSegments = displaySegments.map((segment) =>
-        selectedSegmentIds.has(segment.id)
-          ? lockTranscriptSpeaker(segment, {
-              speakerName: displayName,
-              speakerIsPlaceholder: false,
-              suggestedName: undefined,
-              suggestedProfileId: profileId ?? undefined,
-            })
-          : segment
+
+      const { segments: nextSegments, speakerId } = assignSegmentsToSpeaker(
+        displaySegments,
+        selectedSegmentIds,
+        displayName,
+        { speakerMappings, profileId }
       );
-      await persistDisplaySegments(nextSegments);
+      if (!speakerId) return;
+
+      setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
       handleClearSelection();
+      await persistDisplaySegments(nextSegments);
+      await window.electronAPI?.setSpeakerMapping?.(
+        note.id,
+        speakerId,
+        displayName,
+        email,
+        profileId
+      );
+      refreshSpeakerProfiles();
     },
-    [displaySegments, selectedSegmentIds, persistDisplaySegments, handleClearSelection]
+    [
+      displaySegments,
+      handleClearSelection,
+      note.id,
+      persistDisplaySegments,
+      refreshSpeakerProfiles,
+      selectedSegmentIds,
+      speakerMappings,
+    ]
   );
 
   const handleTitleInput = useCallback(() => {
