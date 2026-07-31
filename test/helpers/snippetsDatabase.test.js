@@ -25,6 +25,15 @@ process.env.NODE_ENV = "test";
 
 const DatabaseManager = require("../../src/helpers/database.js");
 
+const SYNC_TABLES = [
+  "transcriptions",
+  "custom_dictionary",
+  "snippets",
+  "notes",
+  "folders",
+  "agent_conversations",
+];
+
 function isNativeBindingUnavailable(error) {
   const message = String(error?.message || error);
   return (
@@ -32,13 +41,17 @@ function isNativeBindingUnavailable(error) {
   );
 }
 
-function createDb(t) {
+function freshUserDataDir() {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-snippets-db-"));
+  return userDataDir;
+}
+
+function requireSqlite(t) {
   try {
     const BetterSqlite = require("better-sqlite3");
-    const probe = new BetterSqlite(path.join(userDataDir, "probe.db"));
+    const probe = new BetterSqlite(":memory:");
     probe.close();
-    fs.rmSync(path.join(userDataDir, "probe.db"), { force: true });
+    return BetterSqlite;
   } catch (error) {
     if (isNativeBindingUnavailable(error)) {
       t.skip("better-sqlite3 native binding is not available for this Node runtime");
@@ -46,7 +59,11 @@ function createDb(t) {
     }
     throw error;
   }
+}
 
+function createDb(t) {
+  if (!requireSqlite(t)) return null;
+  freshUserDataDir();
   try {
     return new DatabaseManager();
   } catch (error) {
@@ -58,158 +75,48 @@ function createDb(t) {
   }
 }
 
-test("snippets diff trims, dedupes, updates, and preserves synced no-ops", (t) => {
+function columnNames(db, table) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+}
+
+test("snippets diff trims, dedupes, and updates in place", (t) => {
   const db = createDb(t);
   if (!db) return;
+
   db.setSnippets([
     { trigger: "  signoff  ", replacement: "  Regards  " },
     { trigger: "SIGNOFF", replacement: "Ignored duplicate" },
   ]);
-
   assert.deepEqual(db.getSnippets(), [{ trigger: "signoff", replacement: "Regards" }]);
-  const [created] = db.getPendingSnippets();
-  assert.ok(created.client_snippet_id);
 
-  db.markSnippetSynced(created.id, "cloud-1", "2026-07-01T10:00:00.000Z");
+  const created = db.db.prepare("SELECT id FROM snippets").get();
+
+  // An unchanged write is a no-op and must not churn the row.
   db.setSnippets([{ trigger: "signoff", replacement: "Regards" }]);
-  assert.equal(db.getPendingSnippets().length, 0);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS c FROM snippets").get().c, 1);
 
   db.setSnippets([{ trigger: "signoff", replacement: "Best regards" }]);
-  const [updated] = db.getPendingSnippets();
-  assert.equal(updated.id, created.id);
+  const updated = db.db.prepare("SELECT id, replacement FROM snippets").get();
+  assert.equal(updated.id, created.id, "an edit updates in place rather than recreating the row");
   assert.equal(updated.replacement, "Best regards");
 });
 
-test("snippet removals hard-delete unsynced rows and tombstone synced rows", (t) => {
+test("removing a snippet hard-deletes it", (t) => {
   const db = createDb(t);
   if (!db) return;
 
   db.setSnippets([{ trigger: "temp", replacement: "Temporary" }]);
   db.setSnippets([]);
-  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM snippets").get().count, 0);
 
-  db.setSnippets([{ trigger: "synced", replacement: "Synced" }]);
-  const [created] = db.getPendingSnippets();
-  db.markSnippetSynced(created.id, "cloud-2", "2026-07-01T10:00:00.000Z");
-
-  db.setSnippets([]);
   assert.deepEqual(db.getSnippets(), []);
-  const [deleted] = db.getPendingSnippetDeletes();
-  assert.equal(deleted.id, created.id);
-  assert.equal(deleted.cloud_id, "cloud-2");
-});
-
-test("cloud snippets upsert by client id, cloud id, then trigger", (t) => {
-  const db = createDb(t);
-  if (!db) return;
-
-  const first = db.upsertSnippetFromCloud({
-    id: "cloud-1",
-    client_snippet_id: "client-1",
-    trigger: "intro",
-    replacement: "Hello there",
-    created_at: "2026-07-01T10:00:00.000Z",
-    updated_at: "2026-07-01T10:00:00.000Z",
-  });
-  assert.equal(first.trigger, "intro");
-  assert.equal(first.sync_status, "synced");
-
-  const byClient = db.upsertSnippetFromCloud({
-    id: "cloud-1",
-    client_snippet_id: "client-1",
-    trigger: "intro",
-    replacement: "Hello again",
-    created_at: "2026-07-01T10:00:00.000Z",
-    updated_at: "2026-07-01T11:00:00.000Z",
-  });
-  assert.equal(byClient.id, first.id);
-  assert.equal(byClient.replacement, "Hello again");
-
-  const byTrigger = db.upsertSnippetFromCloud({
-    id: "cloud-2",
-    client_snippet_id: "client-2",
-    trigger: "INTRO",
-    replacement: "Case merge",
-    created_at: "2026-07-01T12:00:00.000Z",
-    updated_at: "2026-07-01T12:00:00.000Z",
-  });
-  assert.equal(byTrigger.id, first.id);
-  assert.equal(byTrigger.cloud_id, "cloud-2");
-  assert.equal(byTrigger.client_snippet_id, "client-2");
-  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM snippets").get().count, 1);
-});
-
-test("cloud rename onto a trigger another active snippet holds converges without throwing", (t) => {
-  const db = createDb(t);
-  if (!db) return;
-
-  db.upsertSnippetFromCloud({
-    id: "cloud-a",
-    client_snippet_id: "ca",
-    trigger: "foo",
-    replacement: "Foo text",
-    created_at: "2026-07-01T10:00:00.000Z",
-    updated_at: "2026-07-01T10:00:00.000Z",
-  });
-  db.upsertSnippetFromCloud({
-    id: "cloud-b",
-    client_snippet_id: "cb",
-    trigger: "bar",
-    replacement: "Bar text",
-    created_at: "2026-07-01T10:00:00.000Z",
-    updated_at: "2026-07-01T10:00:00.000Z",
-  });
-
-  const merged = db.upsertSnippetFromCloud({
-    id: "cloud-a",
-    client_snippet_id: "ca",
-    trigger: "bar",
-    replacement: "Foo renamed",
-    created_at: "2026-07-01T10:00:00.000Z",
-    updated_at: "2026-07-01T12:00:00.000Z",
-  });
-
-  assert.equal(merged.trigger, "bar");
-  assert.equal(merged.cloud_id, "cloud-a");
-  assert.deepEqual(db.getSnippets(), [{ trigger: "bar", replacement: "Foo renamed" }]);
-  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM snippets").get().count, 1);
-});
-
-test("markSnippetSynced leaves a row pending when its content changed since the push", (t) => {
-  const db = createDb(t);
-  if (!db) return;
-
-  db.setSnippets([{ trigger: "brb", replacement: "be right back" }]);
-  const [pushed] = db.getPendingSnippets();
-
-  // A concurrent edit lands while the push (snapshot 'be right back') is in flight.
-  db.setSnippets([{ trigger: "brb", replacement: "back in a bit" }]);
-
-  const stale = db.markSnippetSynced(
-    pushed.id,
-    "cloud-1",
-    "2026-07-01T10:00:00.000Z",
-    "brb",
-    "be right back"
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS c FROM snippets").get().c,
+    0,
+    "no tombstone row is left behind now that there is no cloud to notify"
   );
-  assert.equal(stale.changes, 0);
-  const [stillPending] = db.getPendingSnippets();
-  assert.equal(stillPending.id, pushed.id);
-  assert.equal(stillPending.replacement, "back in a bit");
-  assert.equal(stillPending.cloud_id, null);
-
-  const ok = db.markSnippetSynced(
-    pushed.id,
-    "cloud-1",
-    "2026-07-01T11:00:00.000Z",
-    "brb",
-    "back in a bit"
-  );
-  assert.equal(ok.changes, 1);
-  assert.equal(db.getPendingSnippets().length, 0);
 });
 
-test("setSnippets drops triggers longer than the sync limit", (t) => {
+test("setSnippets drops triggers longer than the length limit", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -219,4 +126,113 @@ test("setSnippets drops triggers longer than the sync limit", (t) => {
   ]);
 
   assert.deepEqual(db.getSnippets(), [{ trigger: "ok", replacement: "fine" }]);
+});
+
+test("dictionary diff adds, updates, and hard-deletes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.setDictionary(["alpha", "beta"]);
+  assert.deepEqual([...db.getDictionary()].sort(), ["alpha", "beta"]);
+
+  db.setDictionary(["alpha"]);
+  assert.deepEqual(db.getDictionary(), ["alpha"]);
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS c FROM custom_dictionary").get().c,
+    1,
+    "removed words are hard-deleted, not tombstoned"
+  );
+});
+
+test("deleting a transcription removes the row outright", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const saved = db.saveTranscription("hello world");
+  assert.ok(saved.id);
+
+  const result = db.deleteTranscription(saved.id);
+  assert.equal(result.success, true);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS c FROM transcriptions").get().c, 0);
+});
+
+test("schema carries no cloud sync columns", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  for (const table of SYNC_TABLES) {
+    const cols = columnNames(db.db, table);
+    assert.ok(!cols.includes("cloud_id"), `${table} must not have cloud_id`);
+    assert.ok(!cols.includes("sync_status"), `${table} must not have sync_status`);
+  }
+
+  const staleIndex = db.db
+    .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_snippets_pending_sync'")
+    .get();
+  assert.equal(staleIndex, undefined, "the partial index on sync_status must be gone");
+});
+
+test("migrating a legacy database drops the sync columns and keeps the data", (t) => {
+  const BetterSqlite = requireSqlite(t);
+  if (!BetterSqlite) return;
+
+  const dir = freshUserDataDir();
+  const legacy = new BetterSqlite(path.join(dir, "transcriptions.db"));
+  legacy.exec(`
+    CREATE TABLE transcriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      text TEXT NOT NULL,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      cloud_id TEXT,
+      sync_status TEXT DEFAULT 'pending',
+      deleted_at TEXT
+    );
+    CREATE TABLE snippets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trigger TEXT NOT NULL,
+      replacement TEXT NOT NULL,
+      client_snippet_id TEXT,
+      cloud_id TEXT,
+      sync_status TEXT DEFAULT 'pending',
+      deleted_at TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending';
+    INSERT INTO transcriptions (text, cloud_id, sync_status) VALUES ('kept row', 'cloud-9', 'synced');
+    INSERT INTO snippets (trigger, replacement, cloud_id) VALUES ('brb', 'be right back', 'cloud-8');
+  `);
+  legacy.close();
+
+  const db = new DatabaseManager();
+
+  for (const table of ["transcriptions", "snippets"]) {
+    const cols = columnNames(db.db, table);
+    assert.ok(!cols.includes("cloud_id"), `${table}.cloud_id must be dropped`);
+    assert.ok(!cols.includes("sync_status"), `${table}.sync_status must be dropped`);
+  }
+
+  assert.equal(db.db.prepare("SELECT text FROM transcriptions").get().text, "kept row");
+  assert.deepEqual(db.getSnippets(), [{ trigger: "brb", replacement: "be right back" }]);
+
+  const staleIndex = db.db
+    .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_snippets_pending_sync'")
+    .get();
+  assert.equal(staleIndex, undefined);
+});
+
+test("migration is idempotent across reopens", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setSnippets([{ trigger: "brb", replacement: "be right back" }]);
+  db.db.close();
+
+  const reopened = new DatabaseManager();
+  assert.deepEqual(reopened.getSnippets(), [{ trigger: "brb", replacement: "be right back" }]);
+  for (const table of SYNC_TABLES) {
+    const cols = columnNames(reopened.db, table);
+    assert.ok(!cols.includes("cloud_id"));
+    assert.ok(!cols.includes("sync_status"));
+  }
 });

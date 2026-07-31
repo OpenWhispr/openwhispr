@@ -133,16 +133,6 @@ function useSettingsInternal() {
     return unsubscribe;
   }, [applyCustomDictionaryFromExternal]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.electronAPI?.onSnippetsUpdated) return;
-    const unsubscribe = window.electronAPI.onSnippetsUpdated((snippets: Snippet[]) => {
-      if (Array.isArray(snippets)) {
-        applySnippetsFromExternal(snippets);
-      }
-    });
-    return unsubscribe;
-  }, [applySnippetsFromExternal]);
-
   // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
     "autoLearnCorrections",

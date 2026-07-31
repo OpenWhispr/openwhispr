@@ -36,8 +36,6 @@ export interface TranscriptionItem {
   error_message: string | null;
   error_code: TranscriptionErrorCode;
   client_transcription_id: string;
-  cloud_id: string | null;
-  sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
 }
 
@@ -57,17 +55,13 @@ export interface NoteItem {
   participants: string | null;
   diarization_enabled: number | null;
   expected_speaker_count: number | null;
-  cloud_id: string | null;
   created_at: string;
   updated_at: string;
   client_note_id: string;
-  sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
   meeting_type_id?: number | null;
   mic_audio_path?: string | null;
   system_audio_path?: string | null;
-  workspace_id?: string | null;
-  team_id?: string | null;
 }
 
 export interface FolderItem {
@@ -78,11 +72,7 @@ export interface FolderItem {
   created_at: string;
   updated_at: string;
   client_folder_id: string;
-  cloud_id: string | null;
-  sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
-  workspace_id?: string | null;
-  team_id?: string | null;
 }
 
 export interface DictionaryEntryItem {
@@ -92,8 +82,6 @@ export interface DictionaryEntryItem {
   created_at: string;
   updated_at: string;
   client_dict_id: string;
-  cloud_id: string | null;
-  sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
 }
 
@@ -104,8 +92,6 @@ export interface SnippetEntryItem {
   created_at: string;
   updated_at: string;
   client_snippet_id: string;
-  cloud_id: string | null;
-  sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
 }
 
@@ -361,9 +347,7 @@ export interface ConversationPreview {
   created_at: string;
   updated_at: string;
   archived_at?: string | null;
-  cloud_id?: string | null;
   client_conversation_id?: string;
-  sync_status?: "synced" | "pending" | "error";
   deleted_at?: string | null;
   message_count: number;
   last_message?: string | null;
@@ -471,9 +455,6 @@ declare global {
       setSnippets?: (
         snippets: Array<{ trigger: string; replacement: string }>
       ) => Promise<{ success: boolean }>;
-      onSnippetsUpdated?: (
-        callback: (snippets: Array<{ trigger: string; replacement: string }>) => void
-      ) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
       undoLearnedCorrections?: (words: string[]) => Promise<{ success: boolean }>;
@@ -1163,7 +1144,6 @@ declare global {
           id: number;
           title: string;
           archived_at?: string;
-          cloud_id?: string;
           client_conversation_id?: string;
           created_at: string;
           updated_at: string;
@@ -1173,7 +1153,6 @@ declare global {
         id: number;
         title: string;
         archived_at?: string;
-        cloud_id?: string;
         created_at: string;
         updated_at: string;
         messages: Array<{

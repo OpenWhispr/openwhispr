@@ -91,11 +91,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   getSnippets: () => ipcRenderer.invoke("db-get-snippets"),
   setSnippets: (snippets) => ipcRenderer.invoke("db-set-snippets", snippets),
-  onSnippetsUpdated: (callback) => {
-    const listener = (_event, snippets) => callback?.(snippets);
-    ipcRenderer.on("snippets-updated", listener);
-    return () => ipcRenderer.removeListener("snippets-updated", listener);
-  },
   setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
   onCorrectionsLearned: (callback) => {
     const listener = (_event, words) => callback?.(words);
