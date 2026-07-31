@@ -13,7 +13,6 @@ export function UploadTranscriptionPanel() {
   const startOnboarding = useStartOnboarding();
 
   const {
-    isSignedIn,
     uploadTranscriptionMode,
     setUploadTranscriptionMode,
     setUploadUseLocalWhisper,

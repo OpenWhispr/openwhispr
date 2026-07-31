@@ -10,7 +10,6 @@ import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
-import { useAuth } from "../hooks/useAuth";
 import {
   useTranscriptions,
   useShowDiscarded,
@@ -113,7 +112,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setUseLocalWhisper,
     setCloudTranscriptionMode,
   } = useSettings();
-  const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
 
   const {
     status: updateStatus,
@@ -715,11 +713,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               setSettingsSection(undefined);
               setShowSettings(true);
             }}
-            userName={user?.name}
-            userEmail={user?.email}
-            userImage={user?.image}
-            isSignedIn={isSignedIn}
-            authLoaded={authLoaded}
             updateAction={
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||

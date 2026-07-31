@@ -891,8 +891,6 @@ declare global {
       installUpdate: () => Promise<UpdateResult>;
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
-      getOAuthProtocolRegistered: () => Promise<boolean>;
-      getOAuthProtocol: () => Promise<string>;
       markBundleMigrated: () => Promise<void>;
       markBundleMigrationDismissed: () => Promise<void>;
       getUpdateStatus: () => Promise<UpdateStatusResult>;
@@ -1110,9 +1108,6 @@ declare global {
       setAutoStartEnabled?: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
 
       // Auth
-      authClearSession?: () => Promise<void>;
-      authGetToken?: () => Promise<string | null>;
-      authSetToken?: (token: string) => Promise<void>;
 
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Calendar, Loader2, LogIn, Monitor, Video } from "lucide-react";
+import { Calendar, Loader2, Monitor, Video } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "./lib/utils";
 import type { CalendarEvent } from "../types/calendar";
@@ -27,7 +27,7 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
   const { t, i18n } = useTranslation();
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
   const systemAudio = useSystemAudioPermission();
-  const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const hasCalendarAccount = useSettingsStore((s) => s.gcalAccounts.length > 0);
   const needsSystemAudioGrant = !systemAudio.granted && canManageSystemAudioInApp(systemAudio);
 
   const now = useMemo(() => new Date(), []);
@@ -109,14 +109,14 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
                   : t("onboarding.permissions.grantAccess")}
               </Button>
             </>
-          ) : !isSignedIn ? (
+          ) : !hasCalendarAccount ? (
             <>
-              <LogIn size={24} className="text-muted-foreground/30 mb-2.5" />
+              <Calendar size={24} className="text-muted-foreground/30 mb-2.5" />
               <p className="text-xs font-medium text-muted-foreground/70 text-center mb-1">
-                {t("upcoming.signInRequired")}
+                {t("upcoming.connectCalendar")}
               </p>
               <p className="text-xs text-muted-foreground/50 text-center mb-3">
-                {t("upcoming.signInDescription")}
+                {t("upcoming.connectCalendarDescription")}
               </p>
             </>
           ) : (

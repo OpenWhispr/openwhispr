@@ -8,11 +8,8 @@ import {
   Blocks,
   Settings,
   HelpCircle,
-  UserCircle,
-  X,
   Search,
 } from "lucide-react";
-import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
@@ -28,11 +25,6 @@ interface ControlPanelSidebarProps {
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenSearch?: () => void;
-  userName?: string | null;
-  userEmail?: string | null;
-  userImage?: string | null;
-  isSignedIn?: boolean;
-  authLoaded?: boolean;
   updateAction?: React.ReactNode;
 }
 
@@ -41,11 +33,6 @@ export default function ControlPanelSidebar({
   onViewChange,
   onOpenSettings,
   onOpenSearch,
-  userName,
-  userEmail,
-  userImage,
-  isSignedIn,
-  authLoaded,
   updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
