@@ -52,12 +52,6 @@ import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import PostCallPipelineIndicator from "./PostCallPipelineIndicator";
 import { usePostCallPipelineListener } from "../hooks/usePostCallPipelineListener";
-import AcceptInvitationModal from "./AcceptInvitationModal";
-import {
-  consumePendingInvitationToken,
-  clearPendingInvitationToken,
-} from "../utils/pendingInvitationToken";
-import { WORKSPACES_ENABLED } from "../lib/features";
 import ModelDownloadBanner from "./ModelDownloadBanner";
 import { initAutoDownloadListeners } from "../stores/modelAutoDownloadStore";
 
@@ -93,7 +87,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
   const [showReferrals, setShowReferrals] = useState(false);
-  const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
@@ -328,23 +321,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       duration: 8000,
     });
   }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
-
-  useEffect(() => {
-    if (!WORKSPACES_ENABLED) return;
-    const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
-      setInvitationToken(token);
-    });
-    return () => unsubscribe?.();
-  }, []);
-
-  useEffect(() => {
-    if (!WORKSPACES_ENABLED || !authLoaded || !isSignedIn) return;
-    const pending = consumePendingInvitationToken();
-    if (pending) {
-      setInvitationToken(pending);
-      clearPendingInvitationToken();
-    }
-  }, [authLoaded, isSignedIn]);
 
   useEffect(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
@@ -763,16 +739,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      {WORKSPACES_ENABLED && (
-        <AcceptInvitationModal
-          token={invitationToken}
-          onClose={() => setInvitationToken(null)}
-          isSignedIn={isSignedIn}
-          onSignIn={() => {
-            setInvitationToken(null);
-          }}
-        />
-      )}
 
       {showSearch && (
         <Suspense fallback={null}>

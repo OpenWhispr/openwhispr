@@ -9,11 +9,9 @@ import {
   Keyboard,
   CreditCard,
   Shield,
-  Users,
 } from "lucide-react";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
-import { WORKSPACES_ENABLED } from "../lib/features";
 
 export type { SettingsSectionType };
 
@@ -105,11 +103,11 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
 
   const resolveSection = (section: string | undefined): SettingsSectionType => {
     if (!section) return "general";
-    const resolved = (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
+    const resolved: string = SECTION_ALIASES[section] ?? section;
     // Fork: removed sections (account/plans/billing/workspace) fall back to General.
     if (resolved === "workspace" || resolved === "account" || resolved === "plansBilling")
       return "general";
-    return resolved;
+    return resolved as SettingsSectionType;
   };
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(() =>
