@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   Home,
   MessageSquare,
@@ -6,7 +6,6 @@ import {
   BookOpen,
   Upload,
   Blocks,
-  Gift,
   Settings,
   HelpCircle,
   UserCircle,
@@ -29,16 +28,11 @@ interface ControlPanelSidebarProps {
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenSearch?: () => void;
-  onOpenReferrals?: () => void;
-  onUpgrade?: () => void;
-  isOverLimit?: boolean;
   userName?: string | null;
   userEmail?: string | null;
   userImage?: string | null;
   isSignedIn?: boolean;
   authLoaded?: boolean;
-  isProUser?: boolean;
-  usageLoaded?: boolean;
   updateAction?: React.ReactNode;
 }
 
@@ -47,22 +41,14 @@ export default function ControlPanelSidebar({
   onViewChange,
   onOpenSettings,
   onOpenSearch,
-  onOpenReferrals,
-  onUpgrade,
-  isOverLimit,
   userName,
   userEmail,
   userImage,
   isSignedIn,
   authLoaded,
-  isProUser,
-  usageLoaded,
   updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
-  const [upgradeDismissed, setUpgradeDismissed] = useState(
-    () => localStorage.getItem("upgradeProDismissed") === "true"
-  );
 
   const navItems: {
     id: ControlPanelView;
@@ -156,22 +142,6 @@ export default function ControlPanelSidebar({
           </div>
         )}
 
-        {isSignedIn && onOpenReferrals && (
-          <button
-            onClick={onOpenReferrals}
-            aria-label={t("sidebar.referral")}
-            className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
-          >
-            <Gift
-              size={15}
-              className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-            />
-            <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-              {t("sidebar.referral")}
-            </span>
-          </button>
-        )}
-
         <button
           onClick={onOpenSettings}
           aria-label={t("sidebar.settings")}
@@ -202,7 +172,6 @@ export default function ControlPanelSidebar({
             </button>
           }
         />
-
       </div>
     </div>
   );

@@ -126,7 +126,6 @@ const AUDIO_MIME_TYPES = {
   aac: "audio/aac",
 };
 
-
 const {
   formatTimestamp: formatDiarTime,
   mergeSpeakersWithText,
@@ -825,7 +824,9 @@ class IPCHandlers {
       if (!note) return { success: false, error: "Note not found" };
       for (const p of [note.mic_audio_path, note.system_audio_path]) {
         if (p && fs.existsSync(p)) {
-          try { fs.unlinkSync(p); } catch (_) {}
+          try {
+            fs.unlinkSync(p);
+          } catch (_) {}
         }
       }
       this.databaseManager.updateNote(noteId, { mic_audio_path: null, system_audio_path: null });
@@ -873,14 +874,23 @@ class IPCHandlers {
                 source: "system",
                 timestamp: (seg.start || 0) * 1000,
               }));
-              const enriched = this.diarizationManager.mergeWithTranscript(whisperSegments, diarResult.segments);
+              const enriched = this.diarizationManager.mergeWithTranscript(
+                whisperSegments,
+                diarResult.segments
+              );
               if (enriched?.length) {
                 finalTranscript = JSON.stringify(enriched);
               }
             }
-            try { fs.unlinkSync(tmpWav); } catch (_) {}
+            try {
+              fs.unlinkSync(tmpWav);
+            } catch (_) {}
           } catch (diarErr) {
-            debugLogger.warn("Re-transcription diarization failed, using raw text", { error: diarErr.message }, "meeting");
+            debugLogger.warn(
+              "Re-transcription diarization failed, using raw text",
+              { error: diarErr.message },
+              "meeting"
+            );
           }
         }
 
@@ -1986,7 +1996,10 @@ class IPCHandlers {
 
     ipcMain.handle("download-parakeet-model", async (event, modelName) => {
       if (this._parakeetAutoDownloadActive) {
-        return { success: false, error: "Auto-download in progress. Cancel it first or wait for it to complete." };
+        return {
+          success: false,
+          error: "Auto-download in progress. Cancel it first or wait for it to complete.",
+        };
       }
       try {
         const result = await this.parakeetManager.downloadParakeetModel(
@@ -3873,7 +3886,9 @@ class IPCHandlers {
     });
 
     // Observe pipeline status events for pending retranscription tracking
-    const originalBroadcast = this.postCallPipelineManager._broadcast.bind(this.postCallPipelineManager);
+    const originalBroadcast = this.postCallPipelineManager._broadcast.bind(
+      this.postCallPipelineManager
+    );
     this.postCallPipelineManager._broadcast = (channel, data) => {
       originalBroadcast(channel, data);
       if (channel === "post-call-pipeline-status") {
@@ -5806,7 +5821,11 @@ class IPCHandlers {
         // Diagnostic: measure system audio level (sample every 100 chunks)
         if (meetingSendCounts.system % 100 === 0 && meetingSendCounts.system > 0) {
           try {
-            const samples = new Int16Array(outboundBuffer.buffer, outboundBuffer.byteOffset, outboundBuffer.length >> 1);
+            const samples = new Int16Array(
+              outboundBuffer.buffer,
+              outboundBuffer.byteOffset,
+              outboundBuffer.length >> 1
+            );
             let sumSq = 0;
             for (let i = 0; i < samples.length; i++) {
               const n = samples[i] / 0x7fff;
@@ -5814,7 +5833,11 @@ class IPCHandlers {
             }
             const rms = Math.sqrt(sumSq / samples.length);
             const dbfs = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
-            debugLogger.debug("System audio level", { dbfs: dbfs.toFixed(1), chunks: meetingSendCounts.system }, "meeting-gain");
+            debugLogger.debug(
+              "System audio level",
+              { dbfs: dbfs.toFixed(1), chunks: meetingSendCounts.system },
+              "meeting-gain"
+            );
           } catch (_) {}
         }
 
@@ -6287,36 +6310,6 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-usage", async (event) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        const response = await proxyFetch(`${apiUrl}/api/usage`, {
-          headers: authHeader,
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-          }
-          if (response.status === 503) {
-            return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-          }
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return { success: true, ...data };
-      } catch (error) {
-        debugLogger.error("Cloud usage fetch error:", error);
-        return { success: false, error: error.message };
-      }
-    });
-
     const fetchStripeUrl = async (event, endpoint, errorPrefix, body) => {
       try {
         const apiUrl = getApiUrl();
@@ -6352,148 +6345,6 @@ class IPCHandlers {
         return { success: false, error: error.message };
       }
     };
-
-    ipcMain.handle("cloud-checkout", (event, opts) =>
-      fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error", opts || undefined)
-    );
-
-    ipcMain.handle("cloud-billing-portal", (event) =>
-      fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
-    );
-
-    ipcMain.handle("cloud-switch-plan", async (event, opts) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        const response = await proxyFetch(`${apiUrl}/api/stripe/switch-plan`, {
-          method: "POST",
-          headers: { ...authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify(opts),
-        });
-
-        if (response.status === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-        }
-        if (response.status === 503) {
-          return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-        }
-
-        const data = await response.json();
-        if (!response.ok) {
-          return { success: false, error: data.error || "Failed to switch plan" };
-        }
-        return data;
-      } catch (error) {
-        debugLogger.error(`Cloud switch plan error: ${error.message}`);
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("cloud-preview-switch", async (event, opts) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        const response = await proxyFetch(`${apiUrl}/api/stripe/preview-switch`, {
-          method: "POST",
-          headers: { ...authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify(opts),
-        });
-
-        if (response.status === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-        }
-        if (response.status === 503) {
-          return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-        }
-
-        const data = await response.json();
-        if (!response.ok) {
-          return { success: false, error: data.error || "Failed to preview plan change" };
-        }
-        return { success: true, ...data };
-      } catch (error) {
-        debugLogger.error(`Cloud preview switch error: ${error.message}`);
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("cloud-api-request", async (event, opts) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        if (typeof opts?.path !== "string" || !opts.path.startsWith("/")) {
-          return { success: false, error: "Invalid API path" };
-        }
-        const targetUrl = new URL(opts.path, apiUrl);
-        if (targetUrl.origin !== new URL(apiUrl).origin) {
-          return { success: false, error: "Invalid API path" };
-        }
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        const method = (opts.method || "GET").toUpperCase();
-        const sendWith = (header) => {
-          const headers = { ...header };
-          const fetchOpts = { method, headers };
-          if (opts.body !== undefined) {
-            headers["Content-Type"] = "application/json";
-            fetchOpts.body = JSON.stringify(opts.body);
-          }
-          return proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
-        };
-
-        let response = await sendWith(authHeader);
-
-        // A stale bearer is rejected even when the window still holds a valid session
-        // cookie; retry with the cookie alone (a tagging-along bearer overrides it).
-        if (response.status === 401 && authHeader.Authorization) {
-          const cookieHeader = await getSessionCookies(event);
-          if (cookieHeader) response = await sendWith({ Cookie: cookieHeader });
-        }
-
-        if (response.status === 401) {
-          return {
-            success: false,
-            error: "Session expired",
-            code: "AUTH_EXPIRED",
-            status: 401,
-          };
-        }
-        if (response.status === 503) {
-          return {
-            success: false,
-            error: "Service temporarily unavailable",
-            code: "SERVER_ERROR",
-            status: 503,
-          };
-        }
-
-        const data = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          const message = data?.error?.message || data?.error || `API error: ${response.status}`;
-          return { success: false, error: message, status: response.status };
-        }
-
-        return { success: true, data };
-      } catch (error) {
-        debugLogger.error(
-          `Cloud API request error (${opts?.path}): ${error?.message || error} ${error?.code || ""}`.trim(),
-          error?.stack
-        );
-        return { success: false, error: error.message };
-      }
-    });
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
@@ -6711,116 +6562,6 @@ class IPCHandlers {
         }
       }
     );
-
-    ipcMain.handle("get-referral-stats", async (event) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
-          throw new Error("OpenWhispr API URL not configured");
-        }
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) {
-          throw new Error("Not authenticated");
-        }
-
-        const response = await proxyFetch(`${apiUrl}/api/referrals/stats`, {
-          headers: {
-            ...authHeader,
-          },
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            throw new Error("Unauthorized - please sign in");
-          }
-          if (response.status === 503) {
-            throw new Error("Service temporarily unavailable");
-          }
-          throw new Error(`Failed to fetch referral stats: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        debugLogger.error("Error fetching referral stats:", error);
-        throw error;
-      }
-    });
-
-    ipcMain.handle("send-referral-invite", async (event, email) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
-          throw new Error("OpenWhispr API URL not configured");
-        }
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) {
-          throw new Error("Not authenticated");
-        }
-
-        const response = await proxyFetch(`${apiUrl}/api/referrals/invite`, {
-          method: "POST",
-          headers: {
-            ...authHeader,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email }),
-        });
-
-        if (!response.ok) {
-          let errorMessage = `Failed to send invite: ${response.status}`;
-          try {
-            const errorData = await response.json();
-            if (errorData.error) errorMessage = errorData.error;
-          } catch (_) {}
-          throw new Error(errorMessage);
-        }
-
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        debugLogger.error("Error sending referral invite:", error);
-        throw error;
-      }
-    });
-
-    ipcMain.handle("get-referral-invites", async (event) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
-          throw new Error("OpenWhispr API URL not configured");
-        }
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) {
-          throw new Error("Not authenticated");
-        }
-
-        const response = await proxyFetch(`${apiUrl}/api/referrals/invites`, {
-          headers: {
-            ...authHeader,
-          },
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            throw new Error("Unauthorized - please sign in");
-          }
-          if (response.status === 503) {
-            throw new Error("Service temporarily unavailable");
-          }
-          throw new Error(`Failed to fetch referral invites: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        debugLogger.error("Error fetching referral invites:", error);
-        throw error;
-      }
-    });
 
     ipcMain.handle("open-whisper-models-folder", async () => {
       try {
@@ -7617,9 +7358,8 @@ class IPCHandlers {
     }));
 
     ipcMain.handle("retry-pipeline-step", async (_event, noteId, fromStep) => {
-      this.backgroundJobQueue.enqueue(
-        `post-call-retry-${noteId}`,
-        () => this.postCallPipelineManager.run(noteId, { fromStep })
+      this.backgroundJobQueue.enqueue(`post-call-retry-${noteId}`, () =>
+        this.postCallPipelineManager.run(noteId, { fromStep })
       );
       return { success: true };
     });
@@ -7642,9 +7382,8 @@ class IPCHandlers {
       if (meetingTypeId !== undefined) {
         this.databaseManager.updateNote(noteId, { meeting_type_id: meetingTypeId });
       }
-      this.backgroundJobQueue.enqueue(
-        `regenerate-notes-${noteId}`,
-        () => this.postCallPipelineManager.runSingleStep(noteId, "notes")
+      this.backgroundJobQueue.enqueue(`regenerate-notes-${noteId}`, () =>
+        this.postCallPipelineManager.runSingleStep(noteId, "notes")
       );
       return { success: true };
     });
@@ -7652,13 +7391,18 @@ class IPCHandlers {
     // ── Meeting types CRUD ───────────────────────────────────────────────
 
     ipcMain.handle("get-meeting-types", async () => this.databaseManager.getMeetingTypes());
-    ipcMain.handle("get-meeting-type", async (_event, id) => this.databaseManager.getMeetingType(id));
+    ipcMain.handle("get-meeting-type", async (_event, id) =>
+      this.databaseManager.getMeetingType(id)
+    );
     ipcMain.handle("create-meeting-type", async (_event, name, template) =>
-      this.databaseManager.createMeetingType(name, template));
+      this.databaseManager.createMeetingType(name, template)
+    );
     ipcMain.handle("update-meeting-type", async (_event, id, updates) =>
-      this.databaseManager.updateMeetingType(id, updates));
+      this.databaseManager.updateMeetingType(id, updates)
+    );
     ipcMain.handle("delete-meeting-type", async (_event, id) =>
-      this.databaseManager.deleteMeetingType(id));
+      this.databaseManager.deleteMeetingType(id)
+    );
 
     ipcMain.handle("set-note-meeting-type", async (_event, noteId, meetingTypeId) => {
       this.databaseManager.updateNote(noteId, { meeting_type_id: meetingTypeId });
@@ -7752,16 +7496,16 @@ class IPCHandlers {
       sizeMb: 680,
     });
 
-    debugLogger.info("Auto-downloading Parakeet model for offline transcription",
-      { model: defaultModel }, "startup");
+    debugLogger.info(
+      "Auto-downloading Parakeet model for offline transcription",
+      { model: defaultModel },
+      "startup"
+    );
 
     try {
-      const result = await this.parakeetManager.downloadParakeetModel(
-        defaultModel,
-        (progress) => {
-          this.broadcastToWindows("model-auto-download-progress", progress);
-        }
-      );
+      const result = await this.parakeetManager.downloadParakeetModel(defaultModel, (progress) => {
+        this.broadcastToWindows("model-auto-download-progress", progress);
+      });
       this._parakeetAutoDownloadActive = false;
       if (result?.success) {
         debugLogger.info("Parakeet auto-download complete", { model: defaultModel }, "startup");
@@ -7783,8 +7527,7 @@ class IPCHandlers {
           modelId: defaultModel,
         });
       } else {
-        debugLogger.warn("Parakeet auto-download failed",
-          { error: err.message }, "startup");
+        debugLogger.warn("Parakeet auto-download failed", { error: err.message }, "startup");
         this.broadcastToWindows("model-auto-download-status", {
           type: "error",
           modelId: defaultModel,
@@ -7919,8 +7662,11 @@ class IPCHandlers {
 
     if (pending.length === 0) return;
 
-    debugLogger.info("Draining pending retranscriptions after model download",
-      { count: pending.length }, "meeting");
+    debugLogger.info(
+      "Draining pending retranscriptions after model download",
+      { count: pending.length },
+      "meeting"
+    );
 
     for (const noteId of pending) {
       const note = this.databaseManager.getNote(noteId);
@@ -7928,9 +7674,8 @@ class IPCHandlers {
       const audioPath = note.system_audio_path || note.mic_audio_path;
       if (!audioPath || !fs.existsSync(audioPath)) continue;
 
-      this.backgroundJobQueue.enqueue(
-        `post-call-retry-${noteId}`,
-        () => this.postCallPipelineManager.run(noteId)
+      this.backgroundJobQueue.enqueue(`post-call-retry-${noteId}`, () =>
+        this.postCallPipelineManager.run(noteId)
       );
     }
   }
@@ -7940,9 +7685,8 @@ class IPCHandlers {
       debugLogger.info("Post-call pipeline disabled by user setting", {}, "meeting");
       return;
     }
-    this.backgroundJobQueue.enqueue(
-      `post-call-${noteId}`,
-      () => this.postCallPipelineManager.run(noteId)
+    this.backgroundJobQueue.enqueue(`post-call-${noteId}`, () =>
+      this.postCallPipelineManager.run(noteId)
     );
 
     // Auto-download large whisper model if needed
@@ -7951,15 +7695,26 @@ class IPCHandlers {
       const modelPath = this.whisperManager.getModelPath("large");
       if (modelPath && !fs.existsSync(modelPath)) {
         debugLogger.info("Auto-downloading large whisper model for pipeline", {}, "meeting");
-        this.whisperManager.downloadWhisperModel("large", (progress) => {
-          this.broadcastToWindows("whisper-model-download-progress", progress);
-        }).then(() => {
-          debugLogger.info("Large whisper model download complete, draining pending retranscriptions", {}, "meeting");
-          this._drainPendingRetranscriptions();
-        }).catch((err) => {
-          debugLogger.warn("Auto-download of large model failed", { error: err.message }, "meeting");
-          this._largeModelDownloadTriggered = false;
-        });
+        this.whisperManager
+          .downloadWhisperModel("large", (progress) => {
+            this.broadcastToWindows("whisper-model-download-progress", progress);
+          })
+          .then(() => {
+            debugLogger.info(
+              "Large whisper model download complete, draining pending retranscriptions",
+              {},
+              "meeting"
+            );
+            this._drainPendingRetranscriptions();
+          })
+          .catch((err) => {
+            debugLogger.warn(
+              "Auto-download of large model failed",
+              { error: err.message },
+              "meeting"
+            );
+            this._largeModelDownloadTriggered = false;
+          });
       }
     }
   }
@@ -8228,16 +7983,29 @@ class IPCHandlers {
         fs.copyFileSync(diarizationPcmPath, copyPath);
         systemPcmCopy = copyPath;
       } catch (err) {
-        debugLogger.warn("Could not copy system PCM for audio save", { error: err.message }, "meeting");
+        debugLogger.warn(
+          "Could not copy system PCM for audio save",
+          { error: err.message },
+          "meeting"
+        );
       }
     }
 
     if (saveAudio && noteIdSnapshot) {
-      this._saveMeetingAudio(noteIdSnapshot, micPcmPath, systemPcmCopy)
-        .catch(err => debugLogger.warn("Meeting audio save failed", { error: err.message }, "meeting"));
+      this._saveMeetingAudio(noteIdSnapshot, micPcmPath, systemPcmCopy).catch((err) =>
+        debugLogger.warn("Meeting audio save failed", { error: err.message }, "meeting")
+      );
     } else {
-      if (micPcmPath) { try { fs.unlinkSync(micPcmPath); } catch (_) {} }
-      if (systemPcmCopy) { try { fs.unlinkSync(systemPcmCopy); } catch (_) {} }
+      if (micPcmPath) {
+        try {
+          fs.unlinkSync(micPcmPath);
+        } catch (_) {}
+      }
+      if (systemPcmCopy) {
+        try {
+          fs.unlinkSync(systemPcmCopy);
+        } catch (_) {}
+      }
     }
   }
 
@@ -8263,7 +8031,9 @@ class IPCHandlers {
         debugLogger.warn(`Meeting ${track} audio encode failed`, { error: err.message }, "meeting");
         return null;
       } finally {
-        try { fs.unlinkSync(pcmPath); } catch (_) {}
+        try {
+          fs.unlinkSync(pcmPath);
+        } catch (_) {}
       }
     };
 

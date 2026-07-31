@@ -510,11 +510,6 @@ app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
 
-  if (url.includes("upgrade-success")) {
-    handleUpgradeDeepLink();
-    return;
-  }
-
   void handleOAuthDeepLink(url);
 
   if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
@@ -531,10 +526,7 @@ function resolveAuthUrl() {
     if (fs.existsSync(envPath)) runtimeEnv = JSON.parse(fs.readFileSync(envPath, "utf8"));
   } catch {}
   return (
-    process.env.AUTH_URL ||
-    process.env.VITE_AUTH_URL ||
-    runtimeEnv.VITE_AUTH_URL ||
-    "" // Fork: no hardcoded auth backend — nothing phones home by default.
+    process.env.AUTH_URL || process.env.VITE_AUTH_URL || runtimeEnv.VITE_AUTH_URL || "" // Fork: no hardcoded auth backend — nothing phones home by default.
   );
 }
 
@@ -640,16 +632,6 @@ async function handleOAuthDeepLink(deepLinkUrl) {
     if (rawToken) void applySessionTokenAndRefresh(rawToken);
   } catch (err) {
     if (debugLogger) debugLogger.error("Failed to handle OAuth deep link:", err);
-  }
-}
-
-function handleUpgradeDeepLink() {
-  if (isLiveWindow(windowManager?.controlPanelWindow)) {
-    windowManager.controlPanelWindow.webContents.executeJavaScript(
-      'window.dispatchEvent(new Event("upgrade-success"))'
-    );
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
   }
 }
 
@@ -1446,13 +1428,6 @@ async function startApp() {
   }
 }
 
-// Listen for usage limit reached from dictation overlay, forward to control panel
-ipcMain.on("limit-reached", (_event, data) => {
-  if (isLiveWindow(windowManager?.controlPanelWindow)) {
-    windowManager.controlPanelWindow.webContents.send("limit-reached", data);
-  }
-});
-
 // App event handlers
 if (gotSingleInstanceLock) {
   app.on("second-instance", async (_event, commandLine) => {
@@ -1483,11 +1458,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
-      if (url.includes("upgrade-success")) {
-        handleUpgradeDeepLink();
-      } else {
-        void handleOAuthDeepLink(url);
-      }
+      void handleOAuthDeepLink(url);
     }
   });
 

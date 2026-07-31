@@ -71,8 +71,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
   getNoteAudioPaths: (noteId) => ipcRenderer.invoke("get-note-audio-paths", noteId),
   deleteNoteAudio: (noteId) => ipcRenderer.invoke("delete-note-audio", noteId),
-  retranscribeMeetingNote: (noteId, options) => ipcRenderer.invoke("retranscribe-meeting-note", noteId, options),
-  checkWhisperModelDownloaded: (model) => ipcRenderer.invoke("check-whisper-model-downloaded", model),
+  retranscribeMeetingNote: (noteId, options) =>
+    ipcRenderer.invoke("retranscribe-meeting-note", noteId, options),
+  checkWhisperModelDownloaded: (model) =>
+    ipcRenderer.invoke("check-whisper-model-downloaded", model),
   retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
   updateTranscriptionText: (id, text, rawText) =>
     ipcRenderer.invoke("update-transcription-text", id, text, rawText),
@@ -350,10 +352,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Meeting types
   getMeetingTypes: () => ipcRenderer.invoke("get-meeting-types"),
   getMeetingType: (id) => ipcRenderer.invoke("get-meeting-type", id),
-  createMeetingType: (name, template) =>
-    ipcRenderer.invoke("create-meeting-type", name, template),
-  updateMeetingType: (id, updates) =>
-    ipcRenderer.invoke("update-meeting-type", id, updates),
+  createMeetingType: (name, template) => ipcRenderer.invoke("create-meeting-type", name, template),
+  updateMeetingType: (id, updates) => ipcRenderer.invoke("update-meeting-type", id, updates),
   deleteMeetingType: (id) => ipcRenderer.invoke("delete-meeting-type", id),
   setNoteMeetingType: (noteId, meetingTypeId) =>
     ipcRenderer.invoke("set-note-meeting-type", noteId, meetingTypeId),
@@ -365,10 +365,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("merge-speakers", noteId, keepId, mergeId),
 
   // Pipeline settings
-  setAutoPostCallPipeline: (enabled) =>
-    ipcRenderer.invoke("set-auto-post-call-pipeline", enabled),
-  syncNoteFormattingConfig: (config) =>
-    ipcRenderer.invoke("sync-note-formatting-config", config),
+  setAutoPostCallPipeline: (enabled) => ipcRenderer.invoke("set-auto-post-call-pipeline", enabled),
+  syncNoteFormattingConfig: (config) => ipcRenderer.invoke("sync-note-formatting-config", config),
   onNoteFormattingAutoConfigured: registerListener("note-formatting-auto-configured"),
 
   // Window control functions
@@ -568,20 +566,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   authGetToken: () => ipcRenderer.invoke("auth-get-token"),
   authSetToken: (token) => ipcRenderer.invoke("auth-set-token", token),
 
-  // OpenWhispr Cloud API
-  cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
-  cloudCheckout: (opts) => ipcRenderer.invoke("cloud-checkout", opts),
-  cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
-  cloudSwitchPlan: (opts) => ipcRenderer.invoke("cloud-switch-plan", opts),
-  cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
-  cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
-
   transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
-
-  // Referral stats
-  getReferralStats: () => ipcRenderer.invoke("get-referral-stats"),
-  sendReferralInvite: (email) => ipcRenderer.invoke("send-referral-invite", email),
-  getReferralInvites: () => ipcRenderer.invoke("get-referral-invites"),
 
   // Corti streaming (BYOK)
   cortiStreamingWarmup: (options) => ipcRenderer.invoke("corti-streaming-warmup", options),
@@ -651,10 +636,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "dictation-realtime-session-end",
     (callback) => (_event, data) => callback(data)
   ),
-
-  // Usage limit events (for showing UpgradePrompt in ControlPanel)
-  notifyLimitReached: (data) => ipcRenderer.send("limit-reached", data),
-  onLimitReached: registerListener("limit-reached", (callback) => (_event, data) => callback(data)),
 
   // Globe key listener for hotkey capture (macOS only)
   onGlobeKeyPressed: (callback) => {

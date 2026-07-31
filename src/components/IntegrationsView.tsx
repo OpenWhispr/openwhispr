@@ -5,20 +5,12 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
 import { Toggle } from "./ui/toggle";
-import {
-  ConfirmDialog,
-} from "./ui/dialog";
+import { ConfirmDialog } from "./ui/dialog";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import CliIntegrationCard from "./CliIntegrationCard";
 import googleCalendarIcon from "../assets/icons/google-calendar.svg";
-
-
-interface IntegrationsViewProps {
-  isPaid: boolean;
-  onUpgrade: () => void;
-}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -28,7 +20,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsViewProps) {
+export default function IntegrationsView() {
   const { t } = useTranslation();
   const { gcalAccounts, setGcalAccounts, gcalPrimaryOnly, setGcalPrimaryOnly } = useSettingsStore();
   const [isConnecting, setIsConnecting] = useState(false);
@@ -208,7 +200,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
       <div>
         <SectionLabel>{t("integrations.sections.cli")}</SectionLabel>
-        <CliIntegrationCard isPaid={isPaid} onUpgrade={onUpgrade} />
+        <CliIntegrationCard />
       </div>
 
       {!hasAccounts && (
@@ -224,7 +216,6 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
           </div>
         </div>
       )}
-
 
       <ConfirmDialog
         open={!!confirmDisconnectEmail}

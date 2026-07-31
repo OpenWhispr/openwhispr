@@ -370,15 +370,6 @@ export interface ConversationPreview {
   last_message_role?: "user" | "assistant" | "system" | null;
 }
 
-export interface ReferralItem {
-  id: string;
-  email: string;
-  name: string | null;
-  status: "pending" | "completed" | "rewarded";
-  created_at: string;
-  first_payment_at: string | null;
-}
-
 declare global {
   interface Window {
     electronAPI: {
@@ -429,10 +420,18 @@ declare global {
       deleteTranscriptionAudio: (id: number) => Promise<{ success: boolean }>;
       getAudioStorageUsage: () => Promise<{ fileCount: number; totalBytes: number }>;
       deleteAllAudio: () => Promise<{ deleted: number }>;
-      getNoteAudioPaths?: (noteId: number) => Promise<{ micPath: string | null; systemPath: string | null }>;
+      getNoteAudioPaths?: (
+        noteId: number
+      ) => Promise<{ micPath: string | null; systemPath: string | null }>;
       deleteNoteAudio?: (noteId: number) => Promise<{ success: boolean }>;
-      retranscribeMeetingNote?: (noteId: number, options?: { model?: string; language?: string }) => Promise<{ success: boolean; error?: string; noteId?: number }>;
-      retryPipelineStep?: (noteId: number, fromStep: string) => Promise<{ success: boolean; error?: string }>;
+      retranscribeMeetingNote?: (
+        noteId: number,
+        options?: { model?: string; language?: string }
+      ) => Promise<{ success: boolean; error?: string; noteId?: number }>;
+      retryPipelineStep?: (
+        noteId: number,
+        fromStep: string
+      ) => Promise<{ success: boolean; error?: string }>;
       reprocessAllMeetings?: () => Promise<{ success: boolean; count: number; error?: string }>;
       checkWhisperModelDownloaded?: (model: string) => Promise<{ downloaded: boolean }>;
       retryTranscription: (
@@ -730,13 +729,38 @@ declare global {
         error?: string;
       }>;
       getParakeetDiagnostics: () => Promise<ParakeetDiagnosticsResult>;
-      onModelAutoDownloadStatus?: (callback: (event: unknown, data: {
-        type: string; modelId: string; modelName?: string; sizeMb?: number; error?: string;
-      }) => void) => (() => void);
-      onModelAutoDownloadProgress?: (callback: (event: unknown, data: {
-        type: string; percentage?: number; downloaded_bytes?: number; total_bytes?: number;
-      }) => void) => (() => void);
-      getModelAutoDownloadStatus?: () => Promise<{ active: boolean; modelId: string | null; modelName?: string | null; sizeMb?: number | null } | undefined>;
+      onModelAutoDownloadStatus?: (
+        callback: (
+          event: unknown,
+          data: {
+            type: string;
+            modelId: string;
+            modelName?: string;
+            sizeMb?: number;
+            error?: string;
+          }
+        ) => void
+      ) => () => void;
+      onModelAutoDownloadProgress?: (
+        callback: (
+          event: unknown,
+          data: {
+            type: string;
+            percentage?: number;
+            downloaded_bytes?: number;
+            total_bytes?: number;
+          }
+        ) => void
+      ) => () => void;
+      getModelAutoDownloadStatus?: () => Promise<
+        | {
+            active: boolean;
+            modelId: string | null;
+            modelName?: string | null;
+            sizeMb?: number | null;
+          }
+        | undefined
+      >;
       downloadGemmaBuiltin?: () => Promise<{ success: boolean }>;
 
       // Local AI model management
@@ -1088,70 +1112,6 @@ declare global {
       authGetToken?: () => Promise<string | null>;
       authSetToken?: (token: string) => Promise<void>;
 
-      // OpenWhispr Cloud API
-      cloudUsage?: () => Promise<{
-        success: boolean;
-        wordsUsed?: number;
-        wordsRemaining?: number;
-        limit?: number;
-        plan?: string;
-        status?: string;
-        isSubscribed?: boolean;
-        isTrial?: boolean;
-        trialDaysLeft?: number | null;
-        currentPeriodEnd?: string | null;
-        billingInterval?: "monthly" | "annual" | null;
-        resetAt?: string;
-        error?: string;
-        code?: string;
-      }>;
-      cloudCheckout?: (opts?: {
-        plan?: "monthly" | "annual";
-        tier?: "pro" | "business";
-      }) => Promise<{
-        success: boolean;
-        url?: string;
-        error?: string;
-        code?: string;
-      }>;
-      cloudBillingPortal?: () => Promise<{
-        success: boolean;
-        url?: string;
-        error?: string;
-        code?: string;
-      }>;
-      cloudSwitchPlan?: (opts: {
-        plan: "monthly" | "annual";
-        tier: "pro" | "business";
-      }) => Promise<{
-        success: boolean;
-        alreadyOnPlan?: boolean;
-        error?: string;
-      }>;
-      cloudPreviewSwitch?: (opts: {
-        plan: "monthly" | "annual";
-        tier: "pro" | "business";
-      }) => Promise<{
-        success: boolean;
-        immediateAmount?: number;
-        currency?: string;
-        currentPriceAmount?: number;
-        currentInterval?: string;
-        newPriceAmount?: number;
-        newInterval?: string;
-        nextBillingDate?: string;
-        alreadyOnPlan?: boolean;
-        error?: string;
-      }>;
-
-      // Authenticated cloud API proxy
-      cloudApiRequest?: (opts: { method?: string; path: string; body?: unknown }) => Promise<{
-        success: boolean;
-        data?: unknown;
-        error?: string;
-        code?: string;
-      }>;
-
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
@@ -1171,54 +1131,6 @@ declare global {
         text?: string;
         error?: string;
         diarized?: boolean;
-      }>;
-
-      // Usage limit events
-      notifyLimitReached?: (data: { wordsUsed: number; limit: number }) => void;
-      onLimitReached?: (
-        callback: (data: { wordsUsed: number; limit: number }) => void
-      ) => () => void;
-
-
-
-      // Referral stats
-      getReferralStats?: () => Promise<{
-        referralCode: string;
-        referralLink: string;
-        totalReferrals: number;
-        completedReferrals: number;
-        pendingReferrals: number;
-        totalMonthsEarned: number;
-        referrals: Array<{
-          id: string;
-          email: string;
-          name: string;
-          status: "pending" | "completed" | "rewarded";
-          created_at: string;
-          first_payment_at: string | null;
-          words_used: number;
-        }>;
-      }>;
-
-      sendReferralInvite?: (email: string) => Promise<{
-        success: boolean;
-        invite: {
-          id: string;
-          recipientEmail: string;
-          status: "sent" | "failed" | "opened" | "converted";
-          sentAt: string;
-        };
-      }>;
-
-      getReferralInvites?: () => Promise<{
-        invites: Array<{
-          id: string;
-          recipientEmail: string;
-          status: "sent" | "failed" | "opened" | "converted";
-          sentAt: string;
-          openedAt?: string;
-          convertedAt?: string;
-        }>;
       }>;
 
       // Agent Mode
@@ -1590,16 +1502,14 @@ declare global {
       setSpeakerDiarizationEnabled?: (
         enabled: boolean
       ) => Promise<{ success: boolean; error?: string }>;
-      setAutoPostCallPipeline?: (
-        enabled: boolean
-      ) => Promise<{ success: boolean; error?: string }>;
+      setAutoPostCallPipeline?: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
       syncNoteFormattingConfig?: (config: {
         provider: string;
         model: string;
       }) => Promise<{ success: boolean }>;
       onNoteFormattingAutoConfigured?: (
         callback: (event: unknown, data: { provider: string; model: string }) => void
-      ) => (() => void);
+      ) => () => void;
       setMeetingSessionSpeakerConfig?: (config: {
         enabled: boolean;
         expectedCount: number;
