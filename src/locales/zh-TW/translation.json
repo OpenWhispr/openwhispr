@@ -1324,20 +1324,6 @@
           "saved": "顯示名稱已更新",
           "error": "無法更新您的姓名"
         },
-        "email": {
-          "label": "電子郵件",
-          "change": "變更",
-          "dialogTitle": "變更電子郵件",
-          "dialogDescription": "輸入您帳戶的新電子郵件地址。",
-          "newLabel": "新電子郵件",
-          "newPlaceholder": "you@example.com",
-          "submit": "寄送確認連結",
-          "sending": "寄送中...",
-          "cancel": "取消",
-          "sentTitle": "請查看您的收件匣",
-          "sentDescription": "我們已向您目前的電子郵件地址寄送確認連結。確認後變更即會生效。",
-          "close": "關閉"
-        },
         "password": {
           "label": "密碼",
           "description": "變更您用於登入的密碼。",
@@ -1358,7 +1344,8 @@
         "errors": {
           "invalidPassword": "您目前的密碼不正確。",
           "passwordTooShort": "密碼至少需要 8 個字元。",
-          "passwordTooLong": "密碼過長。",          "noPassword": "此帳戶尚未設定密碼。",
+          "passwordTooLong": "密碼過長。",
+          "noPassword": "此帳戶尚未設定密碼。",
           "generic": "發生錯誤，請再試一次。"
         }
       }

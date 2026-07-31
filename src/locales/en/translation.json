@@ -1602,20 +1602,6 @@
           "saved": "Display name updated",
           "error": "Couldn't update your name"
         },
-        "email": {
-          "label": "Email",
-          "change": "Change",
-          "dialogTitle": "Change email",
-          "dialogDescription": "Enter the new email address for your account.",
-          "newLabel": "New email",
-          "newPlaceholder": "you@example.com",
-          "submit": "Send confirmation link",
-          "sending": "Sending...",
-          "cancel": "Cancel",
-          "sentTitle": "Check your inbox",
-          "sentDescription": "We sent a confirmation link to your current email address. The change takes effect once you confirm it.",
-          "close": "Close"
-        },
         "password": {
           "label": "Password",
           "description": "Change the password you use to sign in.",
@@ -1636,7 +1622,8 @@
         "errors": {
           "invalidPassword": "Your current password is incorrect.",
           "passwordTooShort": "Password must be at least 8 characters.",
-          "passwordTooLong": "Password is too long.",          "noPassword": "No password is set for this account.",
+          "passwordTooLong": "Password is too long.",
+          "noPassword": "No password is set for this account.",
           "generic": "Something went wrong. Please try again."
         }
       }

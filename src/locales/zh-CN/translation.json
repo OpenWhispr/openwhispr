@@ -1324,20 +1324,6 @@
           "saved": "显示名称已更新",
           "error": "无法更新您的姓名"
         },
-        "email": {
-          "label": "邮箱",
-          "change": "更改",
-          "dialogTitle": "更改邮箱",
-          "dialogDescription": "输入您账户的新邮箱地址。",
-          "newLabel": "新邮箱",
-          "newPlaceholder": "you@example.com",
-          "submit": "发送确认链接",
-          "sending": "正在发送...",
-          "cancel": "取消",
-          "sentTitle": "查看您的收件箱",
-          "sentDescription": "我们已向您当前的邮箱发送确认链接。确认后更改即会生效。",
-          "close": "关闭"
-        },
         "password": {
           "label": "密码",
           "description": "更改您用于登录的密码。",
@@ -1358,7 +1344,8 @@
         "errors": {
           "invalidPassword": "您的当前密码不正确。",
           "passwordTooShort": "密码至少需要 8 个字符。",
-          "passwordTooLong": "密码过长。",          "noPassword": "此账户未设置密码。",
+          "passwordTooLong": "密码过长。",
+          "noPassword": "此账户未设置密码。",
           "generic": "出了点问题，请重试。"
         }
       }

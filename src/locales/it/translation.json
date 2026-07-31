@@ -1324,20 +1324,6 @@
           "saved": "Nome visualizzato aggiornato",
           "error": "Impossibile aggiornare il tuo nome"
         },
-        "email": {
-          "label": "E-mail",
-          "change": "Modifica",
-          "dialogTitle": "Modifica e-mail",
-          "dialogDescription": "Inserisci il nuovo indirizzo e-mail per il tuo account.",
-          "newLabel": "Nuova e-mail",
-          "newPlaceholder": "tu@esempio.com",
-          "submit": "Invia link di conferma",
-          "sending": "Invio...",
-          "cancel": "Annulla",
-          "sentTitle": "Controlla la tua posta in arrivo",
-          "sentDescription": "Abbiamo inviato un link di conferma al tuo indirizzo email attuale. La modifica avrà effetto una volta confermata.",
-          "close": "Chiudi"
-        },
         "password": {
           "label": "Password",
           "description": "Modifica la password che usi per accedere.",
@@ -1358,7 +1344,8 @@
         "errors": {
           "invalidPassword": "La tua password attuale non è corretta.",
           "passwordTooShort": "La password deve essere di almeno 8 caratteri.",
-          "passwordTooLong": "La password è troppo lunga.",          "noPassword": "Nessuna password è impostata per questo account.",
+          "passwordTooLong": "La password è troppo lunga.",
+          "noPassword": "Nessuna password è impostata per questo account.",
           "generic": "Qualcosa è andato storto. Riprova."
         }
       }

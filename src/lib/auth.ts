@@ -285,19 +285,6 @@ export async function updateDisplayName(name: string): Promise<{ error?: AuthAct
   }
 }
 
-export async function requestEmailChange(newEmail: string): Promise<{ error?: AuthActionError }> {
-  try {
-    const { error } = await authClient.changeEmail({
-      newEmail: newEmail.trim(),
-      callbackURL: "https://openwhispr.com",
-    });
-    if (error) return { error: toAuthActionError(error, "Failed to change email") };
-    return {};
-  } catch (error) {
-    return { error: toAuthActionError(error, "Failed to change email") };
-  }
-}
-
 export async function changePassword(params: {
   currentPassword: string;
   newPassword: string;

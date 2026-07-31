@@ -1665,7 +1665,6 @@ export default function SettingsPage({
 
                 <ProfileSection
                   name={user.name || ""}
-                  email={user.email}
                   onSessionRefresh={() => {
                     void refetch();
                   }}

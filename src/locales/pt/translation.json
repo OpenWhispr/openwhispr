@@ -1303,20 +1303,6 @@
           "saved": "Nome de exibição atualizado",
           "error": "Não foi possível atualizar seu nome"
         },
-        "email": {
-          "label": "E-mail",
-          "change": "Alterar",
-          "dialogTitle": "Alterar e-mail",
-          "dialogDescription": "Digite o novo endereço de e-mail para sua conta.",
-          "newLabel": "Novo e-mail",
-          "newPlaceholder": "voce@exemplo.com",
-          "submit": "Enviar link de confirmação",
-          "sending": "Enviando...",
-          "cancel": "Cancelar",
-          "sentTitle": "Verifique sua caixa de entrada",
-          "sentDescription": "Enviamos um link de confirmação para o seu endereço de e-mail atual. A alteração terá efeito assim que você confirmar.",
-          "close": "Fechar"
-        },
         "password": {
           "label": "Senha",
           "description": "Altere a senha que você usa para entrar.",
@@ -1337,7 +1323,8 @@
         "errors": {
           "invalidPassword": "Sua senha atual está incorreta.",
           "passwordTooShort": "A senha deve ter pelo menos 8 caracteres.",
-          "passwordTooLong": "A senha é muito longa.",          "noPassword": "Nenhuma senha está definida para esta conta.",
+          "passwordTooLong": "A senha é muito longa.",
+          "noPassword": "Nenhuma senha está definida para esta conta.",
           "generic": "Algo deu errado. Tente novamente."
         }
       }
