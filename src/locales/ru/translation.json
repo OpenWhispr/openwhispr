@@ -106,21 +106,6 @@
     "accessibility": "Настройки универсального доступа недоступны на этой платформе.",
     "systemAudio": "Настройки системного аудио недоступны на этой платформе."
   },
-  "upgradePrompt": {
-    "paymentFailed": "Не удалось обработать платёж",
-    "weeklyLimit": "Вы достигли недельного лимита",
-    "pastDueDescription": "Сейчас вы на бесплатном плане — не волнуйтесь, у вас есть {{limit}} слов в неделю.\nОбновите способ оплаты, чтобы вернуться к безлимитному Pro.",
-    "limitDescription": "Использовано {{used}} из {{limit}} слов.\nВаша транскрипция сохранена и вставлена.",
-    "updatePayment": "Обновить способ оплаты",
-    "updatePaymentDescription": "Вернитесь к безлимитным Pro-транскрипциям.",
-    "upgradeToPro": "Перейти на Pro",
-    "upgradeDescription": "Безлимитные транскрипции от $8/мес.",
-    "useApiKey": "Использовать свой API-ключ",
-    "useApiKeyDescription": "Свой ключ — без ограничений.",
-    "switchToLocal": "Перейти на локальный режим",
-    "switchToLocalDescription": "Офлайн-транскрипция. Без ограничений.",
-    "rollingWeeklyLimit": "Скользящий недельный лимит"
-  },
   "windowControls": {
     "minimize": "Свернуть",
     "maximize": "Развернуть",
@@ -239,12 +224,6 @@
       ],
       "optionalNote": "Необязательно — вы можете настроить или изменить её в любое время в настройках."
     },
-    "connectivity": {
-      "title": "Не удаётся подключиться к OpenWhispr Cloud из этой сети",
-      "body": "{{cause}} Вы можете переключиться на локальный движок или продолжить и повторить попытку позже.",
-      "useLocal": "Использовать локальный движок",
-      "continue": "Продолжить всё равно"
-    },
     "useCase": {
       "title": "Что вас сюда привело?",
       "description": "Мы — небольшая команда и выпускаем обновления каждую неделю. Ваш выбор настраивает приложение под вас — и подсказывает нам, что делать дальше.",
@@ -336,19 +315,9 @@
       "installButton": "Установить обновление",
       "availableButton": "Доступно обновление"
     },
-    "limit": {
-      "weeklyTitle": "Недельный лимит достигнут",
-      "weeklyDescription": "Ваш лимит обновляется на скользящей основе. Перейдите на Pro или используйте свой API-ключ для безлимитного использования."
-    },
     "accessibilityMissing": {
       "title": "Необходимы разрешения универсального доступа",
       "description": "Мы обнаружили, что OpenWhispr нуждается в разрешениях универсального доступа для корректной работы. Включите их ниже."
-    },
-    "billing": {
-      "pastDueTitle": "Не удалось обработать платёж",
-      "pastDueDescription": "Не волнуйтесь — сейчас вы на бесплатном плане. Обновите способ оплаты в настройках, чтобы вернуться к Pro.",
-      "bannerDescription": "Сейчас вы на бесплатном плане — у вас есть {{limit}} слов в неделю. Обновите способ оплаты, чтобы вернуться к Pro.",
-      "updatePayment": "Обновить платёж"
     },
     "history": {
       "couldNotLoadTitle": "Не удалось загрузить историю",
@@ -404,11 +373,6 @@
         "recover": "Восстановить",
         "recovered": "Восстановлено"
       }
-    },
-    "cloudMigration": {
-      "title": "Добро пожаловать в OpenWhispr Cloud",
-      "description": "Мы переключили транскрипцию на OpenWhispr Cloud для более быстрых и точных результатов. Ваши предыдущие настройки сохранены — вы можете вернуться к ним в любой момент в настройках.",
-      "viewSettings": "Открыть настройки"
     },
     "aiCta": {
       "title": "Улучшите транскрипции с помощью ИИ",
@@ -715,75 +679,6 @@
       }
     }
   },
-  "auth": {
-    "cloudNotConfigured": "Облако не настроено",
-    "common": {
-      "back": "Назад",
-      "continue": "Продолжить",
-      "or": "или"
-    },
-    "emailStep": {
-      "continueWithEmail": "Продолжить с электронной почтой",
-      "continueWithoutAccount": "Продолжить без аккаунта",
-      "emailPlaceholder": "you@example.com"
-    },
-    "errors": {
-      "accountExistsSignIn": "Аккаунт с этой электронной почтой уже существует. Войдите в систему.",
-      "accountNotFoundCreate": "Аккаунт с этой электронной почтой не найден. Создайте аккаунт.",
-      "authNotConfigured": "Аутентификация не настроена",
-      "createAccountFailed": "Не удалось создать аккаунт",
-      "failedProviderSignIn": "Не удалось войти через {{provider}}",
-      "failedUserCheck": "Не удалось проверить аккаунт пользователя",
-      "generic": "Что-то пошло не так. Попробуйте ещё раз.",
-      "invalidCredentials": "Неверный адрес электронной почты или пароль",
-      "plusAliasUnsupported": "Алиасы электронной почты с символом «+» не поддерживаются"
-    },
-    "getStarted": "Начать",
-    "legal": {
-      "and": "и",
-      "prefix": "Продолжая, вы соглашаетесь с нашими",
-      "privacy": "Политикой конфиденциальности",
-      "suffix": "",
-      "terms": "Условиями использования"
-    },
-    "passwordForm": {
-      "createAccount": "Создать аккаунт",
-      "createAccountButton": "Создать аккаунт",
-      "createAccountLink": "Создать аккаунт",
-      "createPasswordPlaceholder": "Придумайте пароль",
-      "creatingAccount": "Создание аккаунта...",
-      "enterPasswordPlaceholder": "Введите пароль",
-      "forgotPassword": "Забыли пароль?",
-      "fullNamePlaceholder": "Полное имя",
-      "haveAccount": "Уже есть аккаунт?",
-      "newHere": "Впервые здесь?",
-      "passwordMinLength": "Пароль должен содержать не менее 8 символов",
-      "signIn": "Войти",
-      "signInLink": "Войти",
-      "signingIn": "Вход...",
-      "welcomeBack": "С возвращением"
-    },
-    "signedIn": {
-      "ready": "Готово",
-      "welcomeBack": "С возвращением",
-      "welcomeBackName": "С возвращением, {{name}}"
-    },
-    "sso": {
-      "continueWithSSO": "Войти через SSO",
-      "emailRequired": "Введите рабочий адрес электронной почты для использования SSO.",
-      "failed": "Не удалось выполнить единый вход. Повторите попытку."
-    },
-    "social": {
-      "completeInBrowser": "Завершите вход в браузере",
-      "continueWithApple": "Продолжить с Apple",
-      "continueWithGoogle": "Продолжить с Google",
-      "continueWithMicrosoft": "Продолжить с Microsoft",
-      "protocolUnavailable": "Вход через браузер недоступен — повторно зарегистрируйте протокол openwhispr:// в системных настройках приложений по умолчанию."
-    },
-    "welcomeSubtitle": "Диктуйте где угодно голосом",
-    "welcomeTitle": "Добро пожаловать в OpenWhispr",
-    "sessionExpired": "Сессия истекла. Пожалуйста, войдите снова."
-  },
   "cleanupPrompt": "Очистка",
   "developerSection": {
     "currentLogFile": "Текущий файл логов",
@@ -869,23 +764,6 @@
     "description": "Произошла непредвиденная ошибка. Перезагрузите, чтобы попробовать снова.",
     "reload": "Перезагрузить",
     "title": "Что-то пошло не так"
-  },
-  "forgotPassword": {
-    "back": "Назад",
-    "backToSignIn": "Вернуться к входу",
-    "emailPlaceholder": "Введите вашу электронную почту",
-    "goBack": "Вернуться",
-    "notConfigured": "Аутентификация ещё не настроена.",
-    "sendResetLink": "Отправить ссылку для сброса",
-    "sending": "Отправка...",
-    "subtitle": "Введите вашу электронную почту, и мы отправим вам ссылку для сброса пароля",
-    "success": {
-      "description": "Мы отправили ссылку для сброса пароля на",
-      "help": "Не получили письмо? Проверьте папку «Спам» или попробуйте снова.",
-      "title": "Проверьте почту",
-      "tryAnother": "Попробовать другой адрес"
-    },
-    "title": "Сброс пароля"
   },
   "actionPrompt": "Промпт действия",
   "hotkeyGuidance": {
@@ -1104,183 +982,6 @@
     "title": "Настройки"
   },
   "settingsPage": {
-    "account": {
-      "badges": {
-        "free": "Бесплатный",
-        "limitReached": "Лимит достигнут",
-        "pastDue": "Просрочен",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Пробный"
-      },
-      "billing": {
-        "couldNotOpenDescription": "Не удалось открыть страницу оплаты. Попробуйте ещё раз.",
-        "couldNotOpenTitle": "Не удалось открыть оплату",
-        "manageBilling": "Управление оплатой",
-        "opening": "Открытие...",
-        "updatePaymentMethod": "Обновить способ оплаты"
-      },
-      "checkout": {
-        "couldNotOpenDescription": "Не удалось открыть страницу оформления. Попробуйте ещё раз.",
-        "couldNotOpenTitle": "Не удалось открыть оформление",
-        "opening": "Открытие...",
-        "upgradeToPro": "Перейти на Pro"
-      },
-      "disabled": "Отключено",
-      "featuresDisabled": "Функции аккаунта отключены",
-      "featuresDisabledDescription": "Установите VITE_AUTH_URL в файле .env для включения функций аккаунта.",
-      "notConfigured": "Аутентификация не настроена",
-      "notSignedIn": "Вы не вошли в систему",
-      "notSignedInDescription": "Создайте аккаунт, чтобы разблокировать премиум-функции.",
-      "offline": "Нет сети",
-      "pastDue": {
-        "description": "Сейчас вы на бесплатном плане. Обновите способ оплаты, чтобы вернуться к Pro.",
-        "title": "Не удалось обработать платёж"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} слов на этой неделе",
-        "nextBilling": "Следующее списание: {{date}}",
-        "pastDue": "{{used}} / {{limit}} бесплатных слов на этой неделе — обновите платёж для восстановления Pro",
-        "trial": "Осталось {{days}} дней — безлимитные транскрипции",
-        "unlimited": "Без ограничений"
-      },
-      "planLabels": {
-        "free": "Бесплатный",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Пробный"
-      },
-      "planTitle": "Тариф",
-      "rollingWeeklyLimit": "Скользящий недельный лимит",
-      "signOut": {
-        "failedDescription": "Произошла ошибка при выходе. Попробуйте ещё раз.",
-        "failedTitle": "Не удалось выйти",
-        "signOut": "Выйти",
-        "signingOut": "Выход..."
-      },
-      "signedIn": "Вы вошли",
-      "title": "Аккаунт",
-      "toasts": {
-        "approachingLimit": {
-          "description": "Вы использовали {{used}} из {{limit}} бесплатных слов на этой неделе. Перейдите на Pro для безлимитного использования.",
-          "title": "Приближение к недельному лимиту"
-        }
-      },
-      "trialCta": {
-        "button": "Создать бесплатный аккаунт",
-        "description": "Безлимитные транскрипции, приоритетная обработка и многое другое.",
-        "title": "Попробуйте Pro бесплатно на 7 дней"
-      },
-      "pricing": {
-        "title": "Тарифы",
-        "billedYearly": "Годовая оплата",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "навсегда",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2 000 слов/неделю транскрипции",
-            "5 часов записи встреч/месяц",
-            "## Всегда бесплатно",
-            "Безлимитные локальные модели ИИ",
-            "Безлимитная облачная транскрипция с вашими ключами API",
-            "Поддержка более 100 языков",
-            "Пользовательский словарь",
-            "Нулевое хранение данных",
-            "Поддержка сообщества"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/мес.",
-          "annualPrice": "$80",
-          "annualPeriod": "/год",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Все функции Free +",
-          "features": [
-            "Безлимитная облачная транскрипция",
-            "20 часов записи встреч/месяц",
-            "Синхронизация между устройствами",
-            "Персональный доступ к API",
-            "Интеграция MCP во всех ваших приложениях",
-            "Мобильное приложение (iOS скоро)",
-            "Поддержка по электронной почте"
-          ],
-          "cta": "Начать",
-          "switchToAnnual": "Перейти на годовой"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$20",
-          "monthlyPeriod": "/мес.",
-          "annualPrice": "$200",
-          "annualPeriod": "/год",
-          "annualEquivalent": "$16.67",
-          "includesPrefix": "Все функции Pro +",
-          "badge": "Самый популярный",
-          "features": [
-            "Безлимитные записи встреч",
-            "Режим агента",
-            "Чат с вашими данными",
-            "Приоритетная поддержка"
-          ],
-          "cta": "Начать",
-          "switchToAnnual": "Перейти на годовой"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "Индивидуально",
-          "subtitle": "Для расширенной безопасности и поддержки",
-          "includesPrefix": "Все функции Business +",
-          "features": [
-            "Управляемые кредиты API",
-            "Облачная синхронизация между устройствами",
-            "Командные функции и администрирование",
-            "SSO и соответствие требованиям",
-            "Выделенная поддержка"
-          ],
-          "cta": "Связаться с отделом продаж"
-        },
-        "currentPlan": "Текущий тариф",
-        "upgrade": "Улучшить план",
-        "downgrade": "Понизить план",
-        "planSwitched": "План успешно обновлён",
-        "confirmSwitch": {
-          "title": "Подтвердите смену плана",
-          "description": "Перейти на {{plan}} ({{interval}})",
-          "monthly": "ежемесячно",
-          "yearly": "ежегодно",
-          "chargeToday": "Списание сегодня",
-          "accountCredit": "Кредит на счёте",
-          "newPrice": "Новая цена",
-          "nextBilling": "Следующее списание",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "Отмена",
-          "confirm": "Подтвердить"
-        }
-      },
-      "signedOutPlans": {
-        "button": "Создать бесплатный аккаунт"
-      },
-      "user": "Пользователь",
-      "wordsRemaining": "Осталось {{remaining}}",
-      "deleteAccount": {
-        "label": "Удалить аккаунт",
-        "labelDescription": "Навсегда удалить ваш аккаунт, все облачные и локальные данные. Это действие нельзя отменить.",
-        "button": "Удалить мой аккаунт",
-        "deleting": "Удаление...",
-        "title": "Удалить ваш аккаунт?",
-        "description": "Это навсегда удалит ваш аккаунт OpenWhispr, все синхронизированные облачные заметки и все локальные данные, включая транскрипции, аудиозаписи, загруженные модели, подключения календаря и настройки. Это действие нельзя отменить.",
-        "confirmText": "Удалить всё",
-        "successTitle": "Аккаунт удалён",
-        "successDescription": "Ваш аккаунт и все данные были удалены. Приложение сейчас перезагрузится.",
-        "failedTitle": "Ошибка удаления",
-        "failedDescription": "Что-то пошло не так при удалении вашего аккаунта. Ваши локальные данные могли быть частично удалены. Попробуйте снова."
-      }
-    },
     "agentConfig": {
       "agentName": "Имя агента",
       "description": "Назовите вашего ИИ-помощника, чтобы обращаться к нему во время диктовки",
@@ -2015,78 +1716,6 @@
       }
     }
   },
-  "referral": {
-    "modalTitle": "Реферальная программа",
-    "title": "Приглашайте и получайте награды",
-    "subtitle": "Подарите месяц. Получите месяц.",
-    "tabs": {
-      "refer": "Пригласить",
-      "pastInvites": "Отправленные приглашения"
-    },
-    "howItWorks": {
-      "shareLink": "Поделитесь ссылкой-приглашением",
-      "theySignUp": "Они регистрируются и получают ",
-      "freeMonthOfPro": "бесплатный месяц Pro",
-      "youGet": "Вы получаете ",
-      "freeMonth": "бесплатный месяц",
-      "whenTheyDictate": ", когда они надиктуют 2 000 слов"
-    },
-    "inviteLink": {
-      "title": "Ваша ссылка-приглашение",
-      "copy": "Копировать",
-      "copied": "Скопировано"
-    },
-    "sendInvites": {
-      "title": "Отправить приглашения",
-      "placeholder": "friend@example.com",
-      "send": "Отправить",
-      "sending": "Отправка"
-    },
-    "stats": {
-      "referred": "Приглашено",
-      "converted": "Активировано",
-      "monthsEarned": "Месяцев заработано"
-    },
-    "status": {
-      "converted": "Активировано",
-      "opened": "Открыто",
-      "failed": "Не удалось",
-      "sent": "Отправлено"
-    },
-    "empty": {
-      "title": "Приглашения ещё не отправлены",
-      "description": "Поделитесь ссылкой или отправьте приглашение, чтобы начать"
-    },
-    "toasts": {
-      "copiedTitle": "Скопировано!",
-      "copiedDescription": "Реферальная ссылка скопирована в буфер обмена",
-      "copyFailedTitle": "Ошибка копирования",
-      "copyFailedDescription": "Не удалось скопировать ссылку в буфер обмена",
-      "invalidEmailTitle": "Неверный адрес электронной почты",
-      "invalidEmailDescription": "Пожалуйста, введите корректный адрес электронной почты",
-      "inviteSentTitle": "Приглашение отправлено!",
-      "inviteSentDescription": "Приглашение отправлено на {{email}}",
-      "sendFailedTitle": "Ошибка отправки",
-      "sendFailedDescription": "Не удалось отправить приглашение. Пожалуйста, попробуйте ещё раз."
-    },
-    "errors": {
-      "unableToLoad": "Не удалось загрузить данные реферальной программы",
-      "unableToLoadStats": "Не удалось загрузить статистику рефералов. Пожалуйста, попробуйте позже."
-    },
-    "tryAgain": "Попробовать снова",
-    "card": {
-      "brand": "OpenWhispr",
-      "signalId": "Signal ID",
-      "audioSignature": "Ваша аудиоподпись",
-      "stop": "Стоп",
-      "playSignal": "Воспроизвести сигнал"
-    },
-    "friends": {
-      "title": "Друзья",
-      "completed": "Завершено",
-      "sentInvites": "Отправленные приглашения"
-    }
-  },
   "notes": {
     "sidebar": {
       "newNote": "Новая заметка",
@@ -2448,7 +2077,6 @@
     "notes": "Заметки",
     "upload": "Загрузить",
     "dictionary": "Словарь",
-    "referral": "Получить бесплатный месяц",
     "settings": "Настройки",
     "support": "Поддержка",
     "limitReached": "Недельный лимит достигнут",
@@ -2460,9 +2088,7 @@
     "integrations": "Интеграции",
     "defaultUser": "Пользователь",
     "notSignedIn": "Не авторизован",
-    "chat": "Чат",
-    "inviteTeammate": "Teammitglied einladen",
-    "createWorkspace": "Workspace erstellen"
+    "chat": "Чат"
   },
   "chat": {
     "newChat": "Новый чат",
@@ -2485,26 +2111,6 @@
     "searchTitle": "Поиск бесед",
     "searchDescription": "Поиск по всем беседам",
     "newChatEmpty": "Спросите о заметках, транскрипциях или о чём угодно"
-  },
-  "usage": {
-    "approachingLimit": "Приближается недельный лимит",
-    "approachingLimitDescription": "На этой неделе использовано {{wordsUsed}} / {{limit}} слов.",
-    "yourPlan": "Ваш тариф",
-    "trial": "Пробный период ({{days}} дн.)",
-    "trial_other": "Пробный период ({{days}} дн.)",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "Без ограничений в пробный период",
-    "unlimited": "Без ограничений",
-    "manageSubscription": "Управление подпиской",
-    "weeklyUsage": "За неделю",
-    "limitReached": "Лимит достигнут",
-    "free": "Бесплатно",
-    "wordsRemaining": "Осталось {{remaining}} слов",
-    "rollingLimit": "Скользящий недельный лимит",
-    "upgradeToPro": "Перейти на Pro",
-    "useYourOwnKey": "Свой API-ключ",
-    "upgradeUnlimited": "Pro — без ограничений"
   },
   "support": {
     "documentation": "Документация",
@@ -2697,26 +2303,6 @@
       "mcp": "MCP",
       "cli": "CLI"
     },
-    "api": {
-      "title": "API-ключи",
-      "description": "Управление API-ключами для программного доступа",
-      "proRequired": "Перейдите на платный план, чтобы получить доступ к API",
-      "manage": "Управлять ключами",
-      "viewPlans": "Посмотреть планы",
-      "dialogTitle": "API-ключи"
-    },
-    "mcp": {
-      "title": "Перенесите заметки в ваши инструменты ИИ",
-      "description": "Общайтесь, ищите и работайте с заметками в Claude, ChatGPT и Cursor.",
-      "step1": "В вашем инструменте ИИ добавьте OpenWhispr MCP, используя публичный URL",
-      "step2": "Создайте API-ключ выше с нужными разрешениями.",
-      "step3": "Вставьте ключ в заголовок Authorization для подключения.",
-      "learnMore": "Узнать больше",
-      "viewPlans": "Посмотреть планы",
-      "copyUrl": "Копировать URL MCP",
-      "proRequired": "Перейдите на платный план, чтобы подключить OpenWhispr к Claude, ChatGPT и Cursor.",
-      "copied": "Скопировано"
-    },
     "cli": {
       "title": "Доступ через командную строку",
       "description": "Дайте своему агенту доступ к заметкам из терминала.",
@@ -2724,28 +2310,10 @@
       "learnMore": "Открыть документацию",
       "copyDocsLink": "Скопировать ссылку на документацию",
       "docsLinkCopied": "Ссылка на документацию скопирована",
-      "viewPlans": "Посмотреть планы",
       "local": {
         "label": "Локально",
-        "freeBadge": "Бесплатно",
         "description": "Читайте свои локальные заметки напрямую. Без входа в аккаунт и API-ключа — работает, пока OpenWhispr запущен."
-      },
-      "cloud": {
-        "label": "Облако",
-        "description": "Синхронизируйте устройства с помощью API-ключа.",
-        "proRequired": "Перейдите на платный план, чтобы использовать CLI в облачном режиме."
       }
-    },
-    "plan": {
-      "title": "Ваш план",
-      "current": "Текущий",
-      "free": "Бесплатный",
-      "freeLimit": "5 встреч / месяц",
-      "essential": "Essential",
-      "essentialLimit": "20 встреч / месяц",
-      "pro": "Pro",
-      "proLimit": "Безлимитно",
-      "upgrade": "Улучшить"
     },
     "notABot": {
       "title": "OpenWhispr — это запись встреч, а не бот",
@@ -2785,8 +2353,6 @@
     "untitledEvent": "Без названия",
     "systemAudioRequired": "Разрешение «Системное аудио» необходимо для записи звука других участников.",
     "openSettings": "Открыть Системные настройки",
-    "signInRequired": "Войдите, чтобы записывать встречи",
-    "signInDescription": "Создайте аккаунт или войдите для записи и транскрипции встреч.",
     "connectCalendar": "Подключите календарь",
     "connectCalendarDescription": "Свяжите Google Календарь, чтобы видеть предстоящие встречи и автоматически записывать заметки.",
     "notABot": "OpenWhispr записывает через системный звук — он никогда не присоединяется к встречам как бот.",
@@ -2814,37 +2380,7 @@
     "deleteNote": "Удалить заметку",
     "deleteConfirmTitle": "Удалить заметку?",
     "deleteConfirmDescription": "Эта заметка будет удалена безвозвратно.",
-    "deleteConfirm": "Удалить",
-    "share": {
-      "button": "Поделиться",
-      "dialog": {
-        "title": "Поделиться заметкой",
-        "searchPlaceholder": "Добавьте людей по эл. почте",
-        "emailLabel": "Эл. почта получателя",
-        "shareButton": "Поделиться",
-        "copyLink": "Скопировать ссылку",
-        "copied": "Скопировано",
-        "owner": "Владелец",
-        "pending": "Ожидает",
-        "accepted": "Имеет доступ",
-        "resend": "Отправить приглашение снова",
-        "revoke": "Удалить",
-        "invitationActions": "Действия с приглашением",
-        "permissionRequired": "Изменять настройки публикации может только владелец заметки.",
-        "visibility": {
-          "label": "Видимость",
-          "link": "Любой со ссылкой",
-          "domain": "Все в {{domain}} со ссылкой",
-          "invited": "Только приглашённые"
-        },
-        "error": {
-          "invalidEmail": "Введите корректный адрес эл. почты",
-          "alreadyInvited": "{{email}} уже приглашён",
-          "inviteFailed": "Не удалось отправить приглашение. Попробуйте ещё раз.",
-          "linkUnavailable": "Сгенерируйте или обновите ссылку, чтобы скопировать её"
-        }
-      }
-    }
+    "deleteConfirm": "Удалить"
   },
   "commandSearch": {
     "title": "Поиск",
@@ -2873,54 +2409,6 @@
     "description": "OpenWhispr нужны некоторые разрешения для работы на этом компьютере.",
     "continue": "Продолжить"
   },
-  "apiKeysSection": {
-    "title": "API-ключи",
-    "description": "Создавайте ключи для программного доступа к API OpenWhispr.",
-    "docsLink": "Документация API",
-    "empty": "API-ключей пока нет",
-    "createButton": "Создать API-ключ",
-    "create": {
-      "title": "Создать API-ключ",
-      "nameLabel": "Название ключа",
-      "namePlaceholder": "напр. Моя интеграция",
-      "scopesLabel": "Разрешения",
-      "expiryLabel": "Срок действия",
-      "expiryOptions": {
-        "never": "Бессрочно",
-        "30days": "30 дней",
-        "60days": "60 дней",
-        "90days": "90 дней",
-        "1year": "1 год"
-      },
-      "submit": "Создать",
-      "cancel": "Отмена"
-    },
-    "created": {
-      "title": "API-ключ создан",
-      "warning": "Скопируйте этот ключ сейчас. Он больше не будет показан.",
-      "copied": "Скопировано!",
-      "copyButton": "Скопировать в буфер обмена",
-      "done": "Готово"
-    },
-    "scopes": {
-      "notesRead": "Чтение заметок",
-      "notesWrite": "Создание и редактирование заметок",
-      "transcriptionsRead": "Чтение транскрипций"
-    },
-    "revoke": {
-      "button": "Отозвать",
-      "confirm": "Отозвать этот ключ? Интеграции, использующие его, перестанут работать.",
-      "success": "API-ключ отозван"
-    },
-    "neverUsed": "Не использовался",
-    "lastUsed": "Последнее использование {{time}}",
-    "maxKeysReached": "Максимум {{max}} ключей разрешено",
-    "errors": {
-      "loadFailed": "Не удалось загрузить API-ключи",
-      "createFailed": "Не удалось создать API-ключ",
-      "revokeFailed": "Не удалось отозвать API-ключ"
-    }
-  },
   "embeddedChat": {
     "askPlaceholder": "Спросите что-нибудь...",
     "send": "Отправить",
@@ -2945,54 +2433,6 @@
     "speaker": {
       "you": "Вы",
       "others": "Другие"
-    }
-  },
-  "workspaces": {
-    "switcher": {
-      "personal": "Persönlich",
-      "workspaces": "Workspaces",
-      "empty": "Noch keine Workspaces",
-      "create": "Workspace erstellen…"
-    },
-    "create": {
-      "title": "Workspace erstellen",
-      "description": "Workspaces ermöglichen Zusammenarbeit, geteilte Notizen und gemeinsame Abrechnung.",
-      "nameLabel": "Workspace-Name",
-      "namePlaceholder": "Acme Corp",
-      "submit": "Workspace erstellen",
-      "submitting": "Erstelle…",
-      "errorTitle": "Workspace konnte nicht erstellt werden"
-    },
-    "created": {
-      "title": "Workspace erstellt",
-      "description": "Sie sind nun Inhaber von {{name}}."
-    },
-    "invite": {
-      "title": "Zu {{workspace}} einladen",
-      "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
-      "emailLabel": "E-Mail",
-      "roleLabel": "Rolle",
-      "teamsLabel": "Zu Teams hinzufügen",
-      "submit": "Einladung senden",
-      "submitting": "Sende…",
-      "sentTitle": "Einladung gesendet",
-      "sentDescription": "Einladung an {{email}} gesendet.",
-      "errorTitle": "Einladung konnte nicht gesendet werden",
-      "role": {
-        "admin": "Administrator",
-        "member": "Mitglied"
-      }
-    },
-    "accept": {
-      "title": "Workspace beitreten",
-      "description": "{{inviter}} hat Sie eingeladen, {{workspace}} als {{role}} beizutreten.",
-      "loading": "Lade Einladung…",
-      "accept": "Einladung annehmen",
-      "accepting": "Annehmen…",
-      "signInToAccept": "Anmelden zum Annehmen",
-      "successTitle": "Beigetreten",
-      "successDescription": "Willkommen bei {{name}}.",
-      "errorTitle": "Einladung konnte nicht angenommen werden"
     }
   },
   "meetingNotification": {

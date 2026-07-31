@@ -193,6 +193,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ];
     list.push({ id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield });
     list.push({ id: "activation", title: t("onboarding.steps.activation"), icon: Command });
+    // Was gated on being signed in ("continue-without-account users have no LLM,
+    // so the agent can't run"). Both halves of that are now false: there are no
+    // accounts, and the app ships a built-in local model. It is skippable.
+    list.push({ id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles });
     if (showMeetingStep) {
       list.push({ id: "meeting", title: t("onboarding.steps.meeting"), icon: Users });
     }
