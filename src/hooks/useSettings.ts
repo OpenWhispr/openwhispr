@@ -170,10 +170,14 @@ function useSettingsInternal() {
   }, []);
 
   // Retention periods are enforced by the main process cleanup sweep
-  const { audioRetentionDays, transcriptRetentionDays } = store;
+  const { audioRetentionDays, transcriptRetentionDays, dataRetentionEnabled } = store;
   useEffect(() => {
-    window.electronAPI?.syncRetentionSettings?.({ audioRetentionDays, transcriptRetentionDays });
-  }, [audioRetentionDays, transcriptRetentionDays]);
+    window.electronAPI?.syncRetentionSettings?.({
+      audioRetentionDays,
+      transcriptRetentionDays,
+      dataRetentionEnabled,
+    });
+  }, [audioRetentionDays, transcriptRetentionDays, dataRetentionEnabled]);
 
   // Sync startup pre-warming preferences to main process
   const {

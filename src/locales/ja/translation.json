@@ -402,6 +402,9 @@
         "recover": "復元",
         "recovered": "復元しました"
       },
+      "meeting": {
+        "badge": "ミーティング"
+      },
       "retryTranslationMode": "翻訳モード"
     },
     "cloudMigration": {
@@ -1693,7 +1696,7 @@
       "lastSynced": "最終同期 {{time}}",
       "minutesAgo": "{{count}}分前",
       "audioRetention": "音声の保持",
-      "audioRetentionDescription": "再文字起こしやダウンロードのために音声録音をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。",
+      "audioRetentionDescription": "再文字起こしやダウンロードのために、ディクテーションとミーティングの音声をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。",
       "audioRetentionDisabled": "無効",
       "retentionDays_one": "{{count}}日",
       "retentionDays_other": "{{count}}日",

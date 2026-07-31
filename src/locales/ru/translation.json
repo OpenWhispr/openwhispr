@@ -402,6 +402,9 @@
         "recover": "Восстановить",
         "recovered": "Восстановлено"
       },
+      "meeting": {
+        "badge": "Встреча"
+      },
       "retryTranslationMode": "Режим перевода"
     },
     "cloudMigration": {
@@ -1699,7 +1702,7 @@
       "lastSynced": "Последняя синхронизация {{time}}",
       "minutesAgo": "{{count}}мин назад",
       "audioRetention": "Хранение аудио",
-      "audioRetentionDescription": "Сохранять аудиозаписи локально для повторной расшифровки и скачивания. Файлы автоматически удаляются по истечении срока хранения.",
+      "audioRetentionDescription": "Сохранять аудио диктовок и встреч локально для повторной расшифровки и скачивания. Файлы автоматически удаляются по истечении срока хранения.",
       "audioRetentionDisabled": "Отключено",
       "retentionDays_one": "{{count}} день",
       "retentionDays_few": "{{count}} дня",

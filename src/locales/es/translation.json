@@ -402,6 +402,9 @@
       "audioNotFound": "Archivo de audio no encontrado o expirado",
       "noAiProcessing": "No se aplicó procesamiento de IA a esta transcripción",
       "rawTranscript": "Transcripción sin procesar",
+      "meeting": {
+        "badge": "Reunión"
+      },
       "retryTranslationMode": "Modo Traducción"
     },
     "cloudMigration": {
@@ -1741,7 +1744,7 @@
       "lastSynced": "Última sincronización {{time}}",
       "minutesAgo": "hace {{count}}m",
       "audioRetention": "Retención de audio",
-      "audioRetentionDescription": "Almacena grabaciones de audio localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención.",
+      "audioRetentionDescription": "Almacena el audio de dictados y reuniones localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención.",
       "saveDiscarded": "Guardar dictados descartados",
       "saveDiscardedDescription": "Cuando cancelas un dictado con Escape, conserva su audio en el historial para poder recuperarlo. Requiere tener activadas la retención de datos y de audio.",
       "audioRetentionDisabled": "Desactivado",

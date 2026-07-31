@@ -4,11 +4,17 @@
 const DEFAULT_RETENTION_SETTINGS = {
   audioRetentionDays: 30,
   transcriptRetentionDays: 0, // 0 = keep transcripts forever
+  dataRetentionEnabled: true,
 };
 
 function toDays(value, fallback) {
   const days = Math.trunc(Number(value));
   return Number.isFinite(days) && days >= 0 ? days : fallback;
+}
+
+function toBool(value, fallback) {
+  if (typeof value === "boolean") return value;
+  return fallback;
 }
 
 function applyRetentionSettings(current, incoming) {
@@ -18,10 +24,12 @@ function applyRetentionSettings(current, incoming) {
       incoming?.transcriptRetentionDays,
       current.transcriptRetentionDays
     ),
+    dataRetentionEnabled: toBool(incoming?.dataRetentionEnabled, current.dataRetentionEnabled),
   };
   const changed =
     settings.audioRetentionDays !== current.audioRetentionDays ||
-    settings.transcriptRetentionDays !== current.transcriptRetentionDays;
+    settings.transcriptRetentionDays !== current.transcriptRetentionDays ||
+    settings.dataRetentionEnabled !== current.dataRetentionEnabled;
   return { changed, settings };
 }
 

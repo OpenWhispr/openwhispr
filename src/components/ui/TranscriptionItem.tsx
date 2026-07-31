@@ -97,8 +97,8 @@ export default function TranscriptionItem({
           : isDiscarded
             ? "border-border/30 bg-muted/20 hover:bg-muted/30 opacity-80"
             : "border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 hover:bg-muted/30 dark:hover:bg-surface-2/80",
-        // Subtle left accent for translation records; transparent keeps others pixel-aligned.
-        item.route_kind === "translation"
+        // Subtle left accent for translation/meeting records; transparent keeps others pixel-aligned.
+        item.route_kind === "translation" || item.route_kind === "meeting"
           ? "border-l-primary/70 dark:border-l-primary/70"
           : "border-l-transparent dark:border-l-transparent"
       )}
@@ -172,9 +172,16 @@ export default function TranscriptionItem({
             </span>
           </div>
         ) : (
-          <p className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
-            {item.text}
-          </p>
+          <div className="flex-1 min-w-0 flex items-start gap-2">
+            {item.route_kind === "meeting" && (
+              <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground mt-0.5">
+                {t("controlPanel.history.meeting.badge")}
+              </span>
+            )}
+            <p className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
+              {item.text}
+            </p>
+          </div>
         )}
 
         <div

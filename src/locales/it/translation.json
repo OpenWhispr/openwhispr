@@ -402,6 +402,9 @@
         "recover": "Recupera",
         "recovered": "Recuperata"
       },
+      "meeting": {
+        "badge": "Riunione"
+      },
       "retryTranslationMode": "Modalità Traduzione"
     },
     "cloudMigration": {
@@ -1693,7 +1696,7 @@
       "lastSynced": "Ultima sincronizzazione {{time}}",
       "minutesAgo": "{{count}}m fa",
       "audioRetention": "Conservazione audio",
-      "audioRetentionDescription": "Salva le registrazioni audio localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione.",
+      "audioRetentionDescription": "Salva l'audio di dettatura e riunioni localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione.",
       "audioRetentionDisabled": "Disattivato",
       "retentionDays_one": "{{count}} giorno",
       "retentionDays_other": "{{count}} giorni",

@@ -30,6 +30,7 @@ const { partitionPendingMicFinals, isWithinRetractWindow } = require("./meetingM
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const { DEFAULT_RETENTION_SETTINGS, applyRetentionSettings } = require("./retentionSettings");
+const { shouldSaveMeetingAudioRetention, MIN_MEETING_AUDIO_RETENTION_SECONDS } = require("./meetingAudioRetention");
 const {
   transcriptsOverlap,
   transcriptsLooselyOverlap,
@@ -5667,11 +5668,171 @@ class IPCHandlers {
     let meetingDiarizationPath = null;
     let meetingDiarizationStartedAt = null;
     let meetingDiarizationSegments = [];
+    let meetingRetentionMicStream = null;
+    let meetingRetentionMicPath = null;
+    let meetingRetentionSystemStream = null;
+    let meetingRetentionSystemPath = null;
+    let meetingRetentionStartedAt = null;
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
     let meetingLiveSpeakerStartedAt = null;
     let meetingReclusterTimer = null;
     let meetingSpeakerRemapper = (id) => id;
+
+    const isMeetingAudioRetentionArmed = () =>
+      shouldSaveMeetingAudioRetention(this._retentionSettings, MIN_MEETING_AUDIO_RETENTION_SECONDS);
+
+    const ensureMeetingRetentionStream = (source) => {
+      const now = Date.now();
+      if (!meetingRetentionStartedAt) meetingRetentionStartedAt = now;
+
+      const padSilence = (stream) => {
+        const padMs = now - meetingRetentionStartedAt;
+        if (padMs <= 0) return;
+        const padBytes = Math.floor((padMs / 1000) * MEETING_STREAM_SAMPLE_RATE) * 2;
+        if (padBytes > 0) stream.write(Buffer.alloc(padBytes));
+      };
+
+      if (source === "mic") {
+        if (!meetingRetentionMicStream) {
+          meetingRetentionMicPath = path.join(os.tmpdir(), `ow-retain-mic-${Date.now()}.pcm`);
+          meetingRetentionMicStream = fs.createWriteStream(meetingRetentionMicPath);
+          padSilence(meetingRetentionMicStream);
+        }
+        return meetingRetentionMicStream;
+      }
+      if (!meetingRetentionSystemStream) {
+        meetingRetentionSystemPath = path.join(os.tmpdir(), `ow-retain-sys-${Date.now()}.pcm`);
+        meetingRetentionSystemStream = fs.createWriteStream(meetingRetentionSystemPath);
+        padSilence(meetingRetentionSystemStream);
+      }
+      return meetingRetentionSystemStream;
+    };
+
+    const writeMeetingRetentionAudio = (buffer, source) => {
+      if (!isMeetingAudioRetentionArmed()) return;
+      if (source !== "mic" && source !== "system") return;
+      try {
+        ensureMeetingRetentionStream(source).write(buffer);
+      } catch (error) {
+        debugLogger.warn(
+          "Failed to write meeting retention audio",
+          { source, error: error.message },
+          "meeting"
+        );
+      }
+    };
+
+    const discardMeetingRetentionFiles = (micPath, systemPath) => {
+      for (const filePath of [micPath, systemPath]) {
+        if (!filePath) continue;
+        try {
+          fs.unlinkSync(filePath);
+        } catch (_) {}
+      }
+    };
+
+    const endMeetingRetentionStream = (stream) =>
+      new Promise((resolve) => {
+        if (!stream) {
+          resolve();
+          return;
+        }
+        stream.end(resolve);
+      });
+
+    const captureMeetingRetentionState = async () => {
+      const micPath = meetingRetentionMicPath;
+      const systemPath = meetingRetentionSystemPath;
+      const startedAt = meetingRetentionStartedAt;
+      await Promise.all([
+        endMeetingRetentionStream(meetingRetentionMicStream),
+        endMeetingRetentionStream(meetingRetentionSystemStream),
+      ]);
+      meetingRetentionMicStream = null;
+      meetingRetentionSystemStream = null;
+      meetingRetentionMicPath = null;
+      meetingRetentionSystemPath = null;
+      meetingRetentionStartedAt = null;
+      return { micPath, systemPath, startedAt, endedAt: Date.now() };
+    };
+
+    const resetMeetingRetentionState = () => {
+      if (meetingRetentionMicStream) {
+        meetingRetentionMicStream.end();
+        meetingRetentionMicStream = null;
+      }
+      if (meetingRetentionSystemStream) {
+        meetingRetentionSystemStream.end();
+        meetingRetentionSystemStream = null;
+      }
+      discardMeetingRetentionFiles(meetingRetentionMicPath, meetingRetentionSystemPath);
+      meetingRetentionMicPath = null;
+      meetingRetentionSystemPath = null;
+      meetingRetentionStartedAt = null;
+    };
+
+    const saveMeetingAudioRetention = async ({ transcript, micPath, systemPath, startedAt, endedAt }) => {
+      const durationSeconds =
+        startedAt != null && endedAt != null ? (endedAt - startedAt) / 1000 : 0;
+      try {
+        if (!shouldSaveMeetingAudioRetention(this._retentionSettings, durationSeconds)) {
+          return;
+        }
+        const inputs = [];
+        if (micPath && fs.existsSync(micPath) && fs.statSync(micPath).size > 0) {
+          inputs.push({ path: micPath, sampleRate: MEETING_STREAM_SAMPLE_RATE });
+        }
+        if (systemPath && fs.existsSync(systemPath) && fs.statSync(systemPath).size > 0) {
+          inputs.push({ path: systemPath, sampleRate: MEETING_STREAM_SAMPLE_RATE });
+        }
+        if (inputs.length === 0) return;
+
+        const { encodePcmFilesToWebm } = require("./ffmpegUtils");
+        const webm = await encodePcmFilesToWebm(inputs);
+        if (!webm?.length) return;
+
+        const text = (transcript || "").trim() || "[Meeting recording]";
+        const result = this.databaseManager.saveTranscription(text, null, {
+          routeKind: "meeting",
+        });
+        if (!result?.id) return;
+
+        const saveResult = this.audioStorageManager.saveAudio(
+          result.id,
+          webm,
+          result.transcription?.timestamp || null
+        );
+        if (!saveResult.success) {
+          debugLogger.warn("Failed to persist meeting retention audio file", {}, "meeting");
+          return;
+        }
+
+        this.databaseManager.updateTranscriptionAudio(result.id, {
+          hasAudio: 1,
+          audioDurationMs: Math.round(durationSeconds * 1000),
+          provider: "meeting",
+          model: null,
+        });
+        const updated = this.databaseManager.getTranscriptionById(result.id);
+        if (updated) {
+          this.broadcastToWindows("transcription-added", updated);
+        }
+        debugLogger.info(
+          "Meeting audio saved to retention",
+          { transcriptionId: result.id, durationSeconds: Math.round(durationSeconds) },
+          "meeting"
+        );
+      } catch (error) {
+        debugLogger.warn(
+          "Failed to save meeting audio retention",
+          { error: error.message },
+          "meeting"
+        );
+      } finally {
+        discardMeetingRetentionFiles(micPath, systemPath);
+      }
+    };
 
     const createSpeakerRemapper = (maxSpeakers) => {
       const cap = Math.max(1, Math.floor(maxSpeakers) || 1);
@@ -6258,6 +6419,7 @@ class IPCHandlers {
       }
       meetingDiarizationStartedAt = null;
       meetingDiarizationSegments = [];
+      resetMeetingRetentionState();
       meetingLocalWin = null;
       meetingLocalTranscript = "";
       meetingLocalProvider = null;
@@ -6708,6 +6870,7 @@ class IPCHandlers {
 
     const sendMeetingAudio = (audioBuffer, source) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      writeMeetingRetentionAudio(outboundBuffer, source);
 
       if (source === "system") {
         const receivedAt = Date.now();
@@ -6899,6 +7062,7 @@ class IPCHandlers {
           flushPendingMicFinals(true);
           const { diarizationPcmPath, diarizationSegments, diarizationStartedAt } =
             await captureMeetingDiarizationState();
+          const retentionState = await captureMeetingRetentionState();
           const transcript =
             buildOrderedTranscriptText(diarizationSegments) || meetingLocalTranscript;
           const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
@@ -6917,6 +7081,13 @@ class IPCHandlers {
             sessionSpeakerConfigSnapshot,
             noteIdSnapshot
           );
+          void saveMeetingAudioRetention({
+            transcript,
+            micPath: retentionState.micPath,
+            systemPath: retentionState.systemPath,
+            startedAt: retentionState.startedAt,
+            endedAt: retentionState.endedAt,
+          });
 
           return { success: true, transcript, diarizationSessionId };
         }
@@ -6924,6 +7095,7 @@ class IPCHandlers {
         const results = await disconnectMeetingStreaming({ flushPending: true });
         const { diarizationPcmPath, diarizationSegments, diarizationStartedAt } =
           await captureMeetingDiarizationState();
+        const retentionState = await captureMeetingRetentionState();
         const transcript =
           buildOrderedTranscriptText(diarizationSegments) ||
           [results[0]?.text, results[1]?.text].filter(Boolean).join(" ");
@@ -6943,9 +7115,17 @@ class IPCHandlers {
           sessionSpeakerConfigSnapshot,
           noteIdSnapshot
         );
+        void saveMeetingAudioRetention({
+          transcript,
+          micPath: retentionState.micPath,
+          systemPath: retentionState.systemPath,
+          startedAt: retentionState.startedAt,
+          endedAt: retentionState.endedAt,
+        });
 
         return { success: true, transcript, diarizationSessionId };
       } catch (error) {
+        resetMeetingRetentionState();
         debugLogger.error("Meeting transcription stop error", { error: error.message });
         return { success: false, error: error.message };
       }

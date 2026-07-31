@@ -785,6 +785,7 @@ declare global {
       syncRetentionSettings?: (settings: {
         audioRetentionDays: number;
         transcriptRetentionDays: number;
+        dataRetentionEnabled?: boolean;
       }) => void;
       retryTranscription: (
         id: number,

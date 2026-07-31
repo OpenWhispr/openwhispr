@@ -11,10 +11,15 @@ test("reports a change when a retention period is shortened", () => {
     applyRetentionSettings(DEFAULT_RETENTION_SETTINGS, {
       audioRetentionDays: 1,
       transcriptRetentionDays: 1,
+      dataRetentionEnabled: true,
     }),
     {
       changed: true,
-      settings: { audioRetentionDays: 1, transcriptRetentionDays: 1 },
+      settings: {
+        audioRetentionDays: 1,
+        transcriptRetentionDays: 1,
+        dataRetentionEnabled: true,
+      },
     }
   );
 });
@@ -23,12 +28,17 @@ test("is idempotent when both values are unchanged — dual-window mount sync", 
   const { changed } = applyRetentionSettings(DEFAULT_RETENTION_SETTINGS, {
     audioRetentionDays: 30,
     transcriptRetentionDays: 0,
+    dataRetentionEnabled: true,
   });
   assert.equal(changed, false);
 });
 
 test("keeps the current value when an incoming value is missing or unusable", () => {
-  const current = { audioRetentionDays: 7, transcriptRetentionDays: 1 };
+  const current = {
+    audioRetentionDays: 7,
+    transcriptRetentionDays: 1,
+    dataRetentionEnabled: true,
+  };
   for (const incoming of [
     undefined,
     {},
@@ -39,4 +49,14 @@ test("keeps the current value when an incoming value is missing or unusable", ()
       settings: current,
     });
   }
+});
+
+test("reports a change when data retention is toggled", () => {
+  const { changed, settings } = applyRetentionSettings(DEFAULT_RETENTION_SETTINGS, {
+    audioRetentionDays: 30,
+    transcriptRetentionDays: 0,
+    dataRetentionEnabled: false,
+  });
+  assert.equal(changed, true);
+  assert.equal(settings.dataRetentionEnabled, false);
 });

@@ -402,6 +402,9 @@
         "recover": "Wiederherstellen",
         "recovered": "Wiederhergestellt"
       },
+      "meeting": {
+        "badge": "Meeting"
+      },
       "retryTranslationMode": "Übersetzungsmodus"
     },
     "cloudMigration": {
@@ -1962,7 +1965,7 @@
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
       "audioRetention": "Audio-Aufbewahrung",
-      "audioRetentionDescription": "Audioaufnahmen lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht.",
+      "audioRetentionDescription": "Diktat- und Meeting-Audio lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht.",
       "audioRetentionDisabled": "Deaktiviert",
       "retentionDays_one": "{{count}} Tag",
       "retentionDays_other": "{{count}} Tage",

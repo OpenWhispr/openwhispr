@@ -369,6 +369,81 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
   });
 }
 
+/**
+ * Encode one or more raw PCM s16le mono files into a single Opus/WebM buffer.
+ * Multiple inputs are mixed with amix (duration=longest).
+ *
+ * @param {{ path: string, sampleRate?: number }[]} inputs
+ * @returns {Promise<Buffer>}
+ */
+async function encodePcmFilesToWebm(inputs) {
+  const files = (inputs || []).filter((input) => input?.path && fs.existsSync(input.path));
+  if (files.length === 0) {
+    throw new Error("At least one PCM input is required");
+  }
+
+  const ffmpegPath = getFFmpegPath();
+  if (!ffmpegPath) {
+    throw new Error("FFmpeg not found - required for meeting audio retention");
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-pcm-webm-"));
+  const outputPath = path.join(tempDir, "meeting.webm");
+  try {
+    const args = [];
+    for (const file of files) {
+      const sampleRate = file.sampleRate || 24000;
+      args.push("-f", "s16le", "-ar", String(sampleRate), "-ac", "1", "-i", file.path);
+    }
+
+    if (files.length === 1) {
+      args.push("-c:a", "libopus", "-b:a", "64k", "-y", outputPath);
+    } else {
+      const labels = files.map((_, index) => `[${index}:a]`).join("");
+      args.push(
+        "-filter_complex",
+        `${labels}amix=inputs=${files.length}:duration=longest:normalize=0[out]`,
+        "-map",
+        "[out]",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "64k",
+        "-y",
+        outputPath
+      );
+    }
+
+    await new Promise((resolve, reject) => {
+      const proc = spawn(ffmpegPath, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      let stderr = "";
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+      proc.on("error", (error) => reject(new Error(`FFmpeg process error: ${error.message}`)));
+      proc.on("close", (code) => {
+        if (code !== 0) {
+          const preview = stderr.slice(-500).trim();
+          reject(
+            new Error(
+              `FFmpeg PCM encode exited with code ${code}${preview ? `: ${preview}` : ""}`
+            )
+          );
+          return;
+        }
+        resolve();
+      });
+    });
+
+    return fs.readFileSync(outputPath);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function mergeAudioSegments(segments) {
   if (!Array.isArray(segments) || segments.length === 0) {
     throw new Error("At least one audio segment is required");
@@ -454,6 +529,7 @@ module.exports = {
   splitAudioFile,
   wavToFloat32Samples,
   computeFloat32RMS,
+  encodePcmFilesToWebm,
   mergeAudioSegments,
   clearCache,
 };
