@@ -10,6 +10,11 @@ const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 const MAX_RESULTS = 20;
 const DEFAULT_RESULTS = 5;
 
+// The agent awaits this inside its tool-call loop, so an unbounded request
+// would hang the chat with no user-facing recovery. Matches the timeout
+// convention used by the other proxied calls in ipcHandlers.
+const REQUEST_TIMEOUT_MS = 12_000;
+
 /** Snippets are HTML-ish (Brave bolds query terms); the model wants plain text. */
 function stripHtml(value) {
   if (typeof value !== "string") return "";
@@ -71,13 +76,26 @@ async function braveWebSearch({ query, numResults, apiKey, fetchImpl }) {
     };
   }
 
-  const response = await fetchImpl(buildBraveSearchUrl(query.trim(), numResults), {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      "X-Subscription-Token": apiKey,
-    },
-  });
+  let response;
+  try {
+    response = await fetchImpl(buildBraveSearchUrl(query.trim(), numResults), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-Subscription-Token": apiKey,
+      },
+      // Custom headers are NOT stripped on a cross-origin redirect the way
+      // Authorization is, so following one would replay the subscription token
+      // to whatever host Brave pointed us at. Fail closed instead.
+      redirect: "error",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      return { success: false, error: "Brave Search timed out", code: "TIMEOUT" };
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
@@ -101,6 +119,7 @@ module.exports = {
   BRAVE_SEARCH_URL,
   MAX_RESULTS,
   DEFAULT_RESULTS,
+  REQUEST_TIMEOUT_MS,
   buildBraveSearchUrl,
   clampResultCount,
   mapBraveResults,

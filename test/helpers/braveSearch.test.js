@@ -9,6 +9,7 @@ const {
   stripHtml,
   MAX_RESULTS,
   DEFAULT_RESULTS,
+  REQUEST_TIMEOUT_MS,
 } = require("../../src/helpers/braveSearch");
 
 function okResponse(payload) {
@@ -129,6 +130,50 @@ test("a successful search returns mapped results", async () => {
   assert.deepEqual(result.results, [
     { title: "Electron", url: "https://electronjs.org", text: "d", publishedDate: null },
   ]);
+});
+
+test("the request is bounded by a timeout and refuses to follow redirects", async () => {
+  let seen = null;
+  await braveWebSearch({
+    query: "electron",
+    apiKey: "k",
+    fetchImpl: async (_url, init) => {
+      seen = init;
+      return okResponse({ web: { results: [] } });
+    },
+  });
+  // A cross-origin redirect would replay X-Subscription-Token to the new host,
+  // since custom headers (unlike Authorization) are not stripped by fetch.
+  assert.equal(seen.redirect, "error");
+  assert.ok(seen.signal, "an abort signal is attached");
+  assert.ok(REQUEST_TIMEOUT_MS > 0 && REQUEST_TIMEOUT_MS <= 30_000);
+});
+
+test("a timeout is reported as TIMEOUT rather than thrown at the caller", async () => {
+  const result = await braveWebSearch({
+    query: "electron",
+    apiKey: "k",
+    fetchImpl: async () => {
+      const err = new Error("The operation was aborted due to timeout");
+      err.name = "TimeoutError";
+      throw err;
+    },
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "TIMEOUT");
+});
+
+test("a non-timeout transport error still propagates to the caller", async () => {
+  await assert.rejects(
+    braveWebSearch({
+      query: "electron",
+      apiKey: "k",
+      fetchImpl: async () => {
+        throw new Error("ENOTFOUND");
+      },
+    }),
+    /ENOTFOUND/
+  );
 });
 
 test("auth and rate-limit failures carry a distinguishing code", async () => {
