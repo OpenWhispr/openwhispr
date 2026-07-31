@@ -62,18 +62,32 @@ test("seedMeetingTypes is idempotent", async (t) => {
   assert.equal(count.c, 7);
 });
 
-test("every built-in template mentions Action Items", async (t) => {
+// The per-type templates supply only the "Topics Covered" body; the standard
+// sections come from the prompt wrapper, so assert on the composed prompt.
+test("notes prompt for every built-in type requests Action Items", async (t) => {
   const Database = tryRequireSqlite(t);
   if (!Database) return;
   const { seedMeetingTypes } = await import("../../src/helpers/meetingTypesData.js");
+  const { GENERIC_NOTES_PROMPT, buildTypedNotesPrompt } = require("../../src/helpers/postCallPipelineManager.js");
   const db = createTestDb(Database);
   seedMeetingTypes(db);
 
+  assert.ok(
+    GENERIC_NOTES_PROMPT.toLowerCase().includes("action item"),
+    "Generic notes prompt must request Action Items"
+  );
+
   const types = db.prepare("SELECT name, template FROM meeting_types WHERE is_builtin = 1").all();
-  for (const t of types) {
+  for (const type of types) {
+    assert.ok(type.template.trim().length > 0, `Built-in "${type.name}" must have a template`);
+    const prompt = buildTypedNotesPrompt(type);
     assert.ok(
-      t.template.toLowerCase().includes("action item"),
-      `Built-in "${t.name}" template must mention Action Items`
+      prompt.toLowerCase().includes("action item"),
+      `Notes prompt for "${type.name}" must request Action Items`
+    );
+    assert.ok(
+      prompt.includes(type.template),
+      `Notes prompt for "${type.name}" must embed its type-specific template`
     );
   }
 });
