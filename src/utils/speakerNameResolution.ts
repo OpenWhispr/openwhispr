@@ -61,6 +61,26 @@ export const findClusterForName = (
   return null;
 };
 
+/**
+ * The name a cluster currently answers to, if any. Once a cluster has one, picking
+ * a different name on a single line must not rename everybody in it.
+ */
+export const resolveClusterName = (
+  segments: TranscriptSegment[],
+  speakerId: string,
+  speakerMappings?: SpeakerMappings
+): string | null => {
+  const mapped = speakerMappings?.[speakerId];
+  if (mapped) return mapped;
+
+  for (const segment of segments) {
+    if (segment.speaker !== speakerId) continue;
+    const { name } = resolveSegmentSpeakerName(segment, speakerMappings);
+    if (name) return name;
+  }
+  return null;
+};
+
 const nextSpeakerClusterId = (segments: TranscriptSegment[], speakerMappings?: SpeakerMappings) => {
   let max = -1;
   const consider = (speakerId?: string) => {

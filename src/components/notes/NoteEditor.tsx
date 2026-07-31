@@ -78,6 +78,7 @@ import {
 } from "../../utils/transcriptSpeakerState";
 import {
   assignSegmentsToSpeaker,
+  resolveClusterName,
   resolveSegmentSpeakerName,
 } from "../../utils/speakerNameResolution";
 import NoteParticipants from "./NoteParticipants";
@@ -193,6 +194,8 @@ interface NoteEditorProps {
   actionName?: string | null;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
+  /** Renames one live line only, returning the speaker id it was split into. */
+  onLiveSpeakerSegmentAssign?: (segmentId: string, displayName: string) => string | null;
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
@@ -224,6 +227,7 @@ export default function NoteEditor({
   actionName,
   diarizationSessionId,
   onLiveSpeakerLock,
+  onLiveSpeakerSegmentAssign,
   sessionDiarizationEnabled,
   sessionExpectedCount,
   userTouchedStepper,
@@ -586,13 +590,74 @@ export default function NoteEditor({
     [note.id]
   );
 
+  const assignNameToSegments = useCallback(
+    async (
+      segmentIds: Iterable<string>,
+      displayName: string,
+      email?: string | null,
+      profileId?: number
+    ) => {
+      const { segments: nextSegments, speakerId } = assignSegmentsToSpeaker(
+        displaySegments,
+        segmentIds,
+        displayName,
+        { speakerMappings, profileId }
+      );
+      if (!speakerId) return;
+
+      setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
+      await persistDisplaySegments(nextSegments);
+      await window.electronAPI?.setSpeakerMapping?.(
+        note.id,
+        speakerId,
+        displayName,
+        email,
+        profileId
+      );
+      refreshSpeakerProfiles();
+    },
+    [displaySegments, note.id, persistDisplaySegments, refreshSpeakerProfiles, speakerMappings]
+  );
+
   const handleMapSpeaker = useCallback(
     async (
       speakerId: string,
       displayName: string,
       email?: string | null,
-      profileId?: number | null
+      profileId?: number | null,
+      segmentId?: string
     ) => {
+      // Naming a cluster for the first time covers all of its lines. After that the
+      // cluster belongs to a person, so picking a different name on one line is a
+      // correction to that line only.
+      const clusterName = resolveClusterName(
+        isRecording ? useMeetingRecordingStore.getState().segments : displaySegments,
+        speakerId,
+        speakerMappings
+      );
+      const singleLine = !!segmentId && !!clusterName && clusterName !== displayName;
+
+      if (singleLine) {
+        if (isRecording) {
+          const splitSpeakerId = onLiveSpeakerSegmentAssign?.(segmentId, displayName);
+          if (splitSpeakerId) {
+            setSpeakerMappings((prev) => ({ ...prev, [splitSpeakerId]: displayName }));
+            await window.electronAPI?.setSpeakerMapping?.(
+              note.id,
+              splitSpeakerId,
+              displayName,
+              email,
+              profileId ?? undefined
+            );
+          }
+          refreshSpeakerProfiles();
+          return;
+        }
+
+        await assignNameToSegments([segmentId], displayName, email, profileId ?? undefined);
+        return;
+      }
+
       setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
       await window.electronAPI?.setSpeakerMapping?.(
         note.id,
@@ -627,13 +692,16 @@ export default function NoteEditor({
       refreshSpeakerProfiles();
     },
     [
+      assignNameToSegments,
       diarizedSegments,
       displaySegments,
       isRecording,
       note.id,
       onLiveSpeakerLock,
+      onLiveSpeakerSegmentAssign,
       persistDisplaySegments,
       refreshSpeakerProfiles,
+      speakerMappings,
     ]
   );
 
@@ -701,36 +769,11 @@ export default function NoteEditor({
   const handleBulkAssignName = useCallback(
     async (displayName: string, email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
-
-      const { segments: nextSegments, speakerId } = assignSegmentsToSpeaker(
-        displaySegments,
-        selectedSegmentIds,
-        displayName,
-        { speakerMappings, profileId }
-      );
-      if (!speakerId) return;
-
-      setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
+      const ids = [...selectedSegmentIds];
       handleClearSelection();
-      await persistDisplaySegments(nextSegments);
-      await window.electronAPI?.setSpeakerMapping?.(
-        note.id,
-        speakerId,
-        displayName,
-        email,
-        profileId
-      );
-      refreshSpeakerProfiles();
+      await assignNameToSegments(ids, displayName, email, profileId);
     },
-    [
-      displaySegments,
-      handleClearSelection,
-      note.id,
-      persistDisplaySegments,
-      refreshSpeakerProfiles,
-      selectedSegmentIds,
-      speakerMappings,
-    ]
+    [assignNameToSegments, handleClearSelection, selectedSegmentIds]
   );
 
   const handleTitleInput = useCallback(() => {

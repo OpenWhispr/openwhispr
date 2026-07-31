@@ -119,6 +119,43 @@ test("an empty selection changes nothing", async () => {
   assert.equal(result.segments, segments);
 });
 
+test("a cluster still showing Speaker N has no name, so naming it covers every line", async () => {
+  const { resolveClusterName } = await load();
+
+  assert.equal(resolveClusterName(baseSegments(), "speaker_1", {}), null);
+});
+
+test("a named cluster reports its name from either the mapping or a pinned line", async () => {
+  const { resolveClusterName } = await load();
+
+  assert.equal(resolveClusterName(baseSegments(), "speaker_1", { speaker_1: "Will" }), "Will");
+
+  const pinned = baseSegments().map((s) =>
+    s.id === "s2" ? { ...s, speakerName: "Will", speakerLocked: true, speakerStatus: "locked" } : s
+  );
+  assert.equal(resolveClusterName(pinned, "speaker_1", {}), "Will");
+});
+
+test("renaming one line of a named cluster leaves that cluster's other lines alone", async () => {
+  const { assignSegmentsToSpeaker, resolveSegmentSpeakerName } = await load();
+
+  // Speaker 1 was named Will across the board.
+  const named = assignSegmentsToSpeaker(baseSegments(), ["s1", "s2", "s3"], "Will");
+  const mappings = { [named.speakerId]: "Will" };
+
+  // The user now corrects a single line to Lisa.
+  const corrected = assignSegmentsToSpeaker(named.segments, ["s2"], "Lisa", {
+    speakerMappings: mappings,
+  });
+  mappings[corrected.speakerId] = "Lisa";
+
+  assert.notEqual(corrected.speakerId, named.speakerId);
+  assert.deepEqual(
+    corrected.segments.map((s) => resolveSegmentSpeakerName(s, mappings).name),
+    ["Will", "Lisa", "Will", null]
+  );
+});
+
 test("new cluster ids avoid ids that only exist in the mappings", async () => {
   const { assignSegmentsToSpeaker } = await load();
 

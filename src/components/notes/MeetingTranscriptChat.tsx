@@ -393,7 +393,13 @@ function SpeakerLabel({
   participants?: Array<{ email: string; displayName: string | null }>;
   colorIdx: number;
   isOriginallyYou: boolean;
-  onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
+  onMap?: (
+    speakerId: string,
+    name: string,
+    email?: string | null,
+    profileId?: number,
+    segmentId?: string
+  ) => void;
   onConfirm?: (speakerId: string, name: string, profileId: number) => void;
   onDismiss?: (speakerId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -466,7 +472,7 @@ function SpeakerLabel({
           speakerProfiles={speakerProfiles}
           participants={participants}
           onSelectName={(name, email, profileId) => {
-            onMap?.(speakerId, name, email, profileId);
+            onMap?.(speakerId, name, email, profileId, segment.id);
             setOpen(false);
           }}
           t={t}
@@ -579,7 +585,8 @@ interface MeetingTranscriptChatProps {
     speakerId: string,
     displayName: string,
     email?: string | null,
-    profileId?: number
+    profileId?: number,
+    segmentId?: string
   ) => void;
   onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
   onDismissSuggestion?: (speakerId: string) => void;

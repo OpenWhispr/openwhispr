@@ -47,6 +47,7 @@ import {
   startRecording as storeStartRecording,
   stopRecording as storeStopRecording,
   lockSpeaker,
+  assignSegmentSpeaker,
   setSessionDiarizationEnabled,
   setSessionExpectedCount,
 } from "../../stores/meetingRecordingStore";
@@ -764,6 +765,7 @@ export default function PersonalNotesView({
               }
               diarizationSessionId={diarizationSessionId}
               onLiveSpeakerLock={lockSpeaker}
+              onLiveSpeakerSegmentAssign={assignSegmentSpeaker}
               sessionDiarizationEnabled={sessionDiarizationEnabled}
               sessionExpectedCount={sessionExpectedCount}
               userTouchedStepper={userTouchedStepper}
