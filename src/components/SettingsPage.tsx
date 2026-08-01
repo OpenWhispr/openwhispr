@@ -89,7 +89,12 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import type { GpuDevice, LocalTranscriptionProvider, InferenceMode } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  GpuDevice,
+  LocalTranscriptionProvider,
+  InferenceMode,
+} from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
@@ -2719,7 +2724,7 @@ export default function SettingsPage({
                     >
                       <Select
                         value={chineseScriptPreference}
-                        onValueChange={(value: "simplified" | "traditional" | "as-transcribed") =>
+                        onValueChange={(value: ChineseScriptPreference) =>
                           updateTranscriptionSettings({ chineseScriptPreference: value })
                         }
                       >

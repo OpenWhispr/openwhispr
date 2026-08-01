@@ -321,6 +321,7 @@ class AudioManager {
     this.skipReasoning = false;
     this.voiceAgentRequested = false;
     this.translationRequested = false;
+    this.translationApplied = false;
     this.context = "dictation";
     this.sttConfig = null;
     this.lastAudioBlob = null;
@@ -406,31 +407,62 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return words.length > 0 ? words.join(", ") : null;
   }
 
+  // Script conversion targets whatever the user ends up pasting: the translation
+  // target when translating, otherwise the dictation language. Using the STT
+  // language here would force zh-TW source audio back to Traditional even when
+  // the user asked to translate into Simplified.
+  //
+  // Only a completed translate step actually moves text into the target language.
+  // When translation is unreachable, skipped or fails, the source transcript is
+  // what gets pasted, so it must be scripted as the STT language — otherwise a
+  // failed ja → zh-CN run would run Japanese through OpenCC (会議の資料 → 会议の数据).
+  getEffectiveOutputLanguage(settings) {
+    if (this.translationRequested && this.translationApplied) {
+      return settings.translationTargetLanguage || "auto";
+    }
+    return this.getEffectiveSttLanguage(settings);
+  }
+
   // Whisper only accepts language "zh"; script (简体/繁體) is applied here. See #975.
-  getChineseScriptTarget(settings = getSettings()) {
-    return resolveChineseScriptTarget(
-      this.getEffectiveSttLanguage(settings),
-      settings.chineseScriptPreference
+  // No transcript exists yet, so only an explicit zh-CN/zh-TW may bias the prompt.
+  getWhisperPrompt(settings = getSettings()) {
+    return mergeWhisperPrompt(
+      this.getCustomDictionaryPrompt(),
+      resolveChineseScriptTarget(
+        this.getEffectiveSttLanguage(settings),
+        settings.chineseScriptPreference
+      )
     );
   }
 
-  getWhisperPrompt(settings = getSettings()) {
-    return mergeWhisperPrompt(this.getCustomDictionaryPrompt(), this.getChineseScriptTarget(settings));
-  }
-
-  getCleanupLanguage(settings = getSettings()) {
+  // Cleanup runs before the translate step, so it still works in the STT language.
+  getCleanupLanguage(settings, text) {
     return resolveCleanupLanguage(
       this.getEffectiveSttLanguage(settings),
-      settings.chineseScriptPreference
+      settings.chineseScriptPreference,
+      text
     );
   }
 
   finalizeChineseScript(text, settings = getSettings()) {
-    return applyChineseScript(text, this.getChineseScriptTarget(settings));
+    return applyChineseScript(
+      text,
+      resolveChineseScriptTarget(
+        this.getEffectiveOutputLanguage(settings),
+        settings.chineseScriptPreference,
+        text
+      )
+    );
   }
 
+  // Check the dictionary on its own as well as the full prompt: the echo filter needs
+  // 70% of the prompt's words to appear, and a Chinese script bias counts as one more
+  // word, which alone pushes a one- or two-term dictionary under the threshold.
   isDictionaryEcho(text) {
-    return matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt());
+    return (
+      matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt()) ||
+      matchesDictionaryPrompt(text, this.getWhisperPrompt())
+    );
   }
 
   setCallbacks({
@@ -518,6 +550,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setTranslationRequested(requested) {
     this.translationRequested = requested;
+    this.translationApplied = false;
   }
 
   // In translation mode the STT hint is the configured source language, not
@@ -1783,7 +1816,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             promptMode: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
-            language: this.getCleanupLanguage(settings),
+            language: this.getCleanupLanguage(settings, currentText),
             locale: settings.uiLanguage || "en",
             ...(cleanup.meta || {}),
           });
@@ -1812,7 +1845,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.processWithReasoningModel(currentText, route.model, agentName, route.config);
 
     try {
-      return await executeTranslationChain({
+      const chainResult = await executeTranslationChain({
         text,
         cleanupReachable: route.cleanupReachable,
         cleanupIsCloud: cleanup.mode === "cloudReason",
@@ -1837,6 +1870,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this.notifyTranslationFallback("failed");
         },
       });
+      this.translationApplied = chainResult.translated;
+      return chainResult;
     } catch (translateError) {
       // Translate step threw: raw text is still pasted by the caller. Surface the failure.
       this.notifyTranslationFallback("failed");
@@ -2221,7 +2256,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
-              language: this.getCleanupLanguage(settings),
+              language: this.getCleanupLanguage(settings, processedText),
               locale: settings.uiLanguage || "en",
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
@@ -2298,7 +2333,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     return {
       success: true,
-      text: this.finalizeChineseScript(processedText, settings),
+      text: await this.finalizeChineseScript(processedText, settings),
       rawText,
       source: "openwhispr",
       timings,
@@ -3816,7 +3851,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
-              language: this.getCleanupLanguage(stSettings),
+              language: this.getCleanupLanguage(stSettings, finalText),
               locale: stSettings.uiLanguage || "en",
               sttProvider: this.getStreamingProviderName(),
               sttModel: streamingSttModel,
@@ -3944,9 +3979,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (finalText) {
-      // Batch fallback already ran processTranscription (script applied). Re-applying
-      // the same target is idempotent for OpenCC cn/twp converters.
-      finalText = this.finalizeChineseScript(finalText, stSettings);
+      // The batch fallback routes through processTranscription, which already
+      // applied the script; only streamed text still needs it.
+      if (!usedBatchFallback) {
+        finalText = await this.finalizeChineseScript(finalText, stSettings);
+      }
       const tBeforePaste = performance.now();
       const clientTotalMs = Math.round(tBeforePaste - t0);
       this.lastAudioMetadata = {

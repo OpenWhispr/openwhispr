@@ -186,7 +186,7 @@ class ReasoningService extends BaseReasoningService {
     // No systemPrompt override means the default cleanup path: a deterministic
     // transform, so zero temperature and a delimited transcript.
     const isCleanup = !config.systemPrompt;
-    const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
     const userPrompt = isCleanup ? wrapCleanupTranscript(text) : text;
 
     const messages = [

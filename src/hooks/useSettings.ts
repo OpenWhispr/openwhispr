@@ -2,7 +2,12 @@ import React, { createContext, useCallback, useContext, useEffect, useRef } from
 import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
-import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  LocalTranscriptionProvider,
+  InferenceMode,
+  SelfHostedType,
+} from "../types/electron";
 import type { Snippet } from "../utils/snippets";
 
 export interface TranscriptionSettings {
@@ -16,7 +21,7 @@ export interface TranscriptionSettings {
   fallbackWhisperModel: string;
   preferredLanguage: string;
   /** When transcription language is Auto, force Chinese output script. See #975. */
-  chineseScriptPreference: "simplified" | "traditional" | "as-transcribed";
+  chineseScriptPreference: ChineseScriptPreference;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl?: string;

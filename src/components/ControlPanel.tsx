@@ -588,6 +588,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
           // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
           let handledTranslation = false;
+          let translationApplied = false;
           if (result.transcription.route_kind === "translation") {
             handledTranslation = true;
             try {
@@ -604,7 +605,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const agentName = localStorage.getItem("agentName") || null;
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
-                const { text } = await executeTranslationChain({
+                const { text, translated } = await executeTranslationChain({
                   text: rawText,
                   cleanupReachable: route.cleanupReachable,
                   runCleanup: (currentText: string) =>
@@ -633,6 +634,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       "transcription"
                     ),
                 });
+                translationApplied = translated;
                 if (text !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -683,6 +685,38 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             } catch {
               // Reasoning failed — keep the raw STT result
             }
+          }
+
+          // Deterministic Chinese script pass, mirroring dictation (#975). Runs last so
+          // it covers the cleaned/translated text, or the raw transcript when neither ran.
+          // Only a completed translate step moves the text into the target language.
+          try {
+            const { applyChineseScript, resolveChineseScriptTarget } = await import(
+              "../utils/chineseScript"
+            );
+            const outputLanguage = translationApplied
+              ? s.translationTargetLanguage || "auto"
+              : s.preferredLanguage;
+            const scripted = await applyChineseScript(
+              finalTranscription.text,
+              resolveChineseScriptTarget(
+                outputLanguage,
+                s.chineseScriptPreference,
+                finalTranscription.text
+              )
+            );
+            if (scripted !== finalTranscription.text) {
+              const updated = await window.electronAPI.updateTranscriptionText(
+                id,
+                scripted,
+                rawText
+              );
+              if (updated.success && updated.transcription) {
+                finalTranscription = updated.transcription;
+              }
+            }
+          } catch {
+            // Conversion failed — keep the text as transcribed
           }
 
           updateInStore(finalTranscription);

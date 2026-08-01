@@ -6,7 +6,12 @@ import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
 import whisperVadConstants from "../constants/whisperVad.json";
-import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  LocalTranscriptionProvider,
+  InferenceMode,
+  SelfHostedType,
+} from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import {
@@ -21,6 +26,7 @@ import {
   type InferenceScopeDefinition,
   type InferenceScopeStoreKeys,
 } from "../config/inferenceScopes";
+import { normalizeChineseScriptPreference } from "../utils/chineseScript";
 import type {
   TranscriptionSettings,
   CleanupSettings,
@@ -588,7 +594,7 @@ export interface SettingsState
   setAllowLocalFallback: (value: boolean) => void;
   setFallbackWhisperModel: (value: string) => void;
   setPreferredLanguage: (value: string) => void;
-  setChineseScriptPreference: (value: "simplified" | "traditional" | "as-transcribed") => void;
+  setChineseScriptPreference: (value: ChineseScriptPreference) => void;
   setCloudTranscriptionProvider: (value: string) => void;
   setCloudTranscriptionModel: (value: string) => void;
   setCloudTranscriptionBaseUrl: (value: string) => void;
@@ -942,12 +948,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   allowLocalFallback: readBoolean("allowLocalFallback", false),
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
   preferredLanguage: readString("preferredLanguage", "auto"),
-  chineseScriptPreference: (() => {
-    const v = readString("chineseScriptPreference", "as-transcribed");
-    return v === "simplified" || v === "traditional" || v === "as-transcribed"
-      ? v
-      : "as-transcribed";
-  })(),
+  chineseScriptPreference: normalizeChineseScriptPreference(
+    readString("chineseScriptPreference", "as-transcribed")
+  ),
   cloudTranscriptionProvider: readString("cloudTranscriptionProvider", "openai"),
   cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
   cloudTranscriptionBaseUrl: readString(
@@ -1357,11 +1360,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAllowLocalFallback: createBooleanSetter("allowLocalFallback"),
   setFallbackWhisperModel: createStringSetter("fallbackWhisperModel"),
   setPreferredLanguage: createStringSetter("preferredLanguage"),
-  setChineseScriptPreference: (value: "simplified" | "traditional" | "as-transcribed") => {
-    const next =
-      value === "simplified" || value === "traditional" || value === "as-transcribed"
-        ? value
-        : "as-transcribed";
+  setChineseScriptPreference: (value: ChineseScriptPreference) => {
+    const next = normalizeChineseScriptPreference(value);
     if (isBrowser) localStorage.setItem("chineseScriptPreference", next);
     set({ chineseScriptPreference: next });
   },

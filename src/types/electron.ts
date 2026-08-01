@@ -3,6 +3,8 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
+export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
+
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
 export type SelfHostedType = "openai-compatible" | "lan";

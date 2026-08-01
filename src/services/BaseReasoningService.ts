@@ -23,13 +23,16 @@ export abstract class BaseReasoningService {
     return getDictionaryHintWords(getSettings());
   }
 
-  protected getPreferredLanguage(): string {
+  // `text` is the transcript being processed. When STT language is Auto it maps
+  // chineseScriptPreference to zh-CN/zh-TW so cleanup prompts request the right
+  // character set — but only for Chinese text, since those instructions order the
+  // model to write its entire output in Chinese. See #975.
+  protected getPreferredLanguage(text?: string): string {
     const settings = getSettings();
-    // When STT language is Auto, map chineseScriptPreference to zh-CN/zh-TW so
-    // cleanup prompts request the correct character set. See #975.
     return resolveCleanupLanguage(
       settings.preferredLanguage,
-      settings.chineseScriptPreference
+      settings.chineseScriptPreference,
+      text
     );
   }
 
@@ -37,11 +40,11 @@ export abstract class BaseReasoningService {
     return getSettings().uiLanguage || "en";
   }
 
-  protected getSystemPrompt(agentName: string | null): string {
+  protected getSystemPrompt(agentName: string | null, text?: string): string {
     return getCleanupSystemPrompt(
       agentName,
       this.getCustomDictionary(),
-      this.getPreferredLanguage(),
+      this.getPreferredLanguage(text),
       this.getUiLanguage()
     );
   }

@@ -7,9 +7,9 @@
       "uiDescription": "Elige el idioma usado en la interfaz de OpenWhispr",
       "transcriptionLabel": "Idioma de transcripción",
       "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión",
-      "chineseScriptLabel": "Escritura china (deteccion automatica)",
-      "chineseScriptDescription": "Cuando se detecte chino, convierte la transcripcion a caracteres simplificados o tradicionales. El chino hablado suena igual; Whisper solo devuelve una escritura.",
-      "chineseScriptAsTranscribed": "Mantener como se transcribio",
+      "chineseScriptLabel": "Escritura china (dictado)",
+      "chineseScriptDescription": "Cuando se detecte chino, convierte las transcripciones dictadas a caracteres simplificados o tradicionales. El chino hablado suena igual; Whisper solo devuelve una escritura.",
+      "chineseScriptAsTranscribed": "Mantener como se transcribió",
       "chineseScriptSimplified": "Simplificado (简体)",
       "chineseScriptTraditional": "Tradicional (繁體)"
     },

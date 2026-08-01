@@ -8,7 +8,8 @@ export function shouldRunTranslateStep(sourceLanguage, targetLanguage) {
 }
 
 // Step 1 (optional cleanup) soft-fails to the input text; Step 2 translates unless
-// shouldTranslate is false. usedCloudReasoning tracks whether a cloud step actually ran.
+// shouldTranslate is false. usedCloudReasoning tracks whether a cloud step actually ran;
+// translated tracks whether the output really reached the target language.
 export async function executeTranslationChain({
   text,
   cleanupReachable,
@@ -22,6 +23,7 @@ export async function executeTranslationChain({
 }) {
   let out = text;
   let usedCloudReasoning = false;
+  let translated = false;
 
   if (cleanupReachable) {
     try {
@@ -36,16 +38,17 @@ export async function executeTranslationChain({
   }
 
   if (shouldTranslate) {
-    const translated = await runTranslate(out);
-    if (translated) {
-      out = translated;
+    const translateResult = await runTranslate(out);
+    if (translateResult) {
+      out = translateResult;
+      translated = true;
     } else if (onEmptyTranslate) {
       onEmptyTranslate();
     }
     if (translateIsCloud) usedCloudReasoning = true;
   }
 
-  return { text: out, usedCloudReasoning };
+  return { text: out, usedCloudReasoning, translated };
 }
 
 // Keep the chain result only when it produced text; an empty/missing result

@@ -303,3 +303,36 @@ test("resolveTranslatedText: non-empty chain result replaces finalText", async (
 
   assert.equal(resolveTranslatedText("streamed text", { text: "traducido" }), "traducido");
 });
+
+// `translated` tells the caller whether the output is really in the target language.
+// audioManager keys Chinese script conversion off it: scripting a failed translation's
+// source-language fallback as the target corrupts it (ja 会議の資料 → 会议の数据).
+test("translated: true only when the translate step produced text", async () => {
+  const { executeTranslationChain } = await load();
+
+  const ok = await executeTranslationChain(
+    makeOpts({ runTranslate: async () => "translated" })
+  );
+  assert.equal(ok.translated, true);
+  assert.equal(ok.text, "translated");
+});
+
+test("translated: false when the translate step returns empty", async () => {
+  const { executeTranslationChain } = await load();
+
+  const result = await executeTranslationChain(
+    makeOpts({ runCleanup: async () => "cleaned", runTranslate: async () => "" })
+  );
+  assert.equal(result.translated, false);
+  assert.equal(result.text, "cleaned");
+});
+
+test("translated: false when the translate step is skipped", async () => {
+  const { executeTranslationChain } = await load();
+
+  const result = await executeTranslationChain(
+    makeOpts({ shouldTranslate: false, runTranslate: async () => "translated" })
+  );
+  assert.equal(result.translated, false);
+  assert.equal(result.text, "raw");
+});
