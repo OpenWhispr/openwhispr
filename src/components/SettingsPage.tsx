@@ -72,6 +72,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
+import { isOnlineParakeetModel } from "../models/ModelRegistry";
 import { formatHotkeyLabel } from "../utils/hotkeys";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -795,6 +796,12 @@ export default function SettingsPage({
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
     setFloatingIconAutoHide,
+    notchPopupEnabled,
+    setNotchPopupEnabled,
+    notchPopupExpanded,
+    setNotchPopupExpanded,
+    notchPopupPanelSize,
+    setNotchPopupPanelSize,
     startMinimized,
     setStartMinimized,
     panelStartPosition,
@@ -1099,6 +1106,14 @@ export default function SettingsPage({
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
+
+  const notchUseLocalWhisper = useSettingsStore((s) => s.useLocalWhisper);
+  const notchLocalProvider = useSettingsStore((s) => s.localTranscriptionProvider);
+  const notchParakeetModel = useSettingsStore((s) => s.parakeetModel);
+  const notchModelIsStreaming =
+    notchUseLocalWhisper &&
+    notchLocalProvider === "nvidia" &&
+    isOnlineParakeetModel(notchParakeetModel);
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
@@ -2674,6 +2689,55 @@ export default function SettingsPage({
                     </select>
                   </SettingsRow>
                 </SettingsPanelRow>
+                {platform === "darwin" && (
+                  <>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("notchPopup.enabled.label")}
+                        description={t("notchPopup.enabled.description")}
+                      >
+                        <Toggle
+                          checked={notchPopupEnabled}
+                          onChange={setNotchPopupEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("notchPopup.expanded.label")}
+                        description={
+                          notchModelIsStreaming
+                            ? t("notchPopup.expanded.description")
+                            : `${t("notchPopup.expanded.description")} ${t("notchPopup.streamingHint")}`
+                        }
+                      >
+                        <Toggle
+                          checked={notchPopupExpanded}
+                          onChange={setNotchPopupExpanded}
+                          disabled={!notchPopupEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("notchPopup.panelSize.label")}
+                        description={t("notchPopup.panelSize.description")}
+                      >
+                        <select
+                          value={notchPopupPanelSize}
+                          onChange={(e) =>
+                            setNotchPopupPanelSize(e.target.value as "small" | "large")
+                          }
+                          disabled={!notchPopupEnabled || !notchPopupExpanded}
+                          className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="small">{t("notchPopup.panelSize.small")}</option>
+                          <option value="large">{t("notchPopup.panelSize.large")}</option>
+                        </select>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </>
+                )}
               </SettingsPanel>
             </div>
 

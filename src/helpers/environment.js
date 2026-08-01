@@ -42,6 +42,9 @@ const PERSISTED_KEYS = [
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
+  "NOTCH_POPUP_ENABLED",
+  "NOTCH_POPUP_EXPANDED",
+  "NOTCH_POPUP_PANEL_SIZE",
   "PANEL_START_POSITION",
   "START_MINIMIZED",
   "UI_LANGUAGE",
@@ -463,6 +466,33 @@ class EnvironmentManager {
     const result = this._saveKey("FLOATING_ICON_AUTO_HIDE", String(enabled));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
+  }
+
+  getNotchPopupEnabled() {
+    return this._getKey("NOTCH_POPUP_ENABLED") === "true";
+  }
+
+  // Caller is responsible for saveAllKeysToEnvFile() to avoid duplicate writes.
+  saveNotchPopupEnabled(enabled) {
+    return this._saveKey("NOTCH_POPUP_ENABLED", String(enabled));
+  }
+
+  getNotchPopupExpanded() {
+    return this._getKey("NOTCH_POPUP_EXPANDED") === "true";
+  }
+
+  // Caller is responsible for saveAllKeysToEnvFile() to avoid duplicate writes.
+  saveNotchPopupExpanded(enabled) {
+    return this._saveKey("NOTCH_POPUP_EXPANDED", String(enabled));
+  }
+
+  getNotchPopupPanelSize() {
+    return this._getKey("NOTCH_POPUP_PANEL_SIZE") === "large" ? "large" : "small";
+  }
+
+  // Caller is responsible for saveAllKeysToEnvFile() to avoid duplicate writes.
+  saveNotchPopupPanelSize(size) {
+    return this._saveKey("NOTCH_POPUP_PANEL_SIZE", size === "large" ? "large" : "small");
   }
 
   getStartMinimized() {

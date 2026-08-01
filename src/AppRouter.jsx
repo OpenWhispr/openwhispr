@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
 import AuthenticationStep from "./components/AuthenticationStep.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
+import NotchPopupOverlay from "./components/NotchPopupOverlay.tsx";
 import TranscriptionPreviewOverlay from "./components/TranscriptionPreviewOverlay.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
 import WindowControls from "./components/WindowControls.tsx";
@@ -28,6 +29,10 @@ export default function AppRouter() {
 
   if (params.includes("transcription-preview=true")) {
     return <TranscriptionPreviewOverlay />;
+  }
+
+  if (params.includes("notch-popup=true")) {
+    return <NotchPopupOverlay />;
   }
 
   return <MainApp />;

@@ -1,4 +1,5 @@
 const path = require("path");
+const { computeNotchPopupBounds } = require("./notchDisplay");
 
 const isGnomeWayland =
   process.platform === "linux" &&
@@ -151,6 +152,39 @@ const TRANSCRIPTION_PREVIEW_CONFIG = {
   type: FLOATING_OVERLAY_TYPE,
 };
 
+// Fixed window; the island morphs in CSS inside it (330/490x160/610x240, minimal
+// tracks the menu bar height) plus shadow margin.
+const NOTCH_POPUP_SIZES = {
+  width: 640,
+  height: 360,
+  panelHeights: { small: 160, large: 240 },
+};
+
+const NOTCH_POPUP_CONFIG = {
+  width: NOTCH_POPUP_SIZES.width,
+  height: NOTCH_POPUP_SIZES.height,
+  frame: false,
+  transparent: true,
+  alwaysOnTop: true,
+  skipTaskbar: true,
+  resizable: false,
+  focusable: false,
+  hasShadow: false,
+  show: false,
+  acceptsFirstMouse: true,
+  // macOS pins windows below the menu bar unless this is set.
+  enableLargerThanScreen: true,
+  type: "panel",
+  webPreferences: {
+    preload: path.join(__dirname, "..", "..", "preload.js"),
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+    backgroundThrottling: false,
+  },
+  visibleOnAllWorkspaces: true,
+};
+
 class WindowPositionUtil {
   static getMainWindowPosition(display, customSize = null, position = "bottom-right") {
     const { width, height } = customSize || WINDOW_SIZES.BASE;
@@ -180,6 +214,13 @@ class WindowPositionUtil {
     const x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
     const y = Math.max(0, workArea.y + MARGIN);
     return { x, y, width, height };
+  }
+
+  static getNotchPopupPosition(display) {
+    return computeNotchPopupBounds(display, {
+      width: NOTCH_POPUP_SIZES.width,
+      height: NOTCH_POPUP_SIZES.height,
+    });
   }
 
   static getTranscriptionPreviewPosition(display, mainWindowBounds, size = {}) {
@@ -265,6 +306,8 @@ module.exports = {
   NOTIFICATION_WINDOW_CONFIG,
   TRANSCRIPTION_PREVIEW_CONFIG,
   TRANSCRIPTION_PREVIEW_SIZE_LIMITS,
+  NOTCH_POPUP_SIZES,
+  NOTCH_POPUP_CONFIG,
   WINDOW_SIZES,
   WindowPositionUtil,
 };

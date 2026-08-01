@@ -3359,5 +3359,26 @@
     },
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi"
+  },
+  "notchPopup": {
+    "enabled": {
+      "label": "Popup di dettatura nel notch",
+      "description": "Fa uscire un popup dal notch durante la dettatura. Torna alla pillola fluttuante sui display senza notch."
+    },
+    "expanded": {
+      "label": "Trascrizione dal vivo nel notch",
+      "description": "Mostra un pannello di trascrizione dal vivo sotto le ali del notch mentre detti."
+    },
+    "panelSize": {
+      "label": "Altezza della trascrizione dal vivo",
+      "description": "Altezza del pannello di trascrizione dal vivo sotto il notch.",
+      "small": "Piccola",
+      "large": "Grande"
+    },
+    "streamingHint": "Un testo dal vivo fluido richiede un modello di trascrizione in streaming (ad esempio Parakeet online).",
+    "liveTranscript": "Trascrizione dal vivo",
+    "stopAria": "Ferma la dettatura",
+    "openControlPanelAria": "Apri il pannello di controllo",
+    "listening": "In ascolto"
   }
 }

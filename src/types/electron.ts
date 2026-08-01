@@ -1515,6 +1515,40 @@ declare global {
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
       notifyPanelStartPositionChanged?: (position: string) => void;
+      notifyNotchPopupSettingsChanged?: (payload: {
+        enabled: boolean;
+        expanded: boolean;
+        panelSize: "small" | "large";
+      }) => void;
+      notchPopupReady?: () => Promise<void>;
+      getNotchPopupState?: () => Promise<{
+        phase: "recording" | "processing" | "idle";
+        expanded: boolean;
+        elapsedResetToken: number;
+        menuBarHeight: number;
+        notchSpacerWidth: number;
+        leftWingWidth: number;
+        rightWingWidth: number;
+        panelHeight: number;
+      } | null>;
+      setNotchPopupInteractivity?: (interactive: boolean) => Promise<void>;
+      onNotchPopupState?: (
+        callback: (state: {
+          phase: "recording" | "processing" | "idle";
+          expanded: boolean;
+          elapsedResetToken: number;
+          menuBarHeight: number;
+          notchSpacerWidth: number;
+          leftWingWidth: number;
+          rightWingWidth: number;
+          panelHeight: number;
+        }) => void
+      ) => () => void;
+      notifyNotchPopupRecordingChanged?: (payload: {
+        phase: "recording" | "processing" | "idle";
+        hasTranscriptFeed?: boolean;
+      }) => void;
+      notchPopupAction?: (action: "stop" | "open-control-panel") => void;
 
       // Auto-start at login
       getAutoStartEnabled?: () => Promise<boolean>;

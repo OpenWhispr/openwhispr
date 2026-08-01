@@ -110,6 +110,7 @@
         "macos-globe-listener",
         "macos-fast-paste",
         "macos-mic-listener",
+        "macos-notch-probe",
         "macos-text-monitor",
         "macos-media-remote",
         "MediaRemoteAdapter.framework/**",
