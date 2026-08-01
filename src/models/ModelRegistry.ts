@@ -324,6 +324,7 @@ export function getReasoningModelLabel(modelId: string): string {
 
 const NON_REGISTRY_PROVIDER_NAMES: Record<string, string> = {
   openrouter: "OpenRouter",
+  orcarouter: "OrcaRouter",
   custom: "Custom",
 };
 
@@ -348,6 +349,10 @@ export function getModelProvider(modelId: string): string {
 
   if (storedProvider === "openrouter") {
     return "openrouter";
+  }
+
+  if (storedProvider === "orcarouter") {
+    return "orcarouter";
   }
 
   if (isEnterpriseProvider(storedProvider)) {
@@ -473,6 +478,11 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
   // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
   // custom endpoints keep the request shape they had before OpenRouter landed.
   if (provider === "openrouter" && modelId.includes("/")) {
+    return { tokenParam: "max_tokens", supportsTemperature: true };
+  }
+
+  // OrcaRouter ids carry the same vendor prefix and speak standard Chat Completions.
+  if (provider === "orcarouter" && modelId.includes("/")) {
     return { tokenParam: "max_tokens", supportsTemperature: true };
   }
 

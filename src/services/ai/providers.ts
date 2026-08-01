@@ -56,6 +56,13 @@ export async function getAIModel(
         baseURL,
         ...(opts?.disableThinking ? { fetch: withDisabledReasoning } : {}),
       }).chat(model);
+    case "orcarouter":
+      // OrcaRouter implements Chat Completions, not the OpenAI Responses API. Unlike
+      // OpenRouter it takes OpenAI's flat `reasoning_effort`, so it needs no fetch hook
+      // and `disableThinking` is handled by the shared dialect table instead.
+      return createOpenAI({ apiKey, baseURL: baseURL || API_ENDPOINTS.ORCAROUTER_BASE }).chat(
+        model
+      );
     case "local":
       return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
     default:

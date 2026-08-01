@@ -6,6 +6,7 @@ const CLOUD_CHAT_PROVIDERS = new Set([
   "tinfoil",
   "custom",
   "openrouter",
+  "orcarouter",
   "corti",
 ]);
 

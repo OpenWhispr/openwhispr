@@ -51,6 +51,13 @@ const BYOK_API_KEYS = [
     storeKey: "openrouterApiKey",
   },
   {
+    base: "orcarouter",
+    env: "ORCAROUTER_API_KEY",
+    get: "getOrcarouterKey",
+    save: "saveOrcarouterKey",
+    storeKey: "orcarouterApiKey",
+  },
+  {
     base: "tinfoil",
     env: "TINFOIL_API_KEY",
     get: "getTinfoilKey",

@@ -15,6 +15,7 @@ import vertexIcon from "@/assets/icons/providers/vertex.svg";
 import xaiIcon from "@/assets/icons/providers/xai.svg";
 import cortiIcon from "@/assets/icons/providers/corti.svg";
 import openrouterIcon from "@/assets/icons/providers/openrouter.svg";
+import orcarouterIcon from "@/assets/icons/providers/orcarouter.svg";
 import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
@@ -36,6 +37,9 @@ export const PROVIDER_ICONS: Record<string, string> = {
   xai: xaiIcon,
   corti: cortiIcon,
   openrouter: openrouterIcon,
+  // Not listed in MONOCHROME_PROVIDERS: the mark ships in brand blue, which stays
+  // legible in both themes (icons render through <img>, so currentColor can't apply).
+  orcarouter: orcarouterIcon,
   tinfoil: tinfoilIcon,
 };
 
