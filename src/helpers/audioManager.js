@@ -55,6 +55,7 @@ import { evaluateFinishedRecording } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
+import { PreparedMicCapture } from "./preparedMicCapture";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
@@ -270,6 +271,7 @@ class AudioManager {
     this.micCaptureStatus = "inactive";
     this.cachedApiKey = null;
     this.cachedApiKeyProvider = null;
+    this.preparedMicCapture = new PreparedMicCapture();
 
     this._onApiKeyChanged = () => {
       this.cachedApiKey = null;
@@ -284,6 +286,7 @@ class AudioManager {
       this.validatedSelectedMicDeviceId = null;
       this.micDriverWarmedUp = false;
       this.rejectedMicDeviceId = null;
+      this.preparedMicCapture.cancel();
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
     this.cachedTranscriptionEndpoint = null;
@@ -671,21 +674,34 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  // Briefly acquire and release the mic so the OS audio driver is warm before
-  // the first real recording, reducing cold-start empty captures. See #871.
-  async warmupMicDriver() {
-    if (this.micDriverWarmedUp) return;
-    // Skip while a recording is active so we don't double-acquire the mic. See #871.
-    if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") return;
-    try {
-      const constraints = await this.getAudioConstraints();
-      const tempStream = await navigator.mediaDevices.getUserMedia(constraints);
-      tempStream.getTracks().forEach((track) => track.stop());
-      this.micDriverWarmedUp = true;
-      logger.debug("Microphone driver pre-warmed", {}, "audio");
-    } catch (e) {
-      logger.debug("Mic driver warmup failed (non-critical)", { error: e.message }, "audio");
+  // Acquire the mic while a push-to-talk hold is being confirmed, then hand the
+  // same stream to startRecording instead of opening the device twice.
+  async prepareMicCapture() {
+    if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") {
+      return null;
     }
+    try {
+      const prepared = await this.preparedMicCapture.prepare(async () => {
+        const constraints = await this.getAudioConstraints();
+        const stream = await this.acquireHealthyMicStream(
+          await navigator.mediaDevices.getUserMedia(constraints),
+          constraints
+        );
+        return { stream, constraints };
+      });
+      if (prepared) {
+        this.micDriverWarmedUp = true;
+        logger.debug("Microphone capture prepared", {}, "audio");
+      }
+      return prepared;
+    } catch (e) {
+      logger.debug("Mic capture preparation failed (non-critical)", { error: e.message }, "audio");
+      return null;
+    }
+  }
+
+  cancelPreparedMicCapture() {
+    this.preparedMicCapture.cancel();
   }
 
   // Recovers a dead/muted capture: retries the same device, then hops to the OS default,
@@ -732,11 +748,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return false;
       }
 
-      const constraints = await this.getAudioConstraints(forceDefaultMic);
-      const micStream = await this.acquireHealthyMicStream(
-        await navigator.mediaDevices.getUserMedia(constraints),
-        constraints
-      );
+      const startRequestedAt = performance.now();
+      const prepared = forceDefaultMic ? null : await this.preparedMicCapture.take();
+      const constraints =
+        prepared?.constraints ?? (await this.getAudioConstraints(forceDefaultMic));
+      const micStream =
+        prepared?.stream ??
+        (await this.acquireHealthyMicStream(
+          await navigator.mediaDevices.getUserMedia(constraints),
+          constraints
+        ));
+      const micReadyAt = performance.now();
 
       const audioTrack = micStream.getAudioTracks()[0];
 
@@ -801,6 +823,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         isProcessing: false,
         micCaptureStatus: "active",
       });
+      logger.info(
+        "Recording start timing",
+        {
+          micReadyMs: Math.round(micReadyAt - startRequestedAt),
+          totalMs: Math.round(performance.now() - startRequestedAt),
+          usedPreparedCapture: !!prepared,
+        },
+        "audio"
+      );
 
       const {
         showTranscriptionPreview,
@@ -3366,14 +3397,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.stopRequestedDuringStreamingStart = false;
 
       const t0 = performance.now();
-      const constraints = await this.getAudioConstraints(forceDefaultMic);
+      const prepared = forceDefaultMic ? null : await this.preparedMicCapture.take();
+      const constraints =
+        prepared?.constraints ?? (await this.getAudioConstraints(forceDefaultMic));
       const tConstraints = performance.now();
 
       // 1. Get mic stream (can take 10-15s on cold macOS mic driver)
-      const rawStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const rawStream =
+        prepared?.stream ?? (await navigator.mediaDevices.getUserMedia(constraints));
       const tMedia = performance.now();
 
-      const stream = await this.acquireHealthyMicStream(rawStream, constraints);
+      const stream = prepared?.stream
+        ? prepared.stream
+        : await this.acquireHealthyMicStream(rawStream, constraints);
 
       const audioTrack = stream.getAudioTracks()[0];
 
@@ -4097,6 +4133,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   cleanup() {
     this.micRecovery.stop();
+    this.preparedMicCapture.cancel();
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
     if (this.isStreaming) {
