@@ -1557,6 +1557,8 @@
         "title": "Portapapeles",
         "autoPaste": "Pegado automático",
         "autoPasteDescription": "Pegar automáticamente el texto transcrito en la aplicación activa al finalizar el dictado",
+        "pressEnterAfterPaste": "Pulsar Intro después de pegar",
+        "pressEnterAfterPasteDescription": "Enviar Intro una vez pegado el texto, para enviarlo. Ten cuidado en terminales y paletas de comandos, donde Intro ejecuta los comandos de inmediato.",
         "keepInClipboard": "Mantener transcripción en el portapapeles",
         "keepInClipboardDescription": "Mantener el texto dictado en el portapapeles para poder pegarlo manualmente si es necesario"
       },

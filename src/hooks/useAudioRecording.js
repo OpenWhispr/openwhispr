@@ -182,7 +182,8 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           const isStreaming = result.source?.includes("streaming");
-          const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
+          const { autoPasteEnabled, keepTranscriptionInClipboard, pressEnterAfterPaste } =
+            getSettings();
 
           if (autoPasteEnabled) {
             const pasteStart = performance.now();
@@ -190,6 +191,7 @@ export const useAudioRecording = (toast, options = {}) => {
               ...(isStreaming ? { fromStreaming: true } : {}),
               restoreClipboard: !keepTranscriptionInClipboard,
               allowClipboardFallback: isAccessibilitySkipped(),
+              pressEnterAfterPaste,
             });
             logger.info(
               "Paste timing",
