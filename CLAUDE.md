@@ -129,6 +129,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
 - **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app.
+- **cliAgent/**: Local CLI agent bridge (Claude Code, Codex) for the dictation agent — template-method adapters (baseCliAdapter + per-CLI subclasses), session store with resume window, watchdog timeout, stage-label IPC (`cli-agent-stage`). Renderer side: `src/services/ai/inferenceProviders/cliAgent.ts`, mode `"cli"` (dictationAgent scope only).
 - **postMigrationDetector.js**: Detects users returning from the pre-Gizmo bundle ID via a `.bundle-migrated` sentinel in userData; consumed by `ipcHandlers.js` to drive the `PostMigrationOnboarding` modal
 
 ### React Components (src/components/)

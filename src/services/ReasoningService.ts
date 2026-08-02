@@ -24,6 +24,7 @@ import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
+import { isCliAgentProvider } from "./ai/inferenceProviders/cliAgent";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
 
@@ -346,7 +347,12 @@ class ReasoningService extends BaseReasoningService {
       ? "lan"
       : resolveInferenceProvider(config.provider, trimmedModel);
 
-    if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
+    if (
+      !trimmedModel &&
+      providerId !== "openwhispr" &&
+      providerId !== "lan" &&
+      !isCliAgentProvider(providerId)
+    ) {
       throw new Error("No reasoning model selected");
     }
 
@@ -925,6 +931,14 @@ class ReasoningService extends BaseReasoningService {
       }
 
       const settings = getSettings();
+
+      // CLI agent mode needs no API key or local model — the local CLI binary
+      // authenticates itself (subscription auth).
+      if (settings.useDictationAgent && settings.dictationAgentMode === "cli") {
+        logger.logReasoning("API_KEY_CHECK", { cliAgent: true });
+        return true;
+      }
+
       if (settings.cleanupProvider === "custom" && settings.cleanupCloudBaseUrl?.trim()) {
         logger.logReasoning("API_KEY_CHECK", {
           customProvider: true,

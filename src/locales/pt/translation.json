@@ -1364,6 +1364,27 @@
         }
       }
     },
+    "cliAgent": {
+      "cliLabel": "CLI",
+      "notFound": "Não encontrado no PATH",
+      "modelLabel": "Modelo",
+      "modelDefault": "Padrão do CLI",
+      "modelCustom": "Personalizado…",
+      "permissionLabel": "Modo de permissão",
+      "permissionAuto": "Automático (supervisionado)",
+      "permissionAcceptEdits": "Aceitar edições",
+      "permissionManual": "Manual (aprovações padrão do CLI)",
+      "permissionBypass": "Ignorar todas as permissões",
+      "permissionBypassWarning": "O CLI executará qualquer ferramenta sem perguntar. Use com cuidado.",
+      "advanced": "Avançado",
+      "workingDirLabel": "Diretório de trabalho",
+      "workingDirPlaceholder": "Usa seu diretório inicial por padrão",
+      "timeoutLabel": "Tempo limite (segundos)",
+      "sessionLabel": "Janela de reutilização de sessão (minutos)",
+      "sessionHint": "0 desativa a retomada da conversa",
+      "extraPromptLabel": "Instruções extras",
+      "extraPromptPlaceholder": "Adicionado ao prompt do sistema do agente"
+    },
     "developer": {
       "clearCache": "Limpar cache",
       "dataManagementDescription": "Gerencie modelos em cache e dados do app",
@@ -2878,6 +2899,16 @@
       "stopListening": "Parar de ouvir",
       "startListening": "Começar a ouvir",
       "hideForNow": "Ocultar por agora"
+    },
+    "cliAgent": {
+      "stage": {
+        "command": "Executando um comando…",
+        "tool": "Usando {{name}}…",
+        "skill": "Usando a habilidade {{name}}…",
+        "thinking": "Pensando…"
+      },
+      "denialsTitle": "Algumas ferramentas foram bloqueadas",
+      "denialsBody": "O agente não teve permissão para usar: {{tools}}"
     }
   },
   "dictationAgent": {
@@ -2893,7 +2924,9 @@
       "selfHosted": "Auto-hospedado",
       "selfHostedDesc": "Aponte para um endpoint compatível com OpenAI auto-hospedado.",
       "enterprise": "Corporativo",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI ou Google Vertex."
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI ou Google Vertex.",
+      "cli": "Agente de CLI local",
+      "cliDesc": "Encaminha comandos para o Claude Code ou Codex em execução nesta máquina"
     },
     "prompt": {
       "title": "Prompt do agente",

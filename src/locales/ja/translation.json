@@ -1385,6 +1385,27 @@
         }
       }
     },
+    "cliAgent": {
+      "cliLabel": "CLI",
+      "notFound": "PATH内に見つかりません",
+      "modelLabel": "モデル",
+      "modelDefault": "CLIのデフォルト",
+      "modelCustom": "カスタム…",
+      "permissionLabel": "権限モード",
+      "permissionAuto": "自動（監視付き）",
+      "permissionAcceptEdits": "編集を承認",
+      "permissionManual": "手動（CLIのデフォルト承認）",
+      "permissionBypass": "すべての権限をバイパス",
+      "permissionBypassWarning": "CLIは確認なしであらゆるツールを実行します。取り扱いに注意してください。",
+      "advanced": "詳細設定",
+      "workingDirLabel": "作業ディレクトリ",
+      "workingDirPlaceholder": "デフォルトではホームディレクトリを使用します",
+      "timeoutLabel": "タイムアウト（秒）",
+      "sessionLabel": "セッション再利用ウィンドウ（分）",
+      "sessionHint": "0にすると会話の再開を無効化します",
+      "extraPromptLabel": "追加の指示",
+      "extraPromptPlaceholder": "エージェントのシステムプロンプトに追加されます"
+    },
     "developer": {
       "clearCache": "キャッシュをクリア",
       "dataManagementDescription": "キャッシュされたモデルとアプリデータを管理",
@@ -2878,6 +2899,16 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示"
+    },
+    "cliAgent": {
+      "stage": {
+        "command": "コマンドを実行中…",
+        "tool": "{{name}} を使用中…",
+        "skill": "スキル {{name}} を使用中…",
+        "thinking": "考え中…"
+      },
+      "denialsTitle": "一部のツールがブロックされました",
+      "denialsBody": "エージェントは次のツールを使用できませんでした: {{tools}}"
     }
   },
   "dictationAgent": {
@@ -2893,7 +2924,9 @@
       "selfHosted": "セルフホスト",
       "selfHostedDesc": "セルフホストの OpenAI 互換エンドポイントを指定します。",
       "enterprise": "エンタープライズ",
-      "enterpriseDesc": "AWS Bedrock、Azure OpenAI、Google Vertex を使用します。"
+      "enterpriseDesc": "AWS Bedrock、Azure OpenAI、Google Vertex を使用します。",
+      "cli": "ローカルCLIエージェント",
+      "cliDesc": "このマシン上で動作するClaude CodeまたはCodexにコマンドを転送します"
     },
     "prompt": {
       "title": "エージェントプロンプト",

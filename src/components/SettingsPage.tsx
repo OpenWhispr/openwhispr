@@ -416,6 +416,8 @@ const CLEANUP_MODE_TOAST_KEY: Record<InferenceMode, string> = {
   local: "switchedLocal",
   "self-hosted": "switchedSelfHosted",
   enterprise: "switchedEnterprise",
+  // Cleanup mode selector never offers "cli" (only dictationAgent scope does); unreachable here.
+  cli: "switchedProviders",
 };
 
 function NoteFormattingSettings() {

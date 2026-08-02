@@ -1385,6 +1385,27 @@
         }
       }
     },
+    "cliAgent": {
+      "cliLabel": "CLI",
+      "notFound": "在 PATH 中未找到",
+      "modelLabel": "模型",
+      "modelDefault": "CLI 默认",
+      "modelCustom": "自定义…",
+      "permissionLabel": "权限模式",
+      "permissionAuto": "自动（受监督）",
+      "permissionAcceptEdits": "接受编辑",
+      "permissionManual": "手动（CLI 默认审批）",
+      "permissionBypass": "跳过所有权限",
+      "permissionBypassWarning": "CLI 将不经询问直接运行任何工具，请谨慎使用。",
+      "advanced": "高级",
+      "workingDirLabel": "工作目录",
+      "workingDirPlaceholder": "默认使用你的主目录",
+      "timeoutLabel": "超时时间（秒）",
+      "sessionLabel": "会话复用窗口（分钟）",
+      "sessionHint": "0 表示禁用对话恢复",
+      "extraPromptLabel": "附加说明",
+      "extraPromptPlaceholder": "追加到代理的系统提示词中"
+    },
     "developer": {
       "clearCache": "清除缓存",
       "dataManagementDescription": "管理缓存模型和应用数据",
@@ -2878,6 +2899,16 @@
       "stopListening": "停止录音",
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏"
+    },
+    "cliAgent": {
+      "stage": {
+        "command": "正在运行命令…",
+        "tool": "正在使用 {{name}}…",
+        "skill": "正在使用技能 {{name}}…",
+        "thinking": "思考中…"
+      },
+      "denialsTitle": "部分工具已被阻止",
+      "denialsBody": "代理未被允许使用：{{tools}}"
     }
   },
   "dictationAgent": {
@@ -2893,7 +2924,9 @@
       "selfHosted": "自托管",
       "selfHostedDesc": "指向兼容 OpenAI 的自托管端点。",
       "enterprise": "企业级",
-      "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
+      "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。",
+      "cli": "本地 CLI 代理",
+      "cliDesc": "将命令转发给运行在本机上的 Claude Code 或 Codex"
     },
     "prompt": {
       "title": "助手提示词",

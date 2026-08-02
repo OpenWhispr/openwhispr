@@ -99,3 +99,56 @@ test("a disabled agent is unreachable", async () => {
 
   assert.equal(result.reachable, false);
 });
+
+const cliSettings = {
+  useDictationAgent: true,
+  dictationAgentMode: "cli",
+  dictationAgentProvider: "codex",
+  dictationAgentModel: "",
+  cliAgentPermissionMode: "bypass",
+  cliAgentWorkingDir: "/work",
+  cliAgentTimeoutSeconds: 120,
+  cliAgentSessionMinutes: 10,
+  cliAgentExtraPrompt: "be terse",
+};
+
+test("cli mode: reachable with empty model and carries cli config", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference(cliSettings, { isCloudAgent: false });
+
+  assert.equal(result.reachable, true);
+  assert.equal(result.config.provider, "codex");
+  assert.equal(result.config.cliPermissionMode, "bypass");
+  assert.equal(result.config.cliWorkingDir, "/work");
+  assert.equal(result.config.cliTimeoutSeconds, 120);
+  assert.equal(result.config.cliSessionMinutes, 10);
+  assert.equal(result.config.cliExtraPrompt, "be terse");
+});
+
+test("cli mode: provider defaults to claude-code when unset", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference(
+    { ...cliSettings, dictationAgentProvider: "" },
+    { isCloudAgent: false }
+  );
+
+  assert.equal(result.config.provider, "claude-code");
+});
+
+test("non-cli mode: no cli fields in config", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference(
+    {
+      useDictationAgent: true,
+      dictationAgentMode: "providers",
+      dictationAgentProvider: "openai",
+      dictationAgentModel: "gpt-5-mini",
+    },
+    { isCloudAgent: false }
+  );
+
+  assert.equal(result.config.cliPermissionMode, undefined);
+});

@@ -3,7 +3,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
-export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
+export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise" | "cli";
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
@@ -1222,6 +1222,23 @@ declare global {
         agentName: string | null,
         config: any
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
+
+      // CLI agent (Claude Code / Codex)
+      processCliAgent: (opts: Record<string, unknown>) => Promise<{
+        success: boolean;
+        text?: string;
+        sessionId?: string;
+        permissionDenials?: unknown[];
+        error?: string;
+        errorCode?: string;
+      }>;
+      cancelCliAgent: () => Promise<{ success: boolean; error?: string; errorCode?: string }>;
+      checkCliAgent: (
+        cli: string
+      ) => Promise<{ available: boolean; path?: string | null }>;
+      onCliAgentStage: (
+        callback: (label: { kind: string; name?: string }) => void
+      ) => () => void;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (

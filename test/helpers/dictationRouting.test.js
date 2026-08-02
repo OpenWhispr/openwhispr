@@ -159,6 +159,36 @@ test("agent is reachable with an explicit model (BYOK/local/enterprise)", async 
   );
 });
 
+test("cli agent is reachable without a model", async () => {
+  const { resolveDictationAgentReachability } = await load();
+
+  assert.equal(
+    resolveDictationAgentReachability({
+      useDictationAgent: true,
+      dictationAgentModel: "",
+      isCloudAgent: false,
+      isSelfHostedAgent: false,
+      isCliAgent: true,
+    }),
+    true
+  );
+});
+
+test("cli agent still requires the agent to be enabled", async () => {
+  const { resolveDictationAgentReachability } = await load();
+
+  assert.equal(
+    resolveDictationAgentReachability({
+      useDictationAgent: false,
+      dictationAgentModel: "",
+      isCloudAgent: false,
+      isSelfHostedAgent: false,
+      isCliAgent: true,
+    }),
+    false
+  );
+});
+
 test("disabling the dictation agent overrides cloud reachability", async () => {
   const { resolveDictationAgentReachability } = await load();
 
