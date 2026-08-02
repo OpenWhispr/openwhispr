@@ -123,3 +123,11 @@ test("isValidHotkeyFormat rejects empty input and combos with empty parts", asyn
   assert.equal(isValidHotkeyFormat("Ctrl+"), false);
   assert.equal(isValidHotkeyFormat("+K"), false);
 });
+
+test("parseHotkeyList preserves hotkeys ending with '+' when followed by another hotkey", async () => {
+  const { parseHotkeyList } = await load();
+
+  assert.deepEqual(parseHotkeyList("Control++,F8"), ["Control++", "F8"]);
+  assert.deepEqual(parseHotkeyList("Control+,,F8"), ["Control+,", "F8"]);
+  assert.deepEqual(parseHotkeyList("Control++,Control+,"), ["Control++", "Control+,"]);
+});
