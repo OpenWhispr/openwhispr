@@ -18,6 +18,7 @@ const {
   BrowserWindow,
   dialog,
   ipcMain,
+  Menu,
   net,
   session,
   systemPreferences,
@@ -908,12 +909,53 @@ async function startApp() {
     environmentManager.saveStartMinimized(enabled);
   });
 
+  const applyHideDockIcon = (enabled) => {
+    if (debugLogger) debugLogger.info("Hide dock icon changed", { enabled });
+    environmentManager.saveHideDockIcon(enabled);
+    dockManager.setHideDockIcon(enabled);
+    // dock.hide() turns the app into an accessory process, which can drop the
+    // control panel behind other windows — and the user is likely in it,
+    // having just flipped the toggle. Bring it back.
+    if (enabled && isLiveWindow(windowManager?.controlPanelWindow)) {
+      windowManager.controlPanelWindow.show();
+      windowManager.controlPanelWindow.focus();
+    }
+  };
+
+  ipcMain.on("hide-dock-icon-changed", (_event, enabled) => {
+    applyHideDockIcon(enabled);
+  });
+
   ipcMain.on("panel-start-position-changed", (_event, position) => {
     windowManager.setPanelStartPosition(position);
     environmentManager.savePanelStartPosition(position);
   });
 
-  dockManager.init();
+  dockManager.init({ hideDockIcon: environmentManager.getHideDockIcon() });
+
+  // Right-clicking the Dock icon offers menu-bar-only mode directly (#1380),
+  // the way Tailscale and similar background apps do. The icon is only
+  // visible while the control panel is open, so a live renderer exists to
+  // receive the sync event and keep the Settings toggle honest.
+  if (process.platform === "darwin" && app.dock) {
+    const refreshDockMenu = () => {
+      app.dock.setMenu(
+        Menu.buildFromTemplate([
+          {
+            label: i18nMain.t("dockMenu.hideDockIcon"),
+            click: () => {
+              applyHideDockIcon(true);
+              if (isLiveWindow(windowManager?.controlPanelWindow)) {
+                windowManager.controlPanelWindow.webContents.send("hide-dock-icon-changed", true);
+              }
+            },
+          },
+        ])
+      );
+    };
+    refreshDockMenu();
+    i18nMain.on("languageChanged", refreshDockMenu);
+  }
 
   // In development, wait for Vite dev server to be ready
   if (process.env.NODE_ENV === "development") {

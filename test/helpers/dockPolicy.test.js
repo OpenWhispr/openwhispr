@@ -27,3 +27,40 @@ test("there is no Dock to act on outside macOS", async () => {
     assert.equal(resolveDockVisibility({ platform, controlPanelVisible: true }), null);
   }
 });
+
+test("menu-bar-only mode keeps the icon hidden even with the control panel open", async () => {
+  const { resolveDockVisibility } = await load();
+
+  // #1380: with hideDockIcon set, nothing may surface the icon — not even the
+  // control panel, which normally owns it.
+  assert.equal(
+    resolveDockVisibility({ platform: "darwin", controlPanelVisible: true, hideDockIcon: true }),
+    false
+  );
+  assert.equal(
+    resolveDockVisibility({ platform: "darwin", controlPanelVisible: false, hideDockIcon: true }),
+    false
+  );
+});
+
+test("menu-bar-only mode off preserves follow-the-panel behavior", async () => {
+  const { resolveDockVisibility } = await load();
+
+  assert.equal(
+    resolveDockVisibility({ platform: "darwin", controlPanelVisible: true, hideDockIcon: false }),
+    true
+  );
+  // Callers that predate the setting pass no hideDockIcon at all.
+  assert.equal(resolveDockVisibility({ platform: "darwin", controlPanelVisible: true }), true);
+});
+
+test("menu-bar-only mode changes nothing off macOS", async () => {
+  const { resolveDockVisibility } = await load();
+
+  for (const platform of ["win32", "linux"]) {
+    assert.equal(
+      resolveDockVisibility({ platform, controlPanelVisible: true, hideDockIcon: true }),
+      null
+    );
+  }
+});

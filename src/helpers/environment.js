@@ -42,6 +42,7 @@ const PERSISTED_KEYS = [
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
+  "HIDE_DOCK_ICON",
   "PANEL_START_POSITION",
   "START_MINIMIZED",
   "UI_LANGUAGE",
@@ -461,6 +462,16 @@ class EnvironmentManager {
 
   saveFloatingIconAutoHide(enabled) {
     const result = this._saveKey("FLOATING_ICON_AUTO_HIDE", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getHideDockIcon() {
+    return this._getKey("HIDE_DOCK_ICON") === "true";
+  }
+
+  saveHideDockIcon(enabled) {
+    const result = this._saveKey("HIDE_DOCK_ICON", String(enabled));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

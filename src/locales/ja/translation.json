@@ -37,6 +37,9 @@
     "quit": "OpenWhispr を終了",
     "tooltip": "OpenWhispr - 音声ディクテーション"
   },
+  "dockMenu": {
+    "hideDockIcon": "Dock アイコンを隠す（メニューバーのみ）"
+  },
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "OpenWhispr を終了",
@@ -1518,7 +1521,9 @@
         "title": "起動設定",
         "description": "OpenWhispr の起動時の動作を制御",
         "startMinimized": "最小化で起動",
-        "startMinimizedDescription": "コントロールパネルウィンドウを表示せずに起動"
+        "startMinimizedDescription": "コントロールパネルウィンドウを表示せずに起動",
+        "hideDockIcon": "Dock アイコンを隠す（メニューバーのみ）",
+        "hideDockIconDescription": "OpenWhispr を Dock アイコンなしのメニューバーアプリとして実行します。Cmd+Tab の切り替えにも表示されなくなるため、メニューバーのアイコンから開いてください。"
       },
       "waylandPaste": {
         "title": "Wayland 貼り付け設定",

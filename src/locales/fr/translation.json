@@ -37,6 +37,9 @@
     "quit": "Quitter OpenWhispr",
     "tooltip": "OpenWhispr - Dictée vocale"
   },
+  "dockMenu": {
+    "hideDockIcon": "Masquer l'icône du Dock (barre de menus uniquement)"
+  },
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "Quitter OpenWhispr",
@@ -1796,7 +1799,9 @@
         "title": "Démarrage",
         "description": "Contrôlez le comportement d'OpenWhispr au lancement",
         "startMinimized": "Démarrer réduit",
-        "startMinimizedDescription": "Lancer sans afficher la fenêtre du panneau de contrôle"
+        "startMinimizedDescription": "Lancer sans afficher la fenêtre du panneau de contrôle",
+        "hideDockIcon": "Masquer l'icône du Dock (barre de menus uniquement)",
+        "hideDockIconDescription": "Exécuter OpenWhispr comme app de la barre de menus, sans icône dans le Dock. Elle disparaît aussi du sélecteur Cmd+Tab ; utilisez l'icône de la barre de menus pour l'ouvrir."
       },
       "waylandPaste": {
         "title": "Configuration du collage Wayland",
