@@ -1,8 +1,8 @@
 const { i18nMain } = require("./i18nMain");
 
-function resolveSpeaker(seg, speakerMappings) {
+function resolveSpeaker(seg, speakerMappings = {}) {
   if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
-  if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
+  if (seg.speaker && speakerMappings?.[seg.speaker]) return speakerMappings[seg.speaker];
   if (seg.speaker === "you") return "You";
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
@@ -74,7 +74,7 @@ function extractMetadata(note) {
   return { title, dateStr, participants };
 }
 
-function formatTxt(note, segments, speakerMappings) {
+function formatTxt(note, segments, speakerMappings = {}) {
   const merged = mergeSegments(segments);
   const { title, dateStr, participants } = extractMetadata(note);
 
@@ -90,7 +90,7 @@ function formatTxt(note, segments, speakerMappings) {
   return lines.join("\n");
 }
 
-function formatSrt(segments, speakerMappings) {
+function formatSrt(segments, speakerMappings = {}) {
   const merged = mergeSegments(segments);
   const entries = [];
   for (let i = 0; i < merged.length; i++) {
@@ -104,7 +104,7 @@ function formatSrt(segments, speakerMappings) {
   return entries.join("\n");
 }
 
-function formatJson(note, segments, speakerMappings) {
+function formatJson(note, segments, speakerMappings = {}) {
   const merged = mergeSegments(segments);
   const { title, dateStr } = extractMetadata(note);
 
@@ -133,7 +133,7 @@ function formatJson(note, segments, speakerMappings) {
   );
 }
 
-function formatMd(note, segments, speakerMappings) {
+function formatMd(note, segments, speakerMappings = {}) {
   const merged = mergeSegments(segments);
   const { title, dateStr, participants } = extractMetadata(note);
 

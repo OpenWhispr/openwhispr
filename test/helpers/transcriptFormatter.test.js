@@ -177,3 +177,29 @@ test("a manually named segment does not absorb the adjacent un-named one", () =>
   assert.ok(txtOutput.includes("[00:00:00] Alice:\nAlice said this."));
   assert.ok(txtOutput.includes("[00:00:01] You:\nAnd this is me talking."));
 });
+
+test("formatters handle omitted, undefined, or null speakerMappings gracefully", () => {
+  const note = { title: "Test Note", created_at: "2026-01-01T00:00:00Z" };
+  const segments = [{ speaker: "speaker_0", timestamp: 0, text: "Hello world" }];
+
+  for (const nullishMappings of [undefined, null]) {
+    const txt = formatTxt(note, segments, nullishMappings);
+    assert.match(txt, /Speaker 1:\nHello world/);
+
+    const srt = formatSrt(segments, nullishMappings);
+    assert.match(srt, /Speaker 1: Hello world/);
+
+    const json = formatJson(note, segments, nullishMappings);
+    assert.ok(JSON.parse(json).speakers.includes("Speaker 1"));
+
+    const md = formatMd(note, segments, nullishMappings);
+    assert.match(md, /\*\*Speaker 1\*\*/);
+  }
+
+  // Also test omitting the speakerMappings argument entirely
+  const txtOmitted = formatTxt(note, segments);
+  assert.match(txtOmitted, /Speaker 1:\nHello world/);
+
+  const srtOmitted = formatSrt(segments);
+  assert.match(srtOmitted, /Speaker 1: Hello world/);
+});
