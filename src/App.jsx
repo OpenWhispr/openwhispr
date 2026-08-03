@@ -188,6 +188,9 @@ export default function App() {
 
   // CLI agent stage label (what the agent is currently doing during processing)
   const [cliStage, setCliStage] = useState(null);
+  // Resize only on stage appear/disappear, not on every stage-label change —
+  // each label update is a new object and would trigger a no-op resize IPC.
+  const hasCliStage = !!cliStage;
 
   useEffect(() => {
     const resizeWindow = () => {
@@ -197,7 +200,7 @@ export default function App() {
         window.electronAPI?.resizeMainWindow?.("WITH_MENU");
       } else if (toastCount > 0) {
         window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
-      } else if (cliStage) {
+      } else if (hasCliStage) {
         // Stage label renders above the button — the BASE window is too
         // small to show it.
         window.electronAPI?.resizeMainWindow?.("WITH_STAGE");
@@ -206,7 +209,7 @@ export default function App() {
       }
     };
     resizeWindow();
-  }, [isCommandMenuOpen, toastCount, cliStage]);
+  }, [isCommandMenuOpen, toastCount, hasCliStage]);
 
   const handleDictationToggle = React.useCallback(() => {
     setIsCommandMenuOpen(false);

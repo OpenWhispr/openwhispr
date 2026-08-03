@@ -1,5 +1,6 @@
 const { spawn } = require("child_process");
 const { SECRET_ENV_KEYS } = require("../../config/secretKeys");
+const { killProcessGroup } = require("../../utils/process");
 
 // Strip BYOK/enterprise secrets so they never leak into the CLI's env — e.g.
 // Claude Code prefers ANTHROPIC_API_KEY over subscription auth when present.
@@ -40,17 +41,7 @@ class BaseCliAdapter {
 
       // Kill the whole process group (bash/MCP subprocesses the agent spawned),
       // not just the direct child, since child is spawned detached on non-Windows.
-      const killChild = () => {
-        if (child.pid && process.platform !== "win32") {
-          try {
-            process.kill(-child.pid, "SIGKILL");
-            return;
-          } catch {
-            /* process group already gone; fall back to direct kill */
-          }
-        }
-        try { child.kill("SIGKILL"); } catch { /* already gone */ }
-      };
+      const killChild = () => killProcessGroup(child, "SIGKILL");
 
       const finish = (fn, value) => {
         if (settled) return;

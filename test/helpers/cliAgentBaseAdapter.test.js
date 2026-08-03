@@ -5,11 +5,13 @@ const { EventEmitter } = require("node:events");
 const { BaseCliAdapter, CliAgentError } = require("../../src/helpers/cliAgent/baseCliAdapter");
 
 class FakeChild extends EventEmitter {
-  constructor() {
+  constructor({ pid } = {}) {
     super();
     this.stdout = new EventEmitter();
     this.stderr = new EventEmitter();
     this.killed = false;
+    this.exitCode = null;
+    if (pid !== undefined) this.pid = pid;
   }
   kill() {
     this.killed = true;
@@ -153,11 +155,13 @@ test("spawn env excludes secrets but keeps normal vars, and sets platform-correc
   }
 });
 
-test("watchdog kill falls back cleanly when fake child has no pid", async () => {
+test("watchdog kill falls back to direct kill when group signal fails", async () => {
   const adapter = new EchoAdapter();
   let child;
+  // A pid whose process group doesn't exist: process.kill(-pid) throws,
+  // exercising the fallback to child.kill().
   const promise = adapter.run(baseRequest({ timeoutMs: 10 }), {
-    spawnFn: () => (child = new FakeChild()),
+    spawnFn: () => (child = new FakeChild({ pid: 2 ** 30 })),
   });
   await assert.rejects(promise, (e) => e.code === "timeout");
   assert.equal(child.killed, true);

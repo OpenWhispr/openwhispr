@@ -51,13 +51,9 @@ class CliAgentManager {
     if (this._binaryCache.has(cli)) return this._binaryCache.get(cli);
     const factory = this.adapterFactories[cli];
     if (!factory) return null;
-    const found = await this.resolveBinary(this._adapterBinaryName(cli));
+    const found = await this.resolveBinary(factory().binaryName);
     if (found) this._binaryCache.set(cli, found);
     return found;
-  }
-
-  _adapterBinaryName(cli) {
-    return cli === "codex" ? "codex" : "claude";
   }
 
   async check(cli) {
@@ -78,7 +74,7 @@ class CliAgentManager {
     const commandPath = await this._binaryFor(opts.cli);
     if (!commandPath) {
       throw new CliAgentError(
-        `${this._adapterBinaryName(opts.cli)} was not found on PATH`,
+        `${this.adapterFactories[opts.cli]?.().binaryName ?? opts.cli} was not found on PATH`,
         "cli_not_found"
       );
     }

@@ -410,14 +410,13 @@ interface AiModelsSectionProps {
   }) => void;
 }
 
-const CLEANUP_MODE_TOAST_KEY: Record<InferenceMode, string> = {
+// The cleanup mode selector never offers "cli" (only the dictationAgent scope does).
+const CLEANUP_MODE_TOAST_KEY: Record<Exclude<InferenceMode, "cli">, string> = {
   openwhispr: "switchedCloud",
   providers: "switchedProviders",
   local: "switchedLocal",
   "self-hosted": "switchedSelfHosted",
   enterprise: "switchedEnterprise",
-  // Cleanup mode selector never offers "cli" (only dictationAgent scope does); unreachable here.
-  cli: "switchedProviders",
 };
 
 function NoteFormattingSettings() {
@@ -446,6 +445,7 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
   const { t } = useTranslation();
 
   const handleCleanupModeChange = (mode: InferenceMode) => {
+    if (mode === "cli") return;
     const toastKey = CLEANUP_MODE_TOAST_KEY[mode];
     toast({
       title: t(`settingsPage.aiModels.toasts.${toastKey}.title`),

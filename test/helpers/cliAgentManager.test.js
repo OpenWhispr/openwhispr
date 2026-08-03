@@ -163,7 +163,12 @@ test("run rejects with cli_not_found when binary missing", async () => {
   const mgr = new CliAgentManager({
     sessionFilePath: sessionFile(),
     sendStage: () => {},
-    adapterFactories: { "claude-code": () => { throw new Error("unused"); } },
+    adapterFactories: {
+      "claude-code": () => ({
+        binaryName: "claude",
+        run: () => { throw new Error("adapter.run must not be called when binary is missing"); },
+      }),
+    },
     resolveBinary: async () => null,
   });
   await assert.rejects(mgr.run(baseOpts), (e) => e.code === "cli_not_found");
