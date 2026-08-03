@@ -1149,7 +1149,8 @@
         "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran",
         "layoutLabel": "Lors du déclenchement par raccourci, ouvrir en :",
         "layoutFullWidth": "Pleine largeur",
-        "layoutSidePanel": "Panneau latéral"
+        "layoutSidePanel": "Panneau latéral",
+        "clear": "Effacer le raccourci"
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'agent vocal",

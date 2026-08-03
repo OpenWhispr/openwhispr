@@ -1272,7 +1272,8 @@
         "description": "Start meeting mode and snap the panel to the side of the screen",
         "layoutLabel": "When triggered by hotkey, open in:",
         "layoutFullWidth": "Full width",
-        "layoutSidePanel": "Side panel"
+        "layoutSidePanel": "Side panel",
+        "clear": "Clear hotkey"
       },
       "voiceAgentHotkey": {
         "title": "Voice Agent Hotkey",

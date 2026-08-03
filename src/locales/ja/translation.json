@@ -1149,7 +1149,8 @@
         "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
         "layoutLabel": "ホットキーで起動したときに開く:",
         "layoutFullWidth": "全幅",
-        "layoutSidePanel": "サイドパネル"
+        "layoutSidePanel": "サイドパネル",
+        "clear": "ホットキーをクリア"
       },
       "voiceAgentHotkey": {
         "title": "ボイスエージェントホットキー",

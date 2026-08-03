@@ -1149,7 +1149,8 @@
         "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
         "layoutLabel": "Beim Auslösen per Hotkey öffnen in:",
         "layoutFullWidth": "Volle Breite",
-        "layoutSidePanel": "Seitenleiste"
+        "layoutSidePanel": "Seitenleiste",
+        "clear": "Tastenkürzel löschen"
       },
       "voiceAgentHotkey": {
         "title": "Sprachagent-Hotkey",

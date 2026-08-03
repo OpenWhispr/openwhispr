@@ -1149,7 +1149,8 @@
         "description": "启动会议模式并将面板固定到屏幕侧边",
         "layoutLabel": "通过快捷键触发时,打开方式:",
         "layoutFullWidth": "全宽",
-        "layoutSidePanel": "侧边栏"
+        "layoutSidePanel": "侧边栏",
+        "clear": "清除快捷键"
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
