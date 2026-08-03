@@ -728,6 +728,13 @@ const { t } = useTranslation();
    - If Qdrant fails to start, search still works via FTS5 keyword fallback
    - Semantic search is only available through the AI agent's `search_notes` tool, not the manual search UI
 
+8. **`better-sqlite3` ABI mismatch (database tests fail to load)**:
+   - `npm run build` / `pack` / `dev:main` / `postinstall` all run `electron-builder install-app-deps`, which rebuilds `better-sqlite3` for **Electron's** ABI. `node --test` then cannot load it.
+   - Run the tests again with: `npm rebuild better-sqlite3`
+   - Run the Electron app again with: `npx electron-builder install-app-deps`
+   - The two are mutually exclusive; expect to flip back and forth between testing and running the app.
+   - `test/support/sqlite.js` makes this a loud failure. It used to call `t.skip()`, which let a broken binding masquerade as a passing suite and hid a genuinely failing assertion for days — never reintroduce a skip there.
+
 ### Platform-Specific Notes
 
 **macOS**:

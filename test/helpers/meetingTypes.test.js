@@ -1,27 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-function isNativeBindingUnavailable(error) {
-  const message = String(error?.message || error);
-  return (
-    message.includes("NODE_MODULE_VERSION") || message.includes("Could not locate the bindings file")
-  );
-}
-
-function tryRequireSqlite(t) {
-  try {
-    const Database = require("better-sqlite3");
-    const probe = new Database(":memory:");
-    probe.close();
-    return Database;
-  } catch (error) {
-    if (isNativeBindingUnavailable(error)) {
-      t.skip("better-sqlite3 native binding is not available for this Node runtime");
-      return null;
-    }
-    throw error;
-  }
-}
+const { requireSqlite } = require("../support/sqlite.js");
 
 function createTestDb(Database) {
   const db = new Database(":memory:");
@@ -39,9 +19,8 @@ function createTestDb(Database) {
   return db;
 }
 
-test("seedMeetingTypes creates 7 built-in types", async (t) => {
-  const Database = tryRequireSqlite(t);
-  if (!Database) return;
+test("seedMeetingTypes creates 7 built-in types", async () => {
+  const Database = requireSqlite();
   const { seedMeetingTypes } = await import("../../src/helpers/meetingTypesData.js");
   const db = createTestDb(Database);
   seedMeetingTypes(db);
@@ -50,9 +29,8 @@ test("seedMeetingTypes creates 7 built-in types", async (t) => {
   assert.equal(count.c, 7);
 });
 
-test("seedMeetingTypes is idempotent", async (t) => {
-  const Database = tryRequireSqlite(t);
-  if (!Database) return;
+test("seedMeetingTypes is idempotent", async () => {
+  const Database = requireSqlite();
   const { seedMeetingTypes } = await import("../../src/helpers/meetingTypesData.js");
   const db = createTestDb(Database);
   seedMeetingTypes(db);
@@ -64,9 +42,8 @@ test("seedMeetingTypes is idempotent", async (t) => {
 
 // The per-type templates supply only the "Topics Covered" body; the standard
 // sections come from the prompt wrapper, so assert on the composed prompt.
-test("notes prompt for every built-in type requests Action Items", async (t) => {
-  const Database = tryRequireSqlite(t);
-  if (!Database) return;
+test("notes prompt for every built-in type requests Action Items", async () => {
+  const Database = requireSqlite();
   const { seedMeetingTypes } = await import("../../src/helpers/meetingTypesData.js");
   const { GENERIC_NOTES_PROMPT, buildTypedNotesPrompt } = require("../../src/helpers/postCallPipelineManager.js");
   const db = createTestDb(Database);
@@ -92,9 +69,8 @@ test("notes prompt for every built-in type requests Action Items", async (t) => 
   }
 });
 
-test("every built-in type has keyword rules", async (t) => {
-  const Database = tryRequireSqlite(t);
-  if (!Database) return;
+test("every built-in type has keyword rules", async () => {
+  const Database = requireSqlite();
   const { seedMeetingTypes } = await import("../../src/helpers/meetingTypesData.js");
   const db = createTestDb(Database);
   seedMeetingTypes(db);

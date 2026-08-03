@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
+const { requireSqlite } = require("../support/sqlite.js");
 
 let userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-snippets-db-"));
 const originalLoad = Module._load;
@@ -34,54 +35,23 @@ const SYNC_TABLES = [
   "agent_conversations",
 ];
 
-function isNativeBindingUnavailable(error) {
-  const message = String(error?.message || error);
-  return (
-    message.includes("NODE_MODULE_VERSION") || message.includes("Could not locate the bindings file")
-  );
-}
-
 function freshUserDataDir() {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-snippets-db-"));
   return userDataDir;
 }
 
-function requireSqlite(t) {
-  try {
-    const BetterSqlite = require("better-sqlite3");
-    const probe = new BetterSqlite(":memory:");
-    probe.close();
-    return BetterSqlite;
-  } catch (error) {
-    if (isNativeBindingUnavailable(error)) {
-      t.skip("better-sqlite3 native binding is not available for this Node runtime");
-      return null;
-    }
-    throw error;
-  }
-}
-
-function createDb(t) {
-  if (!requireSqlite(t)) return null;
+function createDb() {
+  requireSqlite();
   freshUserDataDir();
-  try {
-    return new DatabaseManager();
-  } catch (error) {
-    if (isNativeBindingUnavailable(error)) {
-      t.skip("better-sqlite3 native binding is not available for this Node runtime");
-      return null;
-    }
-    throw error;
-  }
+  return new DatabaseManager();
 }
 
 function columnNames(db, table) {
   return db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
 }
 
-test("snippets diff trims, dedupes, and updates in place", (t) => {
-  const db = createDb(t);
-  if (!db) return;
+test("snippets diff trims, dedupes, and updates in place", () => {
+  const db = createDb();
 
   db.setSnippets([
     { trigger: "  signoff  ", replacement: "  Regards  " },
@@ -101,9 +71,8 @@ test("snippets diff trims, dedupes, and updates in place", (t) => {
   assert.equal(updated.replacement, "Best regards");
 });
 
-test("removing a snippet hard-deletes it", (t) => {
-  const db = createDb(t);
-  if (!db) return;
+test("removing a snippet hard-deletes it", () => {
+  const db = createDb();
 
   db.setSnippets([{ trigger: "temp", replacement: "Temporary" }]);
   db.setSnippets([]);
@@ -116,9 +85,8 @@ test("removing a snippet hard-deletes it", (t) => {
   );
 });
 
-test("setSnippets drops triggers longer than the length limit", (t) => {
-  const db = createDb(t);
-  if (!db) return;
+test("setSnippets drops triggers longer than the length limit", () => {
+  const db = createDb();
 
   db.setSnippets([
     { trigger: "x".repeat(101), replacement: "too long" },
@@ -128,9 +96,8 @@ test("setSnippets drops triggers longer than the length limit", (t) => {
   assert.deepEqual(db.getSnippets(), [{ trigger: "ok", replacement: "fine" }]);
 });
 
-test("dictionary diff adds, updates, and hard-deletes", (t) => {
-  const db = createDb(t);
-  if (!db) return;
+test("dictionary diff adds, updates, and hard-deletes", () => {
+  const db = createDb();
 
   db.setDictionary(["alpha", "beta"]);
   assert.deepEqual([...db.getDictionary()].sort(), ["alpha", "beta"]);
@@ -144,9 +111,8 @@ test("dictionary diff adds, updates, and hard-deletes", (t) => {
   );
 });
 
-test("deleting a transcription removes the row outright", (t) => {
-  const db = createDb(t);
-  if (!db) return;
+test("deleting a transcription removes the row outright", () => {
+  const db = createDb();
 
   const saved = db.saveTranscription("hello world");
   assert.ok(saved.id);
@@ -156,9 +122,8 @@ test("deleting a transcription removes the row outright", (t) => {
   assert.equal(db.db.prepare("SELECT COUNT(*) AS c FROM transcriptions").get().c, 0);
 });
 
-test("schema carries no cloud sync columns", (t) => {
-  const db = createDb(t);
-  if (!db) return;
+test("schema carries no cloud sync columns", () => {
+  const db = createDb();
 
   for (const table of SYNC_TABLES) {
     const cols = columnNames(db.db, table);
@@ -172,10 +137,8 @@ test("schema carries no cloud sync columns", (t) => {
   assert.equal(staleIndex, undefined, "the partial index on sync_status must be gone");
 });
 
-test("migrating a legacy database drops the sync columns and keeps the data", (t) => {
-  const BetterSqlite = requireSqlite(t);
-  if (!BetterSqlite) return;
-
+test("migrating a legacy database drops the sync columns and keeps the data", () => {
+  const BetterSqlite = requireSqlite();
   const dir = freshUserDataDir();
   const legacy = new BetterSqlite(path.join(dir, "transcriptions.db"));
   legacy.exec(`
@@ -222,9 +185,8 @@ test("migrating a legacy database drops the sync columns and keeps the data", (t
   assert.equal(staleIndex, undefined);
 });
 
-test("migration is idempotent across reopens", (t) => {
-  const db = createDb(t);
-  if (!db) return;
+test("migration is idempotent across reopens", () => {
+  const db = createDb();
   db.setSnippets([{ trigger: "brb", replacement: "be right back" }]);
   db.db.close();
 
