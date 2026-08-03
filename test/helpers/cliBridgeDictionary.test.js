@@ -7,6 +7,9 @@ const Module = require("node:module");
 
 let userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cli-dict-"));
 const originalLoad = Module._load;
+// Routes broadcast through the shared windowBroadcast module, which reaches for
+// Electron's BrowserWindow; capture the calls so they can be asserted here.
+const broadcasts = [];
 
 Module._load = function patchedLoad(request, parent, isMain) {
   if (request === "electron") {
@@ -16,6 +19,11 @@ Module._load = function patchedLoad(request, parent, isMain) {
         getAppPath: () => process.cwd(),
         isReady: () => false,
       },
+    };
+  }
+  if (request === "./windowBroadcast") {
+    return {
+      broadcastToWindows: (channel, payload) => broadcasts.push({ channel, payload }),
     };
   }
   return originalLoad.call(this, request, parent, isMain);
@@ -52,11 +60,8 @@ function createBridge(t) {
     throw error;
   }
 
-  const broadcasts = [];
-  const bridge = new CliBridge({
-    databaseManager: db,
-    broadcastToWindows: (channel, payload) => broadcasts.push({ channel, payload }),
-  });
+  broadcasts.length = 0;
+  const bridge = new CliBridge({ databaseManager: db });
   return { bridge, db, broadcasts };
 }
 
