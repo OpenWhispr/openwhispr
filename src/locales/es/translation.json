@@ -2141,6 +2141,7 @@
         "openai_gpt_5_6_terra": "GPT-5.6 equilibrado para el trabajo diario",
         "openai_gpt_5_6_luna": "El GPT-5.6 más rápido y económico",
         "openai_gpt_5_5": "Modelo frontier para razonamiento complejo",
+        "anthropic_claude_opus_5": "El modelo Opus más capaz, contexto de 1M",
         "anthropic_claude_opus_4_8": "Potente modelo Opus enfocado en honestidad y fiabilidad",
         "anthropic_claude_opus_4_7": "Modelo Opus potente",
         "anthropic_claude_opus_4_6": "Generación anterior de Opus, contexto de 1M",

@@ -2109,6 +2109,7 @@
         "openai_gpt_5_6_terra": "Сбалансированная GPT-5.6 для повседневной работы",
         "openai_gpt_5_6_luna": "Самая быстрая и недорогая GPT-5.6",
         "openai_gpt_5_5": "Фронтирная модель для сложного рассуждения",
+        "anthropic_claude_opus_5": "Самая мощная модель Opus, контекст 1M",
         "anthropic_claude_opus_4_8": "Мощная модель Opus с упором на честность и надёжность",
         "anthropic_claude_opus_4_7": "Мощная модель Opus",
         "anthropic_claude_opus_4_6": "Предыдущее поколение Opus, контекст 1M",
