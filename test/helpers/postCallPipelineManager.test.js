@@ -181,7 +181,7 @@ test("uses meeting type template for note generation when set", async () => {
     meeting_type_id: 1,
   });
   mocks.databaseManager.getMeetingType = (id) => ({
-    id: 1,
+    id,
     name: "Standup",
     template: "For each speaker: yesterday, today, blockers. End with Action Items.",
   });
