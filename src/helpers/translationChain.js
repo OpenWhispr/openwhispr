@@ -1,6 +1,11 @@
 // Pure orchestration for the cleanup-then-translate chain. No imports: callers
 // inject the actual cleanup/translate calls and logging so this stays node-testable.
 
+function normalizeComparableText(value) {
+  if (typeof value !== "string") return value;
+  return value.trim().replace(/\s+/g, " ");
+}
+
 // Whether the translate step should run: skip only when an explicit source language
 // equals the target. "auto" (or empty, treated as auto) always translates.
 export function shouldRunTranslateStep(sourceLanguage, targetLanguage) {
@@ -20,6 +25,7 @@ export async function executeTranslationChain({
   translateIsCloud = false,
   onCleanupError,
   onEmptyTranslate,
+  onUnchangedTranslate,
 }) {
   let out = text;
   let usedCloudReasoning = false;
@@ -39,9 +45,13 @@ export async function executeTranslationChain({
 
   if (shouldTranslate) {
     const translateResult = await runTranslate(out);
-    if (translateResult) {
+    const normalizedResult = normalizeComparableText(translateResult);
+    const translationChanged = normalizedResult !== normalizeComparableText(out);
+    if (normalizedResult && translationChanged) {
       out = translateResult;
       translated = true;
+    } else if (normalizedResult) {
+      if (onUnchangedTranslate) onUnchangedTranslate();
     } else if (onEmptyTranslate) {
       onEmptyTranslate();
     }

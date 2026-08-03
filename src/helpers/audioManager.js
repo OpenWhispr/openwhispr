@@ -436,12 +436,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // Cleanup runs before the translate step, so it still works in the STT language.
-  getCleanupLanguage(settings, text) {
-    return resolveCleanupLanguage(
-      this.getEffectiveSttLanguage(settings),
-      settings.chineseScriptPreference,
-      text
-    );
+  getCleanupLanguage(settings) {
+    return resolveCleanupLanguage(this.getEffectiveSttLanguage(settings));
   }
 
   finalizeChineseScript(text, settings = getSettings()) {
@@ -1867,6 +1863,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         onEmptyTranslate: () => {
           const { channel } = cleanup.log || {};
           logger.warn("Translation step returned empty text, keeping previous text", {}, channel);
+          this.notifyTranslationFallback("failed");
+        },
+        onUnchangedTranslate: () => {
+          const { channel } = cleanup.log || {};
+          logger.warn("Translation step returned unchanged text, keeping source text", {}, channel);
           this.notifyTranslationFallback("failed");
         },
       });

@@ -52,6 +52,7 @@ import {
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
+import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
@@ -633,6 +634,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       {},
                       "transcription"
                     ),
+                  onUnchangedTranslate: () =>
+                    logger.warn(
+                      "Translation step returned unchanged text, keeping source text",
+                      {},
+                      "transcription"
+                    ),
                 });
                 translationApplied = translated;
                 if (text !== rawText) {
@@ -689,14 +696,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
           // Deterministic Chinese script pass, mirroring dictation (#975). Runs last so
           // it covers the cleaned/translated text, or the raw transcript when neither ran.
-          // Only a completed translate step moves the text into the target language.
+          // Same rule as audioManager.getEffectiveOutputLanguage: only a completed
+          // translate step moves the text into the target language, so anything else
+          // still has to be scripted as the language that was dictated.
           try {
-            const { applyChineseScript, resolveChineseScriptTarget } = await import(
-              "../utils/chineseScript"
-            );
-            const outputLanguage = translationApplied
-              ? s.translationTargetLanguage || "auto"
-              : s.preferredLanguage;
+            const outputLanguage =
+              result.transcription.route_kind === "translation"
+                ? (translationApplied
+                    ? s.translationTargetLanguage
+                    : s.translationSourceLanguage) || "auto"
+                : s.preferredLanguage;
             const scripted = await applyChineseScript(
               finalTranscription.text,
               resolveChineseScriptTarget(

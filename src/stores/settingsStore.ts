@@ -1360,11 +1360,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAllowLocalFallback: createBooleanSetter("allowLocalFallback"),
   setFallbackWhisperModel: createStringSetter("fallbackWhisperModel"),
   setPreferredLanguage: createStringSetter("preferredLanguage"),
-  setChineseScriptPreference: (value: ChineseScriptPreference) => {
-    const next = normalizeChineseScriptPreference(value);
-    if (isBrowser) localStorage.setItem("chineseScriptPreference", next);
-    set({ chineseScriptPreference: next });
-  },
+  setChineseScriptPreference: (value: ChineseScriptPreference) =>
+    createStringSetter("chineseScriptPreference")(normalizeChineseScriptPreference(value)),
   setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),

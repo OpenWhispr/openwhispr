@@ -25,7 +25,18 @@ test("isChineseText distinguishes Chinese from Japanese and Korean", async () =>
   const { isChineseText } = await load();
   assert.equal(isChineseText("这是简体中文"), true);
   assert.equal(isChineseText("這是繁體中文"), true);
-  assert.equal(isChineseText("Hello 世界"), true);
+  assert.equal(isChineseText("这是 OpenAI 的 API"), true);
+  assert.equal(isChineseText("今天天气很好"), true);
+  assert.equal(isChineseText("今天天氣很好"), true);
+  assert.equal(isChineseText("Hello 世界"), false);
+  assert.equal(isChineseText("Meet at 東京駅"), false);
+  assert.equal(isChineseText("東京駅"), false);
+  assert.equal(isChineseText("会議資料"), false);
+  assert.equal(isChineseText("開発資料"), false);
+  assert.equal(isChineseText("設定変更"), false);
+  assert.equal(isChineseText("電気"), false);
+  assert.equal(isChineseText("資料確認"), false);
+  assert.equal(isChineseText("導入試験"), false);
   assert.equal(isChineseText("会議の資料を確認してください"), false);
   assert.equal(isChineseText("今日は時間がありますか"), false);
   assert.equal(isChineseText("한국어 漢字 텍스트"), false);
@@ -42,6 +53,8 @@ test("resolveChineseScriptTarget: auto applies preference only to Chinese text",
   assert.equal(resolveChineseScriptTarget(undefined, "simplified", "这是中文"), "simplified");
   // Japanese, Korean and non-CJK must never be rewritten. See #975.
   assert.equal(resolveChineseScriptTarget("auto", "simplified", "会議の資料"), null);
+  assert.equal(resolveChineseScriptTarget("auto", "simplified", "会議資料"), null);
+  assert.equal(resolveChineseScriptTarget("auto", "simplified", "Meet at 東京駅"), null);
   assert.equal(resolveChineseScriptTarget("auto", "simplified", "한국어 漢字"), null);
   assert.equal(resolveChineseScriptTarget("auto", "simplified", "hello world"), null);
 });
@@ -54,15 +67,18 @@ test("resolveChineseScriptTarget: without text only explicit zh-CN / zh-TW apply
   assert.equal(resolveChineseScriptTarget("auto", "traditional"), null);
 });
 
-test("resolveCleanupLanguage maps auto preference to zh-CN / zh-TW for Chinese only", async () => {
+test("resolveCleanupLanguage keeps auto until the transcription language is known", async () => {
   const { resolveCleanupLanguage } = await load();
-  assert.equal(resolveCleanupLanguage("auto", "simplified", "这是中文"), "zh-CN");
-  assert.equal(resolveCleanupLanguage("auto", "traditional", "这是中文"), "zh-TW");
+  assert.equal(resolveCleanupLanguage("auto", "simplified", "这是中文"), "auto");
+  assert.equal(resolveCleanupLanguage("auto", "traditional", "这是中文"), "auto");
   assert.equal(resolveCleanupLanguage("auto", "as-transcribed", "这是中文"), "auto");
   assert.equal(resolveCleanupLanguage("zh-CN", "traditional", "这是中文"), "zh-CN");
   assert.equal(resolveCleanupLanguage("ja", "simplified", "会議の資料"), "ja");
   // Cleanup must not be told to answer in Chinese for non-Chinese dictation.
   assert.equal(resolveCleanupLanguage("auto", "simplified", "hello world"), "auto");
+  assert.equal(resolveCleanupLanguage("auto", "simplified", "Hello 这是中文"), "auto");
+  assert.equal(resolveCleanupLanguage("auto", "traditional", "這是 API 設定"), "auto");
+  assert.equal(resolveCleanupLanguage("auto", "simplified", "会議資料"), "auto");
   assert.equal(resolveCleanupLanguage("auto", "simplified", "会議の資料"), "auto");
   assert.equal(resolveCleanupLanguage("auto", "simplified"), "auto");
 });

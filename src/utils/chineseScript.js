@@ -7,18 +7,27 @@
  * biases the Whisper prompt; auto never does, because the bias would skew the
  * language detection it depends on.
  *
- * Scope: dictation only (audioManager). Meeting transcription, uploaded audio and
- * history retry strip zh-CN / zh-TW to "zh" and store the response unconverted;
- * the setting's copy is worded to match. Widening it means converting at those
- * sinks too — for retry, before updateTranscriptionText persists the row.
+ * Scope: dictation (audioManager) and history retry (ControlPanel). Meeting
+ * transcription and uploaded audio strip zh-CN / zh-TW to "zh" and store the
+ * response unconverted; the setting's copy is worded to match. Widening it means
+ * converting at those sinks too, before the transcript is persisted.
  *
  * See #975.
  */
 
-const HAN_RE = /[\u3400-\u9fff\uf900-\ufaff]/;
+const HAN_RE = /\p{Script=Han}/u;
 // Kana and Hangul never appear in Chinese, so either one rules the text out.
 const KANA_RE = /[\u3040-\u30ff\u31f0-\u31ff\uff66-\uff9f]/;
 const HANGUL_RE = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/;
+
+// Auto mode must be conservative: Han is shared by Chinese and Japanese. These
+// signals use forms that differ from modern Japanese. Shared forms and phrases
+// such as 開, 電, 設定 and 資料 are deliberately absent: without a distinct
+// character there is no reliable way to distinguish kanji-only Japanese.
+const SIMPLIFIED_CHINESE_VARIANT_RE =
+  /[这们吗简软网语汉习说发东车门问间书见长爱据实认让给还过边达选进运远违连迟适应际标亲亿优仅从众气请谢听读卖产业电备复历压类总处线证验权转导报记试计机传云丰动务场图库录页价关规办觉坏变删乐广设]/;
+const TRADITIONAL_CHINESE_VARIANT_RE =
+  /[這們嗎體說發據實讓邊遲應氣條聽讀寫賣兒經廣樂觀號國學會產歷壓總處證驗權轉傳豐圖錄價關辦覺壞變刪]/;
 
 /** @typedef {"simplified" | "traditional" | "as-transcribed"} ChineseScriptPreference */
 /** @typedef {"simplified" | "traditional"} ChineseScriptTarget */
@@ -51,16 +60,17 @@ export function normalizeChineseScriptPreference(value) {
 }
 
 /**
- * Whether text is Han script that is plausibly Chinese rather than Japanese or
- * Korean. Kana/Hangul are decisive; kanji-only Japanese (e.g. 東京駅) is
- * indistinguishable from Chinese by script alone and reads as Chinese here.
+ * Whether text has positive evidence of being Chinese rather than merely
+ * containing Han. Kana/Hangul rule it out, while short or mixed-script text with
+ * no Chinese-specific variants/phrases stays ambiguous and is left untouched.
  *
  * @param {string | null | undefined} text
  * @returns {boolean}
  */
 export function isChineseText(text) {
   if (!text) return false;
-  return HAN_RE.test(text) && !KANA_RE.test(text) && !HANGUL_RE.test(text);
+  if (KANA_RE.test(text) || HANGUL_RE.test(text)) return false;
+  return SIMPLIFIED_CHINESE_VARIANT_RE.test(text) || TRADITIONAL_CHINESE_VARIANT_RE.test(text);
 }
 
 /**
@@ -93,20 +103,17 @@ export function resolveChineseScriptTarget(preferredLanguage, chineseScriptPrefe
 }
 
 /**
- * Language code passed to cleanup/reasoning prompts so AI instructions match
- * the chosen Chinese script (including when STT language is auto).
+ * Language code passed to cleanup/reasoning prompts. Auto stays auto: specifying
+ * zh-CN / zh-TW tells cleanup to write its entire response in Chinese, which is
+ * unsafe before the transcription language is known. The deterministic final
+ * conversion still applies the selected script to likely-Chinese output.
  *
  * @param {string | null | undefined} preferredLanguage
- * @param {string | null | undefined} chineseScriptPreference
- * @param {string | null | undefined} [text] transcript being cleaned up
  * @returns {string}
  */
-export function resolveCleanupLanguage(preferredLanguage, chineseScriptPreference, text) {
+export function resolveCleanupLanguage(preferredLanguage) {
   if (preferredLanguage && preferredLanguage !== "auto") return preferredLanguage;
-  const target = resolveChineseScriptTarget(preferredLanguage, chineseScriptPreference, text);
-  if (target === "simplified") return "zh-CN";
-  if (target === "traditional") return "zh-TW";
-  return preferredLanguage || "auto";
+  return "auto";
 }
 
 /**
@@ -134,8 +141,8 @@ export async function applyChineseScript(text, target) {
   if (!text || !target) return text || "";
   if (!HAN_RE.test(text)) return text;
 
-  const { toSimplified: t2s, toTraditional: s2t } = await getConverters();
-  return target === "simplified" ? t2s(text) : s2t(text);
+  const { toSimplified, toTraditional } = await getConverters();
+  return target === "simplified" ? toSimplified(text) : toTraditional(text);
 }
 
 /**

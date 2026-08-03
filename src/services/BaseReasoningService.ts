@@ -23,17 +23,12 @@ export abstract class BaseReasoningService {
     return getDictionaryHintWords(getSettings());
   }
 
-  // `text` is the transcript being processed. When STT language is Auto it maps
-  // chineseScriptPreference to zh-CN/zh-TW so cleanup prompts request the right
-  // character set — but only for Chinese text, since those instructions order the
-  // model to write its entire output in Chinese. See #975.
-  protected getPreferredLanguage(text?: string): string {
+  // Auto must remain auto here: zh-CN/zh-TW instructions make cleanup write its
+  // entire response in Chinese before the transcription language is known. The
+  // final deterministic script pass handles likely-Chinese output instead. See #975.
+  protected getPreferredLanguage(_text?: string): string {
     const settings = getSettings();
-    return resolveCleanupLanguage(
-      settings.preferredLanguage,
-      settings.chineseScriptPreference,
-      text
-    );
+    return resolveCleanupLanguage(settings.preferredLanguage);
   }
 
   protected getUiLanguage(): string {
