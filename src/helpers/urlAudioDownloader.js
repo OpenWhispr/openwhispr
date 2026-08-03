@@ -1064,20 +1064,32 @@ function streamToFile(
       bail(Object.assign(new Error("Download stalled"), { code: "DOWNLOAD_FAILED" }));
     });
 
-    const cleanupFile = () => {
-      fileStream.destroy();
-      try {
-        fs.unlinkSync(tempPath);
-      } catch {}
-    };
+    // createWriteStream opens the file asynchronously. Unlinking straight after
+    // destroy() therefore usually runs before the file exists: the unlink fails
+    // with ENOENT, and the still-pending open then creates the file with nothing
+    // left to remove it. Wait for the stream to close before removing.
+    const cleanupFile = () =>
+      new Promise((done) => {
+        const remove = () => {
+          try {
+            fs.rmSync(tempPath, { force: true });
+          } catch {}
+          done();
+        };
+        if (fileStream.closed) {
+          remove();
+          return;
+        }
+        fileStream.once("close", remove);
+        fileStream.destroy();
+      });
 
     const bail = (err) => {
       if (settled) return;
       settled = true;
       stall.clear();
       if (abortSignal) abortSignal.removeEventListener("abort", onAbort);
-      cleanupFile();
-      reject(err);
+      cleanupFile().then(() => reject(err));
     };
 
     // React to cancel even while stalled (no data events arriving).
@@ -1132,9 +1144,10 @@ function streamToFile(
         const sizeBytes = fs.statSync(tempPath).size;
         resolve(sizeBytes);
       } catch {
-        cleanupFile();
-        reject(
-          Object.assign(new Error("Download produced no output"), { code: "DOWNLOAD_FAILED" })
+        cleanupFile().then(() =>
+          reject(
+            Object.assign(new Error("Download produced no output"), { code: "DOWNLOAD_FAILED" })
+          )
         );
       }
     });
