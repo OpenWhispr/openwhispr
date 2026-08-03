@@ -69,18 +69,14 @@ test("resolveChineseScriptTarget: without text only explicit zh-CN / zh-TW apply
 
 test("resolveCleanupLanguage keeps auto until the transcription language is known", async () => {
   const { resolveCleanupLanguage } = await load();
-  assert.equal(resolveCleanupLanguage("auto", "simplified", "这是中文"), "auto");
-  assert.equal(resolveCleanupLanguage("auto", "traditional", "这是中文"), "auto");
-  assert.equal(resolveCleanupLanguage("auto", "as-transcribed", "这是中文"), "auto");
-  assert.equal(resolveCleanupLanguage("zh-CN", "traditional", "这是中文"), "zh-CN");
-  assert.equal(resolveCleanupLanguage("ja", "simplified", "会議の資料"), "ja");
-  // Cleanup must not be told to answer in Chinese for non-Chinese dictation.
-  assert.equal(resolveCleanupLanguage("auto", "simplified", "hello world"), "auto");
-  assert.equal(resolveCleanupLanguage("auto", "simplified", "Hello 这是中文"), "auto");
-  assert.equal(resolveCleanupLanguage("auto", "traditional", "這是 API 設定"), "auto");
-  assert.equal(resolveCleanupLanguage("auto", "simplified", "会議資料"), "auto");
-  assert.equal(resolveCleanupLanguage("auto", "simplified", "会議の資料"), "auto");
-  assert.equal(resolveCleanupLanguage("auto", "simplified"), "auto");
+  // Cleanup must never be told to answer in Chinese before the language is known,
+  // so the script preference is deliberately not an input here.
+  assert.equal(resolveCleanupLanguage("auto"), "auto");
+  assert.equal(resolveCleanupLanguage(""), "auto");
+  assert.equal(resolveCleanupLanguage(undefined), "auto");
+  assert.equal(resolveCleanupLanguage("zh-CN"), "zh-CN");
+  assert.equal(resolveCleanupLanguage("zh-TW"), "zh-TW");
+  assert.equal(resolveCleanupLanguage("ja"), "ja");
 });
 
 test("applyChineseScript converts traditional to simplified", async () => {

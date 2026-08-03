@@ -1812,7 +1812,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             promptMode: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
-            language: this.getCleanupLanguage(settings, currentText),
+            language: this.getCleanupLanguage(settings),
             locale: settings.uiLanguage || "en",
             ...(cleanup.meta || {}),
           });
@@ -1865,10 +1865,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           logger.warn("Translation step returned empty text, keeping previous text", {}, channel);
           this.notifyTranslationFallback("failed");
         },
+        // No fallback toast here: an echoed translation usually means the dictation was
+        // already in the target language, which the current app treats as silent success.
         onUnchangedTranslate: () => {
           const { channel } = cleanup.log || {};
           logger.warn("Translation step returned unchanged text, keeping source text", {}, channel);
-          this.notifyTranslationFallback("failed");
         },
       });
       this.translationApplied = chainResult.translated;
@@ -2257,7 +2258,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
-              language: this.getCleanupLanguage(settings, processedText),
+              language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
@@ -3852,7 +3853,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
-              language: this.getCleanupLanguage(stSettings, finalText),
+              language: this.getCleanupLanguage(stSettings),
               locale: stSettings.uiLanguage || "en",
               sttProvider: this.getStreamingProviderName(),
               sttModel: streamingSttModel,

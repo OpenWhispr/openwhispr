@@ -26,20 +26,19 @@ export abstract class BaseReasoningService {
   // Auto must remain auto here: zh-CN/zh-TW instructions make cleanup write its
   // entire response in Chinese before the transcription language is known. The
   // final deterministic script pass handles likely-Chinese output instead. See #975.
-  protected getPreferredLanguage(_text?: string): string {
-    const settings = getSettings();
-    return resolveCleanupLanguage(settings.preferredLanguage);
+  protected getPreferredLanguage(): string {
+    return resolveCleanupLanguage(getSettings().preferredLanguage);
   }
 
   protected getUiLanguage(): string {
     return getSettings().uiLanguage || "en";
   }
 
-  protected getSystemPrompt(agentName: string | null, text?: string): string {
+  protected getSystemPrompt(agentName: string | null): string {
     return getCleanupSystemPrompt(
       agentName,
       this.getCustomDictionary(),
-      this.getPreferredLanguage(text),
+      this.getPreferredLanguage(),
       this.getUiLanguage()
     );
   }
