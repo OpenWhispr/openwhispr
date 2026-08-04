@@ -6,6 +6,41 @@ const { computeTranscriptDiff } = require("./transcriptDiff");
 
 const STEP_ORDER = ["retranscribe", "title", "classify", "notes"];
 
+function buildTypedNotesPrompt(meetingType) {
+  return `You are a sharp, thorough meeting notes assistant that captures not just what was said, but what it means. You will receive a transcript with speaker labels.
+
+Meeting type: ${meetingType.name}
+
+Produce notes in the following structure. Start with the standard sections, then follow the type-specific template.
+
+## TL;DR
+3-5 bullets. Lead each with **topic in bold**, then what happened + the "so what." Flag urgent items last with **[Urgent]**.
+
+## Meeting Overview
+One short paragraph: purpose of this meeting, who was there (list all speakers by name), and overall tone.
+
+## Topics Covered
+${meetingType.template}
+
+## Decisions & Open Items
+- **Decided:** [list decisions]
+- **Still open:** [list unresolved items]
+
+## Action Items
+Use checkboxes. Attribute to the responsible person. Include deadlines if mentioned.
+- [ ] **[Person]:** [Specific action] — [deadline if stated]
+
+## Key Takeaways
+2-3 sentences of honest analysis: implications, risks, soft commitments, things carefully avoided or left unsaid.
+
+FORMAT RULES (strict):
+- Do NOT repeat the meeting title — the app already shows it.
+- Do NOT use tables, horizontal rules, or block quotes.
+- Use markdown headings (##, ###) and bullet points for scannability.
+- Keep the tone professional but direct. Capture meaning and sentiment, not just words.
+- Preserve important quotes or commitments verbatim when they carry weight.`;
+}
+
 const GENERIC_NOTES_PROMPT = `You are a sharp, thorough meeting notes assistant that captures not just what was said, but what it means. You will receive a transcript with speaker labels.
 
 Produce notes in the following structure. Every section is mandatory — omit a section ONLY if it truly has zero content.
@@ -352,38 +387,7 @@ Reply with ONLY the numeric id of the best matching meeting type. If none match 
     if (note?.meeting_type_id) {
       const meetingType = this._db.getMeetingType(note.meeting_type_id);
       if (meetingType?.template) {
-        systemPrompt = `You are a sharp, thorough meeting notes assistant that captures not just what was said, but what it means. You will receive a transcript with speaker labels.
-
-Meeting type: ${meetingType.name}
-
-Produce notes in the following structure. Start with the standard sections, then follow the type-specific template.
-
-## TL;DR
-3-5 bullets. Lead each with **topic in bold**, then what happened + the "so what." Flag urgent items last with **[Urgent]**.
-
-## Meeting Overview
-One short paragraph: purpose of this meeting, who was there (list all speakers by name), and overall tone.
-
-## Topics Covered
-${meetingType.template}
-
-## Decisions & Open Items
-- **Decided:** [list decisions]
-- **Still open:** [list unresolved items]
-
-## Action Items
-Use checkboxes. Attribute to the responsible person. Include deadlines if mentioned.
-- [ ] **[Person]:** [Specific action] — [deadline if stated]
-
-## Key Takeaways
-2-3 sentences of honest analysis: implications, risks, soft commitments, things carefully avoided or left unsaid.
-
-FORMAT RULES (strict):
-- Do NOT repeat the meeting title — the app already shows it.
-- Do NOT use tables, horizontal rules, or block quotes.
-- Use markdown headings (##, ###) and bullet points for scannability.
-- Keep the tone professional but direct. Capture meaning and sentiment, not just words.
-- Preserve important quotes or commitments verbatim when they carry weight.`;
+        systemPrompt = buildTypedNotesPrompt(meetingType);
       }
     }
 
@@ -438,4 +442,4 @@ FORMAT RULES (strict):
   }
 }
 
-module.exports = { PostCallPipelineManager };
+module.exports = { PostCallPipelineManager, GENERIC_NOTES_PROMPT, buildTypedNotesPrompt };
