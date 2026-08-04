@@ -105,7 +105,15 @@ class WindowsLoopbackAudioManager {
   }
 
   _isTransientProbeFailure(capability) {
-    return !capability.available && /activation_timeout/i.test(capability.error || "");
+    if (capability.available) {
+      return false;
+    }
+
+    if (capability.probeTransient) {
+      return true;
+    }
+
+    return /activation_timeout/i.test(capability.error || "");
   }
 
   async start({ onChunk, onError, onWarning } = {}) {
@@ -277,14 +285,36 @@ class WindowsLoopbackAudioManager {
 
   async _probeCapability() {
     if (!this.resolveBinary()) {
-      return { available: false, error: "Windows system audio helper binary not found." };
+      return {
+        available: false,
+        supportsNativeCapture: false,
+        supportsSystemAudio: false,
+        error: "Windows system audio helper binary not found.",
+        probeTransient: true,
+      };
     }
 
-    const result = await this._runJsonCommand(["probe"], PROBE_TIMEOUT_MS);
-    return {
-      available: !!result?.ok,
-      error: typeof result?.error === "string" ? result.error : null,
-    };
+    try {
+      const result = await this._runJsonCommand(["probe"], PROBE_TIMEOUT_MS);
+      const supportsNativeCapture = !!result?.supportsNativeCapture;
+      const supportsSystemAudio = result?.supportsSystemAudio !== false;
+      const available = !!result?.ok && supportsSystemAudio && supportsNativeCapture;
+      return {
+        available,
+        supportsNativeCapture,
+        supportsSystemAudio,
+        error: typeof result?.error === "string" ? result.error : null,
+        probeTransient: false,
+      };
+    } catch (error) {
+      return {
+        available: false,
+        supportsNativeCapture: false,
+        supportsSystemAudio: false,
+        error: error.message,
+        probeTransient: true,
+      };
+    }
   }
 
   _runJsonCommand(args, timeoutMs) {
