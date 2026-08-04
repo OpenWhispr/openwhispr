@@ -131,6 +131,13 @@ class WindowManager {
     if (!this.notificationWindow || this.notificationWindow.isDestroyed()) {
       return;
     }
+
+    // Electron cannot forward hover events on Linux, so returning to click-through
+    // would prevent this overlay from receiving the next mouse enter.
+    if (process.platform === "linux") {
+      return;
+    }
+
     if (interactive) {
       this.notificationWindow.setIgnoreMouseEvents(false);
     } else {
