@@ -2475,7 +2475,8 @@
       "converting": "Converting audio",
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
-    }
+    },
+    "errorWithReason": "Ошибка: {{step}} — {{reason}}"
   },
   "meetingTypes": {
     "picker": {

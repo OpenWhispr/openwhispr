@@ -1,5 +1,9 @@
 const debugLogger = require("./debugLogger");
 
+// Model families that are served by the bundled llama.cpp server. Used only to
+// recover when a model family has been written into the provider field.
+const LOCAL_MODEL_FAMILIES = ["gemma", "qwen", "llama", "mistral", "gpt-oss", "phi"];
+
 class MainProcessInference {
   constructor(proxyFetch, environmentManager) {
     this._fetch = proxyFetch;
@@ -7,9 +11,30 @@ class MainProcessInference {
   }
 
   async processText(text, { provider, model, systemPrompt, temperature = 0.3, maxTokens }) {
-    const handler = this._providers[provider];
-    if (!handler) throw new Error(`Unsupported inference provider: ${provider}`);
+    const resolved = MainProcessInference.resolveProvider(provider, model);
+    const handler = this._providers[resolved];
+    if (!handler) {
+      throw new Error(
+        `Unsupported inference provider: "${provider}". ` +
+          `Supported providers are: ${MainProcessInference.SUPPORTED_PROVIDERS.join(", ")}. ` +
+          `Set this in Settings > AI Models > Note Formatting.`
+      );
+    }
     return handler.call(this, text, { model, systemPrompt, temperature, maxTokens });
+  }
+
+  /**
+   * Settings has been observed persisting a model family ("gemma") into the
+   * provider field. A locally-served model is still a local model, so resolve
+   * it rather than failing the whole pipeline over a mislabelled field.
+   */
+  static resolveProvider(provider, model) {
+    const value = String(provider || "").toLowerCase();
+    if (MainProcessInference.SUPPORTED_PROVIDERS.includes(value)) return value;
+    if (LOCAL_MODEL_FAMILIES.some((family) => value.startsWith(family))) return "local";
+    // A GGUF-style model id with no recognisable provider is served locally.
+    if (!value && /\.gguf$|-q\d|_k_m$/i.test(String(model || ""))) return "local";
+    return value;
   }
 
   get _providers() {
@@ -17,7 +42,17 @@ class MainProcessInference {
       openai: this._callOpenAI,
       anthropic: this._callAnthropic,
       gemini: this._callGemini,
+      local: this._callLocal,
     };
+  }
+
+  async _callLocal(text, { model, systemPrompt, temperature, maxTokens }) {
+    const LocalReasoningService = require("../services/localReasoningBridge").default;
+    return LocalReasoningService.processText(text, model, {
+      systemPrompt,
+      temperature,
+      maxTokens,
+    });
   }
 
   async _callOpenAI(text, { model, systemPrompt, temperature, maxTokens }) {
@@ -141,5 +176,7 @@ class MainProcessInference {
     return candidate.trim();
   }
 }
+
+MainProcessInference.SUPPORTED_PROVIDERS = ["openai", "anthropic", "gemini", "local"];
 
 module.exports = { MainProcessInference };

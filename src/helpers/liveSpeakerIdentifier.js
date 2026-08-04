@@ -26,8 +26,10 @@ const SPEECH_CHUNKS_MAX_SAMPLES = MAX_EMBEDDING_SAMPLES * 4;
 const SPEECH_THRESHOLD = 0.15;
 const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
-const MATCH_THRESHOLD = 0.65;
-const MATCH_MARGIN = 0.03;
+const {
+  MATCH_THRESHOLD,
+  acceptsMatch,
+} = require("./liveSpeakerMatching");
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
 
@@ -628,10 +630,7 @@ class LiveSpeakerIdentifier {
       }
     }
 
-    return bestSimilarity >= MATCH_THRESHOLD &&
-      bestSimilarity - secondBestSimilarity >= MATCH_MARGIN
-      ? bestSpeakerId
-      : null;
+    return acceptsMatch(bestSimilarity, secondBestSimilarity) ? bestSpeakerId : null;
   }
 
   _findStoredProfileMatch(embedding) {
@@ -670,10 +669,7 @@ class LiveSpeakerIdentifier {
       }
     }
 
-    return bestSimilarity >= MATCH_THRESHOLD &&
-      bestSimilarity - secondBestSimilarity >= MATCH_MARGIN
-      ? bestProfile
-      : null;
+    return acceptsMatch(bestSimilarity, secondBestSimilarity) ? bestProfile : null;
   }
 
   _resolveSpeakerForEmbedding(embedding, options = {}) {
@@ -722,10 +718,29 @@ class LiveSpeakerIdentifier {
   }
 
   _assignOrForceCluster(embedding) {
-    // No artificial speaker cap — freely detect new speakers as they appear.
-    // The similarity threshold in _assignSpeakerId handles merging voices
-    // that sound alike; we don't force-merge just because a count is exceeded.
+    // No artificial cap on how many speakers a call may have. But before
+    // minting another one, merge into the nearest existing cluster if the voice
+    // is a genuine match — otherwise every near-tie spawns a duplicate and the
+    // duplicates make the next match harder still (see liveSpeakerMatching.js).
+    const nearest = this._findNearestTransientAbove(embedding, MATCH_THRESHOLD);
+    if (nearest) {
+      this._updateCentroid(nearest, embedding);
+      return nearest;
+    }
     return this._assignSpeakerId(embedding);
+  }
+
+  _findNearestTransientAbove(embedding, threshold) {
+    let bestSpeakerId = null;
+    let bestSimilarity = -Infinity;
+    for (const [speakerId, centroid] of this.transientEmbeddings.entries()) {
+      const similarity = speakerEmbeddings.cosineSimilarity(embedding, centroid);
+      if (similarity > bestSimilarity) {
+        bestSimilarity = similarity;
+        bestSpeakerId = speakerId;
+      }
+    }
+    return bestSimilarity >= threshold ? bestSpeakerId : null;
   }
 
   _findNearestTransient(embedding) {
