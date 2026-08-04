@@ -1,4 +1,5 @@
 import type { InferenceProvider } from "./types";
+import { getCloudModel } from "../../../models/ModelRegistry";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import logger from "../../../utils/logger";
 
@@ -16,6 +17,9 @@ export const anthropicProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
+    // Claude models from Opus 4.7 onward reject `temperature` with a 400, so
+    // unknown models default to omitting it, which every model accepts.
+    const supportsTemperature = getCloudModel(model)?.supportsTemperature ?? false;
     const result = await window.electronAPI.processAnthropicReasoning(
       userContent,
       model,
@@ -23,6 +27,7 @@ export const anthropicProvider: InferenceProvider = {
       {
         ...config,
         systemPrompt,
+        supportsTemperature,
       }
     );
 

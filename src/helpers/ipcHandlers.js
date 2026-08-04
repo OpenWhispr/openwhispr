@@ -3980,12 +3980,15 @@ class IPCHandlers {
             throw new Error("No model specified for Anthropic API call");
           }
 
+          // Claude models from Opus 4.7 onward reject `temperature` with a 400;
+          // the renderer derives support from the model registry.
+          const useTemperature = config?.supportsTemperature === true;
           const requestBody = {
             model: modelId,
             messages: [{ role: "user", content: userPrompt }],
             system: systemPrompt,
             max_tokens: config?.maxTokens || Math.max(100, Math.min(text.length * 2, 4096)),
-            temperature: config?.temperature || 0.3,
+            ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
           };
 
           const response = await proxyFetch("https://api.anthropic.com/v1/messages", {
