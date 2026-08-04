@@ -621,6 +621,24 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 
 ## Development Guidelines
 
+### Versioning — REQUIRED
+
+**Bump the version for every change that produces a build. No exceptions.** Semantic versioning:
+
+| Change | Bump | Example |
+|---|---|---|
+| Bug fix, internal/build change | **patch** | 1.12.0 → 1.12.1 |
+| New feature, user-visible behaviour change | **minor** | 1.12.0 → 1.13.0 |
+| Breaking or irreversible change (destructive migration, removed capability) | **minor at minimum** | 1.11.0 → 1.12.0 |
+
+Rules:
+
+1. **Never build twice from the same version with different code.** Two artifacts named `OpenWhispr-1.12.0-arm64.dmg` containing different builds make it impossible to know what is installed. This has happened; do not repeat it.
+2. **Bump before building, not after.** The version is baked into the artifact filename and `CFBundleShortVersionString`.
+3. **Once a version is tagged, it is frozen.** Any further change gets a new version — never re-cut an existing one.
+4. **Every bump gets a CHANGELOG entry** in Keep a Changelog format, written for a user rather than as a commit list.
+5. **Delete superseded local artifacts** from `dist/` when replacing a build, so a stale dmg cannot be installed by mistake.
+
 ### Internationalization (i18n) — REQUIRED
 
 All user-facing strings **must** use the i18n system. Never hardcode UI text in components.
