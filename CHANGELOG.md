@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-08-04
+
+### Changed
+- **Deleting a note or conversation now removes it outright.** Deletes used to be soft — the row stayed behind, hidden, for the cloud sync loop to clean up. With the cloud gone nothing drained them, so deleted notes accumulated forever and their text stayed in the search index. Deleting now cascades to speaker mappings, speaker embeddings, attached agent conversations and their messages, and removes the search-index entry.
+- On first launch after upgrading, a one-time purge drains notes and conversations that were soft-deleted before this release. These rows were already hidden from the app; the purge removes them from the database.
+
+### Removed
+- The `cloud_id` and `sync_status` columns from all 6 tables that carried them, plus 43 unreachable sync methods left behind by the cloud removal.
+- 11 modules with no remaining importer.
+
+### Fixed
+- Cancelled and oversized URL audio downloads no longer leave their partial temp file on disk. The cleanup unlinked the file before the write stream had finished opening it, so the file was recreated immediately afterwards with nothing left to remove it.
+- Deleting a folder no longer leaves agent conversations pointing at notes that no longer exist.
+- The clear button on the meeting hotkey setting showed a raw translation key instead of its label.
+
+### Internal
+- The database tests now fail loudly when the `better-sqlite3` native binding is unusable, instead of silently skipping. They had been skipping in CI since the workflow's `npm ci --ignore-scripts` never built the binding, so they had never actually run there.
+
 ## [1.11.0] - 2026-07-31
 
 ### Added
