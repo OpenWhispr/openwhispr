@@ -152,25 +152,105 @@ const TRANSCRIPTION_PREVIEW_CONFIG = {
 };
 
 class WindowPositionUtil {
+  static getWorkArea(display) {
+    return display?.workArea || display?.bounds || null;
+  }
+
+  static clampBoundsToWorkArea(bounds, workArea) {
+    if (!bounds || !workArea) return bounds;
+
+    const maxX = workArea.x + workArea.width - bounds.width;
+    const maxY = workArea.y + workArea.height - bounds.height;
+    const x = maxX < workArea.x ? workArea.x : Math.max(workArea.x, Math.min(bounds.x, maxX));
+    const y = maxY < workArea.y ? workArea.y : Math.max(workArea.y, Math.min(bounds.y, maxY));
+
+    return {
+      ...bounds,
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(bounds.width),
+      height: Math.round(bounds.height),
+    };
+  }
+
+  static getIntersectionArea(bounds, workArea) {
+    if (!bounds || !workArea) return 0;
+
+    const left = Math.max(bounds.x, workArea.x);
+    const top = Math.max(bounds.y, workArea.y);
+    const right = Math.min(bounds.x + bounds.width, workArea.x + workArea.width);
+    const bottom = Math.min(bounds.y + bounds.height, workArea.y + workArea.height);
+    const width = Math.max(0, right - left);
+    const height = Math.max(0, bottom - top);
+
+    return width * height;
+  }
+
+  static getBestVisibleDisplay(bounds, displays = []) {
+    let best = null;
+    let bestArea = 0;
+
+    for (const display of displays) {
+      const area = this.getIntersectionArea(bounds, this.getWorkArea(display));
+      if (area > bestArea) {
+        best = display;
+        bestArea = area;
+      }
+    }
+
+    return bestArea > 0 ? best : null;
+  }
+
+  static getReconciledMainWindowBounds(
+    currentBounds,
+    displays = [],
+    cursorDisplay = null,
+    position = "bottom-right"
+  ) {
+    if (!currentBounds || !Array.isArray(displays) || displays.length === 0) {
+      return null;
+    }
+
+    const visibleDisplay = this.getBestVisibleDisplay(currentBounds, displays);
+    if (visibleDisplay) {
+      return {
+        bounds: this.clampBoundsToWorkArea(currentBounds, this.getWorkArea(visibleDisplay)),
+        display: visibleDisplay,
+        reason: "visible-clamped",
+      };
+    }
+
+    const targetDisplay = cursorDisplay || displays[0];
+    return {
+      bounds: this.getMainWindowPosition(
+        targetDisplay,
+        { width: currentBounds.width, height: currentBounds.height },
+        position
+      ),
+      display: targetDisplay,
+      reason: "offscreen-moved-to-cursor-display",
+    };
+  }
+
   static getMainWindowPosition(display, customSize = null, position = "bottom-right") {
     const { width, height } = customSize || WINDOW_SIZES.BASE;
     const MARGIN = 4;
-    const workArea = display.workArea || display.bounds;
+    const workArea = this.getWorkArea(display);
 
     let x, y;
     if (position === "bottom-left") {
       x = workArea.x + MARGIN;
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      y = workArea.y + workArea.height - height - MARGIN;
     } else if (position === "center") {
       x = Math.round(workArea.x + (workArea.width - width) / 2);
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      y = workArea.y + workArea.height - height - MARGIN;
     } else {
       // bottom-right (default)
-      x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      x = workArea.x + workArea.width - width - MARGIN;
+      y = workArea.y + workArea.height - height - MARGIN;
     }
 
-    return { x, y, width, height };
+    return this.clampBoundsToWorkArea({ x, y, width, height }, workArea);
   }
 
   static getNotificationPosition(display) {
