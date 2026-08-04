@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-07-31
+
+### Added
+- **Reprocess old meeting recordings:** run the post-call pipeline (re-transcribe, title, classify, notes) against meeting notes recorded before the pipeline existed, individually or in bulk.
+- **Agent web search on a Brave BYOK key:** the chat agent can search the web when a Brave Search API key is present. Configured in Settings > AI Models > Chat Intelligence; gated on key presence, not on any account. Key is encrypted at rest via `safeStorage` like every other BYOK secret.
+
+### Removed
+- **OpenWhispr-cloud, end to end.** The fork no longer has any hosted backend. Removed: hosted reasoning and hosted transcription providers; the cloud sync service layer and its 45 IPC channels; accounts, sign-in, email verification and the `openwhispr://` deep-link stack; workspaces, teams and invitations; billing, plan limits, usage metering and referrals; note sharing.
+- 390 now-dead i18n keys across all 10 locales, plus orphaned modules left behind by the above.
+
+### Changed
+- The meeting streaming-provider catalog now comes from the bundled model registry instead of a hosted config endpoint.
+- Onboarding runs start to finish with no sign-in prompt.
+
+### Note
+BYOK and self-hosted paths are unaffected. Streaming transcription for Corti, Tinfoil and OpenAI-realtime is BYOK, not hosted, and still works; Google Calendar uses a loopback OAuth server and is untouched.
+
+## [1.10.2] - 2026-07-29
+
+### Fixed
+- Removed the artificial speaker-count cap — live and post-call diarization now detect speakers freely instead of force-merging them into a fixed number.
+
+## [1.10.1] - 2026-07-29
+
+### Fixed
+- Post-call pipeline now generates titles and notes again. The `noteFormatting` scope's fallback chain was not being resolved, so the title and notes steps ran without a model.
+- System-audio diarization no longer over-counts speakers: the local user is on the mic track, so the remote speaker count is derived separately.
+
+## [1.10.0] - 2026-07-29
+
+### Added
+- **Post-call pipeline:** after a meeting ends, four steps run in order — re-transcribe (large Whisper model), generate a title, classify the meeting type, and generate notes. Includes a global progress indicator with live elapsed time and an opt-out setting.
+- **Meeting types:** 7 built-in types, each with its own notes template, plus an editor for custom types and a picker on meeting notes.
+- **Automatic meeting-type detection** from transcript content via LLM classification (temperature 0, first 2000 chars) with a keyword-heuristic fallback. Skipped when the type is already set by calendar auto-map or by the user; classification failures are non-fatal.
+- **Calendar auto-map:** calendar events are matched to meeting types via keyword rules.
+- **Speaker panel** with rename, merge, and per-speaker transcript filtering, replacing the old diarization pill.
+- **Automatic Parakeet model download** on first launch, with a progress banner, cancel, an onboarding gate, and a queue that drains pending transcriptions once the model is ready.
+
+### Changed
+- **Meeting note templates overhauled** to a debrief format: TL;DR, Meeting Overview (attendees + tone), Topics by importance, Decisions & Open Items, Action Items, and Key Takeaways with sentiment and subtext.
+- Color scheme updated to the Silver / Pacific Cyan / Blue Slate / Dark Khaki / Iron Grey palette.
+
+### Fixed
+- Re-transcription is skipped gracefully when the large Whisper model has not been downloaded yet, instead of failing the pipeline.
+
 ## [1.9.0] - 2026-07-20
 
 ### Added
