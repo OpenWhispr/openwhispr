@@ -1149,7 +1149,8 @@
         "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo",
         "layoutLabel": "Quando attivata da scorciatoia, apri in:",
         "layoutFullWidth": "Larghezza completa",
-        "layoutSidePanel": "Pannello laterale"
+        "layoutSidePanel": "Pannello laterale",
+        "clear": "Cancella scorciatoia"
       },
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'agente vocale",

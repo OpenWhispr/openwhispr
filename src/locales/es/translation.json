@@ -1149,7 +1149,8 @@
         "description": "Iniciar modo reunión y ajustar el panel al lado de la pantalla",
         "layoutLabel": "Al activarse con el atajo, abrir en:",
         "layoutFullWidth": "Ancho completo",
-        "layoutSidePanel": "Panel lateral"
+        "layoutSidePanel": "Panel lateral",
+        "clear": "Borrar atajo"
       },
       "voiceAgentHotkey": {
         "title": "Atajo del agente de voz",

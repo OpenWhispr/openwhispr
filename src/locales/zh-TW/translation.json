@@ -1149,7 +1149,8 @@
         "description": "啟動會議模式並將面板固定到螢幕側邊",
         "layoutLabel": "透過快捷鍵觸發時,開啟方式:",
         "layoutFullWidth": "全寬",
-        "layoutSidePanel": "側邊欄"
+        "layoutSidePanel": "側邊欄",
+        "clear": "清除快速鍵"
       },
       "voiceAgentHotkey": {
         "title": "語音助手快捷鍵",
