@@ -1423,6 +1423,10 @@ declare global {
         { text: string; model: string } | { error: string; code?: string; messageKey?: string }
       >;
 
+      // Vercel API key management
+      getVercelKey?: () => Promise<string | null>;
+      saveVercelKey?: (key: string) => Promise<void>;
+
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;

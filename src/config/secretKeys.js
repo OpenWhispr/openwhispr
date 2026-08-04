@@ -64,6 +64,13 @@ const BYOK_API_KEYS = [
     save: "saveCortiKey",
     storeKey: "cortiApiKey",
   },
+  {
+    base: "vercel",
+    env: "VERCEL_AI_GATEWAY_API_KEY",
+    get: "getVercelKey",
+    save: "saveVercelKey",
+    storeKey: "vercelApiKey",
+  },
 ];
 
 module.exports = { BYOK_API_KEYS };

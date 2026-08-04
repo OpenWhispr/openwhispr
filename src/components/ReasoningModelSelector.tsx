@@ -38,12 +38,16 @@ type CloudModelOption = {
 const OPENROUTER_TAB = "openrouter";
 const OPENROUTER_KEYS_URL = "https://openrouter.ai/keys";
 
+const VERCEL_TAB = "vercel";
+const VERCEL_KEYS_URL = "https://vercel.com/docs/ai-gateway/authentication-and-byok/api-keys";
+
 const CLOUD_PROVIDER_IDS = [
   "openai",
   "anthropic",
   "gemini",
   "groq",
   OPENROUTER_TAB,
+  VERCEL_TAB,
   "tinfoil",
   "corti",
   "custom",
@@ -336,6 +340,8 @@ export default function ReasoningModelSelector({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
+  const vercelApiKey = useSettingsStore((s) => s.vercelApiKey);
+  const setVercelApiKey = useSettingsStore((s) => s.setVercelApiKey);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
@@ -358,7 +364,9 @@ export default function ReasoningModelSelector({
         ? t("reasoning.custom.providerName")
         : id === OPENROUTER_TAB
           ? "OpenRouter"
-          : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
+          : id === VERCEL_TAB
+            ? "Vercel AI Gateway"
+            : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
   }));
 
   const localProviders = useMemo<LocalProvider[]>(() => {
@@ -392,7 +400,12 @@ export default function ReasoningModelSelector({
 
   const selectedCloudModels = useMemo<CloudModelOption[]>(() => {
     if (selectedCloudProvider === "openai") return openaiModelOptions;
-    if (selectedCloudProvider === "custom" || selectedCloudProvider === OPENROUTER_TAB) return [];
+    if (
+      selectedCloudProvider === "custom" ||
+      selectedCloudProvider === OPENROUTER_TAB ||
+      selectedCloudProvider === VERCEL_TAB
+    )
+      return [];
 
     const { icon: iconUrl, invertInDark } = getRemoteProviderIcon(selectedCloudProvider);
 
@@ -442,9 +455,9 @@ export default function ReasoningModelSelector({
   }, []);
 
   const selectDefaultModelForProvider = (provider: string) => {
-    // Custom/OpenRouter fetch their model list dynamically — clear instead of
-    // presetting so another provider's model id can't persist under this one.
-    if (provider === "custom" || provider === OPENROUTER_TAB) {
+    // Custom/OpenRouter/Vercel fetch their model list dynamically — clear instead
+    // of presetting so another provider's model id can't persist under this one.
+    if (provider === "custom" || provider === OPENROUTER_TAB || provider === VERCEL_TAB) {
       setReasoningModel("");
       return;
     }
@@ -559,6 +572,19 @@ export default function ReasoningModelSelector({
                 lockedBaseUrl
                 apiKeyRequired
                 getKeyUrl={OPENROUTER_KEYS_URL}
+              />
+            ) : selectedCloudProvider === VERCEL_TAB ? (
+              <OpenAICompatiblePanel
+                key={VERCEL_TAB}
+                baseUrl={API_ENDPOINTS.VERCEL_AI_GATEWAY_BASE}
+                setBaseUrl={() => {}}
+                apiKey={vercelApiKey}
+                setApiKey={setVercelApiKey}
+                model={reasoningModel}
+                setModel={setReasoningModel}
+                lockedBaseUrl
+                apiKeyRequired
+                getKeyUrl={VERCEL_KEYS_URL}
               />
             ) : selectedCloudProvider === "custom" ? (
               <OpenAICompatiblePanel
