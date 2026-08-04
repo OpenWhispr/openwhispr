@@ -31,12 +31,13 @@ export default function PostCallPipelineIndicator({
   const pipeline = usePostCallPipelineStore(selectAnyActivePipeline);
   const count = usePostCallPipelineStore(selectActivePipelineCount);
   const [tick, setTick] = useState(0);
+  const activeNoteId = pipeline?.noteId;
 
   useEffect(() => {
-    if (!pipeline) return;
+    if (activeNoteId === undefined) return;
     const interval = setInterval(() => setTick((prev) => prev + 1), 1000);
     return () => clearInterval(interval);
-  }, [pipeline?.noteId]);
+  }, [activeNoteId]);
 
   if (!pipeline) return null;
 
