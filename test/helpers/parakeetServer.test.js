@@ -66,6 +66,16 @@ test("audio at or under the 15s cap decodes in one request", async () => {
   assert.deepEqual(fake.calls, [10 * SAMPLE_RATE * 4]);
 });
 
+test("retries a single-request decode when audible audio decodes to empty", async () => {
+  const fake = fakeWsServer([{ text: "" }, { text: "hello" }]);
+  const manager = managerWith(fake);
+
+  const result = await manager.transcribe(wavFromSeconds([{ seconds: 10 }]));
+
+  assert.equal(result.text, "hello");
+  assert.deepEqual(fake.calls, [10 * SAMPLE_RATE * 4, 10 * SAMPLE_RATE * 4]);
+});
+
 test("retries once when an audible segment decodes to empty text", async () => {
   const fake = fakeWsServer([{ text: "" }, { text: "one" }, { text: "two" }, { text: "three" }]);
   const manager = managerWith(fake);
@@ -75,6 +85,21 @@ test("retries once when an audible segment decodes to empty text", async () => {
   assert.equal(result.text, "one two three");
   assert.ok(!result.truncated, "a recovered retry must not flag truncation");
   assert.deepEqual(fake.calls, [SEGMENT_BYTES, SEGMENT_BYTES, SEGMENT_BYTES, SAMPLE_RATE * 4]);
+});
+
+test("a truncated empty first attempt does not taint a successful retry", async () => {
+  const fake = fakeWsServer([
+    { text: "", truncated: true },
+    { text: "one" },
+    { text: "two" },
+    { text: "three" },
+  ]);
+  const manager = managerWith(fake);
+
+  const result = await manager.transcribe(wavFromSeconds([{ seconds: 31 }]));
+
+  assert.equal(result.text, "one two three");
+  assert.ok(!result.truncated, "the discarded attempt's truncation must not survive recovery");
 });
 
 test("flags truncation when an audible segment stays empty after the retry", async () => {
