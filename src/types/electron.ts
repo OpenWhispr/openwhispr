@@ -2084,6 +2084,7 @@ declare global {
         model?: string;
         language?: string;
         noteId?: number | null;
+        aecEnabled?: boolean;
       }) => Promise<{
         success: boolean;
         error?: string;
