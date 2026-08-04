@@ -6,7 +6,12 @@
       "uiLabel": "インターフェース言語",
       "uiDescription": "OpenWhispr のインターフェースで使用する言語を選択",
       "transcriptionLabel": "文字起こし言語",
-      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択"
+      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択",
+      "chineseScriptLabel": "中国語の字体（ディクテーション）",
+      "chineseScriptDescription": "中国語が検出されたとき、ディクテーションの文字起こしを簡体字または繁体字に変換します。話し言葉は同じでも、Whisperはどちらか一方の字体だけを返します。",
+      "chineseScriptAsTranscribed": "文字起こしのまま",
+      "chineseScriptSimplified": "簡体字 (简体)",
+      "chineseScriptTraditional": "繁体字 (繁體)"
     },
     "noteFiles": {
       "title": "ノートをファイルとして保存",
@@ -1317,6 +1322,40 @@
         "successDescription": "アカウントとすべてのデータが削除されました。アプリが再読み込みされます。",
         "failedTitle": "削除に失敗しました",
         "failedDescription": "アカウントの削除中にエラーが発生しました。ローカルデータが部分的に削除された可能性があります。もう一度お試しください。"
+      },
+      "profile": {
+        "name": {
+          "label": "表示名",
+          "placeholder": "お名前",
+          "save": "保存",
+          "saving": "保存中...",
+          "saved": "表示名を更新しました",
+          "error": "名前を更新できませんでした"
+        },
+        "password": {
+          "label": "パスワード",
+          "description": "サインインに使用するパスワードを変更します。",
+          "change": "パスワードを変更",
+          "dialogTitle": "パスワードを変更",
+          "dialogDescription": "現在のパスワードを入力し、新しいパスワードを設定してください。",
+          "currentLabel": "現在のパスワード",
+          "newLabel": "新しいパスワード",
+          "confirmLabel": "新しいパスワード（確認）",
+          "minLength": "パスワードは 8 文字以上にしてください",
+          "mismatch": "パスワードが一致しません",
+          "revokeOthers": "他のデバイスでサインアウト",
+          "submit": "パスワードを更新",
+          "saving": "更新中...",
+          "cancel": "キャンセル",
+          "saved": "パスワードを更新しました"
+        },
+        "errors": {
+          "invalidPassword": "現在のパスワードが正しくありません。",
+          "passwordTooShort": "パスワードは 8 文字以上にしてください。",
+          "passwordTooLong": "パスワードが長すぎます。",
+          "noPassword": "このアカウントにはパスワードが設定されていません。",
+          "generic": "問題が発生しました。もう一度お試しください。"
+        }
       }
     },
     "agentConfig": {
@@ -2096,6 +2135,7 @@
         "openai_gpt_5_6_terra": "日常業務向けのバランス型 GPT-5.6",
         "openai_gpt_5_6_luna": "最速かつ最も低コストの GPT-5.6",
         "openai_gpt_5_5": "複雑な推論のためのフロンティアモデル",
+        "anthropic_claude_opus_5": "最も高性能な Opus モデル、100 万トークンコンテキスト",
         "anthropic_claude_opus_4_8": "誠実さと信頼性を重視した強力な Opus モデル",
         "anthropic_claude_opus_4_7": "高性能な Opus モデル",
         "anthropic_claude_opus_4_6": "前世代の Opus、100 万トークンコンテキスト",
@@ -2995,6 +3035,21 @@
       "systemAudioRequired": "システムオーディオの権限が必要です",
       "systemAudioDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
       "openSettings": "システム設定を開く"
+    },
+    "appleCalendar": {
+      "title": "Apple カレンダー",
+      "optional": "任意",
+      "description": "Calendar.app から会議を読み取ります — iCloud、Google、Exchange、Outlook をまとめて。",
+      "connect": "Apple カレンダーを接続",
+      "connected": "接続済み",
+      "disconnect": "切断",
+      "disconnectConfirm": "Apple カレンダーを切断しますか？",
+      "disconnectDescription": "Apple カレンダーからの会議メモは記録されなくなります。",
+      "permissionDenied": "カレンダーへのアクセスが必要です",
+      "permissionDeniedDescription": "会議を検出するには、OpenWhispr にカレンダーへのアクセスが必要です。システム設定の「プライバシーとセキュリティ」→「カレンダー」で OpenWhispr を有効にしてください。",
+      "openSettings": "システム設定を開く",
+      "connectFailed": "接続に失敗しました",
+      "connectFailedDescription": "Calendar.app への接続中にエラーが発生しました。OpenWhispr を再起動してもう一度お試しください。"
     },
     "sections": {
       "calendar": "カレンダー",

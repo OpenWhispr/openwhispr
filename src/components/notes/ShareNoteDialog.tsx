@@ -31,6 +31,7 @@ import {
 import { useToast } from "../ui/useToast";
 import MemberAvatar from "../MemberAvatar";
 import { emailDomain, isPersonalEmailDomain } from "../../utils/personalEmailDomains";
+import { EMAIL_REGEX } from "../../utils/validation";
 import type {
   NoteAccessGrant,
   NoteAccessState,
@@ -40,7 +41,6 @@ import type {
 } from "../../types/electron";
 
 const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface ShareNoteDialogProps {
   open: boolean;

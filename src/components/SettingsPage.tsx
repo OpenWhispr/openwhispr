@@ -89,7 +89,12 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import type { GpuDevice, LocalTranscriptionProvider, InferenceMode } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  GpuDevice,
+  LocalTranscriptionProvider,
+  InferenceMode,
+} from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
@@ -105,6 +110,7 @@ import { useWorkspaceStore } from "../stores/workspaceStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
+import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
 
 export type SettingsSectionType =
@@ -737,6 +743,7 @@ export default function SettingsPage({
     parakeetModel,
     uiLanguage,
     preferredLanguage,
+    chineseScriptPreference,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
@@ -1334,7 +1341,7 @@ export default function SettingsPage({
     });
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
-  const { isSignedIn, isLoaded, user } = useAuth();
+  const { isSignedIn, isLoaded, user, refetch } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isOpeningBilling, setIsOpeningBilling] = useState(false);
@@ -1661,6 +1668,13 @@ export default function SettingsPage({
                     </div>
                   </SettingsPanelRow>
                 </SettingsPanel>
+
+                <ProfileSection
+                  name={user.name || ""}
+                  onSessionRefresh={() => {
+                    void refetch();
+                  }}
+                />
 
                 <SettingsPanel>
                   <SettingsPanelRow>
@@ -2710,6 +2724,36 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                {preferredLanguage === "auto" && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settings.language.chineseScriptLabel")}
+                      description={t("settings.language.chineseScriptDescription")}
+                    >
+                      <Select
+                        value={chineseScriptPreference}
+                        onValueChange={(value: ChineseScriptPreference) =>
+                          updateTranscriptionSettings({ chineseScriptPreference: value })
+                        }
+                      >
+                        <SelectTrigger className="h-7 w-44 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="as-transcribed">
+                            {t("settings.language.chineseScriptAsTranscribed")}
+                          </SelectItem>
+                          <SelectItem value="simplified">
+                            {t("settings.language.chineseScriptSimplified")}
+                          </SelectItem>
+                          <SelectItem value="traditional">
+                            {t("settings.language.chineseScriptTraditional")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 

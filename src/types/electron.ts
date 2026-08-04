@@ -3,6 +3,8 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
+export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
+
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
 export type SelfHostedType = "openai-compatible" | "lan";
@@ -2240,6 +2242,16 @@ declare global {
       // Google Calendar event listeners
       onGcalConnectionChanged?: (callback: (data: any) => void) => () => void;
       onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
+
+      // Apple Calendar (macOS EventKit)
+      acalConnect?: () => Promise<{ success: boolean; reason?: string; error?: string }>;
+      acalDisconnect?: () => Promise<{ success: boolean; error?: string }>;
+      acalGetConnectionStatus?: () => Promise<{ connected: boolean; sourceNames: string[] }>;
+      openCalendarPrivacySettings?: () => Promise<{ success: boolean; error?: string }>;
+      onAcalConnectionChanged?: (
+        callback: (data: { connected: boolean; sourceNames: string[] }) => void
+      ) => () => void;
+      onAcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       meetingDetectionGetPreferences?: () => Promise<{ success: boolean; preferences?: any }>;
       meetingDetectionSetPreferences?: (

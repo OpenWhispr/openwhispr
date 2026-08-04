@@ -28,6 +28,7 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
   const systemAudio = useSystemAudioPermission();
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const appleCalendarConnected = useSettingsStore((s) => s.appleCalendarConnected);
   const needsSystemAudioGrant = !systemAudio.granted && canManageSystemAudioInApp(systemAudio);
 
   const now = useMemo(() => new Date(), []);
@@ -109,7 +110,7 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
                   : t("onboarding.permissions.grantAccess")}
               </Button>
             </>
-          ) : !isSignedIn ? (
+          ) : !isSignedIn && !appleCalendarConnected ? (
             <>
               <LogIn size={24} className="text-muted-foreground/30 mb-2.5" />
               <p className="text-xs font-medium text-muted-foreground/70 text-center mb-1">

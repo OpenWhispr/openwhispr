@@ -6,7 +6,12 @@
       "uiLabel": "Idioma da interface",
       "uiDescription": "Escolha o idioma usado na interface do OpenWhispr",
       "transcriptionLabel": "Idioma de transcrição",
-      "transcriptionDescription": "Escolha o idioma que você fala para maior precisão"
+      "transcriptionDescription": "Escolha o idioma que você fala para maior precisão",
+      "chineseScriptLabel": "Escrita chinesa (ditado)",
+      "chineseScriptDescription": "Quando o chinês for detectado, converter as transcrições ditadas para caracteres simplificados ou tradicionais. O chinês falado soa igual; o Whisper só retorna uma escrita.",
+      "chineseScriptAsTranscribed": "Manter como transcrito",
+      "chineseScriptSimplified": "Simplificado (简体)",
+      "chineseScriptTraditional": "Tradicional (繁體)"
     },
     "noteFiles": {
       "title": "Salvar notas como arquivos",
@@ -1296,6 +1301,40 @@
         "successDescription": "Sua conta e todos os dados foram excluídos. O aplicativo será recarregado agora.",
         "failedTitle": "Falha na exclusão",
         "failedDescription": "Algo deu errado ao excluir sua conta. Seus dados locais podem ter sido parcialmente removidos. Tente novamente."
+      },
+      "profile": {
+        "name": {
+          "label": "Nome de exibição",
+          "placeholder": "Seu nome",
+          "save": "Salvar",
+          "saving": "Salvando...",
+          "saved": "Nome de exibição atualizado",
+          "error": "Não foi possível atualizar seu nome"
+        },
+        "password": {
+          "label": "Senha",
+          "description": "Altere a senha que você usa para entrar.",
+          "change": "Alterar senha",
+          "dialogTitle": "Alterar senha",
+          "dialogDescription": "Digite sua senha atual e escolha uma nova.",
+          "currentLabel": "Senha atual",
+          "newLabel": "Nova senha",
+          "confirmLabel": "Confirmar nova senha",
+          "minLength": "A senha deve ter pelo menos 8 caracteres",
+          "mismatch": "As senhas não coincidem",
+          "revokeOthers": "Sair dos outros dispositivos",
+          "submit": "Atualizar senha",
+          "saving": "Atualizando...",
+          "cancel": "Cancelar",
+          "saved": "Senha atualizada"
+        },
+        "errors": {
+          "invalidPassword": "Sua senha atual está incorreta.",
+          "passwordTooShort": "A senha deve ter pelo menos 8 caracteres.",
+          "passwordTooLong": "A senha é muito longa.",
+          "noPassword": "Nenhuma senha está definida para esta conta.",
+          "generic": "Algo deu errado. Tente novamente."
+        }
       }
     },
     "agentConfig": {
@@ -2075,6 +2114,7 @@
         "openai_gpt_5_6_terra": "GPT-5.6 equilibrado para o trabalho do dia a dia",
         "openai_gpt_5_6_luna": "O GPT-5.6 mais rápido e econômico",
         "openai_gpt_5_5": "Modelo frontier para raciocínio complexo",
+        "anthropic_claude_opus_5": "O modelo Opus mais capaz, contexto de 1M",
         "anthropic_claude_opus_4_8": "Poderoso modelo Opus voltado para honestidade e confiabilidade",
         "anthropic_claude_opus_4_7": "Modelo Opus potente",
         "anthropic_claude_opus_4_6": "Geração anterior do Opus, contexto de 1M",
@@ -2995,6 +3035,21 @@
       "systemAudioRequired": "Permissão de Áudio do Sistema Necessária",
       "systemAudioDescription": "Para transcrever reuniões, o OpenWhispr precisa da permissão de Áudio do Sistema para capturar o áudio dos outros participantes. Nunca gravamos a sua tela. Você será levado às Configurações do Sistema para ativá-la.",
       "openSettings": "Abrir Configurações do Sistema"
+    },
+    "appleCalendar": {
+      "title": "Calendário da Apple",
+      "optional": "Opcional",
+      "description": "Leia reuniões do Calendar.app — iCloud, Google, Exchange e Outlook em um só lugar.",
+      "connect": "Conectar Calendário da Apple",
+      "connected": "Conectado",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "Desconectar o Calendário da Apple?",
+      "disconnectDescription": "As notas de reunião não serão mais gravadas do seu Calendário da Apple.",
+      "permissionDenied": "Acesso ao calendário necessário",
+      "permissionDeniedDescription": "O OpenWhispr precisa de acesso ao calendário para detectar reuniões. Ative o OpenWhispr em Configurações do Sistema, em Privacidade e Segurança → Calendários.",
+      "openSettings": "Abrir Configurações do Sistema",
+      "connectFailed": "Falha na conexão",
+      "connectFailedDescription": "Ocorreu um erro ao conectar ao Calendar.app. Reinicie o OpenWhispr e tente novamente."
     },
     "sections": {
       "calendar": "Calendário",

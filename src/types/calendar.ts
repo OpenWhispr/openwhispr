@@ -11,6 +11,7 @@ export interface GoogleCalendar {
 export interface CalendarEvent {
   id: string;
   calendar_id: string;
+  provider: string;
   summary: string | null;
   start_time: string;
   end_time: string;

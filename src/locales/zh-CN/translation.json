@@ -6,7 +6,12 @@
       "uiLabel": "界面语言",
       "uiDescription": "选择 OpenWhispr 界面使用的语言",
       "transcriptionLabel": "转录语言",
-      "transcriptionDescription": "选择你说话的语言，以提高转录准确率"
+      "transcriptionDescription": "选择你说话的语言，以提高转录准确率",
+      "chineseScriptLabel": "中文书写（听写）",
+      "chineseScriptDescription": "检测到中文时，将听写的转录结果转换为简体或繁体。口语听起来一样；Whisper 只会输出一种字形。",
+      "chineseScriptAsTranscribed": "保持转录原样",
+      "chineseScriptSimplified": "简体",
+      "chineseScriptTraditional": "繁体"
     },
     "noteFiles": {
       "title": "将笔记保存为文件",
@@ -1317,6 +1322,40 @@
         "successDescription": "您的账户和所有数据已被删除。应用将立即重新加载。",
         "failedTitle": "删除失败",
         "failedDescription": "删除您的账户时出错。您的本地数据可能已被部分删除。请重试。"
+      },
+      "profile": {
+        "name": {
+          "label": "显示名称",
+          "placeholder": "您的姓名",
+          "save": "保存",
+          "saving": "保存中...",
+          "saved": "显示名称已更新",
+          "error": "无法更新您的姓名"
+        },
+        "password": {
+          "label": "密码",
+          "description": "更改您用于登录的密码。",
+          "change": "更改密码",
+          "dialogTitle": "更改密码",
+          "dialogDescription": "输入您的当前密码并设置新密码。",
+          "currentLabel": "当前密码",
+          "newLabel": "新密码",
+          "confirmLabel": "确认新密码",
+          "minLength": "密码至少需要 8 个字符",
+          "mismatch": "两次输入的密码不一致",
+          "revokeOthers": "在其他设备上退出登录",
+          "submit": "更新密码",
+          "saving": "更新中...",
+          "cancel": "取消",
+          "saved": "密码已更新"
+        },
+        "errors": {
+          "invalidPassword": "您的当前密码不正确。",
+          "passwordTooShort": "密码至少需要 8 个字符。",
+          "passwordTooLong": "密码过长。",
+          "noPassword": "此账户未设置密码。",
+          "generic": "出了点问题，请重试。"
+        }
       }
     },
     "agentConfig": {
@@ -2096,6 +2135,7 @@
         "openai_gpt_5_6_terra": "均衡的 GPT-5.6，适合日常工作",
         "openai_gpt_5_6_luna": "速度最快、成本最低的 GPT-5.6",
         "openai_gpt_5_5": "复杂推理前沿模型",
+        "anthropic_claude_opus_5": "最强大的 Opus 模型，1M 上下文",
         "anthropic_claude_opus_4_8": "强大的 Opus 模型，注重诚实与可靠",
         "anthropic_claude_opus_4_7": "强大的 Opus 模型",
         "anthropic_claude_opus_4_6": "上一代 Opus，1M 上下文",
@@ -2995,6 +3035,21 @@
       "systemAudioRequired": "需要系统音频权限",
       "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
       "openSettings": "打开系统设置"
+    },
+    "appleCalendar": {
+      "title": "Apple 日历",
+      "optional": "可选",
+      "description": "从 Calendar.app 读取会议 — iCloud、Google、Exchange 和 Outlook 一站式接入。",
+      "connect": "连接 Apple 日历",
+      "connected": "已连接",
+      "disconnect": "断开",
+      "disconnectConfirm": "断开 Apple 日历？",
+      "disconnectDescription": "将不再从 Apple 日历记录会议笔记。",
+      "permissionDenied": "需要日历访问权限",
+      "permissionDeniedDescription": "OpenWhispr 需要日历访问权限来检测会议。请在系统设置的「隐私与安全性」→「日历」中启用 OpenWhispr。",
+      "openSettings": "打开系统设置",
+      "connectFailed": "连接失败",
+      "connectFailedDescription": "连接 Calendar.app 时出错。请重启 OpenWhispr 后重试。"
     },
     "sections": {
       "calendar": "日历",

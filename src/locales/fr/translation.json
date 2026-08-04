@@ -6,7 +6,12 @@
       "uiLabel": "Langue de l'interface",
       "uiDescription": "Choisissez la langue utilisée dans l'interface OpenWhispr",
       "transcriptionLabel": "Langue de transcription",
-      "transcriptionDescription": "Choisissez la langue que vous parlez pour une transcription plus précise"
+      "transcriptionDescription": "Choisissez la langue que vous parlez pour une transcription plus précise",
+      "chineseScriptLabel": "Écriture chinoise (dictée)",
+      "chineseScriptDescription": "Lorsque le chinois est détecté, convertir les transcriptions dictées en caractères simplifiés ou traditionnels. Le chinois parlé sonne pareil ; Whisper ne renvoie qu'une écriture.",
+      "chineseScriptAsTranscribed": "Garder tel que transcrit",
+      "chineseScriptSimplified": "Simplifié (简体)",
+      "chineseScriptTraditional": "Traditionnel (繁體)"
     },
     "noteFiles": {
       "title": "Enregistrer les notes en fichiers",
@@ -1595,6 +1600,40 @@
         "successDescription": "Votre compte et toutes les données ont été supprimés. L'application va maintenant se recharger.",
         "failedTitle": "Échec de la suppression",
         "failedDescription": "Une erreur s'est produite lors de la suppression de votre compte. Vos données locales ont peut-être été partiellement supprimées. Veuillez réessayer."
+      },
+      "profile": {
+        "name": {
+          "label": "Nom affiché",
+          "placeholder": "Votre nom",
+          "save": "Enregistrer",
+          "saving": "Enregistrement...",
+          "saved": "Nom affiché mis à jour",
+          "error": "Impossible de mettre à jour votre nom"
+        },
+        "password": {
+          "label": "Mot de passe",
+          "description": "Modifiez le mot de passe que vous utilisez pour vous connecter.",
+          "change": "Changer le mot de passe",
+          "dialogTitle": "Changer le mot de passe",
+          "dialogDescription": "Saisissez votre mot de passe actuel et choisissez-en un nouveau.",
+          "currentLabel": "Mot de passe actuel",
+          "newLabel": "Nouveau mot de passe",
+          "confirmLabel": "Confirmer le nouveau mot de passe",
+          "minLength": "Le mot de passe doit contenir au moins 8 caractères",
+          "mismatch": "Les mots de passe ne correspondent pas",
+          "revokeOthers": "Déconnecter les autres appareils",
+          "submit": "Mettre à jour le mot de passe",
+          "saving": "Mise à jour...",
+          "cancel": "Annuler",
+          "saved": "Mot de passe mis à jour"
+        },
+        "errors": {
+          "invalidPassword": "Votre mot de passe actuel est incorrect.",
+          "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères.",
+          "passwordTooLong": "Le mot de passe est trop long.",
+          "noPassword": "Aucun mot de passe n'est défini pour ce compte.",
+          "generic": "Une erreur est survenue. Veuillez réessayer."
+        }
       }
     },
     "agentConfig": {
@@ -2188,6 +2227,7 @@
         "openai_gpt_5_6_terra": "GPT-5.6 équilibré pour le travail quotidien",
         "openai_gpt_5_6_luna": "Le GPT-5.6 le plus rapide et le plus économique",
         "openai_gpt_5_5": "Modèle frontier pour le raisonnement complexe",
+        "anthropic_claude_opus_5": "Le modèle Opus le plus performant, contexte 1M",
         "anthropic_claude_opus_4_8": "Modèle Opus puissant axé sur l'honnêteté et la fiabilité",
         "anthropic_claude_opus_4_7": "Modèle Opus puissant",
         "anthropic_claude_opus_4_6": "Génération Opus précédente, contexte 1M",
@@ -3143,6 +3183,21 @@
       "systemAudioRequired": "Autorisation Audio Système requise",
       "systemAudioDescription": "Pour transcrire les réunions, OpenWhispr a besoin de l'autorisation Audio Système pour capturer l'audio des autres participants. Nous n'enregistrons jamais votre écran. Vous serez dirigé vers les Réglages Système pour l'activer.",
       "openSettings": "Ouvrir les Réglages Système"
+    },
+    "appleCalendar": {
+      "title": "Calendrier Apple",
+      "optional": "Facultatif",
+      "description": "Lisez les réunions depuis Calendar.app — iCloud, Google, Exchange et Outlook au même endroit.",
+      "connect": "Connecter le Calendrier Apple",
+      "connected": "Connecté",
+      "disconnect": "Déconnecter",
+      "disconnectConfirm": "Déconnecter le Calendrier Apple ?",
+      "disconnectDescription": "Les notes de réunion ne seront plus enregistrées depuis votre Calendrier Apple.",
+      "permissionDenied": "Accès au calendrier requis",
+      "permissionDeniedDescription": "OpenWhispr a besoin d'accéder au calendrier pour détecter les réunions. Activez OpenWhispr dans Réglages Système, sous Confidentialité et sécurité → Calendriers.",
+      "openSettings": "Ouvrir les Réglages Système",
+      "connectFailed": "Échec de la connexion",
+      "connectFailedDescription": "Une erreur s'est produite lors de la connexion à Calendar.app. Redémarrez OpenWhispr et réessayez."
     },
     "sections": {
       "calendar": "Calendrier",

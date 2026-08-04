@@ -20,7 +20,8 @@ function getLookaheadMinutes(): number {
 
 export function useUpcomingEvents(): UseUpcomingEventsReturn {
   const gcalAccounts = useSettingsStore((s) => s.gcalAccounts);
-  const isConnected = gcalAccounts.length > 0;
+  const appleCalendarConnected = useSettingsStore((s) => s.appleCalendarConnected);
+  const isConnected = gcalAccounts.length > 0 || appleCalendarConnected;
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,13 +52,19 @@ export function useUpcomingEvents(): UseUpcomingEventsReturn {
     fetchEvents();
   }, [fetchEvents]);
 
-  // Re-fetch when events are synced from Google Calendar
+  // Re-fetch when either provider syncs events
   useEffect(() => {
     if (!isConnected) return;
-    const unsub = window.electronAPI?.onGcalEventsSynced?.(() => {
+    const unsubGcal = window.electronAPI?.onGcalEventsSynced?.(() => {
       fetchEvents();
     });
-    return () => unsub?.();
+    const unsubAcal = window.electronAPI?.onAcalEventsSynced?.(() => {
+      fetchEvents();
+    });
+    return () => {
+      unsubGcal?.();
+      unsubAcal?.();
+    };
   }, [isConnected, fetchEvents]);
 
   return { events, isLoading, isConnected };
