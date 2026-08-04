@@ -273,6 +273,66 @@ function verifyUnpackedBinaries(context) {
 }
 
 // ---------------------------------------------------------------------------
+// Native ABI verification
+// ---------------------------------------------------------------------------
+
+// A V8 addon embeds the ABI it was built for in its exported registration
+// symbol (node_register_module_v<ABI>). N-API addons export
+// napi_register_module_v1 instead and are ABI-stable across runtimes, so a null
+// here means "not ABI-locked", not "broken".
+function abiOfNativeModule(filePath) {
+  const match = fs.readFileSync(filePath).toString("latin1").match(/node_register_module_v(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+// better-sqlite3 is the one bundled addon locked to a specific ABI. Building it
+// for Node (which `npm rebuild better-sqlite3` does, and the test suite needs)
+// and then packaging without `electron-builder install-app-deps` ships an app
+// that dies on launch with NODE_MODULE_VERSION mismatch. Catch that here rather
+// than relying on every packaging script remembering to rebuild.
+function verifyNativeAbi(context) {
+  const bindingPath = path.join(
+    resolveResourcesDir(context),
+    "app.asar.unpacked",
+    "node_modules",
+    "better-sqlite3",
+    "build",
+    "Release",
+    "better_sqlite3.node"
+  );
+  if (!fs.existsSync(bindingPath)) {
+    throw new Error(
+      `afterPack: missing ${bindingPath} — better-sqlite3 was not unpacked from app.asar; the packed app cannot open its database`
+    );
+  }
+
+  const electronVersion = context.packager.info.framework.version;
+  const expected = require("node-abi").getAbi(electronVersion, "electron");
+  const actual = abiOfNativeModule(bindingPath);
+
+  if (actual === null) {
+    console.log("  afterPack: better-sqlite3 is ABI-stable (N-API), skipping ABI check");
+    return;
+  }
+
+  if (actual !== Number(expected)) {
+    throw new Error(
+      `afterPack: BUILD ABORTED — better-sqlite3 was built for NODE_MODULE_VERSION ${actual}, ` +
+        `but Electron ${electronVersion} requires ${expected}. The packaged app would fail to ` +
+        `start with a "compiled against a different Node.js version" error.\n\n` +
+        `This happens when a packaging command runs without 'electron-builder install-app-deps' ` +
+        `(e.g. a bare 'npx electron-builder ...'), typically after 'npm rebuild better-sqlite3' ` +
+        `rebuilt the binding for Node so the tests could run.\n\n` +
+        `Fix: npx electron-builder install-app-deps    then package again.`
+    );
+  }
+
+  console.log(
+    `  afterPack: verified better-sqlite3 ABI ${actual} matches Electron ${electronVersion}`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
 
@@ -281,5 +341,6 @@ exports.default = async function (context) {
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
   verifyUnpackedBinaries(context);
+  verifyNativeAbi(context);
   registerMacResourceBinariesForSigning(context);
 };
