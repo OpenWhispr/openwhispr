@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-08-04
+
+### Fixed
+- **Live diarization invented speakers.** A 3-person call could report 10 or more, with labels like "Speaker 27". Once one person had two voice clusters, both matched their own voice closely, which the matcher read as an ambiguous tie and resolved by creating yet another speaker — so every duplicate made the next match worse. Near-identical matches are now treated as the same person, and an unmatched voice merges into its nearest match instead of always starting a new speaker. Post-call diarization was not affected.
+- **Meeting notes generated no title and no meeting type.** The post-call pipeline could not use local models at all, so anyone running a local model got "Failed: Generating title" and no automatic meeting type. Notes generated with the "Generate Notes" button were unaffected, because that path supports local models — which is why the failure looked inconsistent.
+- Pipeline failures showed only which step failed, never why. The reason is now shown, with the full message on hover.
+
+### Internal
+- Packaging now rebuilds native modules for Electron and verifies the result before building. A build whose `better-sqlite3` binding targets the wrong runtime is aborted with the fix, rather than producing an app that crashes on launch.
+
 ## [1.12.0] - 2026-08-04
 
 ### Changed
