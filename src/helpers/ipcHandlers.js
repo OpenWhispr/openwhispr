@@ -7900,7 +7900,7 @@ class IPCHandlers {
 
     const fs = require("fs");
 
-    (async () => {
+    return (async () => {
       let tmpWav = null;
       try {
         tmpWav = await this.diarizationManager.convertRawPcmToWav(rawPcmPath, 24000);
@@ -8070,6 +8070,12 @@ class IPCHandlers {
         }
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
+        // Enqueue before send: webContents.send can still throw if the window is
+        // destroyed between the guard and the call, and that must not cost the note
+        // its title, meeting type and notes.
+        if (noteId) {
+          this._enqueuePostCallPipeline(noteId);
+        }
         send({ segments: [] });
       } finally {
         try {
