@@ -597,6 +597,7 @@ class DatabaseManager {
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_snippets_trigger_lower_active ON snippets(lower(trigger)) WHERE deleted_at IS NULL"
       );
       this._dropCloudSyncColumns();
+      this._purgeTombstones();
 
       // Meeting types table
       this.db.exec(`
@@ -675,6 +676,41 @@ class DatabaseManager {
             "database"
           );
         }
+      }
+    }
+  }
+
+  // Drains rows that the pre-removal cloud code soft-deleted. The cloud was the
+  // only thing that ever drained them, so without this they stay hidden forever.
+  // Failure is non-fatal: an undrained tombstone is invisible, not harmful.
+  _purgeTombstones() {
+    const tables = [
+      "notes",
+      "agent_conversations",
+      "transcriptions",
+      "folders",
+      "snippets",
+      "custom_dictionary",
+    ];
+
+    for (const table of tables) {
+      const columns = new Set(
+        this.db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name)
+      );
+      if (!columns.has("deleted_at")) continue;
+      try {
+        const { changes } = this.db
+          .prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL`)
+          .run();
+        if (changes > 0) {
+          debugLogger.info("Purged tombstoned rows", { table, count: changes }, "database");
+        }
+      } catch (error) {
+        debugLogger.error(
+          "Failed to purge tombstoned rows",
+          { table, error: error.message },
+          "database"
+        );
       }
     }
   }
@@ -1192,9 +1228,13 @@ class DatabaseManager {
         .prepare("SELECT id FROM notes WHERE folder_id = ?")
         .all(id)
         .map((row) => row.id);
+      const hardDeleteConversations = this.db.prepare(
+        "DELETE FROM agent_conversations WHERE note_id IN (SELECT id FROM notes WHERE folder_id = ?)"
+      );
       const hardDeleteNotes = this.db.prepare("DELETE FROM notes WHERE folder_id = ?");
       const hardDeleteFolder = this.db.prepare("DELETE FROM folders WHERE id = ?");
       this.db.transaction(() => {
+        hardDeleteConversations.run(id);
         hardDeleteNotes.run(id);
         hardDeleteFolder.run(id);
       })();
@@ -1329,11 +1369,18 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const stmt = this.db.prepare(
-        "UPDATE notes SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL"
+      // speaker_mappings and note_speaker_embeddings cascade from notes(id), and the
+      // notes_fts triggers drop the index entry. agent_conversations.note_id was added
+      // by a plain ALTER TABLE and has no foreign key, so it must be cleared by hand.
+      const deleteConversations = this.db.prepare(
+        "DELETE FROM agent_conversations WHERE note_id = ?"
       );
-      const result = stmt.run(id);
-      return { success: result.changes > 0, id };
+      const deleteNote = this.db.prepare("DELETE FROM notes WHERE id = ?");
+      const changes = this.db.transaction(() => {
+        deleteConversations.run(id);
+        return deleteNote.run(id).changes;
+      })();
+      return { success: changes > 0, id };
     } catch (error) {
       debugLogger.error("Error deleting note", { error: error.message }, "notes");
       throw error;
@@ -1417,11 +1464,8 @@ class DatabaseManager {
   deleteAgentConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const result = this.db
-        .prepare(
-          "UPDATE agent_conversations SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
-        )
-        .run(id);
+      // agent_messages cascades from agent_conversations(id).
+      const result = this.db.prepare("DELETE FROM agent_conversations WHERE id = ?").run(id);
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error("Error deleting agent conversation", { error: error.message }, "database");
