@@ -44,3 +44,9 @@ test("MIN_AUDIO_BYTES is 256", async () => {
   const { MIN_AUDIO_BYTES } = await load();
   assert.equal(MIN_AUDIO_BYTES, 256);
 });
+
+test("stays loadable via require() for the main-process retry guard", () => {
+  const { isEmptyRecording, MIN_AUDIO_BYTES } = require("../../src/helpers/recordingGuard.js");
+  assert.equal(isEmptyRecording(MIN_AUDIO_BYTES - 1), true);
+  assert.equal(isEmptyRecording(MIN_AUDIO_BYTES), false);
+});

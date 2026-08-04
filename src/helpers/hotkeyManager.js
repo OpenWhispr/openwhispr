@@ -376,13 +376,17 @@ class HotkeyManager extends EventEmitter {
    * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
    * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
    * Each slot may bind several hotkeys, so we evaluate every one.
+   * When a compositor backend (GNOME/KDE/Hyprland) owns the hotkeys, tap slots are
+   * delivered over D-Bus and watching them here would double-fire; push-to-talk
+   * still needs the raw key events that compositor shortcuts cannot provide.
    */
-  getNativeListenerKeys(activationMode) {
+  getNativeListenerKeys(activationMode, compositorOwnsHotkeys = false) {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
         if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
         const pushToTalk = slotName === "dictation" && activationMode === "push";
+        if (compositorOwnsHotkeys && !pushToTalk) continue;
         if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
           keys.push(hotkey);
         }

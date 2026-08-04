@@ -108,3 +108,18 @@ test("translation slot conflicts are detected and it is never push-enabled", () 
   const mgr2 = makeManager({ translation: "Control+Alt" });
   assert.deepEqual(mgr2.getNativeListenerKeys("tap"), ["Control+Alt"]);
 });
+
+test("compositor-owned tap hotkeys are not watched (D-Bus delivers them)", () => {
+  const mgr = makeManager({ dictation: "Control+Super", agent: "Alt+Super" });
+  assert.deepEqual(mgr.getNativeListenerKeys("tap", true), []);
+});
+
+test("push mode keeps the dictation key watched when the compositor owns hotkeys", () => {
+  const mgr = makeManager({ dictation: "Control+Super", agent: "Alt+Super" });
+  assert.deepEqual(mgr.getNativeListenerKeys("push", true), ["Control+Super"]);
+});
+
+test("push mode with a compositor watches a regular dictation key too", () => {
+  const mgr = makeManager({ dictation: "Insert", voiceAgent: "Control+Alt" });
+  assert.deepEqual(mgr.getNativeListenerKeys("push", true), ["Insert"]);
+});
