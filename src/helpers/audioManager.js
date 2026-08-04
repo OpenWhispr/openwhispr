@@ -57,7 +57,7 @@ import {
 import { resolveDictationAgentInference } from "./dictationAgentInference";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
-import { evaluateFinishedRecording } from "./recordingValidation";
+import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
@@ -1004,12 +1004,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._batchSegments = [];
     const segmentsCount = segments.filter((segment) => segment?.size > 0).length;
     let audioBlob = null;
+    let salvagedRecording = false;
     try {
       audioBlob = await this.mergeRecordedSegments(segments);
     } catch (error) {
       logger.error("Failed to assemble recovered recording", { error: error.message }, "audio");
       // Salvage the largest segment rather than dropping the whole recording.
       audioBlob = this.getLargestRecordedSegment(segments);
+      salvagedRecording = !!audioBlob;
     }
     audioBlob = audioBlob || new Blob([], { type: this.recordingMimeType || "audio/webm" });
     this.lastAudioBlob = audioBlob;
@@ -1054,6 +1056,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     await this.processAudio(audioBlob, {
       durationSeconds,
+      ...(salvagedRecording ? { salvagedRecording: true } : {}),
       ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
     });
   }
@@ -1326,6 +1329,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         model: activeModel || null,
       };
 
+      result = withSalvageWarning(result, metadata.salvagedRecording);
       this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {

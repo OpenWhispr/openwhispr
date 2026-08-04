@@ -139,17 +139,27 @@ class ParakeetServerManager {
       for (let offset = 0; offset < samples.length; offset += maxSegmentBytes) {
         const end = Math.min(offset + maxSegmentBytes, samples.length);
         const segment = samples.subarray(offset, end);
-        const result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
+        let result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
         totalElapsed += result.elapsed || 0;
         if (result.truncated) truncated = true;
-        if (result.text) {
-          texts.push(result.text);
-        } else {
-          debugLogger.warn("Parakeet segment returned empty text", {
+        if (!result.text && computeFloat32RMS(segment) >= SILENCE_RMS_THRESHOLD) {
+          // An empty decode of audible audio silently amputates the transcript
+          // (#1435: dictation openings dropped); retry once before conceding.
+          debugLogger.warn("Parakeet segment returned empty text, retrying", {
             segmentIndex: offset / maxSegmentBytes,
             segmentDuration: segment.length / BYTES_PER_SAMPLE / SAMPLE_RATE,
           });
+          result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
+          totalElapsed += result.elapsed || 0;
+          if (result.truncated) truncated = true;
+          if (!result.text) {
+            truncated = true;
+            debugLogger.warn("Parakeet segment still empty after retry; transcript truncated", {
+              segmentIndex: offset / maxSegmentBytes,
+            });
+          }
         }
+        if (result.text) texts.push(result.text);
       }
 
       const text = texts.join(" ");
