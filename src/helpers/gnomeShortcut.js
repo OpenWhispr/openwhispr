@@ -1,9 +1,8 @@
 const { execFileSync } = require("child_process");
 const debugLogger = require("./debugLogger");
+const DBusToggleService = require("./dbusToggleService");
 
-const DBUS_SERVICE_NAME = "com.openwhispr.App";
-const DBUS_OBJECT_PATH = "/com/openwhispr/App";
-const DBUS_INTERFACE = "com.openwhispr.App";
+const { DBUS_SERVICE_NAME, DBUS_OBJECT_PATH, DBUS_INTERFACE } = DBusToggleService;
 
 // Per-slot gsettings paths and display names
 const SLOT_CONFIG = {
@@ -65,19 +64,6 @@ const ELECTRON_TO_GNOME_KEY_MAP = {
   right: "Right",
 };
 
-let dbus = null;
-
-function getDBus() {
-  if (dbus) return dbus;
-  try {
-    dbus = require("@homebridge/dbus-native");
-    return dbus;
-  } catch (err) {
-    debugLogger.log("[GnomeShortcut] Failed to load dbus-native:", err.message);
-    return null;
-  }
-}
-
 function getSlotConfig(slotName) {
   const config = SLOT_CONFIG[slotName];
   if (!config) {
@@ -86,14 +72,12 @@ function getSlotConfig(slotName) {
   return config;
 }
 
+// Registers global shortcuts as GNOME gsettings custom-keybindings whose command
+// dbus-sends to the shared com.openwhispr.App endpoint (owned by hotkeyManager's
+// DBusToggleService). This class only does gsettings — callback wiring to the bus
+// lives in hotkeyManager.
 class GnomeShortcutManager {
   constructor() {
-    this.bus = null;
-    this.dictationCallback = null;
-    this.agentCallback = null;
-    this.meetingCallback = null;
-    this.voiceAgentCallback = null;
-    this.translationCallback = null;
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -109,101 +93,6 @@ class GnomeShortcutManager {
 
   static isWayland() {
     return process.env.XDG_SESSION_TYPE === "wayland";
-  }
-
-  /**
-   * Set or update the agent callback after initial D-Bus service initialisation.
-   * This supports the case where the dictation hotkey is set up first and the
-   * agent callback is only available later (after agent window creation).
-   */
-  setAgentCallback(callback) {
-    this.agentCallback = callback;
-    debugLogger.log("[GnomeShortcut] Agent callback registered");
-  }
-
-  setMeetingCallback(callback) {
-    this.meetingCallback = callback;
-    debugLogger.log("[GnomeShortcut] Meeting callback registered");
-  }
-
-  setVoiceAgentCallback(callback) {
-    this.voiceAgentCallback = callback;
-    debugLogger.log("[GnomeShortcut] Voice agent callback registered");
-  }
-
-  setTranslationCallback(callback) {
-    this.translationCallback = callback;
-    debugLogger.log("[GnomeShortcut] Translation callback registered");
-  }
-
-  async initDBusService(dictationCallback) {
-    this.dictationCallback = dictationCallback;
-
-    const dbusModule = getDBus();
-    if (!dbusModule) {
-      return false;
-    }
-
-    try {
-      this.bus = dbusModule.sessionBus();
-      // Without a listener, async socket errors (e.g. a stale
-      // DBUS_SESSION_BUS_ADDRESS) crash the process as an unhandled
-      // "error" event — sessionBus() returns before connecting.
-      this.bus.connection.on("error", (err) => {
-        debugLogger.log("[GnomeShortcut] D-Bus connection error:", err.message);
-      });
-      this.bus.requestName(DBUS_SERVICE_NAME, 0);
-      this.bus.exportInterface(
-        {
-          Toggle: () => {
-            if (this.dictationCallback) {
-              this.dictationCallback();
-            }
-          },
-          ToggleAgent: () => {
-            if (this.agentCallback) {
-              this.agentCallback();
-            }
-          },
-          ToggleMeeting: () => {
-            if (this.meetingCallback) {
-              this.meetingCallback();
-            }
-          },
-          ToggleVoiceAgent: () => {
-            if (this.voiceAgentCallback) {
-              this.voiceAgentCallback();
-            }
-          },
-          ToggleTranslation: () => {
-            if (this.translationCallback) {
-              this.translationCallback();
-            }
-          },
-        },
-        DBUS_OBJECT_PATH,
-        {
-          name: DBUS_INTERFACE,
-          methods: {
-            Toggle: ["", ""],
-            ToggleAgent: ["", ""],
-            ToggleMeeting: ["", ""],
-            ToggleVoiceAgent: ["", ""],
-            ToggleTranslation: ["", ""],
-          },
-        }
-      );
-
-      debugLogger.log("[GnomeShortcut] D-Bus service initialized successfully");
-      return true;
-    } catch (err) {
-      debugLogger.log("[GnomeShortcut] Failed to initialize D-Bus service:", err.message);
-      if (this.bus) {
-        this.bus.connection.end();
-        this.bus = null;
-      }
-      return false;
-    }
   }
 
   static isValidShortcut(shortcut) {
@@ -492,12 +381,9 @@ class GnomeShortcutManager {
     return modifiers + gnomeKey;
   }
 
-  close() {
-    if (this.bus) {
-      this.bus.connection.end();
-      this.bus = null;
-    }
-  }
+  // The shared D-Bus endpoint is owned/closed by hotkeyManager; nothing to tear
+  // down here beyond the gsettings keybindings (removed via unregisterKeybinding).
+  close() {}
 }
 
 module.exports = GnomeShortcutManager;
