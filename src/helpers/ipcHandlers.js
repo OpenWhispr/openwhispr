@@ -7444,22 +7444,16 @@ class IPCHandlers {
    * the renderer so the settings store reflects the change without a reload.
    */
   _ensureNoteFormattingConfigured(modelId) {
-    const currentProvider = process.env.NOTE_FORMATTING_PROVIDER;
-    const currentModel = process.env.NOTE_FORMATTING_MODEL;
-    if (currentProvider && currentModel) return;
-
-    process.env.NOTE_FORMATTING_PROVIDER = "local";
-    process.env.NOTE_FORMATTING_MODEL = modelId;
-    this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-    this.broadcastToWindows("note-formatting-auto-configured", {
-      provider: "local",
-      model: modelId,
+    const { ensureNoteFormattingConfigured } = require("./noteFormattingConfig");
+    ensureNoteFormattingConfigured({
+      env: process.env,
+      modelId,
+      onConfigured: (config) => {
+        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+        this.broadcastToWindows("note-formatting-auto-configured", config);
+        debugLogger.info("Auto-configured noteFormatting to local Gemma", config, "startup");
+      },
     });
-    debugLogger.info(
-      "Auto-configured noteFormatting to local Gemma",
-      { provider: "local", model: modelId },
-      "startup"
-    );
   }
 
   /**
@@ -7492,13 +7486,15 @@ class IPCHandlers {
   }
 
   _enqueuePostCallPipeline(noteId) {
-    if (this._autoPostCallPipelineDisabled) {
-      debugLogger.info("Post-call pipeline disabled by user setting", {}, "meeting");
-      return;
-    }
-    this.backgroundJobQueue.enqueue(`post-call-${noteId}`, () =>
-      this.postCallPipelineManager.run(noteId)
-    );
+    const { enqueuePostCallPipeline } = require("./postCallAutoEnqueue");
+    const enqueued = enqueuePostCallPipeline({
+      noteId,
+      disabled: this._autoPostCallPipelineDisabled,
+      backgroundJobQueue: this.backgroundJobQueue,
+      postCallPipelineManager: this.postCallPipelineManager,
+      logger: debugLogger,
+    });
+    if (!enqueued) return;
 
     // Auto-download large whisper model if needed
     if (!this._largeModelDownloadTriggered) {

@@ -526,3 +526,89 @@ test("skips retranscribe when large model not downloaded yet", async () => {
     delete process.env.NOTE_FORMATTING_MODEL;
   }
 });
+
+// The tests above assert on broadcast status events. A step can emit
+// "complete" without having written anything, so assert the actual writes too.
+test("the title step writes the generated title to the note", async () => {
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = createMocks();
+  const writes = [];
+  mocks.databaseManager.updateNote = (id, updates) => {
+    writes.push({ id, updates });
+    return { success: true };
+  };
+
+  // The shared mock keys off the prompt containing "title", which both the
+  // title and notes prompts do. Distinguish by call order instead.
+  let call = 0;
+  mocks.inference.processText = async () => {
+    call += 1;
+    return call === 1 ? "Test Meeting Title" : "## Summary\nGenerated notes body";
+  };
+
+  process.env.NOTE_FORMATTING_PROVIDER = "openai";
+  process.env.NOTE_FORMATTING_MODEL = "gpt-5.5";
+
+  try {
+    const manager = new PostCallPipelineManager({
+      broadcast: mocks.broadcast,
+      databaseManager: mocks.databaseManager,
+      whisperManager: mocks.whisperManager,
+      diarizationManager: mocks.diarizationManager,
+      inference: mocks.inference,
+      convertToWav: mocks.convertToWav,
+    });
+
+    await manager.run(1, { fromStep: "title" });
+
+    const titleWrite = writes.find((w) => w.updates.title !== undefined);
+    assert.ok(titleWrite, "the pipeline must persist a title, not merely report title:complete");
+    assert.equal(titleWrite.updates.title, "Test Meeting Title");
+
+    const notesWrite = writes.find((w) => w.updates.enhanced_content !== undefined);
+    assert.ok(notesWrite, "the pipeline must persist generated notes");
+    assert.match(notesWrite.updates.enhanced_content, /Generated notes body/);
+  } finally {
+    delete process.env.NOTE_FORMATTING_PROVIDER;
+    delete process.env.NOTE_FORMATTING_MODEL;
+  }
+});
+
+// Regression: an unconfigured noteFormatting scope once shipped as a release
+// that generated no titles and no notes, because _getInferenceConfig returns
+// null and every AI step is skipped without surfacing an error.
+test("no title or notes are written when noteFormatting is unconfigured", async () => {
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = createMocks();
+  const writes = [];
+  mocks.databaseManager.updateNote = (id, updates) => {
+    writes.push({ id, updates });
+    return { success: true };
+  };
+  let inferenceCalls = 0;
+  mocks.inference.processText = async () => {
+    inferenceCalls += 1;
+    return "should not be reached";
+  };
+
+  delete process.env.NOTE_FORMATTING_PROVIDER;
+  delete process.env.NOTE_FORMATTING_MODEL;
+
+  const manager = new PostCallPipelineManager({
+    broadcast: mocks.broadcast,
+    databaseManager: mocks.databaseManager,
+    whisperManager: mocks.whisperManager,
+    diarizationManager: mocks.diarizationManager,
+    inference: mocks.inference,
+    convertToWav: mocks.convertToWav,
+  });
+
+  await manager.run(1, { fromStep: "title" });
+
+  assert.equal(inferenceCalls, 0, "no model should be called without a configured provider");
+  assert.equal(
+    writes.find((w) => w.updates.title !== undefined),
+    undefined,
+    "an unconfigured pipeline must not invent a title"
+  );
+});
