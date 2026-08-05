@@ -1,4 +1,5 @@
 const { screen } = require("electron");
+const { resolveEffectiveDisplay } = require("./effectiveWorkArea");
 
 class DragManager {
   constructor() {
@@ -72,8 +73,8 @@ class DragManager {
       const newX = cursorPos.x - this.dragOffset.x;
       const newY = cursorPos.y - this.dragOffset.y;
 
-      // Get screen bounds to keep window visible
-      const display = screen.getDisplayNearestPoint(cursorPos);
+      // Get screen bounds to keep window visible (KDE panel-strut corrected)
+      const display = resolveEffectiveDisplay(screen.getDisplayNearestPoint(cursorPos));
       const bounds = display.workArea;
 
       // Get window size for boundary calculations
