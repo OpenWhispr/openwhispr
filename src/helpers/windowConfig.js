@@ -158,16 +158,19 @@ class WindowPositionUtil {
     const workArea = display.workArea || display.bounds;
 
     let x, y;
+    // Floor on workArea.x/.y, not 0, so a monitor left of or above primary (negative
+    // origin) keeps the widget on its own work area instead of snapping to primary.
+    const bottomY = Math.max(workArea.y, workArea.y + workArea.height - height - MARGIN);
     if (position === "bottom-left") {
       x = workArea.x + MARGIN;
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      y = bottomY;
     } else if (position === "center") {
       x = Math.round(workArea.x + (workArea.width - width) / 2);
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      y = bottomY;
     } else {
       // bottom-right (default)
-      x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      x = Math.max(workArea.x, workArea.x + workArea.width - width - MARGIN);
+      y = bottomY;
     }
 
     return { x, y, width, height };
