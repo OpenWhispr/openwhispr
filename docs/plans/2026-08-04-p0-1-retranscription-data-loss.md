@@ -380,6 +380,28 @@ does, not at module entry.
 
 ---
 
+## Review notes carried into implementation
+
+Revision 3 was confirmed implementable. Three things the reviewer required that are
+easy to lose while coding:
+
+1. **`updateNote` has an allowlist** (`database.js:1144-1161`). `retranscribe_outcome`
+   must be added to `allowedFields` or every write is a silent no-op returning
+   `{success: false}` — exactly the silent-failure genre that has shipped here before.
+   A test asserts the column round-trips through `updateNote`/`getNote`.
+2. **Do not depend on event ordering for the model-missing case.** Today `_runStep`
+   emits `retranscribe:complete` when `_retranscribe` resolves null, *before* `run()`
+   broadcasts `retranscribe:pending` — a contradictory stream that the new deletion
+   rule survives only by accident. Restructure so the model-missing outcome does not
+   emit `complete` at all.
+3. **Free safety property, worth keeping:** an old segment with a missing or undefined
+   `source` makes `sources(old)` a subset of nothing, so the note is preserved. The
+   gate fails in the safe direction. Also verified: `_saveMeetingAudio`'s `encode()`
+   swallows per-track failures (`ipcHandlers.js:7838-7848`), so a note really can hold
+   a dual-source transcript with only one file on disk — the gate handles it.
+
+---
+
 ## Alternatives considered
 
 1. **Keep old segments, replace only their text.** Rejected: the large model

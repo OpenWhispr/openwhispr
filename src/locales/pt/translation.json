@@ -2472,7 +2472,13 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     },
-    "errorWithReason": "Falhou: {{step}} — {{reason}}"
+    "errorWithReason": "Falhou: {{step}} — {{reason}}",
+    "preserved": {
+      "title": "Transcrição original mantida",
+      "incompleteSourceCoverage": "A transcrição aprimorada cobriu apenas parte desta conversa, portanto a transcrição original foi mantida.",
+      "noSegments": "A transcrição aprimorada voltou sem marcações de tempo, portanto a transcrição original foi mantida.",
+      "unknown": "A transcrição aprimorada não pôde ser aplicada com segurança, portanto a transcrição original foi mantida."
+    }
   },
   "meetingTypes": {
     "picker": {

@@ -836,68 +836,40 @@ class IPCHandlers {
       const note = this.databaseManager.getNote(noteId);
       if (!note) return { success: false, error: "Note not found" };
 
-      const audioPath = note.system_audio_path || note.mic_audio_path;
-      if (!audioPath || !fs.existsSync(audioPath)) {
-        return { success: false, error: "No saved audio found for this note" };
-      }
-
       try {
-        const audioBuffer = fs.readFileSync(audioPath);
-        const model = options.model || "large";
+        const { convertToWav } = require("./ffmpegUtils");
+        const { retranscribeNoteTranscript } = require("./retranscribeNoteTranscript");
 
-        const transcriptionResult = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
-          model,
+        // Same module as the automatic pipeline: this handler used to carry a second
+        // copy of the logic, and so a second copy of the transcript-flattening bug.
+        const result = await retranscribeNoteTranscript({
+          note,
+          whisperManager: this.whisperManager,
+          diarizationManager: this.diarizationManager,
+          databaseManager: this.databaseManager,
+          convertToWav,
+          model: options.model || "large",
           language: options.language || null,
+          reloadNote: () => this.databaseManager.getNote(noteId),
         });
 
-        const rawText = transcriptionResult?.text || "";
-        if (!rawText.trim()) {
-          return { success: false, error: "Re-transcription produced empty output" };
+        if (result.outcome === "model-missing") {
+          return { success: false, error: "The large Whisper model has not been downloaded yet" };
         }
 
-        // Re-run diarization if system audio available
-        let finalTranscript = rawText;
-        const systemPath = note.system_audio_path;
-        if (systemPath && fs.existsSync(systemPath) && this.diarizationManager?.isAvailable()) {
-          try {
-            const { convertToWav } = require("./ffmpegUtils");
-            const tmpWav = path.join(os.tmpdir(), `ow-retranscribe-${noteId}-${Date.now()}.wav`);
-            await convertToWav(systemPath, tmpWav, { sampleRate: 16000, channels: 1 });
-
-            const diarResult = await this.diarizationManager.diarize(tmpWav, {});
-            if (diarResult?.segments?.length) {
-              const whisperSegments = (transcriptionResult.segments || []).map((seg, i) => ({
-                id: `retranscribe-${i}`,
-                text: seg.text,
-                source: "system",
-                timestamp: (seg.start || 0) * 1000,
-              }));
-              const enriched = this.diarizationManager.mergeWithTranscript(
-                whisperSegments,
-                diarResult.segments
-              );
-              if (enriched?.length) {
-                finalTranscript = JSON.stringify(enriched);
-              }
-            }
-            try {
-              fs.unlinkSync(tmpWav);
-            } catch (_) {}
-          } catch (diarErr) {
-            debugLogger.warn(
-              "Re-transcription diarization failed, using raw text",
-              { error: diarErr.message },
-              "meeting"
-            );
-          }
+        if (result.outcome === "preserved") {
+          this.databaseManager.updateNote(noteId, { retranscribe_outcome: result.reason });
+          return { success: true, noteId, preserved: true, reason: result.reason };
         }
 
-        this.databaseManager.updateNote(noteId, { transcript: finalTranscript });
-        const updatedNote = this.databaseManager.getNote(noteId);
+        this.databaseManager.updateNote(noteId, {
+          transcript: result.transcript,
+          retranscribe_outcome: null,
+        });
 
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win && !win.isDestroyed()) {
-          win.webContents.send("note-updated", updatedNote);
+          win.webContents.send("note-updated", this.databaseManager.getNote(noteId));
         }
 
         return { success: true, noteId };
@@ -3772,14 +3744,7 @@ class IPCHandlers {
     );
     this.postCallPipelineManager._broadcast = (channel, data) => {
       originalBroadcast(channel, data);
-      if (channel === "post-call-pipeline-status") {
-        if (data.step === "retranscribe" && data.status === "pending") {
-          this._pendingRetranscriptionNoteIds.add(data.noteId);
-        }
-        if (data.step === "pipeline" && data.status === "complete") {
-          this._pendingRetranscriptionNoteIds.delete(data.noteId);
-        }
-      }
+      this._observePipelineStatus(channel, data);
     };
 
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
@@ -7488,6 +7453,19 @@ class IPCHandlers {
       this.backgroundJobQueue.enqueue(`post-call-retry-${noteId}`, () =>
         this.postCallPipelineManager.run(noteId)
       );
+    }
+  }
+
+  // Only the retranscribe step's own outcome decides whether a note is still waiting for
+  // the large model. Clearing on pipeline:complete deleted the note in the very same run
+  // that queued it, so the set was always empty and _drainPendingRetranscriptions never
+  // had anything to drain.
+  _observePipelineStatus(channel, data) {
+    if (channel !== "post-call-pipeline-status" || data?.step !== "retranscribe") return;
+    if (data.status === "pending") {
+      this._pendingRetranscriptionNoteIds.add(data.noteId);
+    } else if (data.status !== "running") {
+      this._pendingRetranscriptionNoteIds.delete(data.noteId);
     }
   }
 

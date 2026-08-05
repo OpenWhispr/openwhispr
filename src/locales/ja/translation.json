@@ -2472,7 +2472,13 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     },
-    "errorWithReason": "失敗: {{step}} — {{reason}}"
+    "errorWithReason": "失敗: {{step}} — {{reason}}",
+    "preserved": {
+      "title": "元の文字起こしを保持しました",
+      "incompleteSourceCoverage": "改善された文字起こしは会話の一部しかカバーしていなかったため、元の文字起こしを保持しました。",
+      "noSegments": "改善された文字起こしにタイムスタンプがなかったため、元の文字起こしを保持しました。",
+      "unknown": "改善された文字起こしを安全に適用できなかったため、元の文字起こしを保持しました。"
+    }
   },
   "meetingTypes": {
     "picker": {

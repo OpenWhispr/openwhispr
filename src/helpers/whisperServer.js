@@ -687,16 +687,22 @@ class WhisperServerManager extends EventEmitter {
       debugLogger.info("Using custom dictionary prompt", { prompt: initialPrompt });
     }
 
+    // verbose_json is the only format that returns per-segment timestamps, which
+    // re-transcription needs to rebuild a speaker-labelled transcript.
     parts.push(
       `--${boundary}\r\n` +
         `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
-        `json\r\n`
+        `${options.includeSegments ? "verbose_json" : "json"}\r\n`
     );
     parts.push(`--${boundary}--\r\n`);
 
     const bodyParts = parts.map((part) => (typeof part === "string" ? Buffer.from(part) : part));
     const body = Buffer.concat(bodyParts);
 
+    return this._sendRequest(body, boundary, effectiveTimeout);
+  }
+
+  _sendRequest(body, boundary, effectiveTimeout) {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
 

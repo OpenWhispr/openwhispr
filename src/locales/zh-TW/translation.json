@@ -2472,7 +2472,13 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     },
-    "errorWithReason": "失敗：{{step}} — {{reason}}"
+    "errorWithReason": "失敗：{{step}} — {{reason}}",
+    "preserved": {
+      "title": "已保留原始逐字稿",
+      "incompleteSourceCoverage": "升級後的轉錄只涵蓋了這次對話的一部分，因此保留了原始逐字稿。",
+      "noSegments": "升級後的轉錄沒有回傳時間戳，因此保留了原始逐字稿。",
+      "unknown": "升級後的轉錄無法安全套用，因此保留了原始逐字稿。"
+    }
   },
   "meetingTypes": {
     "picker": {

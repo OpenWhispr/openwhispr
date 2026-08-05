@@ -2472,7 +2472,13 @@
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
     },
-    "errorWithReason": "Échec : {{step}} — {{reason}}"
+    "errorWithReason": "Échec : {{step}} — {{reason}}",
+    "preserved": {
+      "title": "Transcription d'origine conservée",
+      "incompleteSourceCoverage": "La transcription améliorée ne couvrait qu'une partie de cette conversation ; la transcription d'origine a été conservée.",
+      "noSegments": "La transcription améliorée est revenue sans horodatage ; la transcription d'origine a été conservée.",
+      "unknown": "La transcription améliorée n'a pas pu être appliquée sans risque ; la transcription d'origine a été conservée."
+    }
   },
   "meetingTypes": {
     "picker": {

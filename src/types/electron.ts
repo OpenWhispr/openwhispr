@@ -62,6 +62,7 @@ export interface NoteItem {
   meeting_type_id?: number | null;
   mic_audio_path?: string | null;
   system_audio_path?: string | null;
+  retranscribe_outcome?: string | null;
 }
 
 export interface FolderItem {
