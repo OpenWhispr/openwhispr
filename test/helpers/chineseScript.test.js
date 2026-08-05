@@ -131,17 +131,12 @@ test("Whisper prompt bias and merge", async () => {
   assert.equal(mergeWhisperPrompt("  ", null), null);
 });
 
-test("mergeWhisperPrompt puts the bias first so prompt truncation keeps it", async () => {
+test("mergeWhisperPrompt puts the bias ahead of every dictionary word", async () => {
   const { mergeWhisperPrompt, getChineseScriptPromptBias } = await load();
   const bias = getChineseScriptPromptBias("simplified");
   const dictionary = Array.from({ length: 400 }, (_, i) => `term${i}`).join(", ");
   const prompt = mergeWhisperPrompt(dictionary, "simplified");
   assert.equal(prompt.startsWith(bias), true);
-
-  // audioManager truncates to MAX_PROMPT_CHARS then back to the last comma;
-  // the bias sits ahead of every dictionary word, so it always survives.
-  const MAX_PROMPT_CHARS = 890;
-  assert.equal(prompt.length > MAX_PROMPT_CHARS, true);
-  const truncated = prompt.slice(0, MAX_PROMPT_CHARS);
-  assert.equal(truncated.slice(0, truncated.lastIndexOf(",")).startsWith(bias), true);
+  // audioManager caps the dictionary before merging, so the bias is never
+  // trimmed away — see dictionaryPrompt.test.js.
 });

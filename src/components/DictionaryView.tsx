@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   BookOpen,
@@ -13,13 +13,117 @@ import {
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
-import { ConfirmDialog } from "./ui/dialog";
+import {
+  ConfirmDialog,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/useToast";
 import SnippetsView from "./SnippetsView";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
+import { selectPruneCandidates } from "../helpers/dictionaryPrune";
+import type { DictionaryUsageEntry } from "../types/electron";
+
+type DictionarySortMode = "usage" | "recent";
+
+function PruneUnusedDialog({
+  open,
+  onOpenChange,
+  candidates,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  candidates: DictionaryUsageEntry[];
+  onConfirm: (words: string[]) => void;
+}) {
+  const { t } = useTranslation();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const wasOpen = useRef(false);
+
+  // Snapshot only on the open transition: a background refetch changing
+  // `candidates` must not silently re-check words the user unchecked.
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      setSelected(new Set(candidates.map((c) => c.word)));
+    }
+    wasOpen.current = open;
+  }, [open, candidates]);
+
+  const selectedCandidates = candidates.filter((c) => selected.has(c.word));
+
+  const toggleWord = (word: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(word)) {
+        next.delete(word);
+      } else {
+        next.add(word);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>{t("dictionary.pruneTitle")}</DialogTitle>
+          <DialogDescription>{t("dictionary.pruneDescription")}</DialogDescription>
+        </DialogHeader>
+        <div className="max-h-56 overflow-y-auto rounded-md border border-foreground/8 dark:border-white/6 px-3 py-1">
+          <ul>
+            {candidates.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-center gap-2.5 h-8 border-b border-foreground/4 dark:border-white/3 last:border-b-0"
+              >
+                <input
+                  type="checkbox"
+                  id={`prune-word-${entry.id}`}
+                  checked={selected.has(entry.word)}
+                  onChange={() => toggleWord(entry.word)}
+                  className="accent-primary shrink-0"
+                />
+                <label
+                  htmlFor={`prune-word-${entry.id}`}
+                  className="flex-1 text-xs truncate text-foreground/60 cursor-pointer"
+                >
+                  {entry.word}
+                </label>
+                {entry.source === "learned" && (
+                  <span className="text-[10px] text-foreground/25 shrink-0">
+                    {t("dictionary.autoLearned")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={selectedCandidates.length === 0}
+            onClick={() => onConfirm(selectedCandidates.map((c) => c.word))}
+          >
+            {t("dictionary.pruneConfirm", { count: selectedCandidates.length })}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function DictionaryView() {
   const { t } = useTranslation();
@@ -33,7 +137,32 @@ export default function DictionaryView() {
   const [editingWord, setEditingWord] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+  const [entries, setEntries] = useState<DictionaryUsageEntry[] | null>(null);
+  const [sortMode, setSortMode] = useState<DictionarySortMode>("usage");
+  const [showPrune, setShowPrune] = useState(false);
   const addInputRef = useRef<HTMLInputElement>(null);
+
+  // Usage metadata is display-only: on old preloads (or a failed load) entries
+  // stays null and the list falls back to the plain word order. The short
+  // delay collapses the optimistic and post-write triggers into one fetch.
+  useEffect(() => {
+    const api = window.electronAPI?.getDictionaryEntries;
+    if (!api) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api()
+        .then((rows) => {
+          if (!cancelled) setEntries(Array.isArray(rows) ? rows : null);
+        })
+        .catch(() => {
+          if (!cancelled) setEntries(null);
+        });
+    }, 150);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [customDictionary]);
 
   const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
 
@@ -42,11 +171,47 @@ export default function DictionaryView() {
     [customDictionary, agentName]
   );
 
+  // Entries arrive most-used first, so first-wins keeps the credited row when
+  // legacy case-variant duplicates share a key.
+  const entryByLower = useMemo(() => {
+    if (!entries) return null;
+    const byLower = new Map<string, DictionaryUsageEntry>();
+    for (const entry of entries) {
+      const key = entry.word.toLowerCase();
+      if (!byLower.has(key)) byLower.set(key, entry);
+    }
+    return byLower;
+  }, [entries]);
+
   const searchQuery = newWord.trim().toLowerCase();
-  const visibleWords = useMemo(
-    () =>
-      searchQuery ? userWords.filter((w) => w.toLowerCase().includes(searchQuery)) : userWords,
-    [userWords, searchQuery]
+  const visibleWords = useMemo(() => {
+    const base = searchQuery
+      ? userWords.filter((w) => w.toLowerCase().includes(searchQuery))
+      : userWords;
+    if (!entryByLower) return base;
+    // Optimistically-added words have no DB row yet; rank them newest.
+    const NEWEST = Number.MAX_SAFE_INTEGER;
+    const ranked = base.map((word, index) => ({
+      word,
+      index,
+      entry: entryByLower.get(word.toLowerCase()),
+    }));
+    ranked.sort((a, b) => {
+      if (sortMode === "recent") {
+        return (b.entry?.id ?? NEWEST) - (a.entry?.id ?? NEWEST) || a.index - b.index;
+      }
+      return (
+        (b.entry?.usage_count ?? 0) - (a.entry?.usage_count ?? 0) ||
+        (a.entry?.id ?? NEWEST) - (b.entry?.id ?? NEWEST) ||
+        a.index - b.index
+      );
+    });
+    return ranked.map((r) => r.word);
+  }, [userWords, searchQuery, entryByLower, sortMode]);
+
+  const pruneCandidates = useMemo(
+    () => (entries ? selectPruneCandidates(entries.filter((e) => e.word !== agentName)) : []),
+    [entries, agentName]
   );
 
   const addWords = useCallback(
@@ -99,6 +264,17 @@ export default function DictionaryView() {
     setEditingWord(null);
   }, [editingWord, editValue, customDictionary, updateCustomDictionary]);
 
+  const handlePruneConfirm = useCallback(
+    (words: string[]) => {
+      if (words.length > 0) {
+        updateCustomDictionary({ remove: words });
+        toast({ title: t("dictionary.pruneDone", { count: words.length }) });
+      }
+      setShowPrune(false);
+    },
+    [updateCustomDictionary, toast, t]
+  );
+
   const handleExport = useCallback(async () => {
     const result = await window.electronAPI?.exportDictionary?.(customDictionary);
     if (result?.error) {
@@ -142,6 +318,12 @@ export default function DictionaryView() {
         description={t("dictionary.clearDescription")}
         onConfirm={() => updateCustomDictionary({ remove: userWords })}
         variant="destructive"
+      />
+      <PruneUnusedDialog
+        open={showPrune}
+        onOpenChange={setShowPrune}
+        candidates={pruneCandidates}
+        onConfirm={handlePruneConfirm}
       />
 
       <div className="px-5 pt-4">
@@ -248,10 +430,48 @@ export default function DictionaryView() {
             {userWords.length > 0 && (
               <>
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold text-foreground/40">
-                    {t("dictionary.yourDictionary")}
-                  </h3>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <h3 className="text-xs font-semibold text-foreground/40 shrink-0">
+                      {t("dictionary.yourDictionary")}
+                    </h3>
+                    {entryByLower && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <button
+                          onClick={() => setSortMode("usage")}
+                          aria-pressed={sortMode === "usage"}
+                          className={`transition-colors ${
+                            sortMode === "usage"
+                              ? "text-foreground/60"
+                              : "text-foreground/20 hover:text-foreground/45"
+                          }`}
+                        >
+                          {t("dictionary.sortMostUsed")}
+                        </button>
+                        <span className="text-foreground/15">·</span>
+                        <button
+                          onClick={() => setSortMode("recent")}
+                          aria-pressed={sortMode === "recent"}
+                          className={`transition-colors ${
+                            sortMode === "recent"
+                              ? "text-foreground/60"
+                              : "text-foreground/20 hover:text-foreground/45"
+                          }`}
+                        >
+                          {t("dictionary.sortRecentlyAdded")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3">
+                    {pruneCandidates.length > 0 && (
+                      <button
+                        onClick={() => setShowPrune(true)}
+                        aria-label={t("dictionary.removeUnused")}
+                        className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
+                      >
+                        {t("dictionary.removeUnused")}
+                      </button>
+                    )}
                     <button
                       onClick={() => setConfirmClear(true)}
                       aria-label={t("dictionary.clearAll")}
@@ -282,6 +502,7 @@ export default function DictionaryView() {
               <ul>
                 {visibleWords.map((word) => {
                   const isEditing = editingWord === word;
+                  const usageCount = entryByLower?.get(word.toLowerCase())?.usage_count ?? 0;
                   return (
                     <li
                       key={word}
@@ -301,6 +522,11 @@ export default function DictionaryView() {
                         />
                       ) : (
                         <span className="flex-1 text-xs truncate text-foreground/60">{word}</span>
+                      )}
+                      {!isEditing && usageCount > 0 && (
+                        <span className="text-[10px] tabular-nums text-foreground/25 shrink-0">
+                          {t("dictionary.usageCount", { count: usageCount })}
+                        </span>
                       )}
                       {!isEditing && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
