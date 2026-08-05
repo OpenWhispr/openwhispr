@@ -76,6 +76,7 @@ export interface ApiKeySettings {
   geminiApiKey: string;
   groqApiKey: string;
   xaiApiKey: string;
+  smallestApiKey: string;
   mistralApiKey: string;
   openrouterApiKey: string;
   cortiClientId: string;
@@ -271,6 +272,7 @@ function useSettingsInternal() {
     geminiApiKey: store.geminiApiKey,
     groqApiKey: store.groqApiKey,
     xaiApiKey: store.xaiApiKey,
+    smallestApiKey: store.smallestApiKey,
     mistralApiKey: store.mistralApiKey,
     openrouterApiKey: store.openrouterApiKey,
     tinfoilApiKey: store.tinfoilApiKey,

@@ -207,6 +207,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
   { id: "corti", name: "Corti" },
+  { id: "smallest", name: "Smallest AI" },
   { id: "tinfoil", name: "Tinfoil" },
   { id: "custom", name: "Custom" },
 ];
@@ -216,6 +217,7 @@ interface ProviderCredentialField {
     | "openaiApiKey"
     | "groqApiKey"
     | "xaiApiKey"
+    | "smallestApiKey"
     | "mistralApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
@@ -243,6 +245,10 @@ const PROVIDER_CREDENTIALS: Record<
   xai: {
     consoleUrl: "https://console.x.ai",
     fields: [{ key: "xaiApiKey", input: "secret" }],
+  },
+  smallest: {
+    consoleUrl: "https://waves.smallest.ai",
+    fields: [{ key: "smallestApiKey", input: "secret" }],
   },
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
@@ -346,6 +352,8 @@ export default function TranscriptionModelPicker({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
+  const smallestApiKey = useSettingsStore((s) => s.smallestApiKey);
+  const setSmallestApiKey = useSettingsStore((s) => s.setSmallestApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
@@ -740,6 +748,7 @@ export default function TranscriptionModelPicker({
     openaiApiKey,
     groqApiKey,
     xaiApiKey,
+    smallestApiKey,
     mistralApiKey,
     cortiClientId,
     cortiClientSecret,
@@ -751,6 +760,7 @@ export default function TranscriptionModelPicker({
     openaiApiKey: setOpenaiApiKey,
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
+    smallestApiKey: setSmallestApiKey,
     mistralApiKey: setMistralApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,

@@ -14,6 +14,7 @@ import azureIcon from "@/assets/icons/providers/azure.svg";
 import vertexIcon from "@/assets/icons/providers/vertex.svg";
 import xaiIcon from "@/assets/icons/providers/xai.svg";
 import cortiIcon from "@/assets/icons/providers/corti.svg";
+import smallestIcon from "@/assets/icons/providers/smallest.svg";
 import openrouterIcon from "@/assets/icons/providers/openrouter.svg";
 import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
 
@@ -35,6 +36,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   vertex: vertexIcon,
   xai: xaiIcon,
   corti: cortiIcon,
+  smallest: smallestIcon,
   openrouter: openrouterIcon,
   tinfoil: tinfoilIcon,
 };
@@ -51,6 +53,7 @@ export const MONOCHROME_PROVIDERS = [
   "liquidai",
   "xai",
   "corti",
+  "smallest",
   "openrouter",
   "tinfoil",
 ] as const;
