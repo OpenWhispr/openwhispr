@@ -623,6 +623,7 @@ export interface SettingsState
   setXaiApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
   setOpenrouterApiKey: (key: string) => void;
+  setAtlascloudApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
   setCortiApiKey: (key: string) => void;
@@ -831,6 +832,7 @@ const SECRET_IPC_SAVERS = {
   xai: "saveXaiKey",
   mistral: "saveMistralKey",
   openrouter: "saveOpenrouterKey",
+  atlascloud: "saveAtlascloudKey",
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
   cortiApiKey: "saveCortiKey",
@@ -873,6 +875,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "xaiApiKey",
   "mistralApiKey",
   "openrouterApiKey",
+  "atlascloudApiKey",
   "cortiClientId",
   "cortiClientSecret",
   "cortiApiKey",
@@ -897,6 +900,7 @@ function invalidateApiKeyCaches(
     | "tinfoil"
     | "custom"
     | "openrouter"
+    | "atlascloud"
     | "corti"
 ) {
   if (provider) {
@@ -992,6 +996,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   xaiApiKey: "",
   mistralApiKey: "",
   openrouterApiKey: "",
+  atlascloudApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
   cortiApiKey: "",
@@ -1486,6 +1491,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
+  setAtlascloudApiKey: createSecretSetter("atlascloudApiKey", "atlascloud", "atlascloud"),
   setCortiClientId: (key: string) => {
     set({ cortiClientId: key });
     debouncedSaveSecret("cortiClientId", key);
@@ -2247,6 +2253,7 @@ export async function initializeSettings(): Promise<void> {
         xai,
         mistral,
         openrouter,
+        atlascloud,
         cortiClientId,
         cortiClientSecret,
         cortiApiKey,
@@ -2266,6 +2273,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getXaiKey?.(),
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getOpenrouterKey?.(),
+        window.electronAPI.getAtlascloudKey?.(),
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
         window.electronAPI.getCortiKey?.(),
@@ -2287,6 +2295,7 @@ export async function initializeSettings(): Promise<void> {
         xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
         openrouterApiKey: openrouter || "",
+        atlascloudApiKey: atlascloud || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",
         cortiApiKey: cortiApiKey || "",

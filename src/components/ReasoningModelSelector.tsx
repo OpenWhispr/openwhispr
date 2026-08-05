@@ -43,6 +43,7 @@ const CLOUD_PROVIDER_IDS = [
   "anthropic",
   "gemini",
   "groq",
+  "atlascloud",
   OPENROUTER_TAB,
   "tinfoil",
   "corti",
@@ -334,6 +335,8 @@ export default function ReasoningModelSelector({
   const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const atlascloudApiKey = useSettingsStore((s) => s.atlascloudApiKey);
+  const setAtlascloudApiKey = useSettingsStore((s) => s.setAtlascloudApiKey);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
@@ -627,6 +630,21 @@ export default function ReasoningModelSelector({
                     <ApiKeyInput
                       apiKey={groqApiKey}
                       setApiKey={setGroqApiKey}
+                      label=""
+                      helpText=""
+                    />
+                  </div>
+                )}
+
+                {selectedCloudProvider === "atlascloud" && (
+                  <div className="space-y-2">
+                    <div className="flex items-baseline justify-between">
+                      <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
+                      <GetApiKeyLink url="https://www.atlascloud.ai/" />
+                    </div>
+                    <ApiKeyInput
+                      apiKey={atlascloudApiKey}
+                      setApiKey={setAtlascloudApiKey}
                       label=""
                       helpText=""
                     />

@@ -96,7 +96,15 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
+      | "openai"
+      | "anthropic"
+      | "gemini"
+      | "groq"
+      | "tinfoil"
+      | "custom"
+      | "openrouter"
+      | "atlascloud"
+      | "corti"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -135,6 +143,7 @@ class ReasoningService extends BaseReasoningService {
           gemini: () => window.electronAPI.getGeminiKey(),
           groq: () => window.electronAPI.getGroqKey(),
           openrouter: () => window.electronAPI.getOpenrouterKey(),
+          atlascloud: () => window.electronAPI.getAtlascloudKey(),
           tinfoil: () => window.electronAPI.getTinfoilKey?.(),
           corti: () => window.electronAPI.getCortiKey?.(),
         };
@@ -420,7 +429,15 @@ class ReasoningService extends BaseReasoningService {
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
       const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom" | "openrouter" | "corti";
+        | "openai"
+        | "groq"
+        | "gemini"
+        | "anthropic"
+        | "tinfoil"
+        | "custom"
+        | "openrouter"
+        | "atlascloud"
+        | "corti";
       const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
 
@@ -436,6 +453,9 @@ class ReasoningService extends BaseReasoningService {
           break;
         case "openrouter":
           endpoint = buildApiUrl(API_ENDPOINTS.OPENROUTER_BASE, "/chat/completions");
+          break;
+        case "atlascloud":
+          endpoint = buildApiUrl(API_ENDPOINTS.ATLASCLOUD_BASE, "/chat/completions");
           break;
         case "tinfoil":
           throw new Error("Tinfoil streaming must use the verified SDK transport");
@@ -641,15 +661,25 @@ class ReasoningService extends BaseReasoningService {
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
       const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom" | "openrouter" | "corti";
+        | "openai"
+        | "groq"
+        | "gemini"
+        | "anthropic"
+        | "tinfoil"
+        | "custom"
+        | "openrouter"
+        | "atlascloud"
+        | "corti";
       const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
       baseURL =
         provider === "openrouter"
           ? API_ENDPOINTS.OPENROUTER_BASE
-          : provider === "custom"
-            ? config.baseUrl?.trim() || getConfiguredOpenAIBase()
-            : undefined;
+          : provider === "atlascloud"
+            ? API_ENDPOINTS.ATLASCLOUD_BASE
+            : provider === "custom"
+              ? config.baseUrl?.trim() || getConfiguredOpenAIBase()
+              : undefined;
     }
     const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
     // OpenRouter ids are never in the local registry, so the supportsThinking
@@ -959,6 +989,7 @@ class ReasoningService extends BaseReasoningService {
       const geminiKey = await window.electronAPI?.getGeminiKey?.();
       const groqKey = await window.electronAPI?.getGroqKey?.();
       const openrouterKey = await window.electronAPI?.getOpenrouterKey?.();
+      const atlascloudKey = await window.electronAPI?.getAtlascloudKey?.();
       const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
       const cortiKey = await window.electronAPI?.getCortiKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
@@ -969,6 +1000,7 @@ class ReasoningService extends BaseReasoningService {
         hasGemini: !!geminiKey,
         hasGroq: !!groqKey,
         hasOpenrouter: !!openrouterKey,
+        hasAtlascloud: !!atlascloudKey,
         hasTinfoil: !!tinfoilKey,
         hasCorti: !!cortiKey,
         hasLocal: !!localAvailable,
@@ -980,6 +1012,7 @@ class ReasoningService extends BaseReasoningService {
         geminiKey ||
         groqKey ||
         openrouterKey ||
+        atlascloudKey ||
         tinfoilKey ||
         cortiKey ||
         localAvailable
@@ -1004,6 +1037,7 @@ class ReasoningService extends BaseReasoningService {
       | "tinfoil"
       | "custom"
       | "openrouter"
+      | "atlascloud"
       | "corti"
   ): void {
     if (provider) {
