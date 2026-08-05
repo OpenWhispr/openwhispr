@@ -140,14 +140,24 @@ class PostCallPipelineManager {
     }
 
     // Step 2: Generate title
+    //
+    // Guarded twice on purpose. The first check keeps "reprocess all meetings"
+    // from spending one title call per note on the user's own API key only to
+    // discard every result; the second closes the race the first cannot, since
+    // re-transcription runs for minutes and the user can title the note in that
+    // window.
     if (fromIndex <= 1) {
-      const titleResult = await this._runStep(noteId, "title", () =>
-        this._generateTitle(transcript)
-      );
-      if (titleResult.error) return;
-      if (titleResult.value && (await this._mayGenerateTitle(noteId))) {
-        this._db.updateNote(noteId, { title: titleResult.value });
-        this._broadcastNoteUpdate(noteId);
+      if (await this._mayGenerateTitle(noteId)) {
+        const titleResult = await this._runStep(noteId, "title", () =>
+          this._generateTitle(transcript)
+        );
+        if (titleResult.error) return;
+        if (titleResult.value && (await this._mayGenerateTitle(noteId))) {
+          this._db.updateNote(noteId, { title: titleResult.value });
+          this._broadcastNoteUpdate(noteId);
+        }
+      } else {
+        this._emitStatus(noteId, "title", "skipped");
       }
     }
 
@@ -220,21 +230,34 @@ class PostCallPipelineManager {
     this._emitStatus(noteId, "pipeline", "complete");
   }
 
-  // Read the title as late as possible: re-transcription can run for minutes with
-  // the large model, so the note loaded at the top of run() is long stale by the
-  // time a title is ready to be written.
+  // Reads the note itself rather than trusting run()'s snapshot: re-transcription
+  // can run for minutes with the large model, so that snapshot is long stale.
+  //
+  // Any failure answers "no". The database is closed when the app quits, which
+  // can land inside a run this long, and an escaping exception would abandon
+  // classify and notes with no terminal status — leaving the renderer on a
+  // title:complete for a title that was never written.
   async _mayGenerateTitle(noteId) {
-    const { isRegenerableNoteTitle } = await import("./regenerableNoteTitle.js");
-    const note = this._db.getNote(noteId);
-    if (!note) return false;
+    try {
+      const { isRegenerableNoteTitle } = await import("./regenerableNoteTitle.js");
+      const note = this._db.getNote(noteId);
+      if (!note) return false;
 
-    let calendarEventName = null;
-    if (note.calendar_event_id) {
-      const event = this._db.getCalendarEventById?.(note.calendar_event_id);
-      calendarEventName = event?.summary || null;
+      let calendarEventName = null;
+      if (note.calendar_event_id) {
+        const event = this._db.getCalendarEventById?.(note.calendar_event_id);
+        calendarEventName = event?.summary || null;
+      }
+
+      return isRegenerableNoteTitle(note.title, localizedTitlePlaceholders(), calendarEventName);
+    } catch (err) {
+      debugLogger.warn(
+        "Pipeline: title guard could not read the note, keeping the existing title",
+        { noteId, error: err.message },
+        "meeting"
+      );
+      return false;
     }
-
-    return isRegenerableNoteTitle(note.title, localizedTitlePlaceholders(), calendarEventName);
   }
 
   async _runStep(noteId, step, fn) {
