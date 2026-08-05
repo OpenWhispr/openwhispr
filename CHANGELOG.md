@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-08-05
+
+### Internal
+- The dependency lockfile could be corrupted silently by an out-of-date npm. Versions below 11.11.0 quietly drop the fields that tell npm which Linux build of a native dependency to install; the damaged lockfile still installs without complaint, so nothing caught it. The project now refuses to install on an npm that does this, and a CI check rebuilds the lockfile on every pull request and fails if it does not match. No effect on the app itself.
+
 ## [1.13.1] - 2026-08-05
 
 ### Fixed
