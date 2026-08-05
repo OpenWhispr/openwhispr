@@ -10,6 +10,11 @@ import type {
 } from "../types/electron";
 import type { Snippet } from "../utils/snippets";
 
+export interface DictionaryReplacement {
+  from: string;
+  to: string;
+}
+
 export interface TranscriptionSettings {
   uiLanguage: string;
   useLocalWhisper: boolean;
@@ -32,6 +37,7 @@ export interface TranscriptionSettings {
   remoteTranscriptionModel: string;
   customDictionary: string[];
   snippets: Snippet[];
+  dictionaryReplacements: DictionaryReplacement[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }
@@ -112,7 +118,11 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { applyCustomDictionaryFromExternal, applySnippetsFromExternal } = store;
+  const {
+    applyCustomDictionaryFromExternal,
+    applySnippetsFromExternal,
+    applyDictionaryReplacementsFromExternal,
+  } = store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -151,6 +161,19 @@ function useSettingsInternal() {
     });
     return unsubscribe;
   }, [applySnippetsFromExternal]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.electronAPI?.onDictionaryReplacementsUpdated)
+      return;
+    const unsubscribe = window.electronAPI.onDictionaryReplacementsUpdated(
+      (rules: DictionaryReplacement[]) => {
+        if (Array.isArray(rules)) {
+          applyDictionaryReplacementsFromExternal(rules);
+        }
+      }
+    );
+    return unsubscribe;
+  }, [applyDictionaryReplacementsFromExternal]);
 
   // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
@@ -258,6 +281,8 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     snippets: store.snippets,
     setSnippets: store.setSnippets,
+    dictionaryReplacements: store.dictionaryReplacements,
+    setDictionaryReplacements: store.setDictionaryReplacements,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,

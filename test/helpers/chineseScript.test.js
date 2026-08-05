@@ -145,3 +145,68 @@ test("mergeWhisperPrompt puts the bias first so prompt truncation keeps it", asy
   const truncated = prompt.slice(0, MAX_PROMPT_CHARS);
   assert.equal(truncated.slice(0, truncated.lastIndexOf(",")).startsWith(bias), true);
 });
+
+// ─── normalizeTranscriptScript (the pre-replacement pass) ───
+
+const loadReplacements = () => import("../../src/utils/textReplacements.js");
+
+test("normalizeTranscriptScript leaves text alone with no script target", async () => {
+  const { normalizeTranscriptScript } = await load();
+  assert.equal(
+    await normalizeTranscriptScript("the wheels look great", "en", "traditional"),
+    "the wheels look great"
+  );
+  assert.equal(
+    await normalizeTranscriptScript("软件，我喜欢", "auto", "as-transcribed"),
+    "软件，我喜欢"
+  );
+  assert.equal(
+    await normalizeTranscriptScript("会議の資料，確認", "auto", "simplified"),
+    "会議の資料，確認"
+  );
+  assert.equal(await normalizeTranscriptScript("", "zh-TW", "traditional"), "");
+  assert.equal(await normalizeTranscriptScript(undefined, "auto", "traditional"), undefined);
+});
+
+test("normalizeTranscriptScript follows the STT language over the preference", async () => {
+  const { normalizeTranscriptScript } = await load();
+  assert.equal(
+    await normalizeTranscriptScript("軟體，我喜歡", "zh-CN", "traditional"),
+    "软件，我喜欢"
+  );
+  assert.equal(
+    await normalizeTranscriptScript("软件，我喜欢", "zh-TW", "simplified"),
+    "軟體，我喜歡"
+  );
+});
+
+test("a traditional rule matches a simplified transcript after normalization", async () => {
+  const { normalizeTranscriptScript } = await load();
+  const { applyTextReplacements } = await loadReplacements();
+  const rules = [{ from: "軟體", to: "OpenWhispr" }];
+
+  // Whisper's zh output is not deterministically one script, so the raw text misses.
+  assert.equal(applyTextReplacements("软件，我喜欢", rules), "软件，我喜欢");
+
+  const scripted = await normalizeTranscriptScript("软件，我喜欢", "auto", "traditional");
+  assert.equal(applyTextReplacements(scripted, rules), "OpenWhispr，我喜歡");
+});
+
+test("a simplified rule matches a traditional transcript after normalization", async () => {
+  const { normalizeTranscriptScript } = await load();
+  const { applyTextReplacements } = await loadReplacements();
+  const rules = [{ from: "软件", to: "OpenWhispr" }];
+
+  assert.equal(applyTextReplacements("軟體，我喜歡", rules), "軟體，我喜歡");
+
+  const scripted = await normalizeTranscriptScript("軟體，我喜歡", "auto", "simplified");
+  assert.equal(applyTextReplacements(scripted, rules), "OpenWhispr，我喜欢");
+});
+
+test("non-Chinese transcripts reach the replacement engine untouched", async () => {
+  const { normalizeTranscriptScript } = await load();
+  const { applyTextReplacements } = await loadReplacements();
+  const rules = [{ from: "wheels", to: "views" }];
+  const scripted = await normalizeTranscriptScript("the wheels look great", "en", "simplified");
+  assert.equal(applyTextReplacements(scripted, rules), "the views look great");
+});
