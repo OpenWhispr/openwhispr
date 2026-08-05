@@ -99,3 +99,82 @@ test("a disabled agent is unreachable", async () => {
 
   assert.equal(result.reachable, false);
 });
+
+test("local mode with a leftover cloud provider still routes to llama.cpp", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  // Reproduction from the report: a provider left behind by a previous
+  // configuration must not send a local-mode agent request to a cloud API.
+  const result = resolveDictationAgentInference({
+    useDictationAgent: true,
+    dictationAgentMode: "local",
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "qwen2.5-coder",
+  });
+
+  assert.equal(result.config.provider, "local");
+});
+
+test("local mode with an empty provider routes to llama.cpp", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentMode: "local",
+    dictationAgentProvider: "",
+  });
+
+  assert.equal(result.config.provider, "local");
+});
+
+test("self-hosted mode with a leftover provider routes only via the LAN url", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentMode: "self-hosted",
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "",
+    dictationAgentRemoteUrl: "http://127.0.0.1:8080/v1",
+  });
+
+  assert.equal(result.config.provider, undefined);
+  assert.equal(result.config.lanUrl, "http://127.0.0.1:8080/v1");
+});
+
+test("self-hosted mode without a remote url never keeps a leftover provider", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentMode: "self-hosted",
+    dictationAgentProvider: "openai",
+    dictationAgentRemoteUrl: "",
+  });
+
+  assert.equal(result.config.provider, undefined);
+  assert.equal(result.config.lanUrl, undefined);
+});
+
+test("providers mode keeps an explicit cloud provider", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "gpt-5-mini",
+  });
+
+  assert.equal(result.config.provider, "openai");
+});
+
+test("cloud agent mode overrides the stored provider regardless of mode", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference(
+    { ...baseSettings, dictationAgentMode: "local", dictationAgentProvider: "openai" },
+    { isCloudAgent: true }
+  );
+
+  assert.equal(result.config.provider, "openwhispr");
+});

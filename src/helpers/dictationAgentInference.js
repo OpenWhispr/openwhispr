@@ -9,12 +9,18 @@ import { resolveDictationAgentReachability } from "./dictationRouting.js";
 // running the instruction.
 export function resolveDictationAgentInference(settings, { isCloudAgent = false } = {}) {
   const model = settings.dictationAgentModel?.trim() || "";
-  const isSelfHosted =
-    settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim();
+  const mode = settings.dictationAgentMode;
+  const isSelfHosted = mode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim();
+  // Mode wins over a leftover provider: a stale cloud id would route a local or
+  // self-hosted agent request off-device. Mirrors buildNoteFormattingOverrides.
   const provider = isCloudAgent
     ? "openwhispr"
-    : settings.dictationAgentProvider?.trim() || undefined;
-  const isCustom = settings.dictationAgentMode === "providers" && provider === "custom";
+    : mode === "local"
+      ? "local"
+      : mode === "self-hosted"
+        ? undefined
+        : settings.dictationAgentProvider?.trim() || undefined;
+  const isCustom = mode === "providers" && provider === "custom";
 
   return {
     reachable: resolveDictationAgentReachability({
