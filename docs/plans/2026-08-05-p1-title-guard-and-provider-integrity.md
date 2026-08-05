@@ -92,7 +92,7 @@ fact the lookup can return null. The guard then fails **closed** — it will not
 a title the user kept. That is the safe direction.
 
 **ESM/CJS**: `await import("./regenerableNoteTitle.js")` from CJS main works, including
-inside a packaged asar (precedent at `ipcHandlers.js:3795`, `:6192`). Do not convert the
+inside a packaged asar (precedent at `ipcHandlers.js:3760`, `:6168`). Do not convert the
 module — the renderer imports it as ESM.
 
 ---
@@ -103,7 +103,7 @@ module — the renderer imports it as ESM.
 `NOTE_FORMATTING_PROVIDER=gemma` in `.env`. "gemma" is not a provider.
 
 ### Verified root cause
-`ReasoningModelSelector.tsx:500-503`:
+`ReasoningModelSelector.tsx:501-503`:
 
 ```js
   const handleLocalProviderChange = async (providerId: string) => {
@@ -206,6 +206,33 @@ already async and electronAPI-aware. Two consequences to honour:
   with it rather than being quietly contradicted.
 
 ---
+
+## Carried into implementation from the confirm pass
+
+Green-lit; three items to fold in while coding, none needing another review round:
+
+1. **Chat seed: re-check after the await.** Check
+   `localStorage.getItem("chatAgentProvider") === null` again *after* `modelCheck`
+   resolves, immediately before writing — that closes the clobber window entirely.
+   `initializeSettings()` is invoked once per window from a mount effect
+   (`useSettings.ts:111-121`) before any user interaction, and the null-check makes two
+   windows idempotent. Note honestly: once seeded the key is non-null forever, so a user
+   who later deletes the Gemma model gets "Model file not found" — the same exposure as
+   anyone who chose local then deleted the model, not introduced here, and the seed must
+   not be claimed to prevent it.
+2. **Restore effect: set the mode unconditionally.** When `localReasoningProvider ===
+   "local"`, set mode `"local"` always, and apply the derived family only when
+   `modelRegistry.getModel(reasoningModel)` resolves — it returns `undefined` for `""`
+   (`ModelRegistry.ts:166-174`), so fall back to the component default `"qwen"` when
+   nothing is downloaded. Add `reasoningModel` to the dependency array (`:425` is
+   currently `[localProviders, localReasoningProvider]`) or the family never re-derives.
+3. **Migration lives in its own module**, not exported from `settingsStore.ts`, so the
+   test does not have to execute the store's module-level code to import it.
+
+Implementation note for C1: `i18nMain.js:3-12` already bundles all **10** locales' full
+`translation.json`, so the union is `i18nMain.t(key, { lng })` over
+`SUPPORTED_UI_LANGUAGES` — no new file reads, works inside the asar, and it is plain CJS
+so the regression test can require it under `node --test`.
 
 ## Test plan
 
