@@ -11,7 +11,9 @@ function createMocks() {
     databaseManager: {
       getNote: (id) => ({
         id,
-        transcript: JSON.stringify([{ text: "hello", speaker: "speaker_0" }]),
+        transcript: JSON.stringify([
+          { text: "hello", speaker: "speaker_0", source: "system", timestamp: 0 },
+        ]),
         system_audio_path: "/tmp/test.opus",
         mic_audio_path: null,
         meeting_type_id: null,
@@ -22,7 +24,11 @@ function createMocks() {
       getMeetingTypes: () => [],
     },
     whisperManager: {
-      transcribeLocalWhisper: async () => ({ text: "hello world", segments: [] }),
+      transcribeLocalWhisper: async () => ({
+        success: true,
+        text: "hello world",
+        segments: [{ start: 0, end: 2, text: "hello world" }],
+      }),
       getModelPath: () => "/tmp/model.bin",
     },
     diarizationManager: {
@@ -46,8 +52,11 @@ test("runs steps in order: retranscribe -> title -> notes", async () => {
   const origReadFile = fs.readFileSync;
   const origUnlink = fs.unlinkSync;
   fs.existsSync = (p) => (p === "/tmp/test.opus" || p === "/tmp/model.bin") ? true : origExists(p);
-  fs.readFileSync = (p) => p.includes("ow-pipeline") ? Buffer.from("fake wav") : origReadFile(p);
-  fs.unlinkSync = (p) => { if (!p.includes("ow-pipeline")) origUnlink(p); };
+  fs.readFileSync = (...args) =>
+    typeof args[0] === "string" && args[0].includes("ow-retranscribe")
+      ? Buffer.from("fake wav")
+      : origReadFile(...args);
+  fs.unlinkSync = (p) => { if (!String(p).includes("ow-retranscribe")) origUnlink(p); };
 
   // Set env vars for inference config
   process.env.NOTE_FORMATTING_PROVIDER = "openai";
@@ -509,9 +518,11 @@ test("skips retranscribe when large model not downloaded yet", async () => {
       .filter((e) => e.channel === "post-call-pipeline-status")
       .map((e) => `${e.step}:${e.status}`);
 
-    // Retranscribe should complete (not error) — it returned null gracefully
+    // The step has not run, so it must report pending and NOT complete: the drain queue
+    // keys off this note staying pending until the model download finishes.
     assert.ok(steps.includes("retranscribe:running"));
-    assert.ok(steps.includes("retranscribe:complete"));
+    assert.ok(steps.includes("retranscribe:pending"));
+    assert.ok(!steps.includes("retranscribe:complete"));
     assert.ok(!steps.some((s) => s === "retranscribe:error"));
 
     // Title and notes should still run using the existing transcript
@@ -520,6 +531,120 @@ test("skips retranscribe when large model not downloaded yet", async () => {
     assert.ok(steps.includes("notes:running"));
     assert.ok(steps.includes("notes:complete"));
     assert.ok(steps.includes("pipeline:complete"));
+  } finally {
+    fs.existsSync = origExists;
+    delete process.env.NOTE_FORMATTING_PROVIDER;
+    delete process.env.NOTE_FORMATTING_MODEL;
+  }
+});
+
+test("a preserved re-transcription writes no transcript and is not marked pending", async () => {
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = createMocks();
+  // Dual-source transcript with only one track on disk: rewriting it from the system
+  // track alone would throw away everything the user said.
+  mocks.databaseManager.getNote = (id) => ({
+    id,
+    transcript: JSON.stringify([
+      { text: "them", speaker: "speaker_0", source: "system", timestamp: 0 },
+      { text: "me", speaker: "you", source: "mic", timestamp: 5 },
+    ]),
+    system_audio_path: "/tmp/test.opus",
+    mic_audio_path: null,
+    meeting_type_id: null,
+  });
+  const transcriptWrites = [];
+  mocks.databaseManager.updateNote = (id, updates) => {
+    if (updates.transcript !== undefined) transcriptWrites.push(updates.transcript);
+    return { success: true };
+  };
+
+  const fs = require("fs");
+  const origExists = fs.existsSync;
+  fs.existsSync = (p) => (p === "/tmp/test.opus" || p === "/tmp/model.bin" ? true : origExists(p));
+
+  process.env.NOTE_FORMATTING_PROVIDER = "openai";
+  process.env.NOTE_FORMATTING_MODEL = "gpt-5.5";
+
+  try {
+    const manager = new PostCallPipelineManager({
+      broadcast: mocks.broadcast,
+      databaseManager: mocks.databaseManager,
+      whisperManager: mocks.whisperManager,
+      diarizationManager: mocks.diarizationManager,
+      inference: mocks.inference,
+      convertToWav: mocks.convertToWav,
+    });
+
+    await manager.run(1);
+
+    assert.deepEqual(transcriptWrites, [], "must not overwrite a transcript it cannot replace");
+
+    const retranscribe = mocks.events.filter(
+      (e) => e.channel === "post-call-pipeline-status" && e.step === "retranscribe"
+    );
+    const terminal = retranscribe.at(-1);
+    assert.equal(terminal.status, "complete");
+    assert.equal(terminal.preserved, true);
+    assert.equal(terminal.reason, "incomplete-source-coverage");
+    assert.ok(
+      !retranscribe.some((e) => e.status === "pending"),
+      "preserved must not leak into the pending-retranscription set"
+    );
+  } finally {
+    fs.existsSync = origExists;
+    delete process.env.NOTE_FORMATTING_PROVIDER;
+    delete process.env.NOTE_FORMATTING_MODEL;
+  }
+});
+
+test("a preserved re-transcription still runs the later steps on the kept transcript", async () => {
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = createMocks();
+  mocks.databaseManager.getNote = (id) => ({
+    id,
+    transcript: JSON.stringify([
+      { text: "the kept words", speaker: "speaker_0", source: "system", timestamp: 0 },
+      { text: "and my half", speaker: "you", source: "mic", timestamp: 5 },
+    ]),
+    system_audio_path: "/tmp/test.opus",
+    mic_audio_path: null,
+    meeting_type_id: null,
+  });
+  const titleInputs = [];
+  mocks.inference.processText = async (text, opts) => {
+    // The notes prompt also mentions "title", so match the title prompt itself.
+    if (opts.systemPrompt.startsWith("Generate a concise")) {
+      titleInputs.push(text);
+      return "Kept Title";
+    }
+    return "## Notes";
+  };
+
+  const fs = require("fs");
+  const origExists = fs.existsSync;
+  fs.existsSync = (p) => (p === "/tmp/test.opus" || p === "/tmp/model.bin" ? true : origExists(p));
+
+  process.env.NOTE_FORMATTING_PROVIDER = "openai";
+  process.env.NOTE_FORMATTING_MODEL = "gpt-5.5";
+
+  try {
+    const manager = new PostCallPipelineManager({
+      broadcast: mocks.broadcast,
+      databaseManager: mocks.databaseManager,
+      whisperManager: mocks.whisperManager,
+      diarizationManager: mocks.diarizationManager,
+      inference: mocks.inference,
+      convertToWav: mocks.convertToWav,
+    });
+
+    await manager.run(1);
+
+    assert.equal(titleInputs.length, 1);
+    assert.ok(
+      titleInputs[0].includes("and my half"),
+      "the kept transcript covers both sides, so it beats a system-only re-transcription"
+    );
   } finally {
     fs.existsSync = origExists;
     delete process.env.NOTE_FORMATTING_PROVIDER;

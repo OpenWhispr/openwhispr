@@ -2475,6 +2475,13 @@
       "converting": "Converting audio",
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
+    },
+    "errorWithReason": "Ошибка: {{step}} — {{reason}}",
+    "preserved": {
+      "title": "Исходная расшифровка сохранена",
+      "incompleteSourceCoverage": "Улучшенная расшифровка охватила только часть разговора, поэтому исходная расшифровка сохранена.",
+      "noSegments": "Улучшенная расшифровка вернулась без временных меток, поэтому исходная расшифровка сохранена.",
+      "unknown": "Улучшенную расшифровку не удалось применить безопасно, поэтому исходная расшифровка сохранена."
     }
   },
   "meetingTypes": {

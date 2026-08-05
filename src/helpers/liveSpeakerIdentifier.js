@@ -26,8 +26,10 @@ const SPEECH_CHUNKS_MAX_SAMPLES = MAX_EMBEDDING_SAMPLES * 4;
 const SPEECH_THRESHOLD = 0.15;
 const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
-const MATCH_THRESHOLD = 0.65;
-const MATCH_MARGIN = 0.03;
+const {
+  MATCH_THRESHOLD,
+  acceptsMatch,
+} = require("./liveSpeakerMatching");
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
 
@@ -134,6 +136,7 @@ class LiveSpeakerIdentifier {
     this.transientDisplayNames = new Map();
     this.transientProfileIds = new Map();
     this.transientNoteIds = new Map();
+    this.pendingMerges = [];
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
@@ -231,9 +234,10 @@ class LiveSpeakerIdentifier {
 
   _performRecluster() {
     const speakers = [...this.transientEmbeddings.entries()];
-    if (speakers.length < 2) return [];
+    // Still drain: a merge made while assigning may have left fewer than two clusters,
+    // and dropping it here would orphan every segment under the removed id.
+    if (speakers.length < 2) return this._drainPendingMerges();
 
-    const merges = [];
     const removed = new Set();
 
     for (let i = 0; i < speakers.length; i += 1) {
@@ -253,60 +257,93 @@ class LiveSpeakerIdentifier {
         const [keepId, removeId] = keepFirst
           ? [speakers[i][0], speakers[j][0]]
           : [speakers[j][0], speakers[i][0]];
-        const keepCount = this.transientCounts.get(keepId) || 1;
-        const removeCount = this.transientCounts.get(removeId) || 1;
-        const keepEmb = this.transientEmbeddings.get(keepId);
-        const removeEmb = this.transientEmbeddings.get(removeId);
-        const totalCount = keepCount + removeCount;
-
-        const merged = new Float32Array(keepEmb.length);
-        for (let k = 0; k < keepEmb.length; k += 1) {
-          merged[k] = (keepEmb[k] * keepCount + removeEmb[k] * removeCount) / totalCount;
-        }
-
-        this.transientEmbeddings.set(keepId, merged);
-        this.transientCounts.set(keepId, totalCount);
-        this.transientEmbeddings.delete(removeId);
-        this.transientCounts.delete(removeId);
-
-        if (!this.transientDisplayNames.get(keepId) && this.transientDisplayNames.get(removeId)) {
-          this.transientDisplayNames.set(keepId, this.transientDisplayNames.get(removeId));
-        }
-        this.transientDisplayNames.delete(removeId);
-
-        if (!this.transientProfileIds.get(keepId) && this.transientProfileIds.get(removeId)) {
-          this.transientProfileIds.set(keepId, this.transientProfileIds.get(removeId));
-        }
-        this.transientProfileIds.delete(removeId);
-
-        if (!this.transientNoteIds.get(keepId) && this.transientNoteIds.get(removeId)) {
-          this.transientNoteIds.set(keepId, this.transientNoteIds.get(removeId));
-        }
-        this.transientNoteIds.delete(removeId);
-
-        if (this.currentSegmentSpeakerId === removeId) {
-          this.currentSegmentSpeakerId = keepId;
-        }
-
+        if (this._hasConflictingIdentity(keepId, removeId)) continue;
+        this._mergeTransientSpeakers(keepId, removeId, similarity);
         removed.add(removeId);
-        merges.push({
-          keep: keepId,
-          remove: removeId,
-          displayName: this.transientDisplayNames.get(keepId) || null,
-          similarity,
-        });
-
-        debugLogger.info("Speaker recluster merge", {
-          keep: keepId,
-          remove: removeId,
-          similarity: similarity.toFixed(3),
-          keepCount,
-          removeCount,
-        });
       }
     }
 
-    return merges;
+    return this._drainPendingMerges();
+  }
+
+  // Two clusters that carry different stored profiles, or different user-visible names,
+  // are positive evidence of two different people — stronger evidence than any cosine
+  // score. Merging them would destroy one person's identity.
+  _hasConflictingIdentity(a, b) {
+    const profileA = this.transientProfileIds.get(a);
+    const profileB = this.transientProfileIds.get(b);
+    if (profileA && profileB && profileA !== profileB) return true;
+
+    const nameA = this.transientDisplayNames.get(a);
+    const nameB = this.transientDisplayNames.get(b);
+    return !!nameA && !!nameB && nameA !== nameB;
+  }
+
+  // Every per-speaker map has to move together, or the surviving id ends up half-owning
+  // the merged speaker's state.
+  _mergeTransientSpeakers(keepId, removeId, similarity) {
+    const keepEmb = this.transientEmbeddings.get(keepId);
+    const removeEmb = this.transientEmbeddings.get(removeId);
+    if (!keepEmb || !removeEmb) return null;
+
+    const keepCount = this.transientCounts.get(keepId) || 1;
+    const removeCount = this.transientCounts.get(removeId) || 1;
+    const totalCount = keepCount + removeCount;
+
+    const merged = new Float32Array(keepEmb.length);
+    for (let k = 0; k < keepEmb.length; k += 1) {
+      merged[k] = (keepEmb[k] * keepCount + removeEmb[k] * removeCount) / totalCount;
+    }
+
+    this.transientEmbeddings.set(keepId, merged);
+    this.transientCounts.set(keepId, totalCount);
+    this.transientEmbeddings.delete(removeId);
+    this.transientCounts.delete(removeId);
+
+    for (const map of [
+      this.transientDisplayNames,
+      this.transientProfileIds,
+      this.transientNoteIds,
+    ]) {
+      if (!map.get(keepId) && map.get(removeId)) {
+        map.set(keepId, map.get(removeId));
+      }
+      map.delete(removeId);
+    }
+
+    if (this.currentSegmentSpeakerId === removeId) {
+      this.currentSegmentSpeakerId = keepId;
+      // _performRecluster never did this, so a stale name could still be stamped onto the
+      // finished segment.
+      this.currentSegmentSpeakerName = this.transientDisplayNames.get(keepId) || null;
+    }
+
+    const record = {
+      keep: keepId,
+      remove: removeId,
+      displayName: this.transientDisplayNames.get(keepId) || null,
+      similarity,
+    };
+    this.pendingMerges.push(record);
+
+    debugLogger.info("Speaker merge", {
+      keep: keepId,
+      remove: removeId,
+      similarity: similarity.toFixed(3),
+      keepCount,
+      removeCount,
+    });
+
+    return record;
+  }
+
+  // Merges made while assigning a speaker are invisible to the renderer unless they are
+  // reported alongside the periodic recluster's own, so every earlier segment under the
+  // removed id would orphan.
+  _drainPendingMerges() {
+    const drained = this.pendingMerges;
+    this.pendingMerges = [];
+    return drained;
   }
 
   feedAudio(pcmBuffer) {
@@ -382,6 +419,7 @@ class LiveSpeakerIdentifier {
     this.transientDisplayNames = new Map();
     this.transientProfileIds = new Map();
     this.transientNoteIds = new Map();
+    this.pendingMerges = [];
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
@@ -628,10 +666,7 @@ class LiveSpeakerIdentifier {
       }
     }
 
-    return bestSimilarity >= MATCH_THRESHOLD &&
-      bestSimilarity - secondBestSimilarity >= MATCH_MARGIN
-      ? bestSpeakerId
-      : null;
+    return acceptsMatch(bestSimilarity, secondBestSimilarity) ? bestSpeakerId : null;
   }
 
   _findStoredProfileMatch(embedding) {
@@ -670,10 +705,7 @@ class LiveSpeakerIdentifier {
       }
     }
 
-    return bestSimilarity >= MATCH_THRESHOLD &&
-      bestSimilarity - secondBestSimilarity >= MATCH_MARGIN
-      ? bestProfile
-      : null;
+    return acceptsMatch(bestSimilarity, secondBestSimilarity) ? bestProfile : null;
   }
 
   _resolveSpeakerForEmbedding(embedding, options = {}) {
@@ -697,7 +729,7 @@ class LiveSpeakerIdentifier {
     if (matchedProfile) {
       speakerId = this._findTransientSpeakerForProfile(matchedProfile.id);
       if (!speakerId) {
-        speakerId = this._assignOrForceCluster(embedding);
+        speakerId = this._assignOrForceCluster(embedding, { profileId: matchedProfile.id });
       } else if (updateCentroid) {
         this._updateCentroid(speakerId, embedding);
       }
@@ -721,24 +753,86 @@ class LiveSpeakerIdentifier {
     };
   }
 
-  _assignOrForceCluster(embedding) {
-    // No artificial speaker cap — freely detect new speakers as they appear.
-    // The similarity threshold in _assignSpeakerId handles merging voices
-    // that sound alike; we don't force-merge just because a count is exceeded.
-    return this._assignSpeakerId(embedding);
+  // (best, second) alone cannot tell "two similar people" from "one person's duplicates".
+  // The discriminating signal is how similar the two candidate CLUSTERS are to each
+  // other — the same test _performRecluster already applies every 30 seconds. So a
+  // confirmed duplicate pair is merged outright (which stops it re-triggering on every
+  // later utterance), and otherwise the voice joins its best match rather than minting
+  // yet another cluster. Minting while a real candidate exists is what produced
+  // speaker_23/27/28 on a three-person call.
+  _assignOrForceCluster(embedding, options = {}) {
+    const { profileId = null } = options;
+    const { bestId, bestSimilarity, secondId, secondSimilarity } =
+      this._findTopTransients(embedding);
+
+    if (!bestId || bestSimilarity < MATCH_THRESHOLD) {
+      return this._assignSpeakerId(embedding);
+    }
+
+    // A stored profile is stronger evidence of a distinct person than a cosine score, so
+    // it may not take over a cluster that already belongs to someone else. This is the
+    // one case where minting above the threshold is correct.
+    if (profileId && this._identityConflictsWith(bestId, profileId)) {
+      return this._assignSpeakerId(embedding);
+    }
+
+    if (acceptsMatch(bestSimilarity, secondSimilarity)) {
+      this._updateCentroid(bestId, embedding);
+      return bestId;
+    }
+
+    if (secondId && !this._hasConflictingIdentity(bestId, secondId)) {
+      const clusterSimilarity = speakerEmbeddings.cosineSimilarity(
+        this.transientEmbeddings.get(bestId),
+        this.transientEmbeddings.get(secondId)
+      );
+      if (clusterSimilarity >= MATCH_THRESHOLD) {
+        const keepFirst = this._preferredSurvivor(bestId, secondId);
+        const [keepId, removeId] = keepFirst ? [bestId, secondId] : [secondId, bestId];
+        this._mergeTransientSpeakers(keepId, removeId, clusterSimilarity);
+        this._updateCentroid(keepId, embedding);
+        return keepId;
+      }
+    }
+
+    // Genuinely ambiguous: assign to the best match, but deliberately do NOT move its
+    // centroid — otherwise an absorbed stranger drags the cluster toward itself and
+    // every later utterance matches harder.
+    return bestId;
   }
 
-  _findNearestTransient(embedding) {
-    let bestSpeakerId = null;
+  _identityConflictsWith(speakerId, profileId) {
+    const existing = this.transientProfileIds.get(speakerId);
+    return !!existing && existing !== profileId;
+  }
+
+  _preferredSurvivor(a, b) {
+    const hasNameA = !!this.transientDisplayNames.get(a);
+    const hasNameB = !!this.transientDisplayNames.get(b);
+    if (hasNameA !== hasNameB) return hasNameA;
+    return (this.transientCounts.get(a) || 1) >= (this.transientCounts.get(b) || 1);
+  }
+
+  _findTopTransients(embedding) {
+    let bestId = null;
     let bestSimilarity = -Infinity;
+    let secondId = null;
+    let secondSimilarity = -Infinity;
+
     for (const [speakerId, centroid] of this.transientEmbeddings.entries()) {
       const similarity = speakerEmbeddings.cosineSimilarity(embedding, centroid);
       if (similarity > bestSimilarity) {
+        secondId = bestId;
+        secondSimilarity = bestSimilarity;
+        bestId = speakerId;
         bestSimilarity = similarity;
-        bestSpeakerId = speakerId;
+      } else if (similarity > secondSimilarity) {
+        secondId = speakerId;
+        secondSimilarity = similarity;
       }
     }
-    return bestSpeakerId;
+
+    return { bestId, bestSimilarity, secondId, secondSimilarity };
   }
 
   _findTransientSpeakerForProfile(profileId) {

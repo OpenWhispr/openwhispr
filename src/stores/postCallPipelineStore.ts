@@ -19,6 +19,7 @@ export interface PipelineNoteState {
   startedAt: number;
   steps: Partial<Record<PipelineStep, PipelineStepStatus>>;
   diff: TranscriptDiff | null;
+  preservedReason: string | null;
 }
 
 interface PostCallPipelineStoreState {
@@ -36,13 +37,22 @@ export function handlePipelineStatus(payload: {
   subStage?: RetranscribeSubStage;
   error?: string;
   diff?: TranscriptDiff;
+  preserved?: boolean;
+  reason?: string;
 }) {
-  const { noteId, step, status, subStage, error, diff } = payload;
+  const { noteId, step, status, subStage, error, diff, preserved, reason } = payload;
   const { activePipelines } = usePostCallPipelineStore.getState();
 
   if (step === "pipeline" && status === "complete") {
+    // A preserved re-transcription is the one outcome the user still needs to see after
+    // the run ends: the note kept its old transcript instead of being upgraded.
+    const finished = activePipelines[noteId];
     const next = { ...activePipelines };
-    delete next[noteId];
+    if (finished?.preservedReason) {
+      next[noteId] = { ...finished, currentStep: step, currentStatus: status };
+    } else {
+      delete next[noteId];
+    }
     usePostCallPipelineStore.setState({ activePipelines: next });
     return;
   }
@@ -56,6 +66,7 @@ export function handlePipelineStatus(payload: {
     startedAt: Date.now(),
     steps: {},
     diff: null,
+    preservedReason: null,
   };
 
   const updated: PipelineNoteState = {
@@ -66,6 +77,7 @@ export function handlePipelineStatus(payload: {
     error: error ?? null,
     steps: { ...existing.steps, [step]: status },
     diff: diff ?? existing.diff,
+    preservedReason: preserved ? (reason ?? "unknown") : existing.preservedReason,
   };
 
   usePostCallPipelineStore.setState({

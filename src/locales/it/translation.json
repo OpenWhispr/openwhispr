@@ -2471,6 +2471,13 @@
       "converting": "Converting audio",
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
+    },
+    "errorWithReason": "Non riuscito: {{step}} — {{reason}}",
+    "preserved": {
+      "title": "Trascrizione originale mantenuta",
+      "incompleteSourceCoverage": "La trascrizione migliorata copriva solo una parte di questa conversazione, quindi è stata mantenuta la trascrizione originale.",
+      "noSegments": "La trascrizione migliorata è tornata senza marcatori temporali, quindi è stata mantenuta la trascrizione originale.",
+      "unknown": "La trascrizione migliorata non poteva essere applicata in sicurezza, quindi è stata mantenuta la trascrizione originale."
     }
   },
   "meetingTypes": {

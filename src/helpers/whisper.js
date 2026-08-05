@@ -326,6 +326,7 @@ class WhisperManager {
       vadEnabled,
       vadConfig,
       timeoutMs: options.timeoutMs,
+      includeSegments: options.includeSegments === true,
     });
   }
 
@@ -389,6 +390,7 @@ class WhisperManager {
       language,
       initialPrompt,
       timeoutMs: options.timeoutMs,
+      includeSegments: options.includeSegments === true,
     });
     const elapsed = Date.now() - startTime;
 
@@ -488,10 +490,25 @@ class WhisperManager {
       if (!text || this.isBlankAudioMarker(text)) {
         return { success: false, message: "No audio detected" };
       }
-      return { success: true, text };
+      const segments = this.parseWhisperSegments(result.segments);
+      return segments ? { success: true, text, segments } : { success: true, text };
     }
 
     return { success: false, message: "No audio detected" };
+  }
+
+  // whisper-server returns these only for response_format=verbose_json; start/end are
+  // seconds from the beginning of the audio.
+  parseWhisperSegments(segments) {
+    if (!Array.isArray(segments)) return null;
+    const parsed = segments
+      .map((seg) => ({
+        start: seg?.start,
+        end: seg?.end,
+        text: typeof seg?.text === "string" ? this.normalizeWhitespace(seg.text) : "",
+      }))
+      .filter((seg) => seg.text && Number.isFinite(seg.start));
+    return parsed.length ? parsed : null;
   }
 
   // Check if text is a whisper.cpp blank audio marker
