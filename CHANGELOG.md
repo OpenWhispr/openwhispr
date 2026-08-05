@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-08-05
+
+### Fixed
+- **A meeting could finish with no notes and no explanation.** If the app was quit while a meeting was still being re-transcribed — which takes minutes with the large model — the post-call pipeline stopped dead partway through. The meeting type and the notes were never generated, and the note was left showing "Generating title" as though it were still working. The pipeline now finishes the remaining steps and reports its real outcome.
+- **"Reprocess all meetings" no longer burns an AI request per meeting to produce nothing.** Meetings you had already titled yourself were still sent for a new title, which was then correctly discarded — so a library of 300 meetings cost 300 requests on your own API key for no result. Titles you own are now recognised before the request is made, and the title step reports "skipped" instead of claiming it completed.
+- Notes you titled yourself are still never renamed by reprocessing, including when the title cannot be read at that moment.
+
 ## [1.13.0] - 2026-08-04
 
 1.12.1 was built but never released; its fixes are included here.
