@@ -479,9 +479,11 @@ P0-1b, gate covered by 5 · (d) 6/7/8 · (e) 9/10 · (f) 5c · (g) 11/11b · (h)
 
 Gate: `npm run typecheck && npm run lint && npm test`, ~5 skipped.
 
-Manual verification before any tag: a real 3-person call — 3 speakers, names survive
-re-transcription, title and meeting type populate. Note that "both sides present"
-moves to P0-1b's verification.
+Manual verification is the maintainer's, done separately — it is not a gate on this
+change. When it happens, the things to look at are: 3 speakers rather than 10+, names
+surviving re-transcription, and title and meeting type populating. "Both sides present"
+belongs to P0-1b, not here — a dual-source note is expected to show the preserved banner
+until that lands.
 
 ---
 
