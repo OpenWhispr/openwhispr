@@ -799,6 +799,8 @@ export default function SettingsPage({
     setShowTranscriptionPreview,
     autoPasteEnabled,
     setAutoPasteEnabled,
+    pressEnterAfterPaste,
+    setPressEnterAfterPaste,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
@@ -2569,6 +2571,20 @@ export default function SettingsPage({
                     description={t("settingsPage.general.clipboard.autoPasteDescription")}
                   >
                     <Toggle checked={autoPasteEnabled} onChange={setAutoPasteEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.clipboard.pressEnterAfterPaste")}
+                    description={t(
+                      "settingsPage.general.clipboard.pressEnterAfterPasteDescription"
+                    )}
+                  >
+                    <Toggle
+                      checked={pressEnterAfterPaste}
+                      onChange={setPressEnterAfterPaste}
+                      disabled={!autoPasteEnabled}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>

@@ -1554,6 +1554,8 @@
         "title": "クリップボード",
         "autoPaste": "自動貼り付け",
         "autoPasteDescription": "ディクテーション完了後、文字起こしテキストをアクティブなアプリに自動的に貼り付けます",
+        "pressEnterAfterPaste": "貼り付け後に Enter を押す",
+        "pressEnterAfterPasteDescription": "テキストが貼り付けられた後に Enter を送信して確定します。ターミナルやコマンドパレットでは Enter がコマンドを即座に実行するため注意してください。",
         "keepInClipboard": "文字起こしをクリップボードに保持",
         "keepInClipboardDescription": "必要に応じて手動で貼り付けできるよう、音声入力テキストをクリップボードに保持します"
       },

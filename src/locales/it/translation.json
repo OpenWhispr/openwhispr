@@ -1554,6 +1554,8 @@
         "title": "Appunti",
         "autoPaste": "Incollaggio automatico",
         "autoPasteDescription": "Incolla automaticamente il testo trascritto nell'app attiva al termine della dettatura",
+        "pressEnterAfterPaste": "Premi Invio dopo l'incollaggio",
+        "pressEnterAfterPasteDescription": "Invia Invio dopo che il testo è stato incollato, per confermarlo. Fai attenzione nei terminali e nelle palette dei comandi, dove Invio esegue i comandi immediatamente.",
         "keepInClipboard": "Mantieni la trascrizione negli appunti",
         "keepInClipboardDescription": "Mantieni il testo dettato negli appunti per poterlo incollare manualmente se necessario"
       },

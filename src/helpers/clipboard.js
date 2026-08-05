@@ -61,6 +61,17 @@ const RESTORE_DELAYS = {
   linux_kde_wayland: 1200,
 };
 
+// Gap between the paste keystroke and the Return that submits it. Without it
+// the target app can receive Return before it has finished handling the paste,
+// which submits an empty or half-filled field.
+const ENTER_DELAYS = {
+  darwin: 80,
+  win32: 60,
+  linux: 60,
+};
+
+const ENTER_TIMEOUT_MS = 2000;
+
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
     return Promise.reject(new Error("Invalid webContents for clipboard write"));
@@ -820,6 +831,14 @@ class ClipboardManager {
           expectedClipboardText: text,
         });
         method = pasteResult?.method || "linux-tools";
+      }
+
+      // Reached only when a paste keystroke was actually simulated: the
+      // clipboard-only outcomes return early or throw above. Callers opt in per
+      // paste rather than this reading a global, so a future voice command can
+      // request submission for a single utterance (#1174).
+      if (options.pressEnterAfterPaste === true) {
+        await this.pressEnter();
       }
 
       this.safeLog("✅ Paste operation complete", {
@@ -1942,6 +1961,172 @@ class ClipboardManager {
       "clipboard"
     );
     throw err;
+  }
+
+  /**
+   * Runs a one-shot keystroke command, resolving only on a clean exit.
+   */
+  _runKeystrokeCommand(command, args, spawnOptions = {}) {
+    return new Promise((resolve, reject) => {
+      const proc = spawn(command, args, spawnOptions);
+      let stderr = "";
+      let timedOut = false;
+
+      proc.stderr?.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        killProcess(proc, "SIGKILL");
+        proc.removeAllListeners();
+        reject(new Error(`${command} timed out`));
+      }, ENTER_TIMEOUT_MS);
+
+      proc.on("close", (code) => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        proc.removeAllListeners();
+        if (code === 0) {
+          resolve();
+        } else {
+          const detail = stderr.trim();
+          reject(new Error(`${command} exited with code ${code}${detail ? `: ${detail}` : ""}`));
+        }
+      });
+
+      proc.on("error", (error) => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        proc.removeAllListeners();
+        reject(error);
+      });
+    });
+  }
+
+  /**
+   * Sends a Return keystroke to the frontmost app, to submit text that was just
+   * pasted (#1174).
+   *
+   * Only ever called from the success path of `_pasteText`, so a run that only
+   * copied to the clipboard never submits anything. Deliberately never throws:
+   * the text is already in the target app at this point, so failing to submit
+   * must not be reported to the user as a paste failure.
+   *
+   * @returns {Promise<boolean>} whether the keystroke was delivered
+   */
+  async pressEnter() {
+    const platform = process.platform;
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, ENTER_DELAYS[platform] ?? 60));
+
+      if (platform === "darwin") {
+        await this._pressEnterMacOS();
+      } else if (platform === "win32") {
+        await this._pressEnterWindows();
+      } else {
+        await this._pressEnterLinux();
+      }
+
+      this.safeLog("⏎ Enter sent after paste");
+      debugLogger.debug("Enter sent after paste", { platform }, "clipboard");
+      return true;
+    } catch (error) {
+      this.safeLog("⚠️ Enter after paste failed", error?.message);
+      debugLogger.warn(
+        "Enter after paste failed",
+        { platform, error: error?.message },
+        "clipboard"
+      );
+      return false;
+    }
+  }
+
+  // key code 36 is Return. Accessibility is already granted at this point,
+  // since the paste that preceded this succeeded.
+  _pressEnterMacOS() {
+    return this._runKeystrokeCommand("osascript", [
+      "-e",
+      'tell application "System Events" to key code 36',
+    ]);
+  }
+
+  async _pressEnterWindows() {
+    const nircmdPath = this.getNircmdPath();
+
+    if (nircmdPath) {
+      try {
+        await this._runKeystrokeCommand(nircmdPath, ["sendkeypress", "enter"], {
+          windowsHide: true,
+        });
+        return;
+      } catch (error) {
+        this.safeLog("nircmd Enter failed, falling back to PowerShell", error?.message);
+      }
+    }
+
+    await this._runKeystrokeCommand(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')",
+      ],
+      { windowsHide: true }
+    );
+  }
+
+  async _pressEnterLinux() {
+    const { isWayland, isWlroots } = getLinuxSessionInfo();
+    const legacyYdotool = this._isYdotoolLegacy();
+
+    const xdotoolEntry = { cmd: "xdotool", args: ["key", "--clearmodifiers", "Return"] };
+    const wtypeEntry = { cmd: "wtype", args: ["-k", "Return"] };
+    // 28 is KEY_ENTER in the Linux input event codes; pre-1.0 ydotool took names.
+    const ydotoolEntry = {
+      cmd: "ydotool",
+      args: legacyYdotool ? ["key", "Return"] : ["key", "28:1", "28:0"],
+    };
+
+    // Same compositor-aware ordering the paste path uses, so Enter is delivered
+    // by the tool most likely to have delivered the paste itself.
+    let candidates;
+    if (!isWayland) {
+      candidates = [xdotoolEntry, ydotoolEntry];
+    } else if (isWlroots) {
+      candidates = [wtypeEntry, xdotoolEntry, ydotoolEntry];
+    } else {
+      candidates = [ydotoolEntry, xdotoolEntry, wtypeEntry];
+    }
+
+    const available = candidates.filter((tool) => {
+      if (!this.commandExists(tool.cmd)) return false;
+      if (tool.cmd === "ydotool") return this._isYdotoolDaemonRunning();
+      return true;
+    });
+
+    if (available.length === 0) {
+      throw new Error("No keystroke tool available (install xdotool, wtype, or ydotool)");
+    }
+
+    let lastError;
+    for (const tool of available) {
+      try {
+        await this._runKeystrokeCommand(tool.cmd, tool.args);
+        return;
+      } catch (error) {
+        lastError = error;
+        this.safeLog(`Enter via ${tool.cmd} failed`, error?.message);
+      }
+    }
+
+    throw lastError;
   }
 
   async checkAccessibilityPermissions(silent = false) {

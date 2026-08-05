@@ -1554,6 +1554,8 @@
         "title": "剪贴板",
         "autoPaste": "自动粘贴",
         "autoPasteDescription": "听写结束后自动将转录文本粘贴到当前活动的应用中",
+        "pressEnterAfterPaste": "粘贴后按 Enter",
+        "pressEnterAfterPasteDescription": "文本粘贴完成后发送 Enter 以提交。在终端和命令面板中请谨慎使用，因为 Enter 会立即执行命令。",
         "keepInClipboard": "将转录内容保留在剪贴板",
         "keepInClipboardDescription": "将听写文本保留在剪贴板中，以便在需要时手动粘贴"
       },
