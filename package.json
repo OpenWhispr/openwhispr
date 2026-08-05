@@ -5,7 +5,8 @@
   "main": "main.js",
   "private": true,
   "engines": {
-    "node": ">=24"
+    "node": ">=24",
+    "npm": ">=11.11.0"
   },
   "scripts": {
     "compile:globe": "node scripts/build-globe-listener.js",

@@ -16,7 +16,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **UI Components**: shadcn/ui with Radix primitives
 - **Speech Processing**: whisper.cpp + NVIDIA Parakeet (via sherpa-onnx) + OpenAI API
 - **Audio Processing**: FFmpeg (bundled via ffmpeg-static)
-- **Node.js**: 24 (pinned in `.nvmrc` — CI uses Node 24, do NOT regenerate `package-lock.json` with a different major version)
+- **Node.js**: 24 (pinned in `.nvmrc`; CI uses Node 24). The lockfile constraint is on **npm**, not Node — see "Lockfile" under Common Issues. `engines.npm` is `>=11.11.0` and `.npmrc` sets `engine-strict=true`, so a too-old npm fails loudly instead of corrupting `package-lock.json`.
 
 ### Key Architectural Decisions
 
@@ -749,7 +749,13 @@ const { t } = useTranslation();
    - Run `npm run download:whisper-cpp` before packaging (current platform)
    - Use `npm run download:whisper-cpp:all` for multi-platform packaging
    - afterSign.js automatically skips signing when CSC_IDENTITY_AUTO_DISCOVERY=false
-   - **Lockfile**: Always use Node 24 when running `npm install` (matches CI). If your local Node version differs, use `nvm exec 24 npm install`. Running `npm install` with a different major version will produce an incompatible `package-lock.json` that breaks `npm ci` in CI.
+   - **Lockfile**: the constraint is the **npm version, not the Node major**. npm `< 11.11.0` silently strips all 19 `libc` fields from `package-lock.json` (the glibc/musl variants of `@napi-rs/keyring`, `@rolldown/binding`, `@tailwindcss/oxide`, `lightningcss`), which is what npm uses to pick the right Linux native binary. The stripped lockfile still installs — `npm ci` succeeds on it — so nothing catches it without the guard below.
+     - `engines.npm` is `>=11.11.0`, enforced by `engine-strict=true` in `.npmrc`. Below the floor, **both `npm install` and `npm ci`** abort with `EBADENGINE` before writing anything. `npm run`, `npm rebuild`, and `npx` are unaffected, so the test and build chains still work.
+     - Fix: **`npm i -g npm@11`** (→ 11.19.0). Do **not** use `npm@latest` on Node 25: npm 12 declares `engines.node` as `^22.22.2 || ^24.15.0 || >=26.0.0`, which excludes the 25.x line, so the install aborts with `EBADENGINE`. npm 11.x is `^20.17.0 || >=22.9.0` and covers Node 25 fine. (The repo's `engine-strict=true` is what turns that into a hard error rather than a warning — it stops you installing an npm your Node does not support.)
+     - Alternative: `brew install node@24` (24.19.0, keg-only) to match `.nvmrc` and CI exactly; that line ships npm 11.17.0 and `npm@latest` works on it.
+     - Note the counterintuitive mapping — Node 24.19.0 ships npm 11.17.0 while Node 25.6.0 ships npm 11.8.0, so a *newer Node* can mean an *older npm*.
+     - There is no `nvm`/`fnm`/`volta`/`asdf` on this machine, and `/opt/homebrew/opt/node@24` is a **dangling alias that resolves to Node 25.6.0** — do not trust it as a Node 24.
+     - The `lockfile-drift` CI job regenerates the lockfile with a pinned npm and fails on any diff.
 
 5. **Windows Push-to-Talk Binary**:
    - Prebuilt binary downloaded automatically on Windows during build

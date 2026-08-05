@@ -34,7 +34,7 @@
 > - **Local-only, no signup:** onboarding has no account/signup step and no "how are you using the app" step — first run goes straight to on-device transcription. Default engine is **NVIDIA Parakeet TDT 0.6B** (fast, 680 MB, English/European); Whisper is one click away in Settings for noisy audio or other languages. Cloud/BYOK stays available but strictly opt-in.
 > - **No phone-home:** this fork disables the little that reached out by default — the Better Auth session ping to `auth.openwhispr.com`, the automatic startup update check, and a Google Fonts fetch. There is no analytics SDK. Nothing leaves your device unless you opt into a cloud provider. See [Privacy](docs/FORK-SETUP.md#privacy--no-phone-home).
 > - **Merges stay clean:** changes are isolated (diarization dispatcher in `src/helpers/diarization.js` + small guards, default flips, additive `scripts/setup-fluidaudio.js` and docs), so upstream updates merge without fuss.
-> - **How to run it:** `npm install` → `npm run setup:fluidaudio` (optional, macOS) → `npm run dev`.
+> - **How to run it:** `npm install` → `npm run setup:fluidaudio` (optional, macOS) → `npm run dev`. Needs Node 24+ and npm 11.11.0+.
 > - **More:** [Fork setup & sharing guide](docs/FORK-SETUP.md) · [FluidAudio integration notes](docs/FLUIDAUDIO-INTEGRATION.md) · [Research & decision record](docs/LOCAL-DIARIZATION-RESEARCH.md).
 
 OpenWhispr turns your voice into text, notes, and actions from your desktop. Press a hotkey, speak, and your words appear at your cursor. Choose between fully private offline transcription with local speech-to-text engines like Whisper and NVIDIA Parakeet — where your audio never leaves your device — or cloud processing for speed. No data collection, no telemetry, fully open source.
@@ -69,7 +69,7 @@ npm run setup:fluidaudio   # optional (macOS): build the FluidAudio ANE diarizat
 npm run dev
 ```
 
-Requires Node.js 24+. `npm run setup:fluidaudio` additionally needs the Xcode Command Line Tools (`xcode-select --install`) and is macOS-only — skip it to use the cross-platform sherpa-onnx diarization engine. See [docs/FORK-SETUP.md](docs/FORK-SETUP.md) for the full fork setup, sharing, and upstream-sync guide, or the [upstream documentation](https://docs.openwhispr.com/quickstart) for platform-specific details.
+Requires Node.js 24+ and **npm 11.11.0+** (older npm silently strips the `libc` fields from `package-lock.json`, so `npm install` refuses to run below that floor — fix with `npm i -g npm@11`; on Node 25.x use `npm@11` rather than `npm@latest`, since npm 12 does not support the 25.x line). `npm run setup:fluidaudio` additionally needs the Xcode Command Line Tools (`xcode-select --install`) and is macOS-only — skip it to use the cross-platform sherpa-onnx diarization engine. See [docs/FORK-SETUP.md](docs/FORK-SETUP.md) for the full fork setup, sharing, and upstream-sync guide, or the [upstream documentation](https://docs.openwhispr.com/quickstart) for platform-specific details.
 
 First run starts a **local-only** onboarding — no account or signup. Transcription defaults to on-device **NVIDIA Parakeet TDT 0.6B** (fast and multilingual); you can switch to Whisper or enable a cloud provider later in Settings.
 
