@@ -167,8 +167,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   // visits Settings. Keying off the resolved *model* (not provider, which
   // spuriously falls back to the dictationCleanup default "openai") re-homes
   // users migrated off a removed hosted-cloud mode who never configured a
-  // local model. Scopes that already resolve to a model (e.g. the chat agent's
-  // default) are left untouched.
+  // local model. Scopes that already resolve to a model are left untouched —
+  // including the chat agent, whose contradictory groq default is re-homed by
+  // initializeSettings instead, since only the raw localStorage key can tell a
+  // defaulted provider from one the user chose.
   useEffect(() => {
     const syncNoteFormatting = () => {
       const resolved = selectResolvedNoteFormatting(useSettingsStore.getState());

@@ -2,8 +2,34 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const { computeTranscriptDiff } = require("./transcriptDiff");
 const { retranscribeNoteTranscript } = require("./retranscribeNoteTranscript");
+const { i18nMain, SUPPORTED_UI_LANGUAGES } = require("./i18nMain");
 
 const STEP_ORDER = ["retranscribe", "title", "classify", "notes"];
+
+const TITLE_PLACEHOLDER_KEYS = [
+  "notes.list.untitledNote",
+  "notes.list.newNote",
+  "notes.sidebar.newNote",
+];
+
+let cachedTitlePlaceholders = null;
+
+// A note may have been created while the app was in a different language than
+// the one running now, so recognising only the current locale's placeholder
+// would stop title generation for anyone who ever switched languages — and for
+// every non-English user, since the built-in list is English.
+function localizedTitlePlaceholders() {
+  if (cachedTitlePlaceholders) return cachedTitlePlaceholders;
+  const placeholders = new Set();
+  for (const lng of SUPPORTED_UI_LANGUAGES) {
+    for (const key of TITLE_PLACEHOLDER_KEYS) {
+      const label = i18nMain.t(key, { lng });
+      if (typeof label === "string" && label.trim()) placeholders.add(label.trim());
+    }
+  }
+  cachedTitlePlaceholders = [...placeholders];
+  return cachedTitlePlaceholders;
+}
 
 function buildTypedNotesPrompt(meetingType) {
   return `You are a sharp, thorough meeting notes assistant that captures not just what was said, but what it means. You will receive a transcript with speaker labels.
@@ -114,14 +140,24 @@ class PostCallPipelineManager {
     }
 
     // Step 2: Generate title
+    //
+    // Guarded twice on purpose. The first check keeps "reprocess all meetings"
+    // from spending one title call per note on the user's own API key only to
+    // discard every result; the second closes the race the first cannot, since
+    // re-transcription runs for minutes and the user can title the note in that
+    // window.
     if (fromIndex <= 1) {
-      const titleResult = await this._runStep(noteId, "title", () =>
-        this._generateTitle(transcript)
-      );
-      if (titleResult.error) return;
-      if (titleResult.value) {
-        this._db.updateNote(noteId, { title: titleResult.value });
-        this._broadcastNoteUpdate(noteId);
+      if (await this._mayGenerateTitle(noteId)) {
+        const titleResult = await this._runStep(noteId, "title", () =>
+          this._generateTitle(transcript)
+        );
+        if (titleResult.error) return;
+        if (titleResult.value && (await this._mayGenerateTitle(noteId))) {
+          this._db.updateNote(noteId, { title: titleResult.value });
+          this._broadcastNoteUpdate(noteId);
+        }
+      } else {
+        this._emitStatus(noteId, "title", "skipped");
       }
     }
 
@@ -192,6 +228,36 @@ class PostCallPipelineManager {
     }
 
     this._emitStatus(noteId, "pipeline", "complete");
+  }
+
+  // Reads the note itself rather than trusting run()'s snapshot: re-transcription
+  // can run for minutes with the large model, so that snapshot is long stale.
+  //
+  // Any failure answers "no". The database is closed when the app quits, which
+  // can land inside a run this long, and an escaping exception would abandon
+  // classify and notes with no terminal status — leaving the renderer on a
+  // title:complete for a title that was never written.
+  async _mayGenerateTitle(noteId) {
+    try {
+      const { isRegenerableNoteTitle } = await import("./regenerableNoteTitle.js");
+      const note = this._db.getNote(noteId);
+      if (!note) return false;
+
+      let calendarEventName = null;
+      if (note.calendar_event_id) {
+        const event = this._db.getCalendarEventById?.(note.calendar_event_id);
+        calendarEventName = event?.summary || null;
+      }
+
+      return isRegenerableNoteTitle(note.title, localizedTitlePlaceholders(), calendarEventName);
+    } catch (err) {
+      debugLogger.warn(
+        "Pipeline: title guard could not read the note, keeping the existing title",
+        { noteId, error: err.message },
+        "meeting"
+      );
+      return false;
+    }
   }
 
   async _runStep(noteId, step, fn) {
