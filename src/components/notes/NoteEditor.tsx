@@ -169,6 +169,17 @@ export default function NoteEditor({
   const notePipeline = usePostCallPipelineStore((s) => selectPipelineForNote(s, note.id));
   const isReprocessing = notePipeline?.currentStatus === "running";
 
+  // Re-transcription declines rather than replacing a transcript it cannot fully
+  // reproduce. The reason is persisted on the note, so the notice survives a pipeline
+  // that ran while this window was closed.
+  const preservedTranscriptKey = useMemo(() => {
+    const reason = notePipeline?.preservedReason ?? note.retranscribe_outcome ?? null;
+    if (!reason) return null;
+    if (reason === "incomplete-source-coverage") return "incompleteSourceCoverage";
+    if (reason === "no-segments") return "noSegments";
+    return "unknown";
+  }, [notePipeline?.preservedReason, note.retranscribe_outcome]);
+
   const startReprocess = useCallback(async () => {
     setPendingReprocess(false);
     const large = await window.electronAPI?.checkWhisperModelDownloaded?.("large");
@@ -623,6 +634,14 @@ export default function NoteEditor({
   return (
     <div className="flex h-full min-h-0">
       <div className="flex-1 min-w-0 flex flex-col">
+        {preservedTranscriptKey && (
+          <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-[11px] leading-relaxed text-foreground/70">
+            <span className="font-medium text-foreground/80">
+              {t("pipeline.preserved.title")}
+            </span>{" "}
+            {t(`pipeline.preserved.${preservedTranscriptKey}`)}
+          </div>
+        )}
         <div className="px-5 pt-4 pb-0">
           <div
             ref={titleRef}

@@ -2471,6 +2471,13 @@
       "converting": "Converting audio",
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
+    },
+    "errorWithReason": "失败：{{step}} — {{reason}}",
+    "preserved": {
+      "title": "已保留原始转录",
+      "incompleteSourceCoverage": "升级后的转录只涵盖了这次对话的一部分，因此保留了原始转录。",
+      "noSegments": "升级后的转录没有返回时间戳，因此保留了原始转录。",
+      "unknown": "升级后的转录无法安全应用，因此保留了原始转录。"
     }
   },
   "meetingTypes": {

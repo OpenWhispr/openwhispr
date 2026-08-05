@@ -1,8 +1,7 @@
 const fs = require("fs");
-const path = require("path");
-const os = require("os");
 const debugLogger = require("./debugLogger");
 const { computeTranscriptDiff } = require("./transcriptDiff");
+const { retranscribeNoteTranscript } = require("./retranscribeNoteTranscript");
 
 const STEP_ORDER = ["retranscribe", "title", "classify", "notes"];
 
@@ -107,24 +106,10 @@ class PostCallPipelineManager {
 
     // Step 1: Re-transcribe
     if (fromIndex <= 0) {
-      const audioPath = note.system_audio_path || note.mic_audio_path;
-      const hasAudio = audioPath && fs.existsSync(audioPath);
-
-      if (hasAudio) {
-        const result = await this._runStep(noteId, "retranscribe", () =>
-          this._retranscribe(noteId, audioPath, note.audio_duration_seconds)
-        );
-        if (result.error) return;
-        if (result.value) {
-          transcript = result.value;
-        } else {
-          // retranscribe returned null — model not downloaded, mark as pending
-          this._broadcast("post-call-pipeline-status", {
-            noteId, step: "retranscribe", status: "pending",
-          });
-        }
-      } else {
-        this._emitStatus(noteId, "retranscribe", "skipped");
+      const result = await this._retranscribeStep(noteId, note);
+      if (result.error) return;
+      if (result.transcript) {
+        transcript = result.transcript;
       }
     }
 
@@ -222,80 +207,82 @@ class PostCallPipelineManager {
     }
   }
 
-  async _retranscribe(noteId, audioPath, audioDurationSec) {
-    // Guard: skip if the large model hasn't been downloaded yet
-    const largeModelPath = this._whisper.getModelPath("large");
-    if (!fs.existsSync(largeModelPath)) {
-      debugLogger.warn("Pipeline: large whisper model not downloaded yet, skipping retranscribe",
-        { modelPath: largeModelPath }, "meeting");
-      return null;
+  // Re-transcription must never trade a structured, speaker-labelled transcript for a
+  // plain-text blob. The shared module either produces segments that preserve the
+  // speaker identities or declines, and this step only persists the former.
+  async _retranscribeStep(noteId, note) {
+    const hasAudio = [note.system_audio_path, note.mic_audio_path].some(
+      (audioPath) => audioPath && fs.existsSync(audioPath)
+    );
+    if (!hasAudio) {
+      this._emitStatus(noteId, "retranscribe", "skipped");
+      return {};
     }
 
-    // Sub-stage 1: Convert Opus to WAV for whisper
-    this._emitSubStage(noteId, "retranscribe", "converting");
-    const tmpWav = path.join(os.tmpdir(), `ow-pipeline-${noteId}-${Date.now()}.wav`);
-    await this._convertToWav(audioPath, tmpWav, { sampleRate: 16000, channels: 1 });
+    this._emitStatus(noteId, "retranscribe", "running");
 
+    let result;
     try {
-      // Sub-stage 2: Transcribe with large model
-      this._emitSubStage(noteId, "retranscribe", "transcribing");
-      const wavBuffer = fs.readFileSync(tmpWav);
-      const result = await this._whisper.transcribeLocalWhisper(wavBuffer, {
-        model: "large",
-        language: null,
+      result = await retranscribeNoteTranscript({
+        note,
+        whisperManager: this._whisper,
+        diarizationManager: this._diarization,
+        databaseManager: this._db,
+        convertToWav: this._convertToWav,
+        onSubStage: (subStage) => this._emitSubStage(noteId, "retranscribe", subStage),
+        reloadNote: () => this._db.getNote(noteId),
       });
-
-      const rawText = result?.text || "";
-      if (!rawText.trim()) throw new Error("Re-transcription produced empty output");
-
-      // Save old transcript for diff
-      const oldNote = this._db.getNote(noteId);
-      const oldTranscript = oldNote?.transcript;
-
-      let finalTranscript = rawText;
-
-      // Sub-stage 3: Re-diarize if possible
-      const note = this._db.getNote(noteId);
-      const systemPath = note?.system_audio_path;
-      if (systemPath && fs.existsSync(systemPath) && this._diarization?.isAvailable()) {
-        this._emitSubStage(noteId, "retranscribe", "diarizing");
-        try {
-          const diarWav = path.join(os.tmpdir(), `ow-pipeline-diar-${noteId}-${Date.now()}.wav`);
-          await this._convertToWav(systemPath, diarWav, { sampleRate: 16000, channels: 1 });
-
-          const diarResult = await this._diarization.diarize(diarWav, {});
-          if (diarResult?.segments?.length) {
-            const whisperSegments = (result.segments || []).map((seg, i) => ({
-              id: `retranscribe-${i}`,
-              text: seg.text,
-              source: "system",
-              timestamp: (seg.start || 0) * 1000,
-            }));
-            const enriched = this._diarization.mergeWithTranscript(whisperSegments, diarResult.segments);
-            if (enriched?.length) {
-              finalTranscript = JSON.stringify(enriched);
-            }
-          }
-          try { fs.unlinkSync(diarWav); } catch (_) {}
-        } catch (diarErr) {
-          debugLogger.warn("Pipeline re-diarization failed, using raw text",
-            { error: diarErr.message }, "meeting");
-        }
-      }
-
-      this._db.updateNote(noteId, { transcript: finalTranscript });
-
-      // Compute diff and emit with completion
-      const diff = computeTranscriptDiff(oldTranscript, finalTranscript);
-      this._broadcast("post-call-pipeline-status", {
-        noteId, step: "retranscribe", status: "complete", diff,
-      });
-
-      this._broadcastNoteUpdate(noteId);
-      return finalTranscript;
-    } finally {
-      try { fs.unlinkSync(tmpWav); } catch (_) {}
+    } catch (err) {
+      debugLogger.error(
+        "Pipeline step retranscribe failed",
+        { noteId, error: err.message },
+        "meeting"
+      );
+      this._emitStatus(noteId, "retranscribe", "error", err.message);
+      return { error: err.message };
     }
+
+    if (result.outcome === "model-missing") {
+      // Deliberately no "complete" here: the step has not run, and the note must stay
+      // pending until the model download drains it.
+      this._broadcast("post-call-pipeline-status", {
+        noteId,
+        step: "retranscribe",
+        status: "pending",
+      });
+      return {};
+    }
+
+    if (result.outcome === "preserved") {
+      this._db.updateNote(noteId, { retranscribe_outcome: result.reason });
+      this._broadcast("post-call-pipeline-status", {
+        noteId,
+        step: "retranscribe",
+        status: "complete",
+        preserved: true,
+        reason: result.reason,
+      });
+      this._broadcastNoteUpdate(noteId);
+      // The kept transcript still covers every source, so it stays the better input for
+      // the title, classification and notes that follow.
+      return {};
+    }
+
+    const previousTranscript = this._db.getNote(noteId)?.transcript;
+    this._db.updateNote(noteId, {
+      transcript: result.transcript,
+      retranscribe_outcome: null,
+    });
+
+    this._broadcast("post-call-pipeline-status", {
+      noteId,
+      step: "retranscribe",
+      status: "complete",
+      diff: computeTranscriptDiff(previousTranscript, result.transcript),
+    });
+    this._broadcastNoteUpdate(noteId);
+
+    return { transcript: result.transcript };
   }
 
   async _generateTitle(transcript) {

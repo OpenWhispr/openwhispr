@@ -488,6 +488,11 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN retranscribe_outcome TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       // Sync columns for folders
       try {
@@ -1158,6 +1163,7 @@ class DatabaseManager {
         "mic_audio_path",
         "system_audio_path",
         "meeting_type_id",
+        "retranscribe_outcome",
       ];
       const fields = [];
       const values = [];
@@ -2259,6 +2265,28 @@ class DatabaseManager {
     } catch (error) {
       debugLogger.error(
         "Error saving note speaker embeddings",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // Rows for speakers that a re-transcription dropped keep the note looking unmapped
+  // forever and let retroactive mapping mint mappings for ids no longer in the transcript.
+  pruneNoteSpeakerEmbeddings(noteId, keepSpeakerIds) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const keep = [...(keepSpeakerIds || [])];
+      const placeholders = keep.map(() => "?").join(", ");
+      const sql = keep.length
+        ? `DELETE FROM note_speaker_embeddings WHERE note_id = ? AND speaker_id NOT IN (${placeholders})`
+        : "DELETE FROM note_speaker_embeddings WHERE note_id = ?";
+      this.db.prepare(sql).run(noteId, ...keep);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error(
+        "Error pruning note speaker embeddings",
         { error: error.message },
         "database"
       );

@@ -2471,6 +2471,13 @@
       "converting": "Converting audio",
       "transcribing": "Transcribing (large model)",
       "diarizing": "Re-diarizing speakers"
+    },
+    "errorWithReason": "Failed: {{step}} — {{reason}}",
+    "preserved": {
+      "title": "Transcript kept as recorded",
+      "incompleteSourceCoverage": "The upgraded transcription only covered part of this conversation, so the original transcript was kept.",
+      "noSegments": "The upgraded transcription came back without timings, so the original transcript was kept.",
+      "unknown": "The upgraded transcription could not be applied safely, so the original transcript was kept."
     }
   },
   "meetingTypes": {

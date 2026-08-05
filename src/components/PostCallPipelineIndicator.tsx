@@ -60,9 +60,11 @@ export default function PostCallPipelineIndicator({
       ) : (
         <Loader2 size={14} className="animate-spin text-primary shrink-0" />
       )}
-      <span className="truncate">
+      <span className="truncate" title={isError ? pipeline.error || undefined : undefined}>
         {isError
-          ? t("pipeline.error", { step: stepLabel })
+          ? pipeline.error
+            ? t("pipeline.errorWithReason", { step: stepLabel, reason: pipeline.error })
+            : t("pipeline.error", { step: stepLabel })
           : t("pipeline.processing", { step: displayLabel })}
       </span>
       {!isError && (

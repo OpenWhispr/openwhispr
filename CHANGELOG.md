@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-08-04
+
+1.12.1 was built but never released; its fixes are included here.
+
+### Fixed
+- **Meeting transcripts were being destroyed after every call.** The automatic post-call step that re-transcribes a meeting with the larger, more accurate model replaced the speaker-by-speaker transcript with one unbroken block of text. Speaker names vanished, the transcript could no longer be browsed or filtered by speaker, and — because the note generator relies on those speakers — the generated notes lost their structure. This is why notes came out rough. Re-transcription now rebuilds the transcript with its speakers and names intact, and when it cannot do that safely it keeps the transcript you already have and says so on the note rather than overwriting it. Recordings with both your microphone and the meeting audio are kept as-is for now: replacing them from one side alone would discard everything you said.
+- **A meeting whose speaker detection failed got no notes at all** — no title, no meeting type, no summary. It is now processed like any other meeting, just without speaker labels.
+- **Live diarization invented speakers.** A 3-person call could report 10 or more, with labels like "Speaker 27". Once one person had two voice clusters, both matched their own voice closely, which the matcher read as an ambiguous tie and resolved by creating yet another speaker — so every duplicate made the next match worse. Two voice clusters that are near-identical to each other are now recognised as the same person and combined, and a voice that clearly matches someone already in the call joins them instead of starting a new speaker. People you have named, or who match a saved voice profile, are never merged into someone else. Post-call diarization was not affected.
+- Re-running a meeting after downloading the large model never actually happened: notes queued for that retry were cleared before the retry could run.
+- **Meeting notes generated no title and no meeting type.** The post-call pipeline could not use local models at all, so anyone running a local model got "Failed: Generating title" and no automatic meeting type. Notes generated with the "Generate Notes" button were unaffected, because that path supports local models — which is why the failure looked inconsistent.
+- Pipeline failures showed only which step failed, never why. The reason is now shown, with the full message on hover.
+
+### Internal
+- Packaging now rebuilds native modules for Electron and verifies the result before building. A build whose `better-sqlite3` binding targets the wrong runtime is aborted with the fix, rather than producing an app that crashes on launch.
+
+## [1.12.0] - 2026-08-04
+
+### Changed
+- **Deleting a note or conversation now removes it outright.** Deletes used to be soft — the row stayed behind, hidden, for the cloud sync loop to clean up. With the cloud gone nothing drained them, so deleted notes accumulated forever and their text stayed in the search index. Deleting now cascades to speaker mappings, speaker embeddings, attached agent conversations and their messages, and removes the search-index entry.
+- On first launch after upgrading, a one-time purge drains notes and conversations that were soft-deleted before this release. These rows were already hidden from the app; the purge removes them from the database.
+
+### Removed
+- The `cloud_id` and `sync_status` columns from all 6 tables that carried them, plus 43 unreachable sync methods left behind by the cloud removal.
+- 11 modules with no remaining importer.
+
+### Fixed
+- Cancelled and oversized URL audio downloads no longer leave their partial temp file on disk. The cleanup unlinked the file before the write stream had finished opening it, so the file was recreated immediately afterwards with nothing left to remove it.
+- Deleting a folder no longer leaves agent conversations pointing at notes that no longer exist.
+- The clear button on the meeting hotkey setting showed a raw translation key instead of its label.
+
+### Internal
+- The database tests now fail loudly when the `better-sqlite3` native binding is unusable, instead of silently skipping. They had been skipping in CI since the workflow's `npm ci --ignore-scripts` never built the binding, so they had never actually run there.
+
 ## [1.11.0] - 2026-07-31
 
 ### Added
