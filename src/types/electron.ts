@@ -1517,6 +1517,8 @@ declare global {
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
+      notifyHideDockIconChanged?: (enabled: boolean) => void;
+      onHideDockIconChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyPanelStartPositionChanged?: (position: string) => void;
 
       // Auto-start at login

@@ -42,6 +42,9 @@
     "quit": "Esci da OpenWhispr",
     "tooltip": "OpenWhispr - Dettatura vocale"
   },
+  "dockMenu": {
+    "hideDockIcon": "Nascondi icona nel Dock (solo barra dei menu)"
+  },
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "Esci da OpenWhispr",
@@ -1563,7 +1566,9 @@
         "title": "Avvio",
         "description": "Controlla il comportamento di OpenWhispr all'avvio",
         "startMinimized": "Avvia ridotto a icona",
-        "startMinimizedDescription": "Avvia senza mostrare la finestra del pannello di controllo"
+        "startMinimizedDescription": "Avvia senza mostrare la finestra del pannello di controllo",
+        "hideDockIcon": "Nascondi icona nel Dock (solo barra dei menu)",
+        "hideDockIconDescription": "Esegui OpenWhispr come app della barra dei menu, senza icona nel Dock. Scompare anche dal selettore Cmd+Tab: usa l'icona nella barra dei menu per aprirla."
       },
       "waylandPaste": {
         "title": "Configurazione incolla su Wayland",

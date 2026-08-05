@@ -42,6 +42,9 @@
     "quit": "Quit OpenWhispr",
     "tooltip": "OpenWhispr - Voice Dictation"
   },
+  "dockMenu": {
+    "hideDockIcon": "Hide Dock icon (menu bar only)"
+  },
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "Quit OpenWhispr",
@@ -1841,7 +1844,9 @@
         "title": "Startup",
         "description": "Control how OpenWhispr behaves when it launches",
         "startMinimized": "Start minimized",
-        "startMinimizedDescription": "Launch without showing the control panel window"
+        "startMinimizedDescription": "Launch without showing the control panel window",
+        "hideDockIcon": "Hide Dock icon (menu bar only)",
+        "hideDockIconDescription": "Run OpenWhispr as a menu bar app with no Dock icon. It also leaves the Cmd+Tab switcher — use the menu bar icon to open it."
       },
       "waylandPaste": {
         "title": "Wayland Paste Setup",

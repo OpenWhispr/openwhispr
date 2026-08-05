@@ -219,6 +219,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   // never incrementally indexed before the upsert-from-cloud handler gained a
   // vector upsert. Delayed so the Qdrant sidecar has time to come up; if it
   // isn't ready yet the flag stays unset and the next launch retries.
+  // Keep the Settings toggle honest when menu-bar-only mode is enabled from
+  // the Dock icon's context menu (main-process origin, #1380).
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onHideDockIconChanged?.((enabled: boolean) => {
+      useSettingsStore.getState().setHideDockIcon(enabled);
+    });
+    return () => unsubscribe?.();
+  }, []);
+
   useEffect(() => {
     if (Number(localStorage.getItem("semanticReindexVersion")) >= SEMANTIC_REINDEX_VERSION) return;
     const timer = setTimeout(() => {

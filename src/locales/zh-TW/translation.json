@@ -42,6 +42,9 @@
     "quit": "結束 OpenWhispr",
     "tooltip": "OpenWhispr - 語音輸入"
   },
+  "dockMenu": {
+    "hideDockIcon": "隱藏 Dock 圖示（僅選單列）"
+  },
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "結束 OpenWhispr",
@@ -1563,7 +1566,9 @@
         "title": "啟動",
         "description": "控制 OpenWhispr 啟動時的行為",
         "startMinimized": "啟動時最小化",
-        "startMinimizedDescription": "啟動時不顯示控制面板視窗"
+        "startMinimizedDescription": "啟動時不顯示控制面板視窗",
+        "hideDockIcon": "隱藏 Dock 圖示（僅選單列）",
+        "hideDockIconDescription": "將 OpenWhispr 作為選單列應用程式執行，不顯示 Dock 圖示。應用程式也會從 Cmd+Tab 切換器中消失——請透過選單列圖示開啟。"
       },
       "waylandPaste": {
         "title": "Wayland 貼上設定",

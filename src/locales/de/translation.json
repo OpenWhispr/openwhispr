@@ -42,6 +42,9 @@
     "quit": "OpenWhispr beenden",
     "tooltip": "OpenWhispr – Sprachdiktat"
   },
+  "dockMenu": {
+    "hideDockIcon": "Dock-Symbol ausblenden (nur Menüleiste)"
+  },
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "OpenWhispr beenden",
@@ -1841,7 +1844,9 @@
         "title": "Autostart",
         "description": "Steuern Sie das Verhalten von OpenWhispr beim Start",
         "startMinimized": "Minimiert starten",
-        "startMinimizedDescription": "Starten, ohne das Einstellungsfenster anzuzeigen"
+        "startMinimizedDescription": "Starten, ohne das Einstellungsfenster anzuzeigen",
+        "hideDockIcon": "Dock-Symbol ausblenden (nur Menüleiste)",
+        "hideDockIconDescription": "OpenWhispr als Menüleisten-App ohne Dock-Symbol ausführen. Die App verschwindet auch aus dem Cmd+Tab-Umschalter — öffne sie über das Menüleisten-Symbol."
       },
       "waylandPaste": {
         "title": "Wayland-Einfügen einrichten",
