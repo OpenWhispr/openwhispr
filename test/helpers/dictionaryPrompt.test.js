@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const loadPrompt = () => import("../../src/helpers/dictionaryPrompt.js");
+const loadScript = () => import("../../src/utils/chineseScript.js");
 
 test("default order keeps dictionary first and triggers last", async () => {
   const { buildDictionaryPrompt } = await loadPrompt();
@@ -54,6 +55,35 @@ test("a tail without a comma is returned as-is", async () => {
   const { truncateDictionaryPromptTail } = await loadPrompt();
   const result = truncateDictionaryPromptTail("x".repeat(50), 10);
   assert.equal(result, "x".repeat(10));
+});
+
+test("the Chinese script bias survives the cap and the most-used tail is kept", async () => {
+  const { buildDictionaryPrompt, budgetDictionaryPrompt } = await loadPrompt();
+  const { getChineseScriptPromptBias, mergeWhisperPrompt } = await loadScript();
+  const bias = getChineseScriptPromptBias("simplified");
+  const dictionary = Array.from({ length: 400 }, (_, i) => `term${i}`);
+  const MAX_PROMPT_CHARS = 890;
+
+  const prompt = mergeWhisperPrompt(
+    budgetDictionaryPrompt(
+      buildDictionaryPrompt(dictionary, [], { mostUsedLast: true }),
+      bias,
+      MAX_PROMPT_CHARS
+    ),
+    "simplified"
+  );
+
+  assert.ok(prompt.length <= MAX_PROMPT_CHARS);
+  assert.ok(prompt.startsWith(bias));
+  assert.ok(prompt.endsWith("term1, term0"));
+});
+
+test("budgetDictionaryPrompt drops the dictionary when the prefix fills the cap", async () => {
+  const { budgetDictionaryPrompt } = await loadPrompt();
+  assert.equal(budgetDictionaryPrompt("aaaa, bbbb", "x".repeat(10), 10), null);
+  assert.equal(budgetDictionaryPrompt("aaaa, bbbb", null, 6), "bbbb");
+  assert.equal(budgetDictionaryPrompt("aaaa, bbbb", "bias", NaN), "aaaa, bbbb");
+  assert.equal(budgetDictionaryPrompt(null, "bias", 100), null);
 });
 
 test("prompts within the cap and invalid caps are returned unchanged", async () => {
