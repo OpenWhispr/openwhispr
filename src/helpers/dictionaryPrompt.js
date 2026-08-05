@@ -37,3 +37,18 @@ export function truncateDictionaryPromptTail(prompt, maxChars) {
   const aligned = tail.slice(firstComma + 1).trim();
   return aligned || tail;
 }
+
+/**
+ * Tail-truncate the dictionary against a cap that already accounts for a prefix
+ * the caller prepends afterwards, so the prefix can never be trimmed away.
+ *
+ * @param {string | null | undefined} prompt comma-joined hint list
+ * @param {string | null | undefined} prefix text merged ahead of the dictionary
+ * @param {number} maxChars cap for the merged result
+ * @returns {string | null | undefined} the dictionary that fits, null when the prefix fills the cap
+ */
+export function budgetDictionaryPrompt(prompt, prefix, maxChars) {
+  if (typeof prompt !== "string" || !Number.isFinite(maxChars)) return prompt;
+  const budget = maxChars - (prefix ? prefix.length + 1 : 0);
+  return budget > 0 ? truncateDictionaryPromptTail(prompt, budget) : null;
+}
