@@ -21,6 +21,7 @@ import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useUsage } from "../hooks/useUsage";
+import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
 import {
   useTranscriptions,
@@ -52,6 +53,7 @@ import {
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
+import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
@@ -157,6 +159,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   const usage = useUsage();
+  const upsell = decideUpsell({
+    authLoaded,
+    isSignedIn,
+    hasPaidAccess: usage?.hasPaidAccess ?? null,
+    isPastDue: usage?.isPastDue ?? false,
+  });
 
   const {
     status: updateStatus,
@@ -305,7 +313,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [toast, t]);
 
   useEffect(() => {
-    if (!usage?.isPastDue || !usage.hasLoaded) return;
+    if (!usage?.isPastDue) return;
     if (sessionStorage.getItem("pastDueNotified")) return;
     sessionStorage.setItem("pastDueNotified", "true");
     toast({
@@ -314,7 +322,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       variant: "destructive",
       duration: 8000,
     });
-  }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
+  }, [usage?.isPastDue, toast, t]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
@@ -588,6 +596,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
           // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
           let handledTranslation = false;
+          let translationApplied = false;
           if (result.transcription.route_kind === "translation") {
             handledTranslation = true;
             try {
@@ -604,7 +613,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const agentName = localStorage.getItem("agentName") || null;
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
-                const { text } = await executeTranslationChain({
+                const { text, translated } = await executeTranslationChain({
                   text: rawText,
                   cleanupReachable: route.cleanupReachable,
                   runCleanup: (currentText: string) =>
@@ -632,7 +641,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       {},
                       "transcription"
                     ),
+                  onUnchangedTranslate: () =>
+                    logger.warn(
+                      "Translation step returned unchanged text, keeping source text",
+                      {},
+                      "transcription"
+                    ),
                 });
+                translationApplied = translated;
                 if (text !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -683,6 +699,40 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             } catch {
               // Reasoning failed — keep the raw STT result
             }
+          }
+
+          // Deterministic Chinese script pass, mirroring dictation (#975). Runs last so
+          // it covers the cleaned/translated text, or the raw transcript when neither ran.
+          // Same rule as audioManager.getEffectiveOutputLanguage: only a completed
+          // translate step moves the text into the target language, so anything else
+          // still has to be scripted as the language that was dictated.
+          try {
+            const outputLanguage =
+              result.transcription.route_kind === "translation"
+                ? (translationApplied
+                    ? s.translationTargetLanguage
+                    : s.translationSourceLanguage) || "auto"
+                : s.preferredLanguage;
+            const scripted = await applyChineseScript(
+              finalTranscription.text,
+              resolveChineseScriptTarget(
+                outputLanguage,
+                s.chineseScriptPreference,
+                finalTranscription.text
+              )
+            );
+            if (scripted !== finalTranscription.text) {
+              const updated = await window.electronAPI.updateTranscriptionText(
+                id,
+                scripted,
+                rawText
+              );
+              if (updated.success && updated.transcription) {
+                finalTranscription = updated.transcription;
+              }
+            }
+          } catch {
+            // Conversion failed — keep the text as transcribed
           }
 
           updateInStore(finalTranscription);
@@ -912,8 +962,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             userImage={user?.image}
             isSignedIn={isSignedIn}
             authLoaded={authLoaded}
-            isProUser={!!(usage?.isSubscribed || usage?.isTrial)}
-            usageLoaded={usage?.hasLoaded ?? false}
+            upsell={upsell}
             updateAction={
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
@@ -1105,7 +1154,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {activeView === "integrations" && (
               <Suspense fallback={null}>
                 <IntegrationsView
-                  isPaid={!!(usage?.isSubscribed || usage?.isTrial)}
+                  isPaid={usage?.hasPaidAccessOptimistic ?? false}
                   onUpgrade={() => {
                     setSettingsSection("plansBilling");
                     setShowSettings(true);

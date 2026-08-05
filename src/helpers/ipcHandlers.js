@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { broadcastToWindows } = require("./windowBroadcast");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
@@ -487,6 +488,7 @@ class IPCHandlers {
     this.whisperCudaManager = managers.whisperCudaManager;
     this.whisperVulkanManager = managers.whisperVulkanManager;
     this.googleCalendarManager = managers.googleCalendarManager;
+    this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
@@ -533,7 +535,7 @@ class IPCHandlers {
     this.setupHandlers();
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
     tokenStore.subscribe(({ generation, token }) => {
-      this.broadcastToWindows("auth-token-state-changed", {
+      broadcastToWindows("auth-token-state-changed", {
         generation,
         hasToken: Boolean(token),
       });
@@ -541,10 +543,10 @@ class IPCHandlers {
 
     if (this.whisperManager?.serverManager) {
       this.whisperManager.serverManager.on("cuda-fallback", () => {
-        this.broadcastToWindows("cuda-fallback-notification", {});
+        broadcastToWindows("cuda-fallback-notification", {});
       });
       this.whisperManager.serverManager.on("gpu-fallback", () => {
-        this.broadcastToWindows("gpu-fallback-notification", {});
+        broadcastToWindows("gpu-fallback-notification", {});
       });
     }
   }
@@ -843,7 +845,7 @@ class IPCHandlers {
           this.databaseManager.deleteTranscriptionsExpiredBefore(transcriptRetentionDays);
         for (const id of ids) {
           this.audioStorageManager.deleteAudio(id);
-          this.broadcastToWindows("transcription-deleted", { id });
+          broadcastToWindows("transcription-deleted", { id });
         }
       }
       if (audioRetentionDays > 0) {
@@ -922,11 +924,11 @@ class IPCHandlers {
 
         // Broadcast the post-save normalized list, not the raw input (which
         // still has case-variant dupes), so renderers don't flash ghost rows.
-        this.broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
+        broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
 
         // Show the overlay so the toast is visible (it may have been hidden after dictation)
         this.windowManager.showDictationPanel();
-        this.broadcastToWindows("corrections-learned", corrections);
+        broadcastToWindows("corrections-learned", corrections);
         debugLogger.debug("[AutoLearn] Saved corrections", { corrections });
       }
     } catch (error) {
@@ -1063,7 +1065,7 @@ class IPCHandlers {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
       if (result?.success && result?.transcription) {
         setImmediate(() => {
-          this.broadcastToWindows("transcription-added", result.transcription);
+          broadcastToWindows("transcription-added", result.transcription);
         });
       }
       return result;
@@ -1078,7 +1080,7 @@ class IPCHandlers {
       const result = this.databaseManager.clearTranscriptions();
       if (result?.success) {
         setImmediate(() => {
-          this.broadcastToWindows("transcriptions-cleared", {
+          broadcastToWindows("transcriptions-cleared", {
             cleared: result.cleared,
           });
         });
@@ -1103,7 +1105,7 @@ class IPCHandlers {
           model: metadata?.model || null,
         });
         const updated = this.databaseManager.getTranscriptionById(id);
-        if (updated) this.broadcastToWindows("transcription-updated", updated);
+        if (updated) broadcastToWindows("transcription-updated", updated);
       }
       return result;
     });
@@ -1267,7 +1269,7 @@ class IPCHandlers {
       // Emit the normalized list straight from SQLite so renderers see the
       // post-dedupe truth, never a caller-supplied payload.
       const words = this.databaseManager.getDictionary();
-      this.broadcastToWindows("dictionary-updated", words);
+      broadcastToWindows("dictionary-updated", words);
       return { success: true };
     });
 
@@ -1321,7 +1323,7 @@ class IPCHandlers {
 
     ipcMain.handle("db-broadcast-snippets-updated", async () => {
       const snippets = this.databaseManager.getSnippets();
-      this.broadcastToWindows("snippets-updated", snippets);
+      broadcastToWindows("snippets-updated", snippets);
       return { success: true };
     });
 
@@ -1341,7 +1343,7 @@ class IPCHandlers {
           });
           return { success: false };
         }
-        this.broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
+        broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
         debugLogger.debug("[AutoLearn] Undo: removed words", { words: validWords });
         return { success: true };
       } catch (err) {
@@ -1363,7 +1365,7 @@ class IPCHandlers {
           spaceId
         );
         if (result?.success && result?.note) {
-          setImmediate(() => this.broadcastToWindows("note-added", result.note));
+          setImmediate(() => broadcastToWindows("note-added", result.note));
           this._asyncVectorUpsert(result.note);
           this._asyncMirrorWrite(result.note);
         }
@@ -1386,7 +1388,7 @@ class IPCHandlers {
     ipcMain.handle("db-update-note", async (event, id, updates) => {
       const result = this.databaseManager.updateNote(id, updates);
       if (result?.success && result?.note) {
-        setImmediate(() => this.broadcastToWindows("note-updated", result.note));
+        setImmediate(() => broadcastToWindows("note-updated", result.note));
         this._asyncVectorUpsert(result.note);
         this._asyncMirrorWrite(result.note);
         if (updates.participants) this._tryAutoLabelOneOnOne(id);
@@ -1477,7 +1479,7 @@ class IPCHandlers {
       let done = 0;
       const { failed } = await vectorIndex.reindexAll(notes, (completed, total) => {
         done = completed;
-        this.broadcastToWindows("semantic-reindex-progress", { done: completed, total });
+        broadcastToWindows("semantic-reindex-progress", { done: completed, total });
       });
       // Report failed batches so callers only latch their done-flag on a clean pass.
       return { success: failed === 0, indexed: done - failed };
@@ -1490,7 +1492,7 @@ class IPCHandlers {
     ipcMain.handle("db-update-note-share-state", async (event, id, state) => {
       const note = this.databaseManager.updateNoteShareState(id, state);
       if (note) {
-        setImmediate(() => this.broadcastToWindows("note-updated", note));
+        setImmediate(() => broadcastToWindows("note-updated", note));
       }
       return note;
     });
@@ -1503,7 +1505,7 @@ class IPCHandlers {
       const result = this.databaseManager.createFolder(name, spaceId);
       if (result?.success && result?.folder) {
         setImmediate(() => {
-          this.broadcastToWindows("folder-created", result.folder);
+          broadcastToWindows("folder-created", result.folder);
           if (this._noteFilesEnabled) {
             const markdownMirror = require("./markdownMirror");
             markdownMirror.ensureFolder(result.folder.name);
@@ -1521,7 +1523,7 @@ class IPCHandlers {
           this._asyncVectorDelete(noteId);
         }
         setImmediate(() => {
-          this.broadcastToWindows("folder-deleted", { id });
+          broadcastToWindows("folder-deleted", { id });
           if (folderName) this._mirrorDeleteFolderIfUnshared(folderName);
         });
       }
@@ -1533,7 +1535,7 @@ class IPCHandlers {
       const result = this.databaseManager.renameFolder(id, name);
       if (result?.success && result?.folder) {
         setImmediate(() => {
-          this.broadcastToWindows("folder-renamed", result.folder);
+          broadcastToWindows("folder-renamed", result.folder);
           if (this._noteFilesEnabled && oldName) {
             const markdownMirror = require("./markdownMirror");
             markdownMirror.renameFolder(oldName, name);
@@ -1551,7 +1553,7 @@ class IPCHandlers {
           this._asyncVectorUpsert(note);
         }
         if (result.folder) {
-          setImmediate(() => this.broadcastToWindows("folder-synced", result.folder));
+          setImmediate(() => broadcastToWindows("folder-synced", result.folder));
         }
       }
       return result;
@@ -1568,7 +1570,7 @@ class IPCHandlers {
     ipcMain.handle("db-update-space", async (event, id, updates) => {
       const result = this.databaseManager.updateSpace(id, updates);
       if (result?.success && result.space) {
-        setImmediate(() => this.broadcastToWindows("space-synced", result.space));
+        setImmediate(() => broadcastToWindows("space-synced", result.space));
       }
       return result;
     });
@@ -1596,7 +1598,7 @@ class IPCHandlers {
           this._asyncMirrorDelete(noteId);
         }
         setImmediate(() => {
-          this.broadcastToWindows("space-purged", { spaceId: result.spaceId });
+          broadcastToWindows("space-purged", { spaceId: result.spaceId });
           for (const folderName of result.folderNames ?? []) {
             this._mirrorDeleteFolderIfUnshared(folderName);
           }
@@ -1617,7 +1619,7 @@ class IPCHandlers {
       const result = this.databaseManager.createAction(name, description, prompt, icon);
       if (result?.success && result?.action) {
         setImmediate(() => {
-          this.broadcastToWindows("action-created", result.action);
+          broadcastToWindows("action-created", result.action);
         });
       }
       return result;
@@ -1627,7 +1629,7 @@ class IPCHandlers {
       const result = this.databaseManager.updateAction(id, updates);
       if (result?.success && result?.action) {
         setImmediate(() => {
-          this.broadcastToWindows("action-updated", result.action);
+          broadcastToWindows("action-updated", result.action);
         });
       }
       return result;
@@ -1637,7 +1639,7 @@ class IPCHandlers {
       const result = this.databaseManager.deleteAction(id);
       if (result?.success) {
         setImmediate(() => {
-          this.broadcastToWindows("action-deleted", { id });
+          broadcastToWindows("action-deleted", { id });
         });
       }
       return result;
@@ -1770,7 +1772,7 @@ class IPCHandlers {
     ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
       const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
       if (note) {
-        setImmediate(() => this.broadcastToWindows("note-synced", note));
+        setImmediate(() => broadcastToWindows("note-synced", note));
         this._asyncVectorUpsert(note);
       }
       return note;
@@ -1818,7 +1820,7 @@ class IPCHandlers {
       if (result?.success) {
         this._asyncVectorDelete(id);
         this._asyncMirrorDelete(id);
-        setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
+        setImmediate(() => broadcastToWindows("note-deleted", { id }));
       }
       return result;
     });
@@ -1832,7 +1834,7 @@ class IPCHandlers {
     );
     ipcMain.handle("db-upsert-folder-from-cloud", (_, cloudFolder, localSpaceId) => {
       const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId);
-      if (folder) setImmediate(() => this.broadcastToWindows("folder-synced", folder));
+      if (folder) setImmediate(() => broadcastToWindows("folder-synced", folder));
       return folder;
     });
     ipcMain.handle(
@@ -1862,9 +1864,9 @@ class IPCHandlers {
           this._asyncMirrorWrite(note);
         }
         setImmediate(() => {
-          if (result.folder) this.broadcastToWindows("folder-synced", result.folder);
+          if (result.folder) broadcastToWindows("folder-synced", result.folder);
           for (const note of result.notes ?? []) {
-            this.broadcastToWindows("note-synced", note);
+            broadcastToWindows("note-synced", note);
           }
         });
       }
@@ -1877,7 +1879,7 @@ class IPCHandlers {
           this._asyncVectorDelete(noteId);
         }
         setImmediate(() => {
-          this.broadcastToWindows("folder-deleted", { id });
+          broadcastToWindows("folder-deleted", { id });
           if (result.name) this._mirrorDeleteFolderIfUnshared(result.name);
         });
       }
@@ -1897,13 +1899,13 @@ class IPCHandlers {
           this._asyncMirrorDelete(noteId);
         }
         setImmediate(() => {
-          if (result.folder) this.broadcastToWindows("folder-synced", result.folder);
-          else this.broadcastToWindows("folder-deleted", { id });
+          if (result.folder) broadcastToWindows("folder-synced", result.folder);
+          else broadcastToWindows("folder-deleted", { id });
           for (const note of result.relocatedNotes ?? []) {
-            this.broadcastToWindows("note-updated", note);
+            broadcastToWindows("note-updated", note);
           }
           for (const noteId of result.deletedNoteIds ?? []) {
-            this.broadcastToWindows("note-deleted", { id: noteId });
+            broadcastToWindows("note-deleted", { id: noteId });
           }
           const folderGone = !result.folder || result.folder.name !== result.folderName;
           if (result.folderName && folderGone) {
@@ -1917,21 +1919,21 @@ class IPCHandlers {
     // Renderer-side sync events (conflicts, revocation toasts, …) happen in
     // whichever window ran the pass — rebroadcast them to ALL windows.
     ipcMain.handle("broadcast-sync-event", (_, name, payload) => {
-      this.broadcastToWindows("sync-event", { name, payload });
+      broadcastToWindows("sync-event", { name, payload });
       return { success: true };
     });
 
     // Spaces sync
     ipcMain.handle("db-upsert-space-from-cloud", (_, cloudSpace) => {
       const space = this.databaseManager.upsertSpaceFromCloud(cloudSpace);
-      if (space) setImmediate(() => this.broadcastToWindows("space-synced", space));
+      if (space) setImmediate(() => broadcastToWindows("space-synced", space));
       return space;
     });
     ipcMain.handle("db-set-space-sync-status", (_, id, status) => {
       const result = this.databaseManager.setSpaceSyncStatus(id, status);
       if (result?.success && result.space) {
         // Live skeleton toggling: the tree keys pending/synced off this flag.
-        setImmediate(() => this.broadcastToWindows("space-synced", result.space));
+        setImmediate(() => broadcastToWindows("space-synced", result.space));
       }
       return result;
     });
@@ -1955,7 +1957,7 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-conversation", (_, id) => {
       const result = this.databaseManager.hardDeleteConversation(id);
       if (result?.success) {
-        setImmediate(() => this.broadcastToWindows("conversation-deleted", { id }));
+        setImmediate(() => broadcastToWindows("conversation-deleted", { id }));
       }
       return result;
     });
@@ -1979,7 +1981,7 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-transcription", (_, id) => {
       const result = this.databaseManager.hardDeleteTranscription(id);
       if (result?.success) {
-        setImmediate(() => this.broadcastToWindows("transcription-deleted", { id }));
+        setImmediate(() => broadcastToWindows("transcription-deleted", { id }));
       }
       return result;
     });
@@ -4276,6 +4278,7 @@ class IPCHandlers {
           "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
         systemAudio:
           "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+        calendars: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
       },
       win32: {
         microphone: "ms-settings:privacy-microphone",
@@ -4316,6 +4319,7 @@ class IPCHandlers {
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
+    ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
 
     ipcMain.handle("show-emoji-panel", () => {
       try {
@@ -4932,7 +4936,7 @@ class IPCHandlers {
         const updated = this.databaseManager.getTranscriptionById(id);
         if (updated) {
           setImmediate(() => {
-            this.broadcastToWindows("transcription-updated", updated);
+            broadcastToWindows("transcription-updated", updated);
           });
         }
         return { success: true, transcription: updated };
@@ -7485,8 +7489,11 @@ class IPCHandlers {
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
+        // Never serve entitlement from Chromium's HTTP cache: a cached
+        // response can outlive the account that produced it.
         const response = await proxyFetch(`${apiUrl}/api/usage`, {
           headers: authHeader,
+          cache: "no-store",
         });
 
         if (!response.ok) {
@@ -7496,7 +7503,10 @@ class IPCHandlers {
           if (response.status === 503) {
             return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
           }
-          throw new Error(`API error: ${response.status}`);
+          const errorData = await response.json().catch(() => ({}));
+          const message = errorData.error || `API error: ${response.status}`;
+          debugLogger.error(`Cloud usage fetch error: ${message}`);
+          return { success: false, error: message, code: errorData.code };
         }
 
         const data = await response.json();
@@ -7532,7 +7542,9 @@ class IPCHandlers {
             return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
           }
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `API error: ${response.status}`);
+          const message = errorData.error || `API error: ${response.status}`;
+          debugLogger.error(`${errorPrefix}: ${message}`);
+          return { success: false, error: message, code: errorData.code };
         }
 
         const data = await response.json();
@@ -9045,6 +9057,38 @@ class IPCHandlers {
       }
     });
 
+    // Apple Calendar (macOS EventKit)
+    ipcMain.handle("acal-connect", async () => {
+      try {
+        return await this.appleCalendarManager.connect();
+      } catch (error) {
+        debugLogger.error("Apple Calendar connect failed", { error: error.message }, "acal");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("acal-disconnect", async () => {
+      try {
+        return this.appleCalendarManager.disconnect();
+      } catch (error) {
+        debugLogger.error("Apple Calendar disconnect failed", { error: error.message }, "acal");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("acal-get-connection-status", async () => {
+      try {
+        return this.appleCalendarManager.getConnectionStatus();
+      } catch (error) {
+        debugLogger.error(
+          "Apple Calendar connection status failed",
+          { error: error.message },
+          "acal"
+        );
+        return { connected: false, sourceNames: [] };
+      }
+    });
+
     ipcMain.handle("search-contacts", async (_event, query) => {
       try {
         const contacts = this.databaseManager.searchContacts(query);
@@ -9507,7 +9551,7 @@ class IPCHandlers {
         if (changed) {
           this.databaseManager.updateNote(noteId, { transcript: JSON.stringify(transcript) });
           const updated = this.databaseManager.getNote(noteId);
-          if (updated) this.broadcastToWindows("note-updated", updated);
+          if (updated) broadcastToWindows("note-updated", updated);
         }
 
         if (profile) this._retroactiveMapping(profile);
@@ -9867,7 +9911,7 @@ class IPCHandlers {
     const result = this.databaseManager.deleteTranscription(id);
     if (result?.success) {
       setImmediate(() => {
-        this.broadcastToWindows("transcription-deleted", { id });
+        broadcastToWindows("transcription-deleted", { id });
       });
     }
     return result;
@@ -9876,20 +9920,11 @@ class IPCHandlers {
   deleteNoteInternal(id) {
     const result = this.databaseManager.deleteNote(id);
     if (result?.success) {
-      setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
+      setImmediate(() => broadcastToWindows("note-deleted", { id }));
       this._asyncVectorDelete(id);
       this._asyncMirrorDelete(id);
     }
     return result;
-  }
-
-  broadcastToWindows(channel, payload) {
-    const windows = BrowserWindow.getAllWindows();
-    windows.forEach((win) => {
-      if (!win.isDestroyed()) {
-        win.webContents.send(channel, payload);
-      }
-    });
   }
 }
 

@@ -6,7 +6,12 @@
       "uiLabel": "Idioma de la interfaz",
       "uiDescription": "Elige el idioma usado en la interfaz de OpenWhispr",
       "transcriptionLabel": "Idioma de transcripción",
-      "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión"
+      "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión",
+      "chineseScriptLabel": "Escritura china (dictado)",
+      "chineseScriptDescription": "Cuando se detecte chino, convierte las transcripciones dictadas a caracteres simplificados o tradicionales. El chino hablado suena igual; Whisper solo devuelve una escritura.",
+      "chineseScriptAsTranscribed": "Mantener como se transcribió",
+      "chineseScriptSimplified": "Simplificado (简体)",
+      "chineseScriptTraditional": "Tradicional (繁體)"
     },
     "noteFiles": {
       "title": "Guardar notas como archivos",
@@ -1199,7 +1204,9 @@
         "couldNotOpenTitle": "No se pudo abrir facturación",
         "manageBilling": "Administrar facturación",
         "opening": "Abriendo...",
-        "updatePaymentMethod": "Actualizar método de pago"
+        "updatePaymentMethod": "Actualizar método de pago",
+        "contactOwnerTitle": "Contacta al propietario del espacio de trabajo",
+        "contactOwnerDescription": "Solo el propietario del espacio de trabajo puede actualizar su facturación."
       },
       "checkout": {
         "couldNotOpenDescription": "Tuvimos problemas al abrir la página de pago. Inténtalo de nuevo.",
@@ -1362,6 +1369,44 @@
         "successDescription": "Tu cuenta y todos los datos han sido eliminados. La aplicación se recargará ahora.",
         "failedTitle": "Error al eliminar",
         "failedDescription": "Algo salió mal al eliminar tu cuenta. Es posible que tus datos locales se hayan eliminado parcialmente. Inténtalo de nuevo."
+      },
+      "profile": {
+        "name": {
+          "label": "Nombre visible",
+          "placeholder": "Tu nombre",
+          "save": "Guardar",
+          "saving": "Guardando...",
+          "saved": "Nombre visible actualizado",
+          "error": "No se pudo actualizar tu nombre"
+        },
+        "password": {
+          "label": "Contraseña",
+          "description": "Cambia la contraseña que usas para iniciar sesión.",
+          "change": "Cambiar contraseña",
+          "dialogTitle": "Cambiar contraseña",
+          "dialogDescription": "Introduce tu contraseña actual y elige una nueva.",
+          "currentLabel": "Contraseña actual",
+          "newLabel": "Nueva contraseña",
+          "confirmLabel": "Confirmar nueva contraseña",
+          "minLength": "La contraseña debe tener al menos 8 caracteres",
+          "mismatch": "Las contraseñas no coinciden",
+          "revokeOthers": "Cerrar sesión en otros dispositivos",
+          "submit": "Actualizar contraseña",
+          "saving": "Actualizando...",
+          "cancel": "Cancelar",
+          "saved": "Contraseña actualizada"
+        },
+        "errors": {
+          "invalidPassword": "Tu contraseña actual es incorrecta.",
+          "passwordTooShort": "La contraseña debe tener al menos 8 caracteres.",
+          "passwordTooLong": "La contraseña es demasiado larga.",
+          "noPassword": "Esta cuenta no tiene una contraseña configurada.",
+          "generic": "Algo salió mal. Inténtalo de nuevo."
+        }
+      },
+      "planUnavailable": {
+        "title": "Plan no disponible",
+        "description": "No pudimos cargar tu plan ahora mismo. Tu acceso no ha cambiado."
       }
     },
     "agentConfig": {
@@ -2162,6 +2207,7 @@
         "openai_gpt_5_6_terra": "GPT-5.6 equilibrado para el trabajo diario",
         "openai_gpt_5_6_luna": "El GPT-5.6 más rápido y económico",
         "openai_gpt_5_5": "Modelo frontier para razonamiento complejo",
+        "anthropic_claude_opus_5": "El modelo Opus más capaz, contexto de 1M",
         "anthropic_claude_opus_4_8": "Potente modelo Opus enfocado en honestidad y fiabilidad",
         "anthropic_claude_opus_4_7": "Modelo Opus potente",
         "anthropic_claude_opus_4_6": "Generación anterior de Opus, contexto de 1M",
@@ -2852,26 +2898,6 @@
     "searchDescription": "Buscar en todas tus conversaciones",
     "newChatEmpty": "Pregunta sobre tus notas, transcripciones o lo que quieras"
   },
-  "usage": {
-    "approachingLimit": "Cerca del límite semanal",
-    "approachingLimitDescription": "Has usado {{wordsUsed}} de {{limit}} palabras gratuitas esta semana.",
-    "yourPlan": "Tu plan",
-    "trial": "Prueba (queda {{days}} día)",
-    "trial_other": "Prueba (quedan {{days}} días)",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "Transcripciones ilimitadas durante tu período de prueba",
-    "unlimited": "Transcripciones ilimitadas",
-    "manageSubscription": "Gestionar suscripción",
-    "weeklyUsage": "Uso semanal",
-    "limitReached": "Límite alcanzado",
-    "free": "Gratis",
-    "wordsRemaining": "{{remaining}} palabras restantes",
-    "rollingLimit": "Límite semanal renovable",
-    "upgradeToPro": "Actualizar a Pro",
-    "useYourOwnKey": "Usar tu propia clave API",
-    "upgradeUnlimited": "Actualizar a Pro — transcripciones ilimitadas"
-  },
   "support": {
     "documentation": "Documentación",
     "joinDiscord": "Unirse a Discord",
@@ -3073,6 +3099,21 @@
       "systemAudioRequired": "Se requiere permiso de Audio del Sistema",
       "systemAudioDescription": "Para transcribir reuniones, OpenWhispr necesita el permiso de Audio del Sistema para capturar el audio de otros participantes. Nunca grabamos tu pantalla. Serás dirigido a Ajustes del Sistema para activarlo.",
       "openSettings": "Abrir Ajustes del Sistema"
+    },
+    "appleCalendar": {
+      "title": "Calendario de Apple",
+      "optional": "Opcional",
+      "description": "Lee reuniones de Calendar.app — iCloud, Google, Exchange y Outlook en un solo lugar.",
+      "connect": "Conectar Calendario de Apple",
+      "connected": "Conectado",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "¿Desconectar el Calendario de Apple?",
+      "disconnectDescription": "Ya no se grabarán notas de reuniones de tu Calendario de Apple.",
+      "permissionDenied": "Se requiere acceso al calendario",
+      "permissionDeniedDescription": "OpenWhispr necesita acceso al calendario para detectar reuniones. Activa OpenWhispr en Ajustes del Sistema, en Privacidad y seguridad → Calendarios.",
+      "openSettings": "Abrir Ajustes del Sistema",
+      "connectFailed": "Error de conexión",
+      "connectFailedDescription": "Se produjo un error al conectar con Calendar.app. Reinicia OpenWhispr e inténtalo de nuevo."
     },
     "sections": {
       "calendar": "Calendario",

@@ -226,7 +226,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const { isSignedIn } = useAuth();
   const usage = useUsage();
-  const isProUser = usage?.isSubscribed || usage?.isTrial;
+  // The server enforces the free-tier size limit regardless, so an unresolved
+  // entitlement should not block a payer's upload.
+  const isProUser = usage?.hasPaidAccessOptimistic ?? false;
 
   const {
     openaiApiKey,

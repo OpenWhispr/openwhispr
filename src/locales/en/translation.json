@@ -6,7 +6,12 @@
       "uiLabel": "Interface language",
       "uiDescription": "Choose the language used throughout OpenWhispr's interface",
       "transcriptionLabel": "Transcription language",
-      "transcriptionDescription": "Choose the language you speak for more accurate transcription"
+      "transcriptionDescription": "Choose the language you speak for more accurate transcription",
+      "chineseScriptLabel": "Chinese script (dictation)",
+      "chineseScriptDescription": "When Chinese is detected, convert dictated transcripts to Simplified or Traditional characters. Spoken Chinese is the same either way; Whisper only returns one script.",
+      "chineseScriptAsTranscribed": "Keep as transcribed",
+      "chineseScriptSimplified": "Simplified (简体)",
+      "chineseScriptTraditional": "Traditional (繁體)"
     },
     "noteFiles": {
       "title": "Save notes as files",
@@ -1429,7 +1434,9 @@
         "couldNotOpenTitle": "Couldn't open billing",
         "manageBilling": "Manage Billing",
         "opening": "Opening...",
-        "updatePaymentMethod": "Update Payment Method"
+        "updatePaymentMethod": "Update Payment Method",
+        "contactOwnerTitle": "Contact your workspace owner",
+        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace."
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -1592,6 +1599,44 @@
         "successDescription": "Your account and all data have been deleted. The app will now reload.",
         "failedTitle": "Deletion Failed",
         "failedDescription": "Something went wrong deleting your account. Your local data may have been partially removed. Please try again."
+      },
+      "profile": {
+        "name": {
+          "label": "Display name",
+          "placeholder": "Your name",
+          "save": "Save",
+          "saving": "Saving...",
+          "saved": "Display name updated",
+          "error": "Couldn't update your name"
+        },
+        "password": {
+          "label": "Password",
+          "description": "Change the password you use to sign in.",
+          "change": "Change password",
+          "dialogTitle": "Change password",
+          "dialogDescription": "Enter your current password and choose a new one.",
+          "currentLabel": "Current password",
+          "newLabel": "New password",
+          "confirmLabel": "Confirm new password",
+          "minLength": "Password must be at least 8 characters",
+          "mismatch": "Passwords don't match",
+          "revokeOthers": "Sign out other devices",
+          "submit": "Update password",
+          "saving": "Updating...",
+          "cancel": "Cancel",
+          "saved": "Password updated"
+        },
+        "errors": {
+          "invalidPassword": "Your current password is incorrect.",
+          "passwordTooShort": "Password must be at least 8 characters.",
+          "passwordTooLong": "Password is too long.",
+          "noPassword": "No password is set for this account.",
+          "generic": "Something went wrong. Please try again."
+        }
+      },
+      "planUnavailable": {
+        "title": "Plan unavailable",
+        "description": "We couldn't load your plan right now. Your access is unchanged."
       }
     },
     "agentConfig": {
@@ -2206,6 +2251,7 @@
         "openai_gpt_5_6_terra": "Balanced GPT-5.6 for everyday work",
         "openai_gpt_5_6_luna": "Fastest, lowest-cost GPT-5.6",
         "openai_gpt_5_5": "Frontier model for complex reasoning",
+        "anthropic_claude_opus_5": "Most capable Opus model, 1M context",
         "anthropic_claude_opus_4_8": "Powerful Opus model tuned for honesty and reliability",
         "anthropic_claude_opus_4_7": "Powerful Opus model",
         "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
@@ -2445,26 +2491,6 @@
       "stop": "Stop",
       "playSignal": "Play signal"
     }
-  },
-  "usage": {
-    "approachingLimit": "Approaching Weekly Limit",
-    "approachingLimitDescription": "You've used {{wordsUsed}} of {{limit}} free words this week.",
-    "yourPlan": "Your Plan",
-    "trial": "Trial ({{days}} day left)",
-    "trial_other": "Trial ({{days}} days left)",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "Unlimited transcriptions during your trial",
-    "unlimited": "Unlimited transcriptions",
-    "manageSubscription": "Manage Subscription",
-    "weeklyUsage": "Weekly Usage",
-    "limitReached": "Limit reached",
-    "free": "Free",
-    "wordsRemaining": "{{remaining}} words remaining",
-    "rollingLimit": "Rolling weekly limit",
-    "upgradeToPro": "Upgrade to Pro",
-    "useYourOwnKey": "Use Your Own Key",
-    "upgradeUnlimited": "Upgrade to Pro — unlimited transcriptions"
   },
   "notes": {
     "mutationErrors": {
@@ -3173,6 +3199,21 @@
       "systemAudioRequired": "System Audio Permission Required",
       "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
       "openSettings": "Open System Settings"
+    },
+    "appleCalendar": {
+      "title": "Apple Calendar",
+      "optional": "Optional",
+      "description": "Read meetings from Calendar.app — iCloud, Google, Exchange, and Outlook in one place.",
+      "connect": "Connect Apple Calendar",
+      "connected": "Connected",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect Apple Calendar?",
+      "disconnectDescription": "Meeting notes will no longer be recorded from your Apple Calendar.",
+      "permissionDenied": "Calendar Access Required",
+      "permissionDeniedDescription": "OpenWhispr needs calendar access to detect meetings. Enable OpenWhispr in System Settings under Privacy & Security → Calendars.",
+      "openSettings": "Open System Settings",
+      "connectFailed": "Connection Failed",
+      "connectFailedDescription": "Something went wrong while connecting to Calendar.app. Please restart OpenWhispr and try again."
     },
     "sections": {
       "calendar": "Calendar",

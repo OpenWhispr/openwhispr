@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
 import { getCachedPlatform } from "../utils/platform";
+import type { UpsellDecision } from "../lib/upsell";
 
 const platform = getCachedPlatform();
 
@@ -44,8 +45,7 @@ interface ControlPanelSidebarProps {
   userImage?: string | null;
   isSignedIn?: boolean;
   authLoaded?: boolean;
-  isProUser?: boolean;
-  usageLoaded?: boolean;
+  upsell: UpsellDecision;
   updateAction?: React.ReactNode;
 }
 
@@ -62,8 +62,7 @@ export default function ControlPanelSidebar({
   userImage,
   isSignedIn,
   authLoaded,
-  isProUser,
-  usageLoaded,
+  upsell,
   updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
@@ -71,13 +70,8 @@ export default function ControlPanelSidebar({
     () => localStorage.getItem("upgradeProDismissed") === "true"
   );
 
-  const showLimitBanner = authLoaded && isSignedIn && !isProUser && isOverLimit;
-  const showUpgradeBanner =
-    !showLimitBanner &&
-    authLoaded &&
-    (!isSignedIn || usageLoaded !== false) &&
-    !isProUser &&
-    !upgradeDismissed;
+  const showLimitBanner = upsell === "show" && Boolean(isSignedIn) && Boolean(isOverLimit);
+  const showUpgradeBanner = upsell === "show" && !showLimitBanner && !upgradeDismissed;
 
   const navItems: {
     id: ControlPanelView;

@@ -6,7 +6,12 @@
       "uiLabel": "介面語言",
       "uiDescription": "選擇 OpenWhispr 介面使用的語言",
       "transcriptionLabel": "轉錄語言",
-      "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度"
+      "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度",
+      "chineseScriptLabel": "中文書寫（語音輸入）",
+      "chineseScriptDescription": "偵測到中文時，將語音輸入的轉錄結果轉換為簡體或繁體。口語聽起來一樣；Whisper 只會輸出一種字形。",
+      "chineseScriptAsTranscribed": "保持轉錄原樣",
+      "chineseScriptSimplified": "簡體",
+      "chineseScriptTraditional": "繁體"
     },
     "noteFiles": {
       "title": "將筆記儲存為檔案",
@@ -1151,7 +1156,9 @@
         "couldNotOpenTitle": "無法開啟帳單頁面",
         "manageBilling": "管理帳單",
         "opening": "開啟中...",
-        "updatePaymentMethod": "更新付款方式"
+        "updatePaymentMethod": "更新付款方式",
+        "contactOwnerTitle": "請聯絡工作區擁有者",
+        "contactOwnerDescription": "只有工作區擁有者才能更新該工作區的帳單。"
       },
       "checkout": {
         "couldNotOpenDescription": "開啟結帳頁面時發生問題。請再試一次。",
@@ -1314,6 +1321,44 @@
         "successDescription": "您的帳戶和所有資料已被刪除。應用程式將立即重新載入。",
         "failedTitle": "刪除失敗",
         "failedDescription": "刪除您的帳戶時發生錯誤。您的本地資料可能已被部分刪除。請重試。"
+      },
+      "profile": {
+        "name": {
+          "label": "顯示名稱",
+          "placeholder": "您的姓名",
+          "save": "儲存",
+          "saving": "儲存中...",
+          "saved": "顯示名稱已更新",
+          "error": "無法更新您的姓名"
+        },
+        "password": {
+          "label": "密碼",
+          "description": "變更您用於登入的密碼。",
+          "change": "變更密碼",
+          "dialogTitle": "變更密碼",
+          "dialogDescription": "輸入您目前的密碼並設定新密碼。",
+          "currentLabel": "目前密碼",
+          "newLabel": "新密碼",
+          "confirmLabel": "確認新密碼",
+          "minLength": "密碼至少需要 8 個字元",
+          "mismatch": "兩次輸入的密碼不一致",
+          "revokeOthers": "在其他裝置上登出",
+          "submit": "更新密碼",
+          "saving": "更新中...",
+          "cancel": "取消",
+          "saved": "密碼已更新"
+        },
+        "errors": {
+          "invalidPassword": "您目前的密碼不正確。",
+          "passwordTooShort": "密碼至少需要 8 個字元。",
+          "passwordTooLong": "密碼過長。",
+          "noPassword": "此帳戶尚未設定密碼。",
+          "generic": "發生錯誤，請再試一次。"
+        }
+      },
+      "planUnavailable": {
+        "title": "無法取得方案",
+        "description": "目前無法載入你的方案，你的使用權限不受影響。"
       }
     },
     "agentConfig": {
@@ -2114,6 +2159,7 @@
         "openai_gpt_5_6_terra": "均衡的 GPT-5.6，適合日常工作",
         "openai_gpt_5_6_luna": "速度最快、成本最低的 GPT-5.6",
         "openai_gpt_5_5": "複雜推理前沿模型",
+        "anthropic_claude_opus_5": "最強大的 Opus 模型，1M 上下文",
         "anthropic_claude_opus_4_8": "強大的 Opus 模型，注重誠實與可靠",
         "anthropic_claude_opus_4_7": "強大的 Opus 模型",
         "anthropic_claude_opus_4_6": "上一代 Opus 模型，1M 上下文",
@@ -2804,26 +2850,6 @@
     "searchDescription": "搜尋所有對話",
     "newChatEmpty": "詢問關於筆記、轉錄或其他任何內容"
   },
-  "usage": {
-    "approachingLimit": "即將達到每週上限",
-    "approachingLimitDescription": "你本週已使用 {{wordsUsed}} / {{limit}} 個免費字數。",
-    "yourPlan": "你的方案",
-    "trial": "試用（剩餘 {{days}} 天）",
-    "trial_other": "試用（剩餘 {{days}} 天）",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "試用期間無限轉錄",
-    "unlimited": "無限轉錄",
-    "manageSubscription": "管理訂閱",
-    "weeklyUsage": "每週用量",
-    "limitReached": "已達上限",
-    "free": "免費",
-    "wordsRemaining": "剩餘 {{remaining}} 字",
-    "rollingLimit": "滾動式每週額度",
-    "upgradeToPro": "升級至 Pro",
-    "useYourOwnKey": "使用自己的 API Key",
-    "upgradeUnlimited": "升級至 Pro — 無限轉錄"
-  },
   "support": {
     "documentation": "文件",
     "joinDiscord": "加入 Discord",
@@ -3025,6 +3051,21 @@
       "systemAudioRequired": "需要系統音訊權限",
       "systemAudioDescription": "要轉錄會議，OpenWhispr 需要系統音訊權限來錄製其他參與者的音訊。我們絕不會錄製您的螢幕。您將被引導至系統設定以啟用此權限。",
       "openSettings": "打開系統設定"
+    },
+    "appleCalendar": {
+      "title": "Apple 日曆",
+      "optional": "可選",
+      "description": "從 Calendar.app 讀取會議 — iCloud、Google、Exchange 和 Outlook 一站式接入。",
+      "connect": "連接 Apple 日曆",
+      "connected": "已連接",
+      "disconnect": "中斷連接",
+      "disconnectConfirm": "中斷 Apple 日曆的連接？",
+      "disconnectDescription": "將不再從 Apple 日曆記錄會議筆記。",
+      "permissionDenied": "需要日曆存取權限",
+      "permissionDeniedDescription": "OpenWhispr 需要日曆存取權限來偵測會議。請在系統設定的「隱私權與安全性」→「日曆」中啟用 OpenWhispr。",
+      "openSettings": "打開系統設定",
+      "connectFailed": "連線失敗",
+      "connectFailedDescription": "連線 Calendar.app 時發生錯誤。請重新啟動 OpenWhispr 後再試一次。"
     },
     "sections": {
       "calendar": "行事曆",

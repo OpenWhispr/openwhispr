@@ -6,7 +6,12 @@
       "uiLabel": "Язык интерфейса",
       "uiDescription": "Выберите язык интерфейса OpenWhispr",
       "transcriptionLabel": "Язык транскрипции",
-      "transcriptionDescription": "Выберите язык, на котором вы говорите, для более точной транскрипции"
+      "transcriptionDescription": "Выберите язык, на котором вы говорите, для более точной транскрипции",
+      "chineseScriptLabel": "Китайская письменность (диктовка)",
+      "chineseScriptDescription": "Когда обнаружен китайский, преобразовать надиктованные транскрипты в упрощенные или традиционные иероглифы. На слух китайский одинаков; Whisper возвращает только одну письменность.",
+      "chineseScriptAsTranscribed": "Оставить как распознано",
+      "chineseScriptSimplified": "Упрощенный (简体)",
+      "chineseScriptTraditional": "Традиционный (繁體)"
     },
     "noteFiles": {
       "title": "Сохранять заметки как файлы",
@@ -1157,7 +1162,9 @@
         "couldNotOpenTitle": "Не удалось открыть оплату",
         "manageBilling": "Управление оплатой",
         "opening": "Открытие...",
-        "updatePaymentMethod": "Обновить способ оплаты"
+        "updatePaymentMethod": "Обновить способ оплаты",
+        "contactOwnerTitle": "Обратитесь к владельцу рабочего пространства",
+        "contactOwnerDescription": "Только владелец рабочего пространства может изменить его оплату."
       },
       "checkout": {
         "couldNotOpenDescription": "Не удалось открыть страницу оформления. Попробуйте ещё раз.",
@@ -1320,6 +1327,44 @@
         "successDescription": "Ваш аккаунт и все данные были удалены. Приложение сейчас перезагрузится.",
         "failedTitle": "Ошибка удаления",
         "failedDescription": "Что-то пошло не так при удалении вашего аккаунта. Ваши локальные данные могли быть частично удалены. Попробуйте снова."
+      },
+      "profile": {
+        "name": {
+          "label": "Отображаемое имя",
+          "placeholder": "Ваше имя",
+          "save": "Сохранить",
+          "saving": "Сохранение...",
+          "saved": "Отображаемое имя обновлено",
+          "error": "Не удалось обновить ваше имя"
+        },
+        "password": {
+          "label": "Пароль",
+          "description": "Измените пароль, который вы используете для входа.",
+          "change": "Изменить пароль",
+          "dialogTitle": "Изменить пароль",
+          "dialogDescription": "Введите текущий пароль и выберите новый.",
+          "currentLabel": "Текущий пароль",
+          "newLabel": "Новый пароль",
+          "confirmLabel": "Подтвердите новый пароль",
+          "minLength": "Пароль должен содержать не менее 8 символов",
+          "mismatch": "Пароли не совпадают",
+          "revokeOthers": "Выйти на других устройствах",
+          "submit": "Обновить пароль",
+          "saving": "Обновление...",
+          "cancel": "Отмена",
+          "saved": "Пароль обновлён"
+        },
+        "errors": {
+          "invalidPassword": "Текущий пароль указан неверно.",
+          "passwordTooShort": "Пароль должен содержать не менее 8 символов.",
+          "passwordTooLong": "Пароль слишком длинный.",
+          "noPassword": "Для этого аккаунта не установлен пароль.",
+          "generic": "Что-то пошло не так. Попробуйте ещё раз."
+        }
+      },
+      "planUnavailable": {
+        "title": "План недоступен",
+        "description": "Не удалось загрузить ваш план. Доступ при этом не изменился."
       }
     },
     "agentConfig": {
@@ -2130,6 +2175,7 @@
         "openai_gpt_5_6_terra": "Сбалансированная GPT-5.6 для повседневной работы",
         "openai_gpt_5_6_luna": "Самая быстрая и недорогая GPT-5.6",
         "openai_gpt_5_5": "Фронтирная модель для сложного рассуждения",
+        "anthropic_claude_opus_5": "Самая мощная модель Opus, контекст 1M",
         "anthropic_claude_opus_4_8": "Мощная модель Opus с упором на честность и надёжность",
         "anthropic_claude_opus_4_7": "Мощная модель Opus",
         "anthropic_claude_opus_4_6": "Предыдущее поколение Opus, контекст 1M",
@@ -2834,26 +2880,6 @@
     "searchDescription": "Поиск по всем беседам",
     "newChatEmpty": "Спросите о заметках, транскрипциях или о чём угодно"
   },
-  "usage": {
-    "approachingLimit": "Приближается недельный лимит",
-    "approachingLimitDescription": "На этой неделе использовано {{wordsUsed}} / {{limit}} слов.",
-    "yourPlan": "Ваш тариф",
-    "trial": "Пробный период ({{days}} дн.)",
-    "trial_other": "Пробный период ({{days}} дн.)",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "Без ограничений в пробный период",
-    "unlimited": "Без ограничений",
-    "manageSubscription": "Управление подпиской",
-    "weeklyUsage": "За неделю",
-    "limitReached": "Лимит достигнут",
-    "free": "Бесплатно",
-    "wordsRemaining": "Осталось {{remaining}} слов",
-    "rollingLimit": "Скользящий недельный лимит",
-    "upgradeToPro": "Перейти на Pro",
-    "useYourOwnKey": "Свой API-ключ",
-    "upgradeUnlimited": "Pro — без ограничений"
-  },
   "support": {
     "documentation": "Документация",
     "joinDiscord": "Присоединиться к Discord",
@@ -3055,6 +3081,21 @@
       "systemAudioRequired": "Требуется разрешение «Системное аудио»",
       "systemAudioDescription": "Для транскрипции встреч OpenWhispr нужно разрешение «Системное аудио» для записи звука других участников. Мы никогда не записываем ваш экран. Вы будете перенаправлены в Системные настройки для включения.",
       "openSettings": "Открыть Системные настройки"
+    },
+    "appleCalendar": {
+      "title": "Календарь Apple",
+      "optional": "Необязательно",
+      "description": "Читайте встречи из Calendar.app — iCloud, Google, Exchange и Outlook в одном месте.",
+      "connect": "Подключить Календарь Apple",
+      "connected": "Подключено",
+      "disconnect": "Отключить",
+      "disconnectConfirm": "Отключить Календарь Apple?",
+      "disconnectDescription": "Заметки встреч больше не будут записываться из вашего Календаря Apple.",
+      "permissionDenied": "Требуется доступ к календарю",
+      "permissionDeniedDescription": "OpenWhispr нужен доступ к календарю для обнаружения встреч. Включите OpenWhispr в Системных настройках: Конфиденциальность и безопасность → Календари.",
+      "openSettings": "Открыть Системные настройки",
+      "connectFailed": "Ошибка подключения",
+      "connectFailedDescription": "При подключении к Calendar.app произошла ошибка. Перезапустите OpenWhispr и попробуйте снова."
     },
     "sections": {
       "calendar": "Календарь",
