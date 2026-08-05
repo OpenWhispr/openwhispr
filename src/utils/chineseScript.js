@@ -146,6 +146,24 @@ export async function applyChineseScript(text, target) {
 }
 
 /**
+ * Script pass for the raw transcript, before user text replacements match on it.
+ * Whisper's zh output is not deterministically Simplified or Traditional, so a
+ * rule written in the user's script would otherwise miss half the time. Scoped to
+ * the STT language: translation can still move the text elsewhere afterwards.
+ *
+ * @param {string | null | undefined} text
+ * @param {string | null | undefined} sttLanguage
+ * @param {string | null | undefined} chineseScriptPreference
+ * @returns {Promise<string | null | undefined>}
+ */
+export async function normalizeTranscriptScript(text, sttLanguage, chineseScriptPreference) {
+  const target = resolveChineseScriptTarget(sttLanguage, chineseScriptPreference, text);
+  // No target means no conversion: return the input untouched, never loading OpenCC.
+  if (!target) return text;
+  return applyChineseScript(text, target);
+}
+
+/**
  * Merge dictionary words with an optional Chinese script bias for Whisper prompts.
  *
  * @param {string | null | undefined} dictionaryPrompt

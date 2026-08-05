@@ -12,6 +12,7 @@ import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport"
 import {
   applyChineseScript,
   mergeWhisperPrompt,
+  normalizeTranscriptScript,
   resolveChineseScriptTarget,
   resolveCleanupLanguage,
 } from "../utils/chineseScript";
@@ -439,6 +440,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Cleanup runs before the translate step, so it still works in the STT language.
   getCleanupLanguage(settings) {
     return resolveCleanupLanguage(this.getEffectiveSttLanguage(settings));
+  }
+
+  // Runs on the raw transcript, before user replacements match on it.
+  normalizeSttScript(text, settings = getSettings()) {
+    return normalizeTranscriptScript(
+      text,
+      this.getEffectiveSttLanguage(settings),
+      settings.chineseScriptPreference
+    );
   }
 
   finalizeChineseScript(text, settings = getSettings()) {
@@ -1903,7 +1913,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     // User replacements run before any AI step so cleanup and the agent see corrected words.
-    const normalizedText = applyTranscriptReplacements(trimmedText, getSettings());
+    // Script normalization comes first, or a rule in the user's script misses the other one.
+    const sttSettings = getSettings();
+    const scriptedText = await this.normalizeSttScript(trimmedText, sttSettings);
+    const normalizedText = applyTranscriptReplacements(scriptedText, sttSettings);
 
     if (this.skipReasoning) {
       logger.logReasoning("REASONING_SKIPPED_AGENT_MODE", {
@@ -2235,7 +2248,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw new Error("No audio detected");
     }
     // User replacements run before the reasoning route, same as processTranscription.
-    let processedText = applyTranscriptReplacements(result.text, settings);
+    // Script normalization comes first, or a rule in the user's script misses the other one.
+    const scriptedText = await this.normalizeSttScript(result.text, settings);
+    let processedText = applyTranscriptReplacements(scriptedText, settings);
     if (processedText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
@@ -3826,6 +3841,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
 
     // User replacements run before the reasoning route, same as processTranscription.
+    // Script normalization comes first, or a rule in the user's script misses the other one.
+    finalText = await this.normalizeSttScript(finalText, stSettings);
     finalText = applyTranscriptReplacements(finalText, stSettings);
 
     let usedCloudReasoning = false;
