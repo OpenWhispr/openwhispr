@@ -2,8 +2,34 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const { computeTranscriptDiff } = require("./transcriptDiff");
 const { retranscribeNoteTranscript } = require("./retranscribeNoteTranscript");
+const { i18nMain, SUPPORTED_UI_LANGUAGES } = require("./i18nMain");
 
 const STEP_ORDER = ["retranscribe", "title", "classify", "notes"];
+
+const TITLE_PLACEHOLDER_KEYS = [
+  "notes.list.untitledNote",
+  "notes.list.newNote",
+  "notes.sidebar.newNote",
+];
+
+let cachedTitlePlaceholders = null;
+
+// A note may have been created while the app was in a different language than
+// the one running now, so recognising only the current locale's placeholder
+// would stop title generation for anyone who ever switched languages — and for
+// every non-English user, since the built-in list is English.
+function localizedTitlePlaceholders() {
+  if (cachedTitlePlaceholders) return cachedTitlePlaceholders;
+  const placeholders = new Set();
+  for (const lng of SUPPORTED_UI_LANGUAGES) {
+    for (const key of TITLE_PLACEHOLDER_KEYS) {
+      const label = i18nMain.t(key, { lng });
+      if (typeof label === "string" && label.trim()) placeholders.add(label.trim());
+    }
+  }
+  cachedTitlePlaceholders = [...placeholders];
+  return cachedTitlePlaceholders;
+}
 
 function buildTypedNotesPrompt(meetingType) {
   return `You are a sharp, thorough meeting notes assistant that captures not just what was said, but what it means. You will receive a transcript with speaker labels.
@@ -119,7 +145,7 @@ class PostCallPipelineManager {
         this._generateTitle(transcript)
       );
       if (titleResult.error) return;
-      if (titleResult.value) {
+      if (titleResult.value && (await this._mayGenerateTitle(noteId))) {
         this._db.updateNote(noteId, { title: titleResult.value });
         this._broadcastNoteUpdate(noteId);
       }
@@ -192,6 +218,23 @@ class PostCallPipelineManager {
     }
 
     this._emitStatus(noteId, "pipeline", "complete");
+  }
+
+  // Read the title as late as possible: re-transcription can run for minutes with
+  // the large model, so the note loaded at the top of run() is long stale by the
+  // time a title is ready to be written.
+  async _mayGenerateTitle(noteId) {
+    const { isRegenerableNoteTitle } = await import("./regenerableNoteTitle.js");
+    const note = this._db.getNote(noteId);
+    if (!note) return false;
+
+    let calendarEventName = null;
+    if (note.calendar_event_id) {
+      const event = this._db.getCalendarEventById?.(note.calendar_event_id);
+      calendarEventName = event?.summary || null;
+    }
+
+    return isRegenerableNoteTitle(note.title, localizedTitlePlaceholders(), calendarEventName);
   }
 
   async _runStep(noteId, step, fn) {
