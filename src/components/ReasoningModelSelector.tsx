@@ -419,22 +419,17 @@ export default function ReasoningModelSelector({
   // Restore the mode and family from what was persisted. "local" is the stored
   // provider for every local family, so the family has to come back from the
   // selected model — without this the component falls back to its cloud default
-  // and one stray click rewrites a local user's config to cloud. The family-id
-  // branch stays for configs written before the provider field was fixed.
+  // and one stray click rewrites a local user's config to cloud.
   useEffect(() => {
-    const localProviderIds = localProviders.map((p) => p.id);
     if (localReasoningProvider === LOCAL_PROVIDER_ID) {
       setSelectedMode("local");
       const family = modelRegistry.getModel(reasoningModel)?.provider.id;
       if (family) setSelectedLocalProvider(family);
-    } else if (localProviderIds.includes(localReasoningProvider)) {
-      setSelectedMode("local");
-      setSelectedLocalProvider(localReasoningProvider);
     } else if (CLOUD_PROVIDER_IDS.includes(localReasoningProvider)) {
       setSelectedMode("cloud");
       setSelectedCloudProvider(localReasoningProvider);
     }
-  }, [localProviders, localReasoningProvider, reasoningModel]);
+  }, [localReasoningProvider, reasoningModel]);
 
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
 
