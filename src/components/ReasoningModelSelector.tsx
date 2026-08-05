@@ -35,6 +35,9 @@ type CloudModelOption = {
   invertInDark?: boolean;
 };
 
+// Every local model family is served by the one "local" provider.
+const LOCAL_PROVIDER_ID = "local";
+
 const OPENROUTER_TAB = "openrouter";
 const OPENROUTER_KEYS_URL = "https://openrouter.ai/keys";
 
@@ -413,16 +416,25 @@ export default function ReasoningModelSelector({
     }));
   }, [selectedCloudProvider, openaiModelOptions, tinfoilModels, t]);
 
+  // Restore the mode and family from what was persisted. "local" is the stored
+  // provider for every local family, so the family has to come back from the
+  // selected model — without this the component falls back to its cloud default
+  // and one stray click rewrites a local user's config to cloud. The family-id
+  // branch stays for configs written before the provider field was fixed.
   useEffect(() => {
     const localProviderIds = localProviders.map((p) => p.id);
-    if (localProviderIds.includes(localReasoningProvider)) {
+    if (localReasoningProvider === LOCAL_PROVIDER_ID) {
+      setSelectedMode("local");
+      const family = modelRegistry.getModel(reasoningModel)?.provider.id;
+      if (family) setSelectedLocalProvider(family);
+    } else if (localProviderIds.includes(localReasoningProvider)) {
       setSelectedMode("local");
       setSelectedLocalProvider(localReasoningProvider);
     } else if (CLOUD_PROVIDER_IDS.includes(localReasoningProvider)) {
       setSelectedMode("cloud");
       setSelectedCloudProvider(localReasoningProvider);
     }
-  }, [localProviders, localReasoningProvider]);
+  }, [localProviders, localReasoningProvider, reasoningModel]);
 
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
 
@@ -477,7 +489,7 @@ export default function ReasoningModelSelector({
       setLocalReasoningProvider(selectedCloudProvider);
       selectDefaultModelForProvider(selectedCloudProvider);
     } else {
-      setLocalReasoningProvider(selectedLocalProvider);
+      setLocalReasoningProvider(LOCAL_PROVIDER_ID);
       const downloaded = await loadDownloadedModels();
       const provider = localProviders.find((p) => p.id === selectedLocalProvider);
       const models = provider?.models ?? [];
@@ -500,7 +512,10 @@ export default function ReasoningModelSelector({
 
   const handleLocalProviderChange = async (providerId: string) => {
     setSelectedLocalProvider(providerId);
-    setLocalReasoningProvider(providerId);
+    // providerId is a model *family* (qwen, gemma, ...). Every family is served
+    // by the same local provider; persisting the family here corrupted the
+    // provider field and reached .env as NOTE_FORMATTING_PROVIDER=gemma.
+    setLocalReasoningProvider(LOCAL_PROVIDER_ID);
     const downloaded = await loadDownloadedModels();
     const provider = localProviders.find((p) => p.id === providerId);
     const models = provider?.models ?? [];

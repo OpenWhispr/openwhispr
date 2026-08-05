@@ -1,8 +1,9 @@
 const debugLogger = require("./debugLogger");
 
 // Model families that are served by the bundled llama.cpp server. Used only to
-// recover when a model family has been written into the provider field.
-const LOCAL_MODEL_FAMILIES = ["gemma", "qwen", "llama", "mistral", "gpt-oss", "phi"];
+// recover when a model family has been written into the provider field, so the
+// ids must match modelRegistryData.json's localProviders exactly.
+const LOCAL_MODEL_FAMILIES = ["qwen", "mistral", "llama", "openai-oss", "gemma", "liquidai"];
 
 class MainProcessInference {
   constructor(proxyFetch, environmentManager) {

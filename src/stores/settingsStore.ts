@@ -9,6 +9,7 @@ import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
+import { migrateLocalProviderField } from "./migrateLocalProviderField";
 import {
   INFERENCE_SCOPES,
   type InferenceScope,
@@ -368,6 +369,10 @@ function migrateLLMScopeKeys() {
 }
 
 migrateLLMScopeKeys();
+
+// Runs after migrateLLMScopeKeys, which can itself copy a corrupted legacy
+// reasoningProvider into cleanupProvider.
+if (isBrowser) migrateLocalProviderField(localStorage);
 
 // One-time migration off the removed hosted-cloud inference modes. The store
 // readers below already coerce stale values, but that leaves localStorage — and
