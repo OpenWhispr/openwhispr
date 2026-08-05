@@ -10,3 +10,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Lint package-lock.json
         run: npx --yes lockfile-lint --path package-lock.json --type npm --validate-https --allowed-hosts npm --validate-integrity
+
+  lockfile-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      # The npm version is pinned, not inherited. setup-node resolves the latest
+      # 24.x, whose bundled npm moved 11.12.1 -> 11.13.0 -> 11.16.0 -> 11.17.0
+      # across 24.15-24.19; a floating npm would make this guard its own source
+      # of drift. Bumping this pin requires regenerating package-lock.json with
+      # the new version in the same commit.
+      # --ignore-scripts is REQUIRED, not cosmetic: --package-lock-only still
+      # runs lifecycle scripts, and this repo's postinstall is
+      # `electron-builder install-app-deps`, which is not installed here because
+      # nothing populates node_modules in this job. Without the flag the step
+      # dies with exit 127 on every run.
+      - name: Regenerate the lockfile with the pinned npm
+        run: npx --yes npm@11.17.0 install --package-lock-only --ignore-scripts
+      - name: Fail if it drifted from the committed lockfile
+        run: git diff --exit-code -- package-lock.json
