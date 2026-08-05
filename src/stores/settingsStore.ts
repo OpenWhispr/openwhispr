@@ -2241,6 +2241,35 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
+    // The chat scope's static default is groq while its default mode is local,
+    // so a user who never configured it sees the local card selected and gets a
+    // 401 from groq. Re-home it to the built-in model — but only when that model
+    // is actually present, since "Model file not found" is worse than a
+    // comprehensible 401.
+    //
+    // The raw localStorage key is the only honest signal here: the resolved
+    // state cannot tell a defaulted groq from a chosen one. It is re-checked
+    // after the await so a choice made while the check was in flight wins.
+    try {
+      if (localStorage.getItem("chatAgentProvider") === null) {
+        const { BUILTIN_LOCAL_MODEL_ID } = await import("../models/ModelRegistry");
+        const downloaded = await window.electronAPI.modelCheck?.(BUILTIN_LOCAL_MODEL_ID);
+        if (downloaded && localStorage.getItem("chatAgentProvider") === null) {
+          setResolvedLLMConfig("chatIntelligence", {
+            mode: "local" as InferenceMode,
+            provider: "local",
+            model: BUILTIN_LOCAL_MODEL_ID,
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to seed the chat agent default on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
     ensureAgentNameInDictionary();
   }
 
