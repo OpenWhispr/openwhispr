@@ -4860,6 +4860,30 @@ class IPCHandlers {
       return false;
     };
 
+    const applyLiveSpeakerMerges = (merges, win) => {
+      if (!merges?.length) return;
+
+      const publicMerges = merges.map(({ keep, remove, displayName, similarity }) => ({
+        keep: meetingSpeakerRemapper(keep),
+        remove: meetingSpeakerRemapper(remove),
+        displayName,
+        similarity,
+      }));
+      for (const { keep, remove, displayName } of publicMerges) {
+        if (keep === remove) continue;
+        for (const seg of meetingDiarizationSegments) {
+          if (seg.speaker === remove) {
+            seg.speaker = keep;
+            if (displayName) seg.speakerName = displayName;
+          }
+        }
+      }
+
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("meeting-speakers-merged", publicMerges);
+      }
+    };
+
     const stopLiveSpeakerIdentification = async () => {
       if (!meetingLiveSpeakerActive) {
         return null;
@@ -4871,6 +4895,13 @@ class IPCHandlers {
       }
 
       meetingLiveSpeakerActive = false;
+      // Merges made since the last timer tick — including any made while assigning the
+      // final utterances — must land in meetingDiarizationSegments before it is
+      // snapshotted for the saved note.
+      applyLiveSpeakerMerges(
+        await liveSpeakerIdentifier.recluster(),
+        meetingLocalWin || this.windowManager.controlPanelWindow
+      );
       meetingLiveSpeakerState = await liveSpeakerIdentifier.stop();
       return meetingLiveSpeakerState;
     };
@@ -4948,27 +4979,7 @@ class IPCHandlers {
         meetingLiveSpeakerActive = true;
         meetingReclusterTimer = setInterval(async () => {
           if (!meetingLiveSpeakerActive || !win || win.isDestroyed()) return;
-
-          const merges = await liveSpeakerIdentifier.recluster();
-          if (!merges.length) return;
-
-          const publicMerges = merges.map(({ keep, remove, displayName, similarity }) => ({
-            keep: meetingSpeakerRemapper(keep),
-            remove: meetingSpeakerRemapper(remove),
-            displayName,
-            similarity,
-          }));
-          for (const { keep, remove, displayName } of publicMerges) {
-            if (keep === remove) continue;
-            for (const seg of meetingDiarizationSegments) {
-              if (seg.speaker === remove) {
-                seg.speaker = keep;
-                if (displayName) seg.speakerName = displayName;
-              }
-            }
-          }
-
-          win.webContents.send("meeting-speakers-merged", publicMerges);
+          applyLiveSpeakerMerges(await liveSpeakerIdentifier.recluster(), win);
         }, 30_000);
       } else {
         meetingLiveSpeakerStartedAt = null;
