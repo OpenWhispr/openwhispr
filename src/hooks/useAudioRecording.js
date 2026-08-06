@@ -73,6 +73,9 @@ export const useAudioRecording = (toast, options = {}) => {
           if (getSettings().pauseMediaOnDictation) {
             window.electronAPI?.pauseMediaPlayback?.();
           }
+          if (getSettings().muteSystemOnDictation) {
+            window.electronAPI?.muteSystemVolume?.();
+          }
           window.electronAPI?.registerCancelHotkey?.("Escape");
           void playStartCue();
         }
@@ -95,6 +98,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (!currentState.isRecording && !currentState.isStreamingStartInProgress) return false;
 
       window.electronAPI?.unregisterCancelHotkey?.();
+      window.electronAPI?.unmuteSystemVolume?.();
 
       if (currentState.isStreaming || currentState.isStreamingStartInProgress) {
         void playStopCue();
@@ -123,6 +127,9 @@ export const useAudioRecording = (toast, options = {}) => {
           // Resume media the instant recording ends, not after transcription.
           if (wasRecordingRef.current && getSettings().pauseMediaOnDictation) {
             window.electronAPI?.resumeMediaPlayback?.();
+          }
+          if (wasRecordingRef.current) {
+            window.electronAPI?.unmuteSystemVolume?.();
           }
         }
         wasRecordingRef.current = isRecording;
@@ -169,6 +176,7 @@ export const useAudioRecording = (toast, options = {}) => {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
+        window.electronAPI?.unmuteSystemVolume?.();
       },
       onPartialTranscript: (text) => {
         setPartialTranscript(text);
@@ -364,6 +372,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }
+      window.electronAPI?.unmuteSystemVolume?.();
       toast({
         title: t("hooks.audioRecording.noAudio.title"),
         description: t("hooks.audioRecording.noAudio.description"),
@@ -394,6 +403,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }
+      window.electronAPI?.unmuteSystemVolume?.();
       if (state.isStreaming) {
         return await audioManagerRef.current.stopStreamingRecording();
       }
