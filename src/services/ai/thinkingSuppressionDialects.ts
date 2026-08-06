@@ -33,7 +33,8 @@ export function suppressThinking(
   model: string
 ): void {
   if (providerKey === "gemini") {
-    requestBody.reasoning_effort = "minimal";
+    // Gemini 3 Pro models reject "minimal"; "low" is their floor. See #1341.
+    requestBody.reasoning_effort = (model || "").toLowerCase().includes("pro") ? "low" : "minimal";
     return;
   }
 

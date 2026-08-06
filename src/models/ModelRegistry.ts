@@ -45,6 +45,8 @@ export interface CloudModelDefinition {
   descriptionKey?: string;
   disableThinking?: boolean;
   supportsThinking?: boolean;
+  // Lowest thinking_level the model accepts; Gemini 3 Pro rejects "minimal". See #1341.
+  minThinkingLevel?: "minimal" | "low" | "medium" | "high";
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
 }

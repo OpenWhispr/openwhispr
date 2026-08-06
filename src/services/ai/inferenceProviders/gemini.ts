@@ -5,13 +5,22 @@ import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import logger from "../../../utils/logger";
+import {
+  assessGeminiResponse,
+  resolveGeminiThinkingConfig,
+} from "../../../helpers/geminiResponse.js";
+import { truncatedResponseError } from "../../../helpers/completionTruncation.js";
 
 interface GeminiResponse {
   candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
     finishReason?: string;
   }>;
-  usageMetadata?: { totalTokenCount?: number };
+  usageMetadata?: {
+    totalTokenCount?: number;
+    thoughtsTokenCount?: number;
+    candidatesTokenCount?: number;
+  };
 }
 
 interface GeminiGenerationConfig {
@@ -33,12 +42,14 @@ export const geminiProvider: InferenceProvider = {
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
 
+    const modelDef = getCloudModel(model);
     const generationConfig: GeminiGenerationConfig = {
       temperature: config.temperature ?? (config.systemPrompt ? 0.3 : 0),
+      // Thinking tokens share maxOutputTokens, so thinking-capable models get the full ceiling. See #1341.
       maxOutputTokens:
         config.maxTokens ||
         Math.max(
-          2000,
+          modelDef?.supportsThinking ? TOKEN_LIMITS.MAX_TOKENS_GEMINI : 2000,
           ctx.calculateMaxTokens(
             text.length,
             TOKEN_LIMITS.MIN_TOKENS_GEMINI,
@@ -48,8 +59,9 @@ export const geminiProvider: InferenceProvider = {
         ),
     };
 
-    if (config.disableThinking === true && getCloudModel(model)?.supportsThinking) {
-      generationConfig.thinkingConfig = { thinkingLevel: "minimal", includeThoughts: false };
+    const thinkingConfig = resolveGeminiThinkingConfig(config, modelDef);
+    if (thinkingConfig) {
+      generationConfig.thinkingConfig = thinkingConfig;
     }
 
     const requestBody = {
@@ -114,13 +126,14 @@ export const geminiProvider: InferenceProvider = {
       }
     }, createApiRetryStrategy());
 
-    const candidate = response.candidates?.[0];
-    if (!candidate?.content?.parts?.[0]?.text) {
+    const { kind, text: responseText, finishReason, usage } = assessGeminiResponse(response);
+
+    if (kind === "empty" || kind === "empty_token_limit") {
       logger.logReasoning("GEMINI_EMPTY_RESPONSE", {
         model,
-        finishReason: candidate?.finishReason,
+        finishReason,
       });
-      if (candidate?.finishReason === "MAX_TOKENS") {
+      if (kind === "empty_token_limit") {
         throw new Error(
           "Gemini reached token limit before generating response. Try a shorter input or increase max tokens."
         );
@@ -128,11 +141,25 @@ export const geminiProvider: InferenceProvider = {
       throw new Error("Gemini returned empty response");
     }
 
-    const responseText = candidate.content.parts[0].text!.trim();
+    // A truncated candidate is a reply cut mid-sentence; fail it so the raw transcription survives. See #1341.
+    if (kind === "truncated") {
+      logger.logReasoning("GEMINI_TRUNCATED_RESPONSE", {
+        model,
+        finishReason,
+        responseLength: responseText.length,
+        thoughtsTokenCount: usage.thoughtsTokenCount ?? 0,
+        candidatesTokenCount: usage.candidatesTokenCount ?? 0,
+        totalTokenCount: usage.totalTokenCount ?? 0,
+      });
+      throw truncatedResponseError("Gemini");
+    }
+
     logger.logReasoning("GEMINI_RESPONSE", {
       model,
       responseLength: responseText.length,
-      tokensUsed: response.usageMetadata?.totalTokenCount || 0,
+      tokensUsed: usage.totalTokenCount || 0,
+      thoughtsTokenCount: usage.thoughtsTokenCount ?? 0,
+      candidatesTokenCount: usage.candidatesTokenCount ?? 0,
       success: true,
     });
     return responseText;
