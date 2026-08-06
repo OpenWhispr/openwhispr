@@ -145,6 +145,16 @@ const getMeetingTranscriptionOptions = () => {
     };
   }
 
+  // Tinfoil (BYOK) streams over its own attested WSS — same catalog independence as Corti.
+  if (resolved.cloudTranscriptionMode === "byok" && selectedProvider === "tinfoil") {
+    return {
+      provider: "tinfoil-realtime" as const,
+      model: "voxtral-mini-4b-realtime",
+      mode: "byok" as const,
+      language,
+    };
+  }
+
   const catalog = useStreamingProvidersStore.getState().providers;
   const provider =
     catalog?.find((p) => p.id === resolved.cloudTranscriptionProvider) ?? catalog?.[0];

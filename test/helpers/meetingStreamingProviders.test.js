@@ -1,0 +1,42 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const load = () => import("../../src/helpers/meetingStreamingProviders.js");
+
+test("tinfoil-realtime resolves to the Tinfoil client, never the OpenAI default", async () => {
+  const { STREAMING_CLIENT_BY_PROVIDER } = await load();
+  const { TinfoilRealtimeStreaming } = await import("../../src/helpers/tinfoilRealtimeStreaming.js");
+  const OpenAIRealtimeStreaming = (await import("../../src/helpers/openaiRealtimeStreaming.js"))
+    .default;
+
+  assert.equal(STREAMING_CLIENT_BY_PROVIDER["tinfoil-realtime"], TinfoilRealtimeStreaming);
+  assert.notEqual(STREAMING_CLIENT_BY_PROVIDER["tinfoil-realtime"], OpenAIRealtimeStreaming);
+});
+
+test("every allowed realtime provider has a streaming client (no silent OpenAI fallback)", async () => {
+  const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS } = await load();
+
+  for (const provider of ALLOWED_MEETING_PROVIDERS) {
+    if (provider === "local") continue;
+    assert.equal(
+      typeof STREAMING_CLIENT_BY_PROVIDER[provider],
+      "function",
+      `${provider} is allowed but would fall through to the OpenAI default class`
+    );
+  }
+});
+
+test("allow-list accepts tinfoil-realtime and local", async () => {
+  const { ALLOWED_MEETING_PROVIDERS } = await load();
+
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has("tinfoil-realtime"), true);
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has("local"), true);
+});
+
+test("allow-list rejects unknown and batch-only providers", async () => {
+  const { ALLOWED_MEETING_PROVIDERS } = await load();
+
+  for (const provider of ["tinfoil", "openai", "mistral-realtime", "grok-stt", "", undefined]) {
+    assert.equal(ALLOWED_MEETING_PROVIDERS.has(provider), false, `${provider} must be rejected`);
+  }
+});
