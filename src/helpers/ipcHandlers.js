@@ -2905,8 +2905,7 @@ class IPCHandlers {
           // default, so the threshold ramps with duration unless the caller
           // pinned one. With numSpeakers > 0 sherpa clusters to exactly that
           // count and the threshold is moot.
-          const durationSeconds =
-            fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
+          const durationSeconds = fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
           const threshold = options.threshold
             ? Math.min(1, Math.max(0, Number(options.threshold)))
             : clusterThresholdForDuration(durationSeconds);

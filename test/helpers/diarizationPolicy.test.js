@@ -16,7 +16,10 @@ const {
 // "speakers". The threshold must grow with duration.
 test("short audio keeps the sherpa default threshold", () => {
   assert.equal(clusterThresholdForDuration(0), DEFAULT_CLUSTER_THRESHOLD);
-  assert.equal(clusterThresholdForDuration(THRESHOLD_RAMP_START_SECONDS), DEFAULT_CLUSTER_THRESHOLD);
+  assert.equal(
+    clusterThresholdForDuration(THRESHOLD_RAMP_START_SECONDS),
+    DEFAULT_CLUSTER_THRESHOLD
+  );
 });
 
 test("threshold ramps between the boundaries and is monotonic", () => {
@@ -31,7 +34,10 @@ test("threshold ramps between the boundaries and is monotonic", () => {
 });
 
 test("hour-plus audio is clamped to the long-audio threshold", () => {
-  assert.equal(clusterThresholdForDuration(THRESHOLD_RAMP_END_SECONDS), LONG_AUDIO_CLUSTER_THRESHOLD);
+  assert.equal(
+    clusterThresholdForDuration(THRESHOLD_RAMP_END_SECONDS),
+    LONG_AUDIO_CLUSTER_THRESHOLD
+  );
   assert.equal(clusterThresholdForDuration(3 * 3600), LONG_AUDIO_CLUSTER_THRESHOLD);
 });
 

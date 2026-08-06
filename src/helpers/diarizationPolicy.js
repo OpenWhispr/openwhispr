@@ -24,7 +24,10 @@ function clusterThresholdForDuration(durationSeconds) {
   const progress =
     (durationSeconds - THRESHOLD_RAMP_START_SECONDS) /
     (THRESHOLD_RAMP_END_SECONDS - THRESHOLD_RAMP_START_SECONDS);
-  return DEFAULT_CLUSTER_THRESHOLD + (LONG_AUDIO_CLUSTER_THRESHOLD - DEFAULT_CLUSTER_THRESHOLD) * progress;
+  return (
+    DEFAULT_CLUSTER_THRESHOLD +
+    (LONG_AUDIO_CLUSTER_THRESHOLD - DEFAULT_CLUSTER_THRESHOLD) * progress
+  );
 }
 
 function dropNegligibleClusters(segments, minTotalSeconds = MIN_CLUSTER_TOTAL_SECONDS) {

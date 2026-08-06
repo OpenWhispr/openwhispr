@@ -207,20 +207,16 @@ test("a timeout or an answered request is never teardown collateral", () => {
 });
 
 test("refunds are bounded and the loss ceiling is a real fraction", () => {
-  assert.ok(Number.isInteger(CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS) && CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS > 0);
+  assert.ok(
+    Number.isInteger(CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS) && CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS > 0
+  );
   assert.ok(CLOUD_CHUNK_MAX_LOSS_RATIO > 0 && CLOUD_CHUNK_MAX_LOSS_RATIO < 1);
 });
 
 // Survivors used to be joined with a bare space — a 16-minute fragment of a
 // 73-minute file read as a seamless transcript.
 test("assembleChunkTranscript marks failed spans and collapses consecutive holes", () => {
-  const results = [
-    { text: "one" },
-    null,
-    null,
-    { text: "four" },
-    null,
-  ];
+  const results = [{ text: "one" }, null, null, { text: "four" }, null];
   assert.equal(
     assembleChunkTranscript(results, 240),
     "one [missing audio 4:00-12:00] four [missing audio 16:00-20:00]"
