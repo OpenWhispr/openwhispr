@@ -278,6 +278,7 @@ class WindowManager {
 
     if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
     this.showDictationPanel();
+    this.sendPrepareDictation();
 
     const safetyTimeoutId = setTimeout(() => {
       if (this.macCompoundPushState?.active) {
@@ -325,6 +326,7 @@ class WindowManager {
     if (wasRecording) {
       this.sendStopDictation();
     } else {
+      this.sendCancelDictationPreparation();
       this.hideDictationPanel();
     }
   }
@@ -343,6 +345,8 @@ class WindowManager {
 
     if (wasRecording) {
       this.sendStopDictation();
+    } else {
+      this.sendCancelDictationPreparation();
     }
     this.hideDictationPanel();
 
@@ -402,6 +406,7 @@ class WindowManager {
     const downTime = Date.now();
 
     this.showDictationPanel();
+    this.sendPrepareDictation();
 
     this.winPushState = {
       active: true,
@@ -438,6 +443,7 @@ class WindowManager {
     if (wasRecording) {
       this.sendStopDictation();
     } else {
+      this.sendCancelDictationPreparation();
       this.hideDictationPanel();
     }
   }
@@ -492,6 +498,19 @@ class WindowManager {
     }
   }
 
+  sendPrepareDictation() {
+    if (this.hotkeyManager.isInListeningMode()) return;
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("prepare-dictation");
+    }
+  }
+
+  sendCancelDictationPreparation() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-dictation-preparation");
+    }
+  }
+
   sendStopDictation() {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
@@ -508,6 +527,7 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-dictation-preparation");
       this.mainWindow.webContents.send("cancel-hotkey-pressed");
       this._isDictatingToggle = false;
       this.meetingDetectionEngine?.setUserRecording(false);
