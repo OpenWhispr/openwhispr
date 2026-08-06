@@ -7,7 +7,6 @@
       "uiDescription": "Scegli la lingua usata nell'interfaccia di OpenWhispr",
       "transcriptionLabel": "Lingua di trascrizione",
       "transcriptionDescription": "Scegli fino a {{max}} lingue che parli — cambia la lingua attiva dal pannello di dettatura",
-      "activeLanguage": "Lingua attiva",
       "removeLanguage": "Rimuovi {{language}}",
       "chineseScriptLabel": "Scrittura cinese (dettatura)",
       "chineseScriptDescription": "Quando viene rilevato il cinese, converte le trascrizioni dettate in caratteri semplificati o tradizionali. Il cinese parlato suona uguale; Whisper restituisce una sola scrittura.",

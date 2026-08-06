@@ -2757,7 +2757,6 @@ export default function SettingsPage({
                                   type="button"
                                   onClick={() => setPreferredLanguage(code)}
                                   aria-pressed={isActive}
-                                  aria-label={t("settings.language.activeLanguage")}
                                   className="inline-flex items-center gap-1"
                                 >
                                   {lang?.flag && <span aria-hidden="true">{lang.flag}</span>}

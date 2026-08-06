@@ -7,7 +7,6 @@
       "uiDescription": "Choose the language used throughout OpenWhispr's interface",
       "transcriptionLabel": "Transcription language",
       "transcriptionDescription": "Choose up to {{max}} languages you speak — switch the active one from the dictation panel",
-      "activeLanguage": "Active language",
       "removeLanguage": "Remove {{language}}",
       "chineseScriptLabel": "Chinese script (dictation)",
       "chineseScriptDescription": "When Chinese is detected, convert dictated transcripts to Simplified or Traditional characters. Spoken Chinese is the same either way; Whisper only returns one script.",

@@ -320,20 +320,22 @@ export default function App() {
     }
 
     const handleClickOutside = (event) => {
+      // Both menu triggers are excluded: their click handlers swap the menus
+      // in a single commit. Closing here on the mousedown instead would
+      // momentarily leave no menu open, releasing window focus — and the
+      // in-flight blur event would close the menu the click is about to open.
+      const onMenuTrigger =
+        (buttonRef.current && buttonRef.current.contains(event.target)) ||
+        (languageMenuRef.current && languageMenuRef.current.contains(event.target));
       if (
         isCommandMenuOpen &&
         commandMenuRef.current &&
         !commandMenuRef.current.contains(event.target) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target)
+        !onMenuTrigger
       ) {
         setIsCommandMenuOpen(false);
       }
-      if (
-        isLanguageMenuOpen &&
-        languageMenuRef.current &&
-        !languageMenuRef.current.contains(event.target)
-      ) {
+      if (isLanguageMenuOpen && !onMenuTrigger) {
         setIsLanguageMenuOpen(false);
       }
     };
@@ -357,15 +359,18 @@ export default function App() {
   // invisible to the renderer and would leave an open menu dangling. While a
   // menu is open the main process makes the window focusable and focused, so
   // that click blurs the window and the handler above closes the menu.
+  // Keyed on the derived boolean: switching directly between the two menus
+  // must not release focus in between, or the transient blur event would
+  // close the menu that just opened.
+  const hasOpenMenu = isCommandMenuOpen || isLanguageMenuOpen;
   useEffect(() => {
-    const hasOpenMenu = isCommandMenuOpen || isLanguageMenuOpen;
     window.electronAPI?.setMainWindowMenuFocus?.(hasOpenMenu);
     return () => {
       if (hasOpenMenu) {
         window.electronAPI?.setMainWindowMenuFocus?.(false);
       }
     };
-  }, [isCommandMenuOpen, isLanguageMenuOpen]);
+  }, [hasOpenMenu]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -678,7 +683,10 @@ export default function App() {
                           className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-muted focus:bg-muted focus:outline-none ${
                             isActive ? "text-primary font-medium" : ""
                           }`}
-                          onClick={() => handlePanelLanguageSelect(code)}
+                          onClick={() => {
+                            handlePanelLanguageSelect(code);
+                            setIsCommandMenuOpen(false);
+                          }}
                           role="menuitemradio"
                           aria-checked={isActive}
                         >

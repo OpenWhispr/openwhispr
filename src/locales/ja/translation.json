@@ -7,7 +7,6 @@
       "uiDescription": "OpenWhispr のインターフェースで使用する言語を選択",
       "transcriptionLabel": "文字起こし言語",
       "transcriptionDescription": "話す言語を最大{{max}}言語まで選択 — 使用中の言語はディクテーションパネルで切り替えられます",
-      "activeLanguage": "使用中の言語",
       "removeLanguage": "{{language}}を削除",
       "chineseScriptLabel": "中国語の字体（ディクテーション）",
       "chineseScriptDescription": "中国語が検出されたとき、ディクテーションの文字起こしを簡体字または繁体字に変換します。話し言葉は同じでも、Whisperはどちらか一方の字体だけを返します。",
@@ -965,6 +964,7 @@
   "languageSelector": {
     "lastLanguageHint": "少なくとも1つの言語を選択したままにしてください",
     "maxLanguagesHint": "言語の上限（{{max}}件）に達しました",
+    "selectedCount_one": "{{count}}言語",
     "selectedCount_other": "{{count}}言語",
     "noLanguagesFound": "言語が見つかりません",
     "searchPlaceholder": "検索..."

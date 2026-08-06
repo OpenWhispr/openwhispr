@@ -7,7 +7,6 @@
       "uiDescription": "選擇 OpenWhispr 介面使用的語言",
       "transcriptionLabel": "轉錄語言",
       "transcriptionDescription": "最多選擇 {{max}} 種你說話的語言——可在聽寫面板中切換目前語言",
-      "activeLanguage": "目前語言",
       "removeLanguage": "移除{{language}}",
       "chineseScriptLabel": "中文書寫（語音輸入）",
       "chineseScriptDescription": "偵測到中文時，將語音輸入的轉錄結果轉換為簡體或繁體。口語聽起來一樣；Whisper 只會輸出一種字形。",
@@ -965,6 +964,7 @@
   "languageSelector": {
     "lastLanguageHint": "至少需要保留一種語言",
     "maxLanguagesHint": "已達到 {{max}} 種語言的上限",
+    "selectedCount_one": "{{count}} 種語言",
     "selectedCount_other": "{{count}} 種語言",
     "noLanguagesFound": "找不到語言",
     "searchPlaceholder": "搜尋..."
