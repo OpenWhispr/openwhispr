@@ -3040,6 +3040,10 @@
       "cleanupFailed": {
         "title": "Cleanup failed",
         "description": "Your dictation was pasted without AI cleanup."
+      },
+      "streamingLanguageSwitch": {
+        "title": "Language applies to your next dictation",
+        "description": "This live transcription keeps the previous language. {{language}} takes effect when you start a new dictation."
       }
     },
     "mic": {

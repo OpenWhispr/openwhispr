@@ -3040,6 +3040,10 @@
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",
         "description": "Dein Diktat wurde ohne KI-Bereinigung eingefügt."
+      },
+      "streamingLanguageSwitch": {
+        "title": "Sprache gilt ab dem nächsten Diktat",
+        "description": "Diese Live-Transkription behält die bisherige Sprache bei. {{language}} gilt, sobald du ein neues Diktat startest."
       }
     },
     "mic": {

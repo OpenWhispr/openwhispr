@@ -2892,6 +2892,10 @@
       "cleanupFailed": {
         "title": "Falha na limpeza",
         "description": "Seu ditado foi colado sem limpeza por IA."
+      },
+      "streamingLanguageSwitch": {
+        "title": "O idioma será aplicado no seu próximo ditado",
+        "description": "Esta transcrição ao vivo mantém o idioma anterior. {{language}} entrará em vigor quando você iniciar um novo ditado."
       }
     },
     "mic": {

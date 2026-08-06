@@ -202,9 +202,13 @@ export default function LanguageSelector({
     const current = values ?? [];
     if (current.includes(languageValue)) {
       onValuesChange?.(current.filter((v) => v !== languageValue));
-      return;
+    } else {
+      onValuesChange?.([...current, languageValue]);
     }
-    onValuesChange?.([...current, languageValue]);
+    // The dropdown stays open in multiple mode, but a mouse toggle leaves
+    // focus on the clicked option button, which has no key handler — return
+    // focus to the search input so Escape/arrow keys keep working.
+    searchInputRef.current?.focus();
   };
 
   const clearSearch = () => {
@@ -283,6 +287,18 @@ export default function LanguageSelector({
               top: `${dropdownPosition.top}px`,
               left: `${dropdownPosition.left}px`,
               width: `${dropdownPosition.width}px`,
+            }}
+            onKeyDown={(e) => {
+              // Escape must close the dropdown even when focus sits on an
+              // option button (there is no search input to refocus in short
+              // lists). Only Escape: other keys bubbling from the search
+              // input already ran handleKeyDown there, and handling them
+              // again here would double-step navigation.
+              if (e.key === "Escape" && !e.defaultPrevented) {
+                e.preventDefault();
+                setIsOpen(false);
+                handleSearchQueryChange("");
+              }
             }}
             className="z-9999 bg-popover/95 backdrop-blur-xl border border-border/70 rounded shadow-xl overflow-hidden"
           >

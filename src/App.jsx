@@ -10,6 +10,9 @@ import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useSettingsStore } from "./stores/settingsStore";
 import { getBaseLanguageCode, getLanguageLabel } from "./utils/languageSupport";
+import { getCachedPlatform } from "./utils/platform";
+
+const platform = getCachedPlatform();
 
 // Sound Wave Icon Component (for idle/hover states)
 const SoundWaveIcon = ({ size = 16 }) => {
@@ -108,17 +111,6 @@ export default function App() {
   );
   const showLanguageSwitcher = languageOptions.length > 1;
   const activeLanguageLabel = getLanguageLabel(preferredLanguage);
-  // Switching is allowed mid-recording: whisper/cloud read the language at
-  // transcription time (the switch applies to the recording in progress) and
-  // Parakeet models auto-detect, ignoring the hint either way. The chunked
-  // live preview captures its language at session start, so retarget it too.
-  const handlePanelLanguageSelect = React.useCallback(
-    (code) => {
-      setPreferredLanguage(code);
-      window.electronAPI?.updateDictationPreviewLanguage?.(getBaseLanguageCode(code) ?? null);
-    },
-    [setPreferredLanguage]
-  );
   const prevAutoHideRef = useRef(floatingIconAutoHide);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
@@ -226,12 +218,17 @@ export default function App() {
       } else if (toastCount > 0) {
         window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
       } else {
-        // Wider resting size so the hover language chip isn't clipped
-        window.electronAPI?.resizeMainWindow?.(showLanguageSwitcher ? "WITH_LANGUAGE" : "BASE");
+        // Wider size so the hover language chip isn't clipped. On Windows the
+        // panel never becomes click-through (see setMainWindowInteractivity),
+        // so the extra width at rest would be an invisible click-eating strip
+        // beside the mic — rest at BASE there and widen only while hovered,
+        // which is when the chip mounts anyway.
+        const wantsLanguageWidth = showLanguageSwitcher && (platform !== "win32" || isHovered);
+        window.electronAPI?.resizeMainWindow?.(wantsLanguageWidth ? "WITH_LANGUAGE" : "BASE");
       }
     };
     resizeWindow();
-  }, [isCommandMenuOpen, isLanguageMenuOpen, toastCount, showLanguageSwitcher]);
+  }, [isCommandMenuOpen, isLanguageMenuOpen, toastCount, showLanguageSwitcher, isHovered]);
 
   // Keep toasts stacked above an open menu instead of covering it
   // (the toast viewport in Toast.tsx reads --toast-viewport-bottom)
@@ -263,6 +260,7 @@ export default function App() {
   const {
     isRecording,
     isProcessing,
+    isStreaming,
     micCaptureStatus,
     toggleListening,
     cancelRecording,
@@ -270,6 +268,39 @@ export default function App() {
   } = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
   });
+
+  // Switching is allowed mid-recording: whisper and batch cloud read the
+  // language at transcription time (the switch applies to the recording in
+  // progress) and Parakeet models auto-detect, ignoring the hint either way.
+  // The chunked live preview captures its language at session start, so
+  // retarget it too. The exception is cloud realtime streaming, which fixes
+  // its language when the session starts — tell the user the switch only
+  // takes effect from the next dictation.
+  const handlePanelLanguageSelect = React.useCallback(
+    (code) => {
+      setPreferredLanguage(code);
+      window.electronAPI?.updateDictationPreviewLanguage?.(getBaseLanguageCode(code) ?? null);
+      if (isStreaming) {
+        toast({
+          title: t("app.toasts.streamingLanguageSwitch.title"),
+          description: t("app.toasts.streamingLanguageSwitch.description", {
+            language: getLanguageLabel(code),
+          }),
+          duration: 6000,
+        });
+      }
+    },
+    [setPreferredLanguage, isStreaming, toast, t]
+  );
+
+  // The language chip (and its open menu) disappears during processing —
+  // close the menu state too, or the invisible panel would keep window focus
+  // and the enlarged menu size, then reopen the menu unprompted afterwards.
+  useEffect(() => {
+    if (isProcessing) {
+      setIsLanguageMenuOpen(false);
+    }
+  }, [isProcessing]);
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -438,6 +469,79 @@ export default function App() {
 
   const micProps = getMicButtonProps();
 
+  // Where the hover-mounted chip lives depends on the row's anchor, so the
+  // mic never shifts out from under an aimed click: bottom-right grows
+  // leftward from its pinned right edge (chip before the mic is safe);
+  // bottom-left grows rightward, so the chip goes after the mic; center
+  // would shift the mic on any insertion, so the chip's space stays
+  // reserved and only its visibility toggles.
+  const isChipVisible = (isHovered || isLanguageMenuOpen) && !isProcessing;
+  const chipAfterMic = panelStartPosition === "bottom-left";
+  const reserveChipSpace = panelStartPosition === "center";
+  const languageChip = showLanguageSwitcher && (isChipVisible || reserveChipSpace) && (
+    <div ref={languageMenuRef} className={`flex items-center${isChipVisible ? "" : " invisible"}`}>
+      <Tooltip content={isLanguageMenuOpen ? null : activeLanguageLabel}>
+        <button
+          aria-label={t("app.mic.languageTooltip", {
+            language: activeLanguageLabel,
+          })}
+          aria-haspopup="menu"
+          aria-expanded={isLanguageMenuOpen}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsCommandMenuOpen(false);
+            setIsLanguageMenuOpen((prev) => !prev);
+          }}
+          className="h-[18px] px-1.5 rounded-full bg-surface-2/90 hover:bg-surface-2 border border-border hover:border-border-hover flex items-center gap-1 text-[10px] font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors duration-150"
+        >
+          <span className="uppercase">{preferredLanguage}</span>
+          <ChevronDown
+            size={10}
+            strokeWidth={2.5}
+            className={`shrink-0 transition-transform duration-150 ${
+              isLanguageMenuOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      </Tooltip>
+      {isLanguageMenuOpen && (
+        <div
+          ref={languagePopupRef}
+          className={`absolute bottom-full ${
+            panelStartPosition === "bottom-left"
+              ? "left-0"
+              : panelStartPosition === "center"
+                ? "left-1/2 -translate-x-1/2"
+                : "right-0"
+          } mb-2 w-44 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm`}
+          role="menu"
+        >
+          {languageOptions.map((code) => {
+            const isActive = code === preferredLanguage;
+            return (
+              <button
+                key={code}
+                className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 first:pt-2 last:pb-2 hover:bg-muted focus:bg-muted focus:outline-none ${
+                  isActive ? "text-primary font-medium" : ""
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePanelLanguageSelect(code);
+                  setIsLanguageMenuOpen(false);
+                }}
+                role="menuitemradio"
+                aria-checked={isActive}
+              >
+                <span className="truncate flex-1">{getLanguageLabel(code)}</span>
+                {isActive && <Check size={12} strokeWidth={2.5} className="shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="dictation-window">
       {/* Voice button - position determined by panelStartPosition setting */}
@@ -463,69 +567,7 @@ export default function App() {
             }
           }}
         >
-          {showLanguageSwitcher && (isHovered || isLanguageMenuOpen) && !isProcessing && (
-            <div ref={languageMenuRef} className="flex items-center">
-              <Tooltip content={isLanguageMenuOpen ? null : activeLanguageLabel}>
-                <button
-                  aria-label={t("app.mic.languageTooltip", {
-                    language: activeLanguageLabel,
-                  })}
-                  aria-haspopup="menu"
-                  aria-expanded={isLanguageMenuOpen}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsCommandMenuOpen(false);
-                    setIsLanguageMenuOpen((prev) => !prev);
-                  }}
-                  className="h-[18px] px-1.5 rounded-full bg-surface-2/90 hover:bg-surface-2 border border-border hover:border-border-hover flex items-center gap-1 text-[10px] font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors duration-150"
-                >
-                  <span className="uppercase">{preferredLanguage}</span>
-                  <ChevronDown
-                    size={10}
-                    strokeWidth={2.5}
-                    className={`shrink-0 transition-transform duration-150 ${
-                      isLanguageMenuOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
-              </Tooltip>
-              {isLanguageMenuOpen && (
-                <div
-                  ref={languagePopupRef}
-                  className={`absolute bottom-full ${
-                    panelStartPosition === "bottom-left"
-                      ? "left-0"
-                      : panelStartPosition === "center"
-                        ? "left-1/2 -translate-x-1/2"
-                        : "right-0"
-                  } mb-2 w-44 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm`}
-                  role="menu"
-                >
-                  {languageOptions.map((code) => {
-                    const isActive = code === preferredLanguage;
-                    return (
-                      <button
-                        key={code}
-                        className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 first:pt-2 last:pb-2 hover:bg-muted focus:bg-muted focus:outline-none ${
-                          isActive ? "text-primary font-medium" : ""
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePanelLanguageSelect(code);
-                          setIsLanguageMenuOpen(false);
-                        }}
-                        role="menuitemradio"
-                        aria-checked={isActive}
-                      >
-                        <span className="truncate flex-1">{getLanguageLabel(code)}</span>
-                        {isActive && <Check size={12} strokeWidth={2.5} className="shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          {!chipAfterMic && languageChip}
           {(isRecording || isProcessing) && (isHovered || isLanguageMenuOpen) && (
             <button
               aria-label={
@@ -581,6 +623,7 @@ export default function App() {
               onClick={(e) => {
                 if (!hasDragged) {
                   setIsCommandMenuOpen(false);
+                  setIsLanguageMenuOpen(false);
                   toggleListening();
                 }
                 e.preventDefault();
@@ -645,6 +688,7 @@ export default function App() {
               )}
             </button>
           </Tooltip>
+          {chipAfterMic && languageChip}
           {isCommandMenuOpen && (
             <div
               ref={commandMenuRef}

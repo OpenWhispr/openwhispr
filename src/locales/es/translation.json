@@ -2940,6 +2940,10 @@
       "cleanupFailed": {
         "title": "Limpieza fallida",
         "description": "Tu dictado se pegó sin limpieza con IA."
+      },
+      "streamingLanguageSwitch": {
+        "title": "El idioma se aplicará a tu próximo dictado",
+        "description": "Esta transcripción en vivo mantiene el idioma anterior. {{language}} se aplicará cuando inicies un nuevo dictado."
       }
     },
     "mic": {

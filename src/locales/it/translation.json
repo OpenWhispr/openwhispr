@@ -2892,6 +2892,10 @@
       "cleanupFailed": {
         "title": "Pulizia non riuscita",
         "description": "La dettatura è stata incollata senza pulizia IA."
+      },
+      "streamingLanguageSwitch": {
+        "title": "La lingua si applicherà alla prossima dettatura",
+        "description": "Questa trascrizione in tempo reale mantiene la lingua precedente. {{language}} avrà effetto quando avvierai una nuova dettatura."
       }
     },
     "mic": {

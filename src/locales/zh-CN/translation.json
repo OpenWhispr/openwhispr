@@ -2892,6 +2892,10 @@
       "cleanupFailed": {
         "title": "清理失败",
         "description": "你的听写已直接粘贴，未经 AI 清理。"
+      },
+      "streamingLanguageSwitch": {
+        "title": "语言将在下次听写时生效",
+        "description": "当前的实时转录将继续使用之前的语言。{{language}} 将在你开始新的听写时生效。"
       }
     },
     "mic": {

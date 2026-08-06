@@ -30,7 +30,10 @@ const FLOATING_OVERLAY_TYPE =
 
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
-  // Wide enough for the language chip + cancel button next to the mic
+  // Wide enough for the language chip + cancel button next to the mic.
+  // On Windows the panel is never click-through (see
+  // setMainWindowInteractivity), so App.jsx uses this size only while
+  // hovered there — at rest the extra width would eat clicks beside the mic.
   WITH_LANGUAGE: { width: 160, height: 96 },
   WITH_MENU: { width: 240, height: 280 },
   // Taller variant for the command menu when it includes the language section;

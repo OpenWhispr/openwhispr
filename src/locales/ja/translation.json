@@ -2892,6 +2892,10 @@
       "cleanupFailed": {
         "title": "クリーンアップに失敗しました",
         "description": "ディクテーションは AI クリーンアップなしで貼り付けられました。"
+      },
+      "streamingLanguageSwitch": {
+        "title": "言語は次のディクテーションから適用されます",
+        "description": "進行中のリアルタイム文字起こしは以前の言語のまま続行されます。{{language}} は次のディクテーションから有効になります。"
       }
     },
     "mic": {
