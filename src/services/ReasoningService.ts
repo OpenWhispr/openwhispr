@@ -1,5 +1,5 @@
 import {
-  getModelProvider,
+  resolveInferenceProvider,
   getCloudModel,
   getOpenAiApiConfig,
   getProviderDisplayName,
@@ -25,6 +25,14 @@ import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
 
+export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
+
+interface ToolExecutionResult {
+  data: string;
+  displayText: string;
+  metadata?: ToolMetadata;
+}
+
 export type AgentStreamChunk =
   | { type: "content"; text: string }
   | { type: "tool_calls"; calls: Array<{ id: string; name: string; arguments: string }> }
@@ -33,7 +41,7 @@ export type AgentStreamChunk =
       callId: string;
       toolName: string;
       displayText: string;
-      metadata?: Record<string, unknown>;
+      metadata?: ToolMetadata;
     }
   | { type: "done"; finishReason?: string };
 
@@ -334,7 +342,9 @@ class ReasoningService extends BaseReasoningService {
   ): Promise<string> {
     const trimmedModel = model?.trim?.() || "";
     const isLanCleanup = !!config.lanUrl || this.isLanCleanupMode();
-    const providerId = isLanCleanup ? "lan" : config.provider || getModelProvider(trimmedModel);
+    const providerId = isLanCleanup
+      ? "lan"
+      : resolveInferenceProvider(config.provider, trimmedModel);
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
@@ -822,10 +832,7 @@ class ReasoningService extends BaseReasoningService {
     config: {
       systemPrompt: string;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
-      executeToolCall?: (
-        name: string,
-        args: string
-      ) => Promise<{ data: string; displayText: string; metadata?: Record<string, unknown> }>;
+      executeToolCall?: (name: string, args: string) => Promise<ToolExecutionResult>;
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
@@ -859,7 +866,7 @@ class ReasoningService extends BaseReasoningService {
       }
 
       for (const call of pendingToolCalls) {
-        let toolResult: { data: string; displayText: string; metadata?: Record<string, unknown> };
+        let toolResult: ToolExecutionResult;
         try {
           toolResult = await config.executeToolCall(call.name, call.arguments);
         } catch (error) {

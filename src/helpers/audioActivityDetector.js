@@ -1,9 +1,8 @@
 const { exec, spawn } = require("child_process");
 const { promisify } = require("util");
-const path = require("path");
-const fs = require("fs");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
+const { resolveBundledBinary } = require("./binaryResolver");
 
 const execAsync = promisify(exec);
 
@@ -31,6 +30,7 @@ class AudioActivityDetector extends EventEmitter {
     this._running = false;
     this._eventDriven = false;
     this._resetTimer = null;
+    this._startGeneration = 0;
   }
 
   setUserRecording(active) {
@@ -46,8 +46,11 @@ class AudioActivityDetector extends EventEmitter {
   async start() {
     if (this._running) return;
     this._running = true;
+    const generation = ++this._startGeneration;
 
-    const started = await this._tryEventDriven();
+    const started = await this._tryEventDriven(generation);
+    if (this._isStale(generation)) return;
+
     if (started) {
       this._eventDriven = true;
       debugLogger.info(
@@ -143,54 +146,86 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
+  // True once stop() or a newer start() has superseded the run that owns `generation`.
+  _isStale(generation) {
+    return !this._running || generation !== this._startGeneration;
+  }
+
   // ---------------------------------------------------------------------------
   // Event-driven approach
   // ---------------------------------------------------------------------------
 
-  async _tryEventDriven() {
+  async _tryEventDriven(generation) {
     switch (process.platform) {
       case "darwin":
-        return this._tryEventDrivenDarwin();
+        return this._tryEventDrivenDarwin(generation);
       case "win32":
-        return this._tryEventDrivenWin32();
+        return this._tryEventDrivenWin32(generation);
       case "linux":
-        return this._tryEventDrivenLinux();
+        return this._tryEventDrivenLinux(generation);
       default:
         return false;
     }
   }
 
-  _resolveBinary(binaryName) {
-    const candidates = [
-      path.join(__dirname, "..", "..", "resources", "bin", binaryName),
-      path.join(__dirname, "..", "..", "resources", binaryName),
-    ];
-
-    if (process.resourcesPath) {
-      candidates.push(
-        path.join(process.resourcesPath, binaryName),
-        path.join(process.resourcesPath, "bin", binaryName),
-        path.join(process.resourcesPath, "resources", "bin", binaryName),
-        path.join(process.resourcesPath, "app.asar.unpacked", "resources", "bin", binaryName)
-      );
-    }
-
-    for (const candidate of candidates) {
+  // Spawns a listener and resolves only once the OS has confirmed it started, so a
+  // failure to launch (missing binary, not executable) is reported as false instead
+  // of being raced by the asynchronous "error" event.
+  _spawnListener({ command, args = [], options, label, generation, onLine }) {
+    return new Promise((resolve) => {
+      let child;
       try {
-        if (fs.existsSync(candidate)) {
-          fs.accessSync(candidate, fs.constants.X_OK);
-          debugLogger.info("Resolved binary", { name: binaryName, path: candidate }, "meeting");
-          return candidate;
-        }
-      } catch {
-        // continue
+        child = spawn(command, args, options);
+      } catch (err) {
+        debugLogger.warn(`Failed to spawn ${label}`, { error: err.message }, "meeting");
+        resolve(false);
+        return;
       }
-    }
-    return null;
+
+      const onSpawn = () => {
+        child.removeListener("error", onError);
+        if (this._isStale(generation)) {
+          child.kill();
+          resolve(false);
+          return;
+        }
+
+        this._listenerProcess = child;
+        this._readLines(child.stdout, onLine);
+        child.stderr.on("data", (data) => {
+          debugLogger.debug(`${label} stderr`, { output: data.toString().trim() }, "meeting");
+        });
+        this._attachFallbackHandlers(child, label);
+        resolve(true);
+      };
+
+      const onError = (err) => {
+        child.removeListener("spawn", onSpawn);
+        debugLogger.warn(`Failed to spawn ${label}`, { error: err.message }, "meeting");
+        resolve(false);
+      };
+
+      child.once("spawn", onSpawn);
+      child.once("error", onError);
+    });
+  }
+
+  _readLines(stream, onLine) {
+    let buffer = "";
+    stream.on("data", (data) => {
+      buffer += data.toString();
+      let newlineIdx;
+      while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+        onLine(line);
+      }
+    });
   }
 
   _attachFallbackHandlers(child, label) {
     const fallbackToPolling = () => {
+      if (this._listenerProcess !== child) return;
       this._listenerProcess = null;
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
@@ -209,88 +244,44 @@ class AudioActivityDetector extends EventEmitter {
     });
   }
 
-  _tryEventDrivenDarwin() {
-    const binaryPath = this._resolveBinary("macos-mic-listener");
+  _tryEventDrivenDarwin(generation) {
+    const binaryPath = resolveBundledBinary("macos-mic-listener", "meeting");
     if (!binaryPath) {
       debugLogger.warn("macos-mic-listener binary not found, will use polling", {}, "meeting");
       return false;
     }
 
-    try {
-      const child = spawn(binaryPath, [], { stdio: ["ignore", "pipe", "pipe"] });
-      this._listenerProcess = child;
-
-      let buffer = "";
-      child.stdout.on("data", (data) => {
-        buffer += data.toString();
-        let newlineIdx;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, newlineIdx).trim();
-          buffer = buffer.slice(newlineIdx + 1);
-          if (line === "MIC_ACTIVE") {
-            this._onMicStateChanged(true);
-          } else if (line === "MIC_INACTIVE") {
-            this._onMicStateChanged(false);
-          }
+    return this._spawnListener({
+      command: binaryPath,
+      options: { stdio: ["ignore", "pipe", "pipe"] },
+      label: "macos-mic-listener",
+      generation,
+      onLine: (line) => {
+        if (line === "MIC_ACTIVE") {
+          this._onMicStateChanged(true);
+        } else if (line === "MIC_INACTIVE") {
+          this._onMicStateChanged(false);
         }
-      });
-
-      child.stderr.on("data", (data) => {
-        debugLogger.debug(
-          "macos-mic-listener stderr",
-          { output: data.toString().trim() },
-          "meeting"
-        );
-      });
-
-      this._attachFallbackHandlers(child, "macos-mic-listener");
-      return true;
-    } catch (err) {
-      debugLogger.warn("Failed to spawn macos-mic-listener", { error: err.message }, "meeting");
-      return false;
-    }
+      },
+    });
   }
 
-  _tryEventDrivenWin32() {
-    const binaryPath = this._resolveBinary("windows-mic-listener.exe");
+  _tryEventDrivenWin32(generation) {
+    const binaryPath = resolveBundledBinary("windows-mic-listener.exe", "meeting");
     if (!binaryPath) {
       debugLogger.warn("windows-mic-listener.exe not found, will use polling", {}, "meeting");
       return false;
     }
 
-    try {
+    return this._spawnListener({
+      command: binaryPath,
+      args: ["--exclude-pid", String(process.pid)],
       // stdin must be "pipe" — the Windows binary monitors stdin for parent death
-      const child = spawn(binaryPath, ["--exclude-pid", String(process.pid)], {
-        stdio: ["pipe", "pipe", "pipe"],
-        windowsHide: true,
-      });
-      this._listenerProcess = child;
-
-      let buffer = "";
-      child.stdout.on("data", (data) => {
-        buffer += data.toString();
-        let newlineIdx;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, newlineIdx).trim();
-          buffer = buffer.slice(newlineIdx + 1);
-          this._parseWin32ListenerLine(line);
-        }
-      });
-
-      child.stderr.on("data", (data) => {
-        debugLogger.debug(
-          "windows-mic-listener stderr",
-          { output: data.toString().trim() },
-          "meeting"
-        );
-      });
-
-      this._attachFallbackHandlers(child, "windows-mic-listener");
-      return true;
-    } catch (err) {
-      debugLogger.warn("Failed to spawn windows-mic-listener", { error: err.message }, "meeting");
-      return false;
-    }
+      options: { stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
+      label: "windows-mic-listener",
+      generation,
+      onLine: (line) => this._parseWin32ListenerLine(line),
+    });
   }
 
   _parseWin32ListenerLine(line) {
@@ -313,27 +304,15 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
-  _tryEventDrivenLinux() {
-    try {
-      const child = spawn("pactl", ["subscribe"], { stdio: ["ignore", "pipe", "pipe"] });
-      this._listenerProcess = child;
-
-      let buffer = "";
-      child.stdout.on("data", (data) => {
-        buffer += data.toString();
-        let newlineIdx;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, newlineIdx).trim();
-          buffer = buffer.slice(newlineIdx + 1);
-          this._parsePactlSubscribeLine(line);
-        }
-      });
-
-      this._attachFallbackHandlers(child, "pactl subscribe");
-      return true;
-    } catch {
-      return false;
-    }
+  _tryEventDrivenLinux(generation) {
+    return this._spawnListener({
+      command: "pactl",
+      args: ["subscribe"],
+      options: { stdio: ["ignore", "pipe", "pipe"] },
+      label: "pactl subscribe",
+      generation,
+      onLine: (line) => this._parsePactlSubscribeLine(line),
+    });
   }
 
   _parsePactlSubscribeLine(line) {
@@ -355,6 +334,7 @@ class AudioActivityDetector extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   _onMicStateChanged(active) {
+    if (!this._running) return;
     if (this._userRecording) {
       debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
       return;

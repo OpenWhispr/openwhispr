@@ -58,14 +58,16 @@ function MainApp() {
       }
     }
 
-    // Sync runs in every non-agent window, so tray-only sessions where the
-    // control panel is never opened still stay fresh.
-    if (!isAgentPanel) {
+    // Sync starts only after auth settles, so a new bearer token cannot touch
+    // the previous account's rows while validation is still running. A failed
+    // (guest/offline) resolution also counts as settled: canSync() then no-ops
+    // because no validated auth context exists.
+    if (!isAgentPanel && authLoaded) {
       import("./services/SyncService.js")
         .then(({ syncService }) => syncService.startAutoSync())
         .catch(() => {});
     }
-  }, [isAgentPanel, isControlPanel]);
+  }, [authLoaded, isAgentPanel, isControlPanel]);
 
   useEffect(() => {
     if (!authLoaded) return;
@@ -109,6 +111,8 @@ function MainApp() {
     localStorage.setItem("onboardingCompleted", "true");
   };
 
+  // The agent overlay never touches account-scoped data, so it renders
+  // without waiting for auth resolution (guests can use it offline).
   if (isAgentPanel) {
     return (
       <Suspense fallback={<LoadingFallback />}>
@@ -117,6 +121,9 @@ function MainApp() {
     );
   }
 
+  // isLoading clears once the onboarding effect has run, which itself waits
+  // for authLoaded — and authLoaded terminates even when the session cannot
+  // resolve (guest/offline presents as signed out).
   if (isLoading) {
     return <LoadingFallback />;
   }

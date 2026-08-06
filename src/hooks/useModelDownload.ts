@@ -10,6 +10,7 @@ import type {
   WhisperDownloadProgressData,
   WhisperModelResult,
 } from "../types/electron";
+import { clearMissingLocalModelSelections } from "../stores/settingsStore";
 import "../types/electron";
 
 const PROGRESS_THROTTLE_MS = 100;
@@ -523,7 +524,11 @@ export function useModelDownload({
             });
           }
         } else {
-          await window.electronAPI?.modelDelete?.(modelId);
+          // model-delete reports failure by resolving, not throwing — leaving the
+          // model on disk, so the scopes pointing at it must stay untouched.
+          const result = await window.electronAPI?.modelDelete?.(modelId);
+          if (!result?.success) throw new Error(result?.error ?? "");
+          clearMissingLocalModelSelections((id) => id !== modelId);
           toast({
             title: t("hooks.modelDownload.modelDeleted.title"),
             description: t("hooks.modelDownload.modelDeleted.description"),

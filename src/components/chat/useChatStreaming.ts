@@ -7,6 +7,7 @@ import { getAgentSystemPrompt } from "../../config/prompts";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
 import type { Message, AgentState, ToolCallInfo } from "./types";
+import type { ContainerScope } from "../../types/chat";
 
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
@@ -18,10 +19,15 @@ function estimateModelSizeB(modelId: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-async function buildRAGContext(userText: string): Promise<string> {
+async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
   try {
-    const results = await window.electronAPI.semanticSearchNotes(userText, RAG_NOTE_LIMIT);
+    const results = await window.electronAPI.semanticSearchNotes(
+      userText,
+      RAG_NOTE_LIMIT,
+      scope?.spaceId ?? null,
+      scope?.folderId ?? null
+    );
     if (!results || results.length === 0) return "";
 
     const snippets = await Promise.all(
@@ -44,6 +50,8 @@ interface UseChatStreamingOptions {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   /** Optional note context to prepend to the system prompt (used by embedded note chat). */
   noteContext?: string;
+  /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
+  searchScope?: ContainerScope;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
 }
 
@@ -59,6 +67,7 @@ export function useChatStreaming({
   messages,
   setMessages,
   noteContext: externalNoteContext,
+  searchScope,
   onStreamComplete,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
@@ -69,6 +78,8 @@ export function useChatStreaming({
   const messagesRef = useRef<Message[]>([]);
   const noteContextRef = useRef(externalNoteContext);
   noteContextRef.current = externalNoteContext;
+  const searchScopeRef = useRef(searchScope);
+  searchScopeRef.current = searchScope;
   const toolRegistryRef = useRef<{ key: string; registry: ToolRegistry } | null>(null);
 
   useEffect(() => {
@@ -116,9 +127,11 @@ export function useChatStreaming({
         isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
 
+      const scope = searchScopeRef.current;
       let registry: ToolRegistry | null = null;
       if (supportsTools) {
-        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}-${settings.cloudBackupEnabled}`;
+        const scopeKey = scope ? `${scope.spaceId}:${scope.folderId ?? ""}` : "";
+        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}-${settings.cloudBackupEnabled}-${scopeKey}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -126,12 +139,13 @@ export function useChatStreaming({
             isSignedIn: settings.isSignedIn,
             gcalConnected: settings.gcalConnected,
             cloudBackupEnabled: settings.cloudBackupEnabled,
+            searchScope: scope,
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }
       }
 
-      const ragContext = await buildRAGContext(userText);
+      const ragContext = await buildRAGContext(userText, scope);
       const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
       const systemPrompt = getAgentSystemPrompt(
         registry?.getAll().map((t) => t.name),
@@ -180,7 +194,7 @@ export function useChatStreaming({
                   : result.displayText;
                 const metadata =
                   result.success && result.data && typeof result.data === "object"
-                    ? (result.data as Record<string, unknown>)
+                    ? (result.data as Record<string, unknown> | Array<Record<string, unknown>>)
                     : undefined;
                 return { data, displayText: result.displayText, metadata };
               }

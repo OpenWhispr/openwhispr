@@ -21,6 +21,7 @@ import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useUsage } from "../hooks/useUsage";
+import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
 import {
   useTranscriptions,
@@ -46,13 +47,16 @@ import { isAccessibilitySkipped } from "../utils/permissions";
 import {
   setActiveNoteId,
   setActiveFolderId,
+  navigateToContainer,
   useActiveNoteId,
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
+import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
@@ -60,11 +64,14 @@ import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
-import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
+
+// Bump to force a one-time full semantic reindex on next launch (see the
+// reindex effect for the per-version history).
+const SEMANTIC_REINDEX_VERSION = 2;
 
 const toggleIconClass =
   "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
@@ -100,6 +107,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
+    workspaceId: string;
+    teamIds: string[];
+  } | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
@@ -148,6 +159,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   const usage = useUsage();
+  const upsell = decideUpsell({
+    authLoaded,
+    isSignedIn,
+    hasPaidAccess: usage?.hasPaidAccess ?? null,
+    isPastDue: usage?.isPastDue ?? false,
+  });
 
   const {
     status: updateStatus,
@@ -195,6 +212,26 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     window.electronAPI?.noteFilesSetEnabled?.(true, noteFilesPath || undefined, {
       skipRebuild: true,
     });
+  }, []);
+
+  // One-time background reindex, versioned: v1 backfilled space_id payloads
+  // after the spaces migration; v2 backfills cloud-pulled notes, which were
+  // never incrementally indexed before the upsert-from-cloud handler gained a
+  // vector upsert. Delayed so the Qdrant sidecar has time to come up; if it
+  // isn't ready yet the flag stays unset and the next launch retries.
+  useEffect(() => {
+    if (Number(localStorage.getItem("semanticReindexVersion")) >= SEMANTIC_REINDEX_VERSION) return;
+    const timer = setTimeout(() => {
+      window.electronAPI
+        ?.semanticReindexAll?.()
+        .then((result) => {
+          if (result?.success) {
+            localStorage.setItem("semanticReindexVersion", String(SEMANTIC_REINDEX_VERSION));
+          }
+        })
+        .catch(() => {});
+    }, 15_000);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -276,7 +313,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [toast, t]);
 
   useEffect(() => {
-    if (!usage?.isPastDue || !usage.hasLoaded) return;
+    if (!usage?.isPastDue) return;
     if (sessionStorage.getItem("pastDueNotified")) return;
     sessionStorage.setItem("pastDueNotified", "true");
     toast({
@@ -285,18 +322,25 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       variant: "destructive",
       duration: 8000,
     });
-  }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
+  }, [usage?.isPastDue, toast, t]);
 
   useEffect(() => {
-    if (!WORKSPACES_ENABLED) return;
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);
+      // Consume the main-process stash so a handled push isn't re-pulled on a
+      // later remount.
+      void window.electronAPI?.getPendingInvitationToken?.();
+    });
+    window.electronAPI?.getPendingInvitationToken?.().then((token) => {
+      if (token) setInvitationToken(token);
     });
     return () => unsubscribe?.();
   }, []);
 
   useEffect(() => {
-    if (!WORKSPACES_ENABLED || !authLoaded || !isSignedIn) return;
+    // Also when signed out (the modal's "Sign in to accept" handles auth);
+    // isSignedIn stays in the deps so a stored token resurfaces after sign-in.
+    if (!authLoaded) return;
     const pending = consumePendingInvitationToken();
     if (pending) {
       setInvitationToken(pending);
@@ -552,6 +596,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
           // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
           let handledTranslation = false;
+          let translationApplied = false;
           if (result.transcription.route_kind === "translation") {
             handledTranslation = true;
             try {
@@ -568,7 +613,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const agentName = localStorage.getItem("agentName") || null;
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
-                const { text } = await executeTranslationChain({
+                const { text, translated } = await executeTranslationChain({
                   text: rawText,
                   cleanupReachable: route.cleanupReachable,
                   runCleanup: (currentText: string) =>
@@ -596,7 +641,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       {},
                       "transcription"
                     ),
+                  onUnchangedTranslate: () =>
+                    logger.warn(
+                      "Translation step returned unchanged text, keeping source text",
+                      {},
+                      "transcription"
+                    ),
                 });
+                translationApplied = translated;
                 if (text !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -647,6 +699,40 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             } catch {
               // Reasoning failed — keep the raw STT result
             }
+          }
+
+          // Deterministic Chinese script pass, mirroring dictation (#975). Runs last so
+          // it covers the cleaned/translated text, or the raw transcript when neither ran.
+          // Same rule as audioManager.getEffectiveOutputLanguage: only a completed
+          // translate step moves the text into the target language, so anything else
+          // still has to be scripted as the language that was dictated.
+          try {
+            const outputLanguage =
+              result.transcription.route_kind === "translation"
+                ? (translationApplied
+                    ? s.translationTargetLanguage
+                    : s.translationSourceLanguage) || "auto"
+                : s.preferredLanguage;
+            const scripted = await applyChineseScript(
+              finalTranscription.text,
+              resolveChineseScriptTarget(
+                outputLanguage,
+                s.chineseScriptPreference,
+                finalTranscription.text
+              )
+            );
+            if (scripted !== finalTranscription.text) {
+              const updated = await window.electronAPI.updateTranscriptionText(
+                id,
+                scripted,
+                rawText
+              );
+              if (updated.success && updated.transcription) {
+                finalTranscription = updated.transcription;
+              }
+            }
+          } catch {
+            // Conversion failed — keep the text as transcribed
           }
 
           updateInStore(finalTranscription);
@@ -805,16 +891,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      {WORKSPACES_ENABLED && (
-        <AcceptInvitationModal
-          token={invitationToken}
-          onClose={() => setInvitationToken(null)}
-          isSignedIn={isSignedIn}
-          onSignIn={() => {
-            setInvitationToken(null);
-          }}
-        />
-      )}
+      <AcceptInvitationModal
+        token={invitationToken}
+        onClose={() => setInvitationToken(null)}
+        onAccepted={(entry) => {
+          setInvitationNotesEntry(entry);
+          setActiveView("personal-notes");
+        }}
+      />
 
       {showSearch && (
         <Suspense fallback={null}>
@@ -822,9 +906,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             open={showSearch}
             onOpenChange={setShowSearch}
             transcriptions={history}
-            onNoteSelect={(id, folderId) => {
-              if (folderId) setActiveFolderId(folderId);
+            onNoteSelect={(id, folderId, spaceId) => {
+              if (folderId != null) setActiveFolderId(folderId);
+              else if (spaceId != null) navigateToContainer(spaceId, null);
               setActiveNoteId(id);
+              setActiveView("personal-notes");
+            }}
+            onContainerSelect={(spaceId, folderId) => {
+              navigateToContainer(spaceId, folderId);
               setActiveView("personal-notes");
             }}
             onTranscriptSelect={() => {
@@ -873,8 +962,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             userImage={user?.image}
             isSignedIn={isSignedIn}
             authLoaded={authLoaded}
-            isProUser={!!(usage?.isSubscribed || usage?.isTrial)}
-            usageLoaded={usage?.hasLoaded ?? false}
+            upsell={upsell}
             updateAction={
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
@@ -1038,6 +1126,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   onOpenSearch={() => setShowSearch(true)}
                   meetingRecordingRequest={meetingRecordingRequest}
                   onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
+                  invitationEntry={invitationNotesEntry}
+                  onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
                 />
               </Suspense>
             )}
@@ -1064,7 +1154,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {activeView === "integrations" && (
               <Suspense fallback={null}>
                 <IntegrationsView
-                  isPaid={!!(usage?.isSubscribed || usage?.isTrial)}
+                  isPaid={usage?.hasPaidAccessOptimistic ?? false}
                   onUpgrade={() => {
                     setSettingsSection("plansBilling");
                     setShowSettings(true);
@@ -1098,6 +1188,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         )}
       </div>
       <BackgroundActionToastListener />
+      <SpaceSyncToastListener />
     </div>
   );
 }

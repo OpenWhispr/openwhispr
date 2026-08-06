@@ -1,9 +1,5 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import { cloudGet, cloudPost, cloudDelete, type DataWrap } from "./cloudApi.js";
 import type { Team, TeamMember } from "../types/electron";
-
-interface DataWrap<T> {
-  data: T;
-}
 
 async function list(workspaceId: string): Promise<Team[]> {
   const res = await cloudGet<DataWrap<Team[]>>(`/api/workspaces/${workspaceId}/teams`);
@@ -15,14 +11,6 @@ async function create(
   input: { name: string; description?: string }
 ): Promise<Team> {
   const res = await cloudPost<DataWrap<Team>>(`/api/workspaces/${workspaceId}/teams`, input);
-  return res.data;
-}
-
-async function update(
-  teamId: string,
-  patch: { name?: string; description?: string }
-): Promise<Team> {
-  const res = await cloudPatch<DataWrap<Team>>(`/api/teams/${teamId}`, patch);
   return res.data;
 }
 
@@ -50,7 +38,6 @@ async function removeMember(teamId: string, userId: string): Promise<void> {
 export const TeamsService = {
   list,
   create,
-  update,
   remove,
   listMembers,
   addMember,

@@ -76,6 +76,14 @@ const WhisperCudaManager = require("../../src/helpers/whisperCudaManager.js");
 const LlamaVulkanManager = require("../../src/helpers/llamaVulkanManager.js");
 const WhisperVulkanManager = require("../../src/helpers/whisperVulkanManager.js");
 
+// CUDA pins real release digests, which a stubbed archive can never hash to. Tests that
+// exercise shared pipeline behavior rather than integrity drop the pin to reach it.
+function cudaManagerWithoutDigestPin() {
+  const manager = new WhisperCudaManager();
+  manager.config.expectedDigests = undefined;
+  return manager;
+}
+
 function makeRelease(assetName, overrides = {}) {
   return {
     tag_name: "test-tag",
@@ -114,7 +122,7 @@ test.afterEach(() => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("CUDA: resolves its exact asset from releases/latest and installs binary + companion libs", async () => {
+test("CUDA: resolves its exact asset from the pinned tag and installs binary + companion libs", async () => {
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
   state.extractedFiles = {
     "whisper-server-linux-x64-cuda": "binary",
@@ -122,10 +130,10 @@ test("CUDA: resolves its exact asset from releases/latest and installs binary + 
     "README.md": "doc",
   };
 
-  const manager = new WhisperCudaManager();
+  const manager = cudaManagerWithoutDigestPin();
   await manager.download();
 
-  assert.match(state.fetchedUrls[0], /OpenWhispr\/whisper\.cpp\/releases\/latest$/);
+  assert.match(state.fetchedUrls[0], /OpenWhispr\/whisper\.cpp\/releases\/tags\/0\.0\.8$/);
   assert.equal(state.downloads[0].url, "https://dl/whisper-server-linux-x64-cuda.zip");
 
   const binDir = path.join(userDataDir, "bin");
@@ -149,6 +157,14 @@ test("llama Vulkan: resolves asset by regex from the pinned tag", async () => {
   assert.match(state.fetchedUrls[0], /ggml-org\/llama\.cpp\/releases\/tags\/b9763$/);
   assert.ok(fs.existsSync(path.join(userDataDir, "bin", "llama-server-vulkan")), "renamed output");
   assert.ok(fs.existsSync(path.join(userDataDir, "bin", "libvulkan.so.1")));
+});
+
+test("CUDA: pinned digest rejects an asset that doesn't match (fail closed)", async () => {
+  state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
+  state.extractedFiles = { "whisper-server-linux-x64-cuda": "binary" };
+
+  await assert.rejects(() => new WhisperCudaManager().download(), { message: /integrity check/ });
+  assert.equal(new WhisperCudaManager().isDownloaded(), false);
 });
 
 test("whisper Vulkan: pinned asset, no companion libs, rejects a digest mismatch (fail closed)", async () => {
@@ -262,7 +278,7 @@ test("guard: a second download while one is in flight throws", async () => {
   };
   state.extractedFiles = { "whisper-server-linux-x64-cuda": "binary" };
 
-  const manager = new WhisperCudaManager();
+  const manager = cudaManagerWithoutDigestPin();
   const first = manager.download();
   await assert.rejects(() => manager.download(), { message: "Download already in progress" });
   releaseDownload();
@@ -275,7 +291,7 @@ test("cleanup on failure: archive and extract dir removed, next download can sta
     throw new Error("Extraction failed: corrupt");
   };
 
-  const manager = new WhisperCudaManager();
+  const manager = cudaManagerWithoutDigestPin();
   await assert.rejects(() => manager.download(), { message: /Extraction failed/ });
 
   assert.equal(fs.readdirSync(tempDir).length, 0, "temp artifacts removed");

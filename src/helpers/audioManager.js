@@ -10,6 +10,12 @@ import {
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
 import {
+  applyChineseScript,
+  mergeWhisperPrompt,
+  resolveChineseScriptTarget,
+  resolveCleanupLanguage,
+} from "../utils/chineseScript";
+import {
   createLocalSpeechGateState,
   getLocalSpeechGateDecision,
   recordLocalSpeechWindow,
@@ -46,12 +52,12 @@ import {
 import { detectAgentName } from "../config/agentDetection";
 import {
   resolveDictationRouteKind,
-  resolveDictationAgentReachability,
   resolveDictationTranslationReachability,
 } from "./dictationRouting";
+import { resolveDictationAgentInference } from "./dictationAgentInference";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
-import { evaluateFinishedRecording } from "./recordingValidation";
+import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
@@ -63,13 +69,8 @@ const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
 function dictationAgentReachable(settings) {
-  return resolveDictationAgentReachability({
-    useDictationAgent: settings.useDictationAgent,
-    dictationAgentModel: settings.dictationAgentModel,
-    isCloudAgent: isCloudDictationAgentMode(),
-    isSelfHostedAgent:
-      settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim(),
-  });
+  return resolveDictationAgentInference(settings, { isCloudAgent: isCloudDictationAgentMode() })
+    .reachable;
 }
 
 function translationChainReachable(settings) {
@@ -93,15 +94,8 @@ function resolveReasoningRoute(
 ) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
-  const agentModel = settings.dictationAgentModel?.trim() || "";
-  const isCloudAgent = isCloudDictationAgentMode();
-  const isSelfHostedAgent =
-    settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim();
-  const agentReachable = resolveDictationAgentReachability({
-    useDictationAgent: settings.useDictationAgent,
-    dictationAgentModel: agentModel,
-    isCloudAgent,
-    isSelfHostedAgent,
+  const agent = resolveDictationAgentInference(settings, {
+    isCloudAgent: isCloudDictationAgentMode(),
   });
 
   const isCloudTranslation = isCloudTranslationMode();
@@ -117,7 +111,7 @@ function resolveReasoningRoute(
 
   const kind = resolveDictationRouteKind({
     cleanupReachable,
-    agentReachable,
+    agentReachable: agent.reachable,
     agentInvoked: !!agentName && detectAgentName(text, agentName),
     voiceAgentRequested,
     translationRequested,
@@ -164,22 +158,11 @@ function resolveReasoningRoute(
     };
   }
   if (kind === "agent") {
-    const provider = isCloudAgent
-      ? "openwhispr"
-      : settings.dictationAgentProvider?.trim() || undefined;
-    const isCustomAgent = settings.dictationAgentMode === "providers" && provider === "custom";
     return {
       kind: "agent",
-      model: agentModel,
+      model: agent.model,
       config: {
-        provider,
-        lanUrl: isSelfHostedAgent ? settings.dictationAgentRemoteUrl : undefined,
-        baseUrl: isCustomAgent ? settings.dictationAgentCloudBaseUrl || undefined : undefined,
-        customApiKey:
-          isCustomAgent || isSelfHostedAgent
-            ? settings.dictationAgentCustomApiKey || undefined
-            : undefined,
-        disableThinking: settings.dictationAgentDisableThinking,
+        ...agent.config,
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,
@@ -338,6 +321,7 @@ class AudioManager {
     this.skipReasoning = false;
     this.voiceAgentRequested = false;
     this.translationRequested = false;
+    this.translationApplied = false;
     this.context = "dictation";
     this.sttConfig = null;
     this.lastAudioBlob = null;
@@ -423,8 +407,58 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return words.length > 0 ? words.join(", ") : null;
   }
 
+  // Script conversion targets whatever the user ends up pasting: the translation
+  // target when translating, otherwise the dictation language. Using the STT
+  // language here would force zh-TW source audio back to Traditional even when
+  // the user asked to translate into Simplified.
+  //
+  // Only a completed translate step actually moves text into the target language.
+  // When translation is unreachable, skipped or fails, the source transcript is
+  // what gets pasted, so it must be scripted as the STT language — otherwise a
+  // failed ja → zh-CN run would run Japanese through OpenCC (会議の資料 → 会议の数据).
+  getEffectiveOutputLanguage(settings) {
+    if (this.translationRequested && this.translationApplied) {
+      return settings.translationTargetLanguage || "auto";
+    }
+    return this.getEffectiveSttLanguage(settings);
+  }
+
+  // Whisper only accepts language "zh"; script (简体/繁體) is applied here. See #975.
+  // No transcript exists yet, so only an explicit zh-CN/zh-TW may bias the prompt.
+  getWhisperPrompt(settings = getSettings()) {
+    return mergeWhisperPrompt(
+      this.getCustomDictionaryPrompt(),
+      resolveChineseScriptTarget(
+        this.getEffectiveSttLanguage(settings),
+        settings.chineseScriptPreference
+      )
+    );
+  }
+
+  // Cleanup runs before the translate step, so it still works in the STT language.
+  getCleanupLanguage(settings) {
+    return resolveCleanupLanguage(this.getEffectiveSttLanguage(settings));
+  }
+
+  finalizeChineseScript(text, settings = getSettings()) {
+    return applyChineseScript(
+      text,
+      resolveChineseScriptTarget(
+        this.getEffectiveOutputLanguage(settings),
+        settings.chineseScriptPreference,
+        text
+      )
+    );
+  }
+
+  // Check the dictionary on its own as well as the full prompt: the echo filter needs
+  // 70% of the prompt's words to appear, and a Chinese script bias counts as one more
+  // word, which alone pushes a one- or two-term dictionary under the threshold.
   isDictionaryEcho(text) {
-    return matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt());
+    return (
+      matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt()) ||
+      matchesDictionaryPrompt(text, this.getWhisperPrompt())
+    );
   }
 
   setCallbacks({
@@ -512,6 +546,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setTranslationRequested(requested) {
     this.translationRequested = requested;
+    this.translationApplied = false;
   }
 
   // In translation mode the STT hint is the configured source language, not
@@ -969,12 +1004,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._batchSegments = [];
     const segmentsCount = segments.filter((segment) => segment?.size > 0).length;
     let audioBlob = null;
+    let salvagedRecording = false;
     try {
       audioBlob = await this.mergeRecordedSegments(segments);
     } catch (error) {
       logger.error("Failed to assemble recovered recording", { error: error.message }, "audio");
       // Salvage the largest segment rather than dropping the whole recording.
       audioBlob = this.getLargestRecordedSegment(segments);
+      salvagedRecording = !!audioBlob;
     }
     audioBlob = audioBlob || new Blob([], { type: this.recordingMimeType || "audio/webm" });
     this.lastAudioBlob = audioBlob;
@@ -1019,6 +1056,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     await this.processAudio(audioBlob, {
       durationSeconds,
+      ...(salvagedRecording ? { salvagedRecording: true } : {}),
       ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
     });
   }
@@ -1291,6 +1329,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         model: activeModel || null,
       };
 
+      result = withSalvageWarning(result, metadata.salvagedRecording);
       this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {
@@ -1366,7 +1405,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Add custom dictionary as initial prompt to help Whisper recognize specific words
-      const dictionaryPrompt = this.getCustomDictionaryPrompt();
+      const dictionaryPrompt = this.getWhisperPrompt();
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
       }
@@ -1777,7 +1816,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             promptMode: "cleanup",
             customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
-            language: this.getEffectiveSttLanguage(settings) || "auto",
+            language: this.getCleanupLanguage(settings),
             locale: settings.uiLanguage || "en",
             ...(cleanup.meta || {}),
           });
@@ -1806,7 +1845,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.processWithReasoningModel(currentText, route.model, agentName, route.config);
 
     try {
-      return await executeTranslationChain({
+      const chainResult = await executeTranslationChain({
         text,
         cleanupReachable: route.cleanupReachable,
         cleanupIsCloud: cleanup.mode === "cloudReason",
@@ -1830,7 +1869,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           logger.warn("Translation step returned empty text, keeping previous text", {}, channel);
           this.notifyTranslationFallback("failed");
         },
+        // No fallback toast here: an echoed translation usually means the dictation was
+        // already in the target language, which the current app treats as silent success.
+        onUnchangedTranslate: () => {
+          const { channel } = cleanup.log || {};
+          logger.warn("Translation step returned unchanged text, keeping source text", {}, channel);
+        },
       });
+      this.translationApplied = chainResult.translated;
+      return chainResult;
     } catch (translateError) {
       // Translate step threw: raw text is still pasted by the caller. Surface the failure.
       this.notifyTranslationFallback("failed");
@@ -1839,6 +1886,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async processTranscription(text, source) {
+    const result = await this.processTranscriptionCore(text, source);
+    return this.finalizeChineseScript(result);
+  }
+
+  async processTranscriptionCore(text, source) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
     if (!normalizedText) {
@@ -2158,7 +2210,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.sendLogs = "false";
     }
 
-    const dictionaryPrompt = this.getCustomDictionaryPrompt();
+    const dictionaryPrompt = this.getWhisperPrompt(settings);
     if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
 
     // Use withSessionRefresh to handle AUTH_EXPIRED automatically
@@ -2210,7 +2262,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
-              language: this.getEffectiveSttLanguage(settings) || "auto",
+              language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
@@ -2287,7 +2339,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     return {
       success: true,
-      text: processedText,
+      text: await this.finalizeChineseScript(processedText, settings),
       rawText,
       source: "openwhispr",
       timings,
@@ -2345,7 +2397,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (!window.electronAPI?.proxyTinfoilTranscription) {
           throw new Error("Tinfoil transcription is unavailable in this window");
         }
-        const dictionaryPrompt = this.getCustomDictionaryPrompt();
+        const dictionaryPrompt = this.getWhisperPrompt(apiSettings);
         const apiCallStart = performance.now();
         const result = await window.electronAPI.proxyTinfoilTranscription({
           audioBuffer: await optimizedAudio.arrayBuffer(),
@@ -2413,7 +2465,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // 890 leaves margin for UTF-16 vs codepoint counting drift.
       const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
       const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
-      let dictionaryPrompt = this.getCustomDictionaryPrompt();
+      let dictionaryPrompt = this.getWhisperPrompt(apiSettings);
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
           const originalLength = dictionaryPrompt.length;
@@ -2955,12 +3007,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // shape returns DeploymentNotFound. Build the deployment-style URL.
         // The api-version defaults to a transcribe-capable preview; a user can
         // override it by appending ?api-version=... to their endpoint URL.
-        const azureUrl = buildAzureTranscriptionUrl(normalizedBase, deployment);
+        // Built from the raw base — normalization strips the /audio/transcriptions
+        // suffix that marks a deployment the user pinned.
+        const azureUrl = buildAzureTranscriptionUrl(base, deployment);
         if (azureUrl) {
           endpoint = azureUrl;
           logger.debug(
             "STT endpoint: built Azure deployment URL",
-            { base: normalizedBase, deployment, endpoint },
+            { base, deployment, endpoint },
             "transcription"
           );
         } else {
@@ -3803,7 +3857,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
-              language: this.getEffectiveSttLanguage(stSettings) || "auto",
+              language: this.getCleanupLanguage(stSettings),
               locale: stSettings.uiLanguage || "en",
               sttProvider: this.getStreamingProviderName(),
               sttModel: streamingSttModel,
@@ -3931,6 +3985,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (finalText) {
+      // The batch fallback routes through processTranscription, which already
+      // applied the script; only streamed text still needs it.
+      if (!usedBatchFallback) {
+        finalText = await this.finalizeChineseScript(finalText, stSettings);
+      }
       const tBeforePaste = performance.now();
       const clientTotalMs = Math.round(tBeforePaste - t0);
       this.lastAudioMetadata = {

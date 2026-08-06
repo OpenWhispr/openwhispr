@@ -1,5 +1,6 @@
 import { getCleanupSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
+import { resolveCleanupLanguage } from "../utils/chineseScript";
 import { getDictionaryHintWords } from "../utils/snippets";
 
 export interface ReasoningConfig {
@@ -22,8 +23,11 @@ export abstract class BaseReasoningService {
     return getDictionaryHintWords(getSettings());
   }
 
+  // Auto must remain auto here: zh-CN/zh-TW instructions make cleanup write its
+  // entire response in Chinese before the transcription language is known. The
+  // final deterministic script pass handles likely-Chinese output instead. See #975.
   protected getPreferredLanguage(): string {
-    return getSettings().preferredLanguage || "auto";
+    return resolveCleanupLanguage(getSettings().preferredLanguage);
   }
 
   protected getUiLanguage(): string {

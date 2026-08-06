@@ -2,22 +2,41 @@ import { createAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { openExternalLink } from "../utils/externalLinks";
+import {
+  authContextFetch,
+  handleAuthRequestError,
+  handleAuthRequestResponse,
+  handleAuthRequestSuccess,
+  observeAuthTokenStateEvent,
+  prepareAuthRequest,
+} from "./authRequestContext";
 
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
 export const authClient = createAuthClient({
   baseURL: AUTH_URL,
   plugins: [ssoClient()],
   fetchOptions: {
-    auth: {
-      type: "Bearer",
-      token: async () => (await window.electronAPI?.authGetToken?.()) ?? "",
-    },
+    credentials: "omit",
+    customFetchImpl: authContextFetch,
     headers: { "x-openwhispr-source": "desktop" },
-    onSuccess: async (ctx: { response: Response }) => {
-      const newToken = ctx.response.headers.get("set-auth-token");
-      if (newToken) await window.electronAPI?.authSetToken?.(newToken);
-    },
+    onRequest: prepareAuthRequest,
+    onResponse: handleAuthRequestResponse,
+    onSuccess: handleAuthRequestSuccess,
+    onError: handleAuthRequestError,
   },
+});
+
+let authRefetchTimer: ReturnType<typeof setTimeout> | null = null;
+window.electronAPI?.onAuthTokenStateChanged?.((state) => {
+  observeAuthTokenStateEvent(state);
+  // Main broadcasts a successful compare-and-set rotation before the IPC
+  // invocation resolves. Deferring avoids aborting the exact session request
+  // that is about to bind the new generation.
+  if (authRefetchTimer) clearTimeout(authRefetchTimer);
+  authRefetchTimer = setTimeout(() => {
+    authRefetchTimer = null;
+    authClient.$store.notify("$sessionSignal");
+  }, 0);
 });
 
 export type SocialProvider = "google" | "microsoft" | "apple";
@@ -107,6 +126,12 @@ export function isWithinGracePeriod(): boolean {
   return elapsed < GRACE_PERIOD_MS;
 }
 
+export function getGracePeriodRemainingMs(): number {
+  const startedAt = getLastSignInTime();
+  if (!startedAt) return 0;
+  return Math.max(0, GRACE_PERIOD_MS - Math.max(0, Date.now() - startedAt));
+}
+
 export async function deleteAccount(): Promise<{ error?: Error }> {
   if (!OPENWHISPR_API_URL) {
     return { error: new Error("API not configured") };
@@ -130,13 +155,16 @@ export async function deleteAccount(): Promise<{ error?: Error }> {
 }
 
 export async function signOut(): Promise<void> {
+  credentialAccountCache = null;
   try {
     await authClient.signOut();
-    if (window.electronAPI?.authClearSession) {
-      await window.electronAPI.authClearSession();
-    }
-    markSignedOutState();
   } catch {
+    // Local sign-out must still cross a credential generation boundary when
+    // the server is offline; the remote session can expire independently.
+  } finally {
+    if (window.electronAPI?.authClearSession) {
+      await window.electronAPI.authClearSession().catch(() => undefined);
+    }
     markSignedOutState();
   }
 }
@@ -229,5 +257,64 @@ export async function requestPasswordReset(email: string): Promise<{ error?: Err
     return {};
   } catch (error) {
     return { error: error instanceof Error ? error : new Error("Failed to send reset email") };
+  }
+}
+
+export interface AuthActionError extends Error {
+  code?: string;
+}
+
+function toAuthActionError(source: unknown, fallbackMessage: string): AuthActionError {
+  if (source instanceof Error) return source as AuthActionError;
+  if (source && typeof source === "object") {
+    const record = source as { message?: string; code?: string };
+    const error: AuthActionError = new Error(record.message || fallbackMessage);
+    if (record.code) error.code = record.code;
+    return error;
+  }
+  return new Error(fallbackMessage);
+}
+
+export async function updateDisplayName(name: string): Promise<{ error?: AuthActionError }> {
+  try {
+    const { error } = await authClient.updateUser({ name });
+    if (error) return { error: toAuthActionError(error, "Failed to update name") };
+    return {};
+  } catch (error) {
+    return { error: toAuthActionError(error, "Failed to update name") };
+  }
+}
+
+export async function changePassword(params: {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions: boolean;
+}): Promise<{ error?: AuthActionError }> {
+  try {
+    const { error } = await authClient.changePassword({
+      currentPassword: params.currentPassword,
+      newPassword: params.newPassword,
+      revokeOtherSessions: params.revokeOtherSessions,
+    });
+    if (error) return { error: toAuthActionError(error, "Failed to change password") };
+    return {};
+  } catch (error) {
+    return { error: toAuthActionError(error, "Failed to change password") };
+  }
+}
+
+// Cache only successful results; errors fail open without being cached. Cleared
+// in signOut() so a different account never inherits a stale value.
+let credentialAccountCache: boolean | null = null;
+
+export async function hasCredentialAccount(): Promise<boolean> {
+  if (credentialAccountCache !== null) return credentialAccountCache;
+  try {
+    const { data, error } = await authClient.listAccounts();
+    if (error || !data) return true;
+    credentialAccountCache = data.some((account) => account.providerId === "credential");
+    return credentialAccountCache;
+  } catch {
+    return true;
   }
 }

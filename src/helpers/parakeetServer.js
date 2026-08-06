@@ -117,14 +117,16 @@ class ParakeetServerManager {
 
       if (samples.length <= maxSegmentBytes) {
         const result = await this.wsServer.transcribe(samples, SAMPLE_RATE);
-        if (!result.text?.trim()) {
-          debugLogger.warn("Parakeet returned empty text for non-silent audio", {
-            durationSeconds,
-            rms,
-            samplesBytes: samples.length,
-          });
-        }
-        return result;
+        if (result.text?.trim()) return result;
+        // The RMS gate above already established audible audio, so an empty
+        // decode here loses the whole dictation — retry once before giving up.
+        debugLogger.warn("Parakeet returned empty text for non-silent audio, retrying", {
+          durationSeconds,
+          rms,
+          samplesBytes: samples.length,
+        });
+        const retry = await this.wsServer.transcribe(samples, SAMPLE_RATE);
+        return { ...retry, elapsed: (result.elapsed || 0) + (retry.elapsed || 0) };
       }
 
       debugLogger.debug("Parakeet segmenting long audio", {
@@ -139,17 +141,27 @@ class ParakeetServerManager {
       for (let offset = 0; offset < samples.length; offset += maxSegmentBytes) {
         const end = Math.min(offset + maxSegmentBytes, samples.length);
         const segment = samples.subarray(offset, end);
-        const result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
+        let result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
         totalElapsed += result.elapsed || 0;
-        if (result.truncated) truncated = true;
-        if (result.text) {
-          texts.push(result.text);
-        } else {
-          debugLogger.warn("Parakeet segment returned empty text", {
+        if (!result.text && computeFloat32RMS(segment) >= SILENCE_RMS_THRESHOLD) {
+          // An empty decode of audible audio silently amputates the transcript
+          // (#1435: dictation openings dropped); retry once before conceding.
+          debugLogger.warn("Parakeet segment returned empty text, retrying", {
             segmentIndex: offset / maxSegmentBytes,
             segmentDuration: segment.length / BYTES_PER_SAMPLE / SAMPLE_RATE,
           });
+          result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
+          totalElapsed += result.elapsed || 0;
+          if (!result.text) {
+            truncated = true;
+            debugLogger.warn("Parakeet segment still empty after retry; transcript truncated", {
+              segmentIndex: offset / maxSegmentBytes,
+            });
+          }
         }
+        // Latched after the retry so a discarded attempt's truncation dies with it.
+        if (result.truncated) truncated = true;
+        if (result.text) texts.push(result.text);
       }
 
       const text = texts.join(" ");

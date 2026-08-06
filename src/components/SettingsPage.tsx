@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
+import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
@@ -90,7 +91,12 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import type { GpuDevice, LocalTranscriptionProvider, InferenceMode } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  GpuDevice,
+  LocalTranscriptionProvider,
+  InferenceMode,
+} from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
@@ -104,13 +110,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
-import { useSettingsStore } from "../stores/settingsStore";
+import { clearMissingLocalModelSelections, useSettingsStore } from "../stores/settingsStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
-import { WORKSPACES_ENABLED } from "../lib/features";
-
-const formatAmount = (cents: number, currency: string) =>
-  (cents / 100).toLocaleString(undefined, { style: "currency", currency });
+import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
+import ProfileSection from "./settings/ProfileSection";
+import { formatAmount } from "../utils/formatAmount";
 
 export type SettingsSectionType =
   | "account"
@@ -142,6 +148,11 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
   { value: "zh-CN", label: "简体中文", flag: "🇨🇳" },
   { value: "zh-TW", label: "繁體中文", flag: "🇹🇼" },
 ];
+
+const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
+
+const RETENTION_SELECT_CLASS =
+  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
 const noop = () => {};
 
@@ -529,6 +540,28 @@ function TabPanel({ active, children }: { active: boolean; children: React.React
   return <div className={active ? undefined : "hidden"}>{children}</div>;
 }
 
+function AccountAvatar({ image, name }: { image?: string | null; name: string }) {
+  // Same stale-URL fallback as MemberAvatar: OAuth-hosted images expire, and a
+  // bare <img> would render the broken-image glyph instead of the icon.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  return (
+    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
+      {image && image !== failedSrc ? (
+        <img
+          src={image}
+          alt={name}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedSrc(image)}
+          className="w-10 h-10 rounded-full object-cover"
+        />
+      ) : (
+        <UserCircle className="w-5 h-5 text-primary" />
+      )}
+    </div>
+  );
+}
+
 function SpeechToTextTabs({
   initialTab,
   renderDictation,
@@ -718,6 +751,7 @@ export default function SettingsPage({
     preferredLanguages,
     setPreferredLanguage,
     setPreferredLanguages,
+    chineseScriptPreference,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
@@ -786,12 +820,13 @@ export default function SettingsPage({
     setTelemetryEnabled,
     audioRetentionDays,
     setAudioRetentionDays,
+    transcriptRetentionDays,
+    setTranscriptRetentionDays,
     dataRetentionEnabled,
     setDataRetentionEnabled,
     saveDiscardedTranscriptions,
     setSaveDiscardedTranscriptions,
     customDictionary,
-    setCustomDictionary,
     noteFilesEnabled,
     setNoteFilesEnabled,
     noteFilesPath,
@@ -935,6 +970,10 @@ export default function SettingsPage({
 
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
+  const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
+  const coveringWorkspaceNames = (usage?.entitledWorkspaceIds ?? [])
+    .map((id) => billingWorkspaces.find((workspace) => workspace.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
   const hasShownApproachingToast = useRef(false);
   useEffect(() => {
     if (usage?.isApproachingLimit && !hasShownApproachingToast.current) {
@@ -1295,6 +1334,8 @@ export default function SettingsPage({
               description: t("settingsPage.developer.removeModels.failedDescription"),
             });
           } else {
+            // Every local model is gone, so no local selection can still resolve.
+            clearMissingLocalModelSelections(() => false);
             window.dispatchEvent(new Event("openwhispr-models-cleared"));
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.successTitle"),
@@ -1313,10 +1354,13 @@ export default function SettingsPage({
     });
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
-  const { isSignedIn, isLoaded, user } = useAuth();
+  const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  // Signed out there is nothing to load and the plan grid is purely
+  // promotional; signed in, no card may claim a plan until usage confirms one.
+  const planStateKnown = !isSignedIn || usage?.status === "success";
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [isOpeningBilling, setIsOpeningBilling] = useState(false);
+  const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [billingState, setBillingState] = useState<Record<string, boolean>>({
     pro: true,
     business: true,
@@ -1339,16 +1383,6 @@ export default function SettingsPage({
     localStorage.removeItem("onboardingCompleted");
     window.location.reload();
   }, []);
-
-  const handleBillingPortal = useCallback(async () => {
-    const result = await usage.openBillingPortal();
-    if (!result.success) {
-      toast({
-        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-        description: t("settingsPage.account.checkout.couldNotOpenDescription"),
-      });
-    }
-  }, [usage, toast, t]);
 
   const handleSwitchPlan = useCallback(
     async (plan: "monthly" | "annual", tier: "pro" | "business") => {
@@ -1416,6 +1450,9 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
+      // Team content is membership-scoped, not account data: drop it locally
+      // before the session ends (never blocks sign-out).
+      await syncService.purgeTeamSpacesForSignOut();
       await signOut();
       window.location.reload();
     } catch (error) {
@@ -1623,17 +1660,10 @@ export default function SettingsPage({
                 <SettingsPanel>
                   <SettingsPanelRow>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
-                        {user.image ? (
-                          <img
-                            src={user.image}
-                            alt={user.name || t("settingsPage.account.user")}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <UserCircle className="w-5 h-5 text-primary" />
-                        )}
-                      </div>
+                      <AccountAvatar
+                        image={user.image}
+                        name={user.name || t("settingsPage.account.user")}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-foreground truncate">
                           {user.name || t("settingsPage.account.user")}
@@ -1644,6 +1674,13 @@ export default function SettingsPage({
                     </div>
                   </SettingsPanelRow>
                 </SettingsPanel>
+
+                <ProfileSection
+                  name={user.name || ""}
+                  onSessionRefresh={() => {
+                    void refetch();
+                  }}
+                />
 
                 <SettingsPanel>
                   <SettingsPanelRow>
@@ -1758,409 +1795,33 @@ export default function SettingsPage({
               </>
             ) : isLoaded ? (
               <>
-                <SectionHeader title={t("settingsPage.account.pricing.title")} />
-                <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
-                  {/* Free */}
-                  <div
-                    className={cn(
-                      "rounded-md p-2.5 flex flex-col",
-                      !usage?.isSubscribed && !usage?.isTrial
-                        ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
-                        : "border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
-                    )}
-                  >
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("settingsPage.account.pricing.free.name")}
-                    </p>
-                    <div className="flex items-baseline gap-0.5 mt-0.5">
-                      <span className="text-lg font-bold text-foreground">
-                        {t("settingsPage.account.pricing.free.price")}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground">
-                        / {t("settingsPage.account.pricing.free.period")}
-                      </span>
-                    </div>
-                    <ul className="space-y-0.5 mt-2 flex-1">
-                      {(
-                        t("settingsPage.account.pricing.free.features", {
-                          returnObjects: true,
-                        }) as string[]
-                      ).map((feature, i) =>
-                        feature.startsWith("## ") ? (
-                          <li
-                            key={i}
-                            className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/60 ${i > 0 ? "pt-1.5" : ""}`}
-                          >
-                            {feature.slice(3)}
-                          </li>
-                        ) : (
-                          <li
-                            key={i}
-                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                          >
-                            <Check size={9} className="mt-[2px] text-primary/70 shrink-0" />
-                            {feature}
-                          </li>
-                        )
-                      )}
-                    </ul>
-                    {!isSignedIn ? (
-                      <Button
-                        onClick={startOnboarding}
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {t("settingsPage.account.signedOutPlans.button")}
-                      </Button>
-                    ) : usage?.isSubscribed && !usage?.isTrial ? (
-                      <Button
-                        onClick={handleBillingPortal}
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {t("settingsPage.account.pricing.downgrade")}
-                      </Button>
-                    ) : (
-                      <div className="mt-2 text-center">
-                        <span className="text-[9px] font-medium text-primary/70">
-                          {t("settingsPage.account.pricing.currentPlan")}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Pro */}
-                  <div
-                    className={cn(
-                      "rounded-md border-2 p-2.5 flex flex-col",
-                      usage?.isSubscribed && usage?.plan === "pro"
-                        ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                        : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
-                    )}
-                  >
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("settingsPage.account.pricing.pro.name")}
-                    </p>
-                    <button
-                      onClick={() => setBillingState((prev) => ({ ...prev, pro: !prev.pro }))}
-                      role="switch"
-                      aria-checked={billingState.pro}
-                      className="flex items-center gap-1.5 mt-1"
-                    >
-                      <div
-                        className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
-                      >
-                        <div
-                          className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3" : ""}`}
-                        />
-                      </div>
-                      <span className="text-[9px] text-muted-foreground">
-                        {t("settingsPage.account.pricing.billedYearly")}
-                      </span>
-                    </button>
-                    <div className="flex items-baseline gap-0.5 mt-1">
-                      <span className="text-lg font-bold text-foreground">
-                        {billingState.pro
-                          ? t("settingsPage.account.pricing.pro.annualEquivalent")
-                          : t("settingsPage.account.pricing.pro.monthlyPrice")}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground">
-                        {t("settingsPage.account.pricing.pro.monthlyPeriod")}
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                      {t("settingsPage.account.pricing.pro.includesPrefix")}
-                    </p>
-                    <ul className="space-y-0.5 mt-1 flex-1">
-                      {(
-                        t("settingsPage.account.pricing.pro.features", {
-                          returnObjects: true,
-                        }) as string[]
-                      ).map((feature, i) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                        >
-                          <Check size={9} className="mt-[2px] text-primary shrink-0" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    {(usage?.isSubscribed && usage?.plan === "pro" && !usage?.isTrial) ||
-                    usage?.isTrial ? (
-                      <div className="mt-2 text-center">
-                        <span className="text-[9px] font-medium text-primary">
-                          {t("settingsPage.account.pricing.currentPlan")}
-                        </span>
-                      </div>
-                    ) : usage?.isSubscribed && usage?.plan === "business" ? (
-                      <Button
-                        onClick={() =>
-                          handleSwitchPlan(billingState.pro ? "annual" : "monthly", "pro")
-                        }
-                        disabled={previewLoading || usage.checkoutLoading}
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {previewLoading ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.downgrade")
-                        )}
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() =>
-                          handleCheckout(billingState.pro ? "annual" : "monthly", "pro")
-                        }
-                        disabled={checkoutTier === "pro"}
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {checkoutTier === "pro" ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.pro.cta")
-                        )}
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Business */}
-                  <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
-                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
-                      {t("settingsPage.account.pricing.business.badge")}
-                    </span>
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("settingsPage.account.pricing.business.name")}
-                    </p>
-                    <button
-                      onClick={() =>
-                        setBillingState((prev) => ({ ...prev, business: !prev.business }))
-                      }
-                      role="switch"
-                      aria-checked={billingState.business}
-                      className="flex items-center gap-1.5 mt-1"
-                    >
-                      <div
-                        className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
-                      >
-                        <div
-                          className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3" : ""}`}
-                        />
-                      </div>
-                      <span className="text-[9px] text-muted-foreground">
-                        {t("settingsPage.account.pricing.billedYearly")}
-                      </span>
-                    </button>
-                    <div className="flex items-baseline gap-0.5 mt-1">
-                      <span className="text-lg font-bold text-foreground">
-                        {billingState.business
-                          ? t("settingsPage.account.pricing.business.annualEquivalent")
-                          : t("settingsPage.account.pricing.business.monthlyPrice")}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground">
-                        {t("settingsPage.account.pricing.business.monthlyPeriod")}
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                      {t("settingsPage.account.pricing.business.includesPrefix")}
-                    </p>
-                    <ul className="space-y-0.5 mt-1 flex-1">
-                      {(
-                        t("settingsPage.account.pricing.business.features", {
-                          returnObjects: true,
-                        }) as string[]
-                      ).map((feature, i) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                        >
-                          <Check size={9} className="mt-[2px] text-primary shrink-0" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    {usage?.isSubscribed && usage?.plan === "business" && !usage?.isTrial ? (
-                      <div className="mt-2 text-center">
-                        <span className="text-[9px] font-medium text-primary">
-                          {t("settingsPage.account.pricing.currentPlan")}
-                        </span>
-                      </div>
-                    ) : usage?.isSubscribed && usage?.plan === "pro" && !usage?.isTrial ? (
-                      <Button
-                        onClick={() =>
-                          handleSwitchPlan(billingState.business ? "annual" : "monthly", "business")
-                        }
-                        disabled={previewLoading || usage.checkoutLoading}
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {previewLoading ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.upgrade")
-                        )}
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() =>
-                          handleCheckout(billingState.business ? "annual" : "monthly", "business")
-                        }
-                        disabled={checkoutTier === "business"}
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {checkoutTier === "business" ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.business.cta")
-                        )}
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Enterprise */}
-                  <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("settingsPage.account.pricing.enterprise.name")}
-                    </p>
-                    <p className="text-[9px] text-muted-foreground mt-1">
-                      {t("settingsPage.account.pricing.enterprise.subtitle")}
-                    </p>
-                    <div className="flex items-baseline gap-0.5 mt-1">
-                      <span className="text-lg font-bold text-foreground">
-                        {t("settingsPage.account.pricing.enterprise.price")}
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                      {t("settingsPage.account.pricing.enterprise.includesPrefix")}
-                    </p>
-                    <ul className="space-y-0.5 mt-1 flex-1">
-                      {(
-                        t("settingsPage.account.pricing.enterprise.features", {
-                          returnObjects: true,
-                        }) as string[]
-                      ).map((feature, i) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                        >
-                          <Check
-                            size={9}
-                            className="mt-[2px] text-purple-500 dark:text-purple-400 shrink-0"
-                          />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 w-full h-6 text-[10px]"
-                      onClick={() =>
-                        window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
-                      }
-                    >
-                      <Mail size={10} />
-                      {t("settingsPage.account.pricing.enterprise.cta")}
-                    </Button>
-                  </div>
-                </div>
-
-                <Dialog
-                  open={!!switchPreview}
-                  onOpenChange={(open) => !open && setSwitchPreview(null)}
-                >
-                  <DialogContent className="sm:max-w-90">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {t("settingsPage.account.pricing.confirmSwitch.title")}
-                      </DialogTitle>
-                      <DialogDescription>
-                        {switchPreview &&
-                          t("settingsPage.account.pricing.confirmSwitch.description", {
-                            plan: switchPreview.tier === "pro" ? "Pro" : "Business",
-                            interval:
-                              switchPreview.plan === "annual"
-                                ? t("settingsPage.account.pricing.confirmSwitch.yearly")
-                                : t("settingsPage.account.pricing.confirmSwitch.monthly"),
-                          })}
-                      </DialogDescription>
-                    </DialogHeader>
-                    {switchPreview && (
-                      <div className="rounded-lg border border-border/50 dark:border-border-subtle/60 overflow-hidden">
-                        <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
-                          <span className="text-xs text-muted-foreground">
-                            {switchPreview.immediateAmount < 0
-                              ? t("settingsPage.account.pricing.confirmSwitch.accountCredit")
-                              : t("settingsPage.account.pricing.confirmSwitch.chargeToday")}
-                          </span>
-                          <span
-                            className={cn(
-                              "text-sm font-semibold",
-                              switchPreview.immediateAmount < 0
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-foreground"
-                            )}
-                          >
-                            {formatAmount(
-                              Math.abs(switchPreview.immediateAmount),
-                              switchPreview.currency
-                            )}
-                          </span>
-                        </div>
-                        <div className="divide-y divide-border/40">
-                          <div className="flex justify-between items-center px-3 py-2">
-                            <span className="text-xs text-muted-foreground">
-                              {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
-                            </span>
-                            <span className="text-xs font-medium text-foreground">
-                              {formatAmount(switchPreview.newPriceAmount, switchPreview.currency)}/
-                              {switchPreview.newInterval === "year"
-                                ? t("settingsPage.account.pricing.confirmSwitch.yr")
-                                : t("settingsPage.account.pricing.confirmSwitch.mo")}
-                            </span>
-                          </div>
-                          {switchPreview.nextBillingDate && (
-                            <div className="flex justify-between items-center px-3 py-2">
-                              <span className="text-xs text-muted-foreground">
-                                {t("settingsPage.account.pricing.confirmSwitch.nextBilling")}
-                              </span>
-                              <span className="text-xs font-medium text-foreground">
-                                {new Date(switchPreview.nextBillingDate).toLocaleDateString()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    <DialogFooter>
-                      <Button variant="outline" size="sm" onClick={() => setSwitchPreview(null)}>
-                        {t("settingsPage.account.pricing.confirmSwitch.cancel")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={confirmSwitchPlan}
-                        disabled={usage?.checkoutLoading}
-                      >
-                        {usage?.checkoutLoading ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.confirmSwitch.confirm")
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
+                {isSignedIn && <WorkspaceBillingOverview onRefreshEntitlement={usage?.refetch} />}
                 {isSignedIn ? (
-                  <>
-                    <SectionHeader title={t("settingsPage.account.planTitle")} />
-                    {!usage || !usage.hasLoaded ? (
+                  <div className="space-y-5">
+                    <SectionHeader title={t("settingsPage.unifiedBilling.personalPlanTitle")} />
+                    {usage?.status === "error" ? (
+                      <SettingsPanel>
+                        <SettingsPanelRow>
+                          <SettingsRow
+                            label={t("settingsPage.account.planUnavailable.title")}
+                            description={t("settingsPage.account.planUnavailable.description")}
+                          >
+                            <Button
+                              onClick={() => void usage.retry()}
+                              variant="outline"
+                              size="sm"
+                              disabled={usage.isRetrying}
+                            >
+                              {usage.isRetrying ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                t("common.retry")
+                              )}
+                            </Button>
+                          </SettingsRow>
+                        </SettingsPanelRow>
+                      </SettingsPanel>
+                    ) : usage?.status !== "success" ? (
                       <SettingsPanel>
                         <SettingsPanelRow>
                           <div className="flex items-center justify-between">
@@ -2199,7 +1860,7 @@ export default function SettingsPage({
                                 ? t("settingsPage.account.planLabels.trial")
                                 : usage.isPastDue
                                   ? t("settingsPage.account.planLabels.free")
-                                  : usage.isSubscribed
+                                  : usage.isPersonallySubscribed
                                     ? usage.plan === "business"
                                       ? t("settingsPage.account.planLabels.business")
                                       : t("settingsPage.account.planLabels.pro")
@@ -2215,7 +1876,7 @@ export default function SettingsPage({
                                       used: usage.wordsUsed.toLocaleString(i18n.language),
                                       limit: usage.limit.toLocaleString(i18n.language),
                                     })
-                                  : usage.isSubscribed
+                                  : usage.isPersonallySubscribed
                                     ? usage.currentPeriodEnd
                                       ? t("settingsPage.account.planDescriptions.nextBilling", {
                                           date: new Date(usage.currentPeriodEnd).toLocaleDateString(
@@ -2224,10 +1885,14 @@ export default function SettingsPage({
                                           ),
                                         })
                                       : t("settingsPage.account.planDescriptions.unlimited")
-                                    : t("settingsPage.account.planDescriptions.freeUsage", {
-                                        used: usage.wordsUsed.toLocaleString(i18n.language),
-                                        limit: usage.limit.toLocaleString(i18n.language),
-                                      })
+                                    : coveringWorkspaceNames.length > 0
+                                      ? t("settingsPage.unifiedBilling.providedBy", {
+                                          workspaces: coveringWorkspaceNames.join(", "),
+                                        })
+                                      : t("settingsPage.account.planDescriptions.freeUsage", {
+                                          used: usage.wordsUsed.toLocaleString(i18n.language),
+                                          limit: usage.limit.toLocaleString(i18n.language),
+                                        })
                             }
                           >
                             {usage.isTrial ? (
@@ -2236,7 +1901,7 @@ export default function SettingsPage({
                               <Badge variant="destructive">
                                 {t("settingsPage.account.badges.pastDue")}
                               </Badge>
-                            ) : usage.isSubscribed ? (
+                            ) : usage.isPersonallySubscribed ? (
                               <Badge variant="success">
                                 {usage.plan === "business"
                                   ? t("settingsPage.account.badges.business")
@@ -2295,23 +1960,7 @@ export default function SettingsPage({
                         <SettingsPanelRow>
                           {usage.isPastDue ? (
                             <Button
-                              onClick={async () => {
-                                setIsOpeningBilling(true);
-                                try {
-                                  const result = await usage.openBillingPortal();
-                                  if (!result.success) {
-                                    toast({
-                                      title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                      description: t(
-                                        "settingsPage.account.billing.couldNotOpenDescription"
-                                      ),
-                                      variant: "destructive",
-                                    });
-                                  }
-                                } finally {
-                                  setIsOpeningBilling(false);
-                                }
-                              }}
+                              onClick={() => void openBillingPortal()}
                               disabled={isOpeningBilling}
                               size="sm"
                               className="w-full"
@@ -2325,26 +1974,15 @@ export default function SettingsPage({
                                 t("settingsPage.account.billing.updatePaymentMethod")
                               )}
                             </Button>
-                          ) : usage.isSubscribed && !usage.isTrial ? (
+                          ) : usage.isPersonallySubscribed && !usage.isTrial ? (
                             <Button
-                              onClick={async () => {
-                                const result = await usage.openBillingPortal();
-                                if (!result.success) {
-                                  toast({
-                                    title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                    description: t(
-                                      "settingsPage.account.billing.couldNotOpenDescription"
-                                    ),
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
+                              onClick={() => void openBillingPortal()}
                               variant="outline"
                               size="sm"
                               className="w-full"
-                              disabled={usage.checkoutLoading}
+                              disabled={isOpeningBilling}
                             >
-                              {usage.checkoutLoading
+                              {isOpeningBilling
                                 ? t("settingsPage.account.billing.opening")
                                 : t("settingsPage.account.billing.manageBilling")}
                             </Button>
@@ -2379,8 +2017,389 @@ export default function SettingsPage({
                         </SettingsPanelRow>
                       </SettingsPanel>
                     )}
-                  </>
+                  </div>
                 ) : null}
+
+                <div className="space-y-5">
+                  <SectionHeader title={t("settingsPage.account.pricing.title")} />
+                  <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
+                    <div
+                      className={cn(
+                        "rounded-md p-2.5 flex flex-col",
+                        planStateKnown && !usage?.isPersonallySubscribed && !usage?.isTrial
+                          ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
+                          : "border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                      )}
+                    >
+                      <p className="text-xs font-semibold text-foreground">
+                        {t("settingsPage.account.pricing.free.name")}
+                      </p>
+                      <div className="flex items-baseline gap-0.5 mt-0.5">
+                        <span className="text-lg font-bold text-foreground">
+                          {t("settingsPage.account.pricing.free.price")}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">
+                          / {t("settingsPage.account.pricing.free.period")}
+                        </span>
+                      </div>
+                      <ul className="space-y-0.5 mt-2 flex-1">
+                        {(
+                          t("settingsPage.account.pricing.free.features", {
+                            returnObjects: true,
+                          }) as string[]
+                        ).map((feature, i) =>
+                          feature.startsWith("## ") ? (
+                            <li
+                              key={i}
+                              className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/60 ${i > 0 ? "pt-1.5" : ""}`}
+                            >
+                              {feature.slice(3)}
+                            </li>
+                          ) : (
+                            <li
+                              key={i}
+                              className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                            >
+                              <Check size={9} className="mt-[2px] text-primary/70 shrink-0" />
+                              {feature}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                      {!isSignedIn ? (
+                        <Button
+                          onClick={startOnboarding}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {t("settingsPage.account.signedOutPlans.button")}
+                        </Button>
+                      ) : usage?.isPersonallySubscribed && !usage?.isTrial ? (
+                        <Button
+                          onClick={() => void openBillingPortal()}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                          disabled={isOpeningBilling}
+                        >
+                          {isOpeningBilling
+                            ? t("settingsPage.account.billing.opening")
+                            : t("settingsPage.account.pricing.downgrade")}
+                        </Button>
+                      ) : planStateKnown ? (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary/70">
+                            {t("settingsPage.account.pricing.currentPlan")}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div
+                      className={cn(
+                        "rounded-md border-2 p-2.5 flex flex-col",
+                        usage?.isPersonallySubscribed && usage?.plan === "pro"
+                          ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                          : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
+                      )}
+                    >
+                      <p className="text-xs font-semibold text-foreground">
+                        {t("settingsPage.account.pricing.pro.name")}
+                      </p>
+                      <button
+                        onClick={() => setBillingState((prev) => ({ ...prev, pro: !prev.pro }))}
+                        role="switch"
+                        aria-checked={billingState.pro}
+                        className="flex items-center gap-1.5 mt-1"
+                      >
+                        <div
+                          className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
+                        >
+                          <div
+                            className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3" : ""}`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">
+                          {t("settingsPage.account.pricing.billedYearly")}
+                        </span>
+                      </button>
+                      <div className="flex items-baseline gap-0.5 mt-1">
+                        <span className="text-lg font-bold text-foreground">
+                          {billingState.pro
+                            ? t("settingsPage.account.pricing.pro.annualEquivalent")
+                            : t("settingsPage.account.pricing.pro.monthlyPrice")}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">
+                          {t("settingsPage.account.pricing.pro.monthlyPeriod")}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                        {t("settingsPage.account.pricing.pro.includesPrefix")}
+                      </p>
+                      <ul className="space-y-0.5 mt-1 flex-1">
+                        {(
+                          t("settingsPage.account.pricing.pro.features", {
+                            returnObjects: true,
+                          }) as string[]
+                        ).map((feature, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                          >
+                            <Check size={9} className="mt-[2px] text-primary shrink-0" />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      {(usage?.isPersonallySubscribed &&
+                        usage?.plan === "pro" &&
+                        !usage?.isTrial) ||
+                      usage?.isTrial ? (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.currentPlan")}
+                          </span>
+                        </div>
+                      ) : usage?.isPersonallySubscribed && usage?.plan === "business" ? (
+                        <Button
+                          onClick={() =>
+                            handleSwitchPlan(billingState.pro ? "annual" : "monthly", "pro")
+                          }
+                          disabled={previewLoading || usage.checkoutLoading}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {previewLoading ? (
+                            <Loader2 size={10} className="animate-spin" />
+                          ) : (
+                            t("settingsPage.account.pricing.downgrade")
+                          )}
+                        </Button>
+                      ) : planStateKnown ? (
+                        <Button
+                          onClick={() =>
+                            handleCheckout(billingState.pro ? "annual" : "monthly", "pro")
+                          }
+                          disabled={checkoutTier === "pro"}
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {checkoutTier === "pro" ? (
+                            <Loader2 size={10} className="animate-spin" />
+                          ) : (
+                            t("settingsPage.account.pricing.pro.cta")
+                          )}
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+                        {t("settingsPage.account.pricing.business.badge")}
+                      </span>
+                      <p className="text-xs font-semibold text-foreground">
+                        {t("settingsPage.account.pricing.business.name")}
+                      </p>
+                      <button
+                        onClick={() =>
+                          setBillingState((prev) => ({ ...prev, business: !prev.business }))
+                        }
+                        role="switch"
+                        aria-checked={billingState.business}
+                        className="flex items-center gap-1.5 mt-1"
+                      >
+                        <div
+                          className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
+                        >
+                          <div
+                            className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3" : ""}`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">
+                          {t("settingsPage.account.pricing.billedYearly")}
+                        </span>
+                      </button>
+                      <div className="flex items-baseline gap-0.5 mt-1">
+                        <span className="text-lg font-bold text-foreground">
+                          {billingState.business
+                            ? t("settingsPage.account.pricing.business.annualEquivalent")
+                            : t("settingsPage.account.pricing.business.monthlyPrice")}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">
+                          {t("settingsPage.account.pricing.business.monthlyPeriod")}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                        {t("settingsPage.account.pricing.business.includesPrefix")}
+                      </p>
+                      <ul className="space-y-0.5 mt-1 flex-1">
+                        {(
+                          t("settingsPage.account.pricing.business.features", {
+                            returnObjects: true,
+                          }) as string[]
+                        ).map((feature, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                          >
+                            <Check size={9} className="mt-[2px] text-primary shrink-0" />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      {!isSignedIn ? (
+                        <Button
+                          onClick={startOnboarding}
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {t("settingsPage.account.pricing.business.cta")}
+                        </Button>
+                      ) : (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
+                      <p className="text-xs font-semibold text-foreground">
+                        {t("settingsPage.account.pricing.enterprise.name")}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground mt-1">
+                        {t("settingsPage.account.pricing.enterprise.subtitle")}
+                      </p>
+                      <div className="flex items-baseline gap-0.5 mt-1">
+                        <span className="text-lg font-bold text-foreground">
+                          {t("settingsPage.account.pricing.enterprise.price")}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                        {t("settingsPage.account.pricing.enterprise.includesPrefix")}
+                      </p>
+                      <ul className="space-y-0.5 mt-1 flex-1">
+                        {(
+                          t("settingsPage.account.pricing.enterprise.features", {
+                            returnObjects: true,
+                          }) as string[]
+                        ).map((feature, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                          >
+                            <Check
+                              size={9}
+                              className="mt-[2px] text-purple-500 dark:text-purple-400 shrink-0"
+                            />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full h-6 text-[10px]"
+                        onClick={() =>
+                          window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
+                        }
+                      >
+                        <Mail size={10} />
+                        {t("settingsPage.account.pricing.enterprise.cta")}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Dialog
+                    open={!!switchPreview}
+                    onOpenChange={(open) => !open && setSwitchPreview(null)}
+                  >
+                    <DialogContent className="sm:max-w-90">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {t("settingsPage.account.pricing.confirmSwitch.title")}
+                        </DialogTitle>
+                        <DialogDescription>
+                          {switchPreview &&
+                            t("settingsPage.account.pricing.confirmSwitch.description", {
+                              plan: switchPreview.tier === "pro" ? "Pro" : "Business",
+                              interval:
+                                switchPreview.plan === "annual"
+                                  ? t("settingsPage.account.pricing.confirmSwitch.yearly")
+                                  : t("settingsPage.account.pricing.confirmSwitch.monthly"),
+                            })}
+                        </DialogDescription>
+                      </DialogHeader>
+                      {switchPreview && (
+                        <div className="rounded-lg border border-border/50 dark:border-border-subtle/60 overflow-hidden">
+                          <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
+                            <span className="text-xs text-muted-foreground">
+                              {switchPreview.immediateAmount < 0
+                                ? t("settingsPage.account.pricing.confirmSwitch.accountCredit")
+                                : t("settingsPage.account.pricing.confirmSwitch.chargeToday")}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-sm font-semibold",
+                                switchPreview.immediateAmount < 0
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-foreground"
+                              )}
+                            >
+                              {formatAmount(
+                                Math.abs(switchPreview.immediateAmount),
+                                switchPreview.currency
+                              )}
+                            </span>
+                          </div>
+                          <div className="divide-y divide-border/40">
+                            <div className="flex justify-between items-center px-3 py-2">
+                              <span className="text-xs text-muted-foreground">
+                                {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
+                              </span>
+                              <span className="text-xs font-medium text-foreground">
+                                {formatAmount(switchPreview.newPriceAmount, switchPreview.currency)}
+                                /
+                                {switchPreview.newInterval === "year"
+                                  ? t("settingsPage.account.pricing.confirmSwitch.yr")
+                                  : t("settingsPage.account.pricing.confirmSwitch.mo")}
+                              </span>
+                            </div>
+                            {switchPreview.nextBillingDate && (
+                              <div className="flex justify-between items-center px-3 py-2">
+                                <span className="text-xs text-muted-foreground">
+                                  {t("settingsPage.account.pricing.confirmSwitch.nextBilling")}
+                                </span>
+                                <span className="text-xs font-medium text-foreground">
+                                  {new Date(switchPreview.nextBillingDate).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <DialogFooter>
+                        <Button variant="outline" size="sm" onClick={() => setSwitchPreview(null)}>
+                          {t("settingsPage.account.pricing.confirmSwitch.cancel")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={confirmSwitchPlan}
+                          disabled={usage?.checkoutLoading}
+                        >
+                          {usage?.checkoutLoading ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            t("settingsPage.account.pricing.confirmSwitch.confirm")
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </>
             ) : (
               <>
@@ -2399,7 +2418,12 @@ export default function SettingsPage({
         );
 
       case "workspace":
-        return WORKSPACES_ENABLED ? <WorkspaceSection initialSubTab={initialSubTab} /> : null;
+        return (
+          <WorkspaceSection
+            initialSubTab={initialSubTab}
+            onNavigateToBilling={() => onNavigateToSection?.("plansBilling")}
+          />
+        );
 
       case "general":
         return (
@@ -2761,6 +2785,36 @@ export default function SettingsPage({
                     </div>
                   </SettingsRow>
                 </SettingsPanelRow>
+                {preferredLanguage === "auto" && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settings.language.chineseScriptLabel")}
+                      description={t("settings.language.chineseScriptDescription")}
+                    >
+                      <Select
+                        value={chineseScriptPreference}
+                        onValueChange={(value: ChineseScriptPreference) =>
+                          updateTranscriptionSettings({ chineseScriptPreference: value })
+                        }
+                      >
+                        <SelectTrigger className="h-7 w-44 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="as-transcribed">
+                            {t("settings.language.chineseScriptAsTranscribed")}
+                          </SelectItem>
+                          <SelectItem value="simplified">
+                            {t("settings.language.chineseScriptSimplified")}
+                          </SelectItem>
+                          <SelectItem value="traditional">
+                            {t("settings.language.chineseScriptTraditional")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 
@@ -3531,6 +3585,9 @@ EOF`,
                       </SettingsRow>
                     </SettingsPanelRow>
                   </SettingsPanel>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("settingsPage.privacy.cloudBackupTeamCaveat")}
+                  </p>
                   {migration && (
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -3616,24 +3673,14 @@ EOF`,
                     <select
                       value={audioRetentionDays}
                       onChange={(e) => setAudioRetentionDays(parseInt(e.target.value, 10))}
-                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
+                      className={RETENTION_SELECT_CLASS}
                     >
                       <option value={0}>{t("settingsPage.privacy.audioRetentionDisabled")}</option>
-                      <option value={7}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 7 })}
-                      </option>
-                      <option value={14}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 14 })}
-                      </option>
-                      <option value={30}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 30 })}
-                      </option>
-                      <option value={60}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 60 })}
-                      </option>
-                      <option value={90}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 90 })}
-                      </option>
+                      {RETENTION_DAY_OPTIONS.map((days) => (
+                        <option key={days} value={days}>
+                          {t("settingsPage.privacy.retentionDays", { count: days })}
+                        </option>
+                      ))}
                     </select>
                   </SettingsRow>
                 </SettingsPanelRow>
@@ -3672,6 +3719,28 @@ EOF`,
                     description={t("settingsPage.privacy.dataRetentionDescription")}
                   >
                     <Toggle checked={dataRetentionEnabled} onChange={setDataRetentionEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.transcriptRetention")}
+                    description={t("settingsPage.privacy.transcriptRetentionDescription")}
+                  >
+                    <select
+                      value={transcriptRetentionDays}
+                      disabled={!dataRetentionEnabled}
+                      onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
+                      className={RETENTION_SELECT_CLASS}
+                    >
+                      <option value={0}>
+                        {t("settingsPage.privacy.transcriptRetentionForever")}
+                      </option>
+                      {RETENTION_DAY_OPTIONS.map((days) => (
+                        <option key={days} value={days}>
+                          {t("settingsPage.privacy.retentionDays", { count: days })}
+                        </option>
+                      ))}
+                    </select>
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>

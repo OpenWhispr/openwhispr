@@ -10,7 +10,6 @@ import {
   Settings,
   HelpCircle,
   UserCircle,
-  UserPlus,
   X,
   Search,
 } from "lucide-react";
@@ -19,11 +18,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
 import { getCachedPlatform } from "../utils/platform";
-import WorkspaceSwitcher from "./WorkspaceSwitcher";
-import InviteTeammateDialog from "./InviteTeammateDialog";
-import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
-import { useWorkspace } from "../hooks/useWorkspace";
-import { WORKSPACES_ENABLED } from "../lib/features";
+import type { UpsellDecision } from "../lib/upsell";
 
 const platform = getCachedPlatform();
 
@@ -50,8 +45,7 @@ interface ControlPanelSidebarProps {
   userImage?: string | null;
   isSignedIn?: boolean;
   authLoaded?: boolean;
-  isProUser?: boolean;
-  usageLoaded?: boolean;
+  upsell: UpsellDecision;
   updateAction?: React.ReactNode;
 }
 
@@ -68,25 +62,16 @@ export default function ControlPanelSidebar({
   userImage,
   isSignedIn,
   authLoaded,
-  isProUser,
-  usageLoaded,
+  upsell,
   updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
   const [upgradeDismissed, setUpgradeDismissed] = useState(
     () => localStorage.getItem("upgradeProDismissed") === "true"
   );
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
-  const { active: activeWorkspace } = useWorkspace();
 
-  const showLimitBanner = authLoaded && isSignedIn && !isProUser && isOverLimit;
-  const showUpgradeBanner =
-    !showLimitBanner &&
-    authLoaded &&
-    (!isSignedIn || usageLoaded !== false) &&
-    !isProUser &&
-    !upgradeDismissed;
+  const showLimitBanner = upsell === "show" && Boolean(isSignedIn) && Boolean(isOverLimit);
+  const showUpgradeBanner = upsell === "show" && !showLimitBanner && !upgradeDismissed;
 
   const navItems: {
     id: ControlPanelView;
@@ -107,12 +92,6 @@ export default function ControlPanelSidebar({
         className="w-full h-10 shrink-0"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
-
-      {WORKSPACES_ENABLED && isSignedIn && (
-        <div className="px-2 pt-1 pb-1">
-          <WorkspaceSwitcher userName={userName} />
-        </div>
-      )}
 
       {onOpenSearch && (
         <div className="px-2 pt-2 pb-1">
@@ -251,21 +230,6 @@ export default function ControlPanelSidebar({
           </button>
         )}
 
-        {WORKSPACES_ENABLED && isSignedIn && (
-          <button
-            onClick={() => (activeWorkspace ? setInviteOpen(true) : setCreateWorkspaceOpen(true))}
-            aria-label={
-              activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")
-            }
-            className={rowButtonClass}
-          >
-            <UserPlus size={15} className={rowIconClass} />
-            <span className={rowLabelClass}>
-              {activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")}
-            </span>
-          </button>
-        )}
-
         <button
           onClick={onOpenSettings}
           aria-label={t("sidebar.settings")}
@@ -312,18 +276,6 @@ export default function ControlPanelSidebar({
           </div>
         </div>
       </div>
-
-      {WORKSPACES_ENABLED && activeWorkspace && (
-        <InviteTeammateDialog
-          open={inviteOpen}
-          onOpenChange={setInviteOpen}
-          workspaceId={activeWorkspace.id}
-          workspaceName={activeWorkspace.name}
-        />
-      )}
-      {WORKSPACES_ENABLED && (
-        <CreateWorkspaceDialog open={createWorkspaceOpen} onOpenChange={setCreateWorkspaceOpen} />
-      )}
     </div>
   );
 }

@@ -1,4 +1,12 @@
-import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+  useSyncExternalStore,
+  type ComponentProps,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Download,
@@ -14,10 +22,30 @@ import {
   Plus,
   Check,
   Share2,
+  Users,
 } from "lucide-react";
 import ShareNoteDialog from "./ShareNoteDialog";
-import { useShareCacheEntry } from "../../stores/noteStore";
-import { SHARING_ENABLED } from "../../lib/features";
+import {
+  canOrganizeNote,
+  noteCapabilities,
+  resolveNotePermission,
+  type NoteAclState,
+} from "../../lib/notePermissions";
+import SpaceMembersDialog from "./SpaceMembersDialog";
+import {
+  useShareCacheEntry,
+  useNoteConflict,
+  useSpaces,
+  clearNoteConflict,
+  navigateToContainer,
+  persistNoteShareState,
+  updateNoteInStore,
+  updateShareCache,
+} from "../../stores/noteStore";
+import { NoteSharingService } from "../../services/NoteSharingService";
+import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
+import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
+import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
@@ -39,7 +67,7 @@ import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
-import { normalizeDbDate } from "../../utils/dateFormatting";
+import { normalizeDbDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
@@ -49,6 +77,9 @@ import {
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
+
+const CHIP_BUTTON_CLASS =
+  "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
 
 function formatNoteDate(dateStr: string): string {
   const date = normalizeDbDate(dateStr);
@@ -62,16 +93,10 @@ function formatNoteDate(dateStr: string): string {
   return `${datePart} \u00b7 ${timePart}`;
 }
 
-function formatShortDate(dateStr: string): string {
-  const date = normalizeDbDate(dateStr);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 export interface Enhancement {
   content: string;
   isStale: boolean;
-  onChange: (content: string) => void;
+  onChange: (sourceNoteId: number, content: string) => void;
 }
 
 type MeetingViewMode = "raw" | "transcript" | "enhanced";
@@ -148,8 +173,8 @@ function LiveMeetingTranscriptChat({
 
 interface NoteEditorProps {
   note: NoteItem;
-  onTitleChange: (title: string) => void;
-  onContentChange: (content: string) => void;
+  onTitleChange: (sourceNoteId: number, title: string) => void;
+  onContentChange: (sourceNoteId: number, content: string) => void;
   isSaving: boolean;
   isRecording: boolean;
   isProcessing: boolean;
@@ -173,6 +198,8 @@ interface NoteEditorProps {
   folders?: FolderItem[];
   onMoveToFolder?: (noteId: number, folderId: number) => void;
   onCreateFolderAndMove?: (noteId: number, folderName: string) => void;
+  /** Cancels the owner's debounced autosaves before an external copy is applied. */
+  onCancelPendingSaves?: (noteId: number) => void;
 }
 
 export default function NoteEditor({
@@ -202,6 +229,7 @@ export default function NoteEditor({
   folders,
   onMoveToFolder,
   onCreateFolderAndMove,
+  onCancelPendingSaves,
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
@@ -211,8 +239,124 @@ export default function NoteEditor({
   const [newFolderName, setNewFolderName] = useState("");
   const [isDiarizing, setIsDiarizing] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
+  const [aclRetryVersion, setAclRetryVersion] = useState(0);
+  const [aclRequest, setAclRequest] = useState<{
+    cloudId: string;
+    state: Extract<NoteAclState, "loading" | "unavailable">;
+  } | null>(null);
+  const { isSignedIn, user } = useAuth();
   const shareCache = useShareCacheEntry(note.cloud_id);
-  const isShared = (shareCache?.share.visibility ?? "private") !== "private";
+  const spaces = useSpaces();
+  const space = useMemo(
+    () => spaces.find((s) => s.id === note.space_id) ?? null,
+    [spaces, note.space_id]
+  );
+  const isTeamNote = space?.kind === "team";
+  // Persisted flag is the restart-safe truth; the live cache overlays it for
+  // the current session (it reflects server state before the flag persists).
+  const isShared = shareCache ? shareCache.share.visibility !== "private" : Boolean(note.is_shared);
+  // Same gate as SyncService.canSyncSharedNotes: sharing needs a subscription.
+  // An already-shared note stays manageable (unshare/revoke) after a lapse.
+  const isSubscribed = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
+  const aclState: NoteAclState = shareCache
+    ? "loaded"
+    : !note.cloud_id || !isSignedIn
+      ? "unavailable"
+      : aclRequest?.cloudId === note.cloud_id
+        ? aclRequest.state
+        : "loading";
+  const notePermission = resolveNotePermission({
+    cachedPermission: shareCache?.access?.my_permission,
+    aclState,
+    isTeamNote,
+  });
+  const shareCapabilities = noteCapabilities(notePermission);
+  const canShare =
+    isSignedIn &&
+    (!note.cloud_id || isTeamNote || aclState === "loaded") &&
+    shareCapabilities.canShare &&
+    (isSubscribed || Boolean(note.is_shared));
+  const canEditNote = shareCapabilities.canEdit;
+  // Re-filing is owner-only on shared personal notes (a denied folder_id
+  // PATCH would fork an unexpected Personal copy); team members keep
+  // same-space folder moves.
+  const canMoveToFolders = canOrganizeNote(notePermission, {
+    isTeamNote,
+    hasCloudCopy: Boolean(note.cloud_id),
+  });
+  useEffect(() => {
+    if (!isSignedIn || !note.cloud_id || shareCache) return;
+    const cloudId = note.cloud_id;
+    let cancelled = false;
+    setAclRequest({ cloudId, state: "loading" });
+    NoteSharingService.getShareSettings(cloudId)
+      .then((res) => {
+        if (cancelled) return;
+        updateShareCache(cloudId, (entry) => ({
+          share: res.share,
+          invitations: res.invitations,
+          access: res.access ?? entry?.access,
+          rawToken: entry?.rawToken ?? null,
+        }));
+        const serverShared = res.share.visibility !== "private";
+        if (serverShared !== Boolean(note.is_shared)) {
+          void persistNoteShareState(
+            note.id,
+            serverShared ? { is_shared: 1 } : { is_shared: 0, share_token: null }
+          ).catch((err) => console.error("Share flag persist failed:", err));
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setAclRequest({ cloudId, state: "unavailable" });
+        console.error("Failed to load note permissions:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [aclRetryVersion, isSignedIn, note.cloud_id, note.id, note.is_shared, shareCache]);
+  useEffect(() => {
+    if (
+      !isSignedIn ||
+      !note.cloud_id ||
+      shareCache ||
+      aclRequest?.cloudId !== note.cloud_id ||
+      aclRequest.state !== "unavailable"
+    ) {
+      return;
+    }
+    const retryWhenOnline = () => setAclRetryVersion((version) => version + 1);
+    window.addEventListener("online", retryWhenOnline);
+    return () => window.removeEventListener("online", retryWhenOnline);
+  }, [aclRequest, isSignedIn, note.cloud_id, shareCache]);
+  // A newer cloud copy arrived while this note had unpushed edits (plan §7.3).
+  const conflict = useNoteConflict(note.client_note_id);
+  const [conflictEditorName, setConflictEditorName] = useState<string | null>(null);
+  const conflictEditorId =
+    conflict?.updated_by_user_id && user?.id && conflict.updated_by_user_id !== user.id
+      ? conflict.updated_by_user_id
+      : null;
+  const conflictSpaceId = space?.cloud_space_id ?? null;
+  useEffect(() => {
+    if (!conflictEditorId || !conflictSpaceId) {
+      setConflictEditorName(null);
+      return;
+    }
+    let cancelled = false;
+    fetchSpaceRoster(conflictSpaceId)
+      .then((roster) => {
+        if (cancelled) return;
+        const member = roster.find((m) => m.user_id === conflictEditorId);
+        setConflictEditorName(member ? (member.name ?? member.email) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setConflictEditorName(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conflictEditorId, conflictSpaceId]);
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerProfiles, setSpeakerProfiles] = useState<
@@ -568,9 +712,9 @@ export default function NoteEditor({
   const handleTitleInput = useCallback(() => {
     if (titleRef.current) {
       const text = titleRef.current.textContent || "";
-      onTitleChange(text);
+      onTitleChange(note.id, text);
     }
-  }, [onTitleChange]);
+  }, [note.id, onTitleChange]);
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -595,16 +739,16 @@ export default function NoteEditor({
 
   const handleContentChange = useCallback(
     (newValue: string) => {
-      onContentChange(newValue);
+      onContentChange(note.id, newValue);
     },
-    [onContentChange]
+    [note.id, onContentChange]
   );
 
   const handleEnhancedChange = useCallback(
     (value: string) => {
-      enhancement?.onChange(value);
+      enhancement?.onChange(note.id, value);
     },
-    [enhancement]
+    [enhancement, note.id]
   );
 
   const handleAskSubmit = useCallback(
@@ -623,6 +767,33 @@ export default function NoteEditor({
     }
   }, [chatMode]);
 
+  // Apply the newer cloud copy over the local edits, keeping the note's
+  // current local placement.
+  const handleConflictRefresh = useCallback(async () => {
+    if (!conflict) return;
+    // Cancel any queued autosave FIRST: a pending debounced save holds the
+    // pre-refresh buffer and would both block the editor resync and clobber
+    // the cloud copy in SQLite a second later.
+    onCancelPendingSaves?.(note.id);
+    const fresh = await window.electronAPI.upsertNoteFromCloud?.(
+      conflict as unknown as Record<string, unknown>,
+      note.folder_id,
+      note.space_id
+    );
+    clearNoteConflict(note.client_note_id);
+    // With no save pending, the owner's external-update resync applies the
+    // fresh copy to the visible editor buffer.
+    if (fresh) updateNoteInStore(fresh);
+  }, [conflict, note.client_note_id, note.folder_id, note.id, note.space_id, onCancelPendingSaves]);
+
+  // Keep the local edits, overwriting the cloud revision the user just saw.
+  // Advancing the base first is what lets the next push succeed instead of
+  // 409ing against the same conflict and re-raising the banner.
+  const handleConflictKeep = useCallback(() => {
+    if (conflict) void window.electronAPI.setNoteCloudBase?.(note.id, conflict.updated_at);
+    clearNoteConflict(note.client_note_id);
+  }, [conflict, note.id, note.client_note_id]);
+
   const noteDate = formatNoteDate(note.created_at);
   const shortDate = formatShortDate(note.created_at);
 
@@ -632,7 +803,7 @@ export default function NoteEditor({
         <div className="px-5 pt-4 pb-0">
           <div
             ref={titleRef}
-            contentEditable
+            contentEditable={canEditNote}
             suppressContentEditableWarning
             onInput={handleTitleInput}
             onKeyDown={handleTitleKeyDown}
@@ -659,7 +830,36 @@ export default function NoteEditor({
               </span>
             )}
             <NoteParticipants noteId={note.id} participants={parsedParticipants} />
-            {folders && onMoveToFolder && (
+            {isTeamNote && space && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigateToContainer(space.id, null)}
+                  className={CHIP_BUTTON_CLASS}
+                >
+                  {space.emoji ? (
+                    <span className="text-[11px] leading-none shrink-0" aria-hidden="true">
+                      {space.emoji}
+                    </span>
+                  ) : (
+                    <Users size={11} className="shrink-0" />
+                  )}
+                  <span className="truncate max-w-32">{space.name}</span>
+                </button>
+                {folders && onMoveToFolder && (canMoveToFolders || folderName) && (
+                  <span aria-hidden="true" className="text-[11px] text-foreground/25">
+                    /
+                  </span>
+                )}
+              </>
+            )}
+            {folders && onMoveToFolder && !canMoveToFolders && folderName && (
+              <span className={cn(CHIP_BUTTON_CLASS, "cursor-default")}>
+                <FolderOpen size={11} className="shrink-0" />
+                {folderName}
+              </span>
+            )}
+            {folders && onMoveToFolder && canMoveToFolders && (
               <DropdownMenu
                 onOpenChange={(open) => {
                   if (!open) {
@@ -670,7 +870,7 @@ export default function NoteEditor({
                 }}
               >
                 <DropdownMenuTrigger asChild>
-                  <button className="inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none">
+                  <button className={CHIP_BUTTON_CLASS}>
                     <FolderOpen size={11} className="shrink-0" />
                     {folderName || t("notes.editor.noFolder")}
                   </button>
@@ -758,6 +958,18 @@ export default function NoteEditor({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            {isTeamNote && space?.cloud_space_id && (
+              <button
+                type="button"
+                onClick={() => setMembersDialogOpen(true)}
+                aria-label={t("notes.spaces.teamsMembers.title", { space: space.name })}
+                className={CHIP_BUTTON_CLASS}
+              >
+                <Users size={11} className="shrink-0" />
+                {/* member_count tracks explicit rosters only — the audience always includes the viewer */}
+                {Math.max(1, space.member_count ?? 1)}
+              </button>
+            )}
             {isSaving && (
               <span className="inline-flex items-center gap-1 text-[11px] text-foreground/30 dark:text-foreground/15 tabular-nums">
                 <Loader2 size={8} className="animate-spin" />
@@ -829,7 +1041,7 @@ export default function NoteEditor({
                   )}
                 </div>
               )}
-              {SHARING_ENABLED && note.cloud_id && (
+              {canShare && (
                 <button
                   type="button"
                   onClick={() => setShareDialogOpen(true)}
@@ -921,6 +1133,43 @@ export default function NoteEditor({
           </div>
         </div>
 
+        {conflict && (
+          <div
+            className={cn(
+              "flex items-center gap-2 px-5 h-8 mt-2 shrink-0",
+              "bg-amber-400/5 dark:bg-amber-400/[0.07]",
+              "border-y border-amber-400/15 dark:border-amber-400/20",
+              "animate-in slide-in-from-top-2 duration-300"
+            )}
+          >
+            <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
+            <p className="text-[11px] text-foreground/50 flex-1 truncate">
+              {t("notes.spaces.conflictBanner")}
+              {conflictEditorName && (
+                <span className="text-foreground/30">
+                  {" "}
+                  {t("notes.spaces.editedBy", {
+                    name: conflictEditorName,
+                    time: formatRelativeTime(conflict.updated_at, t),
+                  })}
+                </span>
+              )}
+            </p>
+            <button
+              onClick={handleConflictRefresh}
+              className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+            >
+              {t("notes.spaces.conflictRefresh")}
+            </button>
+            <button
+              onClick={handleConflictKeep}
+              className="text-[11px] font-medium text-foreground/35 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+            >
+              {t("notes.spaces.conflictKeep")}
+            </button>
+          </div>
+        )}
+
         <div className="flex-1 relative min-h-0">
           <div className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
@@ -963,14 +1212,18 @@ export default function NoteEditor({
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
               <RichTextEditor value={note.transcript || ""} disabled />
             ) : viewMode === "enhanced" && enhancement ? (
-              <RichTextEditor value={enhancement.content} onChange={handleEnhancedChange} />
+              <RichTextEditor
+                value={enhancement.content}
+                onChange={handleEnhancedChange}
+                disabled={!canEditNote}
+              />
             ) : (
               <RichTextEditor
                 value={note.content}
                 onChange={handleContentChange}
                 editorRef={editorRef}
                 placeholder={t("notes.editor.startWriting")}
-                disabled={actionProcessingState === "processing"}
+                disabled={!canEditNote || actionProcessingState === "processing"}
               />
             )}
           </div>
@@ -1003,7 +1256,8 @@ export default function NoteEditor({
             onStopRecording={onStopRecording}
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
-            actionPicker={isRecording ? undefined : actionPicker}
+            canRecord={canEditNote}
+            actionPicker={isRecording || !canEditNote ? undefined : actionPicker}
             hideInput={chatMode !== "hidden"}
           />
           {chatMode === "floating" && (
@@ -1036,8 +1290,15 @@ export default function NoteEditor({
           onNewChat={embeddedChat.startNewChat}
         />
       )}
-      {SHARING_ENABLED && note.cloud_id && (
+      {canShare && (
         <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
+      )}
+      {isTeamNote && space?.cloud_space_id && (
+        <SpaceMembersDialog
+          space={space}
+          open={membersDialogOpen}
+          onOpenChange={setMembersDialogOpen}
+        />
       )}
     </div>
   );

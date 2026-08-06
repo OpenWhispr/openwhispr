@@ -7,7 +7,7 @@ import { AgentInput } from "./agent/AgentInput";
 import AudioManager from "../helpers/audioManager";
 import { useChatPersistence } from "./chat/useChatPersistence";
 import { useChatStreaming } from "./chat/useChatStreaming";
-import type { Message } from "./chat/types";
+import { useChatMessageSender } from "./chat/useChatMessageSender";
 
 const MIN_HEIGHT = 200;
 const MIN_WIDTH = 360;
@@ -45,32 +45,38 @@ export default function AgentOverlay() {
     [setMessages]
   );
 
+  const createConversation = useCallback(
+    () => persistence.createConversation(t("agentMode.titleBar.newChat")),
+    [persistence, t]
+  );
+  const updateFirstMessageTitle = useCallback(
+    ({
+      conversationId,
+      text,
+      isFirstMessage,
+    }: {
+      conversationId: number;
+      text: string;
+      isFirstMessage: boolean;
+    }) => {
+      if (!isFirstMessage) return;
+      const title = text.slice(0, 50) + (text.length > 50 ? "..." : "");
+      window.electronAPI?.updateAgentConversationTitle?.(conversationId, title);
+    },
+    []
+  );
+  const sendMessage = useChatMessageSender({
+    conversationId: persistence.conversationId,
+    persistence,
+    streaming,
+    createConversation,
+    onMessagePersisted: updateFirstMessageTitle,
+  });
   const handleTranscriptionComplete = useCallback(
     async (text: string) => {
-      if (!text.trim()) return;
-
-      if (!persistence.conversationId) {
-        await persistence.createConversation(t("agentMode.titleBar.newChat"));
-      }
-
-      const userMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        isStreaming: false,
-      };
-      setMessages((prev) => [...prev, userMsg]);
-
-      await persistence.saveUserMessage(text);
-
-      if (persistence.conversationId && messages.length === 0) {
-        const title = text.slice(0, 50) + (text.length > 50 ? "..." : "");
-        window.electronAPI?.updateAgentConversationTitle?.(persistence.conversationId, title);
-      }
-
-      await streaming.sendToAI(text, [...messages, userMsg]);
+      if (text.trim()) await sendMessage(text);
     },
-    [t, messages, setMessages, persistence, streaming]
+    [sendMessage]
   );
 
   useEffect(() => {

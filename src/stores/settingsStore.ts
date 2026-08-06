@@ -2,13 +2,24 @@ import { create } from "zustand";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
+import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
 import whisperVadConstants from "../constants/whisperVad.json";
-import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  LocalTranscriptionProvider,
+  InferenceMode,
+  SelfHostedType,
+} from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
-import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
+import {
+  deriveReasoningMode,
+  buildReasoningScopePatches,
+  inheritsFallbackEndpoint,
+} from "../helpers/reasoningRouting";
+import { findStaleLocalModelKeys } from "../helpers/localModelSelections";
 import {
   MAX_PREFERRED_LANGUAGES,
   resolveActiveLanguageChange,
@@ -20,6 +31,7 @@ import {
   type InferenceScopeDefinition,
   type InferenceScopeStoreKeys,
 } from "../config/inferenceScopes";
+import { normalizeChineseScriptPreference } from "../utils/chineseScript";
 import type {
   TranscriptionSettings,
   CleanupSettings,
@@ -48,6 +60,12 @@ function readBoolean(key: string, fallback: boolean): boolean {
   if (stored === null) return fallback;
   if (fallback === true) return stored !== "false";
   return stored === "true";
+}
+
+function readNumber(key: string, fallback: number): number {
+  if (!isBrowser) return fallback;
+  const parsed = parseInt(localStorage.getItem(key) ?? "", 10);
+  return isNaN(parsed) ? fallback : parsed;
 }
 
 function readStringArray(key: string, fallback: string[]): string[] {
@@ -149,6 +167,7 @@ const BOOLEAN_SETTINGS = new Set([
   "notifyCalendarReminders",
   "notifyUpdates",
   "gcalPrimaryOnly",
+  "appleCalendarConnected",
 ]);
 
 const ARRAY_SETTINGS = new Set([
@@ -162,6 +181,7 @@ const ARRAY_SETTINGS = new Set([
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
+  "transcriptRetentionDays",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -426,6 +446,7 @@ export interface SettingsState
   notifyCalendarReminders: boolean;
   notifyUpdates: boolean;
   gcalPrimaryOnly: boolean;
+  appleCalendarConnected: boolean;
   meetingProcessDetection: boolean;
   speakerDiarizationEnabled: boolean;
   dictationSileroEnabled: boolean;
@@ -582,6 +603,7 @@ export interface SettingsState
   setFallbackWhisperModel: (value: string) => void;
   setPreferredLanguage: (value: string) => void;
   setPreferredLanguages: (languages: string[]) => void;
+  setChineseScriptPreference: (value: ChineseScriptPreference) => void;
   setCloudTranscriptionProvider: (value: string) => void;
   setCloudTranscriptionModel: (value: string) => void;
   setCloudTranscriptionBaseUrl: (value: string) => void;
@@ -589,6 +611,7 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  updateCustomDictionary: (changes: { add?: string[]; remove?: string[] }) => void;
   applyCustomDictionaryFromExternal: (words: string[]) => void;
   setSnippets: (snippets: Snippet[]) => void;
   applySnippetsFromExternal: (snippets: Snippet[]) => void;
@@ -667,6 +690,7 @@ export interface SettingsState
   setCloudBackupEnabled: (value: boolean) => void;
   setTelemetryEnabled: (value: boolean) => void;
   setAudioRetentionDays: (days: number) => void;
+  setTranscriptRetentionDays: (days: number) => void;
   setDataRetentionEnabled: (value: boolean) => void;
   setSaveDiscardedTranscriptions: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
@@ -679,6 +703,7 @@ export interface SettingsState
   setNotifyCalendarReminders: (value: boolean) => void;
   setNotifyUpdates: (value: boolean) => void;
   setGcalPrimaryOnly: (value: boolean) => void;
+  setAppleCalendarConnected: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
@@ -729,6 +754,13 @@ export function setStringSetting(key: keyof SettingsState, value: string): void 
 
 function createBooleanSetter(key: string) {
   return (value: boolean) => {
+    if (isBrowser) localStorage.setItem(key, String(value));
+    useSettingsStore.setState({ [key]: value });
+  };
+}
+
+function createNumberSetter(key: string) {
+  return (value: number) => {
     if (isBrowser) localStorage.setItem(key, String(value));
     useSettingsStore.setState({ [key]: value });
   };
@@ -926,6 +958,13 @@ const initialLanguageState = (() => {
   return repaired;
 })();
 
+// Kick the matching cloud push once a local write has landed in SQLite.
+function syncAfterLocalWrite(method: "syncDictionaryNow" | "syncSnippetsNow"): void {
+  void import("../services/SyncService.js").then(({ syncService }) => {
+    if (syncService.canSync()) void syncService[method]();
+  });
+}
+
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
   useLocalWhisper: readBoolean("useLocalWhisper", false),
@@ -941,6 +980,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // Multi-select transcription languages. Empty means the user never picked
   // multiple — the effective set is then just [preferredLanguage].
   preferredLanguages: initialLanguageState.preferredLanguages,
+  chineseScriptPreference: normalizeChineseScriptPreference(
+    readString("chineseScriptPreference", "as-transcribed")
+  ),
   cloudTranscriptionProvider: readString("cloudTranscriptionProvider", "openai"),
   cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
   cloudTranscriptionBaseUrl: readString(
@@ -1026,13 +1068,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   cloudBackupEnabled: readBoolean("cloudBackupEnabled", false),
   telemetryEnabled: readBoolean("telemetryEnabled", false),
-  audioRetentionDays: (() => {
-    if (!isBrowser) return 30;
-    const stored = localStorage.getItem("audioRetentionDays");
-    if (stored === null) return 30;
-    const parsed = parseInt(stored, 10);
-    return isNaN(parsed) ? 30 : parsed;
-  })(),
+  audioRetentionDays: readNumber("audioRetentionDays", 30),
+  transcriptRetentionDays: readNumber("transcriptRetentionDays", 0),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   saveDiscardedTranscriptions: readBoolean("saveDiscardedTranscriptions", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
@@ -1058,6 +1095,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     };
   })(),
   gcalPrimaryOnly: readBoolean("gcalPrimaryOnly", true),
+  appleCalendarConnected: readBoolean("appleCalendarConnected", false),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
   dictationSileroEnabled: readBoolean("dictationSileroEnabled", true),
@@ -1378,6 +1416,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       return next;
     });
   },
+  setChineseScriptPreference: (value: ChineseScriptPreference) =>
+    createStringSetter("chineseScriptPreference")(normalizeChineseScriptPreference(value)),
   setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
@@ -1391,19 +1431,57 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
 
+  // Replaces the whole dictionary: anything absent from `words` is deleted.
+  // Editing specific words wants updateCustomDictionary instead (#1295).
   setCustomDictionary: (words: string[]) => {
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
     set({ customDictionary: words });
     window.electronAPI
       ?.setDictionary(words)
-      .then(() => {
-        void import("../services/SyncService.js").then(({ syncService }) => {
-          if (syncService.canSync()) void syncService.syncDictionaryNow();
-        });
-      })
+      .then(() => syncAfterLocalWrite("syncDictionaryNow"))
       .catch((err) => {
         logger.warn(
           "Failed to sync dictionary to SQLite",
+          { error: (err as Error).message },
+          "settings"
+        );
+      });
+  },
+
+  updateCustomDictionary: ({ add = [], remove = [] }) => {
+    const removeLower = new Set(remove.map((w) => w.toLowerCase()));
+    const addLower = new Set(add.map((w) => w.toLowerCase()));
+    // Optimistic so the UI updates immediately; the stored list replaces it below.
+    const optimistic = [
+      ...get().customDictionary.filter((w) => {
+        const lower = w.toLowerCase();
+        return !removeLower.has(lower) && !addLower.has(lower);
+      }),
+      ...add,
+    ];
+    if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(optimistic));
+    set({ customDictionary: optimistic });
+
+    const api = window.electronAPI;
+    if (!api) return;
+    // Older preloads have no delta channel; fall back rather than drop the edit.
+    const written = api.applyDictionaryChanges
+      ? api.applyDictionaryChanges({ add, remove })
+      : api.setDictionary(optimistic);
+
+    written
+      .then(async () => {
+        // SQLite owns ordering, casing and dedupe — adopt what it stored.
+        const stored = await api.getDictionary?.();
+        if (stored) {
+          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(stored));
+          set({ customDictionary: stored });
+        }
+        syncAfterLocalWrite("syncDictionaryNow");
+      })
+      .catch((err) => {
+        logger.warn(
+          "Failed to apply dictionary changes to SQLite",
           { error: (err as Error).message },
           "settings"
         );
@@ -1421,11 +1499,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ snippets });
     window.electronAPI
       ?.setSnippets?.(snippets)
-      .then(() => {
-        void import("../services/SyncService.js").then(({ syncService }) => {
-          if (syncService.canSync()) void syncService.syncSnippetsNow();
-        });
-      })
+      .then(() => syncAfterLocalWrite("syncSnippetsNow"))
       .catch((err) => {
         logger.warn(
           "Failed to sync snippets to SQLite",
@@ -1625,10 +1699,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setCloudBackupEnabled: createBooleanSetter("cloudBackupEnabled"),
   setTelemetryEnabled: createBooleanSetter("telemetryEnabled"),
-  setAudioRetentionDays: (days: number) => {
-    if (isBrowser) localStorage.setItem("audioRetentionDays", String(days));
-    set({ audioRetentionDays: days });
-  },
+  setAudioRetentionDays: createNumberSetter("audioRetentionDays"),
+  setTranscriptRetentionDays: createNumberSetter("transcriptRetentionDays"),
   setDataRetentionEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("dataRetentionEnabled", String(value));
     set({ dataRetentionEnabled: value });
@@ -1679,6 +1751,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     useSettingsStore.setState({ gcalPrimaryOnly: value });
     if (isBrowser) window.electronAPI?.gcalSetPrimaryOnly?.(value);
   },
+  setAppleCalendarConnected: createBooleanSetter("appleCalendarConnected"),
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
   setSpeakerDiarizationEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("speakerDiarizationEnabled", String(value));
@@ -1808,6 +1881,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setPreferredLanguage(settings.preferredLanguage);
     if (settings.preferredLanguages !== undefined)
       s.setPreferredLanguages(settings.preferredLanguages);
+    if (settings.chineseScriptPreference !== undefined)
+      s.setChineseScriptPreference(settings.chineseScriptPreference);
     if (settings.cloudTranscriptionProvider !== undefined)
       s.setCloudTranscriptionProvider(settings.cloudTranscriptionProvider);
     if (settings.cloudTranscriptionModel !== undefined)
@@ -2047,10 +2122,22 @@ export interface ResolvedNoteFormatting {
   cloudMode: string;
   cloudBaseUrl: string;
   remoteUrl: string;
+  customApiKey: string;
 }
 
 export const selectResolvedNoteFormatting = (state: SettingsState): ResolvedNoteFormatting => {
   const cfg = selectResolvedLLMConfig(state, "noteFormatting");
+  const cleanup = selectResolvedLLMConfig(state, "dictationCleanup");
+  // The endpoint falls back to dictation cleanup, so the key that opens it must too,
+  // or an inherited endpoint gets called with no credential.
+  const borrowsEndpoint = inheritsFallbackEndpoint(
+    {
+      mode: cfg.mode,
+      cloudBaseUrl: state.noteFormattingCloudBaseUrl,
+      remoteUrl: state.noteFormattingRemoteUrl,
+    },
+    cleanup.mode
+  );
   return {
     provider: cfg.provider,
     model: cfg.model,
@@ -2058,6 +2145,7 @@ export const selectResolvedNoteFormatting = (state: SettingsState): ResolvedNote
     cloudMode: cfg.cloudMode || "",
     cloudBaseUrl: cfg.cloudBaseUrl || "",
     remoteUrl: cfg.remoteUrl || "",
+    customApiKey: cfg.customApiKey || (borrowsEndpoint ? cleanup.customApiKey || "" : ""),
   };
 };
 
@@ -2099,6 +2187,9 @@ export const selectResolvedLLMConfig = (
     cloudMode: read("cloudMode") || fallback?.cloudMode,
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
+    // Not inherited here: the settings editor renders this field, and a borrowed key
+    // in it would be committed to this scope's storage by an idle edit. Inheritance
+    // belongs on the request path — see selectResolvedNoteFormatting.
     customApiKey: read("customApiKey"),
     disableThinking,
   };
@@ -2140,6 +2231,32 @@ export function isCloudChatAgentMode() {
 
 export function getSettings() {
   return useSettingsStore.getState();
+}
+
+/**
+ * Drops any local model selection the model cache no longer backs — a scope left
+ * pointing at a deleted model fails at inference time with an error the user has
+ * no way to act on. Cleared rather than repointed so the picker asks again.
+ */
+export function clearMissingLocalModelSelections(isInstalled: (modelId: string) => boolean): void {
+  const settings = useSettingsStore.getState() as unknown as Record<string, unknown>;
+  const staleKeys: string[] = findStaleLocalModelKeys(
+    Object.values(INFERENCE_SCOPES),
+    settings,
+    isInstalled
+  );
+  for (const key of staleKeys) {
+    setStringSetting(key as keyof SettingsState, "");
+  }
+}
+
+/** Reconciles every scope against the models actually on disk. */
+export async function reconcileLocalModelSelections(): Promise<void> {
+  if (!isBrowser || !window.electronAPI?.modelGetAll) return;
+
+  const models = await window.electronAPI.modelGetAll();
+  const installed = new Set(models.filter((model) => model.isDownloaded).map((model) => model.id));
+  clearMissingLocalModelSelections((modelId) => installed.has(modelId));
 }
 
 export function getEffectiveCleanupModel() {
@@ -2376,17 +2493,23 @@ export async function initializeSettings(): Promise<void> {
       useSettingsStore.setState({ preferredLanguage: migratedLang });
     }
 
-    // Sync dictionary from SQLite <-> localStorage
+    // Sync dictionary from SQLite <-> localStorage.
+    // Prefer SQLite whenever it has entries (same policy as snippets). A stale
+    // cache used to win when both sides were non-empty; ensureAgentNameInDictionary
+    // then wrote that cache through setDictionary and wiped newer DB words (#1295).
+    let dictionarySyncSucceeded = !window.electronAPI?.getDictionary;
     try {
       if (window.electronAPI.getDictionary) {
         const currentDictionary = useSettingsStore.getState().customDictionary;
         const dbWords = await window.electronAPI.getDictionary();
-        if (dbWords.length === 0 && currentDictionary.length > 0) {
-          await window.electronAPI.setDictionary(currentDictionary);
-        } else if (dbWords.length > 0 && currentDictionary.length === 0) {
-          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(dbWords));
-          useSettingsStore.setState({ customDictionary: dbWords });
+        const decision = chooseDictionaryStartupAction(dbWords, currentDictionary);
+        if (decision.action === "push-local-to-db") {
+          await window.electronAPI.setDictionary(decision.words);
+        } else if (decision.action === "pull-db-to-local") {
+          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(decision.words));
+          useSettingsStore.setState({ customDictionary: decision.words });
         }
+        dictionarySyncSucceeded = true;
       }
     } catch (err) {
       logger.warn(
@@ -2450,6 +2573,20 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
+    // The main-process DB is the source of truth for the Apple Calendar connection
+    try {
+      const status = await window.electronAPI.acalGetConnectionStatus?.();
+      if (status) {
+        useSettingsStore.getState().setAppleCalendarConnected(status.connected);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to hydrate Apple Calendar connection status",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
     try {
       const currentState = useSettingsStore.getState();
       await window.electronAPI.gcalSetPrimaryOnly?.(currentState.gcalPrimaryOnly);
@@ -2495,7 +2632,21 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    ensureAgentNameInDictionary();
+    try {
+      await reconcileLocalModelSelections();
+    } catch (err) {
+      logger.warn(
+        "Failed to reconcile local model selections on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Only after a successful DB↔cache reconcile. If the read failed, the cache
+    // may still be stale — writing it via setCustomDictionary would wipe SQLite.
+    if (dictionarySyncSucceeded) {
+      ensureAgentNameInDictionary();
+    }
   }
 
   // Sync Zustand store when another window writes to localStorage

@@ -3,7 +3,7 @@ import { SquarePen, Search, Archive as ArchiveIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../lib/utils";
-import { normalizeDbDate } from "../../utils/dateFormatting";
+import { groupItemsByDate } from "../../utils/dateGrouping";
 import ConversationItem, { type ConversationPreview } from "./ConversationItem";
 import ConversationDateGroup from "./ConversationDateGroup";
 import EmptyConversationList from "./EmptyConversationList";
@@ -22,41 +22,10 @@ interface ConversationListProps {
 }
 
 function groupByDate(conversations: ConversationPreview[], t: (key: string) => string): FlatItem[] {
-  if (conversations.length === 0) return [];
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const weekAgo = new Date(today);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-
-  const items: FlatItem[] = [];
-  let currentGroup: string | null = null;
-
-  for (const conv of conversations) {
-    const date = normalizeDbDate(conv.updated_at);
-    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-    let group: string;
-    if (target.getTime() >= today.getTime()) {
-      group = t("chat.today");
-    } else if (target.getTime() >= yesterday.getTime()) {
-      group = t("chat.yesterday");
-    } else if (target.getTime() >= weekAgo.getTime()) {
-      group = t("chat.previousWeek");
-    } else {
-      group = t("chat.older");
-    }
-
-    if (group !== currentGroup) {
-      items.push({ type: "header", label: group });
-      currentGroup = group;
-    }
-    items.push({ type: "conversation", data: conv });
-  }
-
-  return items;
+  return groupItemsByDate(conversations, (c) => c.updated_at, t).flatMap((group) => [
+    { type: "header" as const, label: group.label },
+    ...group.items.map((data) => ({ type: "conversation" as const, data })),
+  ]);
 }
 
 function SkeletonRows() {

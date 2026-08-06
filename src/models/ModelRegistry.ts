@@ -387,6 +387,17 @@ export function getModelProvider(modelId: string): string {
   return model?.provider || "openai";
 }
 
+// Local catalog IDs group models for selection and downloads, but all execute
+// through the single local llama.cpp inference provider.
+export function resolveInferenceProvider(
+  configuredProvider: string | undefined,
+  modelId: string
+): string {
+  const provider = configuredProvider?.trim();
+  if (provider && modelRegistry.getProvider(provider)) return "local";
+  return provider || getModelProvider(modelId);
+}
+
 export function getTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry.getTranscriptionProviders();
 }

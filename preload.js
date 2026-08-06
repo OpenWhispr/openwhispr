@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteTranscriptionAudio: (id) => ipcRenderer.invoke("delete-transcription-audio", id),
   getAudioStorageUsage: () => ipcRenderer.invoke("get-audio-storage-usage"),
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
+  syncRetentionSettings: (settings) => ipcRenderer.send("retention-settings-changed", settings),
   retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
   updateTranscriptionText: (id, text, rawText) =>
     ipcRenderer.invoke("update-transcription-text", id, text, rawText),
@@ -79,6 +80,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Dictionary functions
   getDictionary: () => ipcRenderer.invoke("db-get-dictionary"),
   setDictionary: (words) => ipcRenderer.invoke("db-set-dictionary", words),
+  applyDictionaryChanges: (changes) => ipcRenderer.invoke("db-apply-dictionary-changes", changes),
   onDictionaryUpdated: (callback) => {
     const listener = (_event, words) => callback?.(words);
     ipcRenderer.on("dictionary-updated", listener);
@@ -100,7 +102,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
-  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId) =>
+  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId) =>
     ipcRenderer.invoke(
       "db-save-note",
       title,
@@ -108,19 +110,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
       noteType,
       sourceFile,
       audioDuration,
-      folderId
+      folderId,
+      spaceId
     ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
-  getNotes: (noteType, limit, folderId) =>
-    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId),
+  getNotes: (noteType, limit, folderId, spaceId) =>
+    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId),
+  getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
   updateNote: (id, updates) => ipcRenderer.invoke("db-update-note", id, updates),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
   exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
-  searchNotes: (query, limit) => ipcRenderer.invoke("db-search-notes", query, limit),
-  semanticSearchNotes: (query, limit) =>
-    ipcRenderer.invoke("db-semantic-search-notes", query, limit),
+  searchNotes: (query, limit, spaceId, folderId) =>
+    ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId),
+  semanticSearchNotes: (query, limit, spaceId, folderId) =>
+    ipcRenderer.invoke("db-semantic-search-notes", query, limit, spaceId, folderId),
   semanticReindexAll: () => ipcRenderer.invoke("db-semantic-reindex-all"),
   onSemanticReindexProgress: (callback) => {
     const listener = (_event, data) => callback?.(data);
@@ -128,13 +133,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("semantic-reindex-progress", listener);
   },
   updateNoteCloudId: (id, cloudId) => ipcRenderer.invoke("db-update-note-cloud-id", id, cloudId),
+  updateNoteShareState: (id, state) => ipcRenderer.invoke("db-update-note-share-state", id, state),
 
   // Folder functions
-  getFolders: () => ipcRenderer.invoke("db-get-folders"),
-  createFolder: (name) => ipcRenderer.invoke("db-create-folder", name),
+  getFolders: (spaceId) => ipcRenderer.invoke("db-get-folders", spaceId),
+  createFolder: (name, spaceId) => ipcRenderer.invoke("db-create-folder", name, spaceId),
   deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
   renameFolder: (id, name) => ipcRenderer.invoke("db-rename-folder", id, name),
+  moveFolderToSpace: (id, spaceId) => ipcRenderer.invoke("db-move-folder-to-space", id, spaceId),
   getFolderNoteCounts: () => ipcRenderer.invoke("db-get-folder-note-counts"),
+
+  // Space functions
+  getSpaces: () => ipcRenderer.invoke("db-get-spaces"),
+  updateSpace: (id, updates) => ipcRenderer.invoke("db-update-space", id, updates),
+  purgeSpace: (id, options) => ipcRenderer.invoke("db-purge-space", id, options),
+  upsertSpaceFromCloud: (space) => ipcRenderer.invoke("db-upsert-space-from-cloud", space),
+  setSpaceSyncStatus: (id, status) => ipcRenderer.invoke("db-set-space-sync-status", id, status),
+  onSpacePurged: (callback) => {
+    const listener = (_event, payload) => callback?.(payload);
+    ipcRenderer.on("space-purged", listener);
+    return () => ipcRenderer.removeListener("space-purged", listener);
+  },
+  onSpaceSynced: (callback) => {
+    const listener = (_event, space) => callback?.(space);
+    ipcRenderer.on("space-synced", listener);
+    return () => ipcRenderer.removeListener("space-synced", listener);
+  },
 
   // Note files (markdown mirror) functions
   noteFilesSetEnabled: (enabled, customPath, options) =>
@@ -189,6 +213,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event, data) => callback?.(data);
     ipcRenderer.on("note-deleted", listener);
     return () => ipcRenderer.removeListener("note-deleted", listener);
+  },
+  onNoteSynced: (callback) => {
+    const listener = (_event, note) => callback?.(note);
+    ipcRenderer.on("note-synced", listener);
+    return () => ipcRenderer.removeListener("note-synced", listener);
+  },
+  onFolderSynced: (callback) => {
+    const listener = (_event, folder) => callback?.(folder);
+    ipcRenderer.on("folder-synced", listener);
+    return () => ipcRenderer.removeListener("folder-synced", listener);
+  },
+  onFolderDeleted: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("folder-deleted", listener);
+    return () => ipcRenderer.removeListener("folder-deleted", listener);
+  },
+  emitSyncEvent: (name, payload) => ipcRenderer.invoke("broadcast-sync-event", name, payload),
+  onSyncEvent: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("sync-event", listener);
+    return () => ipcRenderer.removeListener("sync-event", listener);
   },
 
   onActionCreated: (callback) => {
@@ -529,13 +574,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),
   openAccessibilitySettings: () => ipcRenderer.invoke("open-accessibility-settings"),
   openSystemAudioSettings: () => ipcRenderer.invoke("open-system-audio-settings"),
+  showEmojiPanel: () => ipcRenderer.invoke("show-emoji-panel"),
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
   authGetToken: () => ipcRenderer.invoke("auth-get-token"),
-  authSetToken: (token) => ipcRenderer.invoke("auth-set-token", token),
+  authGetTokenState: () => ipcRenderer.invoke("auth-get-token-state"),
+  authSetToken: (token, expectedGeneration) =>
+    ipcRenderer.invoke("auth-set-token", token, expectedGeneration),
+  onAuthTokenStateChanged: registerListener(
+    "auth-token-state-changed",
+    (callback) => (_event, state) => callback(state)
+  ),
 
   // OpenWhispr Cloud API
   cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
@@ -553,8 +605,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNoteRecordingConfig: () => ipcRenderer.invoke("get-note-recording-config"),
 
   // Cloud audio file transcription
-  transcribeAudioFileCloud: (filePath) =>
-    ipcRenderer.invoke("transcribe-audio-file-cloud", filePath),
+  transcribeAudioFileCloud: (filePath, options) =>
+    ipcRenderer.invoke("transcribe-audio-file-cloud", filePath, options),
+  cancelUploadTranscription: (requestId) =>
+    ipcRenderer.invoke("cancel-upload-transcription", requestId),
   transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
   onUploadTranscriptionProgress: registerListener(
     "upload-transcription-progress",
@@ -694,6 +748,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "workspace-invitation-token",
     (callback) => (_event, token) => callback(token)
   ),
+  getPendingInvitationToken: () => ipcRenderer.invoke("get-pending-invitation-token"),
 
   // Globe key listener for hotkey capture (macOS only)
   onGlobeKeyPressed: (callback) => {
@@ -834,8 +889,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   agentOpenNote: (noteId) => ipcRenderer.invoke("agent-open-note", noteId),
 
   // Agent conversation persistence
-  createAgentConversation: (title, noteId) =>
-    ipcRenderer.invoke("db-create-agent-conversation", title, noteId),
+  createAgentConversation: (title, noteId, spaceId, folderId) =>
+    ipcRenderer.invoke("db-create-agent-conversation", title, noteId, spaceId, folderId),
   getAgentConversations: (limit) => ipcRenderer.invoke("db-get-agent-conversations", limit),
   getAgentConversation: (id) => ipcRenderer.invoke("db-get-agent-conversation", id),
   deleteAgentConversation: (id) => ipcRenderer.invoke("db-delete-agent-conversation", id),
@@ -850,6 +905,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-search-agent-conversations", query, limit),
   getConversationsForNote: (noteId, limit) =>
     ipcRenderer.invoke("db-get-conversations-for-note", noteId, limit),
+  getConversationsForContainer: (spaceId, folderId, limit) =>
+    ipcRenderer.invoke("db-get-conversations-for-container", spaceId, folderId, limit),
   archiveAgentConversation: (id) => ipcRenderer.invoke("db-archive-agent-conversation", id),
   unarchiveAgentConversation: (id) => ipcRenderer.invoke("db-unarchive-agent-conversation", id),
   updateAgentConversationCloudId: (id, cloudId) =>
@@ -858,26 +915,71 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-semantic-search-conversations", query, limit),
 
   // Sync operations
-  getPendingNotes: () => ipcRenderer.invoke("db-get-pending-notes"),
+  getPendingNotes: (spaceKind) => ipcRenderer.invoke("db-get-pending-notes", spaceKind),
   getPendingNoteDeletes: () => ipcRenderer.invoke("db-get-pending-note-deletes"),
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
-  upsertNoteFromCloud: (cloudNote, localFolderId) =>
-    ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId),
-  markNoteSynced: (id, cloudId) => ipcRenderer.invoke("db-mark-note-synced", id, cloudId),
+  upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
+    ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
+  acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged) =>
+    ipcRenderer.invoke(
+      "db-acknowledge-note-create",
+      id,
+      snapshot,
+      cloudId,
+      cloudUpdatedAt,
+      ownerUserId,
+      settleIfUnchanged
+    ),
+  markNoteSyncedIfUnchanged: (id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId) =>
+    ipcRenderer.invoke(
+      "db-mark-note-synced-if-unchanged",
+      id,
+      snapshot,
+      expectedCloudId,
+      cloudUpdatedAt,
+      ownerUserId
+    ),
+  setNoteCloudBase: (id, cloudUpdatedAt) =>
+    ipcRenderer.invoke("db-set-note-cloud-base", id, cloudUpdatedAt),
+  setNoteOwnerFromCloud: (id, ownerUserId) =>
+    ipcRenderer.invoke("db-set-note-owner-from-cloud", id, ownerUserId),
+  countTeamNotesMissingOwner: () => ipcRenderer.invoke("db-count-team-notes-missing-owner"),
   markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
+  restoreNoteAfterDeniedDelete: (id) =>
+    ipcRenderer.invoke("db-restore-note-after-denied-delete", id),
   hardDeleteNote: (id) => ipcRenderer.invoke("db-hard-delete-note", id),
 
-  getPendingFolders: () => ipcRenderer.invoke("db-get-pending-folders"),
+  getPendingFolders: (spaceKind) => ipcRenderer.invoke("db-get-pending-folders", spaceKind),
   getFolderByClientId: (clientFolderId) =>
     ipcRenderer.invoke("db-get-folder-by-client-id", clientFolderId),
-  upsertFolderFromCloud: (cloudFolder) =>
-    ipcRenderer.invoke("db-upsert-folder-from-cloud", cloudFolder),
-  markFolderSynced: (id, cloudId) => ipcRenderer.invoke("db-mark-folder-synced", id, cloudId),
-  adoptFolderIdentity: (id, clientFolderId, cloudId, updatedAt) =>
-    ipcRenderer.invoke("db-adopt-folder-identity", id, clientFolderId, cloudId, updatedAt),
+  upsertFolderFromCloud: (cloudFolder, localSpaceId) =>
+    ipcRenderer.invoke("db-upsert-folder-from-cloud", cloudFolder, localSpaceId),
+  acknowledgeFolderCreate: (
+    id,
+    snapshot,
+    expectedCloudId,
+    responseClientFolderId,
+    cloudId,
+    cloudUpdatedAt
+  ) =>
+    ipcRenderer.invoke(
+      "db-acknowledge-folder-create",
+      id,
+      snapshot,
+      expectedCloudId,
+      responseClientFolderId,
+      cloudId,
+      cloudUpdatedAt
+    ),
+  markFolderSyncedIfUnchanged: (id, snapshot, expectedCloudId) =>
+    ipcRenderer.invoke("db-mark-folder-synced-if-unchanged", id, snapshot, expectedCloudId),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
+  restoreFolderAfterDeniedDelete: (id) =>
+    ipcRenderer.invoke("db-restore-folder-after-denied-delete", id),
   hardDeleteFolder: (id) => ipcRenderer.invoke("db-hard-delete-folder", id),
+  relocateRevokedFolder: (id, privateSpaceId, preserveFolder) =>
+    ipcRenderer.invoke("db-relocate-revoked-folder", id, privateSpaceId, preserveFolder),
 
   getPendingConversations: () => ipcRenderer.invoke("db-get-pending-conversations"),
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),
@@ -943,6 +1045,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
 
+  // Apple Calendar (macOS EventKit)
+  acalConnect: () => ipcRenderer.invoke("acal-connect"),
+  acalDisconnect: () => ipcRenderer.invoke("acal-disconnect"),
+  acalGetConnectionStatus: () => ipcRenderer.invoke("acal-get-connection-status"),
+  openCalendarPrivacySettings: () => ipcRenderer.invoke("open-calendar-privacy-settings"),
+
   // Contacts
   searchContacts: (query) => ipcRenderer.invoke("search-contacts", query),
   upsertContact: (contact) => ipcRenderer.invoke("upsert-contact", contact),
@@ -955,6 +1063,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onGcalEventsSynced: registerListener(
     "gcal-events-synced",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Apple Calendar event listeners
+  onAcalConnectionChanged: registerListener(
+    "acal-connection-changed",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onAcalEventsSynced: registerListener(
+    "acal-events-synced",
     (callback) => (_event, data) => callback(data)
   ),
 

@@ -7,9 +7,9 @@ import { useToast } from "./ui/useToast";
 import { cn } from "./lib/utils";
 import { SpectrogramCard } from "./referral-cards/SpectrogramCard";
 import logger from "../utils/logger";
+import { EMAIL_REGEX } from "../utils/validation";
 
 const REFERRAL_WORD_GOAL = 2000;
-const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface ReferralStats {
   referralCode: string;
@@ -257,7 +257,7 @@ export function ReferralDashboard() {
   const sendInvite = async () => {
     if (!emailInput.trim()) return;
 
-    if (!RE_EMAIL.test(emailInput.trim())) {
+    if (!EMAIL_REGEX.test(emailInput.trim())) {
       toast({
         title: t("referral.toasts.invalidEmailTitle"),
         description: t("referral.toasts.invalidEmailDescription"),

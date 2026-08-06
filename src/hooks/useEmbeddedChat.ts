@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
 import { useChatStreaming } from "../components/chat/useChatStreaming";
+import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
 
 interface UseEmbeddedChatOptions {
@@ -127,29 +128,20 @@ export function useEmbeddedChat({
     setConversationId(null);
   }, [persistence]);
 
-  const sendMessage = useCallback(
+  const createConversation = useCallback(
     async (text: string) => {
-      let convId = conversationId;
-      if (!convId) {
-        const title = `Note: ${noteTitle || "Untitled"}`;
-        convId = await persistence.createConversation(title, noteId);
-        fetchNoteConversations();
-      }
-
-      const userMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        isStreaming: false,
-      };
-      persistence.setMessages((prev) => [...prev, userMsg]);
-      await persistence.saveUserMessage(text);
-
-      const allMessages = [...persistence.messages, userMsg];
-      await streaming.sendToAI(text, allMessages);
+      const id = await persistence.createConversation(`Note: ${noteTitle || "Untitled"}`, noteId);
+      void fetchNoteConversations();
+      return id;
     },
-    [conversationId, noteId, noteTitle, persistence, streaming, fetchNoteConversations]
+    [fetchNoteConversations, noteId, noteTitle, persistence]
   );
+  const sendMessage = useChatMessageSender({
+    conversationId,
+    persistence,
+    streaming,
+    createConversation,
+  });
 
   return {
     messages: persistence.messages,
