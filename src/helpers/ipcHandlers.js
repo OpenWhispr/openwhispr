@@ -405,7 +405,7 @@ async function chunkedCloudTranscribe({
             // closeAllConnections() kills it, burning an attempt it never
             // owned. No HTTP answer means the pool (not the server) is the
             // suspect; a fatal TLS/protocol alert means it is provably
-            // poisoned and the drop must go through the cooldown gate.
+            // poisoned and the drop is forced through the cooldown gate.
             if (!jobSignal.aborted && !collateral) {
               const poisoned = isConnectionPoisoningFailure(err);
               if (poisoned || isNetworkLevelFailure(err, { timedOut })) {
