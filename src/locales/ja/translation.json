@@ -8,7 +8,7 @@
       "transcriptionLabel": "文字起こし言語",
       "transcriptionDescription": "話す言語を最大{{max}}言語まで選択 — 使用中の言語はディクテーションパネルで切り替えられます",
       "activeLanguage": "使用中の言語",
-      "removeLanguage": "{{language}}を削除",
+      "removeLanguage": "{{language}}を削除",
       "chineseScriptLabel": "中国語の字体（ディクテーション）",
       "chineseScriptDescription": "中国語が検出されたとき、ディクテーションの文字起こしを簡体字または繁体字に変換します。話し言葉は同じでも、Whisperはどちらか一方の字体だけを返します。",
       "chineseScriptAsTranscribed": "文字起こしのまま",

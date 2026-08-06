@@ -8,7 +8,7 @@
       "transcriptionLabel": "Язык транскрипции",
       "transcriptionDescription": "Выберите до {{max}} языков, на которых вы говорите — активный язык можно переключать в панели диктовки",
       "activeLanguage": "Активный язык",
-      "removeLanguage": "Убрать {{language}}",
+      "removeLanguage": "Убрать {{language}}",
       "chineseScriptLabel": "Китайская письменность (диктовка)",
       "chineseScriptDescription": "Когда обнаружен китайский, преобразовать надиктованные транскрипты в упрощенные или традиционные иероглифы. На слух китайский одинаков; Whisper возвращает только одну письменность.",
       "chineseScriptAsTranscribed": "Оставить как распознано",

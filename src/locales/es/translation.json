@@ -8,7 +8,7 @@
       "transcriptionLabel": "Idioma de transcripción",
       "transcriptionDescription": "Elige hasta {{max}} idiomas que hablas — cambia el idioma activo desde el panel de dictado",
       "activeLanguage": "Idioma activo",
-      "removeLanguage": "Quitar {{language}}",
+      "removeLanguage": "Quitar {{language}}",
       "chineseScriptLabel": "Escritura china (dictado)",
       "chineseScriptDescription": "Cuando se detecte chino, convierte las transcripciones dictadas a caracteres simplificados o tradicionales. El chino hablado suena igual; Whisper solo devuelve una escritura.",
       "chineseScriptAsTranscribed": "Mantener como se transcribió",

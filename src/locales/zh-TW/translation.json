@@ -8,7 +8,7 @@
       "transcriptionLabel": "轉錄語言",
       "transcriptionDescription": "最多選擇 {{max}} 種你說話的語言——可在聽寫面板中切換目前語言",
       "activeLanguage": "目前語言",
-      "removeLanguage": "移除{{language}}",
+      "removeLanguage": "移除{{language}}",
       "chineseScriptLabel": "中文書寫（語音輸入）",
       "chineseScriptDescription": "偵測到中文時，將語音輸入的轉錄結果轉換為簡體或繁體。口語聽起來一樣；Whisper 只會輸出一種字形。",
       "chineseScriptAsTranscribed": "保持轉錄原樣",
