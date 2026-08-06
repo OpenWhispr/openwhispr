@@ -507,6 +507,14 @@ export default function ReasoningModelSelector({
     }
   };
 
+  const handleLocalModelSelect = (modelId: string) => {
+    // Persist the owning catalog provider with the model: an empty provider
+    // sends this scope's routing through another scope's heuristics.
+    const owner = modelId ? modelRegistry.getModel(modelId)?.provider.id : undefined;
+    if (owner) setLocalReasoningProvider(owner);
+    setReasoningModel(modelId);
+  };
+
   const MODE_TABS = [
     { id: "cloud", name: t("reasoning.mode.cloud") },
     { id: "local", name: t("reasoning.mode.local") },
@@ -700,7 +708,7 @@ export default function ReasoningModelSelector({
             providers={localProviders}
             selectedModel={reasoningModel}
             selectedProvider={selectedLocalProvider}
-            onModelSelect={setReasoningModel}
+            onModelSelect={handleLocalModelSelect}
             onProviderSelect={handleLocalProviderChange}
             modelType="llm"
             colorScheme="purple"
