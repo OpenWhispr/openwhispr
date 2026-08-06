@@ -965,6 +965,7 @@
   "languageSelector": {
     "lastLanguageHint": "至少需要保留一种语言",
     "maxLanguagesHint": "已达到 {{max}} 种语言的上限",
+    "selectedCount_other": "{{count}} 种语言",
     "noLanguagesFound": "未找到匹配的语言",
     "searchPlaceholder": "搜索..."
   },

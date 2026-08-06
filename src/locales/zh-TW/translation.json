@@ -965,6 +965,7 @@
   "languageSelector": {
     "lastLanguageHint": "至少需要保留一種語言",
     "maxLanguagesHint": "已達到 {{max}} 種語言的上限",
+    "selectedCount_other": "{{count}} 種語言",
     "noLanguagesFound": "找不到語言",
     "searchPlaceholder": "搜尋..."
   },

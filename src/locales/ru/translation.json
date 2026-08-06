@@ -965,6 +965,10 @@
   "languageSelector": {
     "lastLanguageHint": "Хотя бы один язык должен оставаться выбранным",
     "maxLanguagesHint": "Достигнут лимит в {{max}} языков",
+    "selectedCount_one": "{{count}} язык",
+    "selectedCount_few": "{{count}} языка",
+    "selectedCount_many": "{{count}} языков",
+    "selectedCount_other": "{{count}} языка",
     "noLanguagesFound": "Языки не найдены",
     "searchPlaceholder": "Поиск..."
   },

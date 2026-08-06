@@ -965,6 +965,8 @@
   "languageSelector": {
     "lastLanguageHint": "Almeno una lingua deve rimanere selezionata",
     "maxLanguagesHint": "Limite di {{max}} lingue raggiunto",
+    "selectedCount_one": "{{count}} lingua",
+    "selectedCount_other": "{{count}} lingue",
     "noLanguagesFound": "Nessuna lingua trovata",
     "searchPlaceholder": "Cerca..."
   },

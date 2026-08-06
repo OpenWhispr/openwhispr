@@ -250,8 +250,12 @@ export default function LanguageSelector({
               placeholder || ""
             ) : (
               <>
-                <span className="mr-1.5">{selectedOptions.map((l) => l.flag).join(" ")}</span>
-                {selectedOptions.length === 1 && selectedOptions[0].label}
+                <span className="mr-1.5" aria-hidden="true">
+                  {selectedOptions.map((l) => l.flag).join(" ")}
+                </span>
+                {selectedOptions.length === 1
+                  ? selectedOptions[0].label
+                  : t("languageSelector.selectedCount", { count: selectedOptions.length })}
               </>
             )}
           </span>
