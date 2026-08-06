@@ -755,8 +755,10 @@ export default function SettingsPage({
     preferBuiltInMic,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
+    maxRecordingDurationSec,
     setPreferBuiltInMic,
     setSelectedMicDevice,
+    setMaxRecordingDurationSec,
     setUseLocalWhisper,
     setUiLanguage,
     setWhisperModel,
@@ -2793,8 +2795,10 @@ export default function SettingsPage({
                     preferBuiltInMic={preferBuiltInMic}
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
+                    maxRecordingDurationSec={maxRecordingDurationSec}
                     onPreferBuiltInChange={setPreferBuiltInMic}
                     onDeviceSelect={setSelectedMicDevice}
+                    onMaxRecordingDurationChange={setMaxRecordingDurationSec}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
