@@ -161,6 +161,8 @@ class CalendarReminderScheduler {
     for (const key of this.notifiedMeetings) {
       if (key.startsWith(prefix)) this.notifiedMeetings.delete(key);
     }
+
+    this.scheduleNextMeeting();
   }
 }
 
