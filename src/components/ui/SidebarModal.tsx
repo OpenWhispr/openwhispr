@@ -43,6 +43,31 @@ export default function SidebarModal<T extends string>({
   const [isCompact, setIsCompact] = React.useState(false);
   const observerRef = React.useRef<ResizeObserver | null>(null);
 
+  // Radix Select/Popover/Dropdown content portals to <body>, outside this
+  // dialog. Dismissing such a popup by clicking elsewhere must not also close
+  // the dialog. We can't check for open popups inside onPointerDownOutside:
+  // Radix Dialog defers outside dismissal from pointerdown to the following
+  // "click" (deferPointerDownOutside in @radix-ui/react-dismissable-layer),
+  // while the popup closes and unmounts synchronously on pointerdown — so by
+  // the time the dialog's outside handler runs, the popup is gone and any DOM
+  // check comes up empty. Instead, sample the DOM in a capture-phase
+  // pointerdown listener (which runs before the popup's own document-level
+  // dismiss handler) and remember whether a popup was open when the press
+  // started. The selector covers popper-positioned content (Select
+  // position="popper", Popover, DropdownMenu) and item-aligned Selects, which
+  // have no popper wrapper.
+  const pointerDownHadPopupRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointerDownCapture = () => {
+      pointerDownHadPopupRef.current = !!document.querySelector(
+        '[data-radix-popper-content-wrapper], [role="listbox"]'
+      );
+    };
+    window.addEventListener("pointerdown", onPointerDownCapture, { capture: true });
+    return () => window.removeEventListener("pointerdown", onPointerDownCapture, { capture: true });
+  }, [open]);
+
   const containerRef = React.useCallback((el: HTMLDivElement | null) => {
     if (observerRef.current) {
       observerRef.current.disconnect();
@@ -106,6 +131,15 @@ export default function SidebarModal<T extends string>({
         <DialogPrimitive.Content
           onEscapeKeyDown={(e) => {
             if (document.querySelector("[data-capturing]")) e.preventDefault();
+          }}
+          onPointerDownOutside={(e) => {
+            // If a layered popup (Select/Popover/Dropdown) was open when the
+            // press started, that press was dismissing the popup — never the
+            // dialog. See the capture-phase tracker above for why this can't
+            // be a live DOM check.
+            if (pointerDownHadPopupRef.current) {
+              e.preventDefault();
+            }
           }}
           className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-4xl translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden bg-background border border-border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-1 dark:border-border-subtle dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
         >

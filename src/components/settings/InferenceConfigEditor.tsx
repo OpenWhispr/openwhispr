@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, Building2 } from "lucide-react";
+import { Cloud, Key, Cpu, Network, Building2, Terminal } from "lucide-react";
 import {
   useSettingsStore,
   selectResolvedLLMConfig,
@@ -12,6 +12,11 @@ import type { InferenceModeOption } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import OpenAICompatiblePanel from "../OpenAICompatiblePanel";
+import CliAgentConfigSection from "./CliAgentConfigSection";
+import {
+  isCliAgentProvider,
+  DEFAULT_CLI_AGENT_PROVIDER,
+} from "../../services/ai/inferenceProviders/cliAgent";
 import { Toggle } from "../ui/toggle";
 import type { InferenceMode } from "../../types/electron";
 import type { InferenceScope } from "../../config/inferenceScopes";
@@ -34,6 +39,8 @@ function isProviderValidForMode(provider: string, mode: InferenceMode): boolean 
       return modelRegistry.getAllProviders().some((p) => p.id === provider);
     case "enterprise":
       return isEnterpriseProvider(provider);
+    case "cli":
+      return isCliAgentProvider(provider);
     default:
       return true;
   }
@@ -98,6 +105,16 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       description: t(`${prefix}.enterpriseDesc`),
       icon: <Building2 className="w-4 h-4" />,
     },
+    ...(scope === "dictationAgent"
+      ? [
+          {
+            id: "cli" as InferenceMode,
+            label: t("dictationAgent.modes.cli"),
+            description: t("dictationAgent.modes.cliDesc"),
+            icon: <Terminal className="w-4 h-4" />,
+          },
+        ]
+      : []),
   ];
 
   const setField = useCallback(
@@ -122,6 +139,10 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       };
       if (!isProviderValidForMode(config.provider, mode)) {
         patch.provider = "";
+        patch.model = "";
+      }
+      if (mode === "cli") {
+        patch.provider = DEFAULT_CLI_AGENT_PROVIDER;
         patch.model = "";
       }
       setResolvedLLMConfig(scope, patch);
@@ -185,6 +206,8 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
           }
         />
       )}
+
+      {config.mode === "cli" && <CliAgentConfigSection config={config} />}
 
       {showThinkingToggle && (
         <div className="flex items-start justify-between gap-3 pt-1">

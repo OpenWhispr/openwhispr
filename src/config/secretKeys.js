@@ -66,4 +66,24 @@ const BYOK_API_KEYS = [
   },
 ];
 
-module.exports = { BYOK_API_KEYS };
+// Non-BYOK secret env vars (enterprise cloud creds, custom endpoints) that
+// environment.js also encrypts at rest. Combined with BYOK_API_KEYS below to
+// give any consumer (e.g. the CLI agent adapter) the full set of env vars
+// that must never leak into a spawned child process.
+const ENTERPRISE_SECRET_KEYS = [
+  "ASSEMBLYAI_API_KEY",
+  "DEEPGRAM_API_KEY",
+  "CORTI_CLIENT_ID",
+  "CORTI_CLIENT_SECRET",
+  "CUSTOM_TRANSCRIPTION_API_KEY",
+  "CUSTOM_CLEANUP_API_KEY",
+  "BEDROCK_ACCESS_KEY_ID",
+  "BEDROCK_SECRET_ACCESS_KEY",
+  "BEDROCK_SESSION_TOKEN",
+  "AZURE_OPENAI_API_KEY",
+  "VERTEX_API_KEY",
+];
+
+const SECRET_ENV_KEYS = [...BYOK_API_KEYS.map((k) => k.env), ...ENTERPRISE_SECRET_KEYS];
+
+module.exports = { BYOK_API_KEYS, SECRET_ENV_KEYS };

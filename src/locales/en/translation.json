@@ -1708,6 +1708,27 @@
         }
       }
     },
+    "cliAgent": {
+      "cliLabel": "CLI",
+      "notFound": "Not found on PATH",
+      "modelLabel": "Model",
+      "modelDefault": "CLI default",
+      "modelCustom": "Custom…",
+      "permissionLabel": "Permission mode",
+      "permissionAuto": "Auto (supervised)",
+      "permissionAcceptEdits": "Accept edits",
+      "permissionManual": "Manual (CLI default approvals)",
+      "permissionBypass": "Bypass all permissions",
+      "permissionBypassWarning": "The CLI will run any tool without asking. Use with care.",
+      "advanced": "Advanced",
+      "workingDirLabel": "Working directory",
+      "workingDirPlaceholder": "Defaults to your home directory",
+      "timeoutLabel": "Timeout (seconds)",
+      "sessionLabel": "Session reuse window (minutes)",
+      "sessionHint": "0 disables conversation resume",
+      "extraPromptLabel": "Extra instructions",
+      "extraPromptPlaceholder": "Appended to the agent's system prompt"
+    },
     "developer": {
       "clearCache": "Clear Cache",
       "dataManagementDescription": "Manage cached models and app data",
@@ -3050,6 +3071,16 @@
       "stopListening": "Stop listening",
       "startListening": "Start listening",
       "hideForNow": "Hide for now"
+    },
+    "cliAgent": {
+      "stage": {
+        "command": "Running a command…",
+        "tool": "Using {{name}}…",
+        "skill": "Using skill {{name}}…",
+        "thinking": "Thinking…"
+      },
+      "denialsTitle": "Some tools were blocked",
+      "denialsBody": "The agent was not allowed to use: {{tools}}"
     }
   },
   "dictationAgent": {
@@ -3065,7 +3096,9 @@
       "selfHosted": "Self-hosted",
       "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
       "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex.",
+      "cli": "Local CLI Agent",
+      "cliDesc": "Route commands to Claude Code or Codex running on this machine"
     },
     "prompt": {
       "title": "Agent prompt",

@@ -1,5 +1,9 @@
 import { resolveDictationAgentReachability } from "./dictationRouting.js";
 
+// Mirrors DEFAULT_CLI_AGENT_PROVIDER in services/ai/inferenceProviders/cliAgent.ts —
+// can't import it here because this file must load under plain `node --test`.
+const DEFAULT_CLI_AGENT_PROVIDER = "claude-code";
+
 // The dictation agent's inference scope, shared by the dictation route in
 // audioManager and the Prompt Studio test tab so a prompt test hits the same
 // provider, endpoint and credentials a real dictation does.
@@ -9,11 +13,13 @@ import { resolveDictationAgentReachability } from "./dictationRouting.js";
 // running the instruction.
 export function resolveDictationAgentInference(settings, { isCloudAgent = false } = {}) {
   const model = settings.dictationAgentModel?.trim() || "";
+  const isCliAgent = settings.dictationAgentMode === "cli";
   const isSelfHosted =
     settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim();
   const provider = isCloudAgent
     ? "openwhispr"
-    : settings.dictationAgentProvider?.trim() || undefined;
+    : settings.dictationAgentProvider?.trim() ||
+      (isCliAgent ? DEFAULT_CLI_AGENT_PROVIDER : undefined);
   const isCustom = settings.dictationAgentMode === "providers" && provider === "custom";
 
   return {
@@ -22,6 +28,7 @@ export function resolveDictationAgentInference(settings, { isCloudAgent = false 
       dictationAgentModel: model,
       isCloudAgent,
       isSelfHostedAgent: isSelfHosted,
+      isCliAgent,
     }),
     model,
     config: {
@@ -31,6 +38,15 @@ export function resolveDictationAgentInference(settings, { isCloudAgent = false 
       customApiKey:
         isCustom || isSelfHosted ? settings.dictationAgentCustomApiKey || undefined : undefined,
       disableThinking: settings.dictationAgentDisableThinking,
+      ...(isCliAgent
+        ? {
+            cliPermissionMode: settings.cliAgentPermissionMode || "auto",
+            cliWorkingDir: settings.cliAgentWorkingDir || "",
+            cliTimeoutSeconds: Number(settings.cliAgentTimeoutSeconds) || 240,
+            cliSessionMinutes: Number(settings.cliAgentSessionMinutes ?? 30),
+            cliExtraPrompt: settings.cliAgentExtraPrompt || "",
+          }
+        : {}),
     },
   };
 }

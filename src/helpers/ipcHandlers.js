@@ -136,6 +136,7 @@ const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
+const { CliAgentManager } = require("./cliAgent/cliAgentManager");
 const {
   CLOUD_UPLOAD_TIMEOUT_MS,
   CLOUD_CHUNK_MAX_ATTEMPTS,
@@ -496,6 +497,7 @@ class IPCHandlers {
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
+    this.cliAgentManager = null;
     // requestId -> AbortController for in-flight audio-upload transcriptions,
     // so a cancel can abort the exact job.
     this._uploadTranscriptionControllers = new Map();
@@ -932,6 +934,19 @@ class IPCHandlers {
     } catch (error) {
       debugLogger.debug("[AutoLearn] Error processing corrections", { error: error.message });
     }
+  }
+
+  _getCliAgentManager() {
+    if (!this.cliAgentManager) {
+      this.cliAgentManager = new CliAgentManager({
+        sessionFilePath: path.join(app.getPath("userData"), "cli-agent-sessions.json"),
+        sendStage: (label) => {
+          const win = this.windowManager?.mainWindow;
+          if (win && !win.isDestroyed()) win.webContents.send("cli-agent-stage", label);
+        },
+      });
+    }
+    return this.cliAgentManager;
   }
 
   _syncStartupEnv(setVars, clearVars = []) {
@@ -4024,6 +4039,30 @@ class IPCHandlers {
         }
       }
     );
+
+    ipcMain.handle("cli-agent-run", async (event, opts) => {
+      try {
+        const result = await this._getCliAgentManager().run(opts);
+        return { success: true, ...result };
+      } catch (error) {
+        return { success: false, error: error.message, errorCode: error.code || "unknown" };
+      }
+    });
+    ipcMain.handle("cli-agent-cancel", async () => {
+      try {
+        this._getCliAgentManager().cancel();
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message, errorCode: error.code || "unknown" };
+      }
+    });
+    ipcMain.handle("cli-agent-check", async (event, cli) => {
+      try {
+        return await this._getCliAgentManager().check(cli);
+      } catch (error) {
+        return { available: false, path: null };
+      }
+    });
 
     ipcMain.handle("check-local-reasoning-available", async () => {
       try {

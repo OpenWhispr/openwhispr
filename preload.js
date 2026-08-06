@@ -519,6 +519,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   processAnthropicReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-anthropic-reasoning", text, modelId, agentName, config),
 
+  // CLI agent (Claude Code / Codex)
+  processCliAgent: (opts) => ipcRenderer.invoke("cli-agent-run", opts),
+  cancelCliAgent: () => ipcRenderer.invoke("cli-agent-cancel"),
+  checkCliAgent: (cli) => ipcRenderer.invoke("cli-agent-check", cli),
+
   // Enterprise reasoning (Bedrock, Azure, Vertex) — runs in main process so
   // Node-only SDKs (AWS/Azure/Google credential providers) can resolve.
   processEnterpriseReasoning: (text, modelId, agentName, config) =>
@@ -655,6 +660,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onDeepgramPartialTranscript: registerListener(
     "deepgram-partial-transcript",
     (callback) => (_event, text) => callback(text)
+  ),
+  onCliAgentStage: registerListener(
+    "cli-agent-stage",
+    (callback) => (_event, label) => callback(label)
   ),
   onDeepgramFinalTranscript: registerListener(
     "deepgram-final-transcript",

@@ -186,6 +186,12 @@ export default function App() {
     }
   }, [isCommandMenuOpen, isHovered, toastCount, setWindowInteractivity]);
 
+  // CLI agent stage label (what the agent is currently doing during processing)
+  const [cliStage, setCliStage] = useState(null);
+  // Resize only on stage appear/disappear, not on every stage-label change —
+  // each label update is a new object and would trigger a no-op resize IPC.
+  const hasCliStage = !!cliStage;
+
   useEffect(() => {
     const resizeWindow = () => {
       if (isCommandMenuOpen && toastCount > 0) {
@@ -194,12 +200,16 @@ export default function App() {
         window.electronAPI?.resizeMainWindow?.("WITH_MENU");
       } else if (toastCount > 0) {
         window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
+      } else if (hasCliStage) {
+        // Stage label renders above the button — the BASE window is too
+        // small to show it.
+        window.electronAPI?.resizeMainWindow?.("WITH_STAGE");
       } else {
         window.electronAPI?.resizeMainWindow?.("BASE");
       }
     };
     resizeWindow();
-  }, [isCommandMenuOpen, toastCount]);
+  }, [isCommandMenuOpen, toastCount, hasCliStage]);
 
   const handleDictationToggle = React.useCallback(() => {
     setIsCommandMenuOpen(false);
@@ -225,6 +235,28 @@ export default function App() {
     });
     return () => unsubscribe?.();
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onCliAgentStage?.((label) => setCliStage(label));
+    return () => unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
+    if (!isProcessing) setCliStage(null);
+  }, [isProcessing]);
+
+  // CLI agent denial toast
+  useEffect(() => {
+    const handler = (e) => {
+      toast({
+        title: t("app.cliAgent.denialsTitle"),
+        description: t("app.cliAgent.denialsBody", { tools: (e.detail || []).join(", ") }),
+        variant: "destructive",
+      });
+    };
+    window.addEventListener("cli-agent-denials", handler);
+    return () => window.removeEventListener("cli-agent-denials", handler);
+  }, [toast, t]);
 
   const isRecordingRef = useRef(isRecording);
 
@@ -487,6 +519,23 @@ export default function App() {
               )}
             </button>
           </Tooltip>
+          {micState === "processing" && cliStage && (
+            <div
+              className={`absolute bottom-full mb-2 px-1.5 py-1 text-[10px] text-popover-foreground bg-popover border border-border rounded-md z-10 shadow-lg whitespace-nowrap ${
+                panelStartPosition === "bottom-left"
+                  ? "left-0"
+                  : panelStartPosition === "center"
+                    ? "left-1/2 -translate-x-1/2"
+                    : "right-0"
+              }`}
+            >
+              {cliStage.kind === "command" && t("app.cliAgent.stage.command")}
+              {cliStage.kind === "tool" && t("app.cliAgent.stage.tool", { name: cliStage.name })}
+              {cliStage.kind === "skill" &&
+                t("app.cliAgent.stage.skill", { name: cliStage.name })}
+              {cliStage.kind === "thinking" && t("app.cliAgent.stage.thinking")}
+            </div>
+          )}
           {isCommandMenuOpen && (
             <div
               ref={commandMenuRef}

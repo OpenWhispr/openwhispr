@@ -14,6 +14,11 @@ export interface ReasoningConfig {
   provider?: string;
   disableThinking?: boolean;
   language?: string;
+  cliPermissionMode?: string;
+  cliWorkingDir?: string;
+  cliTimeoutSeconds?: number;
+  cliSessionMinutes?: number;
+  cliExtraPrompt?: string;
 }
 
 export abstract class BaseReasoningService {
