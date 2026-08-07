@@ -1,6 +1,7 @@
 const { shell } = require("electron");
 const debugLogger = require("./debugLogger");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
+const createMeetingAutoEndController = require("./meetingAutoEndController");
 const { broadcastToWindows } = require("./windowBroadcast");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
@@ -30,7 +31,8 @@ class MeetingDetectionEngine {
     meetingProcessDetector,
     audioActivityDetector,
     windowManager,
-    databaseManager
+    databaseManager,
+    { createAutoEndController = createMeetingAutoEndController } = {}
   ) {
     this.reminderScheduler = reminderScheduler;
     this.meetingProcessDetector = meetingProcessDetector;
@@ -43,6 +45,24 @@ class MeetingDetectionEngine {
     this._meetingModeActive = false;
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
+    this._recordingSession = null;
+    this._autoEndController = createAutoEndController({
+      onCountdown: (countdown) => {
+        Promise.resolve(this.windowManager.showMeetingAutoEndCountdown?.(countdown)).catch(
+          (error) => {
+            debugLogger.error(
+              "Failed to show meeting auto-end countdown",
+              { error: error?.message },
+              "meeting"
+            );
+          }
+        );
+      },
+      onCountdownCanceled: (sessionId) => {
+        this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
+      },
+      onStop: (sessionId) => this._requestRecordingStop(sessionId),
+    });
     this._bindListeners();
   }
 
@@ -64,6 +84,94 @@ class MeetingDetectionEngine {
     this.audioActivityDetector.on("sustained-audio-detected", (data) => {
       this._handleDetection("audio", "sustained-audio", data);
     });
+
+    this.audioActivityDetector.on("external-mic-state-changed", (state) => {
+      const session = this._recordingSession;
+      if (!session?.autoEndEligible) return;
+
+      this._autoEndController.handleExternalMicState({
+        sessionId: session.sessionId,
+        reliable: state.reliable,
+        externalMicActive: state.externalMicActive,
+      });
+    });
+  }
+
+  _requestRecordingStop(sessionId) {
+    const session = this._recordingSession;
+    if (!session || session.sessionId !== sessionId) return;
+
+    const ownerWebContents = session.ownerWebContents;
+    if (!ownerWebContents || ownerWebContents.isDestroyed?.()) return;
+    try {
+      ownerWebContents.send("meeting-auto-end-requested", { sessionId });
+    } catch (error) {
+      debugLogger.error(
+        "Failed to request meeting auto-end from recording renderer",
+        { error: error?.message, sessionId },
+        "meeting"
+      );
+    }
+  }
+
+  _syncAudioActivityDetector() {
+    if (this.preferences.audioDetection || this._recordingSession?.autoEndEligible) {
+      return this.audioActivityDetector.start();
+    }
+
+    this.audioActivityDetector.stop();
+    return undefined;
+  }
+
+  async beginRecordingSession({ sessionId, autoEndEligible, ownerWebContents }) {
+    const previousSession = this._recordingSession;
+    const eligible = autoEndEligible === true;
+    if (previousSession?.autoEndEligible) {
+      this._autoEndController.endSession(previousSession.sessionId);
+    }
+
+    this._recordingSession = {
+      sessionId,
+      autoEndEligible: eligible,
+      ownerWebContents,
+    };
+
+    if (!eligible) {
+      this._syncAudioActivityDetector();
+      return;
+    }
+
+    await this._syncAudioActivityDetector();
+    if (this._recordingSession?.sessionId !== sessionId) return;
+
+    const externalMicState = this.audioActivityDetector.getExternalMicState();
+    this._autoEndController.beginSession({
+      sessionId,
+      eligible: true,
+      reliable: externalMicState.reliable,
+      externalMicActive: externalMicState.externalMicActive,
+    });
+  }
+
+  endRecordingSession(expectedSessionId) {
+    const session = this._recordingSession;
+    if (!session) return expectedSessionId == null;
+    if (expectedSessionId != null && session.sessionId !== expectedSessionId) return false;
+
+    if (session.autoEndEligible) {
+      this._autoEndController.endSession(session.sessionId);
+    }
+    this._recordingSession = null;
+    this._syncAudioActivityDetector();
+    return true;
+  }
+
+  keepRecordingSession(sessionId) {
+    const session = this._recordingSession;
+    if (!session?.autoEndEligible || session.sessionId !== sessionId) return false;
+
+    this._autoEndController.keepRecording(sessionId);
+    return true;
   }
 
   // Calendar reminders enter the same pipeline as mic detections, so they share
@@ -166,6 +274,7 @@ class MeetingDetectionEngine {
     }
 
     this.windowManager.showMeetingNotification({
+      kind: "detection",
       detectionId,
       source,
       key,
@@ -421,11 +530,7 @@ class MeetingDetectionEngine {
       this.meetingProcessDetector.stop();
     }
 
-    if (this.preferences.audioDetection) {
-      this.audioActivityDetector.start();
-    } else {
-      this.audioActivityDetector.stop();
-    }
+    this._syncAudioActivityDetector();
   }
 
   getPreferences() {
@@ -435,11 +540,15 @@ class MeetingDetectionEngine {
   start() {
     debugLogger.info("Meeting detection engine started", this.preferences, "meeting");
     if (this.preferences.processDetection) this.meetingProcessDetector.start();
-    if (this.preferences.audioDetection) this.audioActivityDetector.start();
+    this._syncAudioActivityDetector();
   }
 
   stop() {
     debugLogger.info("Meeting detection engine stopped", {}, "meeting");
+    if (this._recordingSession?.autoEndEligible) {
+      this._autoEndController.endSession(this._recordingSession.sessionId);
+    }
+    this._recordingSession = null;
     this.meetingProcessDetector.stop();
     this.audioActivityDetector.stop();
     this.activeDetections.clear();

@@ -3397,6 +3397,11 @@
       "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
     },
     "start": "Notizen aufnehmen",
-    "join": "Beitreten & transkribieren"
+    "join": "Beitreten & transkribieren",
+    "autoEnd": {
+      "title": "Das Meeting könnte beendet sein",
+      "body": "Keine andere App verwendet dein Mikrofon. Die Aufnahme wird in {{seconds}} s beendet.",
+      "keep": "Aufnahme fortsetzen"
+    }
   }
 }

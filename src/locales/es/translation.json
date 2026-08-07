@@ -3397,6 +3397,11 @@
       "underway": "Parece que tu reunión ya está en curso. ¿Quieres tomar notas?"
     },
     "start": "Tomar notas",
-    "join": "Unirse y transcribir"
+    "join": "Unirse y transcribir",
+    "autoEnd": {
+      "title": "Es posible que la reunión haya terminado",
+      "body": "Ninguna otra aplicación está usando el micrófono. La grabación se detendrá en {{seconds}} s.",
+      "keep": "Seguir grabando"
+    }
   }
 }

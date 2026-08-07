@@ -3397,6 +3397,11 @@
       "underway": "Parece que sua reunião já está em andamento. Quer fazer anotações?"
     },
     "start": "Fazer anotações",
-    "join": "Entrar e transcrever"
+    "join": "Entrar e transcrever",
+    "autoEnd": {
+      "title": "A reunião pode ter terminado",
+      "body": "Nenhum outro aplicativo está usando seu microfone. A gravação será interrompida em {{seconds}} s.",
+      "keep": "Continuar gravando"
+    }
   }
 }

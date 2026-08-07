@@ -4,8 +4,10 @@ import { useToast } from "./ui/useToast";
 import {
   getMicAnalyser,
   primeMeetingWorklet,
+  stopRecording,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
+import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
@@ -20,6 +22,12 @@ export default function MeetingRecordingMount(): null {
 
   useEffect(() => {
     primeMeetingWorklet();
+  }, []);
+
+  useEffect(() => {
+    return window.electronAPI?.onMeetingAutoEndRequested?.((request) => {
+      requestMeetingRecordingAutoEnd(request, stopRecording);
+    });
   }, []);
 
   useEffect(() => {

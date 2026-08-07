@@ -26,6 +26,31 @@ export type TranscriptionErrorCode =
   | "MODEL_NOT_AVAILABLE"
   | null;
 
+export type MeetingPromptVariant = "detected" | "starting" | "underway";
+
+export interface MeetingDetectionNotificationData {
+  kind: "detection";
+  detectionId: string;
+  source: string;
+  key: string;
+  event: { summary?: string | null } | null;
+  variant: MeetingPromptVariant;
+  joinUrl: string | null;
+}
+
+export interface MeetingAutoEndNotificationData {
+  kind: "auto-end";
+  sessionId: string;
+  expiresAt: number;
+}
+
+export type MeetingNotificationData =
+  MeetingDetectionNotificationData | MeetingAutoEndNotificationData;
+
+export interface MeetingAutoEndRequest {
+  sessionId: string;
+}
+
 export interface AuthTokenState {
   token: string | null;
   generation: number;
@@ -2072,19 +2097,23 @@ declare global {
         model?: string;
         language?: string;
         noteId?: number | null;
+        sessionId: string;
+        autoEndEligible: boolean;
       }) => Promise<{
         success: boolean;
+        sessionId?: string;
         error?: string;
         systemAudioMode?: SystemAudioMode;
         systemAudioStrategy?: SystemAudioStrategy;
         oneOnOneAttendee?: { displayName: string; email: string | null } | null;
       }>;
       meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
-      meetingTranscriptionStop?: () => Promise<{
+      meetingTranscriptionStop?: (expectedSessionId?: string) => Promise<{
         success: boolean;
         transcript?: string;
         diarizationSessionId?: string;
         error?: string;
+        reason?: "stale-session";
       }>;
       meetingTranscriptionCancel?: () => Promise<{
         success: boolean;
@@ -2280,8 +2309,16 @@ declare global {
         speechPadMs?: number;
         samplesOverlap?: number;
       }) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
-      onMeetingNotificationData?: (callback: (data: any) => void) => () => void;
-      getMeetingNotificationData?: () => Promise<any>;
+      onMeetingNotificationData?: (callback: (data: MeetingNotificationData) => void) => () => void;
+      onMeetingAutoEndRequested?: (
+        callback: (request: MeetingAutoEndRequest) => void
+      ) => () => void;
+      meetingAutoEndKeep?: (sessionId: string) => Promise<{
+        success: boolean;
+        reason?: "invalid-session" | "stale-session";
+        error?: string;
+      }>;
+      getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
         detectionId: string,

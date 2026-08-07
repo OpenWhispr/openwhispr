@@ -13,6 +13,7 @@ const {
   CONTROL_PANEL_CONFIG,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
+  getMeetingNotificationWindowSize,
   TRANSCRIPTION_PREVIEW_CONFIG,
   TRANSCRIPTION_PREVIEW_SIZE_LIMITS,
   WINDOW_SIZES,
@@ -25,6 +26,7 @@ class WindowManager {
     this.controlPanelWindow = null;
     this.agentWindow = null;
     this.notificationWindow = null;
+    this._notificationGeneration = 0;
     this._notificationTimeout = null;
     this.transcriptionPreviewWindow = null;
     this.updateNotificationWindow = null;
@@ -1169,10 +1171,14 @@ class WindowManager {
     }
   }
 
-  async showMeetingNotification(promptData) {
-    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
-      this.notificationWindow.close();
-      this.notificationWindow = null;
+  async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
+    const generation = ++this._notificationGeneration;
+    const previousWindow = this.notificationWindow;
+    this.notificationWindow = null;
+    if (previousWindow && !previousWindow.isDestroyed()) previousWindow.close();
+    if (this._notificationReadyFallback) {
+      clearTimeout(this._notificationReadyFallback);
+      this._notificationReadyFallback = null;
     }
     if (this._notificationTimeout) {
       clearTimeout(this._notificationTimeout);
@@ -1180,76 +1186,116 @@ class WindowManager {
     }
 
     const display = screen.getPrimaryDisplay();
-    const position = WindowPositionUtil.getNotificationPosition(display);
+    const notificationSize = getMeetingNotificationWindowSize(promptData);
+    const position = WindowPositionUtil.getNotificationPosition(display, notificationSize);
 
-    this.notificationWindow = new BrowserWindow({
+    const notificationWindow = new BrowserWindow({
       ...NOTIFICATION_WINDOW_CONFIG,
+      ...notificationSize,
       ...position,
     });
+    this.notificationWindow = notificationWindow;
 
-    // Keep the prompt visible to the user but out of screen shares and recordings.
-    this.notificationWindow.setContentProtection(true);
+    const isCurrentNotification = () =>
+      this._notificationGeneration === generation &&
+      this.notificationWindow === notificationWindow &&
+      !notificationWindow.isDestroyed();
 
-    if (process.platform === "darwin") {
-      this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });
-    }
-
-    WindowPositionUtil.setupAlwaysOnTop(this.notificationWindow);
-
-    this._pendingNotificationData = promptData;
-
-    if (process.env.NODE_ENV === "development") {
-      await DevServerManager.waitForDevServer();
-      await this.notificationWindow.loadURL(
-        `${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`
-      );
-    } else {
-      const fileInfo = DevServerManager.getAppFilePath(false);
-      await this.notificationWindow.loadFile(fileInfo.path, {
-        query: { ...fileInfo.query, "meeting-notification": "true" },
-      });
-    }
-
-    this._notificationReadyFallback = setTimeout(() => {
-      this._notificationReadyFallback = null;
-      if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
-        debugLogger.warn(
-          "Notification renderer did not signal ready, force-showing",
-          {},
-          "meeting"
-        );
-        this.notificationWindow.webContents.send("meeting-notification-data", promptData);
-        this.notificationWindow.showInactive();
+    notificationWindow.on("closed", () => {
+      if (
+        this._notificationGeneration !== generation ||
+        this.notificationWindow !== notificationWindow
+      ) {
+        return;
       }
-    }, 3000);
 
-    this._notificationTimeout = setTimeout(() => {
-      if (this.meetingDetectionEngine) {
-        this.meetingDetectionEngine.handleNotificationTimeout();
-      }
-      this.dismissMeetingNotification();
-    }, 30000);
-
-    this.notificationWindow.on("closed", () => {
+      this._notificationGeneration += 1;
       this.notificationWindow = null;
+      this._pendingNotificationData = null;
+      if (this._notificationReadyFallback) {
+        clearTimeout(this._notificationReadyFallback);
+        this._notificationReadyFallback = null;
+      }
       if (this._notificationTimeout) {
         clearTimeout(this._notificationTimeout);
         this._notificationTimeout = null;
       }
     });
+
+    // Keep the prompt visible to the user but out of screen shares and recordings.
+    notificationWindow.setContentProtection(true);
+
+    if (process.platform === "darwin") {
+      notificationWindow.setIgnoreMouseEvents(true, { forward: true });
+    }
+
+    WindowPositionUtil.setupAlwaysOnTop(notificationWindow);
+
+    this._pendingNotificationData = promptData;
+
+    try {
+      if (process.env.NODE_ENV === "development") {
+        await DevServerManager.waitForDevServer();
+        if (!isCurrentNotification()) return;
+        await notificationWindow.loadURL(
+          `${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`
+        );
+      } else {
+        const fileInfo = DevServerManager.getAppFilePath(false);
+        await notificationWindow.loadFile(fileInfo.path, {
+          query: { ...fileInfo.query, "meeting-notification": "true" },
+        });
+      }
+    } catch (error) {
+      if (!isCurrentNotification()) return;
+      throw error;
+    }
+
+    if (!isCurrentNotification()) return;
+
+    const readyFallback = setTimeout(() => {
+      if (!isCurrentNotification() || this._notificationReadyFallback !== readyFallback) return;
+
+      this._notificationReadyFallback = null;
+      debugLogger.warn("Notification renderer did not signal ready, force-showing", {}, "meeting");
+      notificationWindow.webContents.send("meeting-notification-data", promptData);
+      notificationWindow.showInactive();
+    }, 3000);
+    this._notificationReadyFallback = readyFallback;
+
+    if (autoDismiss) {
+      const notificationTimeout = setTimeout(() => {
+        if (!isCurrentNotification() || this._notificationTimeout !== notificationTimeout) return;
+
+        this._notificationTimeout = null;
+        if (this.meetingDetectionEngine) {
+          this.meetingDetectionEngine.handleNotificationTimeout();
+        }
+        this.dismissMeetingNotification();
+      }, 30000);
+      this._notificationTimeout = notificationTimeout;
+    }
   }
 
-  showNotificationWindow() {
+  showNotificationWindow(ownerWebContents) {
+    const notificationWindow = this.notificationWindow;
+    if (
+      !notificationWindow ||
+      notificationWindow.isDestroyed() ||
+      (ownerWebContents && notificationWindow.webContents !== ownerWebContents)
+    ) {
+      return;
+    }
+
     if (this._notificationReadyFallback) {
       clearTimeout(this._notificationReadyFallback);
       this._notificationReadyFallback = null;
     }
-    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
-      this.notificationWindow.showInactive();
-    }
+    notificationWindow.showInactive();
   }
 
   dismissMeetingNotification() {
+    this._notificationGeneration += 1;
     this._pendingNotificationData = null;
     if (this._notificationReadyFallback) {
       clearTimeout(this._notificationReadyFallback);
@@ -1259,10 +1305,26 @@ class WindowManager {
       clearTimeout(this._notificationTimeout);
       this._notificationTimeout = null;
     }
-    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
-      this.notificationWindow.close();
-    }
+    const notificationWindow = this.notificationWindow;
     this.notificationWindow = null;
+    if (notificationWindow && !notificationWindow.isDestroyed()) notificationWindow.close();
+  }
+
+  showMeetingAutoEndCountdown({ sessionId, expiresAt }) {
+    return this.showMeetingNotification(
+      { kind: "auto-end", sessionId, expiresAt },
+      { autoDismiss: false }
+    );
+  }
+
+  dismissMeetingAutoEndCountdown(sessionId) {
+    if (
+      this._pendingNotificationData?.kind !== "auto-end" ||
+      this._pendingNotificationData.sessionId !== sessionId
+    ) {
+      return;
+    }
+    this.dismissMeetingNotification();
   }
 
   async showUpdateNotification(info) {

@@ -3397,6 +3397,11 @@
       "underway": "Sembra che la tua riunione sia già in corso. Vuoi prendere appunti?"
     },
     "start": "Prendi appunti",
-    "join": "Partecipa e trascrivi"
+    "join": "Partecipa e trascrivi",
+    "autoEnd": {
+      "title": "La riunione potrebbe essere finita",
+      "body": "Nessun'altra app sta usando il microfono. La registrazione si interromperà tra {{seconds}} s.",
+      "keep": "Continua a registrare"
+    }
   }
 }

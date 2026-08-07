@@ -14,8 +14,9 @@ const INACTIVE_RESET_MS = 60 * 1000;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
 class AudioActivityDetector extends EventEmitter {
-  constructor() {
+  constructor(getExcludedProcessIds = () => [process.pid]) {
     super();
+    this._getExcludedProcessIds = getExcludedProcessIds;
     this.checkInterval = null;
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
@@ -31,6 +32,20 @@ class AudioActivityDetector extends EventEmitter {
     this._eventDriven = false;
     this._resetTimer = null;
     this._startGeneration = 0;
+    this._linuxOwnershipRequest = 0;
+    this._pidScopedCapability = false;
+    this._externalMicReliable = false;
+    this._externalMicActive = false;
+    this._lastEmittedExternalMicReliable = false;
+    this._lastEmittedExternalMicActive = false;
+  }
+
+  getExternalMicState() {
+    this._updateExternalMicState(false);
+    return {
+      reliable: this._externalMicReliable,
+      externalMicActive: this._externalMicActive,
+    };
   }
 
   setUserRecording(active) {
@@ -80,6 +95,7 @@ class AudioActivityDetector extends EventEmitter {
       this.checkInterval = null;
     }
     this._reset();
+    this._resetExternalMicState();
     this._eventDriven = false;
     debugLogger.info("Audio activity detector stopped", {}, "meeting");
   }
@@ -107,9 +123,18 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this.hasPrompted = false;
+    this._clearResetTimer();
+  }
+
+  _resetExternalMicState() {
     this._activeMicPids.clear();
     this._activeSources = 0;
-    this._clearResetTimer();
+    this._linuxOwnershipRequest++;
+    this._pidScopedCapability = false;
+    this._externalMicReliable = false;
+    this._externalMicActive = false;
+    this._lastEmittedExternalMicReliable = false;
+    this._lastEmittedExternalMicActive = false;
   }
 
   _clearSustainedTimer() {
@@ -227,6 +252,10 @@ class AudioActivityDetector extends EventEmitter {
     const fallbackToPolling = () => {
       if (this._listenerProcess !== child) return;
       this._listenerProcess = null;
+      this._linuxOwnershipRequest++;
+      this._activeMicPids.clear();
+      this._activeSources = 0;
+      this._setPidScopedCapability(false);
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
         this._startPolling();
@@ -256,14 +285,31 @@ class AudioActivityDetector extends EventEmitter {
       options: { stdio: ["ignore", "pipe", "pipe"] },
       label: "macos-mic-listener",
       generation,
-      onLine: (line) => {
-        if (line === "MIC_ACTIVE") {
-          this._onMicStateChanged(true);
-        } else if (line === "MIC_INACTIVE") {
-          this._onMicStateChanged(false);
-        }
-      },
+      onLine: (line) => this._parseDarwinListenerLine(line),
     });
+  }
+
+  _parseDarwinListenerLine(line) {
+    if (!this._running) return;
+
+    if (line === "CAPABILITY PID") {
+      this._setPidScopedCapability(true);
+      return;
+    }
+    if (line === "CAPABILITY AGGREGATE") {
+      this._setPidScopedCapability(false);
+      return;
+    }
+    if (line === "MIC_ACTIVE") {
+      this._onMicStateChanged(true);
+      return;
+    }
+    if (line === "MIC_INACTIVE") {
+      this._onMicStateChanged(false);
+      return;
+    }
+
+    this._parsePidScopedListenerLine(line);
   }
 
   _tryEventDrivenWin32(generation) {
@@ -275,7 +321,7 @@ class AudioActivityDetector extends EventEmitter {
 
     return this._spawnListener({
       command: binaryPath,
-      args: ["--exclude-pid", String(process.pid)],
+      args: [],
       // stdin must be "pipe" — the Windows binary monitors stdin for parent death
       options: { stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
       label: "windows-mic-listener",
@@ -285,11 +331,22 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   _parseWin32ListenerLine(line) {
+    if (!this._running) return;
+    if (line === "READY") {
+      this._setPidScopedCapability(true);
+      return;
+    }
+
+    this._parsePidScopedListenerLine(line);
+  }
+
+  _parsePidScopedListenerLine(line) {
     const startMatch = line.match(/^MIC_START\s+(\d+)$/);
     if (startMatch) {
       const pid = parseInt(startMatch[1], 10);
       this._activeMicPids.add(pid);
-      this._onMicStateChanged(true);
+      const externalMicActive = this._updateExternalMicState();
+      this._onMicStateChanged(externalMicActive);
       return;
     }
 
@@ -297,15 +354,14 @@ class AudioActivityDetector extends EventEmitter {
     if (stopMatch) {
       const pid = parseInt(stopMatch[1], 10);
       this._activeMicPids.delete(pid);
-      if (this._activeMicPids.size === 0) {
-        this._onMicStateChanged(false);
-      }
+      const externalMicActive = this._updateExternalMicState();
+      this._onMicStateChanged(externalMicActive);
       return;
     }
   }
 
-  _tryEventDrivenLinux(generation) {
-    return this._spawnListener({
+  async _tryEventDrivenLinux(generation) {
+    const started = await this._spawnListener({
       command: "pactl",
       args: ["subscribe"],
       options: { stdio: ["ignore", "pipe", "pipe"] },
@@ -313,19 +369,112 @@ class AudioActivityDetector extends EventEmitter {
       generation,
       onLine: (line) => this._parsePactlSubscribeLine(line),
     });
+    if (!started || this._isStale(generation)) return false;
+
+    await this._reconcileLinuxSourceOutputs(generation);
+    return !this._isStale(generation) && this._listenerProcess !== null;
   }
 
   _parsePactlSubscribeLine(line) {
-    if (!line.includes("source-output")) return;
+    if (!this._running || !line.includes("source-output")) return;
 
     if (/Event\s+'new'\s+on\s+source-output/i.test(line)) {
       this._activeSources++;
       this._onMicStateChanged(true);
     } else if (/Event\s+'remove'\s+on\s+source-output/i.test(line)) {
       this._activeSources = Math.max(0, this._activeSources - 1);
-      if (this._activeSources === 0) {
-        this._onMicStateChanged(false);
+      this._onMicStateChanged(this._activeSources > 0);
+    }
+
+    void this._reconcileLinuxSourceOutputs(this._startGeneration);
+  }
+
+  async _reconcileLinuxSourceOutputs(generation) {
+    const request = ++this._linuxOwnershipRequest;
+
+    try {
+      const { stdout } = await execAsync("pactl --format=json list source-outputs", EXEC_OPTS);
+      if (this._isStale(generation) || request !== this._linuxOwnershipRequest) return;
+
+      const sourceOutputs = JSON.parse(stdout);
+      if (!Array.isArray(sourceOutputs)) throw new Error("pactl returned a non-array response");
+
+      const activeMicPids = new Set();
+      for (const sourceOutput of sourceOutputs) {
+        const processId = Number(sourceOutput?.properties?.["application.process.id"]);
+        if (!Number.isInteger(processId) || processId <= 0) {
+          throw new Error("pactl source output is missing application.process.id");
+        }
+        activeMicPids.add(processId);
       }
+
+      this._activeMicPids = activeMicPids;
+      this._activeSources = sourceOutputs.length;
+      this._setPidScopedCapability(true);
+      this._onMicStateChanged(this._activeSources > 0);
+    } catch (err) {
+      if (this._isStale(generation) || request !== this._linuxOwnershipRequest) return;
+      this._setPidScopedCapability(false);
+      debugLogger.warn(
+        "Failed to reconcile pactl source-output ownership",
+        { error: err.message },
+        "meeting"
+      );
+    }
+  }
+
+  _getExcludedProcessIdSet() {
+    const processIds = this._getExcludedProcessIds();
+    return new Set(
+      [...processIds]
+        .map((processId) => Number(processId))
+        .filter((processId) => Number.isInteger(processId) && processId > 0)
+    );
+  }
+
+  _setPidScopedCapability(reliable) {
+    this._pidScopedCapability = reliable;
+    this._updateExternalMicState();
+  }
+
+  _updateExternalMicState(emitChange = true) {
+    let excludedProcessIds;
+    try {
+      excludedProcessIds = this._getExcludedProcessIdSet();
+    } catch (err) {
+      this._setExternalMicSnapshot(false, false, emitChange);
+      debugLogger.warn(
+        "Failed to resolve excluded microphone PIDs",
+        { error: err.message },
+        "meeting"
+      );
+      return false;
+    }
+
+    const externalMicActive = [...this._activeMicPids].some(
+      (processId) => !excludedProcessIds.has(processId)
+    );
+    if (!this._pidScopedCapability) {
+      this._setExternalMicSnapshot(false, false, emitChange);
+      return externalMicActive;
+    }
+
+    this._setExternalMicSnapshot(true, externalMicActive, emitChange);
+    return externalMicActive;
+  }
+
+  _setExternalMicSnapshot(reliable, externalMicActive, emitChange) {
+    this._externalMicReliable = reliable;
+    this._externalMicActive = reliable ? externalMicActive : false;
+    if (
+      emitChange &&
+      (this._externalMicReliable !== this._lastEmittedExternalMicReliable ||
+        this._externalMicActive !== this._lastEmittedExternalMicActive) &&
+      this._running
+    ) {
+      this._lastEmittedExternalMicReliable = this._externalMicReliable;
+      this._lastEmittedExternalMicActive = this._externalMicActive;
+      this.emit("external-mic-state-changed", this.getExternalMicState());
     }
   }
 

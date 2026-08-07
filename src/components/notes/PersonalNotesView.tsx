@@ -56,6 +56,7 @@ import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import NotesOnboarding from "./NotesOnboarding";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
+import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
 import {
   applyNoteDraftMutation,
@@ -330,6 +331,7 @@ export default function PersonalNotesView({
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
       expectedCount: resolveExpectedSpeakerCount(note),
+      autoEndEligible: isMeetingAutoEndEligible(note),
     });
   }, [activeNote]);
 
@@ -622,6 +624,7 @@ export default function PersonalNotesView({
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
       expectedCount: resolveExpectedSpeakerCount(note),
+      autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
     });
     onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);

@@ -3397,6 +3397,11 @@
       "underway": "It sounds like your meeting is underway. Want to take notes?"
     },
     "start": "Take notes",
-    "join": "Join & transcribe"
+    "join": "Join & transcribe",
+    "autoEnd": {
+      "title": "Meeting may have ended",
+      "body": "No other app is using your microphone. Recording will stop in {{seconds}}s.",
+      "keep": "Keep recording"
+    }
   }
 }
