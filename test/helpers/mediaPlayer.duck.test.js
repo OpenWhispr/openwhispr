@@ -195,7 +195,8 @@ test("the quit-path restore has a fallback on every platform", () => {
 test("_clampSnapshot keeps levels above 100 that PulseAudio allows", () => {
   assert.equal(mediaPlayer._clampSnapshot(153), 153);
   assert.equal(mediaPlayer._clampSnapshot(90), 90);
-  assert.equal(mediaPlayer._clampSnapshot(500), 200, "still bounded");
+  assert.equal(mediaPlayer._clampSnapshot(300), 300, "above the common 150% ceiling");
+  assert.equal(mediaPlayer._clampSnapshot(99999), 1000, "still bounded against a bad parse");
   assert.equal(mediaPlayer._clampSnapshot(-5), 0);
   assert.equal(mediaPlayer._clampSnapshot("abc"), 25);
 

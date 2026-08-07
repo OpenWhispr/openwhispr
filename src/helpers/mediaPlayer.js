@@ -67,8 +67,10 @@ const VOLUME_SET_TIMEOUT_MS = 2500;
 // Add-Type can emit warnings on stdout, so reads echo behind a sentinel.
 const DUCK_STDOUT_SENTINEL = "__OWDUCK__:";
 // PulseAudio lets a sink sit above 100%, and that level has to survive the round
-// trip or restoring silently strips the user's amplification.
-const SNAPSHOT_MAX_LEVEL = 200;
+// trip or restoring silently strips the user's amplification. The bound only
+// exists to reject a nonsensical parse, so it sits well above any level a real
+// configuration uses rather than near the common 150% ceiling.
+const SNAPSHOT_MAX_LEVEL = 1000;
 
 class MediaPlayer {
   constructor() {
