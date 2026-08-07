@@ -37,6 +37,8 @@ type CloudModelOption = {
 
 const OPENROUTER_TAB = "openrouter";
 const OPENROUTER_KEYS_URL = "https://openrouter.ai/keys";
+const ORCAROUTER_TAB = "orcarouter";
+const ORCAROUTER_KEYS_URL = "https://www.orcarouter.ai/console";
 
 const CLOUD_PROVIDER_IDS = [
   "openai",
@@ -44,6 +46,7 @@ const CLOUD_PROVIDER_IDS = [
   "gemini",
   "groq",
   OPENROUTER_TAB,
+  ORCAROUTER_TAB,
   "tinfoil",
   "corti",
   "custom",
@@ -336,6 +339,8 @@ export default function ReasoningModelSelector({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
+  const orcarouterApiKey = useSettingsStore((s) => s.orcarouterApiKey);
+  const setOrcarouterApiKey = useSettingsStore((s) => s.setOrcarouterApiKey);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
@@ -358,7 +363,9 @@ export default function ReasoningModelSelector({
         ? t("reasoning.custom.providerName")
         : id === OPENROUTER_TAB
           ? "OpenRouter"
-          : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
+          : id === ORCAROUTER_TAB
+            ? "OrcaRouter"
+            : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
   }));
 
   const localProviders = useMemo<LocalProvider[]>(() => {
@@ -392,7 +399,12 @@ export default function ReasoningModelSelector({
 
   const selectedCloudModels = useMemo<CloudModelOption[]>(() => {
     if (selectedCloudProvider === "openai") return openaiModelOptions;
-    if (selectedCloudProvider === "custom" || selectedCloudProvider === OPENROUTER_TAB) return [];
+    if (
+      selectedCloudProvider === "custom" ||
+      selectedCloudProvider === OPENROUTER_TAB ||
+      selectedCloudProvider === ORCAROUTER_TAB
+    )
+      return [];
 
     const { icon: iconUrl, invertInDark } = getRemoteProviderIcon(selectedCloudProvider);
 
@@ -444,7 +456,7 @@ export default function ReasoningModelSelector({
   const selectDefaultModelForProvider = (provider: string) => {
     // Custom/OpenRouter fetch their model list dynamically — clear instead of
     // presetting so another provider's model id can't persist under this one.
-    if (provider === "custom" || provider === OPENROUTER_TAB) {
+    if (provider === "custom" || provider === OPENROUTER_TAB || provider === ORCAROUTER_TAB) {
       setReasoningModel("");
       return;
     }
@@ -559,6 +571,19 @@ export default function ReasoningModelSelector({
                 lockedBaseUrl
                 apiKeyRequired
                 getKeyUrl={OPENROUTER_KEYS_URL}
+              />
+            ) : selectedCloudProvider === ORCAROUTER_TAB ? (
+              <OpenAICompatiblePanel
+                key={ORCAROUTER_TAB}
+                baseUrl={API_ENDPOINTS.ORCAROUTER_BASE}
+                setBaseUrl={() => {}}
+                apiKey={orcarouterApiKey}
+                setApiKey={setOrcarouterApiKey}
+                model={reasoningModel}
+                setModel={setReasoningModel}
+                lockedBaseUrl
+                apiKeyRequired
+                getKeyUrl={ORCAROUTER_KEYS_URL}
               />
             ) : selectedCloudProvider === "custom" ? (
               <OpenAICompatiblePanel

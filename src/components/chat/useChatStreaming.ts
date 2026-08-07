@@ -121,6 +121,7 @@ export function useChatStreaming({
           "gemini",
           "tinfoil",
           "openrouter",
+          "orcarouter",
           "corti",
         ].includes(settings.chatAgentProvider);
       const localModelCanUseTool =

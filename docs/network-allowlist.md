@@ -55,11 +55,11 @@ Contacted only when a user pastes a URL into the Upload view to download and
 transcribe its audio. Downloads are HTTPS-only and hosts resolving to
 private/internal addresses are rejected.
 
-| Host                                | Protocol | Port | Purpose                                                                    |
-| ----------------------------------- | -------- | ---- | -------------------------------------------------------------------------- |
-| `www.youtube.com`, `youtube.com`, `youtu.be`, `m.youtube.com`, `music.youtube.com` | HTTPS | 443 | YouTube page/metadata fetch for pasted YouTube links (bundled yt-dlp).     |
-| `*.googlevideo.com`                 | HTTPS    | 443  | YouTube media CDN — the actual audio stream download.                      |
-| _User-pasted hosts_                 | HTTPS    | 443  | Direct audio/video URL imports contact whatever public host the user pastes. |
+| Host                                                                               | Protocol | Port | Purpose                                                                      |
+| ---------------------------------------------------------------------------------- | -------- | ---- | ---------------------------------------------------------------------------- |
+| `www.youtube.com`, `youtube.com`, `youtu.be`, `m.youtube.com`, `music.youtube.com` | HTTPS    | 443  | YouTube page/metadata fetch for pasted YouTube links (bundled yt-dlp).       |
+| `*.googlevideo.com`                                                                | HTTPS    | 443  | YouTube media CDN — the actual audio stream download.                        |
+| _User-pasted hosts_                                                                | HTTPS    | 443  | Direct audio/video URL imports contact whatever public host the user pastes. |
 
 ## BYOK provider hosts (only if configured)
 
@@ -76,6 +76,7 @@ provider. Skip any provider not in use.
 | `atc.tinfoil.sh`, `*.tinfoil.sh`                                                 | WSS, HTTPS | 443  | Tinfoil API key configured. `atc.tinfoil.sh` serves the enclave attestation bundle (verified locally against an embedded sigstore root). Inference and realtime transcription connect to an enclave host assigned dynamically at runtime (e.g. `inference.tinfoil.sh`, `router.infN.tinfoil.sh`), so allowlist `*.tinfoil.sh` rather than pinning hosts. |
 | `api.mistral.ai`                                                                 | HTTPS      | 443  | Mistral API key configured.                                                                                                                                                                                                                                                                                                                              |
 | `openrouter.ai`                                                                  | HTTPS      | 443  | OpenRouter selected as a reasoning provider (`/api/v1/models` is fetched even without a key).                                                                                                                                                                                                                                                            |
+| `api.orcarouter.ai`                                                              | HTTPS      | 443  | OrcaRouter selected as a reasoning provider.                                                                                                                                                                                                                                                                                                             |
 
 ## Notes
 

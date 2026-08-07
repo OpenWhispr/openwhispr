@@ -28,6 +28,7 @@ function isProviderValidForMode(provider: string, mode: InferenceMode): boolean 
       return (
         provider === "custom" ||
         provider === "openrouter" ||
+        provider === "orcarouter" ||
         modelRegistry.getCloudProviders().some((p) => p.id === provider)
       );
     case "local":
@@ -159,6 +160,7 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
     (config.mode === "providers" &&
       (config.provider === "custom" ||
         config.provider === "openrouter" ||
+        config.provider === "orcarouter" ||
         !!getCloudModel(config.model)?.supportsThinking)) ||
     (config.mode === "local" && !!getLocalModel(config.model)?.supportsThinking);
 

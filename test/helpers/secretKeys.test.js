@@ -63,6 +63,15 @@ test("openrouter is a first-class secret", () => {
   assert.equal(env.getOpenrouterKey(), "sk-or-abc");
 });
 
+test("orcarouter is a first-class secret", () => {
+  const orca = BYOK_API_KEYS.find((k) => k.base === "orcarouter");
+  assert.ok(orca, "orcarouter present in manifest");
+  assert.equal(orca.env, "ORCAROUTER_API_KEY");
+  const env = new EnvironmentManager();
+  env.saveOrcarouterKey("sk-orca-abc");
+  assert.equal(env.getOrcarouterKey(), "sk-orca-abc");
+});
+
 test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
   // preload.js can't require the manifest under sandbox, so it inlines the
   // {base, get, save} tuples. Assert they stay in lockstep with the manifest.
