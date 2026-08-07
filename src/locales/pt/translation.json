@@ -973,10 +973,10 @@
       "description": "Após um ditado, mantenha o microfone aberto por um breve período para que o próximo comece na hora, sem palavras cortadas",
       "privacyNote": "Enquanto o microfone estiver aberto, o indicador de microfone em uso do sistema permanece aceso. Nada é gravado entre os ditados.",
       "options": {
-        "off": "Desativado",
-        "tenSeconds": "10 segundos",
-        "oneMinute": "1 minuto",
-        "fifteenMinutes": "15 minutos"
+        "0": "Desativado",
+        "10": "10 segundos",
+        "60": "1 minuto",
+        "900": "15 minutos"
       }
     }
   },

@@ -7,6 +7,7 @@ import { Button } from "./button";
 import { RefreshCw, Mic } from "lucide-react";
 import { isBuiltInMicrophone } from "../../utils/audioDeviceUtils";
 import { resolveMicDeviceSelection } from "../../helpers/micDeviceSelection";
+import { MIC_WARM_HOLD_CHOICES } from "../../stores/settingsStore";
 
 interface AudioDevice {
   deviceId: string;
@@ -23,13 +24,6 @@ interface MicrophoneSettingsProps {
   onDeviceSelect: (deviceId: string, label: string) => void;
   onMicWarmHoldSecondsChange: (seconds: number) => void;
 }
-
-const WARM_HOLD_OPTION_KEYS: Record<number, string> = {
-  0: "off",
-  10: "tenSeconds",
-  60: "oneMinute",
-  900: "fifteenMinutes",
-};
 
 export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
   preferBuiltInMic,
@@ -222,9 +216,11 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(WARM_HOLD_OPTION_KEYS).map(([seconds, key]) => (
-              <SelectItem key={seconds} value={seconds}>
-                {t(`microphoneSettings.warmHold.options.${key}`)}
+            {/* Derived from the store's whitelist so a new option can't silently
+                snap to 0 in the setter; its label key is the value itself. */}
+            {MIC_WARM_HOLD_CHOICES.map((seconds) => (
+              <SelectItem key={seconds} value={String(seconds)}>
+                {t(`microphoneSettings.warmHold.options.${seconds}`)}
               </SelectItem>
             ))}
           </SelectContent>

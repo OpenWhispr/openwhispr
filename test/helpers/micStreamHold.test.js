@@ -65,6 +65,21 @@ test("adoptAndClone stores the master and returns a clone", async () => {
   assert.deepEqual(events, [true]);
 });
 
+test("replacing the master is a silent swap, not a release+acquire", async () => {
+  const { hold, events } = await makeHold();
+  const first = fakeTrack();
+  const second = fakeTrack();
+
+  hold.adoptAndClone(fakeStream(first), "key");
+  const clone = hold.adoptAndClone(fakeStream(second), "key2");
+
+  assert.equal(first.stopped, 1);
+  assert.equal(clone.wrapped.cloneOf, second);
+  assert.equal(hold.active, true);
+  // One continuous hold: no false→true blip from the swap.
+  assert.deepEqual(events, [true]);
+});
+
 test("acquireClone returns fresh clones while the master is live", async () => {
   const { hold } = await makeHold();
   const track = fakeTrack();

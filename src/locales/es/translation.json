@@ -1042,10 +1042,10 @@
       "description": "Después de un dictado, mantén el micrófono abierto brevemente para que el siguiente empiece al instante y sin palabras cortadas",
       "privacyNote": "Mientras el micrófono se mantiene abierto, el indicador de micrófono en uso del sistema permanece encendido. No se graba nada entre dictados.",
       "options": {
-        "off": "Desactivado",
-        "tenSeconds": "10 segundos",
-        "oneMinute": "1 minuto",
-        "fifteenMinutes": "15 minutos"
+        "0": "Desactivado",
+        "10": "10 segundos",
+        "60": "1 minuto",
+        "900": "15 minutos"
       }
     }
   },

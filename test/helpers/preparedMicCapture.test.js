@@ -35,9 +35,14 @@ test("cancel disposes a prepared value (stream and recorder stopped)", async () 
   let recorderStops = 0;
   const capture = new PreparedMicCapture();
 
+  const recorder = {
+    state: "recording",
+    ondataavailable: () => {},
+    stop: () => (recorderStops += 1),
+  };
   await capture.prepare(async () => ({
     stream: fakeStream(() => (streamStops += 1)),
-    recorder: { state: "recording", stop: () => (recorderStops += 1) },
+    recorder,
     chunks: [],
     constraints: { audio: true },
   }));
@@ -45,6 +50,8 @@ test("cancel disposes a prepared value (stream and recorder stopped)", async () 
 
   assert.equal(streamStops, 1);
   assert.equal(recorderStops, 1);
+  // Detached before stop, so the final async dataavailable can't repopulate.
+  assert.equal(recorder.ondataavailable, null);
   assert.equal(await capture.take(), null);
 });
 

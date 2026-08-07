@@ -3720,7 +3720,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (prepared?.recorder && prepared.recorder.state !== "inactive") {
         // Prepared while batch mode was expected; keep the stream, drop the pre-roll
         // (the streaming transcript comes from the PCM worklet, not these chunks).
+        // Detach before stop so the final async dataavailable can't repopulate.
         try {
+          prepared.recorder.ondataavailable = null;
           prepared.recorder.stop();
         } catch {
           /* recorder already gone */

@@ -77,12 +77,14 @@ export const useAudioRecording = (toast, options = {}) => {
         if (didStart && stopRequestedDuringStartRef.current) {
           stopRequestedDuringStartRef.current = false;
           window.electronAPI?.unregisterCancelHotkey?.();
+          // Cue semantics mirror performStopRecording: unconditional for
+          // streaming, gated on the stop landing for batch.
           if (audioManagerRef.current.getState().isStreaming) {
+            void playStopCue();
             await audioManagerRef.current.stopStreamingRecording();
-          } else {
-            audioManagerRef.current.stopRecording();
+          } else if (audioManagerRef.current.stopRecording()) {
+            void playStopCue();
           }
-          void playStopCue();
           return didStart;
         }
 

@@ -1082,10 +1082,10 @@
       "description": "After a dictation ends, keep the microphone open briefly so the next one starts instantly with nothing clipped",
       "privacyNote": "While the microphone is held, your system's mic-in-use indicator stays on. Nothing is recorded between dictations.",
       "options": {
-        "off": "Off",
-        "tenSeconds": "10 seconds",
-        "oneMinute": "1 minute",
-        "fifteenMinutes": "15 minutes"
+        "0": "Off",
+        "10": "10 seconds",
+        "60": "1 minute",
+        "900": "15 minutes"
       }
     }
   },

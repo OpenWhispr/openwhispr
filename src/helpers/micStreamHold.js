@@ -50,10 +50,14 @@ export class MicStreamHold {
   // recording — one getUserMedia serves both roles. Pass-through when disabled.
   adoptAndClone(stream, constraintsKey) {
     if (this.holdSeconds === 0) return stream;
-    this.drop();
+    const wasActive = this.active;
+    // Replacing a master is a swap, not a release+acquire: stop the old tracks
+    // silently so observers see one continuous hold, not a false→true blip.
+    this._clearReleaseTimer();
+    this.master?.getAudioTracks().forEach((track) => track.stop());
     this.master = stream;
     this.masterKey = constraintsKey;
-    this.onHoldChange?.(true);
+    if (!wasActive) this.onHoldChange?.(true);
     this.touch();
     return this.makeStream(this._masterTrack().clone());
   }

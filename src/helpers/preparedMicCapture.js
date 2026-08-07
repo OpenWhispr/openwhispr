@@ -6,7 +6,12 @@ export const PREPARED_MAX_AGE_MS = 10000;
 export const disposePreparedCapture = (prepared) => {
   if (!prepared) return;
   try {
-    if (prepared.recorder && prepared.recorder.state !== "inactive") prepared.recorder.stop();
+    if (prepared.recorder && prepared.recorder.state !== "inactive") {
+      // Detach before stop: the recorder's final dataavailable fires async and
+      // would otherwise repopulate the chunks array after it is cleared.
+      prepared.recorder.ondataavailable = null;
+      prepared.recorder.stop();
+    }
   } catch {
     // Recorder already torn down by the browser; the stream stop below still runs.
   }
