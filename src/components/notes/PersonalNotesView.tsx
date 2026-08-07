@@ -208,6 +208,7 @@ export default function PersonalNotesView({
   const [showStructureIntro, setShowStructureIntro] = useState(false);
 
   const isTranscribing = useMeetingRecordingStore((s) => s.isRecording);
+  const isStoppingRecording = useMeetingRecordingStore((s) => s.isStopping);
   const diarizationSessionId = useMeetingRecordingStore((s) => s.diarizationSessionId);
   const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
   const sessionDiarizationEnabled = useMeetingRecordingStore((s) => s.sessionDiarizationEnabled);
@@ -325,6 +326,7 @@ export default function PersonalNotesView({
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
     await storeStartRecording({
       noteId,
+      clientNoteId: note?.client_note_id ?? null,
       noteTitle: note?.title ?? null,
       folderId: note?.folder_id ?? null,
       seedSegments,
@@ -614,9 +616,11 @@ export default function PersonalNotesView({
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
     const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
+    if (!note?.client_note_id) return;
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
     storeStartRecording({
       noteId: meetingRecordingRequest.noteId,
+      clientNoteId: note?.client_note_id ?? null,
       noteTitle: note?.title ?? null,
       folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
       seedSegments,
@@ -748,7 +752,7 @@ export default function PersonalNotesView({
               onContentChange={handleContentChange}
               isSaving={isSaving}
               isRecording={isActiveNoteRecording}
-              isProcessing={false}
+              isProcessing={isStoppingRecording}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
               onExportNote={handleExportNote}

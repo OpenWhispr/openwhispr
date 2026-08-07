@@ -26,6 +26,7 @@ import {
   type TranscriptSpeakerLockSource,
   type TranscriptSpeakerStatus,
 } from "../utils/transcriptSpeakerState";
+import { MeetingSessionLifecycle } from "../helpers/meetingSessionLifecycle";
 
 export interface TranscriptSegment {
   id: string;
@@ -61,6 +62,7 @@ interface RecentSystemSpeaker {
 interface MeetingRecordingState {
   isRecording: boolean;
   isTranscribing: boolean;
+  isStopping: boolean;
   recordingNoteId: number | null;
   recordingNoteTitle: string | null;
   recordingFolderId: number | null;
@@ -431,6 +433,7 @@ let systemProcessor: AudioWorkletNode | null = null;
 let systemStream: MediaStream | null = null;
 let isRecordingFlag = false;
 let isStartingFlag = false;
+const meetingSessionLifecycle = new MeetingSessionLifecycle();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
 let preparePromise: Promise<void> | null = null;
@@ -445,6 +448,7 @@ let pushConfigTimeout: ReturnType<typeof setTimeout> | null = null;
 export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   isRecording: false,
   isTranscribing: false,
+  isStopping: false,
   recordingNoteId: null,
   recordingNoteTitle: null,
   recordingFolderId: null,
@@ -672,7 +676,7 @@ async function cleanup(): Promise<void> {
   isStartingFlag = false;
 }
 
-export async function prepareTranscription(): Promise<void> {
+async function prepareTranscriptionInternal(): Promise<void> {
   if (isPrepared || isRecordingFlag || isStartingFlag) return;
   if (preparePromise) return preparePromise;
 
@@ -709,8 +713,13 @@ export async function prepareTranscription(): Promise<void> {
   await promise;
 }
 
+export function prepareTranscription(): Promise<void> {
+  return meetingSessionLifecycle.run(prepareTranscriptionInternal);
+}
+
 export interface StartRecordingArgs {
   noteId: number | null;
+  clientNoteId: string | null;
   noteTitle: string | null;
   folderId: number | null;
   seedSegments?: TranscriptSegment[];
@@ -718,7 +727,7 @@ export interface StartRecordingArgs {
   expectedCount?: number | null;
 }
 
-export async function startRecording(args: StartRecordingArgs): Promise<void> {
+async function startRecordingInternal(args: StartRecordingArgs): Promise<void> {
   if (isRecordingFlag || isStartingFlag) return;
   isStartingFlag = true;
 
@@ -791,6 +800,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
       window.electronAPI?.meetingTranscriptionStart?.({
         ...getMeetingTranscriptionOptions(),
         noteId: args.noteId ?? null,
+        clientNoteId: args.clientNoteId ?? null,
       }),
       getMeetingMicConstraints().then(async (constraints) => {
         try {
@@ -1242,23 +1252,19 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
   }
 }
 
+export function startRecording(args: StartRecordingArgs): Promise<void> {
+  return meetingSessionLifecycle.start(() => startRecordingInternal(args));
+}
+
 export interface StopRecordingResult {
   diarizationSessionId: string | null;
 }
 
-export async function stopRecording(): Promise<StopRecordingResult> {
-  if (!isRecordingFlag) {
-    return { diarizationSessionId: null };
-  }
-
-  isRecordingFlag = false;
-  isStartingFlag = false;
-  useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
-
-  await cleanup();
-
+async function stopRecordingInternal(): Promise<StopRecordingResult> {
   let diarizationSessionId: string | null = null;
   try {
+    await cleanup();
+
     const result = await window.electronAPI?.meetingTranscriptionStop?.();
     if (result?.diarizationSessionId) {
       diarizationSessionId = result.diarizationSessionId;
@@ -1272,18 +1278,35 @@ export async function stopRecording(): Promise<StopRecordingResult> {
   } catch (err) {
     useMeetingRecordingStore.setState({ error: (err as Error).message });
     logger.error("Meeting transcription stop failed", { error: (err as Error).message }, "meeting");
+  } finally {
+    useMeetingRecordingStore.setState({
+      isStopping: false,
+      micPartial: "",
+      systemPartial: "",
+      systemPartialSpeakerId: null,
+      systemPartialSpeakerName: null,
+      currentMicLevel: 0,
+    });
   }
-
-  useMeetingRecordingStore.setState({
-    micPartial: "",
-    systemPartial: "",
-    systemPartialSpeakerId: null,
-    systemPartialSpeakerName: null,
-    currentMicLevel: 0,
-  });
 
   logger.info("Meeting transcription stopped", {}, "meeting");
   return { diarizationSessionId };
+}
+
+export function stopRecording(): Promise<StopRecordingResult> {
+  if (!isRecordingFlag && !isStartingFlag && !meetingSessionLifecycle.hasPendingOperations) {
+    return Promise.resolve({ diarizationSessionId: null });
+  }
+
+  isRecordingFlag = false;
+  isStartingFlag = false;
+  useMeetingRecordingStore.setState({
+    isRecording: false,
+    isTranscribing: false,
+    isStopping: true,
+  });
+
+  return meetingSessionLifecycle.stop(stopRecordingInternal);
 }
 
 export function lockSpeaker(speakerId: string, displayName: string): void {

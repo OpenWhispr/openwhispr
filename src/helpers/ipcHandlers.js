@@ -42,6 +42,13 @@ const {
   canAutoRelabelSpeaker,
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
+const {
+  matchesMeetingNoteIdentity,
+  persistMeetingDiarizationResult,
+  resolveMeetingNoteIdentity,
+  snapshotMeetingNoteIdentity,
+} = require("./meetingDiarizationPersistence");
+const { MeetingSessionLifecycle } = require("./meetingSessionLifecycle");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
 const postMigrationDetector = require("./postMigrationDetector");
 const {
@@ -1383,7 +1390,9 @@ class IPCHandlers {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
         this._asyncVectorUpsert(result.note);
         this._asyncMirrorWrite(result.note);
-        if (updates.participants) this._tryAutoLabelOneOnOne(id);
+        if (updates.participants) {
+          this._tryAutoLabelOneOnOne(snapshotMeetingNoteIdentity(this.databaseManager, id));
+        }
       }
       return result;
     });
@@ -4959,6 +4968,7 @@ class IPCHandlers {
     let meetingTranscriptionStartInProgress = false;
     let meetingTranscriptionPrepareInProgress = false;
     let meetingTranscriptionPreparePromise = null;
+    const meetingSessionLifecycle = new MeetingSessionLifecycle();
 
     const DUPLICATE_TRANSCRIPT_WINDOW_MS = 6000;
     const DUPLICATE_TRANSCRIPT_MERGE_LIMIT = 3;
@@ -5749,6 +5759,7 @@ class IPCHandlers {
     let meetingOneOnOneAttendee = null;
     let meetingOneOnOneProfileBound = false;
     let meetingNoteId = null;
+    let meetingNoteIdentity = null;
 
     const getLiveSpeakerProfiles = () => {
       const attendees = this._getNoteNonSelfParticipants(meetingNoteId);
@@ -6292,6 +6303,7 @@ class IPCHandlers {
       meetingOneOnOneAttendee = null;
       meetingOneOnOneProfileBound = false;
       meetingNoteId = null;
+      meetingNoteIdentity = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
       if (meetingDiarizationStream) {
@@ -6568,7 +6580,7 @@ class IPCHandlers {
     };
 
     // Pre-warm: fetch tokens + connect WebSockets before user hits record
-    ipcMain.handle("meeting-transcription-prepare", async (event, options = {}) => {
+    const handleMeetingTranscriptionPrepare = async (event, options = {}) => {
       if (meetingTranscriptionPrepareInProgress || meetingTranscriptionStartInProgress) {
         debugLogger.debug("Meeting transcription prepare already in progress, ignoring");
         return { success: false, error: "Operation in progress" };
@@ -6612,9 +6624,15 @@ class IPCHandlers {
       })();
 
       return meetingTranscriptionPreparePromise;
-    });
+    };
+    ipcMain.handle("meeting-transcription-prepare", (event, options = {}) =>
+      meetingSessionLifecycle.run(() => handleMeetingTranscriptionPrepare(event, options))
+    );
 
     ipcMain.handle("meeting-transcription-cancel", async () => {
+      if (meetingSessionLifecycle.isStopping) {
+        return { success: false, reason: "operation-in-progress" };
+      }
       if (isMeetingStreamingConnected() || meetingLocalTimer) {
         return { success: false, reason: "recording-active" };
       }
@@ -6624,7 +6642,7 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("meeting-transcription-start", async (event, options = {}) => {
+    const handleMeetingTranscriptionStart = async (event, options = {}) => {
       // Wait for any in-flight prepare to finish before starting
       if (meetingTranscriptionPreparePromise) {
         debugLogger.debug("Meeting transcription start: waiting for in-flight prepare");
@@ -6649,6 +6667,26 @@ class IPCHandlers {
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;
         meetingNoteId = options.noteId ?? null;
+        const expectedClientNoteId = options.clientNoteId ?? null;
+        try {
+          meetingNoteIdentity = resolveMeetingNoteIdentity(
+            this.databaseManager,
+            meetingNoteId,
+            expectedClientNoteId
+          );
+        } catch (error) {
+          meetingNoteIdentity = null;
+          debugLogger.warn("Failed to snapshot meeting note identity", {
+            noteId: meetingNoteId,
+            error: error.message,
+          });
+        }
+        const noteTargetChanged =
+          (meetingNoteId == null) !== (expectedClientNoteId == null) ||
+          (meetingNoteId != null && meetingNoteIdentity == null);
+        if (noteTargetChanged) {
+          throw new Error("Meeting note changed before recording could start");
+        }
 
         // Seed the speaker cap from the note/calendar participants up front so live
         // identification isn't stuck at the default if the renderer never pushes a config.
@@ -6750,7 +6788,10 @@ class IPCHandlers {
       } finally {
         meetingTranscriptionStartInProgress = false;
       }
-    });
+    };
+    ipcMain.handle("meeting-transcription-start", (event, options = {}) =>
+      meetingSessionLifecycle.start(() => handleMeetingTranscriptionStart(event, options))
+    );
 
     const sendMeetingAudio = (audioBuffer, source) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
@@ -6911,7 +6952,18 @@ class IPCHandlers {
       sendMeetingAudio(audioBuffer, source);
     });
 
-    ipcMain.handle("meeting-transcription-stop", async () => {
+    const handleMeetingTranscriptionStop = async () => {
+      // Snapshot the complete session owner before teardown yields. A later
+      // start is queued behind this operation and cannot replace these values.
+      const sessionContext = {
+        localMode: meetingLocalMode,
+        diarizationWin: meetingLocalWin || this.windowManager.controlPanelWindow,
+        speakerConfig: this.activeMeetingSpeakerConfig
+          ? { ...this.activeMeetingSpeakerConfig }
+          : null,
+        noteIdentity: meetingNoteIdentity ? { ...meetingNoteIdentity } : null,
+      };
+
       this.meetingDetectionEngine?.setUserRecording(false);
       try {
         if (this.audioTapManager) {
@@ -6930,9 +6982,8 @@ class IPCHandlers {
         const liveSpeakerState = await stopLiveSpeakerIdentification().catch(() => null);
 
         const diarizationSessionId = `diar-${Date.now()}`;
-        const diarizationWin = meetingLocalWin || this.windowManager.controlPanelWindow;
 
-        if (meetingLocalMode) {
+        if (sessionContext.localMode) {
           if (meetingLocalTimer) {
             clearInterval(meetingLocalTimer);
             meetingLocalTimer = null;
@@ -6947,8 +6998,6 @@ class IPCHandlers {
             await captureMeetingDiarizationState();
           const transcript =
             buildOrderedTranscriptText(diarizationSegments) || meetingLocalTranscript;
-          const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
-          const noteIdSnapshot = meetingNoteId;
           this.activeMeetingSpeakerConfig = null;
           resetMeetingLocalState();
 
@@ -6958,10 +7007,10 @@ class IPCHandlers {
             diarizationPcmPath,
             diarizationStartedAt,
             diarizationSegments,
-            diarizationWin,
+            sessionContext.diarizationWin,
             liveSpeakerState,
-            sessionSpeakerConfigSnapshot,
-            noteIdSnapshot
+            sessionContext.speakerConfig,
+            sessionContext.noteIdentity
           );
 
           return { success: true, transcript, diarizationSessionId };
@@ -6974,8 +7023,6 @@ class IPCHandlers {
           buildOrderedTranscriptText(diarizationSegments) ||
           [results[0]?.text, results[1]?.text].filter(Boolean).join(" ");
 
-        const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
-        const noteIdSnapshot = meetingNoteId;
         this.activeMeetingSpeakerConfig = null;
 
         // Fire-and-forget background diarization (or notify skip)
@@ -6984,10 +7031,10 @@ class IPCHandlers {
           diarizationPcmPath,
           diarizationStartedAt,
           diarizationSegments,
-          diarizationWin,
+          sessionContext.diarizationWin,
           liveSpeakerState,
-          sessionSpeakerConfigSnapshot,
-          noteIdSnapshot
+          sessionContext.speakerConfig,
+          sessionContext.noteIdentity
         );
 
         return { success: true, transcript, diarizationSessionId };
@@ -6995,7 +7042,10 @@ class IPCHandlers {
         debugLogger.error("Meeting transcription stop error", { error: error.message });
         return { success: false, error: error.message };
       }
-    });
+    };
+    ipcMain.handle("meeting-transcription-stop", () =>
+      meetingSessionLifecycle.stop(handleMeetingTranscriptionStop)
+    );
 
     const streamingStartFailure = (err) => {
       const result = { success: false, error: err.message };
@@ -9427,7 +9477,7 @@ class IPCHandlers {
         buffers[speakerId] = Buffer.from(new Float32Array(arr).buffer);
       }
       this.databaseManager.saveNoteSpeakerEmbeddings(noteId, buffers);
-      this._tryAutoLabelOneOnOne(noteId);
+      this._tryAutoLabelOneOnOne(snapshotMeetingNoteIdentity(this.databaseManager, noteId));
       return { success: true };
     });
   }
@@ -9501,9 +9551,11 @@ class IPCHandlers {
     });
   }
 
-  _tryAutoLabelOneOnOne(noteId) {
+  _tryAutoLabelOneOnOne(noteIdentity) {
     setImmediate(async () => {
+      const noteId = noteIdentity?.noteId ?? null;
       try {
+        if (!matchesMeetingNoteIdentity(this.databaseManager, noteIdentity)) return;
         const note = this.databaseManager.getNote(noteId);
         const other = this._resolveOneOnOneOtherParticipant(note?.participants);
         if (!other) return;
@@ -9589,11 +9641,21 @@ class IPCHandlers {
     }
   }
 
-  _reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments) {
-    if (!liveSpeakerState || !speakerEmbeddingsMap) {
+  _reconcileLiveSpeakerState(
+    liveSpeakerState,
+    speakerEmbeddingsMap,
+    enrichedSegments,
+    noteIdentity
+  ) {
+    if (
+      !liveSpeakerState ||
+      !speakerEmbeddingsMap ||
+      !matchesMeetingNoteIdentity(this.databaseManager, noteIdentity)
+    ) {
       return new Set();
     }
 
+    const noteId = noteIdentity.noteId;
     const speakerEmbeddings = require("./speakerEmbeddings");
     const reconciledSpeakers = new Set();
     const usedLiveSpeakers = new Set();
@@ -9607,7 +9669,7 @@ class IPCHandlers {
         noteId: data?.noteId ?? null,
         embedding: Array.isArray(data?.embedding) ? new Float32Array(data.embedding) : null,
       }))
-      .filter((entry) => entry.embedding);
+      .filter((entry) => entry.embedding && (entry.noteId == null || entry.noteId === noteId));
 
     const getMappingsForNote = (noteId) => {
       if (!noteMappings.has(noteId)) {
@@ -9645,27 +9707,17 @@ class IPCHandlers {
       let displayName = bestEntry.displayName;
       let profileId = bestEntry.profileId;
 
-      if (bestEntry.noteId) {
-        const liveMapping = getMappingsForNote(bestEntry.noteId).find(
+      if (bestEntry.noteId === noteId) {
+        const liveMapping = getMappingsForNote(noteId).find(
           (mapping) => mapping.speaker_id === bestEntry.speakerId
         );
         if (liveMapping) {
           displayName = liveMapping.display_name || displayName;
           profileId = liveMapping.profile_id ?? profileId;
-          this.databaseManager.setSpeakerMapping(
-            bestEntry.noteId,
-            mappedId,
-            profileId,
-            displayName
-          );
-          this.databaseManager.removeSpeakerMapping(bestEntry.noteId, bestEntry.speakerId);
+          this.databaseManager.setSpeakerMapping(noteId, mappedId, profileId, displayName);
+          this.databaseManager.removeSpeakerMapping(noteId, bestEntry.speakerId);
         } else if (displayName) {
-          this.databaseManager.setSpeakerMapping(
-            bestEntry.noteId,
-            mappedId,
-            profileId,
-            displayName
-          );
+          this.databaseManager.setSpeakerMapping(noteId, mappedId, profileId, displayName);
         }
       }
 
@@ -9712,18 +9764,72 @@ class IPCHandlers {
     win,
     liveSpeakerState = null,
     sessionConfig = null,
-    noteId = null
+    noteIdentity = null
   ) {
     const send = (payload) => {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send("meeting-diarization-complete", { sessionId, ...payload });
-      }
+      // This event is a best-effort UI refresh. Main-process persistence is
+      // authoritative if the renderer has not rebound its listener yet.
+      setImmediate(() => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("meeting-diarization-complete", {
+            ...payload,
+            sessionId,
+            noteId: noteIdentity?.noteId ?? null,
+            clientNoteId: noteIdentity?.clientNoteId ?? null,
+          });
+        }
+      });
     };
+
+    const persistAndSend = (payload) => {
+      let eventPayload = payload;
+      if (payload.segments?.length) {
+        try {
+          const result = persistMeetingDiarizationResult({
+            databaseManager: this.databaseManager,
+            identity: noteIdentity,
+            segments: payload.segments,
+            speakerEmbeddings: payload.speakerEmbeddings,
+            onNoteUpdated: (note) => {
+              setImmediate(() => broadcastToWindows("note-updated", note));
+              this._asyncVectorUpsert(note);
+              this._asyncMirrorWrite(note);
+            },
+            onSpeakerEmbeddingsSaved: (identity) => this._tryAutoLabelOneOnOne(identity),
+          });
+
+          if (result.status === "persisted") {
+            eventPayload = { ...payload, segments: result.segments };
+            if (result.embeddingError) {
+              debugLogger.warn("Meeting speaker embeddings could not be persisted", {
+                noteId: noteIdentity?.noteId ?? null,
+                error: result.embeddingError.message,
+              });
+            }
+          } else {
+            eventPayload = { ...payload, segments: [] };
+            debugLogger.warn("Meeting diarization result was not persisted", {
+              noteId: noteIdentity?.noteId ?? null,
+              reason: result.reason,
+            });
+          }
+        } catch (error) {
+          eventPayload = { ...payload, segments: [] };
+          debugLogger.error("Meeting diarization persistence failed", {
+            noteId: noteIdentity?.noteId ?? null,
+            error: error.message,
+          });
+        }
+      }
+      send(eventPayload);
+    };
+
+    const noteId = noteIdentity?.noteId ?? null;
 
     const diarizationEnabled = (sessionConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
     if (!diarizationEnabled || !this.diarizationManager?.isAvailable() || !rawPcmPath) {
-      send({
+      persistAndSend({
         segments: transcriptSegments.map((segment, index) => ({
           ...segment,
           id: segment.id || `segment-${index}`,
@@ -9828,7 +9934,8 @@ class IPCHandlers {
         const reconciledSpeakers = this._reconcileLiveSpeakerState(
           liveSpeakerState,
           speakerEmbeddingsMap,
-          enrichedSegments
+          enrichedSegments,
+          noteIdentity
         );
 
         if (speakerEmbeddingsMap) {
@@ -9892,10 +9999,10 @@ class IPCHandlers {
           }
         }
 
-        send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        persistAndSend({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
-        send({ segments: [] });
+        persistAndSend({ segments: [] });
       } finally {
         try {
           fs.unlinkSync(rawPcmPath);
