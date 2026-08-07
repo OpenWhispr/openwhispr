@@ -6,7 +6,8 @@
       "uiLabel": "Sprache der Oberfläche",
       "uiDescription": "Wählen Sie die Sprache für die OpenWhispr-Oberfläche",
       "transcriptionLabel": "Transkriptionssprache",
-      "transcriptionDescription": "Wählen Sie die Sprache, die Sie sprechen, für genauere Transkription",
+      "transcriptionDescription": "Wählen Sie bis zu {{max}} Sprachen, die Sie sprechen — die aktive Sprache wechseln Sie im Diktierfeld",
+      "removeLanguage": "{{language}} entfernen",
       "chineseScriptLabel": "Chinesische Schrift (Diktat)",
       "chineseScriptDescription": "Wenn Chinesisch erkannt wird, diktierte Transkripte in vereinfachte oder traditionelle Zeichen umwandeln. Gesprochenes Chinesisch klingt gleich; Whisper liefert nur eine Schrift.",
       "chineseScriptAsTranscribed": "Wie transkribiert belassen",
@@ -1058,6 +1059,10 @@
     "duplicate": "Bereits hinzugefügt"
   },
   "languageSelector": {
+    "lastLanguageHint": "Mindestens eine Sprache muss ausgewählt bleiben",
+    "maxLanguagesHint": "Limit von {{max}} Sprachen erreicht",
+    "selectedCount_one": "{{count}} Sprache",
+    "selectedCount_other": "{{count}} Sprachen",
     "noLanguagesFound": "Keine Sprachen gefunden",
     "searchPlaceholder": "Suchen..."
   },
@@ -3042,6 +3047,10 @@
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",
         "description": "Dein Diktat wurde ohne KI-Bereinigung eingefügt."
+      },
+      "streamingLanguageSwitch": {
+        "title": "Sprache gilt ab dem nächsten Diktat",
+        "description": "Diese Live-Transkription behält die bisherige Sprache bei. {{language}} gilt, sobald du ein neues Diktat startest."
       }
     },
     "mic": {
@@ -3049,7 +3058,8 @@
       "recording": "Aufnahme...",
       "processing": "Verarbeitung...",
       "clickToSpeak": "Klicken zum Sprechen",
-      "waitingForMicrophone": "Warte auf Mikrofon…"
+      "waitingForMicrophone": "Warte auf Mikrofon…",
+      "languageTooltip": "Sprache: {{language}} — zum Wechseln klicken"
     },
     "buttons": {
       "cancelRecording": "Aufnahme abbrechen",
@@ -3058,7 +3068,8 @@
     "commandMenu": {
       "stopListening": "Aufnahme beenden",
       "startListening": "Aufnahme starten",
-      "hideForNow": "Vorerst ausblenden"
+      "hideForNow": "Vorerst ausblenden",
+      "language": "Transkriptionssprache"
     }
   },
   "dictationAgent": {

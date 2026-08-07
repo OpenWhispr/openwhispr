@@ -409,6 +409,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
   setNotificationInteractivity: (interactive) =>
     ipcRenderer.invoke("set-notification-interactivity", interactive),
+  setMainWindowMenuFocus: (open) => ipcRenderer.invoke("set-main-window-menu-focus", open),
   resizeMainWindow: (sizeKey) => ipcRenderer.invoke("resize-main-window", sizeKey),
 
   // Update functions
@@ -862,6 +863,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onPreviewHide: registerListener("preview-hide", (callback) => () => callback()),
   startDictationPreview: (opts) => ipcRenderer.invoke("start-dictation-preview", opts),
+  updateDictationPreviewLanguage: (language) =>
+    ipcRenderer.invoke("update-dictation-preview-language", language),
   stopDictationPreview: (opts) => ipcRenderer.invoke("stop-dictation-preview", opts),
   dismissDictationPreview: () => ipcRenderer.invoke("dismiss-dictation-preview"),
   completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),

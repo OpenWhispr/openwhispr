@@ -1326,6 +1326,7 @@ declare global {
       startWindowDrag: () => Promise<void>;
       stopWindowDrag: () => Promise<void>;
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
+      setMainWindowMenuFocus?: (open: boolean) => Promise<{ success: boolean }>;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
 
       // App management
@@ -2351,6 +2352,7 @@ declare global {
         language?: string;
         display?: boolean;
       }) => Promise<{ success: boolean }>;
+      updateDictationPreviewLanguage?: (language: string | null) => Promise<{ success: boolean }>;
       stopDictationPreview?: (opts?: {
         showCleanup?: boolean;
         flushed?: boolean;

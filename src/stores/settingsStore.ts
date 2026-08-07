@@ -21,6 +21,11 @@ import {
 } from "../helpers/reasoningRouting";
 import { findStaleLocalModelKeys } from "../helpers/localModelSelections";
 import {
+  MAX_PREFERRED_LANGUAGES,
+  resolveActiveLanguageChange,
+  resolveLanguageSetChange,
+} from "../helpers/languagePreferences";
+import {
   INFERENCE_SCOPES,
   type InferenceScope,
   type InferenceScopeDefinition,
@@ -171,6 +176,7 @@ const ARRAY_SETTINGS = new Set([
   "gcalAccounts",
   "onboardingUseCases",
   "translationTargets",
+  "preferredLanguages",
 ]);
 
 const NUMERIC_SETTINGS = new Set([
@@ -596,6 +602,7 @@ export interface SettingsState
   setAllowLocalFallback: (value: boolean) => void;
   setFallbackWhisperModel: (value: string) => void;
   setPreferredLanguage: (value: string) => void;
+  setPreferredLanguages: (languages: string[]) => void;
   setChineseScriptPreference: (value: ChineseScriptPreference) => void;
   setCloudTranscriptionProvider: (value: string) => void;
   setCloudTranscriptionModel: (value: string) => void;
@@ -931,6 +938,25 @@ function createSecretSetter(
 }
 
 export const MAX_TRANSLATION_TARGETS = 5;
+export { MAX_PREFERRED_LANGUAGES };
+
+// Repair values persisted before the language-set rules existed ("auto" inside
+// the set, an active language the set no longer offers). The rules themselves
+// live in helpers/languagePreferences.js.
+const initialLanguageState = (() => {
+  const storedLanguages = readStringArray("preferredLanguages", []);
+  const storedLanguage = readString("preferredLanguage", "auto");
+  const repaired = resolveLanguageSetChange({ preferredLanguage: storedLanguage }, storedLanguages);
+  if (isBrowser) {
+    if (repaired.preferredLanguages.length !== storedLanguages.length) {
+      localStorage.setItem("preferredLanguages", JSON.stringify(repaired.preferredLanguages));
+    }
+    if (repaired.preferredLanguage !== storedLanguage) {
+      localStorage.setItem("preferredLanguage", repaired.preferredLanguage);
+    }
+  }
+  return repaired;
+})();
 
 // Kick the matching cloud push once a local write has landed in SQLite.
 function syncAfterLocalWrite(method: "syncDictionaryNow" | "syncSnippetsNow"): void {
@@ -950,7 +976,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   allowOpenAIFallback: readBoolean("allowOpenAIFallback", false),
   allowLocalFallback: readBoolean("allowLocalFallback", false),
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
-  preferredLanguage: readString("preferredLanguage", "auto"),
+  preferredLanguage: initialLanguageState.preferredLanguage,
+  // Multi-select transcription languages. Empty means the user never picked
+  // multiple — the effective set is then just [preferredLanguage].
+  preferredLanguages: initialLanguageState.preferredLanguages,
   chineseScriptPreference: normalizeChineseScriptPreference(
     readString("chineseScriptPreference", "as-transcribed")
   ),
@@ -1363,7 +1392,30 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAllowOpenAIFallback: createBooleanSetter("allowOpenAIFallback"),
   setAllowLocalFallback: createBooleanSetter("allowLocalFallback"),
   setFallbackWhisperModel: createStringSetter("fallbackWhisperModel"),
-  setPreferredLanguage: createStringSetter("preferredLanguage"),
+  setPreferredLanguage: (value: string) => {
+    set((s) => {
+      const next = resolveActiveLanguageChange(s, value);
+      if (isBrowser) {
+        localStorage.setItem("preferredLanguage", next.preferredLanguage);
+        if (next.preferredLanguages !== s.preferredLanguages) {
+          localStorage.setItem("preferredLanguages", JSON.stringify(next.preferredLanguages));
+        }
+      }
+      return next;
+    });
+  },
+  setPreferredLanguages: (languages: string[]) => {
+    set((s) => {
+      const next = resolveLanguageSetChange(s, languages);
+      if (isBrowser) {
+        localStorage.setItem("preferredLanguages", JSON.stringify(next.preferredLanguages));
+        if (next.preferredLanguage !== s.preferredLanguage) {
+          localStorage.setItem("preferredLanguage", next.preferredLanguage);
+        }
+      }
+      return next;
+    });
+  },
   setChineseScriptPreference: (value: ChineseScriptPreference) =>
     createStringSetter("chineseScriptPreference")(normalizeChineseScriptPreference(value)),
   setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
@@ -1827,6 +1879,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setFallbackWhisperModel(settings.fallbackWhisperModel);
     if (settings.preferredLanguage !== undefined)
       s.setPreferredLanguage(settings.preferredLanguage);
+    if (settings.preferredLanguages !== undefined)
+      s.setPreferredLanguages(settings.preferredLanguages);
     if (settings.chineseScriptPreference !== undefined)
       s.setChineseScriptPreference(settings.chineseScriptPreference);
     if (settings.cloudTranscriptionProvider !== undefined)

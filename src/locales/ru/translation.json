@@ -6,7 +6,8 @@
       "uiLabel": "Язык интерфейса",
       "uiDescription": "Выберите язык интерфейса OpenWhispr",
       "transcriptionLabel": "Язык транскрипции",
-      "transcriptionDescription": "Выберите язык, на котором вы говорите, для более точной транскрипции",
+      "transcriptionDescription": "Выберите до {{max}} языков, на которых вы говорите — активный язык можно переключать в панели диктовки",
+      "removeLanguage": "Убрать {{language}}",
       "chineseScriptLabel": "Китайская письменность (диктовка)",
       "chineseScriptDescription": "Когда обнаружен китайский, преобразовать надиктованные транскрипты в упрощенные или традиционные иероглифы. На слух китайский одинаков; Whisper возвращает только одну письменность.",
       "chineseScriptAsTranscribed": "Оставить как распознано",
@@ -970,6 +971,12 @@
     "duplicate": "Уже добавлена"
   },
   "languageSelector": {
+    "lastLanguageHint": "Хотя бы один язык должен оставаться выбранным",
+    "maxLanguagesHint": "Достигнут лимит в {{max}} языков",
+    "selectedCount_one": "{{count}} язык",
+    "selectedCount_few": "{{count}} языка",
+    "selectedCount_many": "{{count}} языков",
+    "selectedCount_other": "{{count}} языка",
     "noLanguagesFound": "Языки не найдены",
     "searchPlaceholder": "Поиск..."
   },
@@ -2924,6 +2931,10 @@
       "cleanupFailed": {
         "title": "Не удалось выполнить очистку",
         "description": "Диктовка вставлена без ИИ-очистки."
+      },
+      "streamingLanguageSwitch": {
+        "title": "Язык применится к следующей диктовке",
+        "description": "Текущая потоковая транскрипция продолжится на прежнем языке. {{language}} вступит в силу со следующей диктовки."
       }
     },
     "mic": {
@@ -2931,7 +2942,8 @@
       "recording": "Запись...",
       "processing": "Обработка...",
       "clickToSpeak": "Нажмите для записи",
-      "waitingForMicrophone": "Ожидание микрофона…"
+      "waitingForMicrophone": "Ожидание микрофона…",
+      "languageTooltip": "Язык: {{language}} — нажмите, чтобы переключить"
     },
     "buttons": {
       "cancelRecording": "Отменить запись",
@@ -2940,7 +2952,8 @@
     "commandMenu": {
       "stopListening": "Остановить запись",
       "startListening": "Начать запись",
-      "hideForNow": "Скрыть"
+      "hideForNow": "Скрыть",
+      "language": "Язык транскрипции"
     }
   },
   "dictationAgent": {

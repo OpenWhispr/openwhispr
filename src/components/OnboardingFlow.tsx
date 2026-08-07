@@ -28,7 +28,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
-import { useSettingsStore } from "../stores/settingsStore";
+import { useSettingsStore, MAX_PREFERRED_LANGUAGES } from "../stores/settingsStore";
+import { resolveLanguageSelection } from "../helpers/languagePreferences";
 import LanguageSelector from "./ui/LanguageSelector";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
@@ -120,11 +121,23 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setUseLocalWhisper,
     updateTranscriptionSettings,
     preferredLanguage,
+    preferredLanguages,
     onboardingUseCases,
     setOnboardingUseCases,
     onboardingUseCaseNote,
     setOnboardingUseCaseNote,
   } = useSettings();
+
+  // Effective multi-select set: falls back to the single active language for
+  // users who never selected multiple.
+  const transcriptionLanguages =
+    preferredLanguages.length > 0 ? preferredLanguages : [preferredLanguage];
+
+  // Auto detect is exclusive: picking it replaces the preset list; picking a
+  // language replaces auto. Same rule as the Settings page selector.
+  const handleTranscriptionLanguagesChange = (values: string[]) => {
+    updateTranscriptionSettings(resolveLanguageSelection(transcriptionLanguages, values));
+  };
 
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -578,12 +591,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     {t("onboarding.setup.language")}
                   </label>
                   <LanguageSelector
-                    value={preferredLanguage}
-                    onChange={(value) => {
-                      updateTranscriptionSettings({ preferredLanguage: value });
-                    }}
+                    multiple
+                    values={transcriptionLanguages}
+                    onValuesChange={handleTranscriptionLanguagesChange}
+                    maxValues={MAX_PREFERRED_LANGUAGES}
                     className="w-full"
                   />
+                  <p className="text-[11px] text-muted-foreground/80">
+                    {t("settings.language.transcriptionDescription", {
+                      max: MAX_PREFERRED_LANGUAGES,
+                    })}
+                  </p>
                 </div>
               </div>
 
@@ -660,12 +678,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 {t("onboarding.transcription.preferredLanguage")}
               </label>
               <LanguageSelector
-                value={preferredLanguage}
-                onChange={(value) => {
-                  updateTranscriptionSettings({ preferredLanguage: value });
-                }}
+                multiple
+                values={transcriptionLanguages}
+                onValuesChange={handleTranscriptionLanguagesChange}
+                maxValues={MAX_PREFERRED_LANGUAGES}
                 className="w-full"
               />
+              <p className="text-[11px] text-muted-foreground/80">
+                {t("settings.language.transcriptionDescription", {
+                  max: MAX_PREFERRED_LANGUAGES,
+                })}
+              </p>
             </div>
           </div>
         );

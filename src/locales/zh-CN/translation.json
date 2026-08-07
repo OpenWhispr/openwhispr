@@ -6,7 +6,8 @@
       "uiLabel": "界面语言",
       "uiDescription": "选择 OpenWhispr 界面使用的语言",
       "transcriptionLabel": "转录语言",
-      "transcriptionDescription": "选择你说话的语言，以提高转录准确率",
+      "transcriptionDescription": "最多选择 {{max}} 种你说话的语言——可在听写面板中切换当前语言",
+      "removeLanguage": "移除{{language}}",
       "chineseScriptLabel": "中文书写（听写）",
       "chineseScriptDescription": "检测到中文时，将听写的转录结果转换为简体或繁体。口语听起来一样；Whisper 只会输出一种字形。",
       "chineseScriptAsTranscribed": "保持转录原样",
@@ -970,6 +971,10 @@
     "duplicate": "已添加"
   },
   "languageSelector": {
+    "lastLanguageHint": "至少需要保留一种语言",
+    "maxLanguagesHint": "已达到 {{max}} 种语言的上限",
+    "selectedCount_one": "{{count}} 种语言",
+    "selectedCount_other": "{{count}} 种语言",
     "noLanguagesFound": "未找到匹配的语言",
     "searchPlaceholder": "搜索..."
   },
@@ -2894,6 +2899,10 @@
       "cleanupFailed": {
         "title": "清理失败",
         "description": "你的听写已直接粘贴，未经 AI 清理。"
+      },
+      "streamingLanguageSwitch": {
+        "title": "语言将在下次听写时生效",
+        "description": "当前的实时转录将继续使用之前的语言。{{language}} 将在你开始新的听写时生效。"
       }
     },
     "mic": {
@@ -2901,7 +2910,8 @@
       "recording": "录音中...",
       "processing": "处理中...",
       "clickToSpeak": "点击开始说话",
-      "waitingForMicrophone": "等待麦克风…"
+      "waitingForMicrophone": "等待麦克风…",
+      "languageTooltip": "语言：{{language}}——点击切换"
     },
     "buttons": {
       "cancelRecording": "取消录音",
@@ -2910,7 +2920,8 @@
     "commandMenu": {
       "stopListening": "停止录音",
       "startListening": "开始录音",
-      "hideForNow": "暂时隐藏"
+      "hideForNow": "暂时隐藏",
+      "language": "转录语言"
     }
   },
   "dictationAgent": {

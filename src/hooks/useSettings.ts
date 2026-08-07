@@ -20,6 +20,7 @@ export interface TranscriptionSettings {
   allowLocalFallback: boolean;
   fallbackWhisperModel: string;
   preferredLanguage: string;
+  preferredLanguages: string[];
   /** When transcription language is Auto, force Chinese output script. See #975. */
   chineseScriptPreference: ChineseScriptPreference;
   cloudTranscriptionProvider: string;
@@ -242,6 +243,7 @@ function useSettingsInternal() {
     allowLocalFallback: store.allowLocalFallback,
     fallbackWhisperModel: store.fallbackWhisperModel,
     preferredLanguage: store.preferredLanguage,
+    preferredLanguages: store.preferredLanguages,
     chineseScriptPreference: store.chineseScriptPreference,
     cloudTranscriptionProvider: store.cloudTranscriptionProvider,
     cloudTranscriptionModel: store.cloudTranscriptionModel,
@@ -289,6 +291,7 @@ function useSettingsInternal() {
     setAllowLocalFallback: store.setAllowLocalFallback,
     setFallbackWhisperModel: store.setFallbackWhisperModel,
     setPreferredLanguage: store.setPreferredLanguage,
+    setPreferredLanguages: store.setPreferredLanguages,
     setChineseScriptPreference: store.setChineseScriptPreference,
     setCloudTranscriptionProvider: store.setCloudTranscriptionProvider,
     setCloudTranscriptionModel: store.setCloudTranscriptionModel,
