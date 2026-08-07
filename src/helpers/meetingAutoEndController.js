@@ -84,11 +84,16 @@ const createMeetingAutoEndController = ({
     }
   };
 
+  // Returns false once the countdown has fired: the stop is already in flight,
+  // so reporting success would tell the user their recording was kept.
   const keepRecording = (sessionId) => {
-    if (!currentSession || currentSession.sessionId !== sessionId) return;
+    if (!currentSession || currentSession.sessionId !== sessionId || currentSession.stopped) {
+      return false;
+    }
 
     cancelCountdown();
     currentSession.state = "disabled";
+    return true;
   };
 
   const endSession = (sessionId) => {

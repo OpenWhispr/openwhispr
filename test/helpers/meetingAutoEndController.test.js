@@ -241,7 +241,7 @@ test("keep recording cancels the countdown and disables auto-end for the session
   });
   const [[timerId]] = clock.pendingTimers();
 
-  controller.keepRecording("meeting-1");
+  assert.equal(controller.keepRecording("meeting-1"), true);
   clock.run(timerId);
   controller.handleExternalMicState({
     sessionId: "meeting-1",
@@ -257,6 +257,27 @@ test("keep recording cancels the countdown and disables auto-end for the session
   assert.equal(countdowns.length, 1);
   assert.deepEqual(stops, []);
   assert.deepEqual(clock.pendingTimers(), []);
+});
+
+test("keep recording after countdown expiry reports failure — the stop is already in flight", () => {
+  const { clock, controller, stops } = createController();
+
+  controller.beginSession({
+    sessionId: "meeting-1",
+    eligible: true,
+    reliable: true,
+    externalMicActive: true,
+  });
+  controller.handleExternalMicState({
+    sessionId: "meeting-1",
+    reliable: true,
+    externalMicActive: false,
+  });
+  const [[timerId]] = clock.pendingTimers();
+  clock.run(timerId);
+
+  assert.deepEqual(stops, ["meeting-1"]);
+  assert.equal(controller.keepRecording("meeting-1"), false);
 });
 
 test("ending or replacing a session cancels its countdown", () => {

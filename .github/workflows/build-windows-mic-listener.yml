@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., 1.0.0)'
+        description: 'Version tag (e.g., 1.1.0)'
         required: false
-        default: '1.0.0'
+        default: '1.1.0'
         type: string
 
 permissions:
@@ -60,13 +60,15 @@ jobs:
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: windows-mic-listener-v${{ inputs.version || '1.0.0' }}
-          name: Windows Mic Listener v${{ inputs.version || '1.0.0' }}
+          tag_name: windows-mic-listener-v${{ inputs.version || '1.1.0' }}
+          name: Windows Mic Listener v${{ inputs.version || '1.1.0' }}
           body: |
             Prebuilt Windows mic listener binary for event-driven microphone detection.
 
-            Uses WASAPI IAudioSessionManager2 to monitor capture sessions.
-            Supports --exclude-pid to filter out OpenWhispr's own mic usage.
+            Uses WASAPI IAudioSessionManager2 to monitor capture sessions with
+            per-PID refcounting across all capture endpoints (hot-plug aware).
+            Announces "CAPABILITY PID" on stdout; PID exclusions are handled by
+            the JavaScript caller.
           files: windows-mic-listener-win32-x64.zip
           make_latest: false
         env:

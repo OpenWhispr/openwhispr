@@ -48,6 +48,7 @@ class MeetingDetectionEngine {
     this._recordingSession = null;
     this._autoEndController = createAutoEndController({
       onCountdown: (countdown) => {
+        debugLogger.info("Meeting auto-end countdown started", countdown, "meeting");
         Promise.resolve(this.windowManager.showMeetingAutoEndCountdown?.(countdown)).catch(
           (error) => {
             debugLogger.error(
@@ -59,6 +60,7 @@ class MeetingDetectionEngine {
         );
       },
       onCountdownCanceled: (sessionId) => {
+        debugLogger.info("Meeting auto-end countdown canceled", { sessionId }, "meeting");
         this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
       },
       onStop: (sessionId) => this._requestRecordingStop(sessionId),
@@ -89,6 +91,11 @@ class MeetingDetectionEngine {
       const session = this._recordingSession;
       if (!session?.autoEndEligible) return;
 
+      debugLogger.debug(
+        "External mic state for auto-end",
+        { sessionId: session.sessionId, ...state },
+        "meeting"
+      );
       this._autoEndController.handleExternalMicState({
         sessionId: session.sessionId,
         reliable: state.reliable,
@@ -101,6 +108,11 @@ class MeetingDetectionEngine {
     const session = this._recordingSession;
     if (!session || session.sessionId !== sessionId) return;
 
+    debugLogger.info(
+      "Meeting auto-end countdown expired, requesting stop",
+      { sessionId },
+      "meeting"
+    );
     const ownerWebContents = session.ownerWebContents;
     if (!ownerWebContents || ownerWebContents.isDestroyed?.()) return;
     try {
@@ -145,6 +157,11 @@ class MeetingDetectionEngine {
     if (this._recordingSession?.sessionId !== sessionId) return;
 
     const externalMicState = this.audioActivityDetector.getExternalMicState();
+    debugLogger.info(
+      "Auto-end armed for recording session",
+      { sessionId, ...externalMicState },
+      "meeting"
+    );
     this._autoEndController.beginSession({
       sessionId,
       eligible: true,
@@ -153,14 +170,29 @@ class MeetingDetectionEngine {
     });
   }
 
+  // Returns false only when a *different* session is currently live — the one
+  // case where the caller must not tear down shared capture. With no tracked
+  // session (e.g. after engine stop at quit) teardown must still proceed.
   endRecordingSession(expectedSessionId) {
     const session = this._recordingSession;
-    if (!session) return expectedSessionId == null;
-    if (expectedSessionId != null && session.sessionId !== expectedSessionId) return false;
+    if (!session) return true;
+    if (expectedSessionId != null && session.sessionId !== expectedSessionId) {
+      debugLogger.info(
+        "Recording session end skipped — another session is live",
+        { expectedSessionId, activeSessionId: session.sessionId },
+        "meeting"
+      );
+      return false;
+    }
 
     if (session.autoEndEligible) {
       this._autoEndController.endSession(session.sessionId);
     }
+    debugLogger.info(
+      "Recording session ended",
+      { sessionId: session.sessionId, autoEndEligible: session.autoEndEligible },
+      "meeting"
+    );
     this._recordingSession = null;
     this._syncAudioActivityDetector();
     return true;
@@ -170,8 +202,13 @@ class MeetingDetectionEngine {
     const session = this._recordingSession;
     if (!session?.autoEndEligible || session.sessionId !== sessionId) return false;
 
-    this._autoEndController.keepRecording(sessionId);
-    return true;
+    const kept = this._autoEndController.keepRecording(sessionId) === true;
+    debugLogger.info(
+      kept ? "Auto-end disabled — user kept recording" : "Keep request lost to expired countdown",
+      { sessionId },
+      "meeting"
+    );
+    return kept;
   }
 
   // Calendar reminders enter the same pipeline as mic detections, so they share

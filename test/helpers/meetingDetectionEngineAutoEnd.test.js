@@ -322,3 +322,37 @@ test("keep recording disables auto-end only for the matching session", async () 
   assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
   engine.stop();
 });
+
+test("keep recording after countdown expiry reports a stale session", async () => {
+  const { audioActivityDetector, clock, engine } = createEngine();
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: { isDestroyed: () => false, send: () => undefined },
+  });
+  audioActivityDetector.emit("external-mic-state-changed", {
+    reliable: true,
+    externalMicActive: false,
+  });
+  const [[timerId]] = clock.pendingTimers();
+  clock.run(timerId);
+
+  assert.equal(engine.keepRecordingSession("meeting-1"), false);
+  engine.stop();
+});
+
+test("ending with no tracked session allows teardown to proceed", async () => {
+  const { engine } = createEngine();
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: { isDestroyed: () => false, send: () => undefined },
+  });
+  // Quit-path engine stop clears the session while capture may still be live;
+  // a scoped stop afterwards must not be treated as stale or streams leak.
+  engine.stop();
+
+  assert.equal(engine.endRecordingSession("meeting-1"), true);
+});

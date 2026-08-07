@@ -508,6 +508,11 @@ static BOOL SetSessionActive(SessionEvents *session, BOOL active)
 {
     bool updated;
 
+    if (active && session->activity.pid == 0) {
+        ReportCoverageLost("attribute an active capture session", E_UNEXPECTED);
+        return FALSE;
+    }
+
     AcquireSRWLockExclusive(&g_pidRegistryLock);
     updated = MicSessionSetActive(
         &g_pidRegistry, &session->activity, active ? true : false);
@@ -840,8 +845,10 @@ static BOOL RegisterSessionOnControl(
 
     hr = IAudioSessionControl2_GetProcessId(control2, &pid);
     if (!MicProcessIdentityIsReliable((long)hr, (MicPid)pid)) {
-        if (hr == S_OK) hr = E_UNEXPECTED;
-        goto fail;
+        /* Sessions that cannot be attributed (e.g. cross-process ones returning
+         * AUDCLNT_S_NO_SINGLE_PROCESS) are tracked under pid 0 so coverage is
+         * only declared lost if one of them actually captures. */
+        pid = 0;
     }
 
     hr = IAudioSessionControl2_GetSessionInstanceIdentifier(control2, &instanceId);
@@ -871,7 +878,7 @@ static BOOL RegisterSessionOnControl(
     hr = IAudioSessionControl_GetState(sessionControl, &state);
     if (FAILED(hr)) goto fail_registered;
     if (!SetSessionActive(events, state == AudioSessionStateActive)) {
-        hr = E_OUTOFMEMORY;
+        hr = E_FAIL;
         goto fail_registered;
     }
 
@@ -1354,6 +1361,9 @@ int main(int argc, char *argv[])
     }
 
     printf("READY\n");
+    /* Distinct from READY (which pre-refcounting builds also print) so the JS
+     * consumer only trusts per-PID data from binaries that actually provide it. */
+    printf("CAPABILITY PID\n");
     fflush(stdout);
     exitCode = 0;
 

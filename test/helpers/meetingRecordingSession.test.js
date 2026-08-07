@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = () => import("../../src/helpers/meetingRecordingSession.js");
+const load = () => import("../../src/helpers/meetingRecordingSession.ts");
 
 function createDeferred() {
   let resolve;

@@ -383,7 +383,7 @@ test("win32: current OpenWhispr PIDs are filtered dynamically in JavaScript", as
   await detector.start();
   assert.deepEqual(calls[0].args, [], "the native listener must report excluded pids too");
 
-  children[0].stdout.emit("data", "READY\nMIC_START 404\n");
+  children[0].stdout.emit("data", "READY\nCAPABILITY PID\nMIC_START 404\n");
   assert.deepEqual(externalStates, [{ reliable: true, externalMicActive: false }]);
 
   excludedProcessIds = [process.pid];
@@ -408,7 +408,7 @@ test("win32: own microphone activity never starts or sustains the legacy prompt"
   });
 
   await detector.start();
-  children[0].stdout.emit("data", `READY\nMIC_START ${process.pid}\n`);
+  children[0].stdout.emit("data", `READY\nCAPABILITY PID\nMIC_START ${process.pid}\n`);
   assert.equal(detector._sustainedTimer, null, "an excluded pid must not start a prompt");
 
   children[0].stdout.emit("data", "MIC_START 900\n");
@@ -420,6 +420,27 @@ test("win32: own microphone activity never starts or sustains the legacy prompt"
     null,
     "an excluded pid must not keep the external prompt active"
   );
+  detector.stop();
+});
+
+test("win32: a legacy binary without CAPABILITY PID stays unreliable but still prompts", async () => {
+  const { detector, children } = createDetector("win32", {
+    excludedProcessIds: () => [process.pid],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  // Pre-refcounting builds print READY and un-refcounted MIC events; trusting
+  // them for auto-end could stop a live meeting recording.
+  children[0].stdout.emit("data", "READY\nMIC_START 900\n");
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: false,
+    externalMicActive: false,
+  });
+  assert.deepEqual(externalStates, []);
+  assert.notEqual(detector._sustainedTimer, null, "legacy events must still drive prompts");
   detector.stop();
 });
 
@@ -462,6 +483,41 @@ test("linux: reconciles source-output ownership at startup and on events", async
   detector.stop();
 });
 
+test("linux: a burst of subscribe events coalesces into at most two reconciles", async () => {
+  const { detector, children, execCalls } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: JSON.stringify([{ index: 1, properties: { "application.process.id": "800" } }]) },
+      { stdout: JSON.stringify([{ index: 1, properties: { "application.process.id": "800" } }]) },
+    ],
+  });
+
+  await detector.start();
+  children[0].stdout.emit(
+    "data",
+    [
+      "Event 'new' on source-output #1",
+      "Event 'new' on source-output #2",
+      "Event 'change' on source-output #1",
+      "Event 'remove' on source-output #2",
+      "",
+    ].join("\n")
+  );
+  await flush();
+
+  assert.equal(
+    execCalls.filter(({ command }) => command === "pactl --format=json list source-outputs").length,
+    3,
+    "startup reconcile plus one running and one trailing reconcile"
+  );
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+  detector.stop();
+});
+
 test("linux: ownership query failure is unreliable while aggregate events still prompt", async () => {
   const { detector, children } = createDetector("linux", {
     execResponses: [{ stdout: "[]" }, { stdout: "not-json" }],
@@ -500,9 +556,7 @@ test("linux: a stale startup reconciliation cannot restore reliability after lis
   await flush();
   children[0].emit("exit", 1);
   ownershipQuery.resolve({
-    stdout: JSON.stringify([
-      { index: 7, properties: { "application.process.id": "900" } },
-    ]),
+    stdout: JSON.stringify([{ index: 7, properties: { "application.process.id": "900" } }]),
     stderr: "",
   });
   await starting;

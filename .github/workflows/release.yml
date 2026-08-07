@@ -135,9 +135,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: resources/bin
-          # The system-audio helper source is in the key so a republished
+          # Native helper sources are in the key so a republished
           # helper binary invalidates the cached copy.
-          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js', 'resources/windows-system-audio-helper.c') }}
+          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js', 'resources/windows-system-audio-helper.c', 'resources/windows-mic-listener.c') }}
 
       - name: Download whisper.cpp binaries
         run: node scripts/download-whisper-cpp.js --current

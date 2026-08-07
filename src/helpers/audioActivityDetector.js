@@ -33,6 +33,8 @@ class AudioActivityDetector extends EventEmitter {
     this._resetTimer = null;
     this._startGeneration = 0;
     this._linuxOwnershipRequest = 0;
+    this._linuxReconcileQueued = false;
+    this._linuxReconcileRunning = false;
     this._pidScopedCapability = false;
     this._externalMicReliable = false;
     this._externalMicActive = false;
@@ -332,7 +334,10 @@ class AudioActivityDetector extends EventEmitter {
 
   _parseWin32ListenerLine(line) {
     if (!this._running) return;
-    if (line === "READY") {
+    // Only rebuilt binaries announce CAPABILITY PID. Pre-refcounting builds
+    // print READY and MIC_START/MIC_STOP too, but their un-refcounted stop
+    // events must never be treated as reliable evidence for auto-end.
+    if (line === "CAPABILITY PID") {
       this._setPidScopedCapability(true);
       return;
     }
@@ -386,7 +391,28 @@ class AudioActivityDetector extends EventEmitter {
       this._onMicStateChanged(this._activeSources > 0);
     }
 
-    void this._reconcileLinuxSourceOutputs(this._startGeneration);
+    this._queueLinuxReconcile();
+  }
+
+  // Bursts of subscribe events coalesce into at most one running and one queued
+  // reconcile instead of spawning a `pactl list` subprocess per line.
+  _queueLinuxReconcile() {
+    if (this._linuxReconcileQueued) return;
+    this._linuxReconcileQueued = true;
+    if (this._linuxReconcileRunning) return;
+
+    this._linuxReconcileRunning = true;
+    void (async () => {
+      try {
+        while (this._linuxReconcileQueued && this._running && this._listenerProcess) {
+          this._linuxReconcileQueued = false;
+          await this._reconcileLinuxSourceOutputs(this._startGeneration);
+        }
+      } finally {
+        this._linuxReconcileQueued = false;
+        this._linuxReconcileRunning = false;
+      }
+    })();
   }
 
   async _reconcileLinuxSourceOutputs(generation) {

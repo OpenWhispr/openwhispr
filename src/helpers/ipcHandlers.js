@@ -6604,10 +6604,10 @@ class IPCHandlers {
       }
 
       meetingTranscriptionStartInProgress = true;
-      const recordingSessionId =
-        typeof options.sessionId === "string" && options.sessionId.length > 0
-          ? options.sessionId
-          : crypto.randomUUID();
+      // The lifecycle wrapper is the only caller and always injects the same
+      // sessionId it registered; re-deriving one here would silently break
+      // scoped stop/auto-end matching.
+      const recordingSessionId = options.sessionId;
       meetingStartedAt = Date.now();
       meetingConnectionOptions = options;
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
@@ -6891,6 +6891,9 @@ class IPCHandlers {
     });
 
     const stopMeetingTranscription = async (expectedSessionId) => {
+      // Only a *different* live session blocks teardown — it owns the shared
+      // capture now. With no engine session (e.g. after quit-path engine stop)
+      // the streams below must still be torn down.
       if (this.meetingDetectionEngine?.endRecordingSession(expectedSessionId) === false) {
         return { success: false, reason: "stale-session" };
       }
