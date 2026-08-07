@@ -32,3 +32,15 @@ test("filterMemberCandidates: matches names and emails case-insensitively", () =
   assert.deepEqual(filterMemberCandidates(members, "grace@"), [members[1]]);
   assert.equal(filterMemberCandidates(members, ""), members);
 });
+
+test("filterMemberCandidates: safely tolerates null or missing email properties", () => {
+  const members = [
+    { user_id: "1", name: "Bob Martin", email: null },
+    { user_id: "2", name: "Charlie", email: undefined },
+    { user_id: "3", name: "Diana Prince", email: "diana@example.com" },
+  ];
+
+  assert.deepEqual(filterMemberCandidates(members, "bob"), [members[0]]);
+  assert.deepEqual(filterMemberCandidates(members, "diana"), [members[2]]);
+  assert.deepEqual(filterMemberCandidates(members, "example"), [members[2]]);
+});
