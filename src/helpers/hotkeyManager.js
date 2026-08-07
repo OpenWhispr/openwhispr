@@ -324,19 +324,17 @@ class HotkeyManager extends EventEmitter {
       return;
     }
 
-    for (const hk of slot.hotkeys || []) {
-      if (
-        !isGlobeLikeHotkey(hk) &&
-        !isMouseButtonHotkey(hk) &&
-        !isRightSideModifier(hk) &&
-        !isModifierOnlyHotkey(hk)
-      ) {
-        const accel = normalizeToAccelerator(hk);
-        try {
-          globalShortcut.unregister(accel);
-        } catch {
-          // already unregistered
-        }
+    // Release exactly what was registered. `accelerators` mirrors `hotkeys`
+    // index-for-index and holds null for the entries a native listener owns, so
+    // it cannot drift from the platform rules in _registerSingleHotkey the way
+    // a re-derived list does — modifier-only combos only bypass globalShortcut
+    // on Windows.
+    for (const accel of slot.accelerators || []) {
+      if (!accel) continue;
+      try {
+        globalShortcut.unregister(accel);
+      } catch {
+        // already unregistered
       }
     }
     slot.hotkeys = [];
