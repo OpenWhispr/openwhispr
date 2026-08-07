@@ -1821,6 +1821,11 @@
       "soundEffects": {
         "dictationSounds": "Diktat-Signaltöne",
         "dictationSoundsDescription": "Ton abspielen, wenn die Aufnahme startet und stoppt",
+        "_duckAudioAutoTranslatedNote": "duckAudio, duckAudioDescription, duckAudioLevel and duckAudioLevelDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
+        "duckAudio": "Systemlautstärke verringern",
+        "duckAudioDescription": "Systemausgabe beim Diktieren leiser stellen, statt sie zu pausieren",
+        "duckAudioLevel": "Lautstärke beim Diktieren",
+        "duckAudioLevelDescription": "Die Systemausgabe wird auf diesen Wert gesetzt und nach dem Diktieren wiederhergestellt",
         "pauseMedia": "Medien pausieren",
         "pauseMediaDescription": "Musik beim Starten der Diktat automatisch pausieren",
         "title": "Soundeffekte"

@@ -581,6 +581,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
+  duckSystemVolume: (level) => ipcRenderer.invoke("duck-system-volume", level),
+  restoreSystemVolume: () => ipcRenderer.invoke("restore-system-volume"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
   authGetToken: () => ipcRenderer.invoke("auth-get-token"),
