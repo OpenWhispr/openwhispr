@@ -48,6 +48,16 @@ function spawnAsync(cmd, args, { timeout = 3000 } = {}) {
   });
 }
 
+// Ducking defaults. The level is an absolute target, not a relative reduction:
+// "duck to 25%" means the system output ends up at 25%, whatever it was before.
+const DUCK_DEFAULT_LEVEL = 25;
+// Windows reads compile C# via Add-Type on first use, which can exceed the 3s default.
+const DUCK_READ_TIMEOUT_MS = 6000;
+const VOLUME_SET_TIMEOUT_MS = 2500;
+// Add-Type can emit warnings on stdout, so the read echoes its result behind a
+// sentinel rather than relying on the output being a bare number.
+const DUCK_STDOUT_SENTINEL = "__OWDUCK__:";
+
 class MediaPlayer {
   constructor() {
     this._linuxBinaryChecked = false;
@@ -62,6 +72,9 @@ class MediaPlayer {
     this._adapterChecked = false;
     this._adapterPaths = null; // { perl, script, framework } once resolved
     this._pausedViaAdapter = false; // macOS: whether we paused via the adapter
+    this._duckActive = false; // Whether we lowered system output volume for this dictation
+    this._duckOriginalVolume = null; // System volume % captured before ducking
+    this._volumeOpQueue = Promise.resolve(); // Serializes duck/restore against quick start/stop
   }
 
   _resolveLinuxFastPaste() {
@@ -733,6 +746,409 @@ try {
       return true;
     }
     return false;
+  }
+
+  // --- System output volume ducking ---
+  //
+  // Unlike pause (which stops the player) and mute (which silences output), this
+  // lowers the system output volume to a target level and puts it back afterwards.
+  // Two invariants carry the design:
+  //   1. We refuse to duck when the current volume can't be read, so we never lower
+  //      a volume we couldn't restore.
+  //   2. `restoreSystemVolume` clears the latch before touching the platform, so a
+  //      failed restore can't pin the user at the ducked level for the rest of the
+  //      session by making the next duck a no-op.
+
+  // Serializes volume operations. Ducking on Windows takes a few hundred ms, and a
+  // quick tap can otherwise let the restore run before the duck lands and latches.
+  _enqueueVolumeOp(operation) {
+    const run = this._volumeOpQueue.then(operation, operation);
+    this._volumeOpQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
+  async duckSystem(targetPercent) {
+    const target = this._clampVolume(targetPercent, DUCK_DEFAULT_LEVEL);
+    return this._enqueueVolumeOp(async () => {
+      try {
+        if (this._duckActive) return true;
+
+        const original = await this._applyDuck(target);
+        if (original === null) {
+          debugLogger.warn("Audio ducking skipped: could not read system volume", {}, "media");
+          return false;
+        }
+
+        // Already at or below the target: nothing was changed, so there is nothing
+        // to restore. Latching here would only cost a needless subprocess on stop.
+        if (original <= target) {
+          debugLogger.debug(
+            "Audio ducking skipped: volume already at or below target",
+            { originalVolume: original, targetVolume: target },
+            "media"
+          );
+          return true;
+        }
+
+        this._duckOriginalVolume = original;
+        this._duckActive = true;
+        debugLogger.debug(
+          "Audio ducked for dictation",
+          { originalVolume: original, targetVolume: target },
+          "media"
+        );
+        return true;
+      } catch (err) {
+        debugLogger.warn("Audio ducking failed", { error: err.message }, "media");
+        return false;
+      }
+    });
+  }
+
+  async restoreSystemVolume() {
+    return this._enqueueVolumeOp(async () => {
+      if (!this._duckActive) return false;
+
+      const originalVolume = this._duckOriginalVolume;
+      this._duckActive = false;
+      this._duckOriginalVolume = null;
+
+      try {
+        const restored = await this._applySystemVolume(originalVolume);
+        if (restored) {
+          debugLogger.debug("Audio ducking restored system volume", { originalVolume }, "media");
+        } else {
+          debugLogger.warn("Audio ducking restore failed", { originalVolume }, "media");
+        }
+        return restored;
+      } catch (err) {
+        debugLogger.warn("Audio ducking restore failed", { error: err.message }, "media");
+        return false;
+      }
+    });
+  }
+
+  // Best-effort restore for the quit path only. An async spawn started in
+  // `will-quit` gets orphaned before it can run, so this one place stays sync.
+  restoreSystemVolumeSync() {
+    if (!this._duckActive) return false;
+
+    const originalVolume = this._duckOriginalVolume;
+    this._duckActive = false;
+    this._duckOriginalVolume = null;
+    if (originalVolume === null) return false;
+
+    try {
+      const args = this._volumeSetCommand(originalVolume);
+      if (!args) return false;
+      const result = spawnSync(args.cmd, args.args, {
+        stdio: "pipe",
+        timeout: 1000,
+        windowsHide: true,
+      });
+      return result.status === 0;
+    } catch (err) {
+      debugLogger.warn("Audio ducking restore on quit failed", { error: err.message }, "media");
+      return false;
+    }
+  }
+
+  _clampVolume(value, fallback = DUCK_DEFAULT_LEVEL) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.min(100, Math.round(parsed)));
+  }
+
+  _compactProcessOutput(output) {
+    return (output || "").toString().trim().replace(/\s+/g, " ").slice(0, 600) || undefined;
+  }
+
+  // Parses a volume percentage out of a platform command's stdout.
+  // Returns an integer 0-100, or null when the output carries no usable value.
+  _parseVolumePercent(stdout, kind) {
+    const text = (stdout || "").toString();
+
+    if (kind === "win32" || kind === "darwin") {
+      const match = text.match(new RegExp(`${DUCK_STDOUT_SENTINEL}(-?\\d+(?:\\.\\d+)?)`));
+      return match ? this._clampVolume(match[1]) : null;
+    }
+
+    if (kind === "pactl") {
+      const match = text.match(/(\d+)%/);
+      return match ? this._clampVolume(match[1]) : null;
+    }
+
+    if (kind === "wpctl") {
+      const match = text.match(/Volume:\s*([0-9.]+)/);
+      return match ? this._clampVolume(Number(match[1]) * 100) : null;
+    }
+
+    return null;
+  }
+
+  // Reads the current volume and lowers it to `target` in a single platform call
+  // where possible. Resolves the PRE-duck volume, or null if it couldn't be read.
+  async _applyDuck(target) {
+    if (process.platform === "win32") return this._duckWindows(target);
+    if (process.platform === "darwin") return this._duckMacOS(target);
+    if (process.platform === "linux") return this._duckLinux(target);
+    return null;
+  }
+
+  async _applySystemVolume(percent) {
+    if (percent === null || percent === undefined) return false;
+    const safePercent = this._clampVolume(percent);
+    if (process.platform === "win32") return this._setWindowsVolume(safePercent);
+    if (process.platform === "darwin") return this._setMacVolume(safePercent);
+    if (process.platform === "linux") return this._setLinuxVolume(safePercent);
+    return false;
+  }
+
+  // --- Windows volume (Core Audio endpoint master scalar) ---
+
+  // nircmd can set the master volume but cannot read it, which is why the duck
+  // path needs PowerShell. Restores hold a snapshot already, so they skip it.
+  _windowsVolumeScript() {
+    return `Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public enum EDataFlow { eRender = 0, eCapture = 1, eAll = 2 }
+public enum ERole { eConsole = 0, eMultimedia = 1, eCommunications = 2 }
+
+[Flags]
+public enum CLSCTX : uint {
+  INPROC_SERVER = 0x1,
+  INPROC_HANDLER = 0x2,
+  LOCAL_SERVER = 0x4,
+  REMOTE_SERVER = 0x10,
+  ALL = INPROC_SERVER | INPROC_HANDLER | LOCAL_SERVER | REMOTE_SERVER
+}
+
+[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDeviceEnumerator {
+  [PreserveSig] int EnumAudioEndpoints(EDataFlow dataFlow, uint dwStateMask, IntPtr ppDevices);
+  [PreserveSig] int GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role, out IMMDevice ppDevice);
+  [PreserveSig] int GetDevice(string pwstrId, out IMMDevice ppDevice);
+  [PreserveSig] int RegisterEndpointNotificationCallback(IntPtr pClient);
+  [PreserveSig] int UnregisterEndpointNotificationCallback(IntPtr pClient);
+}
+
+[Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDevice {
+  [PreserveSig] int Activate(ref Guid iid, CLSCTX dwClsCtx, IntPtr pActivationParams, out IAudioEndpointVolume ppInterface);
+}
+
+[Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IAudioEndpointVolume {
+  [PreserveSig] int RegisterControlChangeNotify(IntPtr pNotify);
+  [PreserveSig] int UnregisterControlChangeNotify(IntPtr pNotify);
+  [PreserveSig] int GetChannelCount(out uint pnChannelCount);
+  [PreserveSig] int SetMasterVolumeLevel(float fLevelDB, Guid pguidEventContext);
+  [PreserveSig] int SetMasterVolumeLevelScalar(float fLevel, Guid pguidEventContext);
+  [PreserveSig] int GetMasterVolumeLevel(out float pfLevelDB);
+  [PreserveSig] int GetMasterVolumeLevelScalar(out float pfLevel);
+}
+
+[ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
+class MMDeviceEnumeratorComObject {}
+
+public class OwAudioEndpoint {
+  static IAudioEndpointVolume Endpoint() {
+    var enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumeratorComObject());
+    IMMDevice device;
+    int hr = enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out device);
+    Marshal.ThrowExceptionForHR(hr);
+    Guid iid = typeof(IAudioEndpointVolume).GUID;
+    IAudioEndpointVolume endpoint;
+    hr = device.Activate(ref iid, CLSCTX.ALL, IntPtr.Zero, out endpoint);
+    Marshal.ThrowExceptionForHR(hr);
+    return endpoint;
+  }
+
+  public static float GetVolume() {
+    float value;
+    int hr = Endpoint().GetMasterVolumeLevelScalar(out value);
+    Marshal.ThrowExceptionForHR(hr);
+    return value * 100.0f;
+  }
+
+  public static void SetVolume(float percent) {
+    percent = Math.Max(0.0f, Math.Min(100.0f, percent));
+    Guid g = Guid.Empty;
+    int hr = Endpoint().SetMasterVolumeLevelScalar(percent / 100.0f, g);
+    Marshal.ThrowExceptionForHR(hr);
+  }
+}
+"@`;
+  }
+
+  _runWindowsVolumePowerShell(command, timeout) {
+    return spawnAsync(
+      "powershell",
+      ["-Sta", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
+      { timeout }
+    );
+  }
+
+  // Reads and lowers in one process: Add-Type compiles the C# on every launch, so
+  // splitting this into a read call plus a write call would double that cost.
+  async _duckWindows(target) {
+    const command = [
+      this._windowsVolumeScript(),
+      `$current = [OwAudioEndpoint]::GetVolume()`,
+      `if ($current -gt ${target}) { [OwAudioEndpoint]::SetVolume(${target}) }`,
+      `[Console]::Out.Write('${DUCK_STDOUT_SENTINEL}' + [int][math]::Round($current))`,
+    ].join("\n");
+
+    const result = await this._runWindowsVolumePowerShell(command, DUCK_READ_TIMEOUT_MS);
+    if (result.status !== 0) {
+      debugLogger.warn(
+        "Windows volume duck failed",
+        {
+          status: result.status,
+          stdout: this._compactProcessOutput(result.stdout),
+          stderr: this._compactProcessOutput(result.stderr),
+        },
+        "media"
+      );
+      return null;
+    }
+
+    return this._parseVolumePercent(result.stdout, "win32");
+  }
+
+  async _setWindowsVolume(percent) {
+    const nircmd = this._resolveNircmd();
+    if (nircmd) {
+      const result = await spawnAsync(
+        nircmd,
+        ["setsysvolume", String(Math.round((percent / 100) * 65535))],
+        { timeout: VOLUME_SET_TIMEOUT_MS }
+      );
+      if (result.status === 0) return true;
+      debugLogger.debug("nircmd volume set failed, falling back to PowerShell", {}, "media");
+    }
+
+    const command = `${this._windowsVolumeScript()}\n[OwAudioEndpoint]::SetVolume(${percent})`;
+    const result = await this._runWindowsVolumePowerShell(command, DUCK_READ_TIMEOUT_MS);
+    if (result.status !== 0) {
+      debugLogger.warn(
+        "Windows volume set failed",
+        {
+          percent,
+          status: result.status,
+          stderr: this._compactProcessOutput(result.stderr),
+        },
+        "media"
+      );
+      return false;
+    }
+    return true;
+  }
+
+  // --- macOS volume ---
+
+  async _duckMacOS(target) {
+    const result = await spawnAsync(
+      "osascript",
+      [
+        "-e",
+        "set cur to output volume of (get volume settings)",
+        "-e",
+        `if cur > ${target} then set volume output volume ${target}`,
+        "-e",
+        `return "${DUCK_STDOUT_SENTINEL}" & cur`,
+      ],
+      { timeout: 3000 }
+    );
+
+    if (result.status !== 0) {
+      debugLogger.warn(
+        "macOS volume duck failed",
+        { status: result.status, stderr: this._compactProcessOutput(result.stderr) },
+        "media"
+      );
+      return null;
+    }
+
+    // `output volume` yields "missing value" on some external and aggregate
+    // devices; the sentinel parse returns null there and we decline to duck.
+    return this._parseVolumePercent(result.stdout, "darwin");
+  }
+
+  async _setMacVolume(percent) {
+    const result = await spawnAsync("osascript", ["-e", `set volume output volume ${percent}`], {
+      timeout: 3000,
+    });
+    return result.status === 0;
+  }
+
+  // --- Linux volume ---
+
+  async _duckLinux(target) {
+    const current = await this._getLinuxVolume();
+    if (current === null) return null;
+    if (current <= target) return current;
+    const applied = await this._setLinuxVolume(target);
+    return applied ? current : null;
+  }
+
+  async _getLinuxVolume() {
+    const pactl = await spawnAsync("pactl", ["get-sink-volume", "@DEFAULT_SINK@"], {
+      timeout: 3000,
+    });
+    if (pactl.status === 0) {
+      const parsed = this._parseVolumePercent(pactl.stdout, "pactl");
+      if (parsed !== null) return parsed;
+    }
+
+    const wpctl = await spawnAsync("wpctl", ["get-volume", "@DEFAULT_AUDIO_SINK@"], {
+      timeout: 3000,
+    });
+    if (wpctl.status === 0) {
+      const parsed = this._parseVolumePercent(wpctl.stdout, "wpctl");
+      if (parsed !== null) return parsed;
+    }
+
+    return null;
+  }
+
+  async _setLinuxVolume(percent) {
+    const pactl = await spawnAsync("pactl", ["set-sink-volume", "@DEFAULT_SINK@", `${percent}%`], {
+      timeout: VOLUME_SET_TIMEOUT_MS,
+    });
+    if (pactl.status === 0) return true;
+
+    const wpctl = await spawnAsync(
+      "wpctl",
+      ["set-volume", "@DEFAULT_AUDIO_SINK@", `${percent / 100}`],
+      { timeout: VOLUME_SET_TIMEOUT_MS }
+    );
+    return wpctl.status === 0;
+  }
+
+  // Command used by the synchronous quit-path restore.
+  _volumeSetCommand(percent) {
+    const safePercent = this._clampVolume(percent);
+    if (process.platform === "win32") {
+      const nircmd = this._resolveNircmd();
+      if (!nircmd) return null;
+      return {
+        cmd: nircmd,
+        args: ["setsysvolume", String(Math.round((safePercent / 100) * 65535))],
+      };
+    }
+    if (process.platform === "darwin") {
+      return { cmd: "osascript", args: ["-e", `set volume output volume ${safePercent}`] };
+    }
+    if (process.platform === "linux") {
+      return { cmd: "pactl", args: ["set-sink-volume", "@DEFAULT_SINK@", `${safePercent}%`] };
+    }
+    return null;
   }
 }
 
