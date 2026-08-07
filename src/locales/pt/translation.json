@@ -1522,6 +1522,11 @@
       "soundEffects": {
         "dictationSounds": "Sons de ditado",
         "dictationSoundsDescription": "Tocar um som ao iniciar e parar a gravação",
+        "_duckAudioAutoTranslatedNote": "duckAudio, duckAudioDescription, duckAudioLevel and duckAudioLevelDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
+        "duckAudio": "Reduzir o volume do sistema",
+        "duckAudioDescription": "Abaixa a saída do sistema durante o ditado em vez de pausá-la",
+        "duckAudioLevel": "Volume durante o ditado",
+        "duckAudioLevelDescription": "A saída do sistema é ajustada para este nível e restaurada ao fim do ditado",
         "pauseMedia": "Pausar mídia",
         "pauseMediaDescription": "Pausar a música automaticamente ao iniciar o ditado",
         "title": "Efeitos sonoros"

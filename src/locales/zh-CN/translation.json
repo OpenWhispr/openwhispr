@@ -1543,6 +1543,11 @@
       "soundEffects": {
         "dictationSounds": "听写音效",
         "dictationSoundsDescription": "在录音开始和停止时播放提示音",
+        "_duckAudioAutoTranslatedNote": "duckAudio, duckAudioDescription, duckAudioLevel and duckAudioLevelDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
+        "duckAudio": "降低系统音量",
+        "duckAudioDescription": "听写时降低系统输出音量，而不是暂停播放",
+        "duckAudioLevel": "听写时的音量",
+        "duckAudioLevelDescription": "系统输出将设为该音量，听写结束后恢复原值",
         "pauseMedia": "暂停媒体",
         "pauseMediaDescription": "开始听写时自动暂停音乐",
         "title": "音效"

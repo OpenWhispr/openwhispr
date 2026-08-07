@@ -1821,6 +1821,10 @@
       "soundEffects": {
         "dictationSounds": "Dictation sounds",
         "dictationSoundsDescription": "Play a tone when recording starts and stops",
+        "duckAudio": "Lower system volume",
+        "duckAudioDescription": "Turn system output down while dictating instead of pausing it",
+        "duckAudioLevel": "Volume while dictating",
+        "duckAudioLevelDescription": "System output is set to this level, then restored when dictation ends",
         "pauseMedia": "Pause media",
         "pauseMediaDescription": "Automatically pause music when dictation starts",
         "title": "Sound Effects"
