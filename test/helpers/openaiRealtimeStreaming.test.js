@@ -21,17 +21,90 @@ function makeFakeSocket(readyState) {
   return socket;
 }
 
-async function connectPreconfigured(streaming, socket) {
+async function connectPreconfigured(streaming, socket, options = {}) {
   const connected = streaming.connect({
     apiKey: "key",
     preconfigured: true,
     createSocket: async () => socket,
+    ...options,
   });
   await new Promise((resolve) => setImmediate(resolve));
   socket.readyState = WS.OPEN;
   socket.emit("message", JSON.stringify({ type: "session.created" }));
   await connected;
 }
+
+async function connectConfigured(streaming, options = {}) {
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const connected = streaming.connect({
+    apiKey: "key",
+    createSocket: async () => socket,
+    ...options,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+  const update = JSON.parse(socket.sent[0]);
+  socket.emit("message", JSON.stringify({ type: "session.updated" }));
+  await connected;
+  return { socket, update };
+}
+
+test("normalizeLanguage returns base ISO-639-1 codes and preserves auto-detection", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+
+  assert.equal(OpenAIRealtimeStreaming.normalizeLanguage(" en-US "), "en");
+  assert.equal(OpenAIRealtimeStreaming.normalizeLanguage("PT_BR"), "pt");
+  assert.equal(OpenAIRealtimeStreaming.normalizeLanguage("AUTO"), undefined);
+  assert.equal(OpenAIRealtimeStreaming.normalizeLanguage(undefined), undefined);
+});
+
+test("BYOK session sends the selected language as an ISO-639-1 hint", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+
+  const { update } = await connectConfigured(streaming, {
+    model: "gpt-4o-transcribe",
+    language: "en-US",
+  });
+
+  assert.equal(update.type, "session.update");
+  assert.deepEqual(update.session.audio.input.transcription, {
+    model: "gpt-4o-transcribe",
+    language: "en",
+  });
+  streaming.cleanup();
+});
+
+test("BYOK session omits the language hint when auto-detection is selected", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+
+  const { update } = await connectConfigured(streaming, {
+    model: "gpt-4o-transcribe",
+    language: "auto",
+  });
+
+  assert.deepEqual(update.session.audio.input.transcription, {
+    model: "gpt-4o-transcribe",
+  });
+  streaming.cleanup();
+});
+
+test("preconfigured session preserves server configuration without sending an update", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+
+  await connectPreconfigured(streaming, socket, {
+    model: "gpt-4o-transcribe",
+    language: "en-US",
+  });
+
+  assert.equal(streaming.language, "en");
+  assert.deepEqual(socket.sent, []);
+  streaming.cleanup();
+});
 
 test("sendAudio buffers frames arriving before the socket exists (token-fetch window)", async () => {
   const OpenAIRealtimeStreaming = (await load()).default;

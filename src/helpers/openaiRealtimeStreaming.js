@@ -28,6 +28,13 @@ async function createSocketWithTimeout(createSocket, timeoutMs) {
 }
 
 class OpenAIRealtimeStreaming {
+  static normalizeLanguage(language) {
+    if (typeof language !== "string") return undefined;
+    const normalized = language.trim().toLowerCase();
+    if (!normalized || normalized === "auto") return undefined;
+    return normalized.split(/[-_]/)[0] || undefined;
+  }
+
   constructor() {
     this.ws = null;
     this.isConnected = false;
@@ -47,6 +54,7 @@ class OpenAIRealtimeStreaming {
     this.isDisconnecting = false;
     this.audioBytesSent = 0;
     this.model = "gpt-4o-mini-transcribe";
+    this.language = undefined;
     this.inputRate = SAMPLE_RATE;
     this.captureRate = SAMPLE_RATE;
     this.coldStartBuffer = [];
@@ -70,7 +78,8 @@ class OpenAIRealtimeStreaming {
   }
 
   async connect(options = {}) {
-    const { apiKey, model, preconfigured, inputRate, captureRate, createSocket } = options;
+    const { apiKey, model, language, preconfigured, inputRate, captureRate, createSocket } =
+      options;
     if (!apiKey) throw new Error("OpenAI API key is required");
 
     if (this.isConnected || this.isConnecting) {
@@ -84,6 +93,7 @@ class OpenAIRealtimeStreaming {
 
     this.isConnecting = true;
     this.model = model || "gpt-4o-mini-transcribe";
+    this.language = OpenAIRealtimeStreaming.normalizeLanguage(language);
     this.preconfigured = !!preconfigured;
     this.inputRate = inputRate || SAMPLE_RATE;
     this.captureRate = captureRate || this.inputRate;
@@ -94,7 +104,10 @@ class OpenAIRealtimeStreaming {
     this._sessionExpired = false;
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
-    debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
+    debugLogger.debug("OpenAI Realtime connecting", {
+      model: this.model,
+      language: this.language || "auto",
+    });
 
     // Attested providers (Tinfoil) supply their socket via an async factory.
     let ws;
@@ -172,11 +185,13 @@ class OpenAIRealtimeStreaming {
             // sending an update would strip language and noise-reduction.
             debugLogger.debug("OpenAI Realtime session created (preconfigured)", {
               model: this.model,
+              language: this.language || "auto",
             });
             this._markConnected();
           } else {
             debugLogger.debug("OpenAI Realtime session created, sending configuration", {
               model: this.model,
+              language: this.language || "auto",
             });
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) break;
             this.ws.send(
@@ -187,7 +202,10 @@ class OpenAIRealtimeStreaming {
                   audio: {
                     input: {
                       format: { type: "audio/pcm", rate: this.inputRate },
-                      transcription: { model: this.model },
+                      transcription: {
+                        model: this.model,
+                        ...(this.language ? { language: this.language } : {}),
+                      },
                       turn_detection: {
                         type: "server_vad",
                         threshold: 0.6,
@@ -207,6 +225,7 @@ class OpenAIRealtimeStreaming {
           if (this.pendingResolve) {
             debugLogger.debug("OpenAI Realtime session configured", {
               model: this.model,
+              language: this.language || "auto",
             });
             this._markConnected();
           }
