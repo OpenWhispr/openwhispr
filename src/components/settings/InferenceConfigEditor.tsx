@@ -16,28 +16,10 @@ import { Toggle } from "../ui/toggle";
 import type { InferenceMode } from "../../types/electron";
 import type { InferenceScope } from "../../config/inferenceScopes";
 import {
-  modelRegistry,
-  isEnterpriseProvider,
+  isProviderValidForMode,
   getCloudModel,
   getLocalModel,
 } from "../../models/ModelRegistry";
-
-function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
-  switch (mode) {
-    case "providers":
-      return (
-        provider === "custom" ||
-        provider === "openrouter" ||
-        modelRegistry.getCloudProviders().some((p) => p.id === provider)
-      );
-    case "local":
-      return modelRegistry.getAllProviders().some((p) => p.id === provider);
-    case "enterprise":
-      return isEnterpriseProvider(provider);
-    default:
-      return true;
-  }
-}
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",

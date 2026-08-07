@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   LlamaServerStatus,
@@ -15,11 +15,13 @@ import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import OpenAICompatiblePanel from "./OpenAICompatiblePanel";
 import { API_ENDPOINTS } from "../config/constants";
-import logger from "../utils/logger";
-import { REASONING_PROVIDERS, toReasoningModel } from "../models/ModelRegistry";
+import {
+  REASONING_PROVIDERS,
+  toReasoningModel,
+  modelRegistry,
+  isProviderValidForMode,
+} from "../models/ModelRegistry";
 import { useTinfoilModels } from "../hooks/useTinfoilModels";
-import { pickDefaultTinfoilModel } from "../models/tinfoilModels";
-import { modelRegistry } from "../models/ModelRegistry";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
@@ -424,87 +426,38 @@ export default function ReasoningModelSelector({
     }
   }, [localProviders, localReasoningProvider]);
 
-  const loadDownloadedModels = useCallback(async () => {
-    try {
-      const result = await window.electronAPI?.modelGetAll?.();
-      if (result && Array.isArray(result)) {
-        const downloaded = new Set(
-          result
-            .filter((m: { isDownloaded?: boolean }) => m.isDownloaded)
-            .map((m: { id: string }) => m.id)
-        );
-        return downloaded;
-      }
-    } catch (error) {
-      logger.error("Failed to load downloaded models", { error }, "models");
-    }
-    return new Set<string>();
-  }, []);
-
-  const selectDefaultModelForProvider = (provider: string) => {
-    // Custom/OpenRouter fetch their model list dynamically — clear instead of
-    // presetting so another provider's model id can't persist under this one.
-    if (provider === "custom" || provider === OPENROUTER_TAB) {
+  // A selection commits only on an explicit click: the model together with
+  // the provider tab it was clicked under. Tab switching is pure browsing.
+  const handleModelSelect = (modelId: string) => {
+    if (!modelId) {
       setReasoningModel("");
       return;
     }
-
-    if (provider === "tinfoil") {
-      const defaultModel = pickDefaultTinfoilModel(tinfoilModels);
-      if (defaultModel) setReasoningModel(defaultModel.id);
-      return;
-    }
-
-    const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
-    if (providerData?.models?.length > 0) {
-      setReasoningModel(providerData.models[0].value);
-    }
+    const provider = effectiveMode === "local" ? selectedLocalProvider : selectedCloudProvider;
+    setLocalReasoningProvider(provider);
+    setReasoningModel(modelId);
   };
 
-  const handleModeChange = async (newMode: "cloud" | "local") => {
+  const handleModeChange = (newMode: "cloud" | "local") => {
     setSelectedMode(newMode);
-    setReasoningModeProp?.(newMode === "local" ? "local" : "providers");
+    const inferenceMode: InferenceMode = newMode === "local" ? "local" : "providers";
+    setReasoningModeProp?.(inferenceMode);
+    if (!isProviderValidForMode(localReasoningProvider, inferenceMode)) {
+      setLocalReasoningProvider("");
+      setReasoningModel("");
+    }
 
     if (newMode === "cloud") {
       window.electronAPI?.llamaServerStop?.();
-      setLocalReasoningProvider(selectedCloudProvider);
-      selectDefaultModelForProvider(selectedCloudProvider);
-    } else {
-      setLocalReasoningProvider(selectedLocalProvider);
-      const downloaded = await loadDownloadedModels();
-      const provider = localProviders.find((p) => p.id === selectedLocalProvider);
-      const models = provider?.models ?? [];
-      if (models.length > 0) {
-        const firstDownloaded = models.find((m) => downloaded.has(m.id));
-        if (firstDownloaded) {
-          setReasoningModel(firstDownloaded.id);
-        } else {
-          setReasoningModel("");
-        }
-      }
     }
   };
 
   const handleCloudProviderChange = (provider: string) => {
     setSelectedCloudProvider(provider);
-    setLocalReasoningProvider(provider);
-    selectDefaultModelForProvider(provider);
   };
 
-  const handleLocalProviderChange = async (providerId: string) => {
+  const handleLocalProviderChange = (providerId: string) => {
     setSelectedLocalProvider(providerId);
-    setLocalReasoningProvider(providerId);
-    const downloaded = await loadDownloadedModels();
-    const provider = localProviders.find((p) => p.id === providerId);
-    const models = provider?.models ?? [];
-    if (models.length > 0) {
-      const firstDownloaded = models.find((m) => downloaded.has(m.id));
-      if (firstDownloaded) {
-        setReasoningModel(firstDownloaded.id);
-      } else {
-        setReasoningModel("");
-      }
-    }
   };
 
   const MODE_TABS = [
@@ -547,6 +500,8 @@ export default function ReasoningModelSelector({
           />
 
           <div>
+            {/* A model renders as selected only under its committed provider —
+                free-form custom/OpenRouter ids can collide with registry ids. */}
             {selectedCloudProvider === OPENROUTER_TAB ? (
               <OpenAICompatiblePanel
                 key={OPENROUTER_TAB}
@@ -554,8 +509,11 @@ export default function ReasoningModelSelector({
                 setBaseUrl={() => {}}
                 apiKey={openrouterApiKey}
                 setApiKey={setOpenrouterApiKey}
-                model={reasoningModel}
-                setModel={setReasoningModel}
+                model={localReasoningProvider === OPENROUTER_TAB ? reasoningModel : ""}
+                setModel={(m) => {
+                  setLocalReasoningProvider(OPENROUTER_TAB);
+                  setReasoningModel(m);
+                }}
                 lockedBaseUrl
                 apiKeyRequired
                 getKeyUrl={OPENROUTER_KEYS_URL}
@@ -567,8 +525,11 @@ export default function ReasoningModelSelector({
                 setBaseUrl={setCloudReasoningBaseUrl}
                 apiKey={customReasoningApiKey}
                 setApiKey={setCustomReasoningApiKey || (() => {})}
-                model={reasoningModel}
-                setModel={setReasoningModel}
+                model={localReasoningProvider === "custom" ? reasoningModel : ""}
+                setModel={(m) => {
+                  setLocalReasoningProvider("custom");
+                  setReasoningModel(m);
+                }}
                 defaultBaseUrl={API_ENDPOINTS.OPENAI_BASE}
               />
             ) : (
@@ -670,8 +631,10 @@ export default function ReasoningModelSelector({
                   </h4>
                   <ModelCardList
                     models={selectedCloudModels}
-                    selectedModel={reasoningModel}
-                    onModelSelect={setReasoningModel}
+                    selectedModel={
+                      localReasoningProvider === selectedCloudProvider ? reasoningModel : ""
+                    }
+                    onModelSelect={handleModelSelect}
                   />
                   {selectedCloudProvider === "tinfoil" && (
                     <>
@@ -700,7 +663,7 @@ export default function ReasoningModelSelector({
             providers={localProviders}
             selectedModel={reasoningModel}
             selectedProvider={selectedLocalProvider}
-            onModelSelect={setReasoningModel}
+            onModelSelect={handleModelSelect}
             onProviderSelect={handleLocalProviderChange}
             modelType="llm"
             colorScheme="purple"

@@ -1,6 +1,7 @@
 import modelDataRaw from "./modelRegistryData.json";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
+import type { InferenceMode } from "../types/electron";
 
 export interface ModelDefinition {
   id: string;
@@ -239,6 +240,23 @@ export type EnterpriseProvider = "bedrock" | "azure" | "vertex";
 export const ENTERPRISE_PROVIDERS: readonly EnterpriseProvider[] = ["bedrock", "azure", "vertex"];
 export function isEnterpriseProvider(value: unknown): value is EnterpriseProvider {
   return typeof value === "string" && (ENTERPRISE_PROVIDERS as readonly string[]).includes(value);
+}
+
+export function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
+  switch (mode) {
+    case "providers":
+      return (
+        provider === "custom" ||
+        provider === "openrouter" ||
+        modelRegistry.getCloudProviders().some((p) => p.id === provider)
+      );
+    case "local":
+      return modelRegistry.getAllProviders().some((p) => p.id === provider);
+    case "enterprise":
+      return isEnterpriseProvider(provider);
+    default:
+      return true;
+  }
 }
 
 export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
