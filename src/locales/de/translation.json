@@ -3172,7 +3172,24 @@
       "disconnectDescription": "Besprechungsnotizen werden von diesem Kalender nicht mehr aufgezeichnet.",
       "systemAudioRequired": "Systemaudio-Berechtigung erforderlich",
       "systemAudioDescription": "Zum Transkribieren von Meetings benötigt OpenWhispr die Systemaudio-Berechtigung, um den Ton anderer Teilnehmer aufzunehmen. Wir nehmen Ihren Bildschirm nie auf. Sie werden zu den Systemeinstellungen weitergeleitet, um diese zu aktivieren.",
-      "openSettings": "Systemeinstellungen öffnen"
+      "openSettings": "Systemeinstellungen öffnen",
+      "connectFailed": "Verbindung fehlgeschlagen",
+      "connectFailedDescription": "Beim Verbinden mit Google Calendar ist ein Fehler aufgetreten. Bitte versuche es erneut."
+    },
+    "microsoftCalendar": {
+      "title": "Microsoft Calendar",
+      "optional": "Optional",
+      "description": "Besprechungen aus deinem Outlook- oder Microsoft 365-Kalender lesen.",
+      "connect": "Microsoft Calendar verbinden",
+      "connected": "Verbunden",
+      "addAnother": "Weiteren Kalender hinzufügen",
+      "primaryOnly": "Nur Hauptkalender synchronisieren",
+      "primaryOnlyDescription": "Termine aus mit dir geteilten Kalendern ignorieren.",
+      "disconnect": "Trennen",
+      "disconnectConfirm": "{{email}} trennen?",
+      "disconnectDescription": "Besprechungsnotizen werden von diesem Kalender nicht mehr aufgezeichnet.",
+      "connectFailed": "Verbindung fehlgeschlagen",
+      "connectFailedDescription": "Beim Verbinden mit Microsoft Calendar ist ein Fehler aufgetreten. Bitte versuche es erneut."
     },
     "appleCalendar": {
       "title": "Apple Kalender",

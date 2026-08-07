@@ -3172,7 +3172,24 @@
       "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",
       "systemAudioRequired": "System Audio Permission Required",
       "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
-      "openSettings": "Open System Settings"
+      "openSettings": "Open System Settings",
+      "connectFailed": "Connection Failed",
+      "connectFailedDescription": "Something went wrong while connecting Google Calendar. Please try again."
+    },
+    "microsoftCalendar": {
+      "title": "Microsoft Calendar",
+      "optional": "Optional",
+      "description": "Read meetings from your Outlook or Microsoft 365 calendar.",
+      "connect": "Connect Microsoft Calendar",
+      "connected": "Connected",
+      "addAnother": "Add another calendar",
+      "primaryOnly": "Sync primary calendar only",
+      "primaryOnlyDescription": "Ignore events from calendars shared with you.",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect {{email}}?",
+      "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",
+      "connectFailed": "Connection Failed",
+      "connectFailedDescription": "Something went wrong while connecting Microsoft Calendar. Please try again."
     },
     "appleCalendar": {
       "title": "Apple Calendar",

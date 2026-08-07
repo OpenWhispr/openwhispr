@@ -131,13 +131,17 @@ export function useChatStreaming({
       let registry: ToolRegistry | null = null;
       if (supportsTools) {
         const scopeKey = scope ? `${scope.spaceId}:${scope.folderId ?? ""}` : "";
-        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}-${settings.cloudBackupEnabled}-${scopeKey}`;
+        // The calendar tool reads the shared provider-deduped events table,
+        // so any connected provider enables it.
+        const calendarConnected =
+          settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
           registry = createToolRegistry({
             isSignedIn: settings.isSignedIn,
-            gcalConnected: settings.gcalConnected,
+            calendarConnected,
             cloudBackupEnabled: settings.cloudBackupEnabled,
             searchScope: scope,
           });

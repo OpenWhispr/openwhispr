@@ -488,6 +488,7 @@ class IPCHandlers {
     this.whisperCudaManager = managers.whisperCudaManager;
     this.whisperVulkanManager = managers.whisperVulkanManager;
     this.googleCalendarManager = managers.googleCalendarManager;
+    this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.audioTapManager = managers.audioTapManager;
@@ -2946,6 +2947,16 @@ class IPCHandlers {
         this.googleCalendarManager?.stop();
       } catch (e) {
         errors.push(`GCal stop: ${e.message}`);
+      }
+      try {
+        this.microsoftCalendarManager?.stop();
+      } catch (e) {
+        errors.push(`MCal stop: ${e.message}`);
+      }
+      try {
+        this.appleCalendarManager?.stop();
+      } catch (e) {
+        errors.push(`ACal stop: ${e.message}`);
       }
 
       // Revoke Google OAuth tokens before DB is closed
@@ -8983,9 +8994,9 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("gcal-disconnect", async () => {
+    ipcMain.handle("gcal-disconnect", async (_event, email) => {
       try {
-        this.googleCalendarManager.disconnect();
+        this.googleCalendarManager.disconnect(email);
         return { success: true };
       } catch (error) {
         debugLogger.error(
@@ -9057,6 +9068,52 @@ class IPCHandlers {
         return { success: true, event };
       } catch (error) {
         return { success: false, event: null };
+      }
+    });
+
+    // Microsoft Calendar
+    ipcMain.handle("mcal-start-oauth", async () => {
+      try {
+        return await this.microsoftCalendarManager.startOAuth();
+      } catch (error) {
+        debugLogger.error("Microsoft Calendar OAuth failed", { error: error.message }, "calendar");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("mcal-disconnect", async (_event, email) => {
+      try {
+        this.microsoftCalendarManager.disconnect(email);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error(
+          "Microsoft Calendar disconnect failed",
+          { error: error.message },
+          "calendar"
+        );
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("mcal-get-connection-status", async () => {
+      try {
+        return this.microsoftCalendarManager.getConnectionStatus();
+      } catch (error) {
+        debugLogger.error(
+          "Microsoft Calendar connection status failed",
+          { error: error.message },
+          "calendar"
+        );
+        return { connected: false, accounts: [] };
+      }
+    });
+
+    ipcMain.handle("mcal-set-primary-only", async (_event, value) => {
+      try {
+        await this.microsoftCalendarManager.setPrimaryOnly(value);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
       }
     });
 
