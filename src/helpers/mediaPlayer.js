@@ -1119,7 +1119,6 @@ public class OwAudioEndpoint {
     return wpctl.status === 0;
   }
 
-  // Command used by the synchronous quit-path restore.
   _volumeSetCommand(percent) {
     const safePercent = this._clampVolume(percent);
     if (process.platform === "win32") {
