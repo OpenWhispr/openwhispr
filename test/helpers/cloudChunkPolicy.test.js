@@ -6,9 +6,14 @@ const {
   CLOUD_CHUNK_MAX_ATTEMPTS,
   CLOUD_CHUNK_GLOBAL_CONCURRENCY,
   CLOUD_POOL_TEARDOWN_COOLDOWN_MS,
+  CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS,
+  CLOUD_CHUNK_MAX_LOSS_RATIO,
   FATAL_CHUNK_CODES,
   isTransientChunkError,
   isNetworkLevelFailure,
+  isConnectionPoisoningFailure,
+  isTeardownCollateral,
+  assembleChunkTranscript,
   chunkRetryDelayMs,
   abortableSleep,
   createTeardownGate,
@@ -120,6 +125,112 @@ test("abortableSleep rejects promptly when aborted mid-wait", async () => {
   setTimeout(() => controller.abort(), 10);
   await assert.rejects(abortableSleep(10_000, controller.signal), { name: "AbortError" });
   assert.ok(Date.now() - start < 5_000, "abort did not interrupt the sleep");
+});
+
+// A fatal TLS alert (Nat Molina's net::ERR_SSL_BAD_RECORD_MAC_ALERT) kills the
+// HTTP/2 connection and every stream on it; waiting out the 30s cooldown just
+// feeds retries back into the same sick pool until their budgets are gone.
+test("fatal TLS/protocol errors are recognized as connection-poisoning", () => {
+  for (const msg of [
+    "net::ERR_SSL_BAD_RECORD_MAC_ALERT",
+    "Failed to fetch: net::ERR_SSL_PROTOCOL_ERROR",
+    "net::ERR_HTTP2_PROTOCOL_ERROR",
+    "net::ERR_QUIC_PROTOCOL_ERROR",
+  ]) {
+    assert.equal(isConnectionPoisoningFailure(new Error(msg)), true, msg);
+  }
+});
+
+test("ordinary failures are not connection-poisoning", () => {
+  assert.equal(isConnectionPoisoningFailure(new Error("net::ERR_CONNECTION_CLOSED")), false);
+  assert.equal(isConnectionPoisoningFailure(new Error("aborted")), false);
+  assert.equal(
+    isConnectionPoisoningFailure(Object.assign(new Error("x"), { statusCode: 502 })),
+    false
+  );
+  assert.equal(isConnectionPoisoningFailure({}), false);
+  assert.equal(isConnectionPoisoningFailure(null), false);
+});
+
+test("a forced teardown bypasses the cooldown and restarts the window", () => {
+  let now = 0;
+  const gate = createTeardownGate(CLOUD_POOL_TEARDOWN_COOLDOWN_MS, () => now);
+
+  assert.equal(gate(), true);
+  assert.equal(gate(true), true, "poisoned connection must be droppable inside the cooldown");
+  now += CLOUD_POOL_TEARDOWN_COOLDOWN_MS - 1;
+  assert.equal(gate(), false, "the forced drop restarts the cooldown window");
+  now += 1;
+  assert.equal(gate(), true);
+});
+
+// closeAllConnections() aborts every sibling still on the wire. Those failures
+// are self-inflicted — the sibling's connection wasn't sick — so their attempts
+// are refunded instead of charged.
+test("teardown collateral: network-level failure during a teardown is refunded", () => {
+  const abortLike = new Error("net::ERR_ABORTED");
+  assert.equal(
+    isTeardownCollateral(abortLike, { timedOut: false, teardownsDuringAttempt: 1 }),
+    true
+  );
+});
+
+test("teardown collateral requires a teardown during the attempt", () => {
+  const abortLike = new Error("net::ERR_ABORTED");
+  assert.equal(
+    isTeardownCollateral(abortLike, { timedOut: false, teardownsDuringAttempt: 0 }),
+    false
+  );
+});
+
+test("a timeout or an answered request is never teardown collateral", () => {
+  assert.equal(
+    isTeardownCollateral(new Error("aborted"), { timedOut: true, teardownsDuringAttempt: 1 }),
+    false,
+    "a stalled upload is the chunk's own failure"
+  );
+  assert.equal(
+    isTeardownCollateral(Object.assign(new Error("x"), { statusCode: 502 }), {
+      timedOut: false,
+      teardownsDuringAttempt: 1,
+    }),
+    false,
+    "an HTTP answer proves the request outlived the teardown"
+  );
+  assert.equal(
+    isTeardownCollateral(Object.assign(new Error("x"), { code: "AUTH_EXPIRED" }), {
+      timedOut: false,
+      teardownsDuringAttempt: 1,
+    }),
+    false
+  );
+});
+
+test("refunds are bounded and the loss ceiling is a real fraction", () => {
+  assert.ok(
+    Number.isInteger(CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS) && CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS > 0
+  );
+  assert.ok(CLOUD_CHUNK_MAX_LOSS_RATIO > 0 && CLOUD_CHUNK_MAX_LOSS_RATIO < 1);
+});
+
+// Survivors used to be joined with a bare space — a 16-minute fragment of a
+// 73-minute file read as a seamless transcript.
+test("assembleChunkTranscript marks failed spans and collapses consecutive holes", () => {
+  const results = [{ text: "one" }, null, null, { text: "four" }, null];
+  assert.equal(
+    assembleChunkTranscript(results, 240),
+    "one [missing audio 4:00-12:00] four [missing audio 16:00-20:00]"
+  );
+});
+
+test("assembleChunkTranscript handles a hole at the start and hour-long offsets", () => {
+  const results = [null, { text: "later" }];
+  assert.equal(assembleChunkTranscript(results, 3600), "[missing audio 0:00-1:00:00] later");
+});
+
+test("assembleChunkTranscript with no holes matches the plain join", () => {
+  const results = [{ text: " a " }, { text: "b\n\nc" }];
+  assert.equal(assembleChunkTranscript(results, 240), "a b c");
 });
 
 test("upload slots cap concurrent holders across independent acquirers", async () => {

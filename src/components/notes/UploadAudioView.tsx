@@ -130,7 +130,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     durationSeconds?: number | null;
   } | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [partialWarning, setPartialWarning] = useState(false);
+  const [partialWarning, setPartialWarning] = useState<{ failed: number; total: number } | null>(
+    null
+  );
   const [noteId, setNoteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -567,7 +569,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setState("idle");
     setFile(null);
     setResult(null);
-    setPartialWarning(false);
+    setPartialWarning(null);
     setNoteId(null);
     setError(null);
     setProgress(0);
@@ -651,7 +653,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (res.success && res.text) {
         setProgress(100);
         setResult(res.text);
-        setPartialWarning(!!res.warning);
+        setPartialWarning(
+          res.warning ? { failed: res.failedChunks ?? 0, total: res.totalChunks ?? 0 } : null
+        );
 
         let title: string;
         if (currentFile.fromUrl) {
@@ -1261,7 +1265,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
             {diarizationEnabled && diarizationModelsReady && (
               <div className="mt-2">
+                <label
+                  htmlFor="upload-num-speakers"
+                  className="text-xs text-foreground/40 font-medium"
+                >
+                  {t("notes.upload.numSpeakersLabel")}
+                </label>
                 <input
+                  id="upload-num-speakers"
                   type="number"
                   min="2"
                   max={MAX_SPEAKER_COUNT}
@@ -1276,12 +1287,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     setDiarizationNumSpeakers(String(isNaN(n) ? "" : n));
                   }}
                   placeholder={t("notes.upload.numSpeakersPlaceholder")}
-                  aria-label={t("notes.upload.numSpeakersPlaceholder")}
                   className={cn(
                     uploadFieldClass,
-                    "w-full h-8 px-2.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    "mt-1 w-full h-8 px-2.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   )}
                 />
+                <p className="text-[10px] text-foreground/20 mt-1">
+                  {t("notes.upload.numSpeakersHint")}
+                </p>
               </div>
             )}
           </div>
@@ -1779,9 +1792,9 @@ function FolderSelect({
 }
 
 interface CompleteViewProps {
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
   result: string;
-  partialWarning: boolean;
+  partialWarning: { failed: number; total: number } | null;
   folders: FolderItem[];
   selectedFolderId: string;
   handleFolderChange: (val: string) => void;
@@ -1850,7 +1863,12 @@ function CompleteView({
 
       {partialWarning && (
         <p className="text-xs text-destructive/50 max-w-[240px] text-center mb-4 -mt-2">
-          {t("notes.upload.partialWarning")}
+          {partialWarning.failed > 0
+            ? t("notes.upload.partialWarningCount", {
+                failed: partialWarning.failed,
+                total: partialWarning.total,
+              })
+            : t("notes.upload.partialWarning")}
         </p>
       )}
 
