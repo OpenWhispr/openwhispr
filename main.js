@@ -1821,4 +1821,7 @@ function performSyncTeardown() {
   if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
   if (textEditMonitor) textEditMonitor.stopMonitoring();
   if (updateManager) updateManager.cleanup();
+  // Quitting mid-dictation would otherwise leave system audio ducked. Sync
+  // because an async spawn started here never gets to run.
+  require("./src/helpers/mediaPlayer").restoreSystemVolumeSync();
 }

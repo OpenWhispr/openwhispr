@@ -75,6 +75,11 @@ export const useAudioRecording = (toast, options = {}) => {
           }
           window.electronAPI?.registerCancelHotkey?.("Escape");
           void playStartCue();
+          // Ducked after the start cue so the cue itself still plays at full volume.
+          const { duckAudioOnDictation, duckVolumeLevel } = getSettings();
+          if (duckAudioOnDictation) {
+            window.electronAPI?.duckSystemVolume?.(duckVolumeLevel);
+          }
         }
 
         return didStart;
@@ -124,6 +129,12 @@ export const useAudioRecording = (toast, options = {}) => {
           if (wasRecordingRef.current && getSettings().pauseMediaOnDictation) {
             window.electronAPI?.resumeMediaPlayback?.();
           }
+          // Restore unconditionally: the main process no-ops when nothing was
+          // ducked, so toggling the setting off mid-dictation can't strand the
+          // user at a lowered volume.
+          if (wasRecordingRef.current) {
+            window.electronAPI?.restoreSystemVolume?.();
+          }
         }
         wasRecordingRef.current = isRecording;
         setIsRecording(isRecording);
@@ -169,6 +180,7 @@ export const useAudioRecording = (toast, options = {}) => {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
+        window.electronAPI?.restoreSystemVolume?.();
       },
       onPartialTranscript: (text) => {
         setPartialTranscript(text);
@@ -364,6 +376,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }
+      window.electronAPI?.restoreSystemVolume?.();
       toast({
         title: t("hooks.audioRecording.noAudio.title"),
         description: t("hooks.audioRecording.noAudio.description"),
@@ -381,6 +394,7 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeStart?.();
       disposeStop?.();
       disposeNoAudio?.();
+      window.electronAPI?.restoreSystemVolume?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
       }
@@ -394,6 +408,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }
+      window.electronAPI?.restoreSystemVolume?.();
       if (state.isStreaming) {
         return await audioManagerRef.current.stopStreamingRecording();
       }
