@@ -2103,6 +2103,7 @@ declare global {
         model?: string;
         language?: string;
         noteId?: number | null;
+        clientNoteId?: string | null;
       }) => Promise<{
         success: boolean;
         error?: string;
@@ -2178,6 +2179,8 @@ declare global {
       onMeetingDiarizationComplete?: (
         callback: (data: {
           sessionId?: string;
+          noteId: number | null;
+          clientNoteId: string | null;
           segments: Array<{
             id: string;
             text: string;
