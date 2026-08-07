@@ -1,36 +1,36 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
-import { normalizeTranscriptSegments } from "./transcriptSpeakerState";
-import logger from "./logger";
+import { normalizeTranscriptSegments } from "./transcriptSpeakerState.ts";
+import logger from "./logger.ts";
+
 export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
-  if (!raw.startsWith("[")) return [];
+  if (typeof raw !== "string") return [];
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("[")) return [];
+
   try {
-    const parsed = JSON.parse(raw) as Array<{
-      text: string;
-      source: "mic" | "system";
-      timestamp?: number;
-      speaker?: string;
-      speakerName?: string;
-      speakerIsPlaceholder?: boolean;
-      suggestedName?: string;
-      suggestedProfileId?: number;
-      speakerStatus?: TranscriptSegment["speakerStatus"];
-      speakerLocked?: TranscriptSegment["speakerLocked"];
-      speakerLockSource?: TranscriptSegment["speakerLockSource"];
-    }>;
+    const parsed = JSON.parse(trimmed);
+    if (!Array.isArray(parsed)) return [];
+
+    const validItems = parsed.filter(
+      (s): s is Record<string, unknown> => s !== null && typeof s === "object"
+    );
+
     return normalizeTranscriptSegments(
-      parsed.map((s, i) => ({
+      validItems.map((s, i) => ({
         id: `stored-${i}`,
-        text: s.text,
-        source: s.source,
-        timestamp: s.timestamp,
-        speaker: s.speaker,
-        speakerName: s.speakerName,
-        speakerIsPlaceholder: s.speakerIsPlaceholder,
-        suggestedName: s.suggestedName,
-        suggestedProfileId: s.suggestedProfileId,
-        speakerStatus: s.speakerStatus,
-        speakerLocked: s.speakerLocked,
-        speakerLockSource: s.speakerLockSource,
+        text: typeof s.text === "string" ? s.text : "",
+        source: (s.source === "system" ? "system" : "mic") as "mic" | "system",
+        timestamp: typeof s.timestamp === "number" ? s.timestamp : undefined,
+        speaker: typeof s.speaker === "string" ? s.speaker : undefined,
+        speakerName: typeof s.speakerName === "string" ? s.speakerName : undefined,
+        speakerIsPlaceholder:
+          typeof s.speakerIsPlaceholder === "boolean" ? s.speakerIsPlaceholder : undefined,
+        suggestedName: typeof s.suggestedName === "string" ? s.suggestedName : undefined,
+        suggestedProfileId:
+          typeof s.suggestedProfileId === "number" ? s.suggestedProfileId : undefined,
+        speakerStatus: s.speakerStatus as TranscriptSegment["speakerStatus"],
+        speakerLocked: s.speakerLocked as TranscriptSegment["speakerLocked"],
+        speakerLockSource: s.speakerLockSource as TranscriptSegment["speakerLockSource"],
       }))
     );
   } catch (e) {
