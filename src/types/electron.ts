@@ -2210,6 +2210,9 @@ declare global {
           }>
         ) => void
       ) => () => void;
+      onMeetingSessionSpeakerConfigUpdated?: (
+        callback: (config: { enabled: boolean; expectedCount: number }) => void
+      ) => () => void;
       onMeetingTranscriptionError?: (callback: (error: string) => void) => () => void;
 
       // Speaker diarization
@@ -2347,6 +2350,7 @@ declare global {
       setMeetingSessionSpeakerConfig?: (config: {
         enabled: boolean;
         expectedCount: number;
+        countIsExplicit?: boolean;
       }) => Promise<{ success: boolean; error?: string }>;
       getWhisperVadConfig?: () => Promise<{
         success: boolean;

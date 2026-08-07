@@ -1,5 +1,38 @@
 import type { CalendarAttendee } from "../types/calendar";
 
+interface ParticipantSpeakerCountSyncInput {
+  recordingNoteId: number | null;
+  noteId: number;
+  userTouchedStepper: boolean;
+  currentExpectedCount: number;
+  participants: readonly CalendarAttendee[];
+}
+
+export const resolveParticipantExpectedSpeakerCount = (
+  participants: readonly CalendarAttendee[]
+): number | null => {
+  const others = participants.filter((attendee) => attendee?.self !== true).length;
+  return others > 0 ? others + 1 : null;
+};
+
+export const resolveParticipantSpeakerCountSync = ({
+  recordingNoteId,
+  noteId,
+  userTouchedStepper,
+  currentExpectedCount,
+  participants,
+}: ParticipantSpeakerCountSyncInput): number | null => {
+  if (recordingNoteId !== noteId || userTouchedStepper) return null;
+
+  const expectedCount = resolveParticipantExpectedSpeakerCount(participants);
+  return expectedCount != null && expectedCount !== currentExpectedCount ? expectedCount : null;
+};
+
+export const resolveInitialSpeakerCountOverride = (
+  expectedCount: number | null | undefined,
+  expectedCountIsExplicit?: boolean
+): boolean => expectedCountIsExplicit ?? expectedCount != null;
+
 // Expected total speaker count for a meeting note: the stored value, else derived from
 // calendar participants (non-self attendees + you), else null so callers use their default.
 export const resolveExpectedSpeakerCount = (note?: {
@@ -17,6 +50,5 @@ export const resolveExpectedSpeakerCount = (note?: {
     return null;
   }
 
-  const others = attendees.filter((attendee) => attendee?.self !== true).length;
-  return others > 0 ? others + 1 : null;
+  return resolveParticipantExpectedSpeakerCount(attendees);
 };
