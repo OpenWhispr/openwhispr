@@ -100,10 +100,6 @@ class WindowManager {
     this.mainWindow.webContents.on("did-finish-load", () => {
       this.mainWindow.setTitle(i18nMain.t("window.voiceRecorderTitle"));
       this.enforceMainWindowOnTop();
-      // The warm-hold gate is renderer-driven; a reload (or crash) while a
-      // hold was active kills the held stream without the "hold ended" IPC,
-      // which would leave audio-evidence meeting detection gated forever.
-      this.meetingDetectionEngine?.setMicWarmHold(false);
     });
 
     await this.loadMainWindow();

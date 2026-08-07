@@ -146,3 +146,65 @@ test("a prepared value that expired is not handed to a later prepare", async () 
   assert.equal(second.id, "second");
   assert.equal((await capture.take()).id, "second");
 });
+
+test("discardPreRoll drops the recorder and chunks but keeps the stream", async () => {
+  const { discardPreRoll } = await load();
+  let streamStops = 0;
+  let recorderStops = 0;
+  const prepared = {
+    stream: fakeStream(() => (streamStops += 1)),
+    recorder: { state: "recording", ondataavailable: () => {}, stop: () => (recorderStops += 1) },
+    chunks: ["a", "b"],
+  };
+
+  discardPreRoll(prepared);
+
+  assert.equal(recorderStops, 1);
+  assert.equal(prepared.recorder, null);
+  assert.deepEqual(prepared.chunks, []);
+  assert.equal(streamStops, 0);
+});
+
+test("stays active after a cancel until the abandoned acquisition settles", async () => {
+  const { PreparedMicCapture } = await load();
+  const events = [];
+  let resolveAcquire;
+  const capture = new PreparedMicCapture({
+    dispose: () => {},
+    onActiveChange: (active) => events.push(active),
+  });
+
+  capture.prepare(
+    () =>
+      new Promise((resolve) => {
+        resolveAcquire = resolve;
+      })
+  );
+  await Promise.resolve();
+  assert.equal(capture.active, true);
+  assert.deepEqual(events, [true]);
+
+  // The cancel frees the slot for a new prepare, but the mic is still opening.
+  capture.cancel();
+  assert.equal(capture.active, true);
+  assert.deepEqual(events, [true]);
+
+  resolveAcquire({ stream: fakeStream(), chunks: [] });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(capture.active, false);
+  assert.deepEqual(events, [true, false]);
+});
+
+test("take reports the capture inactive once it is handed over", async () => {
+  const { PreparedMicCapture } = await load();
+  const events = [];
+  const capture = new PreparedMicCapture({ onActiveChange: (active) => events.push(active) });
+
+  await capture.prepare(async () => ({ stream: fakeStream(), chunks: [] }));
+  assert.equal(capture.active, true);
+
+  await capture.take();
+
+  assert.equal(capture.active, false);
+  assert.deepEqual(events, [true, false]);
+});

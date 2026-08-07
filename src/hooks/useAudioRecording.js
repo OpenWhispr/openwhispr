@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
-import { getSettings, useSettingsStore } from "../stores/settingsStore";
+import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
@@ -69,13 +69,10 @@ export const useAudioRecording = (toast, options = {}) => {
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
 
-        if (!didStart) stopRequestedDuringStartRef.current = false;
-
-        // A release that landed while the start was still awaiting the mic open
-        // used to be dropped (isRecording was still false), leaving a runaway
-        // recording until the next hotkey press. Honor it now that we started.
+        // A stop that landed while the start was still awaiting the mic open was
+        // dropped (isRecording was still false), leaving a runaway recording
+        // until the next hotkey press. Honor it now that we started.
         if (didStart && stopRequestedDuringStartRef.current) {
-          stopRequestedDuringStartRef.current = false;
           window.electronAPI?.unregisterCancelHotkey?.();
           // Cue semantics mirror performStopRecording: unconditional for
           // streaming, gated on the stop landing for batch.
@@ -101,6 +98,7 @@ export const useAudioRecording = (toast, options = {}) => {
         return didStart;
       } finally {
         startLockRef.current = false;
+        stopRequestedDuringStartRef.current = false;
       }
     },
     []
@@ -342,13 +340,15 @@ export const useAudioRecording = (toast, options = {}) => {
       if (!audioManagerRef.current) return;
       const currentState = audioManagerRef.current.getState();
 
-      if (!currentState.isRecording && !currentState.isProcessing) {
+      // A start still awaiting the mic open leaves isRecording false, so without
+      // the lock check this toggle-off would take the start branch and be lost.
+      if (startLockRef.current || currentState.isRecording) {
+        await performStopRecording();
+      } else if (!currentState.isProcessing) {
         // Fire-and-forget: startRecording's take() joins this same acquisition,
         // so the device is opened exactly once. See #845.
         audioManagerRef.current.prepareMicCapture?.();
         await performStartRecording({ voiceAgentRequested, translationRequested });
-      } else if (currentState.isRecording) {
-        await performStopRecording();
       }
     };
 
@@ -422,28 +422,6 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     };
   }, [toast, onToggle, performStartRecording, performStopRecording, t]);
-
-  // The hold duration and mic selection are edited in the control-panel window;
-  // changes reach this window through the settings store's storage sync. Push
-  // them into the audio manager so disabling the hold (or switching devices)
-  // releases a held master immediately, not at the next dictation.
-  useEffect(() => {
-    let lastHold = useSettingsStore.getState().micWarmHoldSeconds;
-    let lastDeviceKey = null;
-    const sync = (state) => {
-      if (state.micWarmHoldSeconds !== lastHold) {
-        lastHold = state.micWarmHoldSeconds;
-        audioManagerRef.current?.setMicWarmHoldSeconds?.(lastHold);
-      }
-      const deviceKey = `${state.preferBuiltInMic}|${state.selectedMicDeviceId}`;
-      if (lastDeviceKey !== null && deviceKey !== lastDeviceKey) {
-        audioManagerRef.current?.dropMicWarmHold?.();
-      }
-      lastDeviceKey = deviceKey;
-    };
-    sync(useSettingsStore.getState());
-    return useSettingsStore.subscribe(sync);
-  }, []);
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {
