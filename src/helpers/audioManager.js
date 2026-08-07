@@ -36,8 +36,13 @@ import { recordCleanupFailure } from "../stores/cleanupFailureStore";
 import {
   getBatchTranscriptionModel,
   getTranscriptionProvider,
+  getTranscriptionProviders,
   isOnlineParakeetModel,
 } from "../models/ModelRegistry";
+import {
+  TINFOIL_PROXY_REQUIRED_ERROR,
+  isTinfoilInferenceUrl,
+} from "../services/transcriptionBaseUrl";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -3007,7 +3012,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Backstop against the OpenAI-default leak: Tinfoil goes through the main-process
     // proxy, never here — except self-hosted, which resolves its remote URL below.
     if (currentProvider === "tinfoil" && !isSelfHostedTranscription(s)) {
-      throw new Error("Tinfoil transcription must go through the attested main-process proxy");
+      throw new Error(TINFOIL_PROXY_REQUIRED_ERROR);
     }
 
     const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
@@ -3024,6 +3029,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!normalizedRemote || !isSecureEndpoint(normalizedRemote)) {
         throw new Error("Self-hosted transcription URL is invalid or unsupported");
       }
+    }
+
+    // The provider-id guard above can't catch a Custom base URL that points at
+    // Tinfoil's inference host (e.g. persisted by the pre-#1459 tab clobber) —
+    // check the URL too. Must stay outside the try below: its catch swallows
+    // errors into the OpenAI default endpoint.
+    if (
+      currentProvider === "custom" &&
+      !isSelfHosted &&
+      isTinfoilInferenceUrl(currentBaseUrl, getTranscriptionProviders())
+    ) {
+      throw new Error(TINFOIL_PROXY_REQUIRED_ERROR);
     }
 
     if (

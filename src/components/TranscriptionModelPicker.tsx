@@ -631,6 +631,9 @@ export default function TranscriptionModelPicker({
     [onModeChange, ensureValidCloudSelection]
   );
 
+  // Never writes cloudTranscriptionBaseUrl: that key is the Custom tab's only
+  // storage, and built-in providers resolve their endpoints from the registry
+  // at request time — writing it here destroyed the user's URL (#1459).
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
       onCloudProviderSelect(providerId);
@@ -641,14 +644,11 @@ export default function TranscriptionModelPicker({
         return;
       }
 
-      if (provider) {
-        setCloudTranscriptionBaseUrl?.(provider.baseUrl);
-        if (provider.models?.length) {
-          onCloudModelSelect(provider.models[0].id);
-        }
+      if (provider?.models?.length) {
+        onCloudModelSelect(provider.models[0].id);
       }
     },
-    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, setCloudTranscriptionBaseUrl]
+    [cloudProviders, onCloudProviderSelect, onCloudModelSelect]
   );
 
   const handleLocalProviderChange = useCallback(
