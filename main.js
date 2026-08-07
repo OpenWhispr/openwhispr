@@ -282,6 +282,7 @@ const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
 const CalendarReminderScheduler = require("./src/helpers/calendarReminderScheduler");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
+const createElectronProcessIdProvider = require("./src/helpers/electronProcessIds");
 const AudioTapManager = require("./src/helpers/audioTapManager");
 const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager");
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
@@ -413,7 +414,9 @@ function initializeCoreManagers() {
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     new MeetingProcessDetector(),
-    new AudioActivityDetector(),
+    new AudioActivityDetector(
+      createElectronProcessIdProvider(process.pid, () => app.getAppMetrics())
+    ),
     windowManager,
     databaseManager
   );

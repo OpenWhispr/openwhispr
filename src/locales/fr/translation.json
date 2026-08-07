@@ -3406,6 +3406,11 @@
       "underway": "On dirait que votre réunion est déjà en cours. Vous voulez prendre des notes ?"
     },
     "start": "Prendre des notes",
-    "join": "Rejoindre et transcrire"
+    "join": "Rejoindre et transcrire",
+    "autoEnd": {
+      "title": "La réunion est peut-être terminée",
+      "body": "Aucune autre application n’utilise votre microphone. L’enregistrement s’arrêtera dans {{seconds}} s.",
+      "keep": "Continuer l’enregistrement"
+    }
   }
 }
