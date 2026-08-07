@@ -22,9 +22,14 @@ function sanitizeWhisperVadConfig(input = {}) {
 }
 
 function resolveContextSileroEnabled(settings = {}, context = "dictation") {
-  if (context === "dictation") return settings.dictationSileroEnabled !== false;
-  if (context === "noteRecording") return settings.noteRecordingSileroEnabled !== false;
-  if (context === "meeting") return settings.meetingSileroEnabled !== false;
+  const resolved = settings || {};
+  // Dictation is opt-in: VAD on pause-heavy dictations can strip the speech and
+  // leave Whisper decoding near-silence seeded with the dictionary prompt, which
+  // replaces the transcript with dictionary words (#1454). Long-form contexts
+  // (notes, meetings) keep VAD to skip extended silence.
+  if (context === "dictation") return resolved.dictationSileroEnabled === true;
+  if (context === "noteRecording") return resolved.noteRecordingSileroEnabled !== false;
+  if (context === "meeting") return resolved.meetingSileroEnabled !== false;
   return true;
 }
 

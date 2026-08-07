@@ -1069,7 +1069,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   appleCalendarConnected: readBoolean("appleCalendarConnected", false),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
-  dictationSileroEnabled: readBoolean("dictationSileroEnabled", true),
+  // Off by default: VAD on pause-heavy dictations can strip the speech and make
+  // Whisper hallucinate the dictionary prompt as the transcript (#1454).
+  dictationSileroEnabled: readBoolean("dictationSileroEnabled", false),
   noteRecordingSileroEnabled: readBoolean("noteRecordingSileroEnabled", true),
   meetingSileroEnabled: readBoolean("meetingSileroEnabled", true),
   whisperVadThreshold: clampVadValue("threshold", readString("whisperVadThreshold", "0.5")),
