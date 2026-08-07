@@ -33,3 +33,14 @@ test("fractional values respect the decimals parameter, with negatives clamped t
   assert.equal(formatBytes(1536, 3), "1.5 KB");
   assert.equal(formatBytes(1536, -1), "2 KB");
 });
+
+test("negative, non-finite, and sub-1 byte values format safely without undefined units", async () => {
+  const { formatBytes } = await load();
+
+  assert.equal(formatBytes(-100), "0 Bytes");
+  assert.equal(formatBytes(-1), "0 Bytes");
+  assert.equal(formatBytes(NaN), "0 Bytes");
+  assert.equal(formatBytes(Infinity), "0 Bytes");
+  assert.equal(formatBytes(0.5), "0.5 Bytes");
+  assert.equal(formatBytes(0.1, 1), "0.1 Bytes");
+});
