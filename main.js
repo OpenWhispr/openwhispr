@@ -1229,6 +1229,7 @@ async function startApp() {
               return;
             }
             windowManager.showDictationPanel();
+            windowManager.sendPrepareDictation();
             const pressTime = now;
             globeKeyDownTime = pressTime;
             globeKeyIsRecording = false;
@@ -1286,6 +1287,9 @@ async function startApp() {
             globeKeyIsRecording = false;
             debugLogger?.debug("[Globe] Stopping dictation (push release)");
             windowManager.sendStopDictation();
+          } else {
+            windowManager.sendCancelDictationPreparation();
+            windowManager.hideDictationPanel();
           }
         }
       }
@@ -1311,6 +1315,7 @@ async function startApp() {
       if (wasRecording) {
         windowManager.sendCancelDictation();
       } else {
+        windowManager.sendCancelDictationPreparation();
         windowManager.hideDictationPanel();
       }
     });
@@ -1349,6 +1354,7 @@ async function startApp() {
         const now = Date.now();
         if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
         windowManager.showDictationPanel();
+        windowManager.sendPrepareDictation();
         const pressTime = now;
         rightModActiveKey = modifier;
         rightModDownTime = pressTime;
@@ -1377,6 +1383,7 @@ async function startApp() {
             rightModIsRecording = false;
             windowManager.sendStopDictation();
           } else {
+            windowManager.sendCancelDictationPreparation();
             windowManager.hideDictationPanel();
           }
         }
@@ -1435,6 +1442,7 @@ async function startApp() {
         const now = Date.now();
         if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
         windowManager.showDictationPanel();
+        windowManager.sendPrepareDictation();
         const pressTime = now;
         mouseButtonActiveButton = button;
         mouseButtonDownTime = pressTime;
@@ -1469,6 +1477,7 @@ async function startApp() {
           mouseButtonIsRecording = false;
           windowManager.sendStopDictation();
         } else {
+          windowManager.sendCancelDictationPreparation();
           windowManager.hideDictationPanel();
         }
       }

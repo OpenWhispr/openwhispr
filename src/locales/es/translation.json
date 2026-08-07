@@ -1036,7 +1036,18 @@
     "selectPlaceholder": "Selecciona un micrófono",
     "systemDefault": "Predeterminado del sistema",
     "unknownDevice": "Dispositivo desconocido",
-    "using": "Usando: {{device}}"
+    "using": "Usando: {{device}}",
+    "warmHold": {
+      "label": "Mantener el micrófono activo",
+      "description": "Después de un dictado, mantén el micrófono abierto brevemente para que el siguiente empiece al instante y sin palabras cortadas",
+      "privacyNote": "Mientras el micrófono se mantiene abierto, el indicador de micrófono en uso del sistema permanece encendido. No se graba nada entre dictados.",
+      "options": {
+        "off": "Desactivado",
+        "tenSeconds": "10 segundos",
+        "oneMinute": "1 minuto",
+        "fifteenMinutes": "15 minutos"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "Verificando capacidades del sistema...",

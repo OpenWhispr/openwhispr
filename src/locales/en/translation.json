@@ -1076,7 +1076,18 @@
     "selectPlaceholder": "Select a microphone",
     "systemDefault": "System Default",
     "unknownDevice": "Unknown Device",
-    "using": "Using: {{device}}"
+    "using": "Using: {{device}}",
+    "warmHold": {
+      "label": "Keep Microphone Warm",
+      "description": "After a dictation ends, keep the microphone open briefly so the next one starts instantly with nothing clipped",
+      "privacyNote": "While the microphone is held, your system's mic-in-use indicator stays on. Nothing is recorded between dictations.",
+      "options": {
+        "off": "Off",
+        "tenSeconds": "10 seconds",
+        "oneMinute": "1 minute",
+        "fifteenMinutes": "15 minutes"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "Checking system capabilities...",

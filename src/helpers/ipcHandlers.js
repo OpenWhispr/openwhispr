@@ -1191,6 +1191,12 @@ class IPCHandlers {
       return this.databaseManager.getTranscriptionById(id);
     });
 
+    // The renderer's idle-hold keeps the mic open after a dictation; gate the
+    // audio-evidence meeting detector while it does (boolean set — idempotent).
+    ipcMain.on("mic-warm-hold-changed", (_event, active) => {
+      this.meetingDetectionEngine?.setMicWarmHold(!!active);
+    });
+
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
       // Both renderer windows re-sync this on mount — ignore same-value updates (#1080).

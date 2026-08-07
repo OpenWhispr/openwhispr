@@ -988,7 +988,18 @@
     "selectPlaceholder": "Seleziona un microfono",
     "systemDefault": "Predefinito di sistema",
     "unknownDevice": "Dispositivo sconosciuto",
-    "using": "In uso: {{device}}"
+    "using": "In uso: {{device}}",
+    "warmHold": {
+      "label": "Mantieni il microfono attivo",
+      "description": "Dopo una dettatura, mantieni il microfono aperto brevemente così la successiva parte all'istante senza parole tagliate",
+      "privacyNote": "Finché il microfono resta aperto, l'indicatore di microfono in uso del sistema rimane acceso. Non viene registrato nulla tra le dettature.",
+      "options": {
+        "off": "Disattivato",
+        "tenSeconds": "10 secondi",
+        "oneMinute": "1 minuto",
+        "fifteenMinutes": "15 minuti"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "Verifica delle funzionalità di sistema...",

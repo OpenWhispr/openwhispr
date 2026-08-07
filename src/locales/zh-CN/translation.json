@@ -988,7 +988,18 @@
     "selectPlaceholder": "选择麦克风",
     "systemDefault": "系统默认",
     "unknownDevice": "未知设备",
-    "using": "当前使用：{{device}}"
+    "using": "当前使用：{{device}}",
+    "warmHold": {
+      "label": "保持麦克风预热",
+      "description": "听写结束后短暂保持麦克风开启，让下一次听写即刻开始且不丢字",
+      "privacyNote": "麦克风保持开启期间，系统的麦克风使用指示灯会一直亮起。听写之间不会录制任何内容。",
+      "options": {
+        "off": "关闭",
+        "tenSeconds": "10 秒",
+        "oneMinute": "1 分钟",
+        "fifteenMinutes": "15 分钟"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "正在检查系统功能...",

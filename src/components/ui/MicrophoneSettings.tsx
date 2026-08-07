@@ -18,16 +18,27 @@ interface MicrophoneSettingsProps {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
   selectedMicDeviceLabel: string;
+  micWarmHoldSeconds: number;
   onPreferBuiltInChange: (value: boolean) => void;
   onDeviceSelect: (deviceId: string, label: string) => void;
+  onMicWarmHoldSecondsChange: (seconds: number) => void;
 }
+
+const WARM_HOLD_OPTION_KEYS: Record<number, string> = {
+  0: "off",
+  10: "tenSeconds",
+  60: "oneMinute",
+  900: "fifteenMinutes",
+};
 
 export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
   preferBuiltInMic,
   selectedMicDeviceId,
   selectedMicDeviceLabel,
+  micWarmHoldSeconds,
   onPreferBuiltInChange,
   onDeviceSelect,
+  onMicWarmHoldSecondsChange,
 }) => {
   const { t } = useTranslation();
   const [devices, setDevices] = useState<AudioDevice[]>([]);
@@ -197,6 +208,32 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
 
           <p className="text-xs text-muted-foreground">{t("microphoneSettings.helpText")}</p>
         </div>
+      )}
+
+      <SettingsRow
+        label={t("microphoneSettings.warmHold.label")}
+        description={t("microphoneSettings.warmHold.description")}
+      >
+        <Select
+          value={String(micWarmHoldSeconds)}
+          onValueChange={(value) => onMicWarmHoldSecondsChange(Number(value))}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(WARM_HOLD_OPTION_KEYS).map(([seconds, key]) => (
+              <SelectItem key={seconds} value={seconds}>
+                {t(`microphoneSettings.warmHold.options.${key}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsRow>
+      {micWarmHoldSeconds > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {t("microphoneSettings.warmHold.privacyNote")}
+        </p>
       )}
     </div>
   );

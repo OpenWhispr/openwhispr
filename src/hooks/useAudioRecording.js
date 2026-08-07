@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
-import { getSettings } from "../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
@@ -27,6 +27,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const [partialTranscript, setPartialTranscript] = useState("");
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
+  const stopRequestedDuringStartRef = useRef(false);
   const stopLockRef = useRef(false);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
@@ -36,6 +37,7 @@ export const useAudioRecording = (toast, options = {}) => {
     async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
       if (startLockRef.current) return false;
       startLockRef.current = true;
+      stopRequestedDuringStartRef.current = false;
       try {
         if (!audioManagerRef.current) return false;
 
@@ -67,6 +69,23 @@ export const useAudioRecording = (toast, options = {}) => {
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
 
+        if (!didStart) stopRequestedDuringStartRef.current = false;
+
+        // A release that landed while the start was still awaiting the mic open
+        // used to be dropped (isRecording was still false), leaving a runaway
+        // recording until the next hotkey press. Honor it now that we started.
+        if (didStart && stopRequestedDuringStartRef.current) {
+          stopRequestedDuringStartRef.current = false;
+          window.electronAPI?.unregisterCancelHotkey?.();
+          if (audioManagerRef.current.getState().isStreaming) {
+            await audioManagerRef.current.stopStreamingRecording();
+          } else {
+            audioManagerRef.current.stopRecording();
+          }
+          void playStopCue();
+          return didStart;
+        }
+
         // A quick tap can end the recording inside the start call itself (deferred
         // streaming stop) — don't pause media for a recording that already ended. See #1060.
         if (didStart && audioManagerRef.current.getState().isRecording) {
@@ -86,6 +105,10 @@ export const useAudioRecording = (toast, options = {}) => {
   );
 
   const performStopRecording = useCallback(async () => {
+    if (startLockRef.current) {
+      stopRequestedDuringStartRef.current = true;
+      return true;
+    }
     if (stopLockRef.current) return false;
     stopLockRef.current = true;
     try {
@@ -315,11 +338,12 @@ export const useAudioRecording = (toast, options = {}) => {
       translationRequested = false,
     } = {}) => {
       if (!audioManagerRef.current) return;
-      // Lazily warm the mic driver on first dictation use, not at launch. See #871.
-      audioManagerRef.current.warmupMicDriver?.();
       const currentState = audioManagerRef.current.getState();
 
       if (!currentState.isRecording && !currentState.isProcessing) {
+        // Fire-and-forget: startRecording's take() joins this same acquisition,
+        // so the device is opened exactly once. See #845.
+        audioManagerRef.current.prepareMicCapture?.();
         await performStartRecording({ voiceAgentRequested, translationRequested });
       } else if (currentState.isRecording) {
         await performStopRecording();
@@ -327,7 +351,7 @@ export const useAudioRecording = (toast, options = {}) => {
     };
 
     const handleStart = async () => {
-      audioManagerRef.current?.warmupMicDriver?.();
+      audioManagerRef.current?.prepareMicCapture?.();
       await performStartRecording();
     };
 
@@ -355,6 +379,14 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
+    const disposePrepare = window.electronAPI.onPrepareDictation?.(() => {
+      audioManagerRef.current?.prepareMicCapture?.();
+    });
+
+    const disposeCancelPreparation = window.electronAPI.onCancelDictationPreparation?.(() => {
+      audioManagerRef.current?.cancelPreparedMicCapture?.();
+    });
+
     const disposeStop = window.electronAPI.onStopDictation?.(() => {
       handleStop();
       onToggle?.();
@@ -379,6 +411,8 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();
       disposeStart?.();
+      disposePrepare?.();
+      disposeCancelPreparation?.();
       disposeStop?.();
       disposeNoAudio?.();
       if (audioManagerRef.current) {
@@ -386,6 +420,28 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     };
   }, [toast, onToggle, performStartRecording, performStopRecording, t]);
+
+  // The hold duration and mic selection are edited in the control-panel window;
+  // changes reach this window through the settings store's storage sync. Push
+  // them into the audio manager so disabling the hold (or switching devices)
+  // releases a held master immediately, not at the next dictation.
+  useEffect(() => {
+    let lastHold = useSettingsStore.getState().micWarmHoldSeconds;
+    let lastDeviceKey = null;
+    const sync = (state) => {
+      if (state.micWarmHoldSeconds !== lastHold) {
+        lastHold = state.micWarmHoldSeconds;
+        audioManagerRef.current?.setMicWarmHoldSeconds?.(lastHold);
+      }
+      const deviceKey = `${state.preferBuiltInMic}|${state.selectedMicDeviceId}`;
+      if (lastDeviceKey !== null && deviceKey !== lastDeviceKey) {
+        audioManagerRef.current?.dropMicWarmHold?.();
+      }
+      lastDeviceKey = deviceKey;
+    };
+    sync(useSettingsStore.getState());
+    return useSettingsStore.subscribe(sync);
+  }, []);
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {
