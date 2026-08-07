@@ -129,9 +129,8 @@ export const useAudioRecording = (toast, options = {}) => {
           if (wasRecordingRef.current && getSettings().pauseMediaOnDictation) {
             window.electronAPI?.resumeMediaPlayback?.();
           }
-          // Restore unconditionally: the main process no-ops when nothing was
-          // ducked, so toggling the setting off mid-dictation can't strand the
-          // user at a lowered volume.
+          // Unconditional: main no-ops when nothing was ducked, so toggling the
+          // setting off mid-dictation can't strand the user at a low volume.
           if (wasRecordingRef.current) {
             window.electronAPI?.restoreSystemVolume?.();
           }

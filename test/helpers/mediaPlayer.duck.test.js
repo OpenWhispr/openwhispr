@@ -35,8 +35,7 @@ test("duckSystem is a no-op while a duck is already active", async () => {
   await mediaPlayer.duckSystem(25);
   assert.equal(await mediaPlayer.duckSystem(25), true);
 
-  // Re-snapshotting here would capture the already-ducked level as the original
-  // and strand the user at 25% after restore.
+  // Re-snapshotting would capture the ducked level as the original.
   assert.equal(applyDuck.mock.callCount(), 1);
   assert.equal(mediaPlayer._duckOriginalVolume, 80);
 });
@@ -86,8 +85,7 @@ test("restoreSystemVolume clears the latch even when the platform call fails", a
   await mediaPlayer.duckSystem(25);
   assert.equal(await mediaPlayer.restoreSystemVolume(), false);
 
-  // A stuck latch would make every later duck a no-op and pin the user at the
-  // ducked level for the rest of the session, so we never retry.
+  // A stuck latch would make every later duck a no-op, so we never retry.
   assert.equal(mediaPlayer._duckActive, false);
 });
 
@@ -124,8 +122,7 @@ test("a restore requested mid-duck still runs after the duck settles", async () 
   await ducking;
   await restoring;
 
-  // Without serialization the restore resolves first, sees no active duck, and
-  // the duck latches afterwards — leaving the user quiet with nothing to undo.
+  // Unserialized, the restore sees no active duck and the duck latches after.
   assert.equal(applyVolume.mock.callCount(), 1);
   assert.deepEqual(applyVolume.mock.calls[0].arguments, [80]);
   assert.equal(mediaPlayer._duckActive, false);

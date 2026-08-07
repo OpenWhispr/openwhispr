@@ -48,14 +48,12 @@ function spawnAsync(cmd, args, { timeout = 3000 } = {}) {
   });
 }
 
-// Ducking defaults. The level is an absolute target, not a relative reduction:
-// "duck to 25%" means the system output ends up at 25%, whatever it was before.
+// Duck level is an absolute target, not a relative cut: 25 means end up at 25%.
 const DUCK_DEFAULT_LEVEL = 25;
-// Windows reads compile C# via Add-Type on first use, which can exceed the 3s default.
+// Add-Type compiles C# on first use, which can exceed the 3s default.
 const DUCK_READ_TIMEOUT_MS = 6000;
 const VOLUME_SET_TIMEOUT_MS = 2500;
-// Add-Type can emit warnings on stdout, so the read echoes its result behind a
-// sentinel rather than relying on the output being a bare number.
+// Add-Type can emit warnings on stdout, so reads echo behind a sentinel.
 const DUCK_STDOUT_SENTINEL = "__OWDUCK__:";
 
 class MediaPlayer {
@@ -749,18 +747,9 @@ try {
   }
 
   // --- System output volume ducking ---
-  //
-  // Unlike pause (which stops the player) and mute (which silences output), this
-  // lowers the system output volume to a target level and puts it back afterwards.
-  // Two invariants carry the design:
-  //   1. We refuse to duck when the current volume can't be read, so we never lower
-  //      a volume we couldn't restore.
-  //   2. `restoreSystemVolume` clears the latch before touching the platform, so a
-  //      failed restore can't pin the user at the ducked level for the rest of the
-  //      session by making the next duck a no-op.
 
-  // Serializes volume operations. Ducking on Windows takes a few hundred ms, and a
-  // quick tap can otherwise let the restore run before the duck lands and latches.
+  // Serializes volume ops: a Windows duck takes a few hundred ms, so a quick tap
+  // could otherwise let the restore run before the duck lands and latches.
   _enqueueVolumeOp(operation) {
     const run = this._volumeOpQueue.then(operation, operation);
     this._volumeOpQueue = run.then(
@@ -782,8 +771,8 @@ try {
           return false;
         }
 
-        // Already at or below the target: nothing was changed, so there is nothing
-        // to restore. Latching here would only cost a needless subprocess on stop.
+        // Nothing was changed, so there is nothing to restore. Latching here
+        // would only cost a needless subprocess on stop.
         if (original <= target) {
           debugLogger.debug(
             "Audio ducking skipped: volume already at or below target",
@@ -831,8 +820,8 @@ try {
     });
   }
 
-  // Best-effort restore for the quit path only. An async spawn started in
-  // `will-quit` gets orphaned before it can run, so this one place stays sync.
+  // Best-effort restore for the quit path only: an async spawn started during
+  // teardown gets orphaned before it runs, so this one place stays sync.
   restoreSystemVolumeSync() {
     if (!this._duckActive) return false;
 
@@ -866,8 +855,7 @@ try {
     return (output || "").toString().trim().replace(/\s+/g, " ").slice(0, 600) || undefined;
   }
 
-  // Parses a volume percentage out of a platform command's stdout.
-  // Returns an integer 0-100, or null when the output carries no usable value.
+  // Integer 0-100 from a platform command's stdout, or null if none is usable.
   _parseVolumePercent(stdout, kind) {
     const text = (stdout || "").toString();
 
@@ -889,8 +877,8 @@ try {
     return null;
   }
 
-  // Reads the current volume and lowers it to `target` in a single platform call
-  // where possible. Resolves the PRE-duck volume, or null if it couldn't be read.
+  // Reads and lowers to `target` in one call where possible. Resolves the
+  // pre-duck volume, or null if it couldn't be read.
   async _applyDuck(target) {
     if (process.platform === "win32") return this._duckWindows(target);
     if (process.platform === "darwin") return this._duckMacOS(target);
@@ -994,8 +982,8 @@ public class OwAudioEndpoint {
     );
   }
 
-  // Reads and lowers in one process: Add-Type compiles the C# on every launch, so
-  // splitting this into a read call plus a write call would double that cost.
+  // One process: Add-Type compiles the C# per launch, so a separate read and
+  // write would double that cost.
   async _duckWindows(target) {
     const command = [
       this._windowsVolumeScript(),
