@@ -990,13 +990,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._stopRequestedDuringMicRecovery = false;
       this._cancelRequestedDuringMicRecovery = false;
       this._receivedAudioData = false;
-      // Pre-roll audio is part of the recording, so the reported duration
-      // starts when the prepared stream started, not when the hold confirmed.
-      this.recordingStartTime = prepared?.startedAt ?? Date.now();
       const preRoll =
         prepared?.recorder && prepared.recorder.state === "recording"
           ? { recorder: prepared.recorder, chunks: prepared.chunks }
           : null;
+      // Pre-roll audio is part of the recording, so the reported duration
+      // starts when the prepared stream started — but only when its recorder
+      // was adopted; a prepared stream without pre-roll contributes no audio
+      // before this point, and back-dating would inflate durationSeconds.
+      this.recordingStartTime = preRoll ? prepared.startedAt : Date.now();
       this.createBatchRecorder(micStream, preRoll);
       preparedAdopted = true;
       this.isRecording = true;

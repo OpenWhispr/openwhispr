@@ -2645,8 +2645,14 @@ export async function initializeSettings(): Promise<void> {
       if (Number.isNaN(parsed)) {
         value =
           key === "audioRetentionDays" ? 30 : (state as unknown as Record<string, unknown>)[key];
+      } else if (key === "audioRetentionDays") {
+        value = Math.round(parsed);
+      } else if (key === "micWarmHoldSeconds") {
+        // Same whitelist as the setter — a hand-edited localStorage value
+        // synced from another window must not exceed the offered durations.
+        value = snapMicWarmHold(parsed);
       } else {
-        value = key === "audioRetentionDays" ? Math.round(parsed) : parsed;
+        value = parsed;
       }
     } else {
       value = newValue;
