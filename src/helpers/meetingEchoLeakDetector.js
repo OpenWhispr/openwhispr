@@ -56,24 +56,28 @@ class MeetingEchoLeakDetector {
     this.micHistory = [];
   }
 
+  // Returns the chunk RMS so callers can gate on system-side level without
+  // rescanning the buffer.
   recordSystemChunk(buffer, timestampMs = Date.now()) {
     if (!buffer?.length) {
-      return;
+      return 0;
     }
 
     const samples = pcm16ToFloat32(buffer);
     if (!samples.length) {
-      return;
+      return 0;
     }
 
+    const rms = computeRms(samples);
     this.systemHistory.push({
       timestampMs,
       samples,
       durationMs: (samples.length / SAMPLE_RATE) * 1000,
-      rms: computeRms(samples),
+      rms,
     });
 
     this._trimHistory(timestampMs);
+    return rms;
   }
 
   analyzeMicChunk(buffer, timestampMs = Date.now()) {
