@@ -112,11 +112,13 @@ import {
   canChangeCloudBackupPreference,
   effectiveAudioRetentionDays,
   effectiveLocalHistoryEnabled,
+  isAgentAllowed,
   isCloudBackupAllowed,
   lockedLocalHistoryValue,
   maxAudioRetentionDays,
 } from "../stores/policyRules";
 import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
+import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
@@ -278,7 +280,11 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
-  const { modes: transcriptionModes, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
+  const {
+    modes: transcriptionModes,
+    effectiveMode: effectiveTranscriptionMode,
+    isModeAllowed,
+  } = usePolicyModeOptions<InferenceModeOption>(
     [
       {
         id: "openwhispr",
@@ -307,16 +313,16 @@ function TranscriptionSection({
         icon: <Network className="w-4 h-4" />,
       },
     ],
-    "transcription"
+    "transcription",
+    transcriptionMode
   );
-
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
       return;
     }
-    if (mode === transcriptionMode) return;
+    if (mode === effectiveTranscriptionMode) return;
     setTranscriptionMode(mode);
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
@@ -391,19 +397,19 @@ function TranscriptionSection({
     <div className="space-y-4">
       <InferenceModeSelector
         modes={transcriptionModes}
-        activeMode={transcriptionMode}
+        activeMode={effectiveTranscriptionMode}
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {transcriptionMode === "local" && (
+      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {effectiveTranscriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}
           {renderPreviewToggle()}
         </>
       )}
 
-      {transcriptionMode === "self-hosted" && (
+      {effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel
           service="transcription"
           url={remoteTranscriptionUrl}
@@ -511,6 +517,7 @@ const LLM_TABS: LlmTab[] = [
   "noteFormatting",
   "chatIntelligence",
 ];
+const AGENT_LLM_TABS = new Set<LlmTab>(["dictationAgent", "chatIntelligence"]);
 
 function useSubTab<T extends string>(storageKey: string, options: readonly T[], initial?: T) {
   const [tab, setTab] = useLocalStorage<T>(storageKey, initial ?? options[0]);
@@ -633,7 +640,11 @@ function LlmsTabs({
   renderChatIntelligence: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", LLM_TABS, initialTab);
+  const agentAllowed = usePolicyStore(isAgentAllowed);
+  const visibleTabIds = agentAllowed
+    ? LLM_TABS
+    : LLM_TABS.filter((tabId) => !AGENT_LLM_TABS.has(tabId));
+  const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", visibleTabIds, initialTab);
 
   const subTabs = [
     { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
@@ -641,7 +652,7 @@ function LlmsTabs({
     { id: "dictationTranslation", name: t("settingsPage.llms.tabs.dictationTranslation") },
     { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
     { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
-  ];
+  ].filter((item) => visibleTabIds.includes(item.id as LlmTab));
 
   return (
     <div className="space-y-4">
@@ -662,10 +673,14 @@ function LlmsTabs({
         }}
       />
       <TabPanel active={tab === "dictationCleanup"}>{renderDictationCleanup()}</TabPanel>
-      <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      {agentAllowed && (
+        <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      )}
       <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
       <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
-      <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
+      {agentAllowed && (
+        <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
+      )}
     </div>
   );
 }
@@ -864,6 +879,7 @@ export default function SettingsPage({
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
 
   const settingsPolicyState = usePolicySnapshot();
+  const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
   const historyLockedByPolicy = lockedLocalHistoryValue(settingsPolicyState) !== null;
   const effectiveDataRetentionEnabled = effectiveLocalHistoryEnabled(
     settingsPolicyState,
@@ -3393,24 +3409,26 @@ EOF`,
             </div>
 
             {/* Voice Agent Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.general.voiceAgentHotkey.title")}
-                description={t("settingsPage.general.voiceAgentHotkey.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={voiceAgentKey}
-                    onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
-                    onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
-                    validate={validateVoiceAgentHotkey}
-                    disabled={isAgentHotkeyCommitting}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                  />
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
+            {agentAllowedByPolicy && (
+              <div>
+                <SectionHeader
+                  title={t("settingsPage.general.voiceAgentHotkey.title")}
+                  description={t("settingsPage.general.voiceAgentHotkey.description")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={voiceAgentKey}
+                      onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
+                      onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
+                      validate={validateVoiceAgentHotkey}
+                      disabled={isAgentHotkeyCommitting}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
 
             {/* Translation Hotkey */}
             <div>
@@ -3485,24 +3503,26 @@ EOF`,
             </div>
 
             {/* Chat Agent Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("agentMode.settings.hotkey")}
-                description={t("agentMode.settings.hotkeyDescription")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={chatAgentKey}
-                    onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
-                    onClear={() => commitAgentHotkey(setChatAgentKey, "")}
-                    validate={validateChatAgentHotkey}
-                    disabled={isAgentHotkeyCommitting}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                  />
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
+            {agentAllowedByPolicy && (
+              <div>
+                <SectionHeader
+                  title={t("agentMode.settings.hotkey")}
+                  description={t("agentMode.settings.hotkeyDescription")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={chatAgentKey}
+                      onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
+                      onClear={() => commitAgentHotkey(setChatAgentKey, "")}
+                      validate={validateChatAgentHotkey}
+                      disabled={isAgentHotkeyCommitting}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
           </div>
         );
 

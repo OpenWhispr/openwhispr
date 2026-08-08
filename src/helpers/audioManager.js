@@ -3,7 +3,7 @@ import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constant
 import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import {
-  isSecureEndpoint,
+  isSecureHttpEndpoint,
   isAzureOpenAIEndpoint,
   buildAzureTranscriptionUrl,
 } from "../utils/urlUtils";
@@ -3077,13 +3077,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const isSelfHosted = isSelfHostedTranscription(s);
     const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
+    const isManagedCustomEndpoint =
+      currentProvider === "custom" && usePolicyStore.getState().status === "managed";
+
+    const rejectManagedCustomEndpoint = () => {
+      const error = new Error("Transcription is restricted by your organization.");
+      error.code = "POLICY_RESTRICTED";
+      error.messageKey = "common.policyTranscriptionRestricted";
+      throw error;
+    };
 
     // Never fall back to the cloud default for self-hosted — fail closed instead.
     if (isSelfHosted) {
       const normalizedRemote = normalizeBaseUrl(remoteUrl);
-      if (!normalizedRemote || !isSecureEndpoint(normalizedRemote)) {
+      if (!normalizedRemote || !isSecureHttpEndpoint(normalizedRemote)) {
         throw new Error("Self-hosted transcription URL is invalid or unsupported");
       }
+    }
+
+    // A managed Custom-only fallback has no safe implicit destination. Reusing
+    // OpenAI here would send audio and credentials to a policy-denied provider.
+    if (isManagedCustomEndpoint && !currentBaseUrl.trim()) {
+      rejectManagedCustomEndpoint();
     }
 
     if (
@@ -3181,7 +3196,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Only validate HTTPS for custom endpoints (known providers are already HTTPS)
-      if (isCustomEndpoint && !isSecureEndpoint(normalizedBase)) {
+      if (isCustomEndpoint && !isSecureHttpEndpoint(normalizedBase)) {
+        if (isManagedCustomEndpoint) {
+          rejectManagedCustomEndpoint();
+        }
         logger.warn(
           "STT endpoint: HTTPS required, falling back to default",
           { attemptedUrl: normalizedBase },
@@ -3234,7 +3252,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         { error: error.message, stack: error.stack },
         "transcription"
       );
-      if (isSelfHosted) throw error;
+      if (isSelfHosted || isManagedCustomEndpoint) throw error;
       this.cachedTranscriptionEndpoint = API_ENDPOINTS.TRANSCRIPTION;
       this.cachedEndpointProvider = currentProvider;
       this.cachedEndpointBaseUrl = currentBaseUrl;

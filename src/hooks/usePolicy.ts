@@ -1,13 +1,13 @@
 import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
-import { useSettingsStore } from "../stores/settingsStore";
+import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
 import {
-  enforceModeOptions,
+  filterModeOptionsByPolicy,
   getTranscriptionSelection,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
+  reconcilePolicyModeSelection,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
@@ -25,28 +25,44 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
 /** Reactive to both stores — updates when the policy or the relevant settings change. */
 export function useTranscriptionContextAllowed(context: TranscriptionPolicyContext): boolean {
   const snapshot = usePolicySnapshot();
-  const selection = useSettingsStore(useShallow((s) => getTranscriptionSelection(s, context)));
+  const selection = useSettingsStore(
+    useShallow((settings) =>
+      getTranscriptionSelection(selectPolicyEffectiveSettings(settings, snapshot), context)
+    )
+  );
   return isTranscriptionSelectionAllowed(snapshot, selection);
 }
 
 interface PolicyModeOptions<T> {
   modes: T[];
+  effectiveMode: InferenceMode | null;
   /**
-   * "Disabled" mode options still fire onSelect (the sign-in gate relies on
-   * that to start onboarding), so call this at the top of the select handler —
-   * policy must be enforced there, not in the UI.
+   * Selection handlers still enforce policy in case a stale renderer event
+   * arrives after an option disappears.
    */
   isModeAllowed: (mode: InferenceMode) => boolean;
 }
 
-/** Mode options with policy-disallowed entries disabled and badged. */
-export function usePolicyModeOptions<
-  T extends { id: InferenceMode; disabled?: boolean; badge?: string },
->(options: T[], scope: PolicyScope): PolicyModeOptions<T> {
-  const { t } = useTranslation();
+/** Visible mode options and a deterministic replacement for a denied managed selection. */
+export function usePolicyModeOptions<T extends { id: InferenceMode; disabled?: boolean }>(
+  options: T[],
+  scope: PolicyScope,
+  selectedMode: InferenceMode,
+  providerCatalog?: {
+    byokProviders: readonly string[];
+    enterpriseProviders?: readonly string[];
+  }
+): PolicyModeOptions<T> {
   const snapshot = usePolicySnapshot();
+  const modes = filterModeOptionsByPolicy(options, scope, snapshot, providerCatalog);
+  const selectionIsVisible = modes.some((option) => option.id === selectedMode && !option.disabled);
+  const preservesRawSelection = snapshot.status === "idle" || snapshot.status === "unmanaged";
   return {
-    modes: enforceModeOptions(options, scope, snapshot, t("common.managedByOrg")),
+    modes,
+    effectiveMode:
+      preservesRawSelection || selectionIsVisible
+        ? selectedMode
+        : reconcilePolicyModeSelection(options, scope, snapshot, selectedMode, providerCatalog),
     isModeAllowed: (mode: InferenceMode) => isModeAllowedByPolicy(snapshot, scope, mode),
   };
 }

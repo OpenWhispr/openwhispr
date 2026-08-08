@@ -31,7 +31,7 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import { useSettingsStore } from "../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
 import {
   isAgentAllowed,
@@ -592,7 +592,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const retryTranscription = useCallback(
     async (id: number, options?: { isRecover?: boolean }) => {
       try {
-        const s = useSettingsStore.getState();
+        const s = getSettings();
         if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return;
@@ -625,13 +625,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const [
                 { default: ReasoningService },
                 { resolveReasoningRoute },
-                { getEffectiveCleanupModel },
+                { getEffectiveCleanupModel, getSettings: getEffectiveSettings },
               ] = await Promise.all([
                 import("../services/ReasoningService"),
                 import("../helpers/audioManager"),
                 import("../stores/settingsStore"),
               ]);
-              const settings = useSettingsStore.getState();
+              const settings = getEffectiveSettings();
               const agentName = localStorage.getItem("agentName") || null;
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {

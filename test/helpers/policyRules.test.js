@@ -95,6 +95,217 @@ test("mode and provider decisions fail closed for empty allowlists", async () =>
   assert.equal(isProviderAllowedByPolicy(snapshot, "transcription", "openai"), false);
 });
 
+test("managed mode lists hide denied options while unmanaged lists remain unchanged", async () => {
+  const { filterModeOptionsByPolicy } = await load();
+  const options = [
+    { id: "openwhispr", label: "Cloud" },
+    { id: "providers", label: "Providers" },
+    { id: "local", label: "Local" },
+    { id: "self-hosted", label: "Self-hosted" },
+  ];
+  const managed = { status: "managed", policy, appVersion: "1.8.1" };
+  const unmanaged = { status: "unmanaged", policy: null, appVersion: "1.8.1" };
+
+  assert.deepEqual(
+    filterModeOptionsByPolicy(options, "transcription", managed).map((option) => option.id),
+    ["openwhispr", "local"]
+  );
+  assert.deepEqual(filterModeOptionsByPolicy(options, "transcription", unmanaged), options);
+});
+
+test("provider-backed modes are hidden when their provider allowlist is empty", async () => {
+  const { filterModeOptionsByPolicy, reconcilePolicyModeSelection } = await load();
+  const noProviderPolicy = {
+    ...policy,
+    transcription: { allowedModes: ["providers", "local"], allowedByokProviders: [] },
+    llm: {
+      allowedModes: ["enterprise", "local"],
+      allowedByokProviders: [],
+      allowedEnterpriseProviders: [],
+    },
+  };
+  const managed = { status: "managed", policy: noProviderPolicy, appVersion: "1.8.1" };
+  const transcriptionOptions = [{ id: "providers" }, { id: "local" }];
+  const llmOptions = [{ id: "enterprise" }, { id: "local" }];
+
+  assert.deepEqual(
+    filterModeOptionsByPolicy(transcriptionOptions, "transcription", managed).map(
+      (option) => option.id
+    ),
+    ["local"]
+  );
+  assert.deepEqual(
+    filterModeOptionsByPolicy(llmOptions, "llm", managed).map((option) => option.id),
+    ["local"]
+  );
+  assert.equal(
+    reconcilePolicyModeSelection(transcriptionOptions, "transcription", managed, "providers"),
+    "local"
+  );
+});
+
+test("enterprise mode stays hidden when policy allows only unavailable desktop providers", async () => {
+  const { filterModeOptionsByPolicy } = await load();
+  const unavailableEnterprisePolicy = {
+    ...policy,
+    llm: {
+      allowedModes: ["enterprise"],
+      allowedByokProviders: [],
+      allowedEnterpriseProviders: ["vertex"],
+    },
+  };
+
+  assert.deepEqual(
+    filterModeOptionsByPolicy([{ id: "enterprise" }], "llm", {
+      status: "managed",
+      policy: unavailableEnterprisePolicy,
+      appVersion: "1.8.1",
+    }),
+    []
+  );
+});
+
+test("denied managed modes fall back in visible catalog order", async () => {
+  const { reconcilePolicyModeSelection } = await load();
+  const options = [
+    { id: "openwhispr" },
+    { id: "providers" },
+    { id: "local" },
+    { id: "self-hosted" },
+  ];
+  const managed = { status: "managed", policy, appVersion: "1.8.1" };
+
+  assert.equal(
+    reconcilePolicyModeSelection(options, "transcription", managed, "providers"),
+    "openwhispr"
+  );
+  assert.equal(reconcilePolicyModeSelection(options, "transcription", managed, "local"), null);
+});
+
+test("mode fallback skips unavailable choices and never invents an empty-allowlist choice", async () => {
+  const { reconcilePolicyModeSelection } = await load();
+  const options = [{ id: "openwhispr", disabled: true }, { id: "local" }];
+  const managed = { status: "managed", policy, appVersion: "1.8.1" };
+  const emptyPolicy = {
+    ...policy,
+    transcription: { allowedModes: [], allowedByokProviders: [] },
+  };
+
+  assert.equal(
+    reconcilePolicyModeSelection(options, "transcription", managed, "providers"),
+    "local"
+  );
+  assert.equal(
+    reconcilePolicyModeSelection(
+      options,
+      "transcription",
+      { status: "managed", policy: emptyPolicy, appVersion: "1.8.1" },
+      "providers"
+    ),
+    null
+  );
+});
+
+test("managed provider lists hide denied BYOK and enterprise providers", async () => {
+  const { filterByokProviderOptionsByPolicy, filterEnterpriseProviderOptionsByPolicy } =
+    await load();
+  const byokOptions = [{ id: "openai" }, { id: "groq" }, { id: "custom" }];
+  const enterpriseOptions = [{ id: "bedrock" }, { id: "azure" }];
+  const managed = { status: "managed", policy, appVersion: "1.8.1" };
+
+  assert.deepEqual(
+    filterByokProviderOptionsByPolicy(byokOptions, "llm", managed).map((option) => option.id),
+    ["openai"]
+  );
+  assert.deepEqual(filterEnterpriseProviderOptionsByPolicy(enterpriseOptions, managed), []);
+});
+
+test("provider fallback preserves an allowed selection and chooses the first visible alternative", async () => {
+  const { reconcileProviderSelection } = await load();
+  const allowedProviders = [{ id: "bedrock" }, { id: "azure", disabled: true }];
+
+  assert.equal(reconcileProviderSelection("bedrock", allowedProviders), null);
+  assert.equal(reconcileProviderSelection("vertex", allowedProviders), "bedrock");
+  assert.equal(reconcileProviderSelection("vertex", []), null);
+});
+
+test("effective managed selections use allowed modes and providers without changing unmanaged choices", async () => {
+  const { resolveEffectivePolicySelection } = await load();
+  const managed = { status: "managed", policy, appVersion: "1.8.1" };
+  const unmanaged = { status: "unmanaged", policy: null, appVersion: "1.8.1" };
+  const catalog = {
+    modes: ["openwhispr", "providers", "local", "self-hosted"],
+    byokProviders: ["openai", "groq", "custom"],
+  };
+
+  assert.deepEqual(
+    resolveEffectivePolicySelection(
+      managed,
+      "transcription",
+      { mode: "providers", provider: "groq" },
+      catalog
+    ),
+    { mode: "openwhispr", provider: "groq" }
+  );
+  assert.deepEqual(
+    resolveEffectivePolicySelection(
+      unmanaged,
+      "transcription",
+      { mode: "providers", provider: "groq" },
+      catalog
+    ),
+    { mode: "providers", provider: "groq" }
+  );
+});
+
+test("effective managed provider selection falls back inside an allowed provider mode", async () => {
+  const { resolveEffectivePolicySelection } = await load();
+  const providersPolicy = {
+    ...policy,
+    transcription: {
+      allowedModes: ["providers"],
+      allowedByokProviders: ["openai"],
+    },
+  };
+
+  assert.deepEqual(
+    resolveEffectivePolicySelection(
+      { status: "managed", policy: providersPolicy, appVersion: "1.8.1" },
+      "transcription",
+      { mode: "providers", provider: "groq" },
+      {
+        modes: ["openwhispr", "providers", "local", "self-hosted"],
+        byokProviders: ["openai", "groq", "custom"],
+      }
+    ),
+    { mode: "providers", provider: "openai" }
+  );
+});
+
+test("effective selection skips policy providers unavailable to a narrower surface", async () => {
+  const { resolveEffectivePolicySelection } = await load();
+  const meetingPolicy = {
+    ...policy,
+    transcription: {
+      allowedModes: ["providers", "local"],
+      allowedByokProviders: ["groq"],
+    },
+  };
+
+  assert.deepEqual(
+    resolveEffectivePolicySelection(
+      { status: "managed", policy: meetingPolicy, appVersion: "1.8.1" },
+      "transcription",
+      { mode: "providers", provider: "groq" },
+      {
+        modes: ["openwhispr", "providers", "local", "self-hosted"],
+        byokProviders: ["openai", "corti", "tinfoil"],
+      }
+    ),
+    { mode: "local", provider: "groq" }
+  );
+});
+
 test("empty managed scope allowlists make that scope unavailable", async () => {
   const { isLlmSelectionAllowed } = await load();
   const emptyLlmPolicy = {
@@ -191,6 +402,69 @@ test("domain-only sharing permits only private recovery and domain visibility", 
   assert.equal(isShareActionAllowed(snapshot, "copy-link", "domain"), true);
   assert.equal(isShareActionAllowed(snapshot, "rotate-link", "domain"), true);
   assert.equal(isShareActionAllowed(snapshot, "copy-link", "invited"), false);
+});
+
+test("share visibility lists hide policy-denied choices", async () => {
+  const { filterShareVisibilityOptions } = await load();
+  const options = [{ id: "private" }, { id: "invited" }, { id: "link" }, { id: "domain" }];
+  const domainOnlyPolicy = {
+    ...policy,
+    sharing: { externalLinkSharing: "domain_only" },
+  };
+  const disabledPolicy = {
+    ...policy,
+    sharing: { externalLinkSharing: "disabled" },
+  };
+
+  assert.deepEqual(
+    filterShareVisibilityOptions(options, {
+      status: "managed",
+      policy: domainOnlyPolicy,
+      appVersion: "1.8.1",
+    }).map((option) => option.id),
+    ["private", "domain"]
+  );
+  assert.deepEqual(
+    filterShareVisibilityOptions(options, {
+      status: "managed",
+      policy: disabledPolicy,
+      appVersion: "1.8.1",
+    }).map((option) => option.id),
+    ["private"]
+  );
+});
+
+test("domain-only sharing is usable only when the owner can offer a domain choice", async () => {
+  const { hasUsableExternalShareVisibility } = await load();
+  const snapshot = {
+    status: "managed",
+    policy: { ...policy, sharing: { externalLinkSharing: "domain_only" } },
+    appVersion: "1.8.1",
+  };
+
+  assert.equal(hasUsableExternalShareVisibility(snapshot, true), true);
+  assert.equal(hasUsableExternalShareVisibility(snapshot, false), false);
+});
+
+test("provider fallback persistence is limited to resolved unmanaged and signed-out idle users", async () => {
+  const { shouldPersistProviderFallback } = await load();
+
+  assert.equal(
+    shouldPersistProviderFallback({ status: "unmanaged", policy: null, appVersion: "1.8.1" }, true),
+    true
+  );
+  assert.equal(
+    shouldPersistProviderFallback({ status: "idle", policy: null, appVersion: null }, false),
+    true
+  );
+  assert.equal(
+    shouldPersistProviderFallback({ status: "idle", policy: null, appVersion: null }, true),
+    false
+  );
+  assert.equal(
+    shouldPersistProviderFallback({ status: "managed", policy, appVersion: "1.8.1" }, true),
+    false
+  );
 });
 
 test("copying an existing share link follows its own visibility", async () => {
@@ -310,6 +584,17 @@ test("re-entering providers mode replaces a dormant policy-disallowed provider",
       hasCustomUrl: false,
     }),
     null
+  );
+
+  assert.deepEqual(
+    reconcileCloudProviderSelection({
+      selectedProvider: "groq",
+      selectedModel: "whisper-large-v3",
+      allowedProviders: [],
+      customAllowed: true,
+      hasCustomUrl: false,
+    }),
+    { provider: "custom", model: "whisper-large-v3" }
   );
 });
 

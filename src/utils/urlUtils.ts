@@ -51,6 +51,18 @@ export function isSecureEndpoint(url: string): boolean {
   }
 }
 
+export function isSecureHttpEndpoint(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" ||
+      (parsed.protocol === "http:" && isPrivateHost(parsed.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
 const AZURE_HOST_SUFFIXES = [
   ".openai.azure.com",
   ".cognitiveservices.azure.com",

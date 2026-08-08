@@ -8,6 +8,7 @@ const enTranslations = require("../../src/locales/en/translation.json");
 // would surface "No reasoning model selected" or a dispatch error instead.
 const AGENT_RESTRICTED = enTranslations.common.policyAgentRestricted;
 const REASONING_RESTRICTED = enTranslations.common.policyAiProcessingRestricted;
+const HTTPS_REQUIRED = enTranslations.reasoning.custom.httpsRequired;
 
 function buildPolicy({ agentEnabled = true, llmModes = [], llmByokProviders = [] } = {}) {
   return {
@@ -38,6 +39,8 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
   const reasoningService = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
   t.after(() => reasoningService.destroy());
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { resolveConfiguredOpenAIBase } = await vite.ssrLoadModule("/services/ai/openaiBase.ts");
   const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
   await i18n.changeLanguage("en");
 
@@ -129,4 +132,120 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     });
     await assert.rejects(stream.next(), { message: REASONING_RESTRICTED });
   });
+
+  await t.test("managed Custom endpoints fail closed before inference dispatch", async () => {
+    setPolicy({ llmModes: ["providers"], llmByokProviders: ["custom"] });
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      return new Response(JSON.stringify({ error: "must not dispatch" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    try {
+      for (const baseUrl of ["", "http://public.example.com/v1", "ftp://192.168.1.20/v1"]) {
+        await assert.rejects(
+          reasoningService.processText("hi", "gpt-4.1", null, {
+            provider: "custom",
+            baseUrl,
+            customApiKey: "must-not-leak",
+          }),
+          { message: REASONING_RESTRICTED }
+        );
+      }
+      assert.equal(fetchCalls, 0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  await t.test("unmanaged Custom endpoint compatibility remains unchanged", () => {
+    usePolicyStore.setState({ status: "unmanaged", appVersion: "1.8.1", policy: null });
+
+    assert.equal(resolveConfiguredOpenAIBase("custom", ""), "https://api.openai.com/v1");
+    assert.equal(
+      resolveConfiguredOpenAIBase("custom", "http://public.example.com/v1"),
+      "https://api.openai.com/v1"
+    );
+    assert.equal(
+      resolveConfiguredOpenAIBase("custom", "http://192.168.1.20:11434/v1"),
+      "http://192.168.1.20:11434/v1"
+    );
+  });
+
+  await t.test("normal cleanup uses its saved valid Custom endpoint", async () => {
+    setPolicy({ llmModes: ["providers"], llmByokProviders: ["custom"] });
+    useSettingsStore.setState({
+      cleanupMode: "providers",
+      cleanupProvider: "custom",
+      cleanupCloudBaseUrl: "https://custom.example.com/v1",
+      cleanupCustomApiKey: "custom-key",
+    });
+
+    const originalFetch = globalThis.fetch;
+    const requestedUrls = [];
+    globalThis.fetch = async (url) => {
+      requestedUrls.push(String(url));
+      return new Response(JSON.stringify({ error: "expected test stop" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    try {
+      await assert.rejects(reasoningService.processText("hi", "custom-model"), {
+        message: "expected test stop",
+      });
+      assert.ok(requestedUrls.length > 0);
+      assert.ok(requestedUrls.every((url) => url.startsWith("https://custom.example.com/v1/")));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  await t.test(
+    "self-hosted execution rejects unsafe endpoint schemes before dispatch",
+    async () => {
+      setPolicy({ llmModes: ["self-hosted"], llmByokProviders: [] });
+      const originalFetch = globalThis.fetch;
+      let fetchCalls = 0;
+      globalThis.fetch = async () => {
+        fetchCalls += 1;
+        return new Response(null, { status: 500 });
+      };
+
+      try {
+        for (const lanUrl of ["http://public.example.com/v1", "ftp://192.168.1.20/v1"]) {
+          await assert.rejects(
+            reasoningService.processText("hi", "custom-model", null, { lanUrl }),
+            { message: HTTPS_REQUIRED }
+          );
+
+          const textStream = reasoningService.processTextStreaming(
+            [{ role: "user", content: "hi" }],
+            "custom-model",
+            "custom",
+            { systemPrompt: "s", lanUrl }
+          );
+          await assert.rejects(textStream.next(), { message: HTTPS_REQUIRED });
+
+          const toolStream = reasoningService.processTextStreamingAI(
+            [{ role: "user", content: "hi" }],
+            "custom-model",
+            "custom",
+            { systemPrompt: "s", lanUrl },
+            {}
+          );
+          await assert.rejects(toolStream.next(), { message: HTTPS_REQUIRED });
+        }
+
+        assert.equal(fetchCalls, 0);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  );
 });

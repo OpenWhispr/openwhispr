@@ -32,7 +32,11 @@ export function UploadTranscriptionPanel() {
     setUploadCloudTranscriptionBaseUrl,
     setUploadCloudTranscriptionMode,
   } = useSettingsStore();
-  const { modes: transcriptionModes, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
+  const {
+    modes: transcriptionModes,
+    effectiveMode: effectiveTranscriptionMode,
+    isModeAllowed,
+  } = usePolicyModeOptions<InferenceModeOption>(
     [
       {
         id: "openwhispr",
@@ -55,16 +59,16 @@ export function UploadTranscriptionPanel() {
         icon: <Cpu className="w-4 h-4" />,
       },
     ],
-    "transcription"
+    "transcription",
+    uploadTranscriptionMode
   );
-
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
       return;
     }
-    if (mode === uploadTranscriptionMode) return;
+    if (mode === effectiveTranscriptionMode) return;
     setUploadTranscriptionMode(mode);
     setUploadUseLocalWhisper(mode === "local");
     setUploadCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
@@ -106,12 +110,12 @@ export function UploadTranscriptionPanel() {
     <div className="space-y-3">
       <InferenceModeSelector
         modes={transcriptionModes}
-        activeMode={uploadTranscriptionMode}
+        activeMode={effectiveTranscriptionMode}
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {uploadTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {uploadTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
     </div>
   );
 }
