@@ -29,6 +29,8 @@ import { useClipboard } from "../hooks/useClipboard";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
 import { useSettingsStore } from "../stores/settingsStore";
+import { usePolicyStore } from "../stores/policyStore";
+import { isAgentAllowed } from "../stores/policyRules";
 import LanguageSelector from "./ui/LanguageSelector";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
@@ -71,6 +73,7 @@ interface OnboardingFlowProps {
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
+  const agentAllowed = usePolicyStore(isAgentAllowed);
 
   const [currentStep, setCurrentStep, removeCurrentStep] = useLocalStorage(
     "onboardingCurrentStep",
@@ -215,7 +218,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
     list.push({ id: "activation", title: t("onboarding.steps.activation"), icon: Command });
     // Hidden for continue-without-account users: they have no LLM, so the agent can't run.
-    if (isSignedIn && !skipAuth) {
+    if (isSignedIn && !skipAuth && agentAllowed) {
       list.push({ id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles });
     }
     if (showMeetingStep) {
@@ -223,7 +226,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
     list.push({ id: "finish", title: t("onboarding.steps.finish"), icon: Flag });
     return list;
-  }, [isSignedIn, skipAuth, showMeetingStep, t]);
+  }, [agentAllowed, isSignedIn, skipAuth, showMeetingStep, t]);
 
   const currentStepId = steps[currentStep]?.id;
 

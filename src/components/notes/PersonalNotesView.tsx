@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Plus, SquarePen, Search, Sparkles } from "lucide-react";
 import { useToast } from "../ui/useToast";
 import NoteEditor from "./NoteEditor";
@@ -15,6 +16,7 @@ import type { NoteItem } from "../../types/electron";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
+  selectPolicyEffectiveSettings,
   selectResolvedNoteFormatting,
 } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
@@ -54,7 +56,7 @@ import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
-import { useTranscriptionContextAllowed } from "../../hooks/usePolicy";
+import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
@@ -198,8 +200,18 @@ export default function PersonalNotesView({
     [commitDraft, persistPendingWrites, takePendingSnapshots]
   );
   const { toast } = useToast();
-  const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
-  const effectiveModelId = useSettingsStore((s) => selectResolvedNoteFormatting(s).model);
+  const policyState = usePolicySnapshot();
+  const noteFormatting = useSettingsStore(
+    useShallow((settings) => {
+      const effectiveSettings = selectPolicyEffectiveSettings(settings, policyState);
+      return {
+        isCloudMode: selectIsCloudNoteFormattingMode(effectiveSettings),
+        modelId: selectResolvedNoteFormatting(effectiveSettings).model,
+      };
+    })
+  );
+  const isCloudMode = noteFormatting.isCloudMode;
+  const effectiveModelId = noteFormatting.modelId;
   const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
   const { isSignedIn } = useAuth();
   const teamSpacesAvailable = useTeamSpacesCapability(isSignedIn);

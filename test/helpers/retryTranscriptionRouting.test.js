@@ -98,3 +98,48 @@ test("does not intercept non-self-hosted retry modes", async () => {
     assert.equal(resolveSelfHostedRetryRoute(settings), null);
   }
 });
+
+test("custom transcription routes require a configured secure endpoint", async () => {
+  const { resolveCustomTranscriptionRoute } = await load();
+
+  for (const baseUrl of [
+    undefined,
+    "",
+    "not a url",
+    "http://public.example.com/v1",
+    "ftp://192.168.1.20/v1",
+    "ws://192.168.1.20/v1",
+  ]) {
+    assert.deepEqual(resolveCustomTranscriptionRoute({ provider: "custom", baseUrl }), {
+      kind: "configuration-error",
+      error: "Custom transcription endpoint is invalid or unsupported",
+    });
+  }
+
+  assert.deepEqual(
+    resolveCustomTranscriptionRoute({
+      provider: "custom",
+      baseUrl: "http://192.168.1.20:5001/v1",
+    }),
+    {
+      kind: "custom",
+      baseUrl: "http://192.168.1.20:5001/v1",
+      endpoint: "http://192.168.1.20:5001/v1/audio/transcriptions",
+    }
+  );
+  assert.deepEqual(
+    resolveCustomTranscriptionRoute({
+      provider: "custom",
+      baseUrl: "https://api.example.com/v1/audio/transcriptions",
+    }),
+    {
+      kind: "custom",
+      baseUrl: "https://api.example.com/v1",
+      endpoint: "https://api.example.com/v1/audio/transcriptions",
+    }
+  );
+  assert.equal(
+    resolveCustomTranscriptionRoute({ provider: "openai", baseUrl: "https://api.openai.com/v1" }),
+    null
+  );
+});

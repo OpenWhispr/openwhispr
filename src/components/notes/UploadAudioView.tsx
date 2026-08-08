@@ -39,6 +39,7 @@ import { getAllReasoningModels, getBatchTranscriptionModel } from "../../models/
 import {
   useSettingsStore,
   selectIsCloudCleanupMode,
+  selectPolicyEffectiveSettings,
   selectResolvedUploadTranscription,
   getSettings,
 } from "../../stores/settingsStore";
@@ -56,7 +57,8 @@ import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
 import { isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
-import { useTranscriptionContextAllowed } from "../../hooks/usePolicy";
+import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
+import { resolveCustomTranscriptionRoute } from "../../helpers/retryTranscriptionRouting";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -241,6 +243,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     customTranscriptionApiKey,
   } = useSettings();
+  const policyState = usePolicySnapshot();
 
   const {
     useLocalWhisper,
@@ -252,7 +255,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionBaseUrl,
     cloudTranscriptionMode,
     transcriptionMode,
-  } = useSettingsStore(useShallow(selectResolvedUploadTranscription));
+  } = useSettingsStore(
+    useShallow((settings) =>
+      selectResolvedUploadTranscription(selectPolicyEffectiveSettings(settings, policyState))
+    )
+  );
   const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");
 
   const remoteTranscriptionUrl = useSettingsStore((s) => s.remoteTranscriptionUrl);
@@ -269,10 +276,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
   const cortiTenant = useSettingsStore((s) => s.cortiTenant);
   const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
-  const isCloudCleanup = useSettingsStore(selectIsCloudCleanupMode);
-  const effectiveCleanupModel = useSettingsStore((s) =>
-    selectIsCloudCleanupMode(s) ? "" : s.cleanupModel
+  const isCloudCleanup = useSettingsStore((settings) =>
+    selectIsCloudCleanupMode(selectPolicyEffectiveSettings(settings, policyState))
   );
+  const effectiveCleanupModel = useSettingsStore((settings) => {
+    const effectiveSettings = selectPolicyEffectiveSettings(settings, policyState);
+    return selectIsCloudCleanupMode(effectiveSettings) ? "" : effectiveSettings.cleanupModel;
+  });
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
 
   const isOpenWhisprCloud =
@@ -368,8 +378,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         if (isSelfHosted) {
           if (!cancelled) setProviderReady(!!remoteTranscriptionUrl?.trim());
         } else if (cloudTranscriptionProvider === "custom") {
-          // Custom providers only need a base URL; API key is truly optional
-          if (!cancelled) setProviderReady(!!cloudTranscriptionBaseUrl?.trim());
+          const customRoute = resolveCustomTranscriptionRoute({
+            provider: cloudTranscriptionProvider,
+            baseUrl: cloudTranscriptionBaseUrl,
+          });
+          if (!cancelled) setProviderReady(customRoute?.kind === "custom");
         } else if (cloudTranscriptionProvider === "corti") {
           if (!cancelled) setProviderReady(!!(cortiClientId && cortiClientSecret));
         } else {

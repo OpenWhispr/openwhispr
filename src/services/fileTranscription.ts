@@ -1,4 +1,5 @@
 import { withSessionRefresh } from "../lib/auth";
+import { resolveCustomTranscriptionRoute } from "../helpers/retryTranscriptionRouting.js";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -61,12 +62,24 @@ export async function transcribeFile(
     });
   }
 
+  const customRoute = resolveCustomTranscriptionRoute({
+    provider: cfg.cloudTranscriptionProvider,
+    baseUrl: cfg.cloudTranscriptionBaseUrl,
+  });
+  if (customRoute?.kind === "configuration-error") {
+    return {
+      success: false,
+      error: customRoute.error,
+      code: "CUSTOM_ENDPOINT_INVALID",
+    };
+  }
+
   // Self-hosted fields make the handler route to the configured server
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
     apiKey: cfg.getApiKey(),
-    baseUrl: cfg.cloudTranscriptionBaseUrl || "",
+    baseUrl: customRoute?.baseUrl ?? cfg.cloudTranscriptionBaseUrl ?? "",
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
     provider: cfg.cloudTranscriptionProvider,

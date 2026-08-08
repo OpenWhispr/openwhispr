@@ -86,3 +86,13 @@ test("unparseable input is never secure", async () => {
   assert.equal(isSecureEndpoint(""), false);
   assert.equal(isSecureEndpoint("not-a-url"), false);
 });
+
+test("secure HTTP endpoints reject non-HTTP schemes even on private hosts", async () => {
+  const { isSecureHttpEndpoint } = await load();
+
+  assert.equal(isSecureHttpEndpoint("https://api.example.com/v1"), true);
+  assert.equal(isSecureHttpEndpoint("http://192.168.1.20:5001/v1"), true);
+  assert.equal(isSecureHttpEndpoint("http://public.example.com/v1"), false);
+  assert.equal(isSecureHttpEndpoint("ftp://192.168.1.20/v1"), false);
+  assert.equal(isSecureHttpEndpoint("ws://127.0.0.1:5001/v1"), false);
+});

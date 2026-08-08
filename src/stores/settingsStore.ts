@@ -27,6 +27,15 @@ import {
   type InferenceScopeStoreKeys,
 } from "../config/inferenceScopes";
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
+import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
+import modelRegistryData from "../models/modelRegistryData.json";
+import {
+  getTranscriptionSelection,
+  resolveEffectivePolicySelection,
+  type PolicyDecisionSnapshot,
+  type TranscriptionPolicyContext,
+} from "./policyRules";
+import { usePolicyStore } from "./policyStore";
 import type {
   TranscriptionSettings,
   CleanupSettings,
@@ -43,6 +52,83 @@ import type { Snippet } from "../utils/snippets";
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
 const isBrowser = typeof window !== "undefined";
+
+const TRANSCRIPTION_POLICY_CATALOG = {
+  modes: ["openwhispr", "providers", "local", "self-hosted"] as const,
+  byokProviders: [
+    ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
+    "custom",
+  ],
+};
+
+const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
+  ...TRANSCRIPTION_POLICY_CATALOG,
+  byokProviders: modelRegistryData.transcriptionProviders
+    .filter((provider) => provider.models.some((model) => model.streaming))
+    .map((provider) => provider.id),
+};
+
+const LLM_POLICY_CATALOG = {
+  modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
+  byokProviders: [
+    ...modelRegistryData.cloudProviders.map((provider) => provider.id),
+    "openrouter",
+    "custom",
+  ],
+  // Azure and Vertex remain intentionally unavailable in the desktop picker.
+  enterpriseProviders: ["bedrock"],
+};
+
+const localLlmProviderIds = new Set(
+  modelRegistryData.localProviders.map((provider) => provider.id)
+);
+
+function transcriptionProviderModels(
+  providerId: string,
+  context: TranscriptionPolicyContext
+): Array<{ id: string; streaming?: boolean }> {
+  const models =
+    modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
+      ?.models ?? [];
+  return context === "meeting" ? models.filter((model) => model.streaming) : models;
+}
+
+function defaultTranscriptionModel(
+  providerId: string,
+  context: TranscriptionPolicyContext
+): string {
+  return transcriptionProviderModels(providerId, context)[0]?.id ?? "whisper-1";
+}
+
+function transcriptionModelBelongsToProvider(
+  providerId: string,
+  modelId: string,
+  context: TranscriptionPolicyContext
+): boolean {
+  if (providerId === "custom") return Boolean(modelId);
+  return transcriptionProviderModels(providerId, context).some((model) => model.id === modelId);
+}
+
+function canonicalTranscriptionBaseUrl(providerId: string): string | null {
+  return (
+    modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
+      ?.baseUrl ?? null
+  );
+}
+
+function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion: string): string {
+  const providers =
+    mode === "local"
+      ? modelRegistryData.localProviders
+      : mode === "enterprise"
+        ? modelRegistryData.enterpriseProviders
+        : modelRegistryData.cloudProviders;
+  const defaultModel =
+    providers.find((provider) => provider.id === providerId)?.models[0]?.id ?? "";
+  return mode === "enterprise" && providerId === "bedrock"
+    ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
+    : defaultModel;
+}
 
 function readString(key: string, fallback: string): string {
   if (!isBrowser) return fallback;
@@ -2170,13 +2256,164 @@ export function setResolvedLLMConfig(
 }
 
 export function isCloudChatAgentMode() {
-  return selectIsCloudChatAgentMode(useSettingsStore.getState());
+  return selectIsCloudChatAgentMode(getSettings());
 }
 
 // --- Convenience getters for non-React code ---
 
-export function getSettings() {
-  return useSettingsStore.getState();
+interface TranscriptionContextKeys {
+  context: TranscriptionPolicyContext;
+  mode: keyof SettingsState;
+  useLocal: keyof SettingsState;
+  cloudMode: keyof SettingsState;
+  provider: keyof SettingsState;
+  model: keyof SettingsState;
+  baseUrl: keyof SettingsState;
+}
+
+const TRANSCRIPTION_CONTEXT_KEYS: readonly TranscriptionContextKeys[] = [
+  {
+    context: "dictation",
+    mode: "transcriptionMode",
+    useLocal: "useLocalWhisper",
+    cloudMode: "cloudTranscriptionMode",
+    provider: "cloudTranscriptionProvider",
+    model: "cloudTranscriptionModel",
+    baseUrl: "cloudTranscriptionBaseUrl",
+  },
+  {
+    context: "meeting",
+    mode: "meetingTranscriptionMode",
+    useLocal: "meetingUseLocalWhisper",
+    cloudMode: "meetingCloudTranscriptionMode",
+    provider: "meetingCloudTranscriptionProvider",
+    model: "meetingCloudTranscriptionModel",
+    baseUrl: "meetingCloudTranscriptionBaseUrl",
+  },
+  {
+    context: "upload",
+    mode: "uploadTranscriptionMode",
+    useLocal: "uploadUseLocalWhisper",
+    cloudMode: "uploadCloudTranscriptionMode",
+    provider: "uploadCloudTranscriptionProvider",
+    model: "uploadCloudTranscriptionModel",
+    baseUrl: "uploadCloudTranscriptionBaseUrl",
+  },
+];
+
+/**
+ * Overlay managed policy choices for rendering and future requests while
+ * leaving Zustand/localStorage preferences untouched for policy removal.
+ */
+export function selectPolicyEffectiveSettings(
+  state: SettingsState,
+  policyState: PolicyDecisionSnapshot
+): SettingsState {
+  if (policyState.status === "idle" || policyState.status === "unmanaged") return state;
+  if (policyState.status !== "managed" || !policyState.policy) return state;
+
+  const effective = { ...state };
+  const writable = effective as unknown as Record<string, unknown>;
+
+  for (const keys of TRANSCRIPTION_CONTEXT_KEYS) {
+    const rawSelection = getTranscriptionSelection(state, keys.context);
+    const selection = resolveEffectivePolicySelection(
+      policyState,
+      "transcription",
+      rawSelection,
+      keys.context === "meeting"
+        ? MEETING_TRANSCRIPTION_POLICY_CATALOG
+        : TRANSCRIPTION_POLICY_CATALOG
+    );
+    if (!selection) continue;
+
+    writable[keys.mode] = selection.mode;
+    writable[keys.useLocal] = selection.mode === "local";
+    writable[keys.cloudMode] = selection.mode === "openwhispr" ? "openwhispr" : "byok";
+    if (selection.mode === "providers") {
+      const providerChanged = selection.provider !== rawSelection.provider;
+      writable[keys.provider] = selection.provider;
+      if (
+        providerChanged ||
+        !transcriptionModelBelongsToProvider(
+          selection.provider,
+          state[keys.model] as string,
+          keys.context
+        )
+      ) {
+        writable[keys.model] = defaultTranscriptionModel(selection.provider, keys.context);
+      }
+
+      const canonicalBaseUrl = canonicalTranscriptionBaseUrl(selection.provider);
+      if (canonicalBaseUrl) {
+        writable[keys.baseUrl] = canonicalBaseUrl;
+      } else if (providerChanged) {
+        // A fallback to Custom must not reinterpret another provider's endpoint
+        // as user authorization to send content there.
+        writable[keys.baseUrl] = "";
+      }
+    }
+  }
+
+  const resolvedConfigs = Object.fromEntries(
+    (Object.keys(INFERENCE_SCOPES) as InferenceScope[]).map((scope) => [
+      scope,
+      selectResolvedLLMConfig(state, scope),
+    ])
+  ) as Record<InferenceScope, ResolvedLLMConfig>;
+
+  for (const scope of Object.keys(INFERENCE_SCOPES) as InferenceScope[]) {
+    const definition = INFERENCE_SCOPES[scope];
+    const config = resolvedConfigs[scope];
+    const selection = resolveEffectivePolicySelection(
+      policyState,
+      "llm",
+      { mode: config.mode, provider: config.provider },
+      LLM_POLICY_CATALOG
+    );
+    if (!selection) continue;
+
+    writable[definition.storeKeys.mode] = selection.mode;
+    if (definition.storeKeys.cloudMode) {
+      writable[definition.storeKeys.cloudMode] =
+        selection.mode === "openwhispr" ? "openwhispr" : "byok";
+    }
+
+    let provider = selection.provider;
+    if (selection.mode === "openwhispr") provider = "openwhispr";
+    if (selection.mode === "self-hosted") provider = "lan";
+    if (selection.mode === "local" && !localLlmProviderIds.has(provider)) {
+      provider = modelRegistryData.localProviders[0]?.id ?? "";
+    }
+    writable[definition.storeKeys.provider] = provider;
+
+    if (
+      definition.storeKeys.cloudBaseUrl &&
+      selection.mode === "providers" &&
+      provider === "custom" &&
+      config.provider !== "custom"
+    ) {
+      writable[definition.storeKeys.cloudBaseUrl] = "";
+    }
+
+    if (
+      selection.mode === "providers" ||
+      selection.mode === "enterprise" ||
+      selection.mode === "local"
+    ) {
+      const providerChanged = selection.mode !== config.mode || provider !== config.provider;
+      writable[definition.storeKeys.model] =
+        !providerChanged && config.model
+          ? config.model
+          : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
+    }
+  }
+
+  return effective;
+}
+
+export function getSettings(): SettingsState {
+  return selectPolicyEffectiveSettings(useSettingsStore.getState(), usePolicyStore.getState());
 }
 
 /**
@@ -2206,7 +2443,7 @@ export async function reconcileLocalModelSelections(): Promise<void> {
 }
 
 export function getEffectiveCleanupModel() {
-  const state = useSettingsStore.getState();
+  const state = getSettings();
   if (selectIsCloudCleanupMode(state)) {
     return "";
   }
@@ -2214,15 +2451,15 @@ export function getEffectiveCleanupModel() {
 }
 
 export function isCloudCleanupMode() {
-  return selectIsCloudCleanupMode(useSettingsStore.getState());
+  return selectIsCloudCleanupMode(getSettings());
 }
 
 export function isCloudDictationAgentMode() {
-  return selectIsCloudDictationAgentMode(useSettingsStore.getState());
+  return selectIsCloudDictationAgentMode(getSettings());
 }
 
 export function isCloudTranslationMode() {
-  return selectIsCloudTranslationMode(useSettingsStore.getState());
+  return selectIsCloudTranslationMode(getSettings());
 }
 
 // --- Initialization ---

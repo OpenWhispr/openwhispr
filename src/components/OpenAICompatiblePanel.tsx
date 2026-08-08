@@ -6,7 +6,7 @@ import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
 import { buildApiUrl, getModelListBaseCandidates, normalizeBaseUrl } from "../config/constants";
-import { isSecureEndpoint } from "../utils/urlUtils";
+import { isSecureHttpEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 
 interface ModelOption {
@@ -122,7 +122,7 @@ export default function OpenAICompatiblePanel({
           return;
         }
 
-        if (!isSecureEndpoint(normalized)) {
+        if (!isSecureHttpEndpoint(normalized)) {
           if (isMountedRef.current && latestBaseRef.current === normalized) {
             setModelsError(t("reasoning.custom.httpsRequired"));
             setModelsLoading(false);

@@ -4,7 +4,7 @@ import { getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import logger from "../../../utils/logger";
-import { getConfiguredOpenAIBase } from "../openaiBase";
+import { resolveConfiguredOpenAIBase } from "../openaiBase";
 import { applyThinkingSuppression } from "../thinkingSuppression";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "../apiErrorMessage";
@@ -153,7 +153,7 @@ export const openaiProvider: InferenceProvider = {
 
     const openAiBase = isOpenRouter
       ? API_ENDPOINTS.OPENROUTER_BASE
-      : config.baseUrl?.trim() || getConfiguredOpenAIBase();
+      : resolveConfiguredOpenAIBase(resolvedProvider, config.baseUrl);
     const dialect = detectEndpointDialect(openAiBase);
     // OpenRouter and known dialect hosts speak Chat Completions only — no /responses probe needed.
     let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;

@@ -114,3 +114,79 @@ test("cloud->local fallback under org policy", async (t) => {
     assert.equal(localWhisperCalls, 1);
   });
 });
+
+test("managed custom transcription never falls through to OpenAI", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-managed-custom-endpoint-test-",
+    mockModules: {
+      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__managedCustomSettings;
+        export const getEffectiveCleanupModel = () => null;
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+      `,
+      "/services/ReasoningService": "export default class ReasoningService {};",
+      "/services/SyncService.js": "export const syncService = {};",
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
+      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
+    },
+  });
+
+  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error("fetch must not run");
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__managedCustomSettings;
+  });
+
+  usePolicyStore.setState({
+    accountId: "org-user",
+    authGeneration: 1,
+    revision: 1,
+    status: "managed",
+    managed: true,
+    policy: {
+      ...buildManagedPolicy(["providers"]),
+      transcription: {
+        allowedModes: ["providers"],
+        allowedByokProviders: ["custom"],
+      },
+    },
+    appVersion: "1.8.1",
+  });
+
+  const manager = Object.create(AudioManager.prototype);
+  manager.getEffectiveSttLanguage = () => "auto";
+  manager.getTranscriptionModel = () => "whisper-1";
+  manager.getAPIKey = async () => "should-not-leak";
+  manager.getWhisperPrompt = () => null;
+  manager.shouldStreamTranscription = () => false;
+
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  for (const baseUrl of ["", "http://public.example.com/v1", "ftp://192.168.1.20/v1"]) {
+    globalThis.__managedCustomSettings = {
+      allowLocalFallback: false,
+      cloudTranscriptionBaseUrl: baseUrl,
+      cloudTranscriptionProvider: "custom",
+      transcriptionMode: "providers",
+      useLocalWhisper: false,
+    };
+
+    await assert.rejects(manager.processWithOpenAIAPI(audioBlob), (error) => {
+      assert.equal(error.code, "POLICY_RESTRICTED");
+      assert.equal(error.messageKey, "common.policyTranscriptionRestricted");
+      return true;
+    });
+  }
+
+  assert.equal(fetchCalls, 0);
+});
