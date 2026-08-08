@@ -1,5 +1,6 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
+const { realtimeUrlFromBase } = require("./realtimeUrl");
 
 const WEBSOCKET_TIMEOUT_MS = 15000;
 const DISCONNECT_TIMEOUT_MS = 3000;
@@ -70,7 +71,7 @@ class OpenAIRealtimeStreaming {
   }
 
   async connect(options = {}) {
-    const { apiKey, model, preconfigured, inputRate, captureRate, createSocket } = options;
+    const { apiKey, model, preconfigured, inputRate, captureRate, createSocket, baseUrl } = options;
     if (!apiKey) throw new Error("OpenAI API key is required");
 
     if (this.isConnected || this.isConnecting) {
@@ -93,8 +94,8 @@ class OpenAIRealtimeStreaming {
     this.speechStartedAt = null;
     this._sessionExpired = false;
 
-    const url = "wss://api.openai.com/v1/realtime?intent=transcription";
-    debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
+    const url = realtimeUrlFromBase(baseUrl, this.model);
+    debugLogger.debug("OpenAI Realtime connecting", { model: this.model, custom: !!baseUrl });
 
     // Attested providers (Tinfoil) supply their socket via an async factory.
     let ws;
