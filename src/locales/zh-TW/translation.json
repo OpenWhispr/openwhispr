@@ -996,7 +996,18 @@
     "selectPlaceholder": "選擇麥克風",
     "systemDefault": "系統預設",
     "unknownDevice": "未知裝置",
-    "using": "使用中：{{device}}"
+    "using": "使用中：{{device}}",
+    "warmHold": {
+      "label": "保持麥克風預熱",
+      "description": "聽寫結束後短暫保持麥克風開啟，讓下一次聽寫立即開始且不漏字",
+      "privacyNote": "麥克風保持開啟期間，系統的麥克風使用指示燈會持續亮起。聽寫之間不會錄製任何內容。",
+      "options": {
+        "0": "關閉",
+        "10": "10 秒",
+        "60": "1 分鐘",
+        "900": "15 分鐘"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "正在檢查系統功能...",

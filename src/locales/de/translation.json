@@ -1084,7 +1084,18 @@
     "selectPlaceholder": "Mikrofon auswählen",
     "systemDefault": "Systemstandard",
     "unknownDevice": "Unbekanntes Gerät",
-    "using": "Verwendet: {{device}}"
+    "using": "Verwendet: {{device}}",
+    "warmHold": {
+      "label": "Mikrofon warmhalten",
+      "description": "Nach einem Diktat das Mikrofon kurz geöffnet lassen, damit das nächste sofort und ohne abgeschnittene Wörter startet",
+      "privacyNote": "Solange das Mikrofon gehalten wird, bleibt die Mikrofonanzeige des Systems aktiv. Zwischen den Diktaten wird nichts aufgezeichnet.",
+      "options": {
+        "0": "Aus",
+        "10": "10 Sekunden",
+        "60": "1 Minute",
+        "900": "15 Minuten"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "Systemfähigkeiten werden geprüft...",

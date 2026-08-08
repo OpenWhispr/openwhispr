@@ -787,6 +787,9 @@ declare global {
       onToggleTranslation?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
+      onPrepareDictation?: (callback: () => void) => () => void;
+      onCancelDictationPreparation?: (callback: () => void) => () => void;
+      micWarmHoldChanged?: (active: boolean) => void;
 
       // STT config
       getSttConfig?: () => Promise<

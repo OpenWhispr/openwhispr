@@ -1084,7 +1084,18 @@
     "selectPlaceholder": "Sélectionnez un microphone",
     "systemDefault": "Par défaut du système",
     "unknownDevice": "Appareil inconnu",
-    "using": "Utilisation : {{device}}"
+    "using": "Utilisation : {{device}}",
+    "warmHold": {
+      "label": "Garder le microphone actif",
+      "description": "Après une dictée, garder le microphone ouvert brièvement pour que la suivante démarre instantanément, sans mots coupés",
+      "privacyNote": "Tant que le microphone est maintenu ouvert, l'indicateur d'utilisation du micro du système reste allumé. Rien n'est enregistré entre les dictées.",
+      "options": {
+        "0": "Désactivé",
+        "10": "10 secondes",
+        "60": "1 minute",
+        "900": "15 minutes"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "Vérification des capacités du système...",

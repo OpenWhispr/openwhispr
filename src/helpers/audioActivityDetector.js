@@ -31,6 +31,7 @@ class AudioActivityDetector extends EventEmitter {
     this._eventDriven = false;
     this._resetTimer = null;
     this._startGeneration = 0;
+    this._micWarmHold = false;
   }
 
   setUserRecording(active) {
@@ -41,6 +42,19 @@ class AudioActivityDetector extends EventEmitter {
       this._clearSustainedTimer();
     }
     debugLogger.debug("User recording state changed", { active }, "meeting");
+  }
+
+  // Our own idle-hold keeps the device "in use" after a dictation ends, and the
+  // macOS/Linux mic signals are device-global — they cannot tell us apart from
+  // a meeting app. Mic evidence during the hold is dropped outright (never
+  // queued: it is not a meeting). Sustained state resets on both transitions so
+  // a half-armed detection from before the hold cannot fire after it.
+  setMicWarmHold(active) {
+    this._micWarmHold = active;
+    this.consecutiveChecks = 0;
+    this.audioActiveStart = null;
+    this._clearSustainedTimer();
+    debugLogger.debug("Mic warm-hold state changed", { active }, "meeting");
   }
 
   async start() {
@@ -339,6 +353,10 @@ class AudioActivityDetector extends EventEmitter {
       debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
       return;
     }
+    if (this._micWarmHold) {
+      debugLogger.debug("Mic state changed during warm-hold, ignoring", { active }, "meeting");
+      return;
+    }
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) {
       debugLogger.debug(
         "Mic state changed but in cooldown",
@@ -368,7 +386,7 @@ class AudioActivityDetector extends EventEmitter {
       if (!this._sustainedTimer) {
         this._sustainedTimer = setTimeout(() => {
           this._sustainedTimer = null;
-          if (this._userRecording || this.hasPrompted) return;
+          if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
           if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
 
           this.hasPrompted = true;
@@ -402,6 +420,7 @@ class AudioActivityDetector extends EventEmitter {
     if (this._checking) return;
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     if (this._userRecording) return;
+    if (this._micWarmHold) return;
 
     this._checking = true;
     try {

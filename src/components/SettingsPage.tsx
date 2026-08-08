@@ -767,8 +767,10 @@ export default function SettingsPage({
     preferBuiltInMic,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
+    micWarmHoldSeconds,
     setPreferBuiltInMic,
     setSelectedMicDevice,
+    setMicWarmHoldSeconds,
     setUseLocalWhisper,
     setUiLanguage,
     setWhisperModel,
@@ -2818,8 +2820,10 @@ export default function SettingsPage({
                     preferBuiltInMic={preferBuiltInMic}
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
+                    micWarmHoldSeconds={micWarmHoldSeconds}
                     onPreferBuiltInChange={setPreferBuiltInMic}
                     onDeviceSelect={setSelectedMicDevice}
+                    onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
