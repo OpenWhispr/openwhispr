@@ -84,6 +84,7 @@ test("a stable authenticated request is bearer-only and returns parsed data", as
     assert.equal(url, "https://api.openwhispr.test/api/me/spaces");
     assert.equal(options.useSessionCookies, false);
     assert.equal(options.headers.Authorization, "Bearer token-a");
+    assert.equal(options.headers["x-openwhispr-policy-version"], "1");
     assert.equal(options.headers["x-openwhispr-version"], "1.2.3");
     return new Response(JSON.stringify({ data: [{ id: "space-a" }] }));
   });
@@ -104,6 +105,8 @@ test("public requests carry neither bearer nor cookies", async () => {
   const handler = createHandler(state, async (_url, options) => {
     assert.equal(options.useSessionCookies, false);
     assert.equal(options.headers.Authorization, undefined);
+    assert.equal(options.headers["x-openwhispr-policy-version"], undefined);
+    assert.equal(options.headers["x-openwhispr-version"], "1.2.3");
     return new Response(JSON.stringify({ data: { invite: "preview" } }));
   });
 
@@ -113,4 +116,35 @@ test("public requests carry neither bearer nor cookies", async () => {
     public: true,
   });
   assert.equal(result.success, true);
+});
+
+test("preserves policy and upgrade metadata from authenticated cloud failures", async () => {
+  const state = { current: { token: "token-a", generation: 22 } };
+  const handler = createHandler(
+    state,
+    async () =>
+      new Response(
+        JSON.stringify({
+          error: "Upgrade required",
+          code: "UPGRADE_REQUIRED",
+          data: { minAppVersion: "2.0.0" },
+        }),
+        { status: 426 }
+      )
+  );
+
+  const result = await handler({
+    method: "POST",
+    path: "/api/transcriptions/create",
+    expectedAuthGeneration: 22,
+  });
+
+  assert.deepEqual(result, {
+    success: false,
+    error: "Upgrade required",
+    status: 426,
+    code: "UPGRADE_REQUIRED",
+    details: { minAppVersion: "2.0.0" },
+    minAppVersion: "2.0.0",
+  });
 });

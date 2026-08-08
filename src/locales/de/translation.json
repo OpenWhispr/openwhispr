@@ -144,6 +144,7 @@
     "cancel": "Abbrechen",
     "recommended": "Empfohlen",
     "active": "Aktiv",
+    "managedByOrg": "Von Ihrer Organisation verwaltet",
     "freeAccountRequired": "Kostenloses Konto erforderlich",
     "cloud": "Cloud",
     "local": "Lokal",
@@ -168,7 +169,10 @@
     "copy": "Kopieren",
     "copied": "Kopiert",
     "done": "Fertig",
-    "skip": "Überspringen"
+    "skip": "Überspringen",
+    "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
+    "policyAgentRestricted": "Die Nutzung des KI-Agenten ist durch Ihre Organisation eingeschränkt.",
+    "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt."
   },
   "onboarding": {
     "steps": {
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "Update erforderlich",
+      "description": "Ihre Organisation erfordert OpenWhispr {{version}} oder neuer. Bitte aktualisieren Sie die App."
+    },
     "update": {
       "readyTitle": "Update bereit zur Installation",
       "readyDescription": "Klicken Sie auf 'Update installieren', um mit der neuesten Version neu zu starten.",
@@ -1179,6 +1187,7 @@
     "defaultTestInputTranslate": "Das Wetter ist heute wunderschön, hast du Lust auf einen Spaziergang?"
   },
   "settingsModal": {
+    "managedByOrg": "Einige Einstellungen werden von Ihrer Organisation verwaltet.",
     "groups": {
       "account": "Konto",
       "app": "App",
@@ -2768,7 +2777,8 @@
       "title": "Besprechungsnotizen",
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "comingSoon": "Demnächst verfügbar",
-      "back": "Zurück"
+      "back": "Zurück",
+      "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt."
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",
@@ -2862,6 +2872,7 @@
     "speaker": {
       "you": "Du",
       "them": "Gegenüber",
+      "unknown": "Unbekannter Sprecher",
       "label": "Sprecher {{n}}",
       "identifyingSpeakers": "Sprecher werden identifiziert...",
       "liveAccuracyHint": "Sprecher werden noch identifiziert. Die Genauigkeit der Beschriftung verbessert sich, sobald das Gespräch endet.",

@@ -204,6 +204,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         try {
           const result = await ReasoningService.processText(testText, agent.model, agentName, {
             ...agent.config,
+            requiresAgent: true,
             systemPrompt: resolvePrompt("dictationAgent", {
               agentName,
               language: settings.preferredLanguage,

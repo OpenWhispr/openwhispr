@@ -30,6 +30,12 @@ import {
 } from "../../stores/noteStore";
 import { useToast } from "../ui/useToast";
 import MemberAvatar from "../MemberAvatar";
+import {
+  isShareActionAllowed,
+  isShareVisibilityAllowed,
+  type SharePolicyAction,
+} from "../../stores/policyRules";
+import { usePolicySnapshot } from "../../hooks/usePolicy";
 import { emailDomain, isPersonalEmailDomain } from "../../utils/personalEmailDomains";
 import { EMAIL_REGEX } from "../../utils/validation";
 import type {
@@ -90,14 +96,33 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     localIsSharedRef.current = Boolean(note.is_shared);
   }, [note.is_shared]);
 
+  const policyState = usePolicySnapshot();
+  const visibilityAllowed = useCallback(
+    (visibility: ShareVisibility) => isShareVisibilityAllowed(policyState, visibility),
+    [policyState]
+  );
+
   const ownerDomain = useMemo(() => emailDomain(ownerEmail), [ownerEmail]);
   const showDomainOption = Boolean(ownerDomain && !isPersonalEmailDomain(ownerDomain));
 
   const share = cached?.share ?? null;
   const access = cached?.access;
-  const canManageSharing = access?.can_manage_access ?? true;
+  const currentVisibility = share?.visibility ?? "private";
+  const shareActionAllowed = useCallback(
+    (action: SharePolicyAction, visibility: ShareVisibility = currentVisibility) =>
+      isShareActionAllowed(policyState, action, visibility),
+    [currentVisibility, policyState]
+  );
+  const canManageAccess = access?.can_manage_access ?? true;
+  const canInvite = canManageAccess && shareActionAllowed("invite");
+  const sharingRestrictedByPolicy =
+    !visibilityAllowed("link") && !visibilityAllowed("domain") && !visibilityAllowed("invited");
+  const canBeginSharing = canManageAccess && !sharingRestrictedByPolicy;
+  const canUseLink =
+    canManageAccess &&
+    shareActionAllowed(currentVisibility === "private" ? "create-link" : "copy-link");
   // Principal search needs the ACL API; legacy servers only take raw emails.
-  const canSearchPrincipals = Boolean(access?.can_manage_access);
+  const canSearchPrincipals = canInvite && Boolean(access?.can_manage_access);
   const invitations = useMemo(() => cached?.invitations ?? [], [cached?.invitations]);
   const accessInvitationEmails = useMemo(
     () =>
@@ -229,9 +254,18 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
 
   const applyVisibility = useCallback(
     async (next: ShareVisibility): Promise<ShareMutationResponse | null> => {
-      if (!cloudId || !canManageSharing) return null;
+      if (!cloudId || !canManageAccess) return null;
       const previous = getShareCacheEntry(cloudId);
       if (!previous || previous.share.visibility === next) return null;
+      const action: SharePolicyAction =
+        next === "private"
+          ? "make-private"
+          : next === "link"
+            ? "create-link"
+            : next === "domain"
+              ? "set-domain"
+              : "invite";
+      if (!shareActionAllowed(action, previous.share.visibility)) return null;
       setSavingVisibility(true);
       // Optimistic update so the dropdown feels instant.
       updateShareCache(cloudId, (entry) => ({
@@ -297,7 +331,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         setSavingVisibility(false);
       }
     },
-    [cloudId, canManageSharing, ownerDomain, note.id, t, toast]
+    [cloudId, canManageAccess, ownerDomain, note.id, t, toast, shareActionAllowed]
   );
 
   const copyLink = useCallback(
@@ -320,7 +354,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
   // Legacy shares can predate local token persistence; rotating is the only
   // way to recover a copyable link (the old one stops working by design).
   const rotateAndCopy = useCallback(async () => {
-    if (!cloudId) return;
+    if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link")) return;
     try {
       const res = await NoteSharingService.rotateToken(cloudId);
       updateShareCache(cloudId, (entry) => ({
@@ -336,10 +370,10 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
       console.error("Share link recovery failed:", err);
       toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
     }
-  }, [cloudId, note.id, copyLink, t, toast]);
+  }, [cloudId, canManageAccess, note.id, copyLink, t, toast, shareActionAllowed]);
 
   const handleLinkButton = useCallback(async () => {
-    if (!cloudId || !share || !canManageSharing) return;
+    if (!cloudId || !share || !canUseLink) return;
     setLinkBusy(true);
     try {
       if (share.visibility === "private") {
@@ -357,18 +391,10 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     } finally {
       setLinkBusy(false);
     }
-  }, [
-    cloudId,
-    share,
-    canManageSharing,
-    note.share_token,
-    applyVisibility,
-    copyLink,
-    rotateAndCopy,
-  ]);
+  }, [cloudId, share, canUseLink, note.share_token, applyVisibility, copyLink, rotateAndCopy]);
 
   const handleInvite = useCallback(async () => {
-    if (!cloudId || !canManageSharing) return;
+    if (!cloudId || !canInvite) return;
     const trimmed = emailInput.trim();
     if (!trimmed) return;
     if (!EMAIL_REGEX.test(trimmed)) {
@@ -404,11 +430,11 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     } finally {
       setSubmitting(false);
     }
-  }, [cloudId, canManageSharing, emailInput, applyVisibility, refreshShareCache, t]);
+  }, [cloudId, canInvite, emailInput, applyVisibility, refreshShareCache, t]);
 
   const handlePrincipalGrant = useCallback(
     async (principal: AccessPrincipalSuggestion) => {
-      if (!cloudId || !cached?.access?.can_manage_access) return;
+      if (!cloudId || !canInvite || !cached?.access?.can_manage_access) return;
       setSubmitting(true);
       setInputError(null);
       try {
@@ -438,12 +464,12 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         setSubmitting(false);
       }
     },
-    [cloudId, cached, note.id, refreshShareCache, t]
+    [cloudId, canInvite, cached, note.id, refreshShareCache, t]
   );
 
   const handleShareInput = useCallback(async () => {
     const trimmed = emailInput.trim();
-    if (!trimmed || !canManageSharing) return;
+    if (!trimmed || !canInvite) return;
 
     if (access) {
       const matchingSuggestion = suggestions.find(
@@ -470,11 +496,11 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     }
 
     await handleInvite();
-  }, [access, canManageSharing, emailInput, suggestions, handlePrincipalGrant, handleInvite]);
+  }, [access, canInvite, emailInput, suggestions, handlePrincipalGrant, handleInvite]);
 
   const handleRevoke = useCallback(
     async (invitation: NoteShareInvitation) => {
-      if (!cloudId || !canManageSharing) return;
+      if (!cloudId || !canManageAccess || !shareActionAllowed("revoke-invitation")) return;
       const previous = getShareCacheEntry(cloudId);
       if (!previous) return;
       updateShareCache(cloudId, (entry) => ({
@@ -496,12 +522,12 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         toast({ title: t("noteEditor.share.dialog.error.revokeFailed"), variant: "destructive" });
       }
     },
-    [cloudId, canManageSharing, t, toast]
+    [cloudId, canManageAccess, shareActionAllowed, t, toast]
   );
 
   const handleResend = useCallback(
     async (invitation: NoteShareInvitation) => {
-      if (!cloudId || !canManageSharing) return;
+      if (!cloudId || !canManageAccess || !shareActionAllowed("resend-invitation")) return;
       setResendingId(invitation.id);
       try {
         const res = await NoteSharingService.resendInvite(cloudId, invitation.id);
@@ -517,7 +543,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         setResendingId(null);
       }
     },
-    [cloudId, canManageSharing, t, toast]
+    [cloudId, canManageAccess, shareActionAllowed, t, toast]
   );
 
   const replaceAccessGrant = useCallback(
@@ -542,7 +568,14 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
 
   const handleGrantPermission = useCallback(
     async (grant: NoteAccessGrant, permission: NoteAccessGrant["permission"]) => {
-      if (!cloudId || grant.permission === permission) return;
+      if (
+        !cloudId ||
+        !canManageAccess ||
+        !shareActionAllowed("change-grant") ||
+        grant.permission === permission
+      ) {
+        return;
+      }
       setBusyGrantId(grant.id);
       replaceAccessGrant(grant.id, { ...grant, permission });
       try {
@@ -561,12 +594,12 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         setBusyGrantId(null);
       }
     },
-    [cloudId, replaceAccessGrant, t, toast]
+    [cloudId, canManageAccess, shareActionAllowed, replaceAccessGrant, t, toast]
   );
 
   const handleRemoveGrant = useCallback(
     async (grant: NoteAccessGrant) => {
-      if (!cloudId) return;
+      if (!cloudId || !canManageAccess || !shareActionAllowed("remove-grant")) return;
       setBusyGrantId(grant.id);
       replaceAccessGrant(grant.id, null);
       try {
@@ -580,10 +613,11 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         setBusyGrantId(null);
       }
     },
-    [cloudId, refreshShareCache, replaceAccessGrant, t, toast]
+    [cloudId, canManageAccess, shareActionAllowed, refreshShareCache, replaceAccessGrant, t, toast]
   );
 
   const handleSyncAndShare = useCallback(async () => {
+    if (!canBeginSharing) return;
     setSyncing(true);
     try {
       const assignedCloudId = await syncService.ensureNoteSynced(note.id);
@@ -595,7 +629,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     } finally {
       setSyncing(false);
     }
-  }, [note.id, t, toast]);
+  }, [canBeginSharing, note.id, t, toast]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || (e.metaKey && e.key === "Enter")) {
@@ -617,7 +651,8 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
             <Button
               size="sm"
               onClick={() => void handleSyncAndShare()}
-              disabled={syncing}
+              disabled={syncing || !canBeginSharing}
+              title={sharingRestrictedByPolicy ? t("common.managedByOrg") : undefined}
               className="h-8 px-3 text-xs gap-1.5 justify-self-start"
             >
               {syncing && <Loader2 size={12} className="animate-spin" />}
@@ -656,7 +691,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                   }}
                   onKeyDown={onKeyDown}
                   placeholder={t("noteEditor.share.dialog.searchPlaceholder")}
-                  disabled={loading || submitting || !canManageSharing}
+                  disabled={loading || submitting || !canInvite}
                   className={cn(
                     notesInputClass,
                     "flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -668,7 +703,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                 <Button
                   size="sm"
                   onClick={() => void handleShareInput()}
-                  disabled={loading || submitting || !canManageSharing || !emailInput.trim()}
+                  disabled={loading || submitting || !canInvite || !emailInput.trim()}
                   className="h-8 px-3 text-xs gap-1.5"
                 >
                   {submitting && <Loader2 size={12} className="animate-spin" />}
@@ -752,10 +787,21 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                 <AccessGrantRow
                   key={grant.id}
                   grant={grant}
-                  canManage={Boolean(
+                  canChangePermission={Boolean(
                     access?.can_manage_access &&
-                    (!grant.inherited || access.can_manage_inherited_access)
+                    (!grant.inherited || access.can_manage_inherited_access) &&
+                    shareActionAllowed("change-grant")
                   )}
+                  canRemove={Boolean(
+                    access?.can_manage_access &&
+                    (!grant.inherited || access.can_manage_inherited_access) &&
+                    shareActionAllowed("remove-grant")
+                  )}
+                  policyRestrictedReason={
+                    access?.can_manage_access && !shareActionAllowed("change-grant")
+                      ? t("common.managedByOrg")
+                      : undefined
+                  }
                   busy={busyGrantId === grant.id}
                   onPermissionChange={(permission) => void handleGrantPermission(grant, permission)}
                   onRemove={() => void handleRemoveGrant(grant)}
@@ -766,7 +812,8 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                 space &&
                 !(access?.grants ?? []).some(
                   (grant) =>
-                    grant.principal.type === "team" && space.teams.some((team) => team.id === grant.principal.id)
+                    grant.principal.type === "team" &&
+                    space.teams.some((team) => team.id === grant.principal.id)
                 ) && (
                   <MemberRow
                     leading={<AudienceIcon />}
@@ -791,7 +838,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                       : t("noteEditor.share.dialog.pending")
                   }
                   trailing={
-                    canManageSharing ? (
+                    canManageAccess ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
@@ -810,7 +857,10 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                         <DropdownMenuContent align="end" sideOffset={4}>
                           <DropdownMenuItem
                             className="text-xs"
-                            disabled={resendingId === invitation.id}
+                            disabled={
+                              resendingId === invitation.id ||
+                              !shareActionAllowed("resend-invitation")
+                            }
                             onClick={() => void handleResend(invitation)}
                           >
                             {t("noteEditor.share.dialog.resend")}
@@ -838,7 +888,12 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                 value={share?.visibility ?? "private"}
                 ownerDomain={ownerDomain}
                 showDomainOption={showDomainOption}
-                disabled={loading || !share || !canManageSharing || savingVisibility || linkBusy}
+                optionDisabledReasons={{
+                  ...(visibilityAllowed("invited") ? {} : { invited: t("common.managedByOrg") }),
+                  ...(visibilityAllowed("link") ? {} : { link: t("common.managedByOrg") }),
+                  ...(visibilityAllowed("domain") ? {} : { domain: t("common.managedByOrg") }),
+                }}
+                disabled={loading || !share || !canManageAccess || savingVisibility || linkBusy}
                 onChange={(v) => void applyVisibility(v)}
               />
               <div className="flex-1" />
@@ -846,7 +901,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                 variant={isPrivate ? "default" : "outline"}
                 size="sm"
                 className="h-8 px-3 text-xs gap-1.5"
-                disabled={loading || !share || !canManageSharing || savingVisibility || linkBusy}
+                disabled={loading || !share || !canUseLink || savingVisibility || linkBusy}
                 onClick={() => void handleLinkButton()}
               >
                 {linkBusy ? (
@@ -911,13 +966,17 @@ function AudienceIcon() {
 
 function AccessGrantRow({
   grant,
-  canManage,
+  canChangePermission,
+  canRemove,
+  policyRestrictedReason,
   busy,
   onPermissionChange,
   onRemove,
 }: {
   grant: NoteAccessGrant;
-  canManage: boolean;
+  canChangePermission: boolean;
+  canRemove: boolean;
+  policyRestrictedReason?: string;
   busy: boolean;
   onPermissionChange: (permission: NoteAccessGrant["permission"]) => void;
   onRemove: () => void;
@@ -957,7 +1016,7 @@ function AccessGrantRow({
       primary={primary}
       secondary={secondary}
       trailing={
-        canManage ? (
+        canChangePermission || canRemove ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -978,19 +1037,35 @@ function AccessGrantRow({
             <DropdownMenuContent align="end" sideOffset={4}>
               <DropdownMenuItem
                 className="text-xs gap-2"
+                disabled={!canChangePermission}
                 onClick={() => onPermissionChange("viewer")}
               >
                 {grant.permission === "viewer" && <Check size={11} />}
                 {t("noteEditor.share.dialog.viewer")}
+                {!canChangePermission && policyRestrictedReason && (
+                  <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                    {policyRestrictedReason}
+                  </span>
+                )}
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-xs gap-2"
+                disabled={!canChangePermission}
                 onClick={() => onPermissionChange("editor")}
               >
                 {grant.permission === "editor" && <Check size={11} />}
                 {t("noteEditor.share.dialog.editor")}
+                {!canChangePermission && policyRestrictedReason && (
+                  <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                    {policyRestrictedReason}
+                  </span>
+                )}
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-xs text-red-500" onClick={onRemove}>
+              <DropdownMenuItem
+                className="text-xs text-red-500"
+                disabled={!canRemove}
+                onClick={onRemove}
+              >
                 {t("noteEditor.share.dialog.revoke")}
               </DropdownMenuItem>
             </DropdownMenuContent>

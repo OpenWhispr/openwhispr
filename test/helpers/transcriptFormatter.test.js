@@ -7,6 +7,7 @@ const {
   formatJson,
   formatMd,
 } = require("../../src/helpers/transcriptFormatter");
+const { changeLanguage } = require("../../src/helpers/i18nMain");
 
 test("TXT and Markdown exports include participant display names", () => {
   const note = {
@@ -176,4 +177,79 @@ test("a manually named segment does not absorb the adjacent un-named one", () =>
 
   assert.ok(txtOutput.includes("[00:00:00] Alice:\nAlice said this."));
   assert.ok(txtOutput.includes("[00:00:01] You:\nAnd this is me talking."));
+});
+
+test("own-voice segments share one label whether or not diarization stamped them", (t) => {
+  changeLanguage("de");
+  t.after(() => changeLanguage("en"));
+
+  const note = { title: "Standup", created_at: "2026-01-01T00:00:00Z" };
+  const segments = [
+    { source: "mic", speaker: "you", timestamp: 0, text: "Guten Morgen." },
+    { source: "mic", timestamp: 3, text: "Noch etwas." },
+    { source: "system", speaker: "speaker_0", timestamp: 8, text: "Hallo." },
+  ];
+
+  const txtOutput = formatTxt(note, segments, {});
+  assert.ok(txtOutput.includes("[00:00:00] Du:\nGuten Morgen."));
+  assert.ok(txtOutput.includes("[00:00:03] Du:\nNoch etwas."));
+  assert.ok(!txtOutput.includes("You:"));
+});
+
+test("the JSON export counts both own-voice segment shapes as one speaker", (t) => {
+  changeLanguage("de");
+  t.after(() => changeLanguage("en"));
+
+  const parsed = JSON.parse(
+    formatJson(
+      { title: "Standup", created_at: "2026-01-01T00:00:00Z" },
+      [
+        { source: "mic", speaker: "you", timestamp: 0, text: "Guten Morgen." },
+        { source: "mic", timestamp: 3, text: "Noch etwas." },
+        { source: "system", speaker: "speaker_0", timestamp: 8, text: "Hallo." },
+      ],
+      {}
+    )
+  );
+
+  assert.deepEqual(parsed.speakers, ["Du", "Sprecher 1"]);
+  assert.equal(parsed.metadata.speaker_count, 2);
+});
+
+test("diarized speaker numbers render in the UI language", (t) => {
+  changeLanguage("de");
+  t.after(() => changeLanguage("en"));
+
+  const txtOutput = formatTxt(
+    { title: "Standup", created_at: "2026-01-01T00:00:00Z" },
+    [{ source: "system", speaker: "speaker_0", timestamp: 0, text: "Hallo." }],
+    {}
+  );
+
+  assert.ok(txtOutput.includes("[00:00:00] Sprecher 1:\nHallo."));
+  assert.ok(!txtOutput.includes("Speaker 1"));
+});
+
+test("segments with no speaker information get a localized unknown label", (t) => {
+  changeLanguage("de");
+  t.after(() => changeLanguage("en"));
+
+  const txtOutput = formatTxt(
+    { title: "Standup", created_at: "2026-01-01T00:00:00Z" },
+    [{ timestamp: 0, text: "Hallo." }],
+    {}
+  );
+
+  assert.ok(txtOutput.includes("[00:00:00] Unbekannter Sprecher:\nHallo."));
+  assert.ok(!txtOutput.includes("Unknown Speaker"));
+});
+
+test("an explicit speaker mapping still overrides the own-voice label", () => {
+  const txtOutput = formatTxt(
+    { title: "Standup", created_at: "2026-01-01T00:00:00Z" },
+    [{ source: "mic", speaker: "you", timestamp: 0, text: "Morning." }],
+    { you: "Ada" }
+  );
+
+  assert.ok(txtOutput.includes("[00:00:00] Ada:\nMorning."));
 });

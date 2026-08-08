@@ -54,8 +54,10 @@ import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
+import { useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
+import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
 import {
   applyNoteDraftMutation,
@@ -213,6 +215,7 @@ export default function PersonalNotesView({
   const sessionDiarizationEnabled = useMeetingRecordingStore((s) => s.sessionDiarizationEnabled);
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
+  const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
 
   const spaces = useSpaces();
   const folders = useFolders();
@@ -615,15 +618,28 @@ export default function PersonalNotesView({
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
     const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    storeStartRecording({
-      noteId: meetingRecordingRequest.noteId,
-      noteTitle: note?.title ?? null,
-      folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
-      seedSegments,
-      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: resolveExpectedSpeakerCount(note),
+    void handleMeetingRecordingRequest({
+      args: {
+        noteId: meetingRecordingRequest.noteId,
+        noteTitle: note?.title ?? null,
+        folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
+        seedSegments,
+        diarizationEnabled:
+          note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+        expectedCount: resolveExpectedSpeakerCount(note),
+      },
+      startRecording: storeStartRecording,
+      restoreFromMeetingMode: async () => {
+        await window.electronAPI?.restoreFromMeetingMode?.();
+      },
+      onHandled: () => onMeetingRecordingRequestHandled?.(),
+    }).catch((error) => {
+      logger.warn(
+        "Failed to handle automatic meeting recording request",
+        { error: (error as Error).message },
+        "meeting"
+      );
     });
-    onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
 
   const prevTranscribingRef = useRef(false);
@@ -749,6 +765,7 @@ export default function PersonalNotesView({
               isSaving={isSaving}
               isRecording={isActiveNoteRecording}
               isProcessing={false}
+              recordingAllowed={meetingRecordingAllowed}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
               onExportNote={handleExportNote}

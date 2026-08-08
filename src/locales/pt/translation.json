@@ -123,6 +123,7 @@
     "cancel": "Cancelar",
     "recommended": "Recomendado",
     "active": "Ativo",
+    "managedByOrg": "Gerenciado pela sua organização",
     "freeAccountRequired": "Conta gratuita necessária",
     "cloud": "Nuvem",
     "local": "Local",
@@ -147,7 +148,10 @@
     "copy": "Copiar",
     "copied": "Copiado",
     "done": "Listo",
-    "skip": "Pular"
+    "skip": "Pular",
+    "policyAiProcessingRestricted": "O processamento de IA está restrito pela sua organização.",
+    "policyAgentRestricted": "O uso do agente de IA está restrito pela sua organização.",
+    "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização."
   },
   "onboarding": {
     "steps": {
@@ -302,6 +306,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "Atualização obrigatória",
+      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo."
+    },
     "update": {
       "readyTitle": "Atualização pronta para instalar",
       "readyDescription": "Clique em 'Instalar atualização' para reiniciar com a versão mais recente.",
@@ -1070,6 +1078,7 @@
     "defaultTestInputTranslate": "O tempo está lindo hoje, quer dar um passeio?"
   },
   "settingsModal": {
+    "managedByOrg": "Algumas configurações são gerenciadas pela sua organização.",
     "groups": {
       "account": "Conta",
       "app": "Aplicativo",
@@ -2577,7 +2586,8 @@
       "title": "Notas de reunião",
       "description": "Transcrições e resumos estruturados",
       "comingSoon": "Em breve",
-      "back": "Voltar"
+      "back": "Voltar",
+      "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização."
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",
@@ -2671,6 +2681,7 @@
     "speaker": {
       "you": "Você",
       "them": "Outro",
+      "unknown": "Participante desconhecido",
       "label": "Participante {{n}}",
       "identifyingSpeakers": "Identificando participantes...",
       "liveAccuracyHint": "Ainda identificando participantes. A precisão dos rótulos melhorará quando a chamada terminar.",

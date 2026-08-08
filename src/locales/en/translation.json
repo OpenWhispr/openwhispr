@@ -144,6 +144,7 @@
     "cancel": "Cancel",
     "recommended": "Recommended",
     "active": "Active",
+    "managedByOrg": "Managed by your organization",
     "freeAccountRequired": "Free account required",
     "cloud": "Cloud",
     "local": "Local",
@@ -168,7 +169,10 @@
     "copy": "Copy",
     "copied": "Copied",
     "done": "Done",
-    "skip": "Skip"
+    "skip": "Skip",
+    "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
+    "policyAgentRestricted": "AI agent use is restricted by your organization.",
+    "policyTranscriptionRestricted": "Transcription is restricted by your organization."
   },
   "onboarding": {
     "steps": {
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "Update required",
+      "description": "Your organization requires OpenWhispr {{version}} or newer. Please update the app."
+    },
     "update": {
       "readyTitle": "Update ready to install",
       "readyDescription": "Click 'Install Update' to restart with the latest version.",
@@ -1179,6 +1187,7 @@
     "defaultTestInputTranslate": "The weather is beautiful today, want to go for a walk?"
   },
   "settingsModal": {
+    "managedByOrg": "Some settings are managed by your organization.",
     "groups": {
       "account": "Account",
       "app": "App",
@@ -2768,7 +2777,8 @@
       "title": "Meeting Notes",
       "description": "Transcriptions & structured summaries",
       "comingSoon": "Coming Soon",
-      "back": "Back"
+      "back": "Back",
+      "restrictedByOrg": "Meeting transcription is restricted by your organization."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -2862,6 +2872,7 @@
     "speaker": {
       "you": "You",
       "them": "Them",
+      "unknown": "Unknown Speaker",
       "label": "Speaker {{n}}",
       "identifyingSpeakers": "Identifying speakers...",
       "liveAccuracyHint": "Still identifying speakers. Labeling accuracy will improve once the call ends.",

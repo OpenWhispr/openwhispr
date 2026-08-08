@@ -144,6 +144,7 @@
     "cancel": "取消",
     "recommended": "推薦",
     "active": "使用中",
+    "managedByOrg": "由您的組織管理",
     "freeAccountRequired": "需要免費帳戶",
     "cloud": "雲端",
     "local": "本機",
@@ -168,7 +169,10 @@
     "copy": "複製",
     "copied": "已複製",
     "done": "完成",
-    "skip": "略過"
+    "skip": "略過",
+    "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
+    "policyAgentRestricted": "AI 代理的使用已被您的組織限制。",
+    "policyTranscriptionRestricted": "轉錄已被您的組織限制。"
   },
   "onboarding": {
     "steps": {
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "需要更新",
+      "description": "您的組織要求使用 OpenWhispr {{version}} 或更新版本。請更新應用程式。"
+    },
     "update": {
       "readyTitle": "更新已準備就緒",
       "readyDescription": "點擊「安裝更新」以重新啟動並套用最新版本。",
@@ -1091,6 +1099,7 @@
     "defaultTestInputTranslate": "今天天氣真好，要不要出去走走？"
   },
   "settingsModal": {
+    "managedByOrg": "部分設定由您的組織管理。",
     "groups": {
       "account": "帳戶",
       "app": "應用程式",
@@ -1318,8 +1327,8 @@
           "accountCredit": "帳戶餘額",
           "newPrice": "新價格",
           "nextBilling": "下次計費",
-          "mo": "mo",
-          "yr": "yr",
+          "mo": "月",
+          "yr": "年",
           "cancel": "取消",
           "confirm": "確認"
         }
@@ -1657,7 +1666,7 @@
       },
       "updates": {
         "badges": {
-          "dev": "Dev",
+          "dev": "開發版",
           "latest": "最新",
           "update": "更新"
         },
@@ -1790,7 +1799,7 @@
       "description": "設定用於聽寫清理、筆記格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "聽寫清理",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "語音助手",
         "noteFormatting": "筆記格式化",
         "chatIntelligence": "聊天",
         "dictationTranslation": "翻譯"
@@ -2180,8 +2189,8 @@
         "bedrock_gpt_oss_120b": "OpenAI 開放權重模型。低成本下的強大推理能力。",
         "bedrock_deepseek_v3_2": "開放權重前沿模型。智慧助手模式的高性價比之選。",
         "bedrock_qwen3_next_80b": "稀疏開放權重模型。快速且多語言。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "vertex_gemini_2_5_flash": "透過 Vertex 提供的快速多模態模型",
+        "vertex_gemini_2_5_pro": "透過 Vertex 提供的進階推理模型"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "強大的混合模型",
@@ -2577,7 +2586,8 @@
       "title": "會議筆記",
       "description": "轉錄與結構化摘要",
       "comingSoon": "即將推出",
-      "back": "返回"
+      "back": "返回",
+      "restrictedByOrg": "會議轉錄已被您的組織限制。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
@@ -2671,6 +2681,7 @@
     "speaker": {
       "you": "你",
       "them": "對方",
+      "unknown": "未知發言者",
       "label": "發言者 {{n}}",
       "identifyingSpeakers": "正在辨識發言者...",
       "liveAccuracyHint": "仍在辨識發言者。通話結束後，標籤準確度會提升。",

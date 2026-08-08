@@ -108,6 +108,15 @@ import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import { clearMissingLocalModelSelections, useSettingsStore } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
+import {
+  canChangeCloudBackupPreference,
+  effectiveAudioRetentionDays,
+  effectiveLocalHistoryEnabled,
+  isCloudBackupAllowed,
+  lockedLocalHistoryValue,
+  maxAudioRetentionDays,
+} from "../stores/policyRules";
+import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
@@ -269,37 +278,40 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
-
-  const transcriptionModes: InferenceModeOption[] = [
-    {
-      id: "openwhispr",
-      label: t("settingsPage.transcription.modes.openwhispr"),
-      description: t("settingsPage.transcription.modes.openwhisprDesc"),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
-    },
-    {
-      id: "providers",
-      label: t("settingsPage.transcription.modes.providers"),
-      description: t("settingsPage.transcription.modes.providersDesc"),
-      icon: <Key className="w-4 h-4" />,
-    },
-    {
-      id: "local",
-      label: t("settingsPage.transcription.modes.local"),
-      description: t("settingsPage.transcription.modes.localDesc"),
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
-      id: "self-hosted",
-      label: t("settingsPage.transcription.modes.selfHosted"),
-      description: t("settingsPage.transcription.modes.selfHostedDesc"),
-      icon: <Network className="w-4 h-4" />,
-    },
-  ];
+  const { modes: transcriptionModes, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
+    [
+      {
+        id: "openwhispr",
+        label: t("settingsPage.transcription.modes.openwhispr"),
+        description: t("settingsPage.transcription.modes.openwhisprDesc"),
+        icon: <Cloud className="w-4 h-4" />,
+        disabled: !isSignedIn,
+        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+      },
+      {
+        id: "providers",
+        label: t("settingsPage.transcription.modes.providers"),
+        description: t("settingsPage.transcription.modes.providersDesc"),
+        icon: <Key className="w-4 h-4" />,
+      },
+      {
+        id: "local",
+        label: t("settingsPage.transcription.modes.local"),
+        description: t("settingsPage.transcription.modes.localDesc"),
+        icon: <Cpu className="w-4 h-4" />,
+      },
+      {
+        id: "self-hosted",
+        label: t("settingsPage.transcription.modes.selfHosted"),
+        description: t("settingsPage.transcription.modes.selfHostedDesc"),
+        icon: <Network className="w-4 h-4" />,
+      },
+    ],
+    "transcription"
+  );
 
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
+    if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
       return;
@@ -852,6 +864,19 @@ export default function SettingsPage({
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
+
+  const settingsPolicyState = usePolicySnapshot();
+  const historyLockedByPolicy = lockedLocalHistoryValue(settingsPolicyState) !== null;
+  const effectiveDataRetentionEnabled = effectiveLocalHistoryEnabled(
+    settingsPolicyState,
+    dataRetentionEnabled
+  );
+  const cloudBackupPolicyAllowed = isCloudBackupAllowed(settingsPolicyState);
+  const audioRetentionCap = maxAudioRetentionDays(settingsPolicyState);
+  const enforcedAudioRetentionDays = effectiveAudioRetentionDays(
+    settingsPolicyState,
+    audioRetentionDays
+  );
 
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -3505,10 +3530,20 @@ EOF`,
                     <SettingsPanelRow>
                       <SettingsRow
                         label={t("settingsPage.privacy.cloudBackup")}
-                        description={t("settingsPage.privacy.cloudBackupDescription")}
+                        description={
+                          cloudBackupPolicyAllowed
+                            ? t("settingsPage.privacy.cloudBackupDescription")
+                            : t("common.managedByOrg")
+                        }
                       >
                         <Toggle
                           checked={cloudBackupEnabled}
+                          disabled={
+                            !canChangeCloudBackupPreference(
+                              cloudBackupPolicyAllowed,
+                              cloudBackupEnabled
+                            )
+                          }
                           onChange={(v) => {
                             setCloudBackupEnabled(v);
                             if (v) {
@@ -3606,13 +3641,29 @@ EOF`,
                     description={t("settingsPage.privacy.audioRetentionDescription")}
                   >
                     <select
-                      value={audioRetentionDays}
-                      onChange={(e) => setAudioRetentionDays(parseInt(e.target.value, 10))}
+                      value={enforcedAudioRetentionDays}
+                      onChange={(e) => {
+                        const days = parseInt(e.target.value, 10);
+                        if (audioRetentionCap !== null && days > audioRetentionCap) return;
+                        setAudioRetentionDays(days);
+                      }}
                       className={RETENTION_SELECT_CLASS}
                     >
                       <option value={0}>{t("settingsPage.privacy.audioRetentionDisabled")}</option>
+                      {enforcedAudioRetentionDays > 0 &&
+                        !RETENTION_DAY_OPTIONS.includes(enforcedAudioRetentionDays) && (
+                          <option value={enforcedAudioRetentionDays}>
+                            {t("settingsPage.privacy.retentionDays", {
+                              count: enforcedAudioRetentionDays,
+                            })}
+                          </option>
+                        )}
                       {RETENTION_DAY_OPTIONS.map((days) => (
-                        <option key={days} value={days}>
+                        <option
+                          key={days}
+                          value={days}
+                          disabled={audioRetentionCap !== null && days > audioRetentionCap}
+                        >
                           {t("settingsPage.privacy.retentionDays", { count: days })}
                         </option>
                       ))}
@@ -3651,9 +3702,17 @@ EOF`,
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.dataRetention")}
-                    description={t("settingsPage.privacy.dataRetentionDescription")}
+                    description={
+                      historyLockedByPolicy
+                        ? t("common.managedByOrg")
+                        : t("settingsPage.privacy.dataRetentionDescription")
+                    }
                   >
-                    <Toggle checked={dataRetentionEnabled} onChange={setDataRetentionEnabled} />
+                    <Toggle
+                      checked={effectiveDataRetentionEnabled}
+                      disabled={historyLockedByPolicy}
+                      onChange={setDataRetentionEnabled}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>
@@ -3663,7 +3722,7 @@ EOF`,
                   >
                     <select
                       value={transcriptRetentionDays}
-                      disabled={!dataRetentionEnabled}
+                      disabled={!effectiveDataRetentionEnabled}
                       onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
                       className={RETENTION_SELECT_CLASS}
                     >
@@ -3685,7 +3744,7 @@ EOF`,
                   >
                     <Toggle
                       checked={saveDiscardedTranscriptions}
-                      disabled={!dataRetentionEnabled || audioRetentionDays === 0}
+                      disabled={!effectiveDataRetentionEnabled || enforcedAudioRetentionDays === 0}
                       onChange={setSaveDiscardedTranscriptions}
                     />
                   </SettingsRow>

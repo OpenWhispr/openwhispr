@@ -178,6 +178,7 @@ interface NoteEditorProps {
   isSaving: boolean;
   isRecording: boolean;
   isProcessing: boolean;
+  recordingAllowed?: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
@@ -209,6 +210,7 @@ export default function NoteEditor({
   isSaving,
   isRecording,
   isProcessing,
+  recordingAllowed = true,
   onStartRecording,
   onStopRecording,
   onExportNote,
@@ -1252,6 +1254,7 @@ export default function NoteEditor({
           <NoteBottomBar
             isRecording={isRecording}
             isProcessing={isProcessing}
+            recordingDisabled={!recordingAllowed}
             onStartRecording={onStartRecording}
             onStopRecording={onStopRecording}
             onAskSubmit={handleAskSubmit}

@@ -12,7 +12,7 @@ import { Cloud, Lock, Zap } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
-import { ProviderTabs } from "./ui/ProviderTabs";
+import { ProviderTabs, type ProviderTabItem } from "./ui/ProviderTabs";
 import OpenAICompatiblePanel from "./OpenAICompatiblePanel";
 import { API_ENDPOINTS } from "../config/constants";
 import logger from "../utils/logger";
@@ -24,6 +24,8 @@ import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
 import { useSettingsStore } from "../stores/settingsStore";
+import { isProviderAllowedByPolicy } from "../stores/policyRules";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 
 type CloudModelOption = {
   value: string;
@@ -348,18 +350,29 @@ export default function ReasoningModelSelector({
     loading: tinfoilModelsLoading,
     error: tinfoilModelsError,
   } = useTinfoilModels(selectedCloudProvider === "tinfoil");
+  const policyState = usePolicySnapshot();
+  const providerAllowed = useCallback(
+    (providerId: string) => isProviderAllowedByPolicy(policyState, "llm", providerId),
+    [policyState]
+  );
 
   const effectiveMode = mode || selectedMode;
 
-  const cloudProviders = CLOUD_PROVIDER_IDS.map((id) => ({
-    id,
-    name:
-      id === "custom"
-        ? t("reasoning.custom.providerName")
-        : id === OPENROUTER_TAB
-          ? "OpenRouter"
-          : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
-  }));
+  const cloudProviderTabs = CLOUD_PROVIDER_IDS.map((id): ProviderTabItem => {
+    const tab = {
+      id,
+      name:
+        id === "custom"
+          ? t("reasoning.custom.providerName")
+          : id === OPENROUTER_TAB
+            ? "OpenRouter"
+            : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
+    };
+    return providerAllowed(id)
+      ? tab
+      : { ...tab, disabled: true, disabledLabel: t("common.managedByOrg") };
+  });
+  const cloudProviders = cloudProviderTabs.filter((tab) => !tab.disabled);
 
   const localProviders = useMemo<LocalProvider[]>(() => {
     return modelRegistry.getAllProviders().map((provider) => ({
@@ -467,8 +480,15 @@ export default function ReasoningModelSelector({
 
     if (newMode === "cloud") {
       window.electronAPI?.llamaServerStop?.();
-      setLocalReasoningProvider(selectedCloudProvider);
-      selectDefaultModelForProvider(selectedCloudProvider);
+      // The remembered cloud provider may have become policy-disallowed while
+      // the user was in local mode — fall back to the first allowed one.
+      const nextProvider = providerAllowed(selectedCloudProvider)
+        ? selectedCloudProvider
+        : cloudProviders[0]?.id;
+      if (!nextProvider) return;
+      if (nextProvider !== selectedCloudProvider) setSelectedCloudProvider(nextProvider);
+      setLocalReasoningProvider(nextProvider);
+      selectDefaultModelForProvider(nextProvider);
     } else {
       setLocalReasoningProvider(selectedLocalProvider);
       const downloaded = await loadDownloadedModels();
@@ -486,6 +506,7 @@ export default function ReasoningModelSelector({
   };
 
   const handleCloudProviderChange = (provider: string) => {
+    if (!providerAllowed(provider)) return;
     setSelectedCloudProvider(provider);
     setLocalReasoningProvider(provider);
     selectDefaultModelForProvider(provider);
@@ -539,7 +560,7 @@ export default function ReasoningModelSelector({
       {effectiveMode === "cloud" && (
         <div className="space-y-2">
           <ProviderTabs
-            providers={cloudProviders}
+            providers={cloudProviderTabs}
             selectedId={selectedCloudProvider}
             onSelect={handleCloudProviderChange}
             colorScheme="purple"

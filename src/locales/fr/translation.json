@@ -144,6 +144,7 @@
     "cancel": "Annuler",
     "recommended": "Recommandé",
     "active": "Actif",
+    "managedByOrg": "Géré par votre organisation",
     "freeAccountRequired": "Compte gratuit requis",
     "cloud": "Cloud",
     "local": "Local",
@@ -168,7 +169,10 @@
     "copy": "Copier",
     "copied": "Copié",
     "done": "Terminé",
-    "skip": "Passer"
+    "skip": "Passer",
+    "policyAiProcessingRestricted": "Le traitement par IA est restreint par votre organisation.",
+    "policyAgentRestricted": "L’utilisation de l’agent IA est restreinte par votre organisation.",
+    "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation."
   },
   "onboarding": {
     "steps": {
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "Mise à jour requise",
+      "description": "Votre organisation exige OpenWhispr {{version}} ou une version plus récente. Veuillez mettre à jour l'application."
+    },
     "update": {
       "readyTitle": "Mise à jour prête à installer",
       "readyDescription": "Cliquez sur « Installer la mise à jour » pour redémarrer avec la dernière version.",
@@ -1179,6 +1187,7 @@
     "defaultTestInputTranslate": "Il fait très beau aujourd'hui, ça te dit d'aller te promener ?"
   },
   "settingsModal": {
+    "managedByOrg": "Certains paramètres sont gérés par votre organisation.",
     "groups": {
       "account": "Compte",
       "app": "Application",
@@ -2768,7 +2777,8 @@
       "title": "Notes de réunion",
       "description": "Transcriptions et résumés structurés",
       "comingSoon": "Bientôt disponible",
-      "back": "Retour"
+      "back": "Retour",
+      "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation."
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",
@@ -2862,6 +2872,7 @@
     "speaker": {
       "you": "Vous",
       "them": "Eux",
+      "unknown": "Intervenant inconnu",
       "label": "Intervenant {{n}}",
       "identifyingSpeakers": "Identification des intervenants...",
       "liveAccuracyHint": "Identification des intervenants en cours. La précision des étiquettes s'améliorera à la fin de l'appel.",

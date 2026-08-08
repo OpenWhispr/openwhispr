@@ -3,6 +3,12 @@ import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
 import { isEnterpriseProvider } from "../../models/ModelRegistry";
 import { getSettings } from "../../stores/settingsStore";
+import {
+  isAgentAllowed,
+  isLlmSelectionAllowed,
+  isWebSearchAllowed,
+} from "../../stores/policyRules";
+import { usePolicyStore } from "../../stores/policyStore";
 import { getAgentSystemPrompt } from "../../config/prompts";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
@@ -103,10 +109,31 @@ export function useChatStreaming({
 
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[]) => {
-      setAgentState("thinking");
-
       const settings = getSettings();
       const chatAgentMode = settings.chatAgentMode || "openwhispr";
+      const policyState = usePolicyStore.getState();
+      const policyProvider =
+        chatAgentMode === "openwhispr"
+          ? "openwhispr"
+          : chatAgentMode === "local"
+            ? "local"
+            : settings.chatAgentProvider;
+      if (
+        !isAgentAllowed(policyState) ||
+        !isLlmSelectionAllowed(policyState, { mode: chatAgentMode, provider: policyProvider })
+      ) {
+        // The user message is already appended; answer it instead of dead-ending silently.
+        const restriction = !isAgentAllowed(policyState)
+          ? t("common.policyAgentRestricted")
+          : t("common.policyAiProcessingRestricted");
+        setMessages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), role: "assistant", content: restriction, isStreaming: false },
+        ]);
+        return;
+      }
+
+      setAgentState("thinking");
       const isCloudAgent = chatAgentMode === "openwhispr" && settings.isSignedIn;
       const isLanAgent = chatAgentMode === "self-hosted" && !!settings.chatAgentRemoteUrl;
       const isCustomAgent =
@@ -131,7 +158,8 @@ export function useChatStreaming({
       let registry: ToolRegistry | null = null;
       if (supportsTools) {
         const scopeKey = scope ? `${scope.spaceId}:${scope.folderId ?? ""}` : "";
-        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}-${settings.cloudBackupEnabled}-${scopeKey}`;
+        const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
+        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -140,6 +168,7 @@ export function useChatStreaming({
             gcalConnected: settings.gcalConnected,
             cloudBackupEnabled: settings.cloudBackupEnabled,
             searchScope: scope,
+            webSearchEnabled,
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }

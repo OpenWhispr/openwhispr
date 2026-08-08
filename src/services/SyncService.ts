@@ -26,6 +26,8 @@ import {
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import { readNoteConflictIds } from "../lib/noteConflictRegistry";
+import { cloudBackupResumed, isCloudBackupAllowed } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import {
   buildNoteCreatePayload,
   buildNoteUpdatePayload,
@@ -204,7 +206,7 @@ export async function upsertCloudSpaces(cloudSpaces: MySpace[]): Promise<number[
   return backfillIds;
 }
 
-class SyncService {
+export class SyncService {
   private syncing = false;
   private syncAllPending = false;
   private autoSyncStarted = false;
@@ -222,7 +224,8 @@ class SyncService {
       hasValidatedAuthContext() &&
       localStorage.getItem("isSignedIn") === "true" &&
       localStorage.getItem("cloudBackupEnabled") === "true" &&
-      readIsSubscribed()
+      readIsSubscribed() &&
+      isCloudBackupAllowed(usePolicyStore.getState())
     );
   }
 
@@ -387,6 +390,9 @@ class SyncService {
     // subscription flag itself (post-checkout refetch, invite acceptance)
     // kicks a pass through the reactive flag instead.
     subscribeIsSubscribed(() => this.requestSyncAll("start"));
+    usePolicyStore.subscribe((policyState, previousPolicyState) => {
+      if (cloudBackupResumed(previousPolicyState, policyState)) this.requestSyncAll("start");
+    });
     setInterval(() => this.requestSyncAll("interval"), AUTO_SYNC_INTERVAL_MS);
   }
 
@@ -1775,8 +1781,9 @@ class SyncService {
     const deletes = (await window.electronAPI.getPendingNoteDeletes?.()) ?? [];
     let denied = false;
     for (const note of deletes) {
+      if (!note.cloud_id) continue;
       try {
-        await NotesService.delete(note.cloud_id!);
+        await NotesService.delete(note.cloud_id);
         await window.electronAPI.hardDeleteNote?.(note.id);
         // A settled tombstone can never resolve a conflict; drop the entry
         // (and its full cloud snapshot) from the durable registry.
@@ -1924,6 +1931,7 @@ class SyncService {
             continue;
           }
 
+          if (local?.deleted_at) continue;
           if (!local || isCloudEntryNewer(cloudNote.updated_at, local.updated_at)) {
             if (local && local.sync_status !== "synced") {
               // A newer cloud copy over unpushed local edits ('pending' or
@@ -2034,8 +2042,9 @@ class SyncService {
   private async pushConversationDeletes(): Promise<void> {
     const deletes = (await window.electronAPI.getPendingConversationDeletes?.()) ?? [];
     for (const conv of deletes) {
+      if (!conv.cloud_id) continue;
       try {
-        await ConversationsService.delete(conv.cloud_id!);
+        await ConversationsService.delete(conv.cloud_id);
         await window.electronAPI.hardDeleteConversation?.(conv.id);
       } catch (err) {
         console.error("Conversation delete sync failed:", err);

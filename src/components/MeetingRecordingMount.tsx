@@ -10,11 +10,17 @@ import {
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
 
+// Sentinel errors set by meetingRecordingStore, translated at display time.
+const MEETING_ERROR_KEYS: Record<string, string> = {
+  policyRestricted: "notes.meeting.restrictedByOrg",
+};
+
 export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
   const { toast } = useToast();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const error = useMeetingRecordingStore((s) => s.error);
+  const errorNonce = useMeetingRecordingStore((s) => s.errorNonce);
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   const wasMicUnavailable = useRef(false);
 
@@ -26,10 +32,11 @@ export default function MeetingRecordingMount(): null {
     if (!error) return;
     toast({
       title: t("notes.meeting.title"),
-      description: error,
+      description: MEETING_ERROR_KEYS[error] ? t(MEETING_ERROR_KEYS[error]) : error,
       variant: "destructive",
     });
-  }, [error, toast, t]);
+    // errorNonce re-fires this toast when the same error repeats back-to-back.
+  }, [error, errorNonce, toast, t]);
 
   useEffect(() => {
     if (micCaptureStatus === "unavailable" && !wasMicUnavailable.current) {

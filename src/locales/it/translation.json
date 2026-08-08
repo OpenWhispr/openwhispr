@@ -144,6 +144,7 @@
     "cancel": "Annulla",
     "recommended": "Consigliato",
     "active": "Attivo",
+    "managedByOrg": "Gestito dalla tua organizzazione",
     "freeAccountRequired": "Account gratuito richiesto",
     "cloud": "Cloud",
     "local": "Locale",
@@ -168,7 +169,10 @@
     "copy": "Copia",
     "copied": "Copiato",
     "done": "Fatto",
-    "skip": "Salta"
+    "skip": "Salta",
+    "policyAiProcessingRestricted": "L’elaborazione con IA è limitata dalla tua organizzazione.",
+    "policyAgentRestricted": "L’uso dell’agente IA è limitato dalla tua organizzazione.",
+    "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione."
   },
   "onboarding": {
     "steps": {
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "Aggiornamento richiesto",
+      "description": "La tua organizzazione richiede OpenWhispr {{version}} o versioni successive. Aggiorna l'app."
+    },
     "update": {
       "readyTitle": "Aggiornamento pronto da installare",
       "readyDescription": "Fai clic su 'Installa aggiornamento' per riavviare con l'ultima versione.",
@@ -1091,6 +1099,7 @@
     "defaultTestInputTranslate": "Che bella giornata oggi, ti va di fare due passi?"
   },
   "settingsModal": {
+    "managedByOrg": "Alcune impostazioni sono gestite dalla tua organizzazione.",
     "groups": {
       "account": "Account",
       "app": "App",
@@ -2577,7 +2586,8 @@
       "title": "Note delle riunioni",
       "description": "Trascrizioni e riassunti strutturati",
       "comingSoon": "Prossimamente",
-      "back": "Indietro"
+      "back": "Indietro",
+      "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione."
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
@@ -2671,6 +2681,7 @@
     "speaker": {
       "you": "Tu",
       "them": "Loro",
+      "unknown": "Partecipante sconosciuto",
       "label": "Partecipante {{n}}",
       "identifyingSpeakers": "Identificazione dei partecipanti...",
       "liveAccuracyHint": "Identificazione dei partecipanti in corso. La precisione delle etichette migliorerà al termine della chiamata.",

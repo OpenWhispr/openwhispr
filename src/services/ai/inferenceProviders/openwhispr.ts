@@ -18,6 +18,7 @@ export const openwhisprProvider: InferenceProvider = {
         customDictionary: ctx.getCustomDictionary(),
         customPrompt,
         systemPrompt: config.systemPrompt,
+        requestPurpose: config.requiresAgent ? "agent" : undefined,
         // Routing already decided this is cleanup — stop the server from
         // flipping to the action prompt on an agent-name mention.
         promptMode: config.systemPrompt ? undefined : "cleanup",

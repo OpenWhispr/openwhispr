@@ -1,8 +1,11 @@
+import { useTranslation } from "react-i18next";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import EnterpriseProviderConfig from "./EnterpriseProviderConfig";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { useSettingsStore } from "../stores/settingsStore";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
+import { isEnterpriseProviderAllowed } from "../stores/policyRules";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 
 const ENTERPRISE_PROVIDER_TABS = [
   { id: "bedrock", name: "AWS Bedrock" },
@@ -23,14 +26,25 @@ export default function EnterpriseSection({
   setReasoningModel,
   setLocalReasoningProvider,
 }: EnterpriseSectionProps) {
+  const { t } = useTranslation();
   const azureDeploymentName = useSettingsStore((s) => s.azureDeploymentName);
   const bedrockRegion = useSettingsStore((s) => s.bedrockRegion);
+  const policyState = usePolicySnapshot();
+  const providerAllowed = (providerId: string) =>
+    isEnterpriseProviderAllowed(policyState, providerId);
+
+  const providerTabs = ENTERPRISE_PROVIDER_TABS.map((tab) =>
+    providerAllowed(tab.id)
+      ? tab
+      : { ...tab, disabled: true, disabledLabel: t("common.managedByOrg") }
+  );
   const selectedEnterprise = ENTERPRISE_PROVIDER_TABS.some((p) => p.id === currentProvider)
     ? currentProvider
     : "";
 
   const handleEnterpriseSelect = (providerId: string) => {
     if (selectedEnterprise === providerId) return;
+    if (!providerAllowed(providerId)) return;
     setLocalReasoningProvider(providerId);
 
     const providerData = REASONING_PROVIDERS[providerId];
@@ -49,7 +63,7 @@ export default function EnterpriseSection({
   return (
     <div className="space-y-2">
       <ProviderTabs
-        providers={ENTERPRISE_PROVIDER_TABS}
+        providers={providerTabs}
         selectedId={selectedEnterprise}
         onSelect={handleEnterpriseSelect}
         colorScheme="purple"

@@ -144,6 +144,7 @@
     "cancel": "取消",
     "recommended": "推荐",
     "active": "已激活",
+    "managedByOrg": "由您的组织管理",
     "freeAccountRequired": "需要免费账户",
     "cloud": "云端",
     "local": "本地",
@@ -158,17 +159,20 @@
     "tap": "点按",
     "close": "关闭",
     "dismiss": "忽略",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "create": "Crear",
-    "delete": "Eliminar",
-    "actions": "Acciones",
-    "error": "Algo salió mal",
-    "unknownError": "Ocurrió un error desconocido",
-    "copy": "Copiar",
-    "copied": "Copiado",
-    "done": "Listo",
-    "skip": "跳过"
+    "save": "保存",
+    "saving": "保存中…",
+    "create": "创建",
+    "delete": "删除",
+    "actions": "操作",
+    "error": "出了点问题",
+    "unknownError": "发生未知错误",
+    "copy": "复制",
+    "copied": "已复制",
+    "done": "完成",
+    "skip": "跳过",
+    "policyAiProcessingRestricted": "AI 处理已被您的组织限制。",
+    "policyAgentRestricted": "AI 智能体的使用已被您的组织限制。",
+    "policyTranscriptionRestricted": "转录已被您的组织限制。"
   },
   "onboarding": {
     "steps": {
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "需要更新",
+      "description": "您的组织要求使用 OpenWhispr {{version}} 或更高版本。请更新应用。"
+    },
     "update": {
       "readyTitle": "更新已准备就绪",
       "readyDescription": "点击“安装更新”以重启并安装最新版本。",
@@ -1091,6 +1099,7 @@
     "defaultTestInputTranslate": "今天天气真好，要不要出去走走？"
   },
   "settingsModal": {
+    "managedByOrg": "部分设置由您的组织管理。",
     "groups": {
       "account": "账户",
       "app": "应用",
@@ -1318,8 +1327,8 @@
           "accountCredit": "账户余额",
           "newPrice": "新价格",
           "nextBilling": "下次计费",
-          "mo": "mo",
-          "yr": "yr",
+          "mo": "月",
+          "yr": "年",
           "cancel": "取消",
           "confirm": "确认"
         }
@@ -1790,7 +1799,7 @@
       "description": "配置用于听写清理、笔记格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "听写清理",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "语音助手",
         "noteFormatting": "笔记格式化",
         "chatIntelligence": "聊天",
         "dictationTranslation": "翻译"
@@ -2180,8 +2189,8 @@
         "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
         "bedrock_deepseek_v3_2": "开放权重前沿模型。智能助手模式的高性价比之选。",
         "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "vertex_gemini_2_5_flash": "通过 Vertex 提供的快速多模态模型",
+        "vertex_gemini_2_5_pro": "通过 Vertex 提供的高级推理模型"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "强大的混合模型",
@@ -2577,7 +2586,8 @@
       "title": "会议笔记",
       "description": "转录与结构化摘要",
       "comingSoon": "即将推出",
-      "back": "返回"
+      "back": "返回",
+      "restrictedByOrg": "会议转录已被您的组织限制。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -2671,6 +2681,7 @@
     "speaker": {
       "you": "你",
       "them": "对方",
+      "unknown": "未知发言者",
       "label": "发言者 {{n}}",
       "identifyingSpeakers": "正在识别发言者...",
       "liveAccuracyHint": "正在识别发言者。通话结束后，标签准确性会提升。",

@@ -10,6 +10,8 @@ import { cn } from "./lib/utils";
 import { useUpcomingEvents } from "../hooks/useUpcomingEvents";
 import UpcomingMeetings from "./UpcomingMeetings";
 import { useSettingsStore } from "../stores/settingsStore";
+import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 
 interface HistoryViewProps {
   history: TranscriptionItemType[];
@@ -49,7 +51,10 @@ export default function HistoryView({
   onToggleDiscarded,
 }: HistoryViewProps) {
   const { t } = useTranslation();
-  const dataRetentionEnabled = useSettingsStore((s) => s.dataRetentionEnabled);
+  const personalDataRetentionEnabled = useSettingsStore((s) => s.dataRetentionEnabled);
+  const dataRetentionEnabled = usePolicyStore((policyState) =>
+    effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
+  );
   const { events, isLoading: eventsLoading, isConnected } = useUpcomingEvents();
 
   const groupedHistory = useMemo(() => {

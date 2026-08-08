@@ -25,6 +25,8 @@ import {
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
 import { useSettingsStore } from "../stores/settingsStore";
+import { isProviderAllowedByPolicy, reconcileCloudProviderSelection } from "../stores/policyRules";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
@@ -276,8 +278,6 @@ const PROVIDER_CREDENTIALS: Record<
   },
 };
 
-const VALID_CLOUD_PROVIDER_IDS = CLOUD_PROVIDER_TABS.map((p) => p.id);
-
 const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
@@ -393,16 +393,32 @@ export default function TranscriptionModelPicker({
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const colorScheme: ColorScheme = variant === "settings" ? "purple" : "blue";
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
-  const cloudProviders = useMemo(
+  const policyState = usePolicySnapshot();
+  const providerAllowed = useCallback(
+    (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
+    [policyState]
+  );
+  const availableCloudProviders = useMemo(
     () => (streamingOnly ? getStreamingTranscriptionProviders() : getTranscriptionProviders()),
     [streamingOnly]
   );
+  const cloudProviders = useMemo(
+    () => availableCloudProviders.filter((p) => providerAllowed(p.id)),
+    [availableCloudProviders, providerAllowed]
+  );
   const cloudProviderTabs = useMemo(() => {
-    const visibleIds = new Set([...cloudProviders.map((p) => p.id), "custom"]);
-    return CLOUD_PROVIDER_TABS.filter((p) => visibleIds.has(p.id)).map((provider) =>
-      provider.id === "custom" ? { ...provider, name: t("transcription.customProvider") } : provider
-    );
-  }, [cloudProviders, t]);
+    const availableIds = new Set(availableCloudProviders.map((p) => p.id));
+    availableIds.add("custom");
+    return CLOUD_PROVIDER_TABS.filter((p) => availableIds.has(p.id)).map((provider) => {
+      const named =
+        provider.id === "custom"
+          ? { ...provider, name: t("transcription.customProvider") }
+          : provider;
+      return providerAllowed(named.id)
+        ? named
+        : { ...named, disabled: true, disabledLabel: t("common.managedByOrg") };
+    });
+  }, [availableCloudProviders, providerAllowed, t]);
 
   useEffect(() => {
     selectedLocalModelRef.current = selectedLocalModel;
@@ -463,40 +479,35 @@ export default function TranscriptionModelPicker({
   }, []);
 
   const ensureValidCloudSelection = useCallback(() => {
-    const isValidProvider = VALID_CLOUD_PROVIDER_IDS.includes(selectedCloudProvider);
-
-    if (!isValidProvider) {
-      const knownProviderUrls = cloudProviders.map((p) => p.baseUrl);
-      const hasCustomUrl =
-        cloudTranscriptionBaseUrl &&
-        cloudTranscriptionBaseUrl.trim() !== "" &&
-        cloudTranscriptionBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE &&
-        !knownProviderUrls.includes(cloudTranscriptionBaseUrl);
-
-      if (hasCustomUrl) {
-        onCloudProviderSelect("custom");
-      } else {
-        const firstProvider = cloudProviders[0];
-        if (firstProvider) {
-          onCloudProviderSelect(firstProvider.id);
-          if (firstProvider.models?.length) {
-            onCloudModelSelect(firstProvider.models[0].id);
-          }
-        }
-      }
-    } else if (selectedCloudProvider !== "custom" && !selectedCloudModel) {
-      const provider = cloudProviders.find((p) => p.id === selectedCloudProvider);
-      if (provider?.models?.length) {
-        onCloudModelSelect(provider.models[0].id);
-      }
-    }
+    // Every provider's URL counts as known, including policy-blocked ones:
+    // otherwise a blocked provider's stored URL reads as a custom endpoint and
+    // reconciliation would keep pointing "custom" at what policy just denied.
+    const knownProviderUrls = availableCloudProviders.map((provider) => provider.baseUrl);
+    const hasCustomUrl = Boolean(
+      cloudTranscriptionBaseUrl &&
+      cloudTranscriptionBaseUrl.trim() !== "" &&
+      cloudTranscriptionBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE &&
+      !knownProviderUrls.includes(cloudTranscriptionBaseUrl)
+    );
+    const selection = reconcileCloudProviderSelection({
+      selectedProvider: selectedCloudProvider,
+      selectedModel: selectedCloudModel,
+      allowedProviders: cloudProviders,
+      customAllowed: providerAllowed("custom"),
+      hasCustomUrl,
+    });
+    if (!selection) return;
+    if (selection.provider !== selectedCloudProvider) onCloudProviderSelect(selection.provider);
+    if (selection.model !== selectedCloudModel) onCloudModelSelect(selection.model);
   }, [
+    availableCloudProviders,
     cloudProviders,
     cloudTranscriptionBaseUrl,
     selectedCloudProvider,
     selectedCloudModel,
     onCloudProviderSelect,
     onCloudModelSelect,
+    providerAllowed,
   ]);
 
   useEffect(() => {
@@ -633,6 +644,7 @@ export default function TranscriptionModelPicker({
 
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
+      if (!providerAllowed(providerId)) return;
       onCloudProviderSelect(providerId);
       const provider = cloudProviders.find((p) => p.id === providerId);
 
@@ -648,7 +660,13 @@ export default function TranscriptionModelPicker({
         }
       }
     },
-    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, setCloudTranscriptionBaseUrl]
+    [
+      cloudProviders,
+      onCloudProviderSelect,
+      onCloudModelSelect,
+      setCloudTranscriptionBaseUrl,
+      providerAllowed,
+    ]
   );
 
   const handleLocalProviderChange = useCallback(

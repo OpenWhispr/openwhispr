@@ -14,6 +14,8 @@ interface ShareVisibilityMenuProps {
   value: ShareVisibility;
   ownerDomain: string;
   showDomainOption: boolean;
+  /** Policy-restricted options render disabled with this reason instead of hiding. */
+  optionDisabledReasons?: Partial<Record<ShareVisibility, string>>;
   disabled?: boolean;
   onChange: (visibility: ShareVisibility) => void;
 }
@@ -22,6 +24,7 @@ export default function ShareVisibilityMenu({
   value,
   ownerDomain,
   showDomainOption,
+  optionDisabledReasons,
   disabled,
   onChange,
 }: ShareVisibilityMenuProps) {
@@ -61,12 +64,14 @@ export default function ShareVisibilityMenu({
           icon={<Users size={13} className="text-foreground/50" />}
           label={t("noteEditor.share.dialog.visibility.invited")}
           active={value === "invited"}
+          disabledReason={optionDisabledReasons?.invited}
           onSelect={() => onChange("invited")}
         />
         <VisibilityItem
           icon={<Globe size={13} className="text-foreground/50" />}
           label={t("noteEditor.share.dialog.visibility.link")}
           active={value === "link"}
+          disabledReason={optionDisabledReasons?.link}
           onSelect={() => onChange("link")}
         />
         {showDomainOption && (
@@ -74,6 +79,7 @@ export default function ShareVisibilityMenu({
             icon={<Building2 size={13} className="text-foreground/50" />}
             label={t("noteEditor.share.dialog.visibility.domain", { domain: ownerDomain })}
             active={value === "domain"}
+            disabledReason={optionDisabledReasons?.domain}
             onSelect={() => onChange("domain")}
           />
         )}
@@ -116,18 +122,30 @@ function VisibilityItem({
   icon,
   label,
   active,
+  disabledReason,
   onSelect,
 }: {
   icon: React.ReactNode;
   label: string;
   active: boolean;
+  disabledReason?: string;
   onSelect: () => void;
 }) {
   return (
-    <DropdownMenuItem onClick={onSelect} className="text-xs gap-2 py-1.5">
+    <DropdownMenuItem
+      onClick={onSelect}
+      disabled={!!disabledReason}
+      className="text-xs gap-2 py-1.5"
+    >
       {icon}
       <span className="flex-1">{label}</span>
-      {active && <Check size={12} className="text-primary" />}
+      {disabledReason ? (
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+          {disabledReason}
+        </span>
+      ) : (
+        active && <Check size={12} className="text-primary" />
+      )}
     </DropdownMenuItem>
   );
 }

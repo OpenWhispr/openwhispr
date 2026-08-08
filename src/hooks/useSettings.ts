@@ -9,6 +9,8 @@ import type {
   SelfHostedType,
 } from "../types/electron";
 import type { Snippet } from "../utils/snippets";
+import { effectiveAudioRetentionDays } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -179,9 +181,15 @@ function useSettingsInternal() {
 
   // Retention periods are enforced by the main process cleanup sweep
   const { audioRetentionDays, transcriptRetentionDays } = store;
+  const enforcedAudioRetentionDays = usePolicyStore((policyState) =>
+    effectiveAudioRetentionDays(policyState, audioRetentionDays)
+  );
   useEffect(() => {
-    window.electronAPI?.syncRetentionSettings?.({ audioRetentionDays, transcriptRetentionDays });
-  }, [audioRetentionDays, transcriptRetentionDays]);
+    window.electronAPI?.syncRetentionSettings?.({
+      audioRetentionDays: enforcedAudioRetentionDays,
+      transcriptRetentionDays,
+    });
+  }, [enforcedAudioRetentionDays, transcriptRetentionDays]);
 
   // Sync startup pre-warming preferences to main process
   const {
