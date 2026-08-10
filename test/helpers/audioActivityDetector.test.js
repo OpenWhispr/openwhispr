@@ -444,6 +444,47 @@ test("win32: a legacy binary without CAPABILITY PID stays unreliable but still p
   detector.stop();
 });
 
+test("win32: a mid-run coverage downgrade emits an unreliable snapshot but keeps prompting", async () => {
+  const { detector, children } = createDetector("win32", {
+    excludedProcessIds: () => [process.pid],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "READY\nCAPABILITY PID\nMIC_START 900\n");
+  assert.deepEqual(externalStates.at(-1), { reliable: true, externalMicActive: true });
+
+  // The helper announces CAPABILITY AGGREGATE instead of exiting when it can
+  // no longer guarantee per-PID coverage.
+  children[0].stdout.emit("data", "CAPABILITY AGGREGATE\n");
+  assert.deepEqual(externalStates.at(-1), {
+    reliable: false,
+    externalMicActive: false,
+  });
+
+  children[0].stdout.emit("data", "MIC_START 901\n");
+  assert.notEqual(detector._sustainedTimer, null, "degraded events must still drive prompts");
+  assert.equal(detector.getExternalMicState().reliable, false);
+  detector.stop();
+});
+
+test("win32: unattributable sessions (pid 0) count as external capture", async () => {
+  const { detector, children } = createDetector("win32", {
+    excludedProcessIds: () => [process.pid],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "READY\nCAPABILITY PID\nMIC_START 0\n");
+  assert.deepEqual(externalStates.at(-1), { reliable: true, externalMicActive: true });
+
+  children[0].stdout.emit("data", "MIC_STOP 0\n");
+  assert.deepEqual(externalStates.at(-1), { reliable: true, externalMicActive: false });
+  detector.stop();
+});
+
 test("linux: reconciles source-output ownership at startup and on events", async () => {
   const { detector, children, execCalls } = createDetector("linux", {
     excludedProcessIds: () => [700],
@@ -514,6 +555,47 @@ test("linux: a burst of subscribe events coalesces into at most two reconciles",
   assert.deepEqual(detector.getExternalMicState(), {
     reliable: true,
     externalMicActive: true,
+  });
+  detector.stop();
+});
+
+test("linux: module streams without a process id stay excluded without costing reliability", async () => {
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: "[]" },
+      {
+        // module-echo-cancel/loopback streams carry no application.process.id.
+        stdout: JSON.stringify([
+          { index: 1, properties: { "media.name": "Echo-Cancel Source Stream" } },
+          { index: 2, properties: { "application.process.id": "900" } },
+        ]),
+      },
+      {
+        stdout: JSON.stringify([
+          { index: 1, properties: { "media.name": "Echo-Cancel Source Stream" } },
+        ]),
+      },
+    ],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  await flush();
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+
+  children[0].stdout.emit("data", "Event 'remove' on source-output #2\n");
+  await flush();
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: false,
   });
   detector.stop();
 });

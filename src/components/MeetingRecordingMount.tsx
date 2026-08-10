@@ -8,6 +8,7 @@ import {
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
+import logger from "../utils/logger";
 
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
@@ -26,7 +27,13 @@ export default function MeetingRecordingMount(): null {
 
   useEffect(() => {
     return window.electronAPI?.onMeetingAutoEndRequested?.((request) => {
-      requestMeetingRecordingAutoEnd(request, stopRecording);
+      requestMeetingRecordingAutoEnd(request, stopRecording, (error, sessionId) => {
+        logger.error(
+          "Meeting auto-end stop failed; recording is still running",
+          { error: error instanceof Error ? error.message : String(error), sessionId },
+          "meeting"
+        );
+      });
     });
   }, []);
 

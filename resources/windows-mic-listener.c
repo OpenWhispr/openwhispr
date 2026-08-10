@@ -4,11 +4,20 @@
  * Monitors every active WASAPI capture endpoint and emits process-scoped
  * MIC_START/MIC_STOP transitions. PID exclusions are deliberately handled by
  * the JavaScript caller so its live process set can change without restarting
- * this helper.
+ * this helper. Sessions that cannot be attributed to a single process are
+ * reported under pid 0; on an unrecoverable coverage gap the helper announces
+ * "CAPABILITY AGGREGATE" and keeps emitting best-effort transitions instead
+ * of exiting.
  *
  * Compile with: cl /O2 windows-mic-listener.c /Fe:windows-mic-listener.exe ole32.lib oleaut32.lib user32.lib
  * Or with MinGW: gcc -O2 windows-mic-listener.c -o windows-mic-listener.exe -lole32 -loleaut32 -luser32
  */
+
+/* Single source of truth for the release tag (windows-mic-listener-v<version>).
+ * The publisher workflow tags the release from it and the download script pins
+ * to it, so build jobs can never silently pick up a binary built from older
+ * source. Bump it on any protocol or behavior change. */
+#define MIC_LISTENER_VERSION "1.1.0"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -113,10 +122,6 @@ static bool MicPidRegistrySetSession(
 {
     MicPidActivity *activity = registry->head;
     MicPidActivity *previous = NULL;
-
-    if (pid == 0) {
-        return true;
-    }
 
     while (activity && activity->pid != pid) {
         previous = activity;
@@ -250,14 +255,19 @@ static void TestStateTransitions(void)
     assert(context.transitionCount == 2);
     assert(context.pids[1] == 42 && !context.states[1]);
 
+    /* Unattributable sessions (pid 0) refcount and emit like any other pid so
+     * the JS caller can treat them as external captures. */
     assert(MicSessionSetActive(&registry, &systemSession, true));
+    assert(context.transitionCount == 3);
+    assert(context.pids[2] == 0 && context.states[2]);
     assert(MicSessionSetActive(&registry, &systemSession, false));
-    assert(context.transitionCount == 2);
+    assert(context.transitionCount == 4);
+    assert(context.pids[3] == 0 && !context.states[3]);
 
     context.failAllocation = true;
     assert(!MicSessionSetActive(&registry, &failedSetup, true));
     assert(!failedSetup.active);
-    assert(context.transitionCount == 2);
+    assert(context.transitionCount == 4);
 
     MicPidRegistryDestroy(&registry);
     puts("native state tests passed");
@@ -507,11 +517,6 @@ static void EmitPidTransition(MicPid pid, bool active, void *context)
 static BOOL SetSessionActive(SessionEvents *session, BOOL active)
 {
     bool updated;
-
-    if (active && session->activity.pid == 0) {
-        ReportCoverageLost("attribute an active capture session", E_UNEXPECTED);
-        return FALSE;
-    }
 
     AcquireSRWLockExclusive(&g_pidRegistryLock);
     updated = MicSessionSetActive(
@@ -846,8 +851,10 @@ static BOOL RegisterSessionOnControl(
     hr = IAudioSessionControl2_GetProcessId(control2, &pid);
     if (!MicProcessIdentityIsReliable((long)hr, (MicPid)pid)) {
         /* Sessions that cannot be attributed (e.g. cross-process ones returning
-         * AUDCLNT_S_NO_SINGLE_PROCESS) are tracked under pid 0 so coverage is
-         * only declared lost if one of them actually captures. */
+         * AUDCLNT_S_NO_SINGLE_PROCESS) are reported under pid 0. The JS caller
+         * can never exclude pid 0 as its own, so such a session counts as an
+         * external capture — auto-end stays parked while it is active instead
+         * of the helper giving up. */
         pid = 0;
     }
 
@@ -1189,14 +1196,20 @@ static EndpointNotification *CreateEndpointNotification(void)
     return notification;
 }
 
+/* A coverage gap means per-PID data can no longer be trusted, but degraded
+ * MIC_START/MIC_STOP reporting still beats exiting (the JS caller has no
+ * respawn, and its polling fallback only knows a few process names). Announce
+ * the one-way downgrade so the consumer stops treating the data as reliable,
+ * and keep running. Setup-time losses still abort via MicCoverageSetupIsReady,
+ * which gates the READY/CAPABILITY handshake on g_coverageLost. */
 static void ReportCoverageLost(const char *operation, HRESULT hr)
 {
     if (InterlockedCompareExchange(&g_coverageLost, 1, 0) == 0) {
-        fprintf(stderr, "Error: Lost microphone coverage while attempting to %s (0x%08lx)\n",
+        fprintf(stderr, "Warning: Lost microphone coverage while attempting to %s (0x%08lx)\n",
             operation, (unsigned long)hr);
+        printf("CAPABILITY AGGREGATE\n");
+        fflush(stdout);
     }
-    InterlockedExchange(&g_running, 0);
-    if (g_mainThreadId) PostThreadMessage(g_mainThreadId, WM_QUIT, 0, 0);
 }
 
 static void HandleCreatedSession(CreatedSessionMessage *message)

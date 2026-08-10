@@ -15,12 +15,15 @@ export function canStopMeetingRecordingSession(
 
 export function requestMeetingRecordingAutoEnd(
   payload: { sessionId?: unknown } | null | undefined,
-  stopRecording: (sessionId: string) => unknown
+  stopRecording: (sessionId: string) => unknown,
+  onError: (error: unknown, sessionId: string) => void
 ): boolean {
   const sessionId = payload?.sessionId;
   if (typeof sessionId !== "string" || sessionId.trim().length === 0) return false;
 
-  void Promise.resolve(stopRecording(sessionId)).catch(() => undefined);
+  // A rejected stop means the recording is still running while main already
+  // considers the countdown expired — surface it instead of swallowing it.
+  void Promise.resolve(stopRecording(sessionId)).catch((error) => onError(error, sessionId));
   return true;
 }
 

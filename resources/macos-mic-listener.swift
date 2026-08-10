@@ -156,6 +156,11 @@ func removeProcessMonitoring() {
     }
 }
 
+// A process can vanish between enumeration and the per-object property
+// queries, so a failing object is skipped (treated as no longer capturing)
+// rather than abandoning PID mode. Returns nil only when a non-empty process
+// list yields no readable object at all — a systemic failure where reported
+// state could no longer be trusted.
 func prepareProcessSnapshot(
     _ processObjects: [AudioObjectID]
 ) -> (pids: [AudioObjectID: pid_t], active: Set<pid_t>)? {
@@ -167,7 +172,7 @@ func prepareProcessSnapshot(
             let processId = getProcessPid(processObject),
             let isRunningInput = isProcessRunningInput(processObject)
         else {
-            return nil
+            continue
         }
 
         pids[processObject] = processId
@@ -176,6 +181,9 @@ func prepareProcessSnapshot(
         }
     }
 
+    if !processObjects.isEmpty && pids.isEmpty {
+        return nil
+    }
     return (pids, active)
 }
 
@@ -202,7 +210,7 @@ func startProcessMonitoring() -> Bool {
         return false
     }
 
-    for processObject in processObjects {
+    for processObject in snapshot.pids.keys {
         guard addProcessStateListener(processObject) else {
             removeProcessMonitoring()
             return false
@@ -217,13 +225,13 @@ func reconcileProcessMonitoring() {
     guard listenerMode == .process else { return }
     guard
         let processObjects = getProcessObjects(),
-        let snapshot = prepareProcessSnapshot(processObjects)
+        var snapshot = prepareProcessSnapshot(processObjects)
     else {
         startAggregateFallback()
         return
     }
 
-    let nextObjects = Set(processObjects)
+    let nextObjects = Set(snapshot.pids.keys)
     let previousObjects = Set(processObjectPids.keys)
 
     for processObject in previousObjects.subtracting(nextObjects) {
@@ -231,9 +239,13 @@ func reconcileProcessMonitoring() {
         processObjectPids.removeValue(forKey: processObject)
     }
     for processObject in nextObjects.subtracting(previousObjects) {
+        // Registration can lose the same vanish race as the snapshot; drop the
+        // object and let the next reconcile retry if it is actually alive. Its
+        // pid stays in the active set until then so a live capture is never
+        // reported stopped early.
         guard addProcessStateListener(processObject) else {
-            startAggregateFallback()
-            return
+            snapshot.pids.removeValue(forKey: processObject)
+            continue
         }
         processObjectPids[processObject] = snapshot.pids[processObject]
     }

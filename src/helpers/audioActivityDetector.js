@@ -341,6 +341,12 @@ class AudioActivityDetector extends EventEmitter {
       this._setPidScopedCapability(true);
       return;
     }
+    // The helper downgrades itself mid-run on an unrecoverable coverage gap
+    // and keeps emitting best-effort transitions for meeting detection.
+    if (line === "CAPABILITY AGGREGATE") {
+      this._setPidScopedCapability(false);
+      return;
+    }
 
     this._parsePidScopedListenerLine(line);
   }
@@ -427,10 +433,12 @@ class AudioActivityDetector extends EventEmitter {
 
       const activeMicPids = new Set();
       for (const sourceOutput of sourceOutputs) {
+        // Audio-server plumbing (module-echo-cancel, loopbacks) legitimately
+        // lacks application.process.id — client streams always carry it. Skip
+        // such streams instead of surrendering PID reliability, or systems
+        // with these modules loaded could never arm auto-end.
         const processId = Number(sourceOutput?.properties?.["application.process.id"]);
-        if (!Number.isInteger(processId) || processId <= 0) {
-          throw new Error("pactl source output is missing application.process.id");
-        }
+        if (!Number.isInteger(processId) || processId <= 0) continue;
         activeMicPids.add(processId);
       }
 
