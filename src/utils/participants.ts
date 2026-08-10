@@ -6,7 +6,13 @@ export const resolveExpectedSpeakerCount = (note?: {
   expected_speaker_count?: number | null;
   participants?: string | null;
 }): number | null => {
-  if (note?.expected_speaker_count != null) return note.expected_speaker_count;
+  if (
+    typeof note?.expected_speaker_count === "number" &&
+    Number.isInteger(note.expected_speaker_count) &&
+    note.expected_speaker_count > 0
+  ) {
+    return note.expected_speaker_count;
+  }
   if (!note?.participants) return null;
 
   let attendees: CalendarAttendee[];
