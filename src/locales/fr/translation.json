@@ -3413,7 +3413,7 @@
       "title": "Prompt de Traduction",
       "description": "Personnalisez la façon dont le modèle traduit votre dictée"
     },
-    "hotkeyHint": "Définissez le raccourci dans Réglages → Général → Raccourci de Traduction",
+    "hotkeyHint": "Définissez le raccourci dans Réglages → Raccourcis → Raccourci de Traduction",
     "targetsLabel": "Langues cibles",
     "addTarget": "Ajouter une langue…",
     "activeTarget": "Langue cible active",
