@@ -1,5 +1,7 @@
 import { en as enPrompts, type PromptBundle } from "../../locales/prompts";
 
+// When changing this text, move its old hash to the retired set in
+// src/config/retiredPrompts.js and update the current-hash snapshot there.
 const DEFAULT_CHAT_AGENT_PROMPT =
   "You are a helpful voice assistant. Respond concisely and conversationally. " +
   "Keep answers brief unless the user asks for detail. " +

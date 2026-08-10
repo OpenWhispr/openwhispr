@@ -110,7 +110,9 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const [editedPrompt, setEditedPrompt] = useState(customPrompt || defaultPrompt);
 
   const savePrompt = () => {
-    setCustomPrompt(kind, editedPrompt);
+    // Saving the unedited default is not a customization; keep resolving the
+    // shipped default so future prompt updates still reach this install.
+    setCustomPrompt(kind, editedPrompt === defaultPrompt ? "" : editedPrompt);
     showAlertDialog({
       title: t("promptStudio.dialogs.saved.title"),
       description: t("promptStudio.dialogs.saved.description"),
