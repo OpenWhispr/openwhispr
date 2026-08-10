@@ -3481,7 +3481,7 @@
       "title": "Prompt di Traduzione",
       "description": "Personalizza come il modello traduce la tua dettatura"
     },
-    "hotkeyHint": "Imposta la hotkey in Impostazioni → Generali → Hotkey Traduzione",
+    "hotkeyHint": "Imposta la hotkey in Impostazioni → Scorciatoie → Hotkey Traduzione",
     "targetsLabel": "Lingue di destinazione",
     "addTarget": "Aggiungi lingua…",
     "activeTarget": "Lingua di destinazione attiva",

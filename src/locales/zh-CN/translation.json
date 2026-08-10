@@ -3481,7 +3481,7 @@
       "title": "翻译提示词",
       "description": "自定义模型翻译听写内容的方式"
     },
-    "hotkeyHint": "在 设置 → 通用 → 翻译快捷键 中设置快捷键",
+    "hotkeyHint": "在 设置 → 快捷键 → 翻译快捷键 中设置快捷键",
     "targetsLabel": "目标语言",
     "addTarget": "添加语言…",
     "activeTarget": "当前目标语言",

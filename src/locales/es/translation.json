@@ -3481,7 +3481,7 @@
       "title": "Prompt de Traducción",
       "description": "Personaliza cómo el modelo traduce tu dictado"
     },
-    "hotkeyHint": "Configura el atajo en Ajustes → General → Atajo de Traducción",
+    "hotkeyHint": "Configura el atajo en Ajustes → Atajos → Atajo de Traducción",
     "targetsLabel": "Idiomas de destino",
     "addTarget": "Añadir idioma…",
     "activeTarget": "Idioma de destino activo",

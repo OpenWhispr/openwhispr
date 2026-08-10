@@ -3481,7 +3481,7 @@
       "title": "Prompt de Tradução",
       "description": "Personalize como o modelo traduz seu ditado"
     },
-    "hotkeyHint": "Defina o atalho em Configurações → Geral → Atalho de Tradução",
+    "hotkeyHint": "Defina o atalho em Configurações → Atalhos → Atalho de Tradução",
     "targetsLabel": "Idiomas de destino",
     "addTarget": "Adicionar idioma…",
     "activeTarget": "Idioma de destino ativo",
