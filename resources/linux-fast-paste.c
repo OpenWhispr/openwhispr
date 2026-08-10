@@ -39,13 +39,6 @@ typedef enum {
 #define PORTAL_IFACE "org.freedesktop.portal.RemoteDesktop"
 #define REQUEST_IFACE "org.freedesktop.portal.Request"
 
-/* evdev keycodes for portal mode */
-#define PORTAL_KEY_LEFTCTRL  29
-#define PORTAL_KEY_LEFTSHIFT 42
-#define PORTAL_KEY_C         46
-#define PORTAL_KEY_V         47
-#define PORTAL_KEY_INSERT    110
-
 static int portal_exit_code = 0;
 
 typedef struct {
@@ -77,54 +70,62 @@ static guint subscribe_response(PortalData *app, const char *request_path,
         callback, app, NULL);
 }
 
-static void portal_emit_key(PortalData *app, gint32 keycode, guint32 pressed,
-                            const char *label)
+static int portal_emit_keysym(PortalData *app, gint32 keysym, guint32 pressed,
+                              const char *label)
 {
     GError *err = NULL;
     GVariant *opts = g_variant_new("a{sv}", NULL);
-    g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
-        PORTAL_IFACE, "NotifyKeyboardKeycode",
-        g_variant_new("(o@a{sv}iu)", app->session_handle, opts, keycode, pressed),
+    GVariant *result = g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
+        PORTAL_IFACE, "NotifyKeyboardKeysym",
+        g_variant_new("(o@a{sv}iu)", app->session_handle, opts, keysym, pressed),
         NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
-    if (err) { fprintf(stderr, "%s: %s\n", label, err->message); g_clear_error(&err); }
+    if (err) {
+        fprintf(stderr, "%s: %s\n", label, err->message);
+        g_clear_error(&err);
+        return 0;
+    }
+    if (result) g_variant_unref(result);
+    return 1;
 }
 
 static void portal_send_paste(PortalData *app)
 {
+    int ok = 1;
     if (app->copy_mode) {
         const int use_shift = (app->mode == PASTE_MODE_CTRL_SHIFT_V);
-        portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 1, "Ctrl press");
+        ok &= portal_emit_keysym(app, XK_Control_L, 1, "Ctrl press");
         if (use_shift)
-            portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
-        portal_emit_key(app, PORTAL_KEY_C, 1, "C press");
+            ok &= portal_emit_keysym(app, XK_Shift_L, 1, "Shift press");
+        ok &= portal_emit_keysym(app, XK_c, 1, "C press");
         usleep(20000);
-        portal_emit_key(app, PORTAL_KEY_C, 0, "C release");
+        ok &= portal_emit_keysym(app, XK_c, 0, "C release");
         if (use_shift)
-            portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 0, "Shift release");
-        portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 0, "Ctrl release");
+            ok &= portal_emit_keysym(app, XK_Shift_L, 0, "Shift release");
+        ok &= portal_emit_keysym(app, XK_Control_L, 0, "Ctrl release");
     } else if (app->mode == PASTE_MODE_SHIFT_INSERT) {
-        portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
+        ok &= portal_emit_keysym(app, XK_Shift_L, 1, "Shift press");
         /* let the compositor register the modifier before the key arrives */
         usleep(20000);
-        portal_emit_key(app, PORTAL_KEY_INSERT,    1, "Insert press");
+        ok &= portal_emit_keysym(app, XK_Insert, 1, "Insert press");
         usleep(20000);
-        portal_emit_key(app, PORTAL_KEY_INSERT,    0, "Insert release");
-        portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 0, "Shift release");
+        ok &= portal_emit_keysym(app, XK_Insert, 0, "Insert release");
+        ok &= portal_emit_keysym(app, XK_Shift_L, 0, "Shift release");
     } else {
         const int use_shift = (app->mode == PASTE_MODE_CTRL_SHIFT_V);
 
-        portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 1, "Ctrl press");
+        ok &= portal_emit_keysym(app, XK_Control_L, 1, "Ctrl press");
         if (use_shift)
-            portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
+            ok &= portal_emit_keysym(app, XK_Shift_L, 1, "Shift press");
         usleep(20000);
-        portal_emit_key(app, PORTAL_KEY_V, 1, "V press");
+        ok &= portal_emit_keysym(app, XK_v, 1, "V press");
         usleep(20000);
-        portal_emit_key(app, PORTAL_KEY_V, 0, "V release");
+        ok &= portal_emit_keysym(app, XK_v, 0, "V release");
         if (use_shift)
-            portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 0, "Shift release");
-        portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 0, "Ctrl release");
+            ok &= portal_emit_keysym(app, XK_Shift_L, 0, "Shift release");
+        ok &= portal_emit_keysym(app, XK_Control_L, 0, "Ctrl release");
     }
 
+    if (!ok) portal_exit_code = 6;
     g_main_loop_quit(app->loop);
 }
 
@@ -817,6 +818,9 @@ int main(int argc, char *argv[]) {
 
     if (capabilities_only) {
         printf("paste-v1 selection-copy-v1 target-window-v1");
+#ifdef HAVE_GIO
+        printf(" portal-keysym-v1");
+#endif
 #ifdef HAVE_ATSPI
         printf(" atspi-selection-v1");
 #endif

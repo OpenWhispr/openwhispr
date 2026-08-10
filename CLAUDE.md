@@ -57,7 +57,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **clipboard.js**: Cross-platform clipboard operations
   - macOS: AppleScript-based paste with accessibility permission check
   - Windows: PowerShell SendKeys with nircmd.exe fallback
-  - Linux: Native XTest binary + compositor-aware fallbacks (xdotool, wtype, ydotool)
+  - Linux: compositor-aware Wayland paste (Hyprland sendshortcut, wlroots wtype, GNOME/KDE portal keysyms) with native uinput/XTest and system-tool fallbacks
 - **database.js**: SQLite operations for transcription history
 - **debugLogger.js**: Debug logging system with file output
 - **devServerManager.js**: Vite dev server integration
@@ -698,12 +698,14 @@ const { t } = useTranslation();
    - Verify FFmpeg is executable
 
 3. **Clipboard Not Working**:
-   - macOS: Check accessibility permissions (required for AppleScript paste)
-   - Linux: Native `linux-fast-paste` binary (XTest) is tried first, works for X11 and XWayland apps
-     - X11: xdotool fallback if native binary unavailable
-     - GNOME/KDE Wayland: xdotool (XWayland apps) → ydotool (requires ydotoold daemon)
-     - wlroots Wayland (Sway, Hyprland): wtype → xdotool → ydotool
-   - Windows: PowerShell SendKeys (built-in) or nircmd.exe (bundled)
+    - macOS: Check accessibility permissions (required for AppleScript paste)
+    - Linux: Native `linux-fast-paste` binary (XTest) is tried first, works for X11 and XWayland apps
+      - X11: xdotool fallback if native binary unavailable
+      - Hyprland Wayland: sendshortcut → wtype → uinput/ydotool
+      - Sway/wlroots Wayland: wtype → uinput/ydotool
+      - GNOME/KDE Wayland: portal keysyms → uinput/ydotool
+      - Physical Wayland fallbacks use Shift+Insert to avoid layout-sensitive KEY_V
+    - Windows: PowerShell SendKeys (built-in) or nircmd.exe (bundled)
 
 4. **Build Issues**:
    - Use `npm run pack` for unsigned builds (CSC_IDENTITY_AUTO_DISCOVERY=false)
@@ -771,8 +773,10 @@ const { t } = useTranslation();
 - Recommend `pavucontrol` for audio device management
 - **Clipboard paste tools** (at least one required for auto-paste):
   - **X11**: `xdotool` (recommended)
-  - **Wayland** (non-GNOME): `wtype` (requires virtual keyboard protocol) or `xdotool` (works via XWayland, recommended for Electron apps)
-  - **GNOME Wayland**: `xdotool` for XWayland apps only (native Wayland apps require manual paste)
+  - **Hyprland Wayland**: `hyprctl` sendshortcut, then `wtype`
+  - **Sway/wlroots Wayland**: `wtype` (requires the virtual keyboard protocol)
+  - **GNOME/KDE Wayland**: RemoteDesktop portal keysyms, then uinput/ydotool
+  - **Wayland physical fallback**: Shift+Insert avoids layout-sensitive KEY_V; `ydotool` requires the `ydotoold` daemon
   - Terminal detection: Auto-detects terminal emulators and uses Ctrl+Shift+V
   - Fallback: Text copied to clipboard with manual paste instructions
 - **GNOME Wayland global hotkeys**:
