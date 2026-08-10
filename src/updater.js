@@ -1,5 +1,9 @@
 const { autoUpdater } = require("electron-updater");
 const { appUpdatesEnabled } = require("./helpers/updateCheckPolicy");
+const {
+  parseAutoInstallEnv,
+  shouldRegisterQuitHandler,
+} = require("./helpers/updateInstallPolicy");
 
 class UpdateManager {
   constructor() {
@@ -65,7 +69,7 @@ class UpdateManager {
     }
 
     autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.autoInstallOnAppQuit = parseAutoInstallEnv(process.env.UPDATE_AUTO_INSTALL);
     autoUpdater.logger = console;
 
     this.setupEventHandlers();
@@ -266,6 +270,19 @@ class UpdateManager {
       console.error("❌ Update installation error:", error);
       throw error;
     }
+  }
+
+  setAutoInstallOnAppQuit(enabled) {
+    const value = enabled === true;
+    autoUpdater.autoInstallOnAppQuit = value;
+    // The quit hook is protected API, so guard against it disappearing upstream.
+    if (
+      shouldRegisterQuitHandler(value, this.updateDownloaded) &&
+      typeof autoUpdater.addQuitHandler === "function"
+    ) {
+      autoUpdater.addQuitHandler();
+    }
+    return { success: true, enabled: value };
   }
 
   async getAppVersion() {

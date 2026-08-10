@@ -1699,6 +1699,8 @@
         }
       },
       "updates": {
+        "autoInstall": "自动安装更新",
+        "autoInstallDescription": "已下载的更新会在退出应用时安装。关闭后，仅在你选择安装时才会安装。",
         "badges": {
           "dev": "开发版",
           "latest": "最新",

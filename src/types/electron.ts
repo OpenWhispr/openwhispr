@@ -1523,6 +1523,8 @@ declare global {
       checkForUpdates: () => Promise<UpdateCheckResult>;
       downloadUpdate: () => Promise<UpdateResult>;
       installUpdate: () => Promise<UpdateResult>;
+      getUpdateAutoInstall: () => Promise<{ enabled: boolean }>;
+      setUpdateAutoInstall: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
       getOAuthProtocolRegistered: () => Promise<boolean>;

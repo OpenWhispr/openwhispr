@@ -1982,6 +1982,8 @@
         }
       },
       "updates": {
+        "autoInstall": "Install updates automatically",
+        "autoInstallDescription": "Downloaded updates install when the app quits. Turn off to install only when you choose.",
         "badges": {
           "dev": "Dev",
           "latest": "Latest",
