@@ -231,7 +231,14 @@ export function useNoteDragAndDrop({
         },
       };
     },
-    [onCrossSpaceDrop, canCrossSpaceDrop, onCrossSpaceVeto, onHoverTarget, commitDrop, clearHoverTimeout]
+    [
+      onCrossSpaceDrop,
+      canCrossSpaceDrop,
+      onCrossSpaceVeto,
+      onHoverTarget,
+      commitDrop,
+      clearHoverTimeout,
+    ]
   );
 
   return { dragState, noteDragHandlers, dropTargetHandlers };
