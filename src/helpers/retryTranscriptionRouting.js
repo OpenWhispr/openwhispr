@@ -1,5 +1,5 @@
 import { buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
-import { isSecureEndpoint } from "../utils/urlUtils.ts";
+import { isSecureHttpEndpoint } from "../utils/urlUtils.ts";
 import { resolveSelfHostedTranscriptionModel } from "./selfHostedTranscription.js";
 
 export function resolveSelfHostedRetryRoute(settings) {
@@ -20,13 +20,7 @@ export function resolveSelfHostedRetryRoute(settings) {
 
   const remoteUrl = configuredUrl.replace(/\/+$/, "");
   const normalizedBaseUrl = normalizeBaseUrl(remoteUrl);
-  let hasSupportedProtocol = false;
-  try {
-    const protocol = new URL(normalizedBaseUrl).protocol;
-    hasSupportedProtocol = protocol === "http:" || protocol === "https:";
-  } catch {}
-
-  if (!normalizedBaseUrl || !hasSupportedProtocol || !isSecureEndpoint(normalizedBaseUrl)) {
+  if (!normalizedBaseUrl || !isSecureHttpEndpoint(normalizedBaseUrl)) {
     return {
       kind: "configuration-error",
       error: "Self-hosted transcription URL is invalid or unsupported",
@@ -37,5 +31,24 @@ export function resolveSelfHostedRetryRoute(settings) {
     kind: "self-hosted",
     endpoint: buildApiUrl(normalizedBaseUrl, "/audio/transcriptions"),
     model: resolveSelfHostedTranscriptionModel(settings),
+  };
+}
+
+export function resolveCustomTranscriptionRoute({ provider, baseUrl }) {
+  if (provider !== "custom") return null;
+
+  const configuredUrl = typeof baseUrl === "string" ? baseUrl.trim() : "";
+  const normalizedBaseUrl = normalizeBaseUrl(configuredUrl);
+  if (!normalizedBaseUrl || !isSecureHttpEndpoint(normalizedBaseUrl)) {
+    return {
+      kind: "configuration-error",
+      error: "Custom transcription endpoint is invalid or unsupported",
+    };
+  }
+
+  return {
+    kind: "custom",
+    baseUrl: normalizedBaseUrl,
+    endpoint: buildApiUrl(normalizedBaseUrl, "/audio/transcriptions"),
   };
 }

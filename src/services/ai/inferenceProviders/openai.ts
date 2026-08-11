@@ -4,7 +4,7 @@ import { getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import logger from "../../../utils/logger";
-import { getConfiguredOpenAIBase } from "../openaiBase";
+import { resolveConfiguredOpenAIBase } from "../openaiBase";
 import { applyThinkingSuppression } from "../thinkingSuppression";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "../apiErrorMessage";
@@ -153,7 +153,7 @@ export const openaiProvider: InferenceProvider = {
 
     const openAiBase = isOpenRouter
       ? API_ENDPOINTS.OPENROUTER_BASE
-      : config.baseUrl?.trim() || getConfiguredOpenAIBase();
+      : resolveConfiguredOpenAIBase(resolvedProvider, config.baseUrl);
     const dialect = detectEndpointDialect(openAiBase);
     // OpenRouter and known dialect hosts speak Chat Completions only — no /responses probe needed.
     let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;
@@ -281,6 +281,18 @@ export const openaiProvider: InferenceProvider = {
     const isResponsesApi = Array.isArray(response?.output);
     const isChatCompletions = Array.isArray(response?.choices);
 
+    if (config.requireCompleteOutput) {
+      const responseIncomplete =
+        response?.status === "incomplete" ||
+        !!response?.incomplete_details ||
+        response?.choices?.some((choice: any) =>
+          ["length", "max_tokens"].includes(choice?.finish_reason)
+        );
+      if (responseIncomplete) {
+        throw new Error("Model output was truncated before the selection edit completed");
+      }
+    }
+
     logger.logReasoning("OPENAI_RAW_RESPONSE", {
       model,
       format: isResponsesApi ? "responses" : isChatCompletions ? "chat_completions" : "unknown",
@@ -351,6 +363,9 @@ export const openaiProvider: InferenceProvider = {
     });
 
     if (!responseText) {
+      if (config.requireCompleteOutput) {
+        throw new Error("Model returned an empty selection edit");
+      }
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

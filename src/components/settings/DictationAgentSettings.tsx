@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { isAgentAllowed } from "../../stores/policyRules";
+import { usePolicyStore } from "../../stores/policyStore";
 import { useAgentName } from "../../utils/agentName";
 import { useDialogs } from "../../hooks/useDialogs";
 import { Toggle } from "../ui/toggle";
@@ -14,6 +16,7 @@ export default function DictationAgentSettings() {
   const { t } = useTranslation();
   const useDictationAgent = useSettingsStore((s) => s.useDictationAgent);
   const setUseDictationAgent = useSettingsStore((s) => s.setUseDictationAgent);
+  const agentAllowed = usePolicyStore(isAgentAllowed);
 
   const { agentName, setAgentName } = useAgentName();
   const [agentNameInput, setAgentNameInput] = useState(agentName);
@@ -111,9 +114,17 @@ export default function DictationAgentSettings() {
         <SettingsPanelRow>
           <SettingsRow
             label={t("dictationAgent.enabled")}
-            description={t("dictationAgent.enabledDescription", { agentName })}
+            description={
+              agentAllowed
+                ? t("dictationAgent.enabledDescription", { agentName })
+                : t("common.managedByOrg")
+            }
           >
-            <Toggle checked={useDictationAgent} onChange={setUseDictationAgent} />
+            <Toggle
+              checked={useDictationAgent}
+              onChange={setUseDictationAgent}
+              disabled={!agentAllowed}
+            />
           </SettingsRow>
         </SettingsPanelRow>
       </SettingsPanel>

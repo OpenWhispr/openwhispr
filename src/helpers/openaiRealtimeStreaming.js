@@ -39,7 +39,9 @@ class OpenAIRealtimeStreaming {
     this.onError = null;
     this.onSessionEnd = null;
     this.onSessionExpired = null;
+    this.onConnectionLost = null;
     this._sessionExpired = false;
+    this._connectionLossNotified = false;
     this._sessionTimer = null;
     this.pendingResolve = null;
     this.pendingReject = null;
@@ -92,6 +94,7 @@ class OpenAIRealtimeStreaming {
     this.audioBytesSent = 0;
     this.speechStartedAt = null;
     this._sessionExpired = false;
+    this._connectionLossNotified = false;
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
     debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
@@ -129,6 +132,7 @@ class OpenAIRealtimeStreaming {
       });
 
       this.ws.on("error", (error) => {
+        const wasActive = this.isConnected;
         debugLogger.error("OpenAI Realtime WebSocket error", { error: error.message });
         this.isConnecting = false;
         this.cleanup();
@@ -137,7 +141,11 @@ class OpenAIRealtimeStreaming {
           this.pendingReject = null;
           this.pendingResolve = null;
         }
-        this.onError?.(error);
+        if (wasActive && !this.isDisconnecting) {
+          this._notifyConnectionLost(error);
+        } else if (!this.isDisconnecting) {
+          this.onError?.(error);
+        }
       });
 
       this.ws.on("close", (code, reason) => {
@@ -156,6 +164,7 @@ class OpenAIRealtimeStreaming {
         this.cleanup();
         if (wasActive && !this.isDisconnecting && !this._sessionExpired) {
           this.onSessionEnd?.({ text: this.getFullTranscript() });
+          this._notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
         }
       });
     });
@@ -257,7 +266,7 @@ class OpenAIRealtimeStreaming {
           if (errCode === "session_expired" && this.onSessionExpired) {
             debugLogger.warn("OpenAI Realtime session expired", { message: errMsg });
             this._sessionExpired = true;
-            this.onSessionExpired();
+            this.onSessionExpired({ proactive: false });
             break;
           }
           const isEmptyBuffer =
@@ -299,12 +308,22 @@ class OpenAIRealtimeStreaming {
     }
   }
 
+  _notifyConnectionLost(error) {
+    if (this._connectionLossNotified) return;
+    this._connectionLossNotified = true;
+    if (this.onConnectionLost) {
+      this.onConnectionLost(error);
+    } else {
+      this.onError?.(error);
+    }
+  }
+
   _startSessionTimer() {
     clearTimeout(this._sessionTimer);
     this._sessionTimer = setTimeout(() => {
       if (!this.isConnected) return;
       debugLogger.debug("OpenAI Realtime session approaching 60min limit, requesting reconnect");
-      this.onSessionExpired?.();
+      this.onSessionExpired?.({ proactive: true });
     }, SESSION_PREEMPT_MS);
   }
 
@@ -401,7 +420,7 @@ class OpenAIRealtimeStreaming {
     return true;
   }
 
-  async disconnect() {
+  async disconnect({ commit = true } = {}) {
     debugLogger.debug("OpenAI Realtime disconnect", {
       audioBytesSent: this.audioBytesSent,
       segments: this.completedSegments.length,
@@ -421,7 +440,7 @@ class OpenAIRealtimeStreaming {
     }
 
     if (this.ws.readyState === WebSocket.OPEN) {
-      if (this.audioBytesSent > 0) {
+      if (commit && this.audioBytesSent > 0) {
         const prevOnFinal = this.onFinalTranscript;
         const prevOnError = this.onError;
 

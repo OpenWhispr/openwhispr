@@ -144,6 +144,7 @@
     "cancel": "取消",
     "recommended": "推薦",
     "active": "使用中",
+    "managedByOrg": "由您的組織管理",
     "freeAccountRequired": "需要免費帳戶",
     "cloud": "雲端",
     "local": "本機",
@@ -168,7 +169,10 @@
     "copy": "複製",
     "copied": "已複製",
     "done": "完成",
-    "skip": "略過"
+    "skip": "略過",
+    "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
+    "policyAgentRestricted": "AI 代理的使用已被您的組織限制。",
+    "policyTranscriptionRestricted": "轉錄已被您的組織限制。"
   },
   "onboarding": {
     "steps": {
@@ -229,7 +233,7 @@
       "title": "語音助手設定",
       "description": "一鍵喚起你的 AI 助手",
       "hotkey": "快捷鍵",
-      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。{{agentName}} 會把結果輸入到游標所在的位置。無需先說「Hey {{agentName}}」。",
+      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代所選內容；否則會把結果輸入到游標所在的位置。無需先說「Hey {{agentName}}」。",
       "test": "試試看",
       "testInstruction": "點擊下方，按下 {{hotkey}} 並說出指令",
       "testSetHotkey": "在上方設定快捷鍵即可試用",
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "需要更新",
+      "description": "您的組織要求使用 OpenWhispr {{version}} 或更新版本。請更新應用程式。"
+    },
     "update": {
       "readyTitle": "更新已準備就緒",
       "readyDescription": "點擊「安裝更新」以重新啟動並套用最新版本。",
@@ -596,6 +604,15 @@
         "unreachableDescription": "你的口述內容已按原文貼上，未經翻譯。請檢查翻譯設定。",
         "failedTitle": "翻譯失敗",
         "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "未套用選取文字編輯",
+        "changed": "處理期間，選取的文字或目標應用程式已變更。未取代任何內容。",
+        "expired": "選取文字編輯已逾時。請重新選取文字後再試。",
+        "pasteFailed": "OpenWhispr 已產生編輯結果，但無法取代選取的文字。",
+        "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
+        "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
+        "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
       }
     },
     "clipboard": {
@@ -979,7 +996,18 @@
     "selectPlaceholder": "選擇麥克風",
     "systemDefault": "系統預設",
     "unknownDevice": "未知裝置",
-    "using": "使用中：{{device}}"
+    "using": "使用中：{{device}}",
+    "warmHold": {
+      "label": "保持麥克風預熱",
+      "description": "聽寫結束後短暫保持麥克風開啟，讓下一次聽寫立即開始且不漏字",
+      "privacyNote": "麥克風保持開啟期間，系統的麥克風使用指示燈會持續亮起。聽寫之間不會錄製任何內容。",
+      "options": {
+        "0": "關閉",
+        "10": "10 秒",
+        "60": "1 分鐘",
+        "900": "15 分鐘"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "正在檢查系統功能...",
@@ -1071,6 +1099,7 @@
     "defaultTestInputTranslate": "今天天氣真好，要不要出去走走？"
   },
   "settingsModal": {
+    "managedByOrg": "部分設定由您的組織管理。",
     "groups": {
       "account": "帳戶",
       "app": "應用程式",
@@ -1298,8 +1327,8 @@
           "accountCredit": "帳戶餘額",
           "newPrice": "新價格",
           "nextBilling": "下次計費",
-          "mo": "mo",
-          "yr": "yr",
+          "mo": "月",
+          "yr": "年",
           "cancel": "取消",
           "confirm": "確認"
         }
@@ -1370,7 +1399,7 @@
       },
       "examplesTitle": "範例",
       "helper": "選個簡短、自然、好說的名字",
-      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，AI 會執行你的命令——撰寫內容、格式化文字或回答問題——而不是逐字轉寫。",
+      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，AI 會執行你的命令。如果有選取的文字，該文字會傳送到你設定的語音代理模型，並安全地取代為結果。",
       "howItWorksTitle": "運作方式",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1378,7 +1407,7 @@
       "title": "語音助理",
       "examples": {
         "formalEmail": "Hey {{agentName}}，撰寫一封關於預算的正式郵件",
-        "professional": "Hey {{agentName}}，讓這個更專業",
+        "professional": "先選取文字，再說：Hey {{agentName}}，讓這個更專業",
         "bulletPoints": "Hey {{agentName}}，將這個轉換成要點列表"
       }
     },
@@ -1525,7 +1554,7 @@
       },
       "voiceAgentHotkey": {
         "title": "語音助手快捷鍵",
-        "description": "說出你的需求，AI 助手會輸入結果，而不是你說的原話"
+        "description": "說出你的需求——選取的文字會就地編輯，否則代理會把結果輸入到游標位置"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",
@@ -1637,7 +1666,7 @@
       },
       "updates": {
         "badges": {
-          "dev": "Dev",
+          "dev": "開發版",
           "latest": "最新",
           "update": "更新"
         },
@@ -1770,7 +1799,7 @@
       "description": "設定用於聽寫清理、筆記格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "聽寫清理",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "語音助手",
         "noteFormatting": "筆記格式化",
         "chatIntelligence": "聊天",
         "dictationTranslation": "翻譯"
@@ -1903,7 +1932,7 @@
       "tab": {
         "general": "一般",
         "members": "成員",
-        "teams": "團隊空間",
+        "teams": "團隊",
         "developer": "開發者"
       },
       "role": {
@@ -2160,8 +2189,8 @@
         "bedrock_gpt_oss_120b": "OpenAI 開放權重模型。低成本下的強大推理能力。",
         "bedrock_deepseek_v3_2": "開放權重前沿模型。智慧助手模式的高性價比之選。",
         "bedrock_qwen3_next_80b": "稀疏開放權重模型。快速且多語言。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "vertex_gemini_2_5_flash": "透過 Vertex 提供的快速多模態模型",
+        "vertex_gemini_2_5_pro": "透過 Vertex 提供的進階推理模型"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "強大的混合模型",
@@ -2560,7 +2589,8 @@
       "title": "會議筆記",
       "description": "轉錄與結構化摘要",
       "comingSoon": "即將推出",
-      "back": "返回"
+      "back": "返回",
+      "restrictedByOrg": "會議轉錄已被您的組織限制。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
@@ -2654,6 +2684,7 @@
     "speaker": {
       "you": "你",
       "them": "對方",
+      "unknown": "未知發言者",
       "label": "發言者 {{n}}",
       "identifyingSpeakers": "正在辨識發言者...",
       "liveAccuracyHint": "仍在辨識發言者。通話結束後，標籤準確度會提升。",
@@ -2909,7 +2940,7 @@
   },
   "dictationAgent": {
     "enabled": "啟用語音代理",
-    "enabledDescription": "向你的代理口述指令。說出 \"{{agentName}}\" 即可啟用。可於下方設定。",
+    "enabledDescription": "向你的代理口述指令。選取的文字會傳送到所設定的模型並就地編輯。說出 \"{{agentName}}\" 即可啟用。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "使用 OpenWhispr 託管的代理，無需 API Key。",

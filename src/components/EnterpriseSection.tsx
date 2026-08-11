@@ -1,8 +1,14 @@
+import { useCallback } from "react";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import EnterpriseProviderConfig from "./EnterpriseProviderConfig";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { useSettingsStore } from "../stores/settingsStore";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
+import {
+  filterEnterpriseProviderOptionsByPolicy,
+  isEnterpriseProviderAllowed,
+} from "../stores/policyRules";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 
 const ENTERPRISE_PROVIDER_TABS = [
   { id: "bedrock", name: "AWS Bedrock" },
@@ -25,35 +31,58 @@ export default function EnterpriseSection({
 }: EnterpriseSectionProps) {
   const azureDeploymentName = useSettingsStore((s) => s.azureDeploymentName);
   const bedrockRegion = useSettingsStore((s) => s.bedrockRegion);
-  const selectedEnterprise = ENTERPRISE_PROVIDER_TABS.some((p) => p.id === currentProvider)
+  const policyState = usePolicySnapshot();
+  const providerAllowed = useCallback(
+    (providerId: string) => isEnterpriseProviderAllowed(policyState, providerId),
+    [policyState]
+  );
+
+  const providerTabs = filterEnterpriseProviderOptionsByPolicy(
+    ENTERPRISE_PROVIDER_TABS,
+    policyState
+  );
+  const selectedEnterprise = providerTabs.some((provider) => provider.id === currentProvider)
     ? currentProvider
     : "";
 
-  const handleEnterpriseSelect = (providerId: string) => {
-    if (selectedEnterprise === providerId) return;
-    setLocalReasoningProvider(providerId);
+  const handleEnterpriseSelect = useCallback(
+    (providerId: string) => {
+      if (selectedEnterprise === providerId) return;
+      if (!providerAllowed(providerId)) return;
+      setLocalReasoningProvider(providerId);
 
-    const providerData = REASONING_PROVIDERS[providerId];
-    if (providerData?.models?.length) {
-      const defaultModel = providerData.models[0].value;
-      setReasoningModel(
-        providerId === "bedrock"
-          ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
-          : defaultModel
-      );
-    } else if (providerId === "azure" && azureDeploymentName) {
-      setReasoningModel(azureDeploymentName);
-    }
-  };
+      const providerData = REASONING_PROVIDERS[providerId];
+      if (providerData?.models?.length) {
+        const defaultModel = providerData.models[0].value;
+        setReasoningModel(
+          providerId === "bedrock"
+            ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
+            : defaultModel
+        );
+      } else if (providerId === "azure" && azureDeploymentName) {
+        setReasoningModel(azureDeploymentName);
+      }
+    },
+    [
+      azureDeploymentName,
+      bedrockRegion,
+      providerAllowed,
+      selectedEnterprise,
+      setLocalReasoningProvider,
+      setReasoningModel,
+    ]
+  );
 
   return (
     <div className="space-y-2">
-      <ProviderTabs
-        providers={ENTERPRISE_PROVIDER_TABS}
-        selectedId={selectedEnterprise}
-        onSelect={handleEnterpriseSelect}
-        colorScheme="purple"
-      />
+      {providerTabs.length > 0 && (
+        <ProviderTabs
+          providers={providerTabs}
+          selectedId={selectedEnterprise}
+          onSelect={handleEnterpriseSelect}
+          colorScheme="purple"
+        />
+      )}
 
       {selectedEnterprise && (
         <EnterpriseProviderConfig

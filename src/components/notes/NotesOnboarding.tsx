@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Sparkles, Plus, ChevronRight, Zap, Loader2, Check, Monitor } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
-import { useSettingsStore } from "../../stores/settingsStore";
+import {
+  selectPolicyEffectiveSettings,
+  selectResolvedLLMConfig,
+  useSettingsStore,
+} from "../../stores/settingsStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import {
   useActions,
@@ -17,6 +22,7 @@ import { AlertDialog } from "../ui/dialog";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
+import { usePolicySnapshot } from "../../hooks/usePolicy";
 
 interface NotesOnboardingProps {
   onComplete: () => void;
@@ -34,14 +40,19 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
 
-  const cleanupModel = useSettingsStore((s) => s.cleanupModel);
+  const policyState = usePolicySnapshot();
+  const cleanupConfig = useSettingsStore(
+    useShallow((settings) =>
+      selectResolvedLLMConfig(
+        selectPolicyEffectiveSettings(settings, policyState),
+        "dictationCleanup"
+      )
+    )
+  );
   const setCleanupModel = useSettingsStore((s) => s.setCleanupModel);
-  const cleanupProvider = useSettingsStore((s) => s.cleanupProvider);
   const setCleanupProvider = useSettingsStore((s) => s.setCleanupProvider);
   const setCleanupMode = useSettingsStore((s) => s.setCleanupMode);
-  const cleanupCloudBaseUrl = useSettingsStore((s) => s.cleanupCloudBaseUrl);
   const setCleanupCloudBaseUrl = useSettingsStore((s) => s.setCleanupCloudBaseUrl);
-  const cleanupCustomApiKey = useSettingsStore((s) => s.cleanupCustomApiKey);
   const setCleanupCustomApiKey = useSettingsStore((s) => s.setCleanupCustomApiKey);
 
   const { alertDialog, hideAlertDialog } = useDialogs();
@@ -159,13 +170,13 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 </p>
 
                 <ReasoningModelSelector
-                  reasoningModel={cleanupModel}
+                  reasoningModel={cleanupConfig.model}
                   setReasoningModel={setCleanupModel}
-                  localReasoningProvider={cleanupProvider}
+                  localReasoningProvider={cleanupConfig.provider}
                   setLocalReasoningProvider={setCleanupProvider}
-                  cloudReasoningBaseUrl={cleanupCloudBaseUrl}
+                  cloudReasoningBaseUrl={cleanupConfig.cloudBaseUrl ?? ""}
                   setCloudReasoningBaseUrl={setCleanupCloudBaseUrl}
-                  customReasoningApiKey={cleanupCustomApiKey}
+                  customReasoningApiKey={cleanupConfig.customApiKey ?? ""}
                   setCustomReasoningApiKey={setCleanupCustomApiKey}
                   setReasoningMode={setCleanupMode}
                 />

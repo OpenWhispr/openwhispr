@@ -1,6 +1,6 @@
-// Pure resolver for the "retention-settings-changed" IPC sync. Both renderer
-// windows re-sync on mount, so the handler needs to know whether the incoming
-// values actually differ before kicking off another cleanup sweep.
+// Pure resolver for the "retention-settings-changed" IPC sync. The renderer
+// re-syncs on mount, so the handler needs to know whether the incoming values
+// actually differ before kicking off another cleanup sweep.
 const DEFAULT_RETENTION_SETTINGS = {
   audioRetentionDays: 30,
   transcriptRetentionDays: 0, // 0 = keep transcripts forever
@@ -25,4 +25,18 @@ function applyRetentionSettings(current, incoming) {
   return { changed, settings };
 }
 
-module.exports = { DEFAULT_RETENTION_SETTINGS, applyRetentionSettings };
+function createRetentionSettingsHandler({ getCurrentSettings, getOwner, onSettingsChanged }) {
+  return (event, incoming) => {
+    const owner = getOwner();
+    if (!owner || event.sender !== owner) return;
+
+    const { changed, settings } = applyRetentionSettings(getCurrentSettings(), incoming);
+    if (changed) onSettingsChanged(settings);
+  };
+}
+
+module.exports = {
+  DEFAULT_RETENTION_SETTINGS,
+  applyRetentionSettings,
+  createRetentionSettingsHandler,
+};

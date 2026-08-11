@@ -229,3 +229,144 @@ test("unsupported platforms poll without spawning a listener", async () => {
   assert.notEqual(detector.checkInterval, null);
   detector.stop();
 });
+
+// The native listeners are edge-triggered: they emit only on state transitions,
+// so an edge swallowed by a gate is never re-delivered. The detector must
+// remember the last known state and re-evaluate it when the gate lifts.
+// Mirrors SUSTAINED_EVENT_DRIVEN_MS and COOLDOWN_MS in audioActivityDetector.js.
+const SUSTAINED_MS = 2 * 1000;
+const COOLDOWN_MS = 5 * 60 * 1000;
+
+test("darwin: a mic edge swallowed by the recording gate is re-evaluated when recording stops", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.setUserRecording(true);
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  assert.equal(detector._sustainedTimer, null, "a gated edge must not arm the sustained timer");
+
+  detector.setUserRecording(false);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 1, "the ongoing call must be detected once the gate lifts");
+  detector.stop();
+});
+
+test("darwin: a mic edge swallowed by the dismissal cooldown is re-evaluated when it expires", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.dismiss();
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  assert.equal(detector._sustainedTimer, null, "the cooldown must still swallow the prompt");
+
+  // Split ticks: mocked timers do not cascade timers armed inside a callback.
+  t.mock.timers.tick(COOLDOWN_MS);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 1, "a call outlasting the cooldown must still be detected");
+  detector.stop();
+});
+
+test("darwin: a dismissed call that keeps running re-prompts after the cooldown", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(emitted.length, 1);
+
+  detector.dismiss();
+  t.mock.timers.tick(COOLDOWN_MS);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 2, "polling parity: an ongoing call re-prompts after the cooldown");
+  detector.stop();
+});
+
+test("darwin: a mic that went quiet while recording does not re-prompt when recording stops", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.setUserRecording(true);
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  children[0].stdout.emit("data", "MIC_INACTIVE\n");
+  detector.setUserRecording(false);
+  t.mock.timers.tick(SUSTAINED_MS * 2);
+
+  assert.equal(emitted.length, 0, "a released mic must not produce a stale prompt");
+  detector.stop();
+});
+
+test("darwin: a call that outlives the mic warm-hold is detected when the hold releases", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.setMicWarmHold(true);
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  assert.equal(
+    detector._sustainedTimer,
+    null,
+    "warm-hold evidence must not arm the sustained timer"
+  );
+
+  detector.setMicWarmHold(false);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 1, "a call still holding the mic after our hold ends must prompt");
+  detector.stop();
+});
+
+test("darwin: a warm-hold that releases cleanly does not produce a stale prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.setMicWarmHold(true);
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  detector.setMicWarmHold(false);
+  children[0].stdout.emit("data", "MIC_INACTIVE\n");
+  t.mock.timers.tick(SUSTAINED_MS * 2);
+
+  assert.equal(emitted.length, 0, "the release edge must cancel the pending re-evaluation");
+  detector.stop();
+});
+
+test("win32: an unrelated app's mic session ending does not hide an ongoing dismissed call", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "MIC_START 11\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(emitted.length, 1);
+  detector.dismiss();
+
+  // pid 11 never stopped, so the reference count must still hold it — otherwise
+  // pid 22's stop reads as "every mic closed" and cancels the re-evaluation.
+  children[0].stdout.emit("data", "MIC_START 22\nMIC_STOP 22\n");
+  t.mock.timers.tick(COOLDOWN_MS);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 2, "the still-running call must re-prompt after the cooldown");
+  detector.stop();
+});

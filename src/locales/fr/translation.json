@@ -144,6 +144,7 @@
     "cancel": "Annuler",
     "recommended": "Recommandé",
     "active": "Actif",
+    "managedByOrg": "Géré par votre organisation",
     "freeAccountRequired": "Compte gratuit requis",
     "cloud": "Cloud",
     "local": "Local",
@@ -168,7 +169,10 @@
     "copy": "Copier",
     "copied": "Copié",
     "done": "Terminé",
-    "skip": "Passer"
+    "skip": "Passer",
+    "policyAiProcessingRestricted": "Le traitement par IA est restreint par votre organisation.",
+    "policyAgentRestricted": "L’utilisation de l’agent IA est restreinte par votre organisation.",
+    "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation."
   },
   "onboarding": {
     "steps": {
@@ -229,7 +233,7 @@
       "title": "Configuration de l'agent vocal",
       "description": "Parlez à votre agent IA d'une simple touche",
       "hotkey": "Raccourci",
-      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». {{agentName}} écrit le résultat là où se trouve votre curseur. Pas besoin de dire « Hey {{agentName}} » d'abord.",
+      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} modifie et remplace cette sélection ; sinon, il écrit le résultat là où se trouve votre curseur. Pas besoin de dire « Hey {{agentName}} » d'abord.",
       "test": "Essayer",
       "testInstruction": "Cliquez ci-dessous, appuyez sur {{hotkey}} et dites une commande",
       "testSetHotkey": "Définissez un raccourci ci-dessus pour l'essayer",
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "Mise à jour requise",
+      "description": "Votre organisation exige OpenWhispr {{version}} ou une version plus récente. Veuillez mettre à jour l'application."
+    },
     "update": {
       "readyTitle": "Mise à jour prête à installer",
       "readyDescription": "Cliquez sur « Installer la mise à jour » pour redémarrer avec la dernière version.",
@@ -596,6 +604,15 @@
         "unreachableDescription": "Votre dictée a été collée sans traduction. Vérifiez les paramètres de traduction.",
         "failedTitle": "Échec de la traduction",
         "failedDescription": "Le texte original a été collé. Vous pouvez réessayer depuis l'Historique."
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "Modification de la sélection non appliquée",
+        "changed": "Le texte sélectionné ou l’application cible a changé pendant le traitement. Rien n’a été remplacé.",
+        "expired": "La modification a expiré. Sélectionnez de nouveau le texte et réessayez.",
+        "pasteFailed": "OpenWhispr a généré la modification, mais n’a pas pu remplacer le texte sélectionné.",
+        "unavailable": "OpenWhispr n’a pas pu lire la sélection en toute sécurité. Vérifiez les autorisations d’accessibilité ou d’automatisation.",
+        "tooLarge": "La sélection est trop grande. Sélectionnez au maximum 6 000 caractères.",
+        "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié."
       }
     },
     "clipboard": {
@@ -1067,7 +1084,18 @@
     "selectPlaceholder": "Sélectionnez un microphone",
     "systemDefault": "Par défaut du système",
     "unknownDevice": "Appareil inconnu",
-    "using": "Utilisation : {{device}}"
+    "using": "Utilisation : {{device}}",
+    "warmHold": {
+      "label": "Garder le microphone actif",
+      "description": "Après une dictée, garder le microphone ouvert brièvement pour que la suivante démarre instantanément, sans mots coupés",
+      "privacyNote": "Tant que le microphone est maintenu ouvert, l'indicateur d'utilisation du micro du système reste allumé. Rien n'est enregistré entre les dictées.",
+      "options": {
+        "0": "Désactivé",
+        "10": "10 secondes",
+        "60": "1 minute",
+        "900": "15 minutes"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "Vérification des capacités du système...",
@@ -1159,6 +1187,7 @@
     "defaultTestInputTranslate": "Il fait très beau aujourd'hui, ça te dit d'aller te promener ?"
   },
   "settingsModal": {
+    "managedByOrg": "Certains paramètres sont gérés par votre organisation.",
     "groups": {
       "account": "Compte",
       "app": "Application",
@@ -1222,7 +1251,7 @@
       "tab": {
         "general": "Général",
         "members": "Membres",
-        "teams": "Espaces d'équipe",
+        "teams": "Équipes",
         "developer": "Développeur"
       },
       "role": {
@@ -1648,7 +1677,7 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, l'IA exécute votre commande — rédiger du contenu, formater du texte ou répondre à des questions — au lieu de la transcrire littéralement.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, l'IA exécute votre commande. Si du texte est surligné, ce texte est envoyé au modèle d'agent vocal configuré et remplacé en toute sécurité par le résultat.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
@@ -1656,7 +1685,7 @@
       "title": "Agent vocal",
       "examples": {
         "formalEmail": "Hey {{agentName}}, rédige un e-mail formel sur le budget",
-        "professional": "Hey {{agentName}}, rends ça plus professionnel",
+        "professional": "Sélectionnez du texte, puis dites : Hey {{agentName}}, rends ça plus professionnel",
         "bulletPoints": "Hey {{agentName}}, convertis ça en liste à puces"
       }
     },
@@ -1803,7 +1832,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'agent vocal",
-        "description": "Dites ce que vous voulez — votre agent IA écrit le résultat, pas vos mots"
+        "description": "Dites ce que vous voulez — le texte surligné est modifié sur place ; sinon, votre agent écrit là où se trouve le curseur"
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
@@ -2751,7 +2780,8 @@
       "title": "Notes de réunion",
       "description": "Transcriptions et résumés structurés",
       "comingSoon": "Bientôt disponible",
-      "back": "Retour"
+      "back": "Retour",
+      "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation."
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",
@@ -2845,6 +2875,7 @@
     "speaker": {
       "you": "Vous",
       "them": "Eux",
+      "unknown": "Intervenant inconnu",
       "label": "Intervenant {{n}}",
       "identifyingSpeakers": "Identification des intervenants...",
       "liveAccuracyHint": "Identification des intervenants en cours. La précision des étiquettes s'améliorera à la fin de l'appel.",
@@ -3057,7 +3088,7 @@
   },
   "dictationAgent": {
     "enabled": "Activer l'agent vocal",
-    "enabledDescription": "Dictez des instructions à votre agent. Activez-le en disant « \"{{agentName}}\" ». Configurable ci-dessous.",
+    "enabledDescription": "Dictez des instructions à votre agent. Le texte surligné est envoyé au modèle configuré et modifié sur place. Activez-le en disant « \"{{agentName}}\" ».",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Utilisez l'agent géré par OpenWhispr, sans clé API.",

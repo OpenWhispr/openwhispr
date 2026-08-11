@@ -9,6 +9,7 @@ const BAR_COUNT = 5;
 interface NoteBottomBarProps {
   isRecording: boolean;
   isProcessing: boolean;
+  recordingDisabled?: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
   onAskSubmit: (text: string) => void;
@@ -23,6 +24,7 @@ interface NoteBottomBarProps {
 export default function NoteBottomBar({
   isRecording,
   isProcessing,
+  recordingDisabled = false,
   onStartRecording,
   onStopRecording,
   onAskSubmit,
@@ -150,6 +152,7 @@ export default function NoteBottomBar({
             ) : (
               <button
                 onClick={onStartRecording}
+                disabled={recordingDisabled}
                 className={cn(
                   "flex items-center justify-center w-10 h-10 rounded-xl",
                   "bg-foreground/3 dark:bg-white/4",
@@ -159,9 +162,11 @@ export default function NoteBottomBar({
                   "hover:bg-foreground/6 dark:hover:bg-white/8",
                   "hover:text-foreground/50 dark:hover:text-foreground/35",
                   "hover:border-border/30 dark:hover:border-white/10",
-                  "active:scale-95"
+                  "active:scale-95",
+                  "disabled:pointer-events-none disabled:opacity-40"
                 )}
                 aria-label={t("notes.editor.transcribe")}
+                title={recordingDisabled ? t("common.managedByOrg") : undefined}
               >
                 <Mic size={15} />
               </button>

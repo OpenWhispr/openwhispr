@@ -31,6 +31,9 @@ class AudioActivityDetector extends EventEmitter {
     this._eventDriven = false;
     this._resetTimer = null;
     this._startGeneration = 0;
+    this._micWarmHold = false;
+    this._lastKnownMicState = false;
+    this._cooldownReevalTimer = null;
   }
 
   setUserRecording(active) {
@@ -39,8 +42,26 @@ class AudioActivityDetector extends EventEmitter {
       this.consecutiveChecks = 0;
       this.audioActiveStart = null;
       this._clearSustainedTimer();
+    } else {
+      this._reevaluateAfterGate();
     }
     debugLogger.debug("User recording state changed", { active }, "meeting");
+  }
+
+  // Our own idle-hold keeps the device "in use" after a dictation ends, and the
+  // macOS/Linux mic signals are device-global — they cannot tell us apart from
+  // a meeting app. Mic evidence during the hold is dropped outright (never
+  // queued: it is not a meeting). Sustained state resets on both transitions so
+  // a half-armed detection from before the hold cannot fire after it.
+  setMicWarmHold(active) {
+    this._micWarmHold = active;
+    this.consecutiveChecks = 0;
+    this.audioActiveStart = null;
+    this._clearSustainedTimer();
+    if (!active) {
+      this._reevaluateAfterGate();
+    }
+    debugLogger.debug("Mic warm-hold state changed", { active }, "meeting");
   }
 
   async start() {
@@ -75,6 +96,7 @@ class AudioActivityDetector extends EventEmitter {
     this._killListenerProcess();
     this._clearSustainedTimer();
     this._clearResetTimer();
+    this._resetListenerState();
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
@@ -89,6 +111,11 @@ class AudioActivityDetector extends EventEmitter {
     this._reset();
     this._clearSustainedTimer();
     this._clearResetTimer();
+    // Polling parity: polling re-detects a still-running call once the cooldown
+    // lapses, but the edge-triggered listeners will never re-announce it.
+    if (this._eventDriven && this._lastKnownMicState) {
+      this._scheduleCooldownReeval(COOLDOWN_MS);
+    }
     debugLogger.info(
       "Audio detection dismissed, cooldown started",
       { cooldownMs: COOLDOWN_MS },
@@ -107,9 +134,18 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this.hasPrompted = false;
+    this._clearResetTimer();
+  }
+
+  // The pid set and source count mirror what the OS told us is open, not our
+  // own detection state — only losing the listener invalidates them. Clearing
+  // them on dismissal would desync the reference count, so an unrelated app's
+  // mic session ending would report the still-running call as gone.
+  _resetListenerState() {
     this._activeMicPids.clear();
     this._activeSources = 0;
-    this._clearResetTimer();
+    this._lastKnownMicState = false;
+    this._clearCooldownReevalTimer();
   }
 
   _clearSustainedTimer() {
@@ -229,6 +265,7 @@ class AudioActivityDetector extends EventEmitter {
       this._listenerProcess = null;
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
+        this._resetListenerState();
         this._startPolling();
       }
     };
@@ -333,21 +370,62 @@ class AudioActivityDetector extends EventEmitter {
   // Shared event-driven handler
   // ---------------------------------------------------------------------------
 
+  // The listeners are edge-triggered: they announce transitions, never steady
+  // state. A gate may swallow the only edge a call will ever produce, so the
+  // state is recorded unconditionally and re-evaluated when gates lift.
   _onMicStateChanged(active) {
     if (!this._running) return;
+    this._lastKnownMicState = active;
+    this._evaluateMicState(active);
+  }
+
+  _reevaluateAfterGate() {
+    if (this._running && this._eventDriven && this._lastKnownMicState) {
+      this._evaluateMicState(true);
+    }
+  }
+
+  _cooldownRemainingMs() {
+    if (!this.lastDismissedAt) return 0;
+    return Math.max(0, COOLDOWN_MS - (Date.now() - this.lastDismissedAt));
+  }
+
+  _scheduleCooldownReeval(delayMs) {
+    this._clearCooldownReevalTimer();
+    this._cooldownReevalTimer = setTimeout(() => {
+      this._cooldownReevalTimer = null;
+      this._reevaluateAfterGate();
+    }, delayMs);
+  }
+
+  _clearCooldownReevalTimer() {
+    if (this._cooldownReevalTimer) {
+      clearTimeout(this._cooldownReevalTimer);
+      this._cooldownReevalTimer = null;
+    }
+  }
+
+  _evaluateMicState(active) {
     if (this._userRecording) {
       debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
       return;
     }
-    if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) {
+    if (this._micWarmHold) {
+      debugLogger.debug("Mic state changed during warm-hold, ignoring", { active }, "meeting");
+      return;
+    }
+    const cooldownRemainingMs = this._cooldownRemainingMs();
+    if (cooldownRemainingMs > 0) {
       debugLogger.debug(
         "Mic state changed but in cooldown",
-        {
-          active,
-          remainingMs: COOLDOWN_MS - (Date.now() - this.lastDismissedAt),
-        },
+        { active, remainingMs: cooldownRemainingMs },
         "meeting"
       );
+      if (active) {
+        this._scheduleCooldownReeval(cooldownRemainingMs);
+      } else {
+        this._clearCooldownReevalTimer();
+      }
       return;
     }
 
@@ -368,7 +446,7 @@ class AudioActivityDetector extends EventEmitter {
       if (!this._sustainedTimer) {
         this._sustainedTimer = setTimeout(() => {
           this._sustainedTimer = null;
-          if (this._userRecording || this.hasPrompted) return;
+          if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
           if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
 
           this.hasPrompted = true;
@@ -402,6 +480,7 @@ class AudioActivityDetector extends EventEmitter {
     if (this._checking) return;
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     if (this._userRecording) return;
+    if (this._micWarmHold) return;
 
     this._checking = true;
     try {

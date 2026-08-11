@@ -18,6 +18,7 @@ interface ToolRegistrySettings {
   cloudBackupEnabled: boolean;
   /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
   searchScope?: ContainerScope;
+  webSearchEnabled: boolean;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -31,7 +32,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   registry.register(listFoldersTool);
   registry.register(clipboardTool);
 
-  if (settings.isSignedIn) {
+  if (settings.isSignedIn && settings.webSearchEnabled) {
     registry.register(webSearchTool);
   }
 

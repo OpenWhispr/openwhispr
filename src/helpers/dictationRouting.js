@@ -1,30 +1,109 @@
-// Whether the dictation agent can actually run. Mirrors ReasoningService.processText,
-// which accepts an empty model only for the cloud ("openwhispr") and self-hosted ("lan")
-// providers; every other mode (BYOK, local, enterprise) requires an explicit model.
+function resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted }) {
+  if (mode === "openwhispr") return isCloud;
+  if (mode === "self-hosted") return isSelfHosted;
+
+  const hasModel = (model?.trim()?.length ?? 0) > 0;
+  if (mode === "local") return hasModel;
+  if (mode === "providers" || mode === "enterprise") {
+    return !!provider?.trim() && hasModel;
+  }
+  return false;
+}
+
 export function resolveDictationAgentReachability({
   useDictationAgent,
+  dictationAgentMode,
+  dictationAgentProvider,
   dictationAgentModel,
   isCloudAgent,
   isSelfHostedAgent,
 }) {
   if (!useDictationAgent) return false;
-  if (isCloudAgent || isSelfHostedAgent) return true;
-  return (dictationAgentModel?.trim()?.length ?? 0) > 0;
+  return resolveModeReachability({
+    mode: dictationAgentMode,
+    provider: dictationAgentProvider,
+    model: dictationAgentModel,
+    isCloud: isCloudAgent,
+    isSelfHosted: isSelfHostedAgent,
+  });
 }
 
-// Whether the translation step can run: cloud/self-hosted accept an empty model,
-// every other mode requires one; a target language is always required.
 export function resolveDictationTranslationReachability({
   useDictationTranslation,
   translationTargetLanguage,
+  translationMode,
+  translationProvider,
   translationModel,
   isCloudTranslation,
   isSelfHostedTranslation,
 }) {
   if (!useDictationTranslation) return false;
   if (!translationTargetLanguage?.trim()) return false;
-  if (isCloudTranslation || isSelfHostedTranslation) return true;
-  return (translationModel?.trim()?.length ?? 0) > 0;
+  return resolveModeReachability({
+    mode: translationMode,
+    provider: translationProvider,
+    model: translationModel,
+    isCloud: isCloudTranslation,
+    isSelfHosted: isSelfHostedTranslation,
+  });
+}
+
+function resolveModeProvider({ isCloud, mode, provider }) {
+  switch (mode) {
+    case "openwhispr":
+      return isCloud ? "openwhispr" : undefined;
+    case "local":
+      return "local";
+    case "self-hosted":
+      return undefined;
+    case "providers":
+    case "enterprise":
+      return provider?.trim() || undefined;
+    default:
+      return undefined;
+  }
+}
+
+export function resolveDictationAgentProvider({
+  isCloudAgent,
+  dictationAgentMode,
+  dictationAgentProvider,
+}) {
+  return resolveModeProvider({
+    isCloud: isCloudAgent,
+    mode: dictationAgentMode,
+    provider: dictationAgentProvider,
+  });
+}
+
+function resolveModeDisplayProvider(mode, provider) {
+  if (mode === "openwhispr") return "openwhispr";
+  if (mode === "local") return "local";
+  if (mode === "self-hosted") return "self-hosted";
+  return provider?.trim() || "none";
+}
+
+export function resolveDictationAgentDisplayProvider({
+  dictationAgentMode,
+  dictationAgentProvider,
+}) {
+  return resolveModeDisplayProvider(dictationAgentMode, dictationAgentProvider);
+}
+
+export function resolveTranslationProviderId({
+  isCloudTranslation,
+  translationMode,
+  translationProvider,
+}) {
+  return resolveModeProvider({
+    isCloud: isCloudTranslation,
+    mode: translationMode,
+    provider: translationProvider,
+  });
+}
+
+export function resolveTranslationDisplayProvider({ translationMode, translationProvider }) {
+  return resolveModeDisplayProvider(translationMode, translationProvider);
 }
 
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")

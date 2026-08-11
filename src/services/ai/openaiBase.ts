@@ -1,86 +1,68 @@
 import { API_ENDPOINTS, ensureV1Suffix } from "../../config/constants";
-import { getSettings } from "../../stores/settingsStore";
-import { isSecureEndpoint } from "../../utils/urlUtils";
+import { usePolicyStore } from "../../stores/policyStore";
+import { isSecureHttpEndpoint } from "../../utils/urlUtils";
 import logger from "../../utils/logger";
+import i18n from "../../i18n";
 
-export function getConfiguredOpenAIBase(): string {
-  if (typeof window === "undefined") {
-    return API_ENDPOINTS.OPENAI_BASE;
+function invalidCustomEndpoint(reason: string, attempted?: string): string {
+  const policyStatus = usePolicyStore.getState().status;
+  if (policyStatus !== "idle" && policyStatus !== "unmanaged") {
+    throw Object.assign(new Error(i18n.t("common.policyAiProcessingRestricted")), {
+      code: "POLICY_RESTRICTED",
+    });
   }
 
-  try {
-    const settings = getSettings();
-    const provider = settings.cleanupProvider || "";
-    const isCustomProvider = provider === "custom";
+  logger.logReasoning("OPENAI_BASE_REJECTED", {
+    reason,
+    attempted,
+    fallbackTo: API_ENDPOINTS.OPENAI_BASE,
+  });
+  return API_ENDPOINTS.OPENAI_BASE;
+}
 
-    if (!isCustomProvider) {
-      logger.logReasoning("CUSTOM_CLEANUP_ENDPOINT_CHECK", {
-        hasCustomUrl: false,
-        provider,
-        reason: "Provider is not 'custom', using default OpenAI endpoint",
-        defaultEndpoint: API_ENDPOINTS.OPENAI_BASE,
-      });
-      return API_ENDPOINTS.OPENAI_BASE;
-    }
+export function resolveConfiguredOpenAIBase(provider: string, configuredBaseUrl?: string): string {
+  if (provider !== "custom") return API_ENDPOINTS.OPENAI_BASE;
 
-    const stored = settings.cleanupCloudBaseUrl || "";
-    const trimmed = stored.trim();
-
-    if (!trimmed) {
-      logger.logReasoning("CUSTOM_CLEANUP_ENDPOINT_CHECK", {
-        hasCustomUrl: false,
-        provider,
-        usingDefault: true,
-        defaultEndpoint: API_ENDPOINTS.OPENAI_BASE,
-      });
-      return API_ENDPOINTS.OPENAI_BASE;
-    }
-
-    const normalized = ensureV1Suffix(trimmed) || API_ENDPOINTS.OPENAI_BASE;
-
-    logger.logReasoning("CUSTOM_CLEANUP_ENDPOINT_CHECK", {
-      hasCustomUrl: true,
-      provider,
-      rawUrl: trimmed,
-      normalizedUrl: normalized,
-      defaultEndpoint: API_ENDPOINTS.OPENAI_BASE,
-    });
-
-    const knownNonOpenAIUrls = [
-      "api.groq.com",
-      "api.anthropic.com",
-      "generativelanguage.googleapis.com",
-    ];
-
-    const isKnownNonOpenAI = knownNonOpenAIUrls.some((url) => normalized.includes(url));
-    if (isKnownNonOpenAI) {
-      logger.logReasoning("OPENAI_BASE_REJECTED", {
-        reason: "Custom URL is a known non-OpenAI provider, using default OpenAI endpoint",
-        attempted: normalized,
-      });
-      return API_ENDPOINTS.OPENAI_BASE;
-    }
-
-    if (!isSecureEndpoint(normalized)) {
-      logger.logReasoning("OPENAI_BASE_REJECTED", {
-        reason: "HTTPS required (HTTP allowed for local network only)",
-        attempted: normalized,
-      });
-      return API_ENDPOINTS.OPENAI_BASE;
-    }
-
-    logger.logReasoning("CUSTOM_CLEANUP_ENDPOINT_RESOLVED", {
-      customEndpoint: normalized,
-      isCustom: true,
-      provider,
-    });
-
-    return normalized;
-  } catch (error) {
-    logger.logReasoning("CUSTOM_CLEANUP_ENDPOINT_ERROR", {
-      error: (error as Error).message,
-      fallbackTo: API_ENDPOINTS.OPENAI_BASE,
-    });
-    return API_ENDPOINTS.OPENAI_BASE;
+  const trimmed = configuredBaseUrl?.trim() ?? "";
+  if (!trimmed) {
+    return invalidCustomEndpoint("Custom endpoint is not configured");
   }
+
+  const normalized = ensureV1Suffix(trimmed);
+  if (!normalized) {
+    return invalidCustomEndpoint("Custom endpoint could not be normalized", trimmed);
+  }
+
+  const knownNonOpenAIUrls = [
+    "api.groq.com",
+    "api.anthropic.com",
+    "generativelanguage.googleapis.com",
+  ];
+  if (knownNonOpenAIUrls.some((url) => normalized.includes(url))) {
+    return invalidCustomEndpoint("Custom URL is a known non-OpenAI provider", normalized);
+  }
+
+  if (!isSecureHttpEndpoint(normalized)) {
+    return invalidCustomEndpoint(
+      "HTTPS required (HTTP allowed for local network only)",
+      normalized
+    );
+  }
+
+  logger.logReasoning("CUSTOM_CLEANUP_ENDPOINT_RESOLVED", {
+    customEndpoint: normalized,
+    isCustom: true,
+    provider,
+  });
+
+  return normalized;
+}
+
+export function resolveSelfHostedOpenAIBase(configuredBaseUrl: string): string {
+  const normalized = ensureV1Suffix(configuredBaseUrl.trim());
+  if (!normalized || !isSecureHttpEndpoint(normalized)) {
+    throw new Error(i18n.t("reasoning.custom.httpsRequired"));
+  }
+
+  return normalized;
 }

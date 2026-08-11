@@ -144,6 +144,7 @@
     "cancel": "Cancelar",
     "recommended": "Recomendado",
     "active": "Activo",
+    "managedByOrg": "Gestionado por tu organización",
     "freeAccountRequired": "Cuenta gratuita requerida",
     "cloud": "Nube",
     "local": "Local",
@@ -168,7 +169,10 @@
     "copy": "Copiar",
     "copied": "Copiado",
     "done": "Listo",
-    "skip": "Omitir"
+    "skip": "Omitir",
+    "policyAiProcessingRestricted": "El procesamiento con IA está restringido por tu organización.",
+    "policyAgentRestricted": "El uso del agente de IA está restringido por tu organización.",
+    "policyTranscriptionRestricted": "La transcripción está restringida por tu organización."
   },
   "onboarding": {
     "steps": {
@@ -229,7 +233,7 @@
       "title": "Configuración del agente de voz",
       "description": "Habla con tu agente de IA con una sola pulsación",
       "hotkey": "Atajo",
-      "howItWorks": "Pulsa la tecla y di lo que quieres, por ejemplo «escribe una breve nota de agradecimiento». {{agentName}} escribe el resultado donde esté el cursor. No hace falta decir «Hey {{agentName}}» antes.",
+      "howItWorks": "Pulsa la tecla y di lo que quieres, por ejemplo «escribe una breve nota de agradecimiento». Si hay texto resaltado, {{agentName}} edita y reemplaza esa selección; si no, escribe el resultado donde esté el cursor. No hace falta decir «Hey {{agentName}}» antes.",
       "test": "Pruébalo",
       "testInstruction": "Haz clic abajo, pulsa {{hotkey}} y di un comando",
       "testSetHotkey": "Configura un atajo arriba para probarlo",
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "Actualización obligatoria",
+      "description": "Tu organización requiere OpenWhispr {{version}} o una versión más reciente. Actualiza la aplicación."
+    },
     "update": {
       "readyTitle": "Actualización lista para instalar",
       "readyDescription": "Haz clic en 'Instalar actualización' para reiniciar con la última versión.",
@@ -596,6 +604,15 @@
         "unreachableDescription": "Tu dictado se pegó sin traducir. Revisa los ajustes de traducción.",
         "failedTitle": "La traducción falló",
         "failedDescription": "Se pegó el texto original. Puedes reintentarlo desde el Historial."
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "Edición de selección no aplicada",
+        "changed": "El texto seleccionado o la aplicación de destino cambió durante el procesamiento. No se reemplazó nada.",
+        "expired": "La edición caducó. Selecciona el texto e inténtalo de nuevo.",
+        "pasteFailed": "OpenWhispr generó la edición, pero no pudo reemplazar el texto seleccionado.",
+        "unavailable": "OpenWhispr no pudo leer de forma segura el texto seleccionado. Revisa los permisos de accesibilidad o automatización.",
+        "tooLarge": "La selección es demasiado grande. Selecciona 6.000 caracteres o menos.",
+        "reasoningFailed": "La IA no pudo completar la edición. El texto original no se modificó."
       }
     },
     "clipboard": {
@@ -1027,7 +1044,18 @@
     "selectPlaceholder": "Selecciona un micrófono",
     "systemDefault": "Predeterminado del sistema",
     "unknownDevice": "Dispositivo desconocido",
-    "using": "Usando: {{device}}"
+    "using": "Usando: {{device}}",
+    "warmHold": {
+      "label": "Mantener el micrófono activo",
+      "description": "Después de un dictado, mantén el micrófono abierto brevemente para que el siguiente empiece al instante y sin palabras cortadas",
+      "privacyNote": "Mientras el micrófono se mantiene abierto, el indicador de micrófono en uso del sistema permanece encendido. No se graba nada entre dictados.",
+      "options": {
+        "0": "Desactivado",
+        "10": "10 segundos",
+        "60": "1 minuto",
+        "900": "15 minutos"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "Verificando capacidades del sistema...",
@@ -1119,6 +1147,7 @@
     "defaultTestInputTranslate": "Hace un día precioso hoy, ¿te apetece dar un paseo?"
   },
   "settingsModal": {
+    "managedByOrg": "Algunos ajustes están gestionados por tu organización.",
     "groups": {
       "account": "Cuenta",
       "app": "Aplicación",
@@ -1418,7 +1447,7 @@
       },
       "examplesTitle": "Ejemplos",
       "helper": "Elige algo corto y natural para decir en voz alta",
-      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, la IA ejecuta tu comando — redactando contenido, formateando texto o respondiendo preguntas — en lugar de transcribirlo literalmente.",
+      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, la IA ejecuta tu comando. Si hay texto resaltado, ese texto se envía al modelo de agente de voz configurado y se reemplaza de forma segura con el resultado.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",
@@ -1426,7 +1455,7 @@
       "title": "Agente de voz",
       "examples": {
         "formalEmail": "Hey {{agentName}}, escribe un correo formal sobre el presupuesto",
-        "professional": "Hey {{agentName}}, hazlo más profesional",
+        "professional": "Selecciona texto y luego di: Hey {{agentName}}, hazlo más profesional",
         "bulletPoints": "Hey {{agentName}}, convierte esto en viñetas"
       }
     },
@@ -1573,7 +1602,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atajo del agente de voz",
-        "description": "Di lo que necesitas y tu agente de IA escribe el resultado, no tus palabras"
+        "description": "Di lo que necesitas — el texto resaltado se edita en su lugar; si no, tu agente escribe donde esté el cursor"
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
@@ -1951,7 +1980,7 @@
       "tab": {
         "general": "General",
         "members": "Miembros",
-        "teams": "Espacios de equipo",
+        "teams": "Equipos",
         "developer": "Desarrollador"
       },
       "role": {
@@ -2608,7 +2637,8 @@
       "title": "Notas de reunión",
       "description": "Transcripciones y resúmenes estructurados",
       "comingSoon": "Próximamente",
-      "back": "Atrás"
+      "back": "Atrás",
+      "restrictedByOrg": "La transcripción de reuniones está restringida por tu organización."
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",
@@ -2702,6 +2732,7 @@
     "speaker": {
       "you": "Tú",
       "them": "Ellos",
+      "unknown": "Participante desconocido",
       "label": "Participante {{n}}",
       "identifyingSpeakers": "Identificando participantes...",
       "liveAccuracyHint": "Aún identificando participantes. La precisión de las etiquetas mejorará cuando termine la llamada.",
@@ -2957,7 +2988,7 @@
   },
   "dictationAgent": {
     "enabled": "Activar agente de voz",
-    "enabledDescription": "Dicta instrucciones a tu agente. Actívalo diciendo \"{{agentName}}\". Configurable más abajo.",
+    "enabledDescription": "Dicta instrucciones a tu agente. El texto resaltado se envía al modelo configurado y se edita en su lugar. Actívalo diciendo \"{{agentName}}\".",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Usa el agente gestionado por OpenWhispr, sin necesidad de clave API.",

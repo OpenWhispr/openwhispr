@@ -100,3 +100,17 @@ test("local mode with no model stays local (regression: inherited cloud id hit t
   assert.equal(overrides.provider, "local");
   assert.equal(overrides.customApiKey, undefined);
 });
+
+test("enterprise mode pins its provider instead of inheriting cleanup routing", async () => {
+  const { buildNoteFormattingOverrides } = await load();
+  const overrides = buildNoteFormattingOverrides(
+    { mode: "enterprise", provider: "bedrock", customApiKey: "irrelevant" },
+    false
+  );
+  assert.deepEqual(overrides, {
+    provider: "bedrock",
+    baseUrl: undefined,
+    customApiKey: undefined,
+    lanUrl: undefined,
+  });
+});

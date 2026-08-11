@@ -1,6 +1,6 @@
 // Provider overrides for note-formatting ReasoningService.processText calls.
 // Self-hosted must forward remoteUrl as lanUrl — without it, processText
-// guesses the provider from the model and can silently hit a cloud API.
+// would use the dictation-cleanup scope instead of this scope's endpoint.
 export function buildNoteFormattingOverrides(noteFormatting, isCloudMode) {
   if (isCloudMode) {
     return {
@@ -22,13 +22,12 @@ export function buildNoteFormattingOverrides(noteFormatting, isCloudMode) {
     };
   }
 
-  // Local must pin its provider for the same reason: an empty local selection
-  // resolves to the cleanup scope's model, and processText would derive a cloud
-  // provider from that id — sending note content off-device.
+  // Local and enterprise must pin their providers too, or processText would
+  // use the dictation-cleanup scope when this scope has no route override.
   const provider =
     mode === "local"
       ? "local"
-      : mode === "providers"
+      : mode === "providers" || mode === "enterprise"
         ? noteFormatting?.provider || undefined
         : undefined;
   const isCustom = provider === "custom";

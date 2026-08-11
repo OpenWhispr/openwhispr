@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   DEFAULT_RETENTION_SETTINGS,
   applyRetentionSettings,
+  createRetentionSettingsHandler,
 } = require("../../src/helpers/retentionSettings");
 
 test("reports a change when a retention period is shortened", () => {
@@ -39,4 +40,40 @@ test("keeps the current value when an incoming value is missing or unusable", ()
       settings: current,
     });
   }
+});
+
+test("only the main renderer can replace process-global retention settings", () => {
+  const mainRenderer = {};
+  const auxiliaryRenderers = [{}, {}, {}];
+  const managedSettings = { audioRetentionDays: 7, transcriptRetentionDays: 30 };
+  let current = { ...DEFAULT_RETENTION_SETTINGS };
+  let cleanupRuns = 0;
+  const handleRetentionSettingsChanged = createRetentionSettingsHandler({
+    getCurrentSettings: () => current,
+    getOwner: () => mainRenderer,
+    onSettingsChanged: (settings) => {
+      current = settings;
+      cleanupRuns += 1;
+    },
+  });
+
+  handleRetentionSettingsChanged({ sender: mainRenderer }, managedSettings);
+  assert.deepEqual(current, managedSettings);
+  assert.equal(cleanupRuns, 1);
+
+  for (const auxiliaryRenderer of auxiliaryRenderers) {
+    handleRetentionSettingsChanged(
+      { sender: auxiliaryRenderer },
+      { audioRetentionDays: 90, transcriptRetentionDays: 0 }
+    );
+    assert.deepEqual(current, managedSettings);
+    assert.equal(cleanupRuns, 1);
+  }
+
+  handleRetentionSettingsChanged(
+    { sender: mainRenderer },
+    { audioRetentionDays: 90, transcriptRetentionDays: 0 }
+  );
+  assert.deepEqual(current, { audioRetentionDays: 90, transcriptRetentionDays: 0 });
+  assert.equal(cleanupRuns, 2);
 });

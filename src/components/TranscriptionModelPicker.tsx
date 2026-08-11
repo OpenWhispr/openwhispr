@@ -25,6 +25,13 @@ import {
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
 import { useSettingsStore } from "../stores/settingsStore";
+import {
+  filterByokProviderOptionsByPolicy,
+  isProviderAllowedByPolicy,
+  reconcileCloudProviderSelection,
+  shouldPersistProviderFallback,
+} from "../stores/policyRules";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
@@ -276,8 +283,6 @@ const PROVIDER_CREDENTIALS: Record<
   },
 };
 
-const VALID_CLOUD_PROVIDER_IDS = CLOUD_PROVIDER_TABS.map((p) => p.id);
-
 const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
@@ -360,6 +365,7 @@ export default function TranscriptionModelPicker({
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
+  const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
@@ -386,23 +392,36 @@ export default function TranscriptionModelPicker({
   const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const loadLocalModelsRef = useRef<(() => Promise<void>) | null>(null);
   const loadParakeetModelsRef = useRef<(() => Promise<void>) | null>(null);
-  const ensureValidCloudSelectionRef = useRef<(() => void) | null>(null);
   const selectedLocalModelRef = useRef(selectedLocalModel);
   const onLocalModelSelectRef = useRef(onLocalModelSelect);
 
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const colorScheme: ColorScheme = variant === "settings" ? "purple" : "blue";
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
-  const cloudProviders = useMemo(
+  const policyState = usePolicySnapshot();
+  const providerAllowed = useCallback(
+    (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
+    [policyState]
+  );
+  const availableCloudProviders = useMemo(
     () => (streamingOnly ? getStreamingTranscriptionProviders() : getTranscriptionProviders()),
     [streamingOnly]
   );
+  const cloudProviders = useMemo(
+    () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),
+    [availableCloudProviders, policyState]
+  );
   const cloudProviderTabs = useMemo(() => {
-    const visibleIds = new Set([...cloudProviders.map((p) => p.id), "custom"]);
-    return CLOUD_PROVIDER_TABS.filter((p) => visibleIds.has(p.id)).map((provider) =>
-      provider.id === "custom" ? { ...provider, name: t("transcription.customProvider") } : provider
+    const availableIds = new Set(availableCloudProviders.map((p) => p.id));
+    if (!streamingOnly) availableIds.add("custom");
+    const tabs = CLOUD_PROVIDER_TABS.filter((provider) => availableIds.has(provider.id)).map(
+      (provider) =>
+        provider.id === "custom"
+          ? { ...provider, name: t("transcription.customProvider") }
+          : provider
     );
-  }, [cloudProviders, t]);
+    return filterByokProviderOptionsByPolicy(tabs, "transcription", policyState);
+  }, [availableCloudProviders, policyState, streamingOnly, t]);
 
   useEffect(() => {
     selectedLocalModelRef.current = selectedLocalModel;
@@ -462,41 +481,64 @@ export default function TranscriptionModelPicker({
     return queuedLoad;
   }, []);
 
-  const ensureValidCloudSelection = useCallback(() => {
-    const isValidProvider = VALID_CLOUD_PROVIDER_IDS.includes(selectedCloudProvider);
-
-    if (!isValidProvider) {
-      const knownProviderUrls = cloudProviders.map((p) => p.baseUrl);
-      const hasCustomUrl =
-        cloudTranscriptionBaseUrl &&
-        cloudTranscriptionBaseUrl.trim() !== "" &&
-        cloudTranscriptionBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE &&
-        !knownProviderUrls.includes(cloudTranscriptionBaseUrl);
-
-      if (hasCustomUrl) {
-        onCloudProviderSelect("custom");
-      } else {
-        const firstProvider = cloudProviders[0];
-        if (firstProvider) {
-          onCloudProviderSelect(firstProvider.id);
-          if (firstProvider.models?.length) {
-            onCloudModelSelect(firstProvider.models[0].id);
-          }
-        }
-      }
-    } else if (selectedCloudProvider !== "custom" && !selectedCloudModel) {
-      const provider = cloudProviders.find((p) => p.id === selectedCloudProvider);
-      if (provider?.models?.length) {
-        onCloudModelSelect(provider.models[0].id);
-      }
-    }
+  const effectiveCloudSelection = useMemo(() => {
+    // Every provider's URL counts as known, including policy-blocked ones:
+    // otherwise a blocked provider's stored URL reads as a custom endpoint and
+    // reconciliation would keep pointing "custom" at what policy just denied.
+    const knownProviderUrls = new Set(
+      availableCloudProviders.map((provider) => normalizeBaseUrl(provider.baseUrl))
+    );
+    const normalizedBaseUrl = normalizeBaseUrl(cloudTranscriptionBaseUrl);
+    const hasCustomUrl = Boolean(
+      normalizedBaseUrl &&
+      normalizedBaseUrl !== normalizeBaseUrl(API_ENDPOINTS.TRANSCRIPTION_BASE) &&
+      !knownProviderUrls.has(normalizedBaseUrl)
+    );
+    return (
+      reconcileCloudProviderSelection({
+        selectedProvider: selectedCloudProvider,
+        selectedModel: selectedCloudModel,
+        allowedProviders: cloudProviders,
+        customAllowed: !streamingOnly && providerAllowed("custom"),
+        hasCustomUrl,
+      }) ?? { provider: selectedCloudProvider, model: selectedCloudModel }
+    );
   }, [
+    availableCloudProviders,
     cloudProviders,
     cloudTranscriptionBaseUrl,
     selectedCloudProvider,
     selectedCloudModel,
-    onCloudProviderSelect,
+    providerAllowed,
+    streamingOnly,
+  ]);
+  const displayedCloudProvider = effectiveCloudSelection.provider;
+  const displayedCloudModel = effectiveCloudSelection.model;
+
+  useEffect(() => {
+    if (
+      effectiveLocal ||
+      !shouldPersistProviderFallback(policyState, isSignedIn) ||
+      (effectiveCloudSelection.provider === selectedCloudProvider &&
+        effectiveCloudSelection.model === selectedCloudModel)
+    ) {
+      return;
+    }
+    if (effectiveCloudSelection.provider !== selectedCloudProvider) {
+      onCloudProviderSelect(effectiveCloudSelection.provider);
+    }
+    if (effectiveCloudSelection.model !== selectedCloudModel) {
+      onCloudModelSelect(effectiveCloudSelection.model);
+    }
+  }, [
+    effectiveCloudSelection,
+    effectiveLocal,
+    isSignedIn,
     onCloudModelSelect,
+    onCloudProviderSelect,
+    policyState,
+    selectedCloudModel,
+    selectedCloudProvider,
   ]);
 
   useEffect(() => {
@@ -505,10 +547,6 @@ export default function TranscriptionModelPicker({
   useEffect(() => {
     loadParakeetModelsRef.current = loadParakeetModels;
   }, [loadParakeetModels]);
-  useEffect(() => {
-    ensureValidCloudSelectionRef.current = ensureValidCloudSelection;
-  }, [ensureValidCloudSelection]);
-
   useEffect(() => {
     if (!effectiveLocal) return;
 
@@ -526,7 +564,6 @@ export default function TranscriptionModelPicker({
 
     hasLoadedRef.current = false;
     hasLoadedParakeetRef.current = false;
-    ensureValidCloudSelectionRef.current?.();
   }, [effectiveLocal]);
 
   useEffect(() => {
@@ -626,13 +663,16 @@ export default function TranscriptionModelPicker({
   const handleModeChange = useCallback(
     (isLocal: boolean) => {
       onModeChange(isLocal);
-      if (!isLocal) ensureValidCloudSelection();
     },
-    [onModeChange, ensureValidCloudSelection]
+    [onModeChange]
   );
 
+  // Never writes cloudTranscriptionBaseUrl: that key is the Custom tab's only
+  // storage, and built-in providers resolve their endpoints from the registry
+  // at request time — writing it here destroyed the user's URL (#1459).
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
+      if (!providerAllowed(providerId)) return;
       onCloudProviderSelect(providerId);
       const provider = cloudProviders.find((p) => p.id === providerId);
 
@@ -641,14 +681,11 @@ export default function TranscriptionModelPicker({
         return;
       }
 
-      if (provider) {
-        setCloudTranscriptionBaseUrl?.(provider.baseUrl);
-        if (provider.models?.length) {
-          onCloudModelSelect(provider.models[0].id);
-        }
+      if (provider?.models?.length) {
+        onCloudModelSelect(provider.models[0].id);
       }
     },
-    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, setCloudTranscriptionBaseUrl]
+    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, providerAllowed]
   );
 
   const handleLocalProviderChange = useCallback(
@@ -730,12 +767,12 @@ export default function TranscriptionModelPicker({
   );
 
   const currentCloudProvider = useMemo<TranscriptionProviderData | undefined>(
-    () => cloudProviders.find((p) => p.id === selectedCloudProvider),
-    [cloudProviders, selectedCloudProvider]
+    () => cloudProviders.find((p) => p.id === displayedCloudProvider),
+    [cloudProviders, displayedCloudProvider]
   );
 
   const providerCredentials =
-    PROVIDER_CREDENTIALS[selectedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
+    PROVIDER_CREDENTIALS[displayedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
   const credentialValues: Record<ProviderCredentialField["key"], string> = {
     openaiApiKey,
     groqApiKey,
@@ -761,7 +798,7 @@ export default function TranscriptionModelPicker({
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
-    const { icon, invertInDark } = getRemoteProviderIcon(selectedCloudProvider);
+    const { icon, invertInDark } = getRemoteProviderIcon(displayedCloudProvider);
     return currentCloudProvider.models.map((m) => ({
       value: m.id,
       label: m.name,
@@ -771,7 +808,7 @@ export default function TranscriptionModelPicker({
       icon,
       invertInDark,
     }));
-  }, [currentCloudProvider, selectedCloudProvider, t]);
+  }, [currentCloudProvider, displayedCloudProvider, t]);
 
   const progressDisplay = useMemo(() => {
     if (!effectiveLocal) return null;
@@ -946,127 +983,133 @@ export default function TranscriptionModelPicker({
 
       {!effectiveLocal ? (
         <>
-          <ProviderTabs
-            providers={cloudProviderTabs}
-            selectedId={selectedCloudProvider}
-            onSelect={handleCloudProviderChange}
-            colorScheme="purple"
-            wrap
-          />
+          {cloudProviderTabs.length > 0 && (
+            <ProviderTabs
+              providers={cloudProviderTabs}
+              selectedId={displayedCloudProvider}
+              onSelect={handleCloudProviderChange}
+              colorScheme="purple"
+              wrap
+            />
+          )}
 
-          <div>
-            {selectedCloudProvider === "custom" ? (
-              <div className="space-y-2">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-foreground">
-                    {t("transcription.endpointUrl")}
-                  </label>
-                  <Input
-                    value={cloudTranscriptionBaseUrl}
-                    onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
-                    onBlur={handleBaseUrlBlur}
-                    placeholder="https://your-api.example.com/v1"
-                    className="h-8 text-sm"
+          {providerAllowed(displayedCloudProvider) && (
+            <div>
+              {displayedCloudProvider === "custom" ? (
+                <div className="space-y-2">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-foreground">
+                      {t("transcription.endpointUrl")}
+                    </label>
+                    <Input
+                      value={cloudTranscriptionBaseUrl}
+                      onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
+                      onBlur={handleBaseUrlBlur}
+                      placeholder="https://your-api.example.com/v1"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+
+                  <ApiKeyInput
+                    apiKey={customTranscriptionApiKey}
+                    setApiKey={setCustomTranscriptionApiKey}
+                    label={t("transcription.apiKeyOptional")}
+                    helpText=""
                   />
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-foreground">
+                      {t("common.model")}
+                    </label>
+                    <Input
+                      value={displayedCloudModel}
+                      onChange={(e) => onCloudModelSelect(e.target.value)}
+                      placeholder="whisper-1"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+
+                  {/azure\.com/i.test(cloudTranscriptionBaseUrl || "") && (
+                    <p className="text-xs text-muted-foreground">{t("transcription.azureHint")}</p>
+                  )}
                 </div>
-
-                <ApiKeyInput
-                  apiKey={customTranscriptionApiKey}
-                  setApiKey={setCustomTranscriptionApiKey}
-                  label={t("transcription.apiKeyOptional")}
-                  helpText=""
-                />
-
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-foreground">
-                    {t("common.model")}
-                  </label>
-                  <Input
-                    value={selectedCloudModel}
-                    onChange={(e) => onCloudModelSelect(e.target.value)}
-                    placeholder="whisper-1"
-                    className="h-8 text-sm"
-                  />
-                </div>
-
-                {/azure\.com/i.test(cloudTranscriptionBaseUrl || "") && (
-                  <p className="text-xs text-muted-foreground">{t("transcription.azureHint")}</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {providerCredentials.fields.map((field, index) => (
-                  <div key={field.key} className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-foreground">
-                        {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
-                      </label>
-                      {index === 0 && (
-                        <GetApiKeyLink
-                          url={providerCredentials.consoleUrl}
-                          labelKey="transcription.getKey"
-                          className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+              ) : (
+                <div className="space-y-2">
+                  {providerCredentials.fields.map((field, index) => (
+                    <div key={field.key} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-foreground">
+                          {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
+                        </label>
+                        {index === 0 && (
+                          <GetApiKeyLink
+                            url={providerCredentials.consoleUrl}
+                            labelKey="transcription.getKey"
+                            className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                          />
+                        )}
+                      </div>
+                      {field.input === "secret" ? (
+                        <ApiKeyInput
+                          apiKey={credentialValues[field.key]}
+                          setApiKey={credentialSetters[field.key]}
+                          label=""
+                          helpText=""
+                        />
+                      ) : field.input === "select" ? (
+                        <Select
+                          value={credentialValues[field.key]}
+                          onValueChange={credentialSetters[field.key]}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options?.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={credentialValues[field.key]}
+                          onChange={(e) => credentialSetters[field.key](e.target.value)}
+                          placeholder={field.placeholder}
+                          className="h-8 text-sm"
                         />
                       )}
                     </div>
-                    {field.input === "secret" ? (
-                      <ApiKeyInput
-                        apiKey={credentialValues[field.key]}
-                        setApiKey={credentialSetters[field.key]}
-                        label=""
-                        helpText=""
-                      />
-                    ) : field.input === "select" ? (
-                      <Select
-                        value={credentialValues[field.key]}
-                        onValueChange={credentialSetters[field.key]}
-                      >
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options?.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        value={credentialValues[field.key]}
-                        onChange={(e) => credentialSetters[field.key](e.target.value)}
-                        placeholder={field.placeholder}
-                        className="h-8 text-sm"
-                      />
+                  ))}
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-foreground">
+                      {t("common.model")}
+                    </label>
+                    <ModelCardList
+                      models={cloudModelOptions}
+                      selectedModel={displayedCloudModel}
+                      onModelSelect={onCloudModelSelect}
+                      colorScheme="purple"
+                    />
+                    {displayedCloudProvider === "tinfoil" && (
+                      <p className="text-xs text-muted-foreground/70">
+                        {t("transcription.tinfoil.transportNote")}{" "}
+                        <a
+                          href={TINFOIL_AUDIO_DOCS_URL}
+                          onClick={createExternalLinkHandler(TINFOIL_AUDIO_DOCS_URL)}
+                          className="text-primary/70 hover:text-primary transition-colors"
+                        >
+                          {t("transcription.tinfoil.docsLink")}
+                        </a>
+                      </p>
                     )}
                   </div>
-                ))}
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">{t("common.model")}</label>
-                  <ModelCardList
-                    models={cloudModelOptions}
-                    selectedModel={selectedCloudModel}
-                    onModelSelect={onCloudModelSelect}
-                    colorScheme="purple"
-                  />
-                  {selectedCloudProvider === "tinfoil" && (
-                    <p className="text-xs text-muted-foreground/70">
-                      {t("transcription.tinfoil.transportNote")}{" "}
-                      <a
-                        href={TINFOIL_AUDIO_DOCS_URL}
-                        onClick={createExternalLinkHandler(TINFOIL_AUDIO_DOCS_URL)}
-                        className="text-primary/70 hover:text-primary transition-colors"
-                      >
-                        {t("transcription.tinfoil.docsLink")}
-                      </a>
-                    </p>
-                  )}
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <>

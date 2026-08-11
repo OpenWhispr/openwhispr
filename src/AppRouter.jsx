@@ -9,6 +9,7 @@ import WindowControls from "./components/WindowControls.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
+import { usePolicyStore } from "./stores/policyStore";
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
@@ -35,6 +36,14 @@ export default function AppRouter() {
 
 function MainApp() {
   const { isSignedIn, isGracePeriodOnly, isLoaded: authLoaded } = useAuth();
+  const policyStatus = usePolicyStore((state) => state.status);
+  const policyResolved =
+    !isSignedIn ||
+    policyStatus === "managed" ||
+    policyStatus === "unmanaged" ||
+    policyStatus === "error";
+  const isWaitingForPolicyStart = isSignedIn && !policyResolved;
+  const autoSyncReady = authLoaded && policyResolved;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
@@ -62,12 +71,12 @@ function MainApp() {
     // the previous account's rows while validation is still running. A failed
     // (guest/offline) resolution also counts as settled: canSync() then no-ops
     // because no validated auth context exists.
-    if (!isAgentPanel && authLoaded) {
+    if (!isAgentPanel && autoSyncReady) {
       import("./services/SyncService.js")
         .then(({ syncService }) => syncService.startAutoSync())
         .catch(() => {});
     }
-  }, [authLoaded, isAgentPanel, isControlPanel]);
+  }, [autoSyncReady, isAgentPanel, isControlPanel]);
 
   useEffect(() => {
     if (!authLoaded) return;
@@ -111,9 +120,10 @@ function MainApp() {
     localStorage.setItem("onboardingCompleted", "true");
   };
 
-  // The agent overlay never touches account-scoped data, so it renders
-  // without waiting for auth resolution (guests can use it offline).
+  // The agent waits for auth resolution so account policy can fail closed;
+  // guests still render once the signed-out state resolves.
   if (isAgentPanel) {
+    if (!authLoaded || isWaitingForPolicyStart) return <LoadingFallback />;
     return (
       <Suspense fallback={<LoadingFallback />}>
         <AgentOverlay />
@@ -124,7 +134,7 @@ function MainApp() {
   // isLoading clears once the onboarding effect has run, which itself waits
   // for authLoaded — and authLoaded terminates even when the session cannot
   // resolve (guest/offline presents as signed out).
-  if (isLoading) {
+  if (isLoading || isWaitingForPolicyStart) {
     return <LoadingFallback />;
   }
 

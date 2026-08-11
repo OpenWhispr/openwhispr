@@ -14,6 +14,8 @@ export interface ReasoningConfig {
   provider?: string;
   disableThinking?: boolean;
   language?: string;
+  requireCompleteOutput?: boolean;
+  requiresAgent?: boolean;
 }
 
 export abstract class BaseReasoningService {

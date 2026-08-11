@@ -10,6 +10,11 @@ const INITIAL_QUERY_RETRIES = 4; // Retry if AXValue is empty (paste not yet pro
 const INITIAL_QUERY_RETRY_DELAY_MS = 300;
 const ACTIVATE_CONFIRM_RETRIES = 6; // Poll the frontmost app until activation lands
 const ACTIVATE_CONFIRM_DELAY_MS = 25;
+// One dictation triggers target captures from several call sites (hotkey press,
+// toggle path, recording start) within a few hundred ms; reuse the result
+// across that burst. Kept short so back-to-back dictations in different apps
+// still get a fresh capture.
+const TARGET_CAPTURE_FRESHNESS_MS = 250;
 
 // Monitoring is strictly read-only: never write AXEnhancedUserInterface (or any
 // AX attribute) on the target app to force its accessibility tree. Flipping that
@@ -50,6 +55,23 @@ const MACOS_AX_PRECEDING_CHAR_SCRIPT = (pid) =>
   `\treturn "OK:" & (character loc of theVal)\n` +
   `end tell`;
 
+// Read the exact current selection without touching the clipboard. Prefixes
+// distinguish an empty selection from an inaccessible target so selection
+// editing can fail closed when Accessibility cannot inspect the focused field.
+const MACOS_AX_SELECTED_TEXT_SCRIPT = (pid) =>
+  `tell application "System Events"\n` +
+  `\ttry\n` +
+  `\t\tset targetProc to first application process whose unix id is ${pid}\n` +
+  `\t\tset focAttr to value of attribute "AXFocusedUIElement" of targetProc\n` +
+  `\t\tif focAttr is missing value then return "UNAVAILABLE:"\n` +
+  `\t\tset selectedValue to value of attribute "AXSelectedText" of focAttr\n` +
+  `\t\tif selectedValue is missing value or selectedValue is "" then return "NONE:"\n` +
+  `\t\treturn "SELECTED:" & selectedValue\n` +
+  `\ton error\n` +
+  `\t\treturn "UNAVAILABLE:"\n` +
+  `\tend try\n` +
+  `end tell`;
+
 // AppleScript to read the focused text field value from a specific app by PID.
 // Using PID avoids the problem where the Electron overlay is "frontmost".
 // Tries AXValue first, then falls back to AXStringForRange for apps that
@@ -82,6 +104,8 @@ class TextEditMonitor extends EventEmitter {
     this._lastValue = null;
     this._stdoutBuffer = "";
     this.lastTargetPid = null;
+    this._captureTargetPromise = null;
+    this._lastCaptureAt = 0;
   }
 
   /**
@@ -89,13 +113,31 @@ class TextEditMonitor extends EventEmitter {
    * Must be called at hotkey press time, BEFORE showDictationPanel()/mainWindow.show().
    * NSWorkspace.frontmostApplication correctly identifies the key window owner,
    * ignoring panel-type windows like the OpenWhispr overlay.
+   *
+   * Resolves with the captured PID (or null). At most one lookup runs at a
+   * time: concurrent calls share the in-flight lookup, so an older lookup can
+   * never overwrite a newer target, and a just-captured result is reused
+   * briefly so the press-time and recording-start captures of one dictation
+   * cost a single osascript spawn instead of several.
    */
   captureTargetPid() {
-    if (process.platform !== "darwin") return;
-    this._readFrontmostPid().then((pid) => {
+    if (process.platform !== "darwin") return Promise.resolve(null);
+    if (this._captureTargetPromise) return this._captureTargetPromise;
+    if (
+      this.lastTargetPid !== null &&
+      Date.now() - this._lastCaptureAt < TARGET_CAPTURE_FRESHNESS_MS
+    ) {
+      return Promise.resolve(this.lastTargetPid);
+    }
+    this.lastTargetPid = null;
+    this._captureTargetPromise = this._readFrontmostPid().then((pid) => {
+      this._captureTargetPromise = null;
+      this._lastCaptureAt = Date.now();
       this.lastTargetPid = pid;
       debugLogger.debug("[TextEditMonitor] Captured target PID", { pid });
+      return pid;
     });
+    return this._captureTargetPromise;
   }
 
   /**
@@ -151,7 +193,11 @@ class TextEditMonitor extends EventEmitter {
    */
   async activateTargetPid() {
     if (process.platform !== "darwin" || !this.lastTargetPid) return false;
-    const pid = this.lastTargetPid;
+    return this.activatePid(this.lastTargetPid);
+  }
+
+  async activatePid(pid) {
+    if (process.platform !== "darwin" || !pid) return false;
     if ((await this._readFrontmostPid()) === pid) return true;
 
     await this._activateApp(pid);
@@ -164,6 +210,86 @@ class TextEditMonitor extends EventEmitter {
     }
     debugLogger.debug("[TextEditMonitor] Target did not become frontmost", { pid });
     return false;
+  }
+
+  getSelectedText(pid, timeoutMs = 1200) {
+    return new Promise((resolve) => {
+      if (process.platform !== "darwin" || !pid) {
+        resolve({ state: "unavailable" });
+        return;
+      }
+
+      const resolved = this.resolveBinary();
+      if (resolved) {
+        execFile(
+          resolved.command,
+          [...resolved.args, "--selected-text", String(pid)],
+          { timeout: timeoutMs },
+          (error, stdout, stderr) => {
+            const output = stdout.replace(/\n$/, "");
+            if (output === "NONE:") {
+              resolve({ state: "none" });
+              return;
+            }
+            if (output.startsWith("SELECTED_B64:")) {
+              try {
+                resolve({
+                  state: "selected",
+                  text: Buffer.from(output.slice("SELECTED_B64:".length), "base64").toString(
+                    "utf8"
+                  ),
+                });
+                return;
+              } catch (decodeError) {
+                debugLogger.debug("[TextEditMonitor] Failed to decode native selected text", {
+                  error: decodeError.message,
+                });
+              }
+            }
+            if (output.startsWith("SELECTED:")) {
+              resolve({ state: "selected", text: output.slice("SELECTED:".length) });
+              return;
+            }
+
+            debugLogger.debug(
+              "[TextEditMonitor] Native selected-text read unavailable; trying AppleScript",
+              {
+                pid,
+                error: error?.message || null,
+                stderr: stderr?.trim() || null,
+              }
+            );
+            this._getSelectedTextViaAppleScript(pid, timeoutMs, resolve);
+          }
+        );
+        return;
+      }
+
+      this._getSelectedTextViaAppleScript(pid, timeoutMs, resolve);
+    });
+  }
+
+  _getSelectedTextViaAppleScript(pid, timeoutMs, resolve) {
+    execFile(
+      "osascript",
+      ["-e", MACOS_AX_SELECTED_TEXT_SCRIPT(pid)],
+      { timeout: timeoutMs },
+      (err, stdout) => {
+        if (err) {
+          resolve({ state: "unavailable" });
+          return;
+        }
+
+        const output = stdout.replace(/\n$/, "");
+        if (output === "NONE:") {
+          resolve({ state: "none" });
+        } else if (output.startsWith("SELECTED:")) {
+          resolve({ state: "selected", text: output.slice("SELECTED:".length) });
+        } else {
+          resolve({ state: "unavailable" });
+        }
+      }
+    );
   }
 
   /**

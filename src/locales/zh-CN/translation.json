@@ -144,6 +144,7 @@
     "cancel": "取消",
     "recommended": "推荐",
     "active": "已激活",
+    "managedByOrg": "由您的组织管理",
     "freeAccountRequired": "需要免费账户",
     "cloud": "云端",
     "local": "本地",
@@ -158,17 +159,20 @@
     "tap": "点按",
     "close": "关闭",
     "dismiss": "忽略",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "create": "Crear",
-    "delete": "Eliminar",
-    "actions": "Acciones",
-    "error": "Algo salió mal",
-    "unknownError": "Ocurrió un error desconocido",
-    "copy": "Copiar",
-    "copied": "Copiado",
-    "done": "Listo",
-    "skip": "跳过"
+    "save": "保存",
+    "saving": "保存中…",
+    "create": "创建",
+    "delete": "删除",
+    "actions": "操作",
+    "error": "出了点问题",
+    "unknownError": "发生未知错误",
+    "copy": "复制",
+    "copied": "已复制",
+    "done": "完成",
+    "skip": "跳过",
+    "policyAiProcessingRestricted": "AI 处理已被您的组织限制。",
+    "policyAgentRestricted": "AI 智能体的使用已被您的组织限制。",
+    "policyTranscriptionRestricted": "转录已被您的组织限制。"
   },
   "onboarding": {
     "steps": {
@@ -229,7 +233,7 @@
       "title": "语音助手设置",
       "description": "一键唤起你的 AI 助手",
       "hotkey": "快捷键",
-      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。{{agentName}} 会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
+      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换所选内容；否则会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
       "test": "试一试",
       "testInstruction": "点击下方，按下 {{hotkey}} 并说出指令",
       "testSetHotkey": "在上方设置快捷键即可试用",
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "需要更新",
+      "description": "您的组织要求使用 OpenWhispr {{version}} 或更高版本。请更新应用。"
+    },
     "update": {
       "readyTitle": "更新已准备就绪",
       "readyDescription": "点击“安装更新”以重启并安装最新版本。",
@@ -596,6 +604,15 @@
         "unreachableDescription": "你的口述内容已按原文粘贴，未经翻译。请检查翻译设置。",
         "failedTitle": "翻译失败",
         "failedDescription": "已粘贴原始文本。你可以在历史记录中重试。"
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "未应用选中文本编辑",
+        "changed": "处理期间，选中的文本或目标应用已发生变化。未替换任何内容。",
+        "expired": "选中文本编辑已过期。请重新选择文本后再试。",
+        "pasteFailed": "OpenWhispr 已生成编辑结果，但无法替换选中的文本。",
+        "unavailable": "OpenWhispr 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
+        "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
+        "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。"
       }
     },
     "clipboard": {
@@ -979,7 +996,18 @@
     "selectPlaceholder": "选择麦克风",
     "systemDefault": "系统默认",
     "unknownDevice": "未知设备",
-    "using": "当前使用：{{device}}"
+    "using": "当前使用：{{device}}",
+    "warmHold": {
+      "label": "保持麦克风预热",
+      "description": "听写结束后短暂保持麦克风开启，让下一次听写即刻开始且不丢字",
+      "privacyNote": "麦克风保持开启期间，系统的麦克风使用指示灯会一直亮起。听写之间不会录制任何内容。",
+      "options": {
+        "0": "关闭",
+        "10": "10 秒",
+        "60": "1 分钟",
+        "900": "15 分钟"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "正在检查系统功能...",
@@ -1071,6 +1099,7 @@
     "defaultTestInputTranslate": "今天天气真好，要不要出去走走？"
   },
   "settingsModal": {
+    "managedByOrg": "部分设置由您的组织管理。",
     "groups": {
       "account": "账户",
       "app": "应用",
@@ -1298,8 +1327,8 @@
           "accountCredit": "账户余额",
           "newPrice": "新价格",
           "nextBilling": "下次计费",
-          "mo": "mo",
-          "yr": "yr",
+          "mo": "月",
+          "yr": "年",
           "cancel": "取消",
           "confirm": "确认"
         }
@@ -1370,7 +1399,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会执行你的命令——撰写内容、格式化文本或回答问题——而不是逐字转写。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会执行你的命令。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1378,7 +1407,7 @@
       "title": "语音助手",
       "examples": {
         "formalEmail": "Hey {{agentName}}，写一封关于预算的正式邮件",
-        "professional": "Hey {{agentName}}，让这个更专业",
+        "professional": "先选中文本，再说：Hey {{agentName}}，让这个更专业",
         "bulletPoints": "Hey {{agentName}}，把这个转换成要点列表"
       }
     },
@@ -1525,7 +1554,7 @@
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
-        "description": "说出你的需求，AI 助手会输入结果，而不是你说的原话"
+        "description": "说出你的需求——选中的文本会就地编辑，否则助手会把结果输入到光标位置"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -1770,7 +1799,7 @@
       "description": "配置用于听写清理、笔记格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "听写清理",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "语音助手",
         "noteFormatting": "笔记格式化",
         "chatIntelligence": "聊天",
         "dictationTranslation": "翻译"
@@ -1903,7 +1932,7 @@
       "tab": {
         "general": "常规",
         "members": "成员",
-        "teams": "团队空间",
+        "teams": "团队",
         "developer": "开发者"
       },
       "role": {
@@ -2160,8 +2189,8 @@
         "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
         "bedrock_deepseek_v3_2": "开放权重前沿模型。智能助手模式的高性价比之选。",
         "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "vertex_gemini_2_5_flash": "通过 Vertex 提供的快速多模态模型",
+        "vertex_gemini_2_5_pro": "通过 Vertex 提供的高级推理模型"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "强大的混合模型",
@@ -2560,7 +2589,8 @@
       "title": "会议笔记",
       "description": "转录与结构化摘要",
       "comingSoon": "即将推出",
-      "back": "返回"
+      "back": "返回",
+      "restrictedByOrg": "会议转录已被您的组织限制。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -2654,6 +2684,7 @@
     "speaker": {
       "you": "你",
       "them": "对方",
+      "unknown": "未知发言者",
       "label": "发言者 {{n}}",
       "identifyingSpeakers": "正在识别发言者...",
       "liveAccuracyHint": "正在识别发言者。通话结束后，标签准确性会提升。",
@@ -2909,7 +2940,7 @@
   },
   "dictationAgent": {
     "enabled": "启用语音助手",
-    "enabledDescription": "向助手口述指令。说出“{{agentName}}”即可激活，可在下方配置。",
+    "enabledDescription": "向助手口述指令。选中的文本会发送到所配置的模型并就地编辑。说出“{{agentName}}”即可激活。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "使用 OpenWhispr 托管的助手，无需 API Key。",

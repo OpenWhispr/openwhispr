@@ -144,6 +144,7 @@
     "cancel": "キャンセル",
     "recommended": "推奨",
     "active": "有効",
+    "managedByOrg": "組織によって管理されています",
     "freeAccountRequired": "無料アカウントが必要です",
     "cloud": "クラウド",
     "local": "ローカル",
@@ -168,7 +169,10 @@
     "copy": "コピー",
     "copied": "コピーしました",
     "done": "完了",
-    "skip": "スキップ"
+    "skip": "スキップ",
+    "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
+    "policyAgentRestricted": "AIエージェントの使用は組織によって制限されています。",
+    "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。"
   },
   "onboarding": {
     "steps": {
@@ -229,7 +233,7 @@
       "title": "ボイスエージェント設定",
       "description": "ワンキーでAIエージェントに話しかけられます",
       "hotkey": "ホットキー",
-      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えば、{{agentName}}がカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}がその選択範囲を編集して置き換えます。選択がなければカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
       "test": "試す",
       "testInstruction": "下をクリックし、{{hotkey}} を押してコマンドを話してください",
       "testSetHotkey": "上でホットキーを設定すると試せます",
@@ -323,6 +327,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "アップデートが必要です",
+      "description": "組織では OpenWhispr {{version}} 以降が必要です。アプリを更新してください。"
+    },
     "update": {
       "readyTitle": "アップデートの準備完了",
       "readyDescription": "「アップデートをインストール」をクリックして最新バージョンで再起動します。",
@@ -596,6 +604,15 @@
         "unreachableDescription": "口述内容は翻訳されずに貼り付けられました。翻訳設定を確認してください。",
         "failedTitle": "翻訳に失敗しました",
         "failedDescription": "元のテキストが貼り付けられました。履歴から再試行できます。"
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "選択範囲の編集を適用できませんでした",
+        "changed": "処理中に選択したテキストまたは対象アプリが変更されました。置換は行われていません。",
+        "expired": "選択範囲の編集が期限切れになりました。テキストを選択し直して再試行してください。",
+        "pasteFailed": "OpenWhispr は編集を生成しましたが、選択したテキストを置換できませんでした。",
+        "unavailable": "OpenWhispr は選択したテキストを安全に読み取れませんでした。アクセシビリティまたは入力自動化の権限を確認してください。",
+        "tooLarge": "選択範囲が大きすぎます。6,000文字以内を選択してください。",
+        "reasoningFailed": "AI は選択範囲の編集を完了できませんでした。元のテキストは変更されていません。"
       }
     },
     "clipboard": {
@@ -979,7 +996,18 @@
     "selectPlaceholder": "マイクを選択",
     "systemDefault": "システムデフォルト",
     "unknownDevice": "不明なデバイス",
-    "using": "使用中: {{device}}"
+    "using": "使用中: {{device}}",
+    "warmHold": {
+      "label": "マイクをウォーム状態に保つ",
+      "description": "ディクテーション終了後もマイクを短時間開いたままにし、次回を冒頭の欠落なくすぐに開始できるようにします",
+      "privacyNote": "マイクを保持している間は、システムのマイク使用中インジケーターが点灯したままになります。ディクテーションの合間に録音は行われません。",
+      "options": {
+        "0": "オフ",
+        "10": "10秒",
+        "60": "1分",
+        "900": "15分"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "システム機能を確認中...",
@@ -1071,6 +1099,7 @@
     "defaultTestInputTranslate": "今日はいい天気ですね、散歩に行きませんか？"
   },
   "settingsModal": {
+    "managedByOrg": "一部の設定は組織によって管理されています。",
     "groups": {
       "account": "アカウント",
       "app": "アプリ",
@@ -1370,7 +1399,7 @@
       },
       "examplesTitle": "例",
       "helper": "声に出して言いやすい短い名前を選びましょう",
-      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、AI はそのまま書き起こすのではなく、コンテンツの作成、テキストの整形、質問への回答などのコマンドを実行します。",
+      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、AI がコマンドを実行します。テキストが選択されている場合、そのテキストは設定済みのボイスエージェントモデルに送信され、結果で安全に置き換えられます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
@@ -1378,7 +1407,7 @@
       "title": "音声エージェント",
       "examples": {
         "formalEmail": "Hey {{agentName}}、予算についてフォーマルなメールを書いて",
-        "professional": "Hey {{agentName}}、これをもっとプロフェッショナルにして",
+        "professional": "テキストを選択してから話しかけます：Hey {{agentName}}、これをもっとプロフェッショナルにして",
         "bulletPoints": "Hey {{agentName}}、これを箇条書きに変換して"
       }
     },
@@ -1525,7 +1554,7 @@
       },
       "voiceAgentHotkey": {
         "title": "ボイスエージェントホットキー",
-        "description": "話しかけるだけで、AIエージェントが言葉そのままではなく結果を入力します"
+        "description": "話しかけるだけ — 選択中のテキストはその場で編集され、選択がなければエージェントがカーソル位置に入力します"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -1903,7 +1932,7 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
-        "teams": "チームスペース",
+        "teams": "チーム",
         "developer": "開発者"
       },
       "role": {
@@ -2544,7 +2573,8 @@
       "title": "議事録",
       "description": "文字起こしと構造化されたサマリー",
       "comingSoon": "近日公開",
-      "back": "戻る"
+      "back": "戻る",
+      "restrictedByOrg": "会議の文字起こしは組織によって制限されています。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -2582,6 +2612,7 @@
     "speaker": {
       "you": "あなた",
       "them": "相手",
+      "unknown": "不明な話者",
       "label": "話者 {{n}}",
       "identifyingSpeakers": "話者を識別中...",
       "liveAccuracyHint": "話者を識別中です。通話終了後にラベルの精度が向上します。",
@@ -2909,7 +2940,7 @@
   },
   "dictationAgent": {
     "enabled": "音声エージェントを有効にする",
-    "enabledDescription": "エージェントに指示を口述できます。「{{agentName}}」と話しかけて起動します。設定は以下で行えます。",
+    "enabledDescription": "エージェントに指示を口述できます。選択中のテキストは設定済みのモデルに送信され、その場で編集されます。「{{agentName}}」と話しかけて起動します。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "OpenWhispr が管理するエージェントを使用。API キーは不要です。",

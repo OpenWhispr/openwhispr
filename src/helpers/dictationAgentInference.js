@@ -1,4 +1,9 @@
-import { resolveDictationAgentReachability } from "./dictationRouting.js";
+import {
+  resolveDictationAgentDisplayProvider,
+  resolveDictationAgentProvider,
+  resolveDictationAgentReachability,
+} from "./dictationRouting.js";
+import { isProviderValidForMode } from "../models/ModelRegistry";
 
 // The dictation agent's inference scope, shared by the dictation route in
 // audioManager and the Prompt Studio test tab so a prompt test hits the same
@@ -11,19 +16,31 @@ export function resolveDictationAgentInference(settings, { isCloudAgent = false 
   const model = settings.dictationAgentModel?.trim() || "";
   const isSelfHosted =
     settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim();
-  const provider = isCloudAgent
-    ? "openwhispr"
-    : settings.dictationAgentProvider?.trim() || undefined;
+  const storedProvider = settings.dictationAgentProvider?.trim() || "";
+  const providerForMode = isProviderValidForMode(storedProvider, settings.dictationAgentMode)
+    ? storedProvider
+    : undefined;
+  const provider = resolveDictationAgentProvider({
+    isCloudAgent,
+    dictationAgentMode: settings.dictationAgentMode,
+    dictationAgentProvider: providerForMode,
+  });
   const isCustom = settings.dictationAgentMode === "providers" && provider === "custom";
 
   return {
     reachable: resolveDictationAgentReachability({
       useDictationAgent: settings.useDictationAgent,
+      dictationAgentMode: settings.dictationAgentMode,
+      dictationAgentProvider: provider,
       dictationAgentModel: model,
       isCloudAgent,
       isSelfHostedAgent: isSelfHosted,
     }),
     model,
+    displayProvider: resolveDictationAgentDisplayProvider({
+      dictationAgentMode: settings.dictationAgentMode,
+      dictationAgentProvider: providerForMode,
+    }),
     config: {
       provider,
       lanUrl: isSelfHosted ? settings.dictationAgentRemoteUrl : undefined,

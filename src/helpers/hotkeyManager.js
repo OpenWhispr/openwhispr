@@ -296,7 +296,7 @@ class HotkeyManager extends EventEmitter {
 
   unregisterSlot(slotName) {
     const slot = this.slots.get(slotName);
-    if (!slot || !(slot.hotkeys && slot.hotkeys.length)) return;
+    if (!slot || !(slot.hotkeys?.length || slot.accelerators?.length)) return;
 
     // On KDE (X11 or Wayland), persistent slots are managed via KGlobalAccel
     if (this.useKDE && this.kdeManager && slotName !== "cancel") {
@@ -324,19 +324,13 @@ class HotkeyManager extends EventEmitter {
       return;
     }
 
-    for (const hk of slot.hotkeys || []) {
-      if (
-        !isGlobeLikeHotkey(hk) &&
-        !isMouseButtonHotkey(hk) &&
-        !isRightSideModifier(hk) &&
-        !isModifierOnlyHotkey(hk)
-      ) {
-        const accel = normalizeToAccelerator(hk);
-        try {
-          globalShortcut.unregister(accel);
-        } catch {
-          // already unregistered
-        }
+    // Release what was actually registered; native-listener entries are null.
+    for (const accel of slot.accelerators || []) {
+      if (!accel) continue;
+      try {
+        globalShortcut.unregister(accel);
+      } catch {
+        // already unregistered
       }
     }
     slot.hotkeys = [];

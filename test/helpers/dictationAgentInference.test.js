@@ -6,8 +6,8 @@ const load = () => import("../../src/helpers/dictationAgentInference.js");
 const baseSettings = {
   useDictationAgent: true,
   dictationAgentMode: "providers",
-  dictationAgentProvider: "llama",
-  dictationAgentModel: "llama-3.1-8b-instruct-q4_k_m",
+  dictationAgentProvider: "openai",
+  dictationAgentModel: "gpt-5-mini",
   dictationAgentRemoteUrl: "",
   dictationAgentCloudBaseUrl: "",
   dictationAgentCustomApiKey: "",
@@ -24,11 +24,11 @@ test("uses the dictation agent scope, not the cleanup scope", async () => {
     cleanupModel: "gpt-4.1-mini",
   });
 
-  assert.equal(result.model, "llama-3.1-8b-instruct-q4_k_m");
-  assert.equal(result.config.provider, "llama");
+  assert.equal(result.model, "gpt-5-mini");
+  assert.equal(result.config.provider, "openai");
 });
 
-test("a local agent is unreachable without an explicit model", async () => {
+test("a model-required agent is unreachable without an explicit model", async () => {
   const { resolveDictationAgentInference } = await load();
 
   const result = resolveDictationAgentInference({ ...baseSettings, dictationAgentModel: "" });
@@ -56,7 +56,12 @@ test("cloud is reachable with no model", async () => {
   const { resolveDictationAgentInference } = await load();
 
   const result = resolveDictationAgentInference(
-    { ...baseSettings, dictationAgentModel: "" },
+    {
+      ...baseSettings,
+      dictationAgentMode: "openwhispr",
+      dictationAgentProvider: "openai",
+      dictationAgentModel: "",
+    },
     { isCloudAgent: true }
   );
 
@@ -98,4 +103,127 @@ test("a disabled agent is unreachable", async () => {
   const result = resolveDictationAgentInference({ ...baseSettings, useDictationAgent: false });
 
   assert.equal(result.reachable, false);
+});
+
+test("local mode with a leftover cloud provider still routes to llama.cpp", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    useDictationAgent: true,
+    dictationAgentMode: "local",
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "qwen2.5-coder",
+  });
+
+  assert.equal(result.config.provider, "local");
+});
+
+test("local mode with an empty provider routes to llama.cpp", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentMode: "local",
+    dictationAgentProvider: "",
+  });
+
+  assert.equal(result.config.provider, "local");
+});
+
+test("self-hosted mode with a leftover provider routes only via the LAN url", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentMode: "self-hosted",
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "",
+    dictationAgentRemoteUrl: "http://127.0.0.1:8080/v1",
+  });
+
+  assert.equal(result.config.provider, undefined);
+  assert.equal(result.config.lanUrl, "http://127.0.0.1:8080/v1");
+});
+
+test("self-hosted mode without a remote url never keeps a leftover provider", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentMode: "self-hosted",
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "gpt-5-mini",
+    dictationAgentRemoteUrl: "",
+  });
+
+  assert.equal(result.reachable, false);
+  assert.equal(result.displayProvider, "self-hosted");
+  assert.equal(result.config.provider, undefined);
+  assert.equal(result.config.lanUrl, undefined);
+});
+
+test("providers mode keeps an explicit cloud provider", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "gpt-5-mini",
+  });
+
+  assert.equal(result.config.provider, "openai");
+});
+
+test("providers mode rejects a stale local provider", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentProvider: "qwen",
+    dictationAgentModel: "qwen2.5-coder",
+  });
+
+  assert.equal(result.reachable, false);
+  assert.equal(result.displayProvider, "none");
+  assert.equal(result.config.provider, undefined);
+});
+
+test("local mode wins over an inconsistent cloud flag", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference(
+    { ...baseSettings, dictationAgentMode: "local", dictationAgentProvider: "openai" },
+    { isCloudAgent: true }
+  );
+
+  assert.equal(result.config.provider, "local");
+});
+
+test("managed mode never falls through to a stale provider when signed out", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentMode: "openwhispr",
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "gpt-5-mini",
+  });
+
+  assert.equal(result.reachable, false);
+  assert.equal(result.displayProvider, "openwhispr");
+  assert.equal(result.config.provider, undefined);
+});
+
+test("enterprise mode with a missing provider fails closed", async () => {
+  const { resolveDictationAgentInference } = await load();
+
+  const result = resolveDictationAgentInference({
+    ...baseSettings,
+    dictationAgentMode: "enterprise",
+    dictationAgentProvider: "",
+    dictationAgentModel: "anthropic.claude-sonnet-4",
+  });
+
+  assert.equal(result.reachable, false);
+  assert.equal(result.config.provider, undefined);
 });
