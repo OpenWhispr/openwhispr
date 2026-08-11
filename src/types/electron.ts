@@ -1772,6 +1772,8 @@ declare global {
           success: boolean;
           text?: string;
           warning?: string;
+          failedChunks?: number;
+          totalChunks?: number;
         } & PolicyFailureMetadata
       >;
 

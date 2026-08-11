@@ -30,6 +30,14 @@ function clusterThresholdForDuration(durationSeconds) {
   );
 }
 
+function resolveClusterThreshold(durationSeconds, requestedThreshold) {
+  const automaticThreshold = clusterThresholdForDuration(durationSeconds);
+  if (requestedThreshold == null || requestedThreshold === "") return automaticThreshold;
+  const parsedThreshold = Number(requestedThreshold);
+  if (!Number.isFinite(parsedThreshold)) return automaticThreshold;
+  return Math.min(1, Math.max(0, parsedThreshold));
+}
+
 function dropNegligibleClusters(segments, minTotalSeconds = MIN_CLUSTER_TOTAL_SECONDS) {
   if (!segments?.length) return segments;
   const totals = new Map();
@@ -50,5 +58,6 @@ module.exports = {
   THRESHOLD_RAMP_END_SECONDS,
   MIN_CLUSTER_TOTAL_SECONDS,
   clusterThresholdForDuration,
+  resolveClusterThreshold,
   dropNegligibleClusters,
 };

@@ -266,6 +266,12 @@ function computeFloat32RMS(float32Buffer) {
   return Math.sqrt(sumSquares / numSamples);
 }
 
+function parseFfmpegDuration(stderr) {
+  const match = stderr?.match(/Duration:\s*(\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)/);
+  if (!match) return null;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
 function splitAudioFile(inputPath, outputDir, options = {}) {
   const { segmentDuration = 600, audioBitrate = "128k", signal } = options;
 
@@ -363,8 +369,9 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
         return;
       }
 
-      debugLogger.debug("FFmpeg split complete", { chunkCount: chunks.length });
-      resolve(chunks);
+      const durationSeconds = parseFfmpegDuration(stderr);
+      debugLogger.debug("FFmpeg split complete", { chunkCount: chunks.length, durationSeconds });
+      resolve({ chunkPaths: chunks, durationSeconds });
     });
   });
 }
@@ -452,6 +459,7 @@ module.exports = {
   parseWavFormat,
   convertToWav,
   splitAudioFile,
+  parseFfmpegDuration,
   wavToFloat32Samples,
   computeFloat32RMS,
   mergeAudioSegments,

@@ -40,6 +40,11 @@ const CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS = 3;
 // shipped a 16-minute transcript of a 73-minute file as a normal note).
 const CLOUD_CHUNK_MAX_LOSS_RATIO = 0.5;
 
+// A 422 NO_SPEECH response is a valid empty segment, not an upload failure.
+// Keep it distinct from null (failed) and response objects (transcribed) so
+// silence neither consumes the loss budget nor creates a missing-audio marker.
+const SILENT_CHUNK = Symbol("silent-cloud-chunk");
+
 // Codes that doom the whole job, not just one chunk: retrying the siblings can
 // only burn time and quota.
 const FATAL_CHUNK_CODES = new Set(["AUTH_EXPIRED", "LIMIT_REACHED"]);
@@ -88,13 +93,32 @@ function createTeardownGate(cooldownMs = CLOUD_POOL_TEARDOWN_COOLDOWN_MS, now = 
   };
 }
 
+function summarizeChunkResults(results) {
+  const responses = [];
+  let failedChunks = 0;
+  let silentChunks = 0;
+
+  for (const result of results) {
+    if (result == null) {
+      failedChunks++;
+    } else if (result === SILENT_CHUNK) {
+      silentChunks++;
+    } else {
+      responses.push(result);
+    }
+  }
+
+  return { responses, failedChunks, silentChunks };
+}
+
 // Joins surviving chunk texts in order and marks every failed span with an
 // explicit gap (consecutive failures collapse into one marker), so a partial
-// transcript reads as partial instead of seamlessly wrong. The end of a final
-// gap is the next chunk boundary — close enough for a marker.
-function assembleChunkTranscript(results, segmentDurationSeconds) {
+// transcript reads as partial instead of seamlessly wrong. Silent segments
+// are omitted, and a known input duration clamps the final gap to its real end.
+function assembleChunkTranscript(results, segmentDurationSeconds, totalDurationSeconds) {
   const pieces = [];
   for (let i = 0; i < results.length; i++) {
+    if (results[i] === SILENT_CHUNK) continue;
     if (results[i] != null) {
       pieces.push(results[i].text);
       continue;
@@ -102,7 +126,12 @@ function assembleChunkTranscript(results, segmentDurationSeconds) {
     const gapStart = i;
     while (i + 1 < results.length && results[i + 1] == null) i++;
     const from = formatTimestamp(gapStart * segmentDurationSeconds);
-    const to = formatTimestamp((i + 1) * segmentDurationSeconds);
+    const gapEnd = (i + 1) * segmentDurationSeconds;
+    const to = formatTimestamp(
+      Number.isFinite(totalDurationSeconds) && totalDurationSeconds > 0
+        ? Math.min(gapEnd, totalDurationSeconds)
+        : gapEnd
+    );
     pieces.push(`[missing audio ${from}-${to}]`);
   }
   return pieces.join(" ").replace(/\s+/g, " ").trim();
@@ -198,11 +227,13 @@ module.exports = {
   CLOUD_POOL_TEARDOWN_COOLDOWN_MS,
   CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS,
   CLOUD_CHUNK_MAX_LOSS_RATIO,
+  SILENT_CHUNK,
   FATAL_CHUNK_CODES,
   isTransientChunkError,
   isNetworkLevelFailure,
   isConnectionPoisoningFailure,
   isTeardownCollateral,
+  summarizeChunkResults,
   assembleChunkTranscript,
   chunkRetryDelayMs,
   abortableSleep,

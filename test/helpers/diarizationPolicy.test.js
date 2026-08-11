@@ -8,6 +8,7 @@ const {
   THRESHOLD_RAMP_END_SECONDS,
   MIN_CLUSTER_TOTAL_SECONDS,
   clusterThresholdForDuration,
+  resolveClusterThreshold,
   dropNegligibleClusters,
 } = require("../../src/helpers/diarizationPolicy");
 
@@ -45,6 +46,15 @@ test("unknown duration falls back to the default threshold", () => {
   assert.equal(clusterThresholdForDuration(NaN), DEFAULT_CLUSTER_THRESHOLD);
   assert.equal(clusterThresholdForDuration(undefined), DEFAULT_CLUSTER_THRESHOLD);
   assert.equal(clusterThresholdForDuration(-5), DEFAULT_CLUSTER_THRESHOLD);
+});
+
+test("explicit thresholds accept zero, clamp bounds, and reject non-finite values", () => {
+  assert.equal(resolveClusterThreshold(3600, 0), 0);
+  assert.equal(resolveClusterThreshold(3600, 2), 1);
+  assert.equal(resolveClusterThreshold(3600, -1), 0);
+  assert.equal(resolveClusterThreshold(3600, ""), clusterThresholdForDuration(3600));
+  assert.equal(resolveClusterThreshold(3600, "not-a-number"), clusterThresholdForDuration(3600));
+  assert.equal(resolveClusterThreshold(3600, Infinity), clusterThresholdForDuration(3600));
 });
 
 // Every cluster — however tiny — wins at least one sentence in the character-

@@ -8,11 +8,13 @@ const {
   CLOUD_POOL_TEARDOWN_COOLDOWN_MS,
   CLOUD_CHUNK_MAX_TEARDOWN_REFUNDS,
   CLOUD_CHUNK_MAX_LOSS_RATIO,
+  SILENT_CHUNK,
   FATAL_CHUNK_CODES,
   isTransientChunkError,
   isNetworkLevelFailure,
   isConnectionPoisoningFailure,
   isTeardownCollateral,
+  summarizeChunkResults,
   assembleChunkTranscript,
   chunkRetryDelayMs,
   abortableSleep,
@@ -48,7 +50,7 @@ test("teardown gate admits one drop per cooldown window", () => {
   assert.equal(gate(), true, "a later wedge must still be recoverable");
 });
 
-test("auth and quota doom the job; silence dooms only its own chunk", () => {
+test("auth and quota doom the job; a no-speech chunk is nonfatal", () => {
   assert.equal(FATAL_CHUNK_CODES.has("AUTH_EXPIRED"), true);
   assert.equal(FATAL_CHUNK_CODES.has("LIMIT_REACHED"), true);
   // Silence in one segment says nothing about the rest, so the siblings must
@@ -231,6 +233,22 @@ test("assembleChunkTranscript handles a hole at the start and hour-long offsets"
 test("assembleChunkTranscript with no holes matches the plain join", () => {
   const results = [{ text: " a " }, { text: "b\n\nc" }];
   assert.equal(assembleChunkTranscript(results, 240), "a b c");
+});
+
+test("silent chunks are omitted without consuming the failure budget", () => {
+  const results = [{ text: "one" }, SILENT_CHUNK, null, { text: "four" }];
+  assert.deepEqual(summarizeChunkResults(results), {
+    responses: [{ text: "one" }, { text: "four" }],
+    failedChunks: 1,
+    silentChunks: 1,
+  });
+  assert.equal(assembleChunkTranscript(results, 240), "one [missing audio 8:00-12:00] four");
+});
+
+test("the final missing-audio marker ends at the real input duration", () => {
+  const results = new Array(19).fill(SILENT_CHUNK);
+  results[18] = null;
+  assert.equal(assembleChunkTranscript(results, 240, 73 * 60), "[missing audio 1:12:00-1:13:00]");
 });
 
 test("upload slots cap concurrent holders across independent acquirers", async () => {

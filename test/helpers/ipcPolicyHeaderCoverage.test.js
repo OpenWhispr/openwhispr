@@ -37,6 +37,25 @@ test("all OpenWhispr multipart transcription transports use policy headers", () 
   );
 });
 
+test("chunk pool recovery cannot abort inline multipart uploads", () => {
+  const chunkedStart = source.indexOf("async function chunkedCloudTranscribe");
+  const handlersStart = source.indexOf("class IPCHandlers");
+  assert.ok(chunkedStart >= 0 && handlersStart > chunkedStart);
+
+  const chunkedSource = source.slice(chunkedStart, handlersStart);
+  assert.match(chunkedSource, /session:\s*getChunkCloudUploadSession\(\)/);
+  assert.doesNotMatch(chunkedSource, /getInlineCloudUploadSession/);
+  assert.match(
+    source,
+    /async function dropUploadConnections[\s\S]{0,300}?getChunkCloudUploadSession\(\)\.closeAllConnections/
+  );
+
+  const handlerSource = source.slice(handlersStart);
+  assert.match(handlerSource, /session:\s*getInlineCloudUploadSession\(\)/);
+  assert.doesNotMatch(handlerSource, /session:\s*getChunkCloudUploadSession\(\)/);
+  assert.doesNotMatch(source, /session:\s*getCloudUploadSession\(/);
+});
+
 test("the shared realtime-token helper applies policy headers", () => {
   assert.match(
     source,
