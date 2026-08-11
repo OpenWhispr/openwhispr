@@ -1303,6 +1303,14 @@
           "description": "{{name}} becomes the owner of {{workspace}}. Your role changes to admin and only the new owner can transfer it back."
         }
       },
+      "joinRequests": {
+        "title": "Requests to join",
+        "approve": "Approve",
+        "deny": "Deny",
+        "approved": "{{name}} joined the workspace",
+        "denied": "Request denied",
+        "errorTitle": "Could not update the request"
+      },
       "teams": {
         "title": "Teams",
         "description": "Groups of workspace members that grant access to team spaces.",
@@ -1432,8 +1440,6 @@
       "nonBillableSeat": "Admin-only access · no paid seat",
       "managedBy": "Billing is managed by {{owner}}.",
       "addSeat": "Add seat",
-      "startWithSeats_one": "Start Business with {{count}} seat",
-      "startWithSeats_other": "Start Business with {{count}} seats",
       "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
       "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
       "seatUpdateFailed": "Couldn't update workspace seats",
@@ -2370,9 +2376,7 @@
       "emailPlaceholder": "teammate@example.com",
       "roleLabel": "Role",
       "seatUsage": "Using {{used}} of {{seats}} seats",
-      "seatLimit": "All {{seats}} seats are in use.",
-      "askOwner": "All {{seats}} seats are in use. Ask the workspace owner to add seats.",
-      "manageSeats": "Manage seats",
+      "seatCost": "Adds a seat to your plan · {{amount}} charged now.",
       "submit": "Send invite",
       "submitting": "Sending…",
       "sentTitle": "Invite sent",
@@ -2388,6 +2392,25 @@
         "admin": "Manages members and billing",
         "member": "Uses the workspace"
       }
+    },
+    "join": {
+      "title": "Join your team",
+      "domainTitle": "Your team is on OpenWhispr",
+      "description": "These workspaces have someone from your email domain.",
+      "invitedDescription": "You've been invited to a workspace.",
+      "invitedBy": "Invited by {{inviter}} as {{role}}",
+      "memberCount_one": "{{count}} member",
+      "memberCount_other": "{{count}} members",
+      "join": "Join",
+      "requestErrorTitle": "Could not send the request",
+      "requestedDescription": "An admin of {{workspace}} will review it.",
+      "requestedTitle": "Request sent",
+      "requested": "Requested",
+      "request": "Ask to join",
+      "notNow": "Not now",
+      "successTitle": "Joined",
+      "successDescription": "You're now a member of {{workspace}}.",
+      "errorTitle": "Could not join"
     },
     "accept": {
       "title": "Join workspace",
@@ -2557,12 +2580,6 @@
       "undo": "Undo",
       "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
       "emptyTeamHint": "Spaces shared with you will appear here.",
-      "lockedPitch": "Create shared spaces where your team's notes stay in sync.",
-      "planBlocked": {
-        "title": "{{workspace}} is on the Free plan",
-        "description": "Workspaces have their own subscription, separate from your personal plan. Team spaces need a paid workspace plan.",
-        "cta": "View workspace billing"
-      },
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",

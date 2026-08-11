@@ -20,6 +20,7 @@ import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
+import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useUsage } from "../hooks/useUsage";
 import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
@@ -68,6 +69,7 @@ import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
+import JoinYourTeamModal from "./JoinYourTeamModal";
 import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
@@ -166,6 +168,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setCloudTranscriptionMode,
   } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  // Suppressed while a deep-linked invitation is open so the two never stack.
+  const {
+    joinable,
+    dismiss: dismissJoinable,
+    markRequested,
+  } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
   const usage = useUsage();
   const upsell = decideUpsell({
     authLoaded,
@@ -920,6 +928,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           setInvitationNotesEntry(entry);
           setActiveView("personal-notes");
         }}
+      />
+
+      <JoinYourTeamModal
+        joinable={joinable}
+        domain={user?.email?.split("@")[1] ?? null}
+        onDismiss={dismissJoinable}
+        onRequested={markRequested}
+        onJoined={() => setActiveView("personal-notes")}
       />
 
       {showSearch && (

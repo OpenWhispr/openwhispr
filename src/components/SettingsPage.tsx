@@ -2482,7 +2482,6 @@ export default function SettingsPage({
         return (
           <WorkspaceSection
             initialSubTab={initialSubTab}
-            onNavigateToBilling={() => onNavigateToSection?.("plansBilling")}
           />
         );
 

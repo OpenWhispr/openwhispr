@@ -1,5 +1,10 @@
 import { cloudGet, cloudPost, cloudPatch, cloudDelete, type DataWrap } from "./cloudApi.js";
-import type { Workspace, WorkspaceMember } from "../types/electron";
+import type {
+  JoinableWorkspace,
+  Workspace,
+  WorkspaceJoinRequest,
+  WorkspaceMember,
+} from "../types/electron";
 
 export interface SeatPreview {
   next_quantity: number;
@@ -50,12 +55,11 @@ async function removeMember(workspaceId: string, userId: string): Promise<void> 
 
 async function billingCheckout(
   workspaceId: string,
-  interval: "monthly" | "annual" = "monthly",
-  additionalSeats = 0
+  interval: "monthly" | "annual" = "monthly"
 ): Promise<string> {
   const res = await cloudPost<DataWrap<{ url: string }>>(
     `/api/workspaces/${workspaceId}/billing/checkout`,
-    { interval, additional_seats: additionalSeats }
+    { interval }
   );
   return res.data.url;
 }
@@ -88,7 +92,46 @@ async function updateSeats(
   return res.data;
 }
 
+/** Workspaces the caller can join: pending invitations plus opted-in domain matches. */
+async function listJoinable(): Promise<JoinableWorkspace[]> {
+  const res = await cloudGet<DataWrap<JoinableWorkspace[]>>("/api/me/joinable");
+  return res.data;
+}
+
+async function join(workspaceId: string): Promise<{ workspace_id: string; role: string }> {
+  const res = await cloudPost<DataWrap<{ workspace_id: string; role: string }>>(
+    "/api/me/joinable",
+    { workspace_id: workspaceId }
+  );
+  return res.data;
+}
+
+/** Ask a workspace's admins for access. Grants nothing until one approves. */
+async function requestJoin(workspaceId: string): Promise<void> {
+  await cloudPost("/api/me/joinable/request", { workspace_id: workspaceId });
+}
+
+async function listJoinRequests(workspaceId: string): Promise<WorkspaceJoinRequest[]> {
+  const res = await cloudGet<DataWrap<WorkspaceJoinRequest[]>>(
+    `/api/workspaces/${workspaceId}/join-requests`
+  );
+  return res.data;
+}
+
+async function decideJoinRequest(
+  workspaceId: string,
+  requestId: string,
+  decision: "approve" | "deny"
+): Promise<void> {
+  await cloudPatch(`/api/workspaces/${workspaceId}/join-requests/${requestId}`, { decision });
+}
+
 export const WorkspacesService = {
+  listJoinable,
+  join,
+  requestJoin,
+  listJoinRequests,
+  decideJoinRequest,
   list,
   create,
   update,

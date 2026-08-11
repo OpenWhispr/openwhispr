@@ -4,7 +4,6 @@ import {
   useEffect,
   useMemo,
   useCallback,
-  useSyncExternalStore,
   type ComponentProps,
 } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,7 +43,6 @@ import {
 } from "../../stores/noteStore";
 import { NoteSharingService } from "../../services/NoteSharingService";
 import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
-import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
@@ -257,9 +255,6 @@ export default function NoteEditor({
   // Persisted flag is the restart-safe truth; the live cache overlays it for
   // the current session (it reflects server state before the flag persists).
   const isShared = shareCache ? shareCache.share.visibility !== "private" : Boolean(note.is_shared);
-  // Same gate as SyncService.canSyncSharedNotes: sharing needs a subscription.
-  // An already-shared note stays manageable (unshare/revoke) after a lapse.
-  const isSubscribed = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
   const aclState: NoteAclState = shareCache
     ? "loaded"
     : !note.cloud_id || !isSignedIn
@@ -276,8 +271,7 @@ export default function NoteEditor({
   const canShare =
     isSignedIn &&
     (!note.cloud_id || isTeamNote || aclState === "loaded") &&
-    shareCapabilities.canShare &&
-    (isSubscribed || Boolean(note.is_shared));
+    shareCapabilities.canShare;
   const canEditNote = shareCapabilities.canEdit;
   // Re-filing is owner-only on shared personal notes (a denied folder_id
   // PATCH would fork an unexpected Personal copy); team members keep

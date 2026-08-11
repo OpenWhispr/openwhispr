@@ -1133,8 +1133,6 @@
       "nonBillableSeat": "Acesso somente de administrador · sem assento pago",
       "managedBy": "A cobrança é gerenciada por {{owner}}.",
       "addSeat": "Adicionar assento",
-      "startWithSeats_one": "Iniciar o Business com {{count}} assento",
-      "startWithSeats_other": "Iniciar o Business com {{count}} assentos",
       "seatUpdated_one": "Capacidade do workspace atualizada para {{count}} assento",
       "seatUpdated_other": "Capacidade do workspace atualizada para {{count}} assentos",
       "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace",
@@ -1963,6 +1961,14 @@
           "description": "{{name}} se torna o proprietário de {{workspace}}. Sua função muda para administrador e apenas o novo proprietário pode transferi-la de volta."
         }
       },
+      "joinRequests": {
+        "title": "Pedidos de acesso",
+        "approve": "Aprovar",
+        "deny": "Recusar",
+        "approved": "{{name}} entrou no workspace",
+        "denied": "Pedido recusado",
+        "errorTitle": "Não foi possível atualizar o pedido"
+      },
       "teams": {
         "title": "Equipes",
         "description": "Grupos de membros do workspace que concedem acesso a espaços de equipe.",
@@ -2366,12 +2372,6 @@
       "undo": "Desfazer",
       "emptySpace": "Nenhuma nota ainda. As notas aqui são visíveis para todos em {{space}}.",
       "emptyTeamHint": "Os espaços compartilhados com você aparecerão aqui.",
-      "lockedPitch": "Crie espaços compartilhados onde as notas da sua equipe ficam sincronizadas.",
-      "planBlocked": {
-        "title": "{{workspace}} está no plano Free",
-        "description": "Os espaços de trabalho têm sua própria assinatura, separada do seu plano pessoal. Os espaços de equipe exigem um plano pago do espaço de trabalho.",
-        "cta": "Ver cobrança do espaço de trabalho"
-      },
       "noteCount_one": "{{count}} nota",
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Você não tem mais acesso a {{space}}",
@@ -3364,9 +3364,7 @@
       "emailPlaceholder": "colega@exemplo.com",
       "roleLabel": "Função",
       "seatUsage": "Usando {{used}} de {{seats}} assentos",
-      "seatLimit": "Todos os {{seats}} assentos estão em uso.",
-      "askOwner": "Todos os {{seats}} assentos estão em uso. Peça ao proprietário do espaço de trabalho para adicionar assentos.",
-      "manageSeats": "Gerenciar assentos",
+      "seatCost": "Adiciona um assento ao seu plano · {{amount}} cobrados agora.",
       "submit": "Enviar convite",
       "submitting": "Enviando…",
       "sentTitle": "Convite enviado",
@@ -3382,6 +3380,25 @@
         "admin": "Gerencia membros e cobrança",
         "member": "Usa o espaço de trabalho"
       }
+    },
+    "join": {
+      "title": "Entre na sua equipe",
+      "domainTitle": "Sua equipe já está no OpenWhispr",
+      "description": "Estes workspaces têm alguém do domínio do seu e-mail.",
+      "invitedDescription": "Você foi convidado para um workspace.",
+      "invitedBy": "Convidado por {{inviter}} como {{role}}",
+      "memberCount_one": "{{count}} membro",
+      "memberCount_other": "{{count}} membros",
+      "join": "Entrar",
+      "requestErrorTitle": "Não foi possível enviar o pedido",
+      "requestedDescription": "Um administrador de {{workspace}} vai analisar.",
+      "requestedTitle": "Pedido enviado",
+      "requested": "Solicitado",
+      "request": "Pedir acesso",
+      "notNow": "Agora não",
+      "successTitle": "Você entrou",
+      "successDescription": "Agora você é membro de {{workspace}}.",
+      "errorTitle": "Não foi possível entrar"
     },
     "accept": {
       "title": "Entrar no espaço de trabalho",

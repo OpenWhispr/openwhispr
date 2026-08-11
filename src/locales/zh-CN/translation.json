@@ -1154,8 +1154,6 @@
       "nonBillableSeat": "仅管理员访问 · 无付费席位",
       "managedBy": "账单由 {{owner}} 管理。",
       "addSeat": "添加席位",
-      "startWithSeats_one": "以 {{count}} 个席位开始 Business",
-      "startWithSeats_other": "以 {{count}} 个席位开始 Business",
       "seatUpdated_one": "工作区容量已更新为 {{count}} 个席位",
       "seatUpdated_other": "工作区容量已更新为 {{count}} 个席位",
       "seatUpdateFailed": "无法更新工作区席位",
@@ -1984,6 +1982,14 @@
           "description": "{{name}} 将成为 {{workspace}} 的所有者。你的角色将变为管理员，只有新所有者才能转回所有权。"
         }
       },
+      "joinRequests": {
+        "title": "加入申请",
+        "approve": "批准",
+        "deny": "拒绝",
+        "approved": "{{name}} 已加入工作区",
+        "denied": "已拒绝申请",
+        "errorTitle": "无法更新申请"
+      },
       "teams": {
         "title": "团队",
         "description": "授予团队空间访问权限的工作区成员分组。",
@@ -2366,12 +2372,6 @@
       "undo": "撤销",
       "emptySpace": "还没有笔记。这里的笔记对 {{space}} 中的所有人可见。",
       "emptyTeamHint": "与你共享的空间将显示在这里。",
-      "lockedPitch": "创建共享空间，让团队笔记保持同步。",
-      "planBlocked": {
-        "title": "{{workspace}} 目前是 Free 方案",
-        "description": "工作区有自己的订阅，与你的个人方案相互独立。团队空间需要工作区的付费方案。",
-        "cta": "查看工作区账单"
-      },
       "noteCount_one": "{{count}} 条笔记",
       "noteCount_other": "{{count}} 条笔记",
       "accessRevoked": "你已无法访问 {{space}}",
@@ -3364,9 +3364,7 @@
       "emailPlaceholder": "teammate@example.com",
       "roleLabel": "角色",
       "seatUsage": "已使用 {{used}}/{{seats}} 个席位",
-      "seatLimit": "全部 {{seats}} 个席位均已使用。",
-      "askOwner": "全部 {{seats}} 个席位均已使用。请联系工作区所有者添加席位。",
-      "manageSeats": "管理席位",
+      "seatCost": "将为你的方案增加一个席位 · 现在收取 {{amount}}。",
       "submit": "发送邀请",
       "submitting": "发送中…",
       "sentTitle": "邀请已发送",
@@ -3382,6 +3380,24 @@
         "admin": "管理成员和账单",
         "member": "使用工作区"
       }
+    },
+    "join": {
+      "title": "加入你的团队",
+      "domainTitle": "你的团队已在 OpenWhispr",
+      "description": "这些工作区中有与你相同邮箱域名的成员。",
+      "invitedDescription": "有人邀请你加入一个工作区。",
+      "invitedBy": "{{inviter}} 邀请你担任{{role}}",
+      "memberCount_other": "{{count}} 位成员",
+      "join": "加入",
+      "requestErrorTitle": "无法发送申请",
+      "requestedDescription": "{{workspace}} 的管理员会进行审核。",
+      "requestedTitle": "申请已发送",
+      "requested": "已申请",
+      "request": "申请加入",
+      "notNow": "暂不",
+      "successTitle": "已加入",
+      "successDescription": "你现在是 {{workspace}} 的成员。",
+      "errorTitle": "无法加入"
     },
     "accept": {
       "title": "加入工作区",

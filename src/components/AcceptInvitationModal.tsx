@@ -82,9 +82,9 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
       const accepted = await InvitationsService.accept(token);
       clearPendingInvitationToken();
       await refresh();
-      // A free invitee just gained a billable seat server-side; refetch usage
-      // so the isSubscribed flag flips and team sync can run (the flag flip
-      // itself kicks another sync pass).
+      // Joining a paid workspace can change the caller's entitlement, so
+      // refetch usage. Team sync no longer waits on it — collaboration is
+      // plan-independent — but the plan badge and word limit still are.
       window.dispatchEvent(new Event("usage-changed"));
       // Pull the just-granted team spaces right away (skeleton rows render
       // while their backfill is pending).

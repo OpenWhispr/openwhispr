@@ -1,6 +1,64 @@
 // Pure decision logic for sync passes, kept out of SyncService so the
 // node --test suite can cover it (the cloudSyncGuards.js precedent, #1290).
 
+export interface SyncConsent {
+  /** Backup of everything the user has NOT explicitly shared. */
+  backup: boolean;
+  /** Shared notes and team-space content. */
+  shared: boolean;
+}
+
+/**
+ * What the account has consented to sync. Backup is a blanket copy of private
+ * content, so it stays behind the plan, the cloud-backup toggle, and org
+ * policy. Sharing a note or joining a team space is per-item consent the user
+ * gave deliberately, so it syncs whenever they are signed in — collaboration
+ * is not a paid feature, and gating it on the *invitee's* plan silently
+ * stranded free teammates in workspaces they had already been added to.
+ */
+export function resolveSyncConsent(state: {
+  authValidated: boolean;
+  signedIn: boolean;
+  backupEnabled: boolean;
+  subscribed: boolean;
+  backupAllowedByPolicy: boolean;
+}): SyncConsent {
+  const shared = state.authValidated && state.signedIn;
+  return {
+    shared,
+    backup: shared && state.backupEnabled && state.subscribed && state.backupAllowedByPolicy,
+  };
+}
+
+const TEAM_ONLY_PASS_BASE_MS = 5 * 60 * 1000;
+const TEAM_ONLY_PASS_MAX_MS = 60 * 60 * 1000;
+
+/**
+ * Backoff for ambient team-only passes — the passes that run when cloud backup
+ * is off, so their only job is moving shared notes and team-space content.
+ * Once collaboration stopped being a paid feature most signed-in accounts run
+ * these, and the majority have neither shared notes nor team spaces: three
+ * requests every five minutes to confirm nothing changed.
+ *
+ * Each consecutive pass that moves nothing doubles the wait to a one-hour
+ * ceiling; the first pass that moves anything resets it, so an active
+ * collaborator is never slower than before. Deliberate work — a manual sync,
+ * a local push, a retry — bypasses this entirely.
+ */
+export function teamOnlyPassDelayMs(emptyStreak: number): number {
+  if (emptyStreak <= 1) return 0;
+  return Math.min(TEAM_ONLY_PASS_MAX_MS, TEAM_ONLY_PASS_BASE_MS * 2 ** (emptyStreak - 1));
+}
+
+export function shouldRunAmbientTeamOnlyPass(state: {
+  emptyStreak: number;
+  lastPassAt: number | null;
+  now: number;
+}): boolean {
+  if (state.lastPassAt == null) return true;
+  return state.now - state.lastPassAt >= teamOnlyPassDelayMs(state.emptyStreak);
+}
+
 export interface PullCursorAdvance {
   // The pass's own cursor ("lastSyncedAt.<kind>", or ".<kind>.team" on a
   // team-only pass).

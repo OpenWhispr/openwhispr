@@ -1154,8 +1154,6 @@
       "nonBillableSeat": "Accesso solo amministratore · nessun posto a pagamento",
       "managedBy": "La fatturazione è gestita da {{owner}}.",
       "addSeat": "Aggiungi posto",
-      "startWithSeats_one": "Avvia Business con {{count}} posto",
-      "startWithSeats_other": "Avvia Business con {{count}} posti",
       "seatUpdated_one": "Capacità dell'area di lavoro aggiornata a {{count}} posto",
       "seatUpdated_other": "Capacità dell'area di lavoro aggiornata a {{count}} posti",
       "seatUpdateFailed": "Impossibile aggiornare i posti dell'area di lavoro",
@@ -1984,6 +1982,14 @@
           "description": "{{name}} diventa il proprietario di {{workspace}}. Il tuo ruolo passa ad amministratore e solo il nuovo proprietario potrà ritrasferirla."
         }
       },
+      "joinRequests": {
+        "title": "Richieste di accesso",
+        "approve": "Approva",
+        "deny": "Rifiuta",
+        "approved": "{{name}} si è unito al workspace",
+        "denied": "Richiesta rifiutata",
+        "errorTitle": "Impossibile aggiornare la richiesta"
+      },
       "teams": {
         "title": "Team",
         "description": "Gruppi di membri del workspace che concedono l'accesso agli spazi di team.",
@@ -2366,12 +2372,6 @@
       "undo": "Annulla",
       "emptySpace": "Ancora nessuna nota. Le note qui sono visibili a tutti in {{space}}.",
       "emptyTeamHint": "Gli spazi condivisi con te appariranno qui.",
-      "lockedPitch": "Crea spazi condivisi dove le note del tuo team restano sincronizzate.",
-      "planBlocked": {
-        "title": "{{workspace}} è sul piano Free",
-        "description": "Le aree di lavoro hanno un abbonamento proprio, separato dal tuo piano personale. Gli spazi del team richiedono un piano a pagamento dell'area di lavoro.",
-        "cta": "Vedi fatturazione dell'area di lavoro"
-      },
       "noteCount_one": "{{count}} nota",
       "noteCount_other": "{{count}} note",
       "accessRevoked": "Non hai più accesso a {{space}}",
@@ -3364,9 +3364,7 @@
       "emailPlaceholder": "collega@esempio.com",
       "roleLabel": "Ruolo",
       "seatUsage": "{{used}} di {{seats}} posti in uso",
-      "seatLimit": "Tutti i {{seats}} posti sono in uso.",
-      "askOwner": "Tutti i {{seats}} posti sono in uso. Chiedi al proprietario dell'area di lavoro di aggiungere posti.",
-      "manageSeats": "Gestisci posti",
+      "seatCost": "Aggiunge un posto al tuo piano · {{amount}} addebitati ora.",
       "submit": "Invia invito",
       "submitting": "Invio…",
       "sentTitle": "Invito inviato",
@@ -3382,6 +3380,25 @@
         "admin": "Gestisce membri e fatturazione",
         "member": "Utilizza l'area di lavoro"
       }
+    },
+    "join": {
+      "title": "Unisciti al tuo team",
+      "domainTitle": "Il tuo team è già su OpenWhispr",
+      "description": "In questi workspace c'è qualcuno del dominio della tua email.",
+      "invitedDescription": "Sei stato invitato a un workspace.",
+      "invitedBy": "Invitato da {{inviter}} come {{role}}",
+      "memberCount_one": "{{count}} membro",
+      "memberCount_other": "{{count}} membri",
+      "join": "Unisciti",
+      "requestErrorTitle": "Impossibile inviare la richiesta",
+      "requestedDescription": "Un amministratore di {{workspace}} la esaminerà.",
+      "requestedTitle": "Richiesta inviata",
+      "requested": "Richiesto",
+      "request": "Chiedi l'accesso",
+      "notNow": "Non ora",
+      "successTitle": "Ti sei unito",
+      "successDescription": "Ora sei un membro di {{workspace}}.",
+      "errorTitle": "Impossibile unirsi"
     },
     "accept": {
       "title": "Unisciti all'area di lavoro",

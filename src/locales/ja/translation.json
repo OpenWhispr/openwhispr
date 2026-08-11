@@ -1154,8 +1154,6 @@
       "nonBillableSeat": "管理者専用アクセス · 有料シートなし",
       "managedBy": "請求は {{owner}} が管理しています。",
       "addSeat": "シートを追加",
-      "startWithSeats_one": "{{count}} シートで Business を開始",
-      "startWithSeats_other": "{{count}} シートで Business を開始",
       "seatUpdated_one": "ワークスペースの容量を {{count}} シートに更新しました",
       "seatUpdated_other": "ワークスペースの容量を {{count}} シートに更新しました",
       "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
@@ -1984,6 +1982,14 @@
           "description": "{{name}} が {{workspace}} のオーナーになります。あなたの役割は管理者に変わり、元に戻せるのは新しいオーナーのみです。"
         }
       },
+      "joinRequests": {
+        "title": "参加リクエスト",
+        "approve": "承認",
+        "deny": "却下",
+        "approved": "{{name}} がワークスペースに参加しました",
+        "denied": "リクエストを却下しました",
+        "errorTitle": "リクエストを更新できませんでした"
+      },
       "teams": {
         "title": "チーム",
         "description": "チームスペースへのアクセスを付与するワークスペースメンバーのグループ。",
@@ -2294,12 +2300,6 @@
       "undo": "元に戻す",
       "emptySpace": "まだノートがありません。ここのノートは{{space}}の全員に表示されます。",
       "emptyTeamHint": "共有されたスペースはここに表示されます。",
-      "lockedPitch": "チームのノートが同期される共有スペースを作成しましょう。",
-      "planBlocked": {
-        "title": "{{workspace}} は Free プランです",
-        "description": "ワークスペースには個人プランとは別の独自のサブスクリプションがあります。チームスペースにはワークスペースの有料プランが必要です。",
-        "cta": "ワークスペースの請求を見る"
-      },
       "noteCount_one": "{{count}} 件のノート",
       "noteCount_other": "{{count}} 件のノート",
       "accessRevoked": "{{space}} へのアクセス権がなくなりました",
@@ -3364,9 +3364,7 @@
       "emailPlaceholder": "teammate@example.com",
       "roleLabel": "役割",
       "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
-      "seatLimit": "{{seats}} シートすべてが使用中です。",
-      "askOwner": "{{seats}} シートすべてが使用中です。シートの追加はワークスペースのオーナーにご依頼ください。",
-      "manageSeats": "シートを管理",
+      "seatCost": "プランに 1 席追加されます · 今すぐ {{amount}} が請求されます。",
       "submit": "招待を送信",
       "submitting": "送信中…",
       "sentTitle": "招待を送信しました",
@@ -3382,6 +3380,24 @@
         "admin": "メンバーと請求を管理できます",
         "member": "ワークスペースを利用できます"
       }
+    },
+    "join": {
+      "title": "チームに参加",
+      "domainTitle": "あなたのチームはすでに OpenWhispr にいます",
+      "description": "これらのワークスペースに、あなたと同じメールドメインのメンバーがいます。",
+      "invitedDescription": "ワークスペースに招待されています。",
+      "invitedBy": "{{inviter}} が {{role}} として招待しました",
+      "memberCount_other": "メンバー {{count}} 人",
+      "join": "参加",
+      "requestErrorTitle": "リクエストを送信できませんでした",
+      "requestedDescription": "{{workspace}} の管理者が確認します。",
+      "requestedTitle": "リクエストを送信しました",
+      "requested": "リクエスト済み",
+      "request": "参加をリクエスト",
+      "notNow": "後で",
+      "successTitle": "参加しました",
+      "successDescription": "{{workspace}} のメンバーになりました。",
+      "errorTitle": "参加できませんでした"
     },
     "accept": {
       "title": "ワークスペースに参加",

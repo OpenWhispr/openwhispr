@@ -1303,6 +1303,14 @@
           "description": "{{name}} devient propriétaire de {{workspace}}. Votre rôle passe à administrateur et seul le nouveau propriétaire pourra la retransférer."
         }
       },
+      "joinRequests": {
+        "title": "Demandes d'accès",
+        "approve": "Approuver",
+        "deny": "Refuser",
+        "approved": "{{name}} a rejoint l'espace de travail",
+        "denied": "Demande refusée",
+        "errorTitle": "Impossible de mettre à jour la demande"
+      },
       "teams": {
         "title": "Équipes",
         "description": "Groupes de membres du workspace qui donnent accès aux espaces d'équipe.",
@@ -1432,8 +1440,6 @@
       "nonBillableSeat": "Accès administrateur uniquement · aucun siège payant",
       "managedBy": "La facturation est gérée par {{owner}}.",
       "addSeat": "Ajouter un siège",
-      "startWithSeats_one": "Démarrer Business avec {{count}} siège",
-      "startWithSeats_other": "Démarrer Business avec {{count}} sièges",
       "seatUpdated_one": "Capacité de l'espace de travail mise à jour : {{count}} siège",
       "seatUpdated_other": "Capacité de l'espace de travail mise à jour : {{count}} sièges",
       "seatUpdateFailed": "Impossible de mettre à jour les sièges de l'espace de travail",
@@ -2370,9 +2376,7 @@
       "emailPlaceholder": "collegue@exemple.com",
       "roleLabel": "Rôle",
       "seatUsage": "{{used}} sur {{seats}} sièges utilisés",
-      "seatLimit": "Les {{seats}} sièges sont tous utilisés.",
-      "askOwner": "Les {{seats}} sièges sont tous utilisés. Demandez au propriétaire de l'espace de travail d'ajouter des sièges.",
-      "manageSeats": "Gérer les sièges",
+      "seatCost": "Ajoute un siège à votre offre · {{amount}} facturés maintenant.",
       "submit": "Envoyer l'invitation",
       "submitting": "Envoi…",
       "sentTitle": "Invitation envoyée",
@@ -2388,6 +2392,25 @@
         "admin": "Gère les membres et la facturation",
         "member": "Utilise l'espace de travail"
       }
+    },
+    "join": {
+      "title": "Rejoignez votre équipe",
+      "domainTitle": "Votre équipe est déjà sur OpenWhispr",
+      "description": "Ces espaces de travail comptent quelqu'un de votre domaine e-mail.",
+      "invitedDescription": "Vous avez été invité à un espace de travail.",
+      "invitedBy": "Invité par {{inviter}} en tant que {{role}}",
+      "memberCount_one": "{{count}} membre",
+      "memberCount_other": "{{count}} membres",
+      "join": "Rejoindre",
+      "requestErrorTitle": "Impossible d'envoyer la demande",
+      "requestedDescription": "Un administrateur de {{workspace}} l'examinera.",
+      "requestedTitle": "Demande envoyée",
+      "requested": "Demandé",
+      "request": "Demander l'accès",
+      "notNow": "Pas maintenant",
+      "successTitle": "Vous avez rejoint",
+      "successDescription": "Vous êtes désormais membre de {{workspace}}.",
+      "errorTitle": "Impossible de rejoindre"
     },
     "accept": {
       "title": "Rejoindre l'espace",
@@ -2557,12 +2580,6 @@
       "undo": "Annuler",
       "emptySpace": "Aucune note pour le moment. Les notes ici sont visibles par tous les membres de {{space}}.",
       "emptyTeamHint": "Les espaces partagés avec vous apparaîtront ici.",
-      "lockedPitch": "Créez des espaces partagés où les notes de votre équipe restent synchronisées.",
-      "planBlocked": {
-        "title": "{{workspace}} est sur le forfait Free",
-        "description": "Les espaces de travail ont leur propre abonnement, distinct de votre forfait personnel. Les espaces d'équipe nécessitent un forfait payant pour l'espace de travail.",
-        "cta": "Voir la facturation de l'espace de travail"
-      },
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "Vous n'avez plus accès à {{space}}",
