@@ -29,6 +29,24 @@
     "pipeline": {
       "autoProcess": "Traitement automatique des réunions",
       "autoProcessDescription": "Re-transcrire automatiquement, générer un titre et créer des notes après chaque réunion"
+    },
+    "meetingDetection": {
+      "title": "Détection des réunions",
+      "description": "Si OpenWhispr peut encore savoir quand un appel commence",
+      "status": {
+        "healthy": "Opérationnelle",
+        "degraded": "Dégradée",
+        "unavailable": "Indisponible",
+        "off": "Désactivée"
+      },
+      "reason": "Raison : {{reason}}",
+      "openLogs": "Ouvrir les journaux",
+      "notice": {
+        "title": "La détection des réunions ne fonctionne pas",
+        "description": "Vous ne serez pas invité à prendre des notes au début d'un appel.",
+        "action": "Ouvrir les paramètres",
+        "dismiss": "Ignorer"
+      }
     }
   },
   "tray": {

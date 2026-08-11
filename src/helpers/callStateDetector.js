@@ -14,6 +14,7 @@
 const { spawn } = require("child_process");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
+const health = require("./meetingDetectionHealth");
 const { resolveBinaryPath } = require("../utils/serverUtils");
 
 const ACTIVATE_DEBOUNCE_MS = 2500; // avoid firing on brief device blips
@@ -23,6 +24,9 @@ const DEACTIVATE_DEBOUNCE_MS = 8000; // survive short device flaps mid-call
 // camera (only the call holds it) and the meeting URL instead.
 const END_POLL_MS = 12000;
 const END_MISS_THRESHOLD = 2; // ~24s of "not in call" before auto-stop
+const RESTART_BASE_MS = 1000;
+const RESTART_MAX_MS = 60 * 1000;
+const RESTART_MAX_ATTEMPTS = 5;
 
 class CallStateDetector extends EventEmitter {
   constructor({ urlChecker = null } = {}) {
@@ -38,6 +42,9 @@ class CallStateDetector extends EventEmitter {
     this._callUsedCamera = false;
     this._endPollTimer = null;
     this._endMisses = 0;
+    this._running = false;
+    this._restartTimer = null;
+    this._restartAttempts = 0;
   }
 
   _binaryPath() {
@@ -47,6 +54,7 @@ class CallStateDetector extends EventEmitter {
 
   start() {
     if (this.proc) return;
+    this._running = true;
     const binaryPath = this._binaryPath();
     if (!binaryPath) {
       debugLogger.warn(
@@ -54,28 +62,100 @@ class CallStateDetector extends EventEmitter {
         {},
         "meeting"
       );
+      health.setMode("call", "unavailable", { reason: "binary-not-found" });
       return;
+    }
+    this._spawnDetector(binaryPath);
+  }
+
+  _spawnDetector(binaryPath = this._binaryPath()) {
+    if (!binaryPath) {
+      health.setMode("call", "unavailable", { reason: "binary-not-found" });
+      return null;
     }
     try {
       this.proc = spawn(binaryPath, [], { stdio: ["ignore", "pipe", "pipe"] });
     } catch (err) {
       debugLogger.warn("Failed to spawn call-detector", { error: err.message }, "meeting");
       this.proc = null;
-      return;
+      health.setMode("call", "unavailable", { reason: "spawn-failed" });
+      this._scheduleRestart("spawn-failed");
+      return null;
     }
     this.proc.stdout.on("data", (chunk) => this._onData(chunk));
     this.proc.stderr.on("data", (d) =>
       debugLogger.debug("call-detector stderr", { msg: d.toString().trim() }, "meeting")
     );
-    this.proc.on("close", (code) => {
-      debugLogger.debug("call-detector exited", { code }, "meeting");
-      this.proc = null;
-    });
+    this.proc.on("close", (code) => this._onChildGone("close", code));
     this.proc.on("error", (err) => {
       debugLogger.warn("call-detector process error", { error: err.message }, "meeting");
-      this.proc = null;
+      this._onChildGone("error", null);
     });
+    health.setMode("call", "event-driven", { via: "macos-call-detector" });
+    health.recordChild("call", { pid: this.proc.pid, alive: true });
+    this._restartAttempts = 0;
     debugLogger.info("Call-state detector started", { binaryPath }, "meeting");
+    return this.proc;
+  }
+
+  // The detector's state is a mirror of the child's device reports. Once the child
+  // is gone that mirror is stale, and stale "camera still on" would swallow the
+  // next call's start as well as its end.
+  _onChildGone(kind, code) {
+    debugLogger.warn("call-detector exited", { kind, code }, "meeting");
+    this.proc = null;
+    this.buffer = "";
+    this.state = { camera: false, microphone: false };
+    this._callActive = false;
+    this._callUsedCamera = false;
+    if (this._activateTimer) {
+      clearTimeout(this._activateTimer);
+      this._activateTimer = null;
+    }
+    if (this._deactivateTimer) {
+      clearTimeout(this._deactivateTimer);
+      this._deactivateTimer = null;
+    }
+    health.recordChild("call", { alive: false, ...(code === null ? {} : { exitCode: code }) });
+    health.setMode("call", "unavailable", { reason: `call-detector-${kind}` });
+    this._scheduleRestart(`call-detector-${kind}`);
+  }
+
+  _scheduleRestart(reason) {
+    if (this._restartTimer || !this._running) return;
+
+    if (this._restartAttempts >= RESTART_MAX_ATTEMPTS) {
+      debugLogger.error(
+        "call-detector could not be restarted; giving up",
+        { attempts: this._restartAttempts, reason },
+        "meeting"
+      );
+      health.setMode("call", "unavailable", { reason: `unrecoverable:${reason}` });
+      return;
+    }
+
+    this._restartAttempts += 1;
+    const delayMs = Math.min(RESTART_BASE_MS * 2 ** (this._restartAttempts - 1), RESTART_MAX_MS);
+    health.recordRestart("call", { attempt: this._restartAttempts, delayMs, reason });
+    this._restartTimer = setTimeout(() => {
+      this._restartTimer = null;
+      if (!this._running || this.proc) return;
+      this._spawnDetector();
+      if (!this.proc) this._scheduleRestart(reason);
+    }, delayMs);
+    this._restartTimer?.unref?.();
+  }
+
+  revalidate(reason = "revalidate") {
+    if (!this._running || this.proc) return;
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
+    }
+    this._restartAttempts = 0;
+    debugLogger.info("Revalidating call-state detector", { reason }, "meeting");
+    this._spawnDetector();
+    if (!this.proc) this._scheduleRestart(reason);
   }
 
   _onData(chunk) {
@@ -224,6 +304,12 @@ class CallStateDetector extends EventEmitter {
   }
 
   stop() {
+    this._running = false;
+    this._restartAttempts = 0;
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
+    }
     if (this._activateTimer) {
       clearTimeout(this._activateTimer);
       this._activateTimer = null;
@@ -245,6 +331,7 @@ class CallStateDetector extends EventEmitter {
     this._callUsedCamera = false;
     this._stopEndPoll();
     this.state = { camera: false, microphone: false };
+    health.setMode("call", "stopped");
   }
 }
 

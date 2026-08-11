@@ -29,6 +29,24 @@
     "pipeline": {
       "autoProcess": "自动处理会议",
       "autoProcessDescription": "每次会议结束后自动重新转写、生成标题并创建笔记"
+    },
+    "meetingDetection": {
+      "title": "会议检测",
+      "description": "OpenWhispr 是否仍能识别通话的开始",
+      "status": {
+        "healthy": "正常",
+        "degraded": "降级",
+        "unavailable": "不可用",
+        "off": "已关闭"
+      },
+      "reason": "原因：{{reason}}",
+      "openLogs": "打开日志",
+      "notice": {
+        "title": "会议检测未运行",
+        "description": "通话开始时不会提示你做记录。",
+        "action": "打开设置",
+        "dismiss": "忽略"
+      }
     }
   },
   "tray": {

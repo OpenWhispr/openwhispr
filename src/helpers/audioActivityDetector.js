@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
+const health = require("./meetingDetectionHealth");
 
 const execAsync = promisify(exec);
 
@@ -12,6 +13,13 @@ const SUSTAINED_THRESHOLD_CHECKS = 2;
 const SUSTAINED_EVENT_DRIVEN_MS = 2 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
 const INACTIVE_RESET_MS = 60 * 1000;
+// The inactivity reset only arms on a mic-inactive transition. A mic that never
+// reports inactive — a listener that died mid-call, a device left claimed — would
+// otherwise latch the prompt for the life of the process.
+const PROMPT_MAX_AGE_MS = 30 * 60 * 1000;
+const RESTART_BASE_MS = 1000;
+const RESTART_MAX_MS = 60 * 1000;
+const RESTART_MAX_ATTEMPTS = 5;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
 class AudioActivityDetector extends EventEmitter {
@@ -31,6 +39,9 @@ class AudioActivityDetector extends EventEmitter {
     this._running = false;
     this._eventDriven = false;
     this._resetTimer = null;
+    this._promptMaxAgeTimer = null;
+    this._restartTimer = null;
+    this._restartAttempts = 0;
   }
 
   setUserRecording(active) {
@@ -50,6 +61,8 @@ class AudioActivityDetector extends EventEmitter {
     const started = await this._tryEventDriven();
     if (started) {
       this._eventDriven = true;
+      health.setMode("audio", "event-driven", { via: process.platform });
+      health.recordChild("audio", { pid: this._listenerProcess?.pid ?? null, alive: true });
       debugLogger.info(
         "Audio activity detector started (event-driven)",
         { platform: process.platform },
@@ -57,10 +70,11 @@ class AudioActivityDetector extends EventEmitter {
       );
     } else {
       this._eventDriven = false;
-      this._startPolling();
-      debugLogger.info(
-        "Audio activity detector started (polling)",
-        { intervalMs: CHECK_INTERVAL_MS, threshold: SUSTAINED_THRESHOLD_CHECKS },
+      this._degrade("event-driven-unavailable");
+      this._scheduleListenerRestart("event-driven-unavailable");
+      debugLogger.warn(
+        "Audio activity detector started without its native listener",
+        { platform: process.platform, mode: health.getSnapshot().status },
         "meeting"
       );
     }
@@ -72,12 +86,16 @@ class AudioActivityDetector extends EventEmitter {
     this._killListenerProcess();
     this._clearSustainedTimer();
     this._clearResetTimer();
+    this._clearPromptMaxAgeTimer();
+    this._clearRestartTimer();
+    this._restartAttempts = 0;
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
     this._reset();
     this._eventDriven = false;
+    health.setMode("audio", "stopped");
     debugLogger.info("Audio activity detector stopped", {}, "meeting");
   }
 
@@ -95,6 +113,7 @@ class AudioActivityDetector extends EventEmitter {
 
   resetPrompt() {
     this.hasPrompted = false;
+    this._clearPromptMaxAgeTimer();
     this._clearSustainedTimer();
     this.audioActiveStart = null;
     debugLogger.info("Audio detection prompt reset (no cooldown)", {}, "meeting");
@@ -104,6 +123,7 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this.hasPrompted = false;
+    this._clearPromptMaxAgeTimer();
     this._activeMicPids.clear();
     this._activeSources = 0;
     this._clearResetTimer();
@@ -130,6 +150,109 @@ class AudioActivityDetector extends EventEmitter {
       clearTimeout(this._resetTimer);
       this._resetTimer = null;
     }
+  }
+
+  _markPrompted() {
+    this.hasPrompted = true;
+    this._clearPromptMaxAgeTimer();
+    this._promptMaxAgeTimer = setTimeout(() => {
+      this._promptMaxAgeTimer = null;
+      if (!this.hasPrompted) return;
+      debugLogger.warn(
+        "Prompt latch expired without the mic ever going idle",
+        { afterMs: PROMPT_MAX_AGE_MS },
+        "meeting"
+      );
+      health.recordSuppression("prompt-latch-expired", { source: "audio" });
+      this.hasPrompted = false;
+    }, PROMPT_MAX_AGE_MS);
+    this._promptMaxAgeTimer?.unref?.();
+  }
+
+  _clearPromptMaxAgeTimer() {
+    if (this._promptMaxAgeTimer) {
+      clearTimeout(this._promptMaxAgeTimer);
+      this._promptMaxAgeTimer = null;
+    }
+  }
+
+  _clearRestartTimer() {
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
+    }
+  }
+
+  // A listener that dies takes detection with it, so keep trying to bring it back
+  // rather than degrading once and never retrying.
+  _scheduleListenerRestart(reason) {
+    if (this._restartTimer || !this._running) return;
+
+    if (this._restartAttempts >= RESTART_MAX_ATTEMPTS) {
+      debugLogger.error(
+        "Mic listener could not be restarted; giving up",
+        { attempts: this._restartAttempts, reason },
+        "meeting"
+      );
+      this._degrade(`listener-unrecoverable:${reason}`);
+      return;
+    }
+
+    this._restartAttempts += 1;
+    const delayMs = Math.min(RESTART_BASE_MS * 2 ** (this._restartAttempts - 1), RESTART_MAX_MS);
+    health.recordRestart("audio", { attempt: this._restartAttempts, delayMs, reason });
+    debugLogger.warn(
+      "Scheduling mic listener restart",
+      { attempt: this._restartAttempts, delayMs, reason },
+      "meeting"
+    );
+
+    this._restartTimer = setTimeout(async () => {
+      this._restartTimer = null;
+      if (!this._running) return;
+      const started = await this._tryEventDriven();
+      if (started) {
+        this._eventDriven = true;
+        this._restartAttempts = 0;
+        this._stopPolling();
+        health.setMode("audio", "event-driven", { via: process.platform });
+        health.recordChild("audio", { pid: this._listenerProcess?.pid ?? null, alive: true });
+        debugLogger.info("Mic listener restarted", { reason }, "meeting");
+        return;
+      }
+      this._scheduleListenerRestart(reason);
+    }, delayMs);
+    this._restartTimer?.unref?.();
+  }
+
+  // Interim state while the listener is down: poll where polling can actually see
+  // the mic, and say so plainly where it cannot.
+  _degrade(reason) {
+    if (this._pollingSupported()) {
+      this._startPolling();
+      health.setMode("audio", "polling", { reason });
+    } else {
+      health.setMode("audio", "unavailable", { reason });
+    }
+  }
+
+  // Re-check after a wake or on demand: bring back a child that died while we
+  // were not watching.
+  async revalidate(reason = "revalidate") {
+    if (!this._running) return;
+    if (this._listenerProcess) return;
+    this._clearRestartTimer();
+    this._restartAttempts = 0;
+    const started = await this._tryEventDriven();
+    if (started) {
+      this._eventDriven = true;
+      this._stopPolling();
+      health.setMode("audio", "event-driven", { via: process.platform });
+      health.recordChild("audio", { pid: this._listenerProcess?.pid ?? null, alive: true });
+      debugLogger.info("Mic listener revalidated", { reason }, "meeting");
+      return;
+    }
+    this._scheduleListenerRestart(reason);
   }
 
   _killListenerProcess() {
@@ -190,22 +313,24 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   _attachFallbackHandlers(child, label) {
-    const fallbackToPolling = () => {
+    const onGone = (reason) => {
+      if (this._listenerProcess && this._listenerProcess !== child) return;
       this._listenerProcess = null;
-      if (this._running && this._eventDriven) {
-        this._eventDriven = false;
-        this._startPolling();
-      }
+      health.recordChild("audio", { alive: false });
+      this._eventDriven = false;
+      this._degrade(reason);
+      this._scheduleListenerRestart(reason);
     };
 
     child.on("error", (err) => {
       debugLogger.warn(`${label} error`, { error: err.message }, "meeting");
-      fallbackToPolling();
+      onGone(`${label}-error`);
     });
 
     child.on("exit", (code) => {
       debugLogger.warn(`${label} exited`, { code }, "meeting");
-      fallbackToPolling();
+      health.recordChild("audio", { alive: false, exitCode: code });
+      onGone(`${label}-exited`);
     });
   }
 
@@ -354,19 +479,16 @@ class AudioActivityDetector extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   _onMicStateChanged(active) {
+    health.recordEvent("audio");
     if (this._userRecording) {
-      debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
+      health.recordSuppression("user-recording", { source: "audio", active });
       return;
     }
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) {
-      debugLogger.debug(
-        "Mic state changed but in cooldown",
-        {
-          active,
-          remainingMs: COOLDOWN_MS - (Date.now() - this.lastDismissedAt),
-        },
-        "meeting"
-      );
+      health.recordSuppression("dismiss-cooldown", {
+        source: "audio",
+        remainingMs: COOLDOWN_MS - (Date.now() - this.lastDismissedAt),
+      });
       return;
     }
 
@@ -379,7 +501,7 @@ class AudioActivityDetector extends EventEmitter {
     if (active) {
       this._clearResetTimer();
       if (this.hasPrompted) {
-        debugLogger.debug("Mic active but already prompted, suppressing", {}, "meeting");
+        health.recordSuppression("already-prompted", { source: "audio" });
         return;
       }
       if (!this.audioActiveStart) this.audioActiveStart = Date.now();
@@ -390,7 +512,7 @@ class AudioActivityDetector extends EventEmitter {
           if (this._userRecording || this.hasPrompted) return;
           if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
 
-          this.hasPrompted = true;
+          this._markPrompted();
           const now = Date.now();
           const durationMs = now - this.audioActiveStart;
           debugLogger.info(
@@ -412,9 +534,35 @@ class AudioActivityDetector extends EventEmitter {
   // Polling fallback
   // ---------------------------------------------------------------------------
 
+  // macOS has no mic-in-use signal we can poll for: the ioreg key this used to
+  // grep ("IOAudioEngineState") does not exist on modern macOS/Apple Silicon, so
+  // the fallback could only ever return false. Saying "unavailable" keeps the
+  // listener restart as the real recovery path instead of pretending to poll.
+  _pollingSupported() {
+    return process.platform !== "darwin";
+  }
+
   _startPolling() {
+    this._stopPolling();
+    if (!this._pollingSupported()) {
+      health.setMode("audio", "unavailable", { reason: "no-pollable-mic-signal" });
+      debugLogger.warn(
+        "No pollable mic signal on this platform; detection needs the native listener",
+        { platform: process.platform },
+        "meeting"
+      );
+      return;
+    }
     this._check();
     this.checkInterval = setInterval(() => this._check(), CHECK_INTERVAL_MS);
+    this.checkInterval?.unref?.();
+  }
+
+  _stopPolling() {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
+      this.checkInterval = null;
+    }
   }
 
   async _check() {
@@ -437,7 +585,7 @@ class AudioActivityDetector extends EventEmitter {
         if (!this.audioActiveStart) this.audioActiveStart = Date.now();
 
         if (!this.hasPrompted && this.consecutiveChecks >= SUSTAINED_THRESHOLD_CHECKS) {
-          this.hasPrompted = true;
+          this._markPrompted();
           const now = Date.now();
           const durationMs = now - this.audioActiveStart;
           debugLogger.info(
@@ -466,26 +614,12 @@ class AudioActivityDetector extends EventEmitter {
 
   async _isMicActive() {
     switch (process.platform) {
-      case "darwin":
-        return this._checkDarwin();
       case "win32":
         return this._checkWin32();
       case "linux":
         return this._checkLinux();
       default:
         return false;
-    }
-  }
-
-  async _checkDarwin() {
-    try {
-      const { stdout } = await execAsync(
-        "ioreg -l -w 0 | grep '\"IOAudioEngineState\" = 1'",
-        EXEC_OPTS
-      );
-      return stdout.trim().length > 0;
-    } catch {
-      return false;
     }
   }
 

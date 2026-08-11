@@ -7,8 +7,10 @@ import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
-import type { InferenceMode } from "../../types/electron";
+import type { InferenceMode, MeetingDetectionStatus } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
+import { useMeetingDetectionHealth } from "../../hooks/useMeetingDetectionHealth";
+import { Button } from "../ui/button";
 
 export function MeetingSpeakerDetectionRow() {
   const { t } = useTranslation();
@@ -21,6 +23,47 @@ export function MeetingSpeakerDetectionRow() {
       description={t("settings.meeting.speakerDetection.description")}
     >
       <Toggle checked={speakerDiarizationEnabled} onChange={setSpeakerDiarizationEnabled} />
+    </SettingsRow>
+  );
+}
+
+const STATUS_STYLES: Record<MeetingDetectionStatus, string> = {
+  healthy: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  degraded: "bg-warning/15 text-amber-700 dark:text-warning",
+  unavailable: "bg-destructive/10 text-destructive",
+  off: "bg-muted text-muted-foreground",
+};
+
+export function MeetingDetectionStatusRow() {
+  const { t } = useTranslation();
+  const { health } = useMeetingDetectionHealth();
+  const status: MeetingDetectionStatus = health?.status ?? "off";
+  // Reasons are diagnostic identifiers ("no-pollable-mic-signal"); they are for
+  // the log and the bug report, so they are shown rather than translated.
+  const reason = status === "healthy" ? null : health?.reason;
+
+  return (
+    <SettingsRow
+      label={t("settings.meetingDetection.title")}
+      description={
+        reason
+          ? t("settings.meetingDetection.reason", { reason })
+          : t("settings.meetingDetection.description")
+      }
+    >
+      <div className="flex items-center gap-2">
+        <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}>
+          {t(`settings.meetingDetection.status.${status}`)}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-xs"
+          onClick={() => window.electronAPI?.openLogsFolder?.()}
+        >
+          {t("settings.meetingDetection.openLogs")}
+        </Button>
+      </div>
     </SettingsRow>
   );
 }

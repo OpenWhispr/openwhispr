@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const meetingDetectionHealth = require("./meetingDetectionHealth");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const { classifyAndLog } = require("./networkErrors");
 const GnomeShortcutManager = require("./gnomeShortcut");
@@ -5843,7 +5844,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("meeting-transcription-stop", async (_event, options = {}) => {
-      this.meetingDetectionEngine?.setUserRecording(false);
+      this.meetingDetectionEngine?.endMeetingSession("meeting-transcription-stop");
       try {
         if (this.audioTapManager) {
           await this.audioTapManager.stop();
@@ -6456,6 +6457,11 @@ class IPCHandlers {
         debugLogger.error("Failed to set debug logging:", error);
         return { success: false, error: error.message };
       }
+    });
+
+    ipcMain.handle("get-meeting-detection-health", () => {
+      const snapshot = meetingDetectionHealth.getSnapshot();
+      return { ...snapshot, logPath: debugLogger.getLogPath() };
     });
 
     ipcMain.handle("open-logs-folder", async () => {
