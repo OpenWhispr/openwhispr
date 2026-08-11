@@ -14,6 +14,9 @@ export interface FileTranscriptionResult {
   code?: string;
   diarized?: boolean;
   warning?: string;
+  // Set alongside `warning` by the chunked cloud path: how much audio was lost.
+  failedChunks?: number;
+  totalChunks?: number;
 }
 
 export interface DiarizationSettings {
