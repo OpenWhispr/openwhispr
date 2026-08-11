@@ -29,6 +29,24 @@
     "pipeline": {
       "autoProcess": "Auto-process meetings",
       "autoProcessDescription": "Automatically re-transcribe, generate title, and create notes after each meeting ends"
+    },
+    "meetingDetection": {
+      "title": "Meeting detection",
+      "description": "Whether OpenWhispr can still tell when a call starts",
+      "status": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "unavailable": "Unavailable",
+        "off": "Off"
+      },
+      "reason": "Reason: {{reason}}",
+      "openLogs": "Open logs",
+      "notice": {
+        "title": "Meeting detection isn't running",
+        "description": "You won't be prompted to take notes when a call starts.",
+        "action": "Open settings",
+        "dismiss": "Dismiss"
+      }
     }
   },
   "tray": {

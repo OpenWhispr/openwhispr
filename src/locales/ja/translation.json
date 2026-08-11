@@ -29,6 +29,24 @@
     "pipeline": {
       "autoProcess": "会議の自動処理",
       "autoProcessDescription": "各会議終了後に自動的に再文字起こし、タイトル生成、ノート作成を行います"
+    },
+    "meetingDetection": {
+      "title": "会議の検出",
+      "description": "通話の開始を OpenWhispr がまだ検出できるかどうか",
+      "status": {
+        "healthy": "正常",
+        "degraded": "機能低下",
+        "unavailable": "利用不可",
+        "off": "オフ"
+      },
+      "reason": "理由: {{reason}}",
+      "openLogs": "ログを開く",
+      "notice": {
+        "title": "会議の検出が動作していません",
+        "description": "通話が始まってもメモの確認は表示されません。",
+        "action": "設定を開く",
+        "dismiss": "閉じる"
+      }
     }
   },
   "tray": {

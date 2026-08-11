@@ -29,6 +29,24 @@
     "pipeline": {
       "autoProcess": "自動處理會議",
       "autoProcessDescription": "每次會議結束後自動重新轉寫、產生標題並建立筆記"
+    },
+    "meetingDetection": {
+      "title": "會議偵測",
+      "description": "OpenWhispr 是否仍能偵測通話的開始",
+      "status": {
+        "healthy": "正常",
+        "degraded": "降級",
+        "unavailable": "無法使用",
+        "off": "已關閉"
+      },
+      "reason": "原因：{{reason}}",
+      "openLogs": "開啟記錄檔",
+      "notice": {
+        "title": "會議偵測未運行",
+        "description": "通話開始時不會提示你做筆記。",
+        "action": "開啟設定",
+        "dismiss": "忽略"
+      }
     }
   },
   "tray": {

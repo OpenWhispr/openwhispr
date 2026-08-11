@@ -29,6 +29,24 @@
     "pipeline": {
       "autoProcess": "Elaborazione automatica delle riunioni",
       "autoProcessDescription": "Ri-trascrivere automaticamente, generare titolo e creare note dopo ogni riunione"
+    },
+    "meetingDetection": {
+      "title": "Rilevamento riunioni",
+      "description": "Se OpenWhispr riesce ancora a capire quando inizia una chiamata",
+      "status": {
+        "healthy": "Funzionante",
+        "degraded": "Ridotto",
+        "unavailable": "Non disponibile",
+        "off": "Disattivato"
+      },
+      "reason": "Motivo: {{reason}}",
+      "openLogs": "Apri i log",
+      "notice": {
+        "title": "Il rilevamento delle riunioni non è attivo",
+        "description": "Non ti verrà chiesto di prendere appunti all'inizio di una chiamata.",
+        "action": "Apri le impostazioni",
+        "dismiss": "Ignora"
+      }
     }
   },
   "tray": {

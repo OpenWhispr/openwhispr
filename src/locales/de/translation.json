@@ -29,6 +29,24 @@
     "pipeline": {
       "autoProcess": "Meetings automatisch verarbeiten",
       "autoProcessDescription": "Nach jedem Meeting automatisch neu transkribieren, Titel generieren und Notizen erstellen"
+    },
+    "meetingDetection": {
+      "title": "Besprechungserkennung",
+      "description": "Ob OpenWhispr noch erkennen kann, wann ein Anruf beginnt",
+      "status": {
+        "healthy": "In Ordnung",
+        "degraded": "Eingeschränkt",
+        "unavailable": "Nicht verfügbar",
+        "off": "Aus"
+      },
+      "reason": "Grund: {{reason}}",
+      "openLogs": "Protokolle öffnen",
+      "notice": {
+        "title": "Die Besprechungserkennung läuft nicht",
+        "description": "Sie werden zu Beginn eines Anrufs nicht zum Mitschreiben aufgefordert.",
+        "action": "Einstellungen öffnen",
+        "dismiss": "Ausblenden"
+      }
     }
   },
   "tray": {

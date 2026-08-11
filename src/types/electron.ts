@@ -6,6 +6,29 @@ export type InferenceMode = "providers" | "local" | "self-hosted";
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
+export type MeetingDetectionStatus = "healthy" | "degraded" | "unavailable" | "off";
+
+export interface MeetingDetectionDetector {
+  name: string;
+  mode: "event-driven" | "polling" | "unavailable" | "stopped";
+  reason: string | null;
+  childPid: number | null;
+  childAlive: boolean;
+  lastExitCode: number | null;
+  restartCount: number;
+  lastEventAt: number | null;
+}
+
+export interface MeetingDetectionHealth {
+  status: MeetingDetectionStatus;
+  reason: string | null;
+  detectors: MeetingDetectionDetector[];
+  latches: { meetingModeActive?: boolean; userRecording?: boolean };
+  suppressionCounts: Record<string, number>;
+  lastSuppression: { reason: string; at: number } | null;
+  logPath: string | null;
+}
+
 export type TranscriptionStatus = "completed" | "failed" | "pending" | "discarded";
 
 export type TranscriptionErrorCode =
@@ -1057,6 +1080,7 @@ declare global {
         error?: string;
       }>;
       openLogsFolder: () => Promise<{ success: boolean; error?: string }>;
+      getMeetingDetectionHealth: () => Promise<MeetingDetectionHealth>;
 
       // FFmpeg availability
       checkFFmpegAvailability: () => Promise<FFmpegAvailabilityResult>;
