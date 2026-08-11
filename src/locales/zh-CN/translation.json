@@ -42,6 +42,9 @@
     "quit": "退出 OpenWhispr",
     "tooltip": "OpenWhispr - 语音听写"
   },
+  "dockMenu": {
+    "hideDockIcon": "隐藏 Dock 图标（仅菜单栏）"
+  },
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "退出 OpenWhispr",
@@ -1598,7 +1601,9 @@
         "title": "启动",
         "description": "控制 OpenWhispr 启动时的行为",
         "startMinimized": "启动时最小化",
-        "startMinimizedDescription": "启动时不显示控制面板窗口"
+        "startMinimizedDescription": "启动时不显示控制面板窗口",
+        "hideDockIcon": "隐藏 Dock 图标（仅菜单栏）",
+        "hideDockIconDescription": "将 OpenWhispr 作为菜单栏应用运行，不显示 Dock 图标。应用也会从 Cmd+Tab 切换器中消失——请通过菜单栏图标打开。"
       },
       "waylandPaste": {
         "title": "Wayland 粘贴设置",

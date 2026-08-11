@@ -352,6 +352,8 @@ function useSettingsInternal() {
     setFloatingIconAutoHide: store.setFloatingIconAutoHide,
     startMinimized: store.startMinimized,
     setStartMinimized: store.setStartMinimized,
+    hideDockIcon: store.hideDockIcon,
+    setHideDockIcon: store.setHideDockIcon,
     panelStartPosition: store.panelStartPosition,
     setPanelStartPosition: store.setPanelStartPosition,
     preferBuiltInMic: store.preferBuiltInMic,

@@ -13,12 +13,15 @@ const { resolveDockVisibility } = require("./dockPolicy");
 class DockManager {
   constructor() {
     this._controlPanelVisible = false;
+    this._hideDockIcon = false;
   }
 
   // Called once at startup, before any window exists: hides the Dock icon
   // until the control panel opens, so tray-only launches never show one.
-  init() {
+  // hideDockIcon carries the persisted menu-bar-only setting (#1380).
+  init({ hideDockIcon = false } = {}) {
     this._controlPanelVisible = false;
+    this._hideDockIcon = !!hideDockIcon;
     this._applyVisibility();
   }
 
@@ -28,10 +31,18 @@ class DockManager {
     this._applyVisibility();
   }
 
+  // Menu-bar-only mode. Applied immediately, so flipping the setting while
+  // the control panel is open hides or restores the icon on the spot.
+  setHideDockIcon(enabled) {
+    this._hideDockIcon = !!enabled;
+    this._applyVisibility();
+  }
+
   _applyVisibility() {
     const visible = resolveDockVisibility({
       platform: process.platform,
       controlPanelVisible: this._controlPanelVisible,
+      hideDockIcon: this._hideDockIcon,
     });
     if (visible === null || !app.dock) return;
 

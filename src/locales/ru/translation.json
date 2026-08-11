@@ -42,6 +42,9 @@
     "quit": "Закрыть OpenWhispr",
     "tooltip": "OpenWhispr — голосовая диктовка"
   },
+  "dockMenu": {
+    "hideDockIcon": "Скрыть значок в Dock (только строка меню)"
+  },
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "Закрыть OpenWhispr",
@@ -1604,7 +1607,9 @@
         "title": "Автозапуск",
         "description": "Управляйте поведением OpenWhispr при запуске",
         "startMinimized": "Запуск в свёрнутом виде",
-        "startMinimizedDescription": "Запускать без отображения окна панели управления"
+        "startMinimizedDescription": "Запускать без отображения окна панели управления",
+        "hideDockIcon": "Скрыть значок в Dock (только строка меню)",
+        "hideDockIconDescription": "Запускать OpenWhispr как приложение строки меню без значка в Dock. Оно также исчезает из переключателя Cmd+Tab — открывайте его через значок в строке меню."
       },
       "waylandPaste": {
         "title": "Настройка вставки в Wayland",
