@@ -116,3 +116,11 @@ test("does not flag completely unrelated text", async () => {
     false
   );
 });
+
+test("returns false when text or prompt normalizes to empty string (punctuation only)", async () => {
+  const { matchesDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(matchesDictionaryPrompt("...", "..."), false);
+  assert.equal(matchesDictionaryPrompt("!!!", ",,,"), false);
+  assert.equal(matchesDictionaryPrompt("???", "OpenWhispr, Parakeet"), false);
+  assert.equal(matchesDictionaryPrompt("OpenWhispr, Parakeet", "!!!"), false);
+});

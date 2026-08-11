@@ -11,6 +11,8 @@ export function matchesDictionaryPrompt(text, dictionaryPrompt) {
   const normalizedText = normalize(text);
   const normalizedPrompt = normalize(dictionaryPrompt);
 
+  if (!normalizedText || !normalizedPrompt) return false;
+
   if (normalizedText === normalizedPrompt) return true;
 
   const dictWords = new Set(normalizedPrompt.split(" "));
