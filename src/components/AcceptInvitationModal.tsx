@@ -15,10 +15,10 @@ import {
   storePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
-import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useAuth } from "../hooks/useAuth";
 import { signOut } from "../lib/auth";
 import { syncService } from "../services/SyncService.js";
+import { afterWorkspaceJoined } from "../services/membershipActions";
 import { useToast } from "./ui/useToast";
 import SignInDialog from "./SignInDialog";
 import type { InvitationPreview } from "../types/electron";
@@ -33,7 +33,6 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
   const { t } = useTranslation();
   const { toast } = useToast();
   const { isSignedIn, user } = useAuth();
-  const refresh = useWorkspaceStore((s) => s.refresh);
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [accepting, setAccepting] = useState(false);
@@ -81,14 +80,7 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
     try {
       const accepted = await InvitationsService.accept(token);
       clearPendingInvitationToken();
-      await refresh();
-      // Joining a paid workspace can change the caller's entitlement, so
-      // refetch usage. Team sync no longer waits on it — collaboration is
-      // plan-independent — but the plan badge and word limit still are.
-      window.dispatchEvent(new Event("usage-changed"));
-      // Pull the just-granted team spaces right away (skeleton rows render
-      // while their backfill is pending).
-      syncService.requestSyncAll("manual");
+      await afterWorkspaceJoined();
       toast({
         title: t("workspaces.accept.successTitle"),
         description: preview

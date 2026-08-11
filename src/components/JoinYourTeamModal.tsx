@@ -13,8 +13,7 @@ import { Button } from "./ui/button";
 import { useToast } from "./ui/useToast";
 import MemberAvatar from "./MemberAvatar";
 import { WorkspacesService } from "../services/WorkspacesService";
-import { useWorkspaceStore } from "../stores/workspaceStore";
-import { syncService } from "../services/SyncService.js";
+import { afterWorkspaceJoined } from "../services/membershipActions";
 import { cn } from "./lib/utils";
 import type { JoinableWorkspace } from "../types/electron";
 
@@ -47,17 +46,13 @@ export default function JoinYourTeamModal({
 }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const refresh = useWorkspaceStore((s) => s.refresh);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function handleJoin(entry: JoinableWorkspace) {
     setBusyId(entry.workspace_id);
     try {
       await WorkspacesService.join(entry.workspace_id);
-      await refresh();
-      // Pull the spaces this membership just unlocked; skeleton rows render
-      // while their backfill is pending.
-      syncService.requestSyncAll("manual");
+      await afterWorkspaceJoined();
       toast({
         title: t("workspaces.join.successTitle"),
         description: t("workspaces.join.successDescription", { workspace: entry.workspace_name }),
