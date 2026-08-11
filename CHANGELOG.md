@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-08-11
+
+### Fixed
+- **Meeting detection stopped working after a meeting, and stayed off until you restarted the app.** Ending a meeting recording left the app believing a meeting was still in progress, and while it believes that it ignores every detection — so you were never prompted about the next call. The only thing that cleared it was the "Back to notes" button, which is not shown at all in a wide window. Ending the recording now ends the meeting, and a 15-minute check clears the flag if anything else goes wrong.
+- **The microphone listener and the call detector are now restarted when they die.** Either one dying used to disable detection permanently, with nothing to indicate it had happened. Both are restarted with a growing delay, and the call detector's view of your camera and microphone is reset when it restarts — stale state would otherwise have swallowed the start of your next call as well.
+- **On macOS, losing the listener silently turned detection off rather than degrading it.** The fallback checked a hardware value that does not exist on any current Mac, so it could only ever answer "no microphone in use". It no longer pretends to work: detection reports itself as unavailable and keeps trying to bring the listener back.
+- Waking from sleep now re-checks the detection stack instead of assuming it survived, and re-checks browser permission you may have granted since the app started.
+- A meeting prompt you never answered, and a "we already asked about this" flag that had no way to expire, could each block later detections for as long as the app ran. Both now expire.
+
+### Added
+- **Settings → Notifications shows whether meeting detection is actually working** — Healthy, Degraded, Unavailable or Off — with the reason and a button to open the log folder. If detection cannot run at all, the app now says so once on the main screen instead of failing quietly.
+
+### Internal
+- Warnings and errors are now written to the log file on every install, not only when debug logging is switched on. This is why the above could go unnoticed for so long: nothing was ever recorded. Log files are rotated and capped, and a message that repeats is counted rather than written thousands of times.
+
 ## [1.13.2] - 2026-08-05
 
 ### Internal
