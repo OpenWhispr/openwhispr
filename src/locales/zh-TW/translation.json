@@ -1926,7 +1926,8 @@
       "errors": {
         "noModel": "未選擇 AI 模型。請在設定中進行配置。",
         "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。",
-        "actionFailed": "操作失敗"
+        "actionFailed": "操作失敗",
+        "promptTooLong": "這次通話對本機模型來說太長了。請使用雲端模型，或縮短筆記。"
       }
     },
     "empty": {

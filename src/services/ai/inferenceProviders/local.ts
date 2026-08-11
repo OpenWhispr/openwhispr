@@ -25,7 +25,11 @@ export const localProvider: InferenceProvider = {
 
     if (!result.success) {
       logger.logReasoning("LOCAL_ERROR", { model, processingTimeMs, error: result.error });
-      throw new Error(result.error);
+      const error: Error & { code?: string } = new Error(result.error);
+      // Carried so callers can translate a known failure rather than showing the
+      // main process's raw message.
+      if (result.code) error.code = result.code;
+      throw error;
     }
 
     logger.logReasoning("LOCAL_SUCCESS", {

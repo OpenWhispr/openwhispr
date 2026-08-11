@@ -6,6 +6,10 @@ const LOG_LEVELS = {
   trace: 10,
   debug: 20,
   info: 30,
+  // Not a problem, but expensive or irreversible enough that we want it on the
+  // record without asking the user to turn on debug logging: a model server
+  // starting, a multi-minute inference, a migration.
+  notice: 35,
   warn: 40,
   error: 50,
   fatal: 60,
@@ -14,8 +18,9 @@ const LOG_LEVELS = {
 // warn and above always reach disk, whatever the log level — a failure nobody can
 // see is a failure nobody can fix. Rotation and throttling are what make that
 // affordable: some call sites warn per audio chunk.
-const PERSIST_FROM = LOG_LEVELS.warn;
-const MAX_LOG_FILES = 10;
+const PERSIST_FROM = LOG_LEVELS.notice;
+const RETENTION_DAYS = 30;
+const MAX_LOG_FILES = 60;
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 const THROTTLE_WINDOW_MS = 10000;
 const THROTTLE_LIMIT = 5;
@@ -50,6 +55,7 @@ class DebugLogger {
     this.logStream = null;
     this.fileLoggingEnabled = false;
     this.maxFiles = options.maxFiles || MAX_LOG_FILES;
+    this.retentionDays = options.retentionDays || RETENTION_DAYS;
     this.maxBytes = options.maxBytes || MAX_LOG_BYTES;
     this.bytesWritten = 0;
     this._throttle = new Map();
@@ -82,7 +88,13 @@ class DebugLogger {
         })
         .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-      for (const entry of entries.slice(Math.max(keep, 0))) {
+      // Age is the primary bound — a month of history is what makes a failure
+      // reported days later still diagnosable. The count is only a backstop so a
+      // restart loop cannot fill the disk.
+      const cutoff = Date.now() - this.retentionDays * 24 * 60 * 60 * 1000;
+      const doomed = entries.filter((entry, index) => index >= Math.max(keep, 0) || entry.mtimeMs < cutoff);
+
+      for (const entry of doomed) {
         try {
           fs.rmSync(entry.full, { force: true });
         } catch {
@@ -325,6 +337,12 @@ class DebugLogger {
 
   info(message, meta, scope, source) {
     this.write("info", message, meta, scope, source);
+  }
+
+  // Always reaches the log file. Keep variable data in `meta` — the message is
+  // the throttle key, so "pass 3 of 14" in the message defeats throttling.
+  notice(message, meta, scope, source) {
+    this.write("notice", message, meta, scope, source);
   }
 
   warn(message, meta, scope, source) {

@@ -28,6 +28,7 @@ export function useActionProcessing(noteId: number | null) {
         noModel: t("notes.actions.errors.noModel"),
         noEndpoint: t("notes.actions.errors.noEndpoint"),
         actionFailed: t("notes.actions.errors.actionFailed"),
+        promptTooLong: t("notes.actions.errors.promptTooLong"),
       });
     },
     [noteId, t]

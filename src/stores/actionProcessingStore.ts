@@ -114,6 +114,7 @@ export interface RunActionLabels {
   noModel: string;
   noEndpoint: string;
   actionFailed: string;
+  promptTooLong: string;
 }
 
 /**
@@ -197,7 +198,13 @@ export function runBackgroundAction(
       if (cancelledFlags.get(noteId)) return;
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
-      const message = err instanceof Error ? err.message : labels.actionFailed;
+      const code = (err as { code?: string })?.code;
+      const message =
+        code === "LOCAL_CONTEXT_EXCEEDED"
+          ? labels.promptTooLong
+          : err instanceof Error
+            ? err.message
+            : labels.actionFailed;
       pushErrorEvent({ noteId, message });
     } finally {
       cancelledFlags.delete(noteId);

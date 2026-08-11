@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-08-11
+
+### Fixed
+- **Generating notes with a local model could make the whole machine unresponsive.** The local model server was never told how much context to allocate, so it reserved as much as the model was trained for — on the bundled Gemma that is 131,072 tokens, about 13 GB of memory set aside before any work starts, next to the 5 GB the model itself needs. On a 24 GB machine that is enough to push everything else into swap and stall the desktop. The app now works out a context the machine can actually hold from the model's own properties and the memory available, which on that same machine means about 3 GB instead of 13.
+- **A note too long for the local model now says so.** Previously an over-long transcript was accepted and processed for as long as it took, with no indication that anything was wrong — it simply looked like the app had hung. It now stops immediately and tells you the call is too long for the local model, suggesting a cloud model instead. Handling long calls properly, by working through them in passes rather than cutting them short, is coming next.
+
+### Changed
+- **Logs are kept for 30 days** instead of the last ten files, so a problem reported days after it happened can still be investigated. A file-count limit remains as a backstop.
+- **Expensive operations are now recorded in the log by default** — the model server starting (with the context and memory it reserved), and each inference with its size and how long it took. A request that takes over a minute is flagged. Previously none of this reached the log unless debug logging was on, which is why the failure above left no trace.
+
 ## [1.14.0] - 2026-08-11
 
 ### Fixed
