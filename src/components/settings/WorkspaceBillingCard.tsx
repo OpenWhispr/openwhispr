@@ -21,10 +21,7 @@ interface Props {
   onRefreshEntitlement?: () => Promise<void>;
 }
 
-export default function WorkspaceBillingCard({
-  workspace,
-  onRefreshEntitlement,
-}: Props) {
+export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const refresh = useWorkspaceStore((s) => s.refresh);

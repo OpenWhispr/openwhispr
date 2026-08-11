@@ -221,11 +221,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
 
       <div className="pt-1">
         {tab === "general" && <GeneralTab workspace={workspace} />}
-        {tab === "members" && (
-          <WorkspaceMembersTab
-            workspace={workspace}
-          />
-        )}
+        {tab === "members" && <WorkspaceMembersTab workspace={workspace} />}
         {tab === "teams" && <WorkspaceTeamsTab workspace={workspace} />}
         {tab === "developer" && canManage && <WorkspaceDeveloperTab workspace={workspace} />}
       </div>

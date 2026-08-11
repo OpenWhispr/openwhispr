@@ -66,10 +66,7 @@ test("team-only backoff: an account that keeps finding work never slows down", a
   assert.equal(teamOnlyPassDelayMs(0), 0);
   // One empty pass is not a pattern — stay on the normal interval.
   assert.equal(teamOnlyPassDelayMs(1), 0);
-  assert.equal(
-    shouldRunAmbientTeamOnlyPass({ emptyStreak: 0, lastPassAt: 1000, now: 1001 }),
-    true
-  );
+  assert.equal(shouldRunAmbientTeamOnlyPass({ emptyStreak: 0, lastPassAt: 1000, now: 1001 }), true);
 });
 
 test("team-only backoff: consecutive empty passes double up to an hour", async () => {
@@ -95,10 +92,7 @@ test("team-only backoff: an idle account waits, and the first launch always runs
     true
   );
   // No recorded pass (fresh profile) must never be held back.
-  assert.equal(
-    shouldRunAmbientTeamOnlyPass({ emptyStreak: 9, lastPassAt: null, now }),
-    true
-  );
+  assert.equal(shouldRunAmbientTeamOnlyPass({ emptyStreak: 9, lastPassAt: null, now }), true);
 });
 
 // --- resolvePullCursorAdvance ----------------------------------------------

@@ -2479,11 +2479,7 @@ export default function SettingsPage({
         );
 
       case "workspace":
-        return (
-          <WorkspaceSection
-            initialSubTab={initialSubTab}
-          />
-        );
+        return <WorkspaceSection initialSubTab={initialSubTab} />;
 
       case "general":
         return (
