@@ -501,6 +501,15 @@ class MeetingDetectionEngine {
     }
   }
 
+  // The meeting session ends when its recording stops, not when the renderer
+  // happens to navigate away — "Back to notes" isn't rendered in every layout, so
+  // relying on it left the suppression latch set for the rest of the process.
+  endMeetingSession(reason = "recording-stopped") {
+    debugLogger.info("Meeting session ended", { reason }, "meeting");
+    this.setMeetingModeActive(false);
+    this.setUserRecording(false);
+  }
+
   setUserRecording(active) {
     this._userRecording = active;
     this.audioActivityDetector.setUserRecording(active);

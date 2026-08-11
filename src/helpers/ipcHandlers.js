@@ -5843,7 +5843,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("meeting-transcription-stop", async (_event, options = {}) => {
-      this.meetingDetectionEngine?.setUserRecording(false);
+      this.meetingDetectionEngine?.endMeetingSession("meeting-transcription-stop");
       try {
         if (this.audioTapManager) {
           await this.audioTapManager.stop();
