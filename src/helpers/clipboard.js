@@ -1652,6 +1652,18 @@ class ClipboardManager {
             debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
           }
         } else if (isGnome && linuxFastPaste) {
+          // GNOME: uinput first for the first-ever paste — the portal shows a
+          // permission dialog and can stall for 10s+ (issue #494). But once a
+          // restore token exists the portal is dialog-free and instant, so
+          // prefer it: uinput creates and destroys a virtual keyboard on every
+          // paste, forcing mutter to hotplug an input device each time, which
+          // has driven gnome-shell into unrecoverable hangs under sustained
+          // dictation.
+          const havePortalToken = !this.portalDenied && !!this._readPortalToken();
+          if (havePortalToken) {
+            const portalPaste = await tryPortalPaste();
+            if (portalPaste) return { method: "portal", ...portalPaste };
+          }
           try {
             const uinputPaste = await tryUinputPaste();
             return { method: "uinput", ...uinputPaste };
@@ -1662,7 +1674,7 @@ class ClipboardManager {
               "clipboard"
             );
           }
-          if (!this.portalDenied) {
+          if (!havePortalToken && !this.portalDenied) {
             const portalPaste = await tryPortalPaste();
             if (portalPaste) return { method: "portal", ...portalPaste };
           }
