@@ -535,6 +535,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getActivationMode: () => ipcRenderer.invoke("get-activation-mode"),
   saveActivationMode: (mode) => ipcRenderer.invoke("save-activation-mode", mode),
 
+  // Whisper server idle-unload timeout persistence (file-based for reliable startup)
+  getWhisperIdleTimeoutMs: () => ipcRenderer.invoke("get-whisper-idle-timeout"),
+  saveWhisperIdleTimeoutMs: (ms) => ipcRenderer.invoke("save-whisper-idle-timeout", ms),
+
   saveAllKeysToEnv: () => ipcRenderer.invoke("save-all-keys-to-env"),
   syncStartupPreferences: (prefs) => ipcRenderer.invoke("sync-startup-preferences", prefs),
 

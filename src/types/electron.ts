@@ -1698,6 +1698,10 @@ declare global {
       getActivationMode?: () => Promise<"tap" | "push">;
       saveActivationMode?: (mode: "tap" | "push") => Promise<void>;
 
+      // Whisper server idle-unload timeout persistence (file-based for reliable startup)
+      getWhisperIdleTimeoutMs?: () => Promise<number>;
+      saveWhisperIdleTimeoutMs?: (ms: number) => Promise<void>;
+
       // Debug logging
       getLogLevel?: () => Promise<string>;
       log?: (entry: {

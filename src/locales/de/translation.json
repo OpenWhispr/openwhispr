@@ -2216,6 +2216,18 @@
             "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
           }
         }
+      },
+      "idleUnload": {
+        "title": "Entladen bei Inaktivität",
+        "description": "Stoppt den lokalen Whisper-Server automatisch nach einer Zeit der Inaktivität, um RAM und VRAM freizugeben",
+        "label": "Entladen nach",
+        "options": {
+          "0": "Nie",
+          "300000": "5 Minuten",
+          "900000": "15 Minuten",
+          "1800000": "30 Minuten",
+          "3600000": "60 Minuten"
+        }
       }
     },
     "intelligence": {

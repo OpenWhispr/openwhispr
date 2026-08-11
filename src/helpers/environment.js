@@ -49,6 +49,7 @@ const PERSISTED_KEYS = [
   "WHISPER_VULKAN_ENABLED",
   "WHISPER_GPU_FAILED",
   "WHISPER_THREADS",
+  "WHISPER_IDLE_TIMEOUT_MS",
   "TRANSCRIPTION_GPU_UUID",
   "INTELLIGENCE_GPU_UUID",
   "BEDROCK_REGION",
@@ -486,6 +487,19 @@ class EnvironmentManager {
     const result = this._saveKey("PANEL_START_POSITION", position);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
+  }
+
+  getWhisperIdleTimeoutMs() {
+    const parsed = parseInt(this._getKey("WHISPER_IDLE_TIMEOUT_MS"), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  }
+
+  saveWhisperIdleTimeoutMs(ms) {
+    const parsed = Number(ms);
+    const value = Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+    const result = this._saveKey("WHISPER_IDLE_TIMEOUT_MS", String(value));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return { ...result, idleTimeoutMs: value };
   }
 
   getUiLanguage() {

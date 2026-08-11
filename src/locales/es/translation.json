@@ -1978,6 +1978,18 @@
             "info": "Audio que se extiende de un segmento al siguiente para evitar cortes bruscos al concatenarlos."
           }
         }
+      },
+      "idleUnload": {
+        "title": "Descarga por inactividad",
+        "description": "Detiene automáticamente el servidor local de Whisper tras un período de inactividad para liberar RAM y VRAM",
+        "label": "Descargar después de",
+        "options": {
+          "0": "Nunca",
+          "300000": "5 minutos",
+          "900000": "15 minutos",
+          "1800000": "30 minutos",
+          "3600000": "60 minutos"
+        }
       }
     },
     "intelligence": {

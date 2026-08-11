@@ -1909,6 +1909,18 @@
             "info": "Áudio estendido de um segmento para o próximo, evitando cortes bruscos na concatenação."
           }
         }
+      },
+      "idleUnload": {
+        "title": "Desligamento por inatividade",
+        "description": "Desliga automaticamente o servidor Whisper local após um período de inatividade para liberar RAM e VRAM",
+        "label": "Desligar após",
+        "options": {
+          "0": "Nunca",
+          "300000": "5 minutos",
+          "900000": "15 minutos",
+          "1800000": "30 minutos",
+          "3600000": "60 minutos"
+        }
       }
     },
     "intelligence": {

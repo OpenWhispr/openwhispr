@@ -29,6 +29,8 @@ const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const PROCESS_EXIT_WAIT_MS = 2000;
 const PROCESS_EXIT_POLL_INTERVAL_MS = 50;
 const DEFAULT_WHISPER_THREADS = 4;
+// 0 = never unload; opt-in only, so existing always-on behavior is unchanged by default.
+const DEFAULT_WHISPER_IDLE_TIMEOUT_MS = 0;
 const MAX_AUTO_WHISPER_THREADS = 12;
 const MAX_MANUAL_WHISPER_THREADS = 64;
 const AUTO_THREAD_RATIO = 0.75;
@@ -116,6 +118,11 @@ function shouldFallbackToDefaultThreads(resolution) {
 
 function getThreadSignature(resolution) {
   return `threads:${resolution.threads || "default"}`;
+}
+
+function resolveWhisperIdleTimeoutMs(env = process.env) {
+  const parsed = parsePositiveInteger(env.WHISPER_IDLE_TIMEOUT_MS);
+  return parsed || DEFAULT_WHISPER_IDLE_TIMEOUT_MS;
 }
 
 function isVadActive(options = {}) {
@@ -230,6 +237,7 @@ class WhisperServerManager extends EventEmitter {
     this.vadSignature = "vad:off";
     this.threadSignature = "threads:default";
     this.lastStartOptions = {};
+    this.idleTimer = null;
   }
 
   getFFmpegPath() {
@@ -614,6 +622,7 @@ class WhisperServerManager extends EventEmitter {
     }
 
     this.startHealthCheck();
+    this.resetIdleTimer();
 
     debugLogger.info("whisper-server started successfully", {
       port: this.port,
@@ -711,78 +720,107 @@ class WhisperServerManager extends EventEmitter {
     }
   }
 
+  resetIdleTimer() {
+    this.clearIdleTimer();
+    if (this.isRemote) return;
+
+    const timeoutMs = resolveWhisperIdleTimeoutMs();
+    if (!timeoutMs) return;
+
+    this.idleTimer = setTimeout(() => {
+      debugLogger.info("whisper-server idle timeout reached, stopping to free RAM/VRAM", {
+        timeoutMs,
+        model: this.modelPath ? path.basename(this.modelPath) : null,
+      });
+      this.stop();
+    }, timeoutMs);
+  }
+
+  clearIdleTimer() {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
   async transcribe(audioBuffer, options = {}) {
     if (!this.ready || (!this.process && !this.isRemote)) {
       throw new Error("whisper-server is not running");
     }
 
-    // Debug: Log audio buffer info
-    debugLogger.debug("whisper-server transcribe called", {
-      bufferLength: audioBuffer?.length || 0,
-      bufferType: audioBuffer?.constructor?.name,
-      firstBytes:
-        audioBuffer?.length >= 16
-          ? Array.from(audioBuffer.slice(0, 16))
-              .map((b) => b.toString(16).padStart(2, "0"))
-              .join(" ")
-          : "too short",
-    });
-
-    const { language, initialPrompt } = options;
-
-    // Always convert to 16kHz mono WAV - whisper.cpp requires this exact format
-    let finalBuffer = audioBuffer;
-    if (!this.canConvert) {
-      throw new Error("FFmpeg not found - required for audio conversion");
-    }
-    finalBuffer = await this._convertToWav(audioBuffer);
-
-    const boundary = `----WhisperBoundary${Date.now()}`;
-    const parts = [];
-    const fileName = "audio.wav";
-    const contentType = "audio/wav";
-
-    parts.push(
-      `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
-        `Content-Type: ${contentType}\r\n\r\n`
-    );
-    parts.push(finalBuffer);
-    parts.push("\r\n");
-
-    parts.push(
-      `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="language"\r\n\r\n` +
-        `${language || "auto"}\r\n`
-    );
-
-    // Add initial prompt for custom dictionary words
-    if (initialPrompt) {
-      parts.push(
-        `--${boundary}\r\n` +
-          `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
-          `${initialPrompt}\r\n`
-      );
-      debugLogger.info("Using custom dictionary prompt", { prompt: initialPrompt });
-    }
-
-    parts.push(
-      `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
-        `json\r\n`
-    );
-    parts.push(`--${boundary}--\r\n`);
-
-    const bodyParts = parts.map((part) => (typeof part === "string" ? Buffer.from(part) : part));
-    const body = Buffer.concat(bodyParts);
-
-    const generation = this.startGeneration;
-    const modelPath = this.modelPath;
+    this.clearIdleTimer();
 
     try {
-      return await this._postInference(body, boundary);
-    } catch (err) {
-      return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
+      // Debug: Log audio buffer info
+      debugLogger.debug("whisper-server transcribe called", {
+        bufferLength: audioBuffer?.length || 0,
+        bufferType: audioBuffer?.constructor?.name,
+        firstBytes:
+          audioBuffer?.length >= 16
+            ? Array.from(audioBuffer.slice(0, 16))
+                .map((b) => b.toString(16).padStart(2, "0"))
+                .join(" ")
+            : "too short",
+      });
+
+      const { language, initialPrompt } = options;
+
+      // Always convert to 16kHz mono WAV - whisper.cpp requires this exact format
+      let finalBuffer = audioBuffer;
+      if (!this.canConvert) {
+        throw new Error("FFmpeg not found - required for audio conversion");
+      }
+      finalBuffer = await this._convertToWav(audioBuffer);
+
+      const boundary = `----WhisperBoundary${Date.now()}`;
+      const parts = [];
+      const fileName = "audio.wav";
+      const contentType = "audio/wav";
+
+      parts.push(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+          `Content-Type: ${contentType}\r\n\r\n`
+      );
+      parts.push(finalBuffer);
+      parts.push("\r\n");
+
+      parts.push(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="language"\r\n\r\n` +
+          `${language || "auto"}\r\n`
+      );
+
+      // Add initial prompt for custom dictionary words
+      if (initialPrompt) {
+        parts.push(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
+            `${initialPrompt}\r\n`
+        );
+        debugLogger.info("Using custom dictionary prompt", { prompt: initialPrompt });
+      }
+
+      parts.push(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
+          `json\r\n`
+      );
+      parts.push(`--${boundary}--\r\n`);
+
+      const bodyParts = parts.map((part) => (typeof part === "string" ? Buffer.from(part) : part));
+      const body = Buffer.concat(bodyParts);
+
+      const generation = this.startGeneration;
+      const modelPath = this.modelPath;
+
+      try {
+        return await this._postInference(body, boundary);
+      } catch (err) {
+        return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
+      }
+    } finally {
+      this.resetIdleTimer();
     }
   }
 
@@ -950,6 +988,7 @@ class WhisperServerManager extends EventEmitter {
 
   async stop() {
     this._stopRequested = true;
+    this.clearIdleTimer();
     this.stopHealthCheck();
 
     if (this.isRemote) {
@@ -1014,6 +1053,7 @@ class WhisperServerManager extends EventEmitter {
       // infer this from "the GPU pack is downloaded" (see the CPU fallbacks)
       gpuBackend,
       gpuAccelerated: running && !this.isRemote && gpuBackend !== null,
+      idleTimeoutMs: resolveWhisperIdleTimeoutMs(),
     };
   }
 }
@@ -1022,5 +1062,6 @@ module.exports = WhisperServerManager;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
 module.exports.getVadSignature = getVadSignature;
 module.exports.resolveWhisperThreads = resolveWhisperThreads;
+module.exports.resolveWhisperIdleTimeoutMs = resolveWhisperIdleTimeoutMs;
 module.exports.shouldFallbackToCpuAfterRequestError = shouldFallbackToCpuAfterRequestError;
 module.exports.shouldRetryAfterServerReplaced = shouldRetryAfterServerReplaced;
