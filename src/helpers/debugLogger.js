@@ -11,6 +11,16 @@ const LOG_LEVELS = {
   fatal: 60,
 };
 
+// warn and above always reach disk, whatever the log level — a failure nobody can
+// see is a failure nobody can fix. Rotation and throttling are what make that
+// affordable: some call sites warn per audio chunk.
+const PERSIST_FROM = LOG_LEVELS.warn;
+const MAX_LOG_FILES = 10;
+const MAX_LOG_BYTES = 5 * 1024 * 1024;
+const THROTTLE_WINDOW_MS = 10000;
+const THROTTLE_LIMIT = 5;
+const THROTTLE_KEYS_MAX = 500;
+
 const normalizeLevel = (value) => {
   if (!value) return null;
   const lower = String(value).toLowerCase();
@@ -32,68 +42,163 @@ const readArgLogLevel = () => {
 };
 
 class DebugLogger {
-  constructor() {
-    this.logLevel = this.resolveLogLevel();
+  constructor(options = {}) {
+    this.logLevel = normalizeLevel(options.level) || this.resolveLogLevel();
     this.levelValue = LOG_LEVELS[this.logLevel] || LOG_LEVELS.info;
     this.debugMode = this.isDebugEnabled();
     this.logFile = null;
     this.logStream = null;
     this.fileLoggingEnabled = false;
-    this.fileLoggingPending = this.debugMode; // Track if we need to initialize file logging later
+    this.maxFiles = options.maxFiles || MAX_LOG_FILES;
+    this.maxBytes = options.maxBytes || MAX_LOG_BYTES;
+    this.bytesWritten = 0;
+    this._throttle = new Map();
 
     // IMPORTANT: Do NOT call initializeFileLogging() here!
     // It uses app.getPath() which is unsafe before app.whenReady().
-    // File logging will be initialized on first log write or via ensureFileLogging().
+    // File logging is initialized on the first write that needs to persist.
+  }
+
+  // Outside Electron `app` is undefined, and before whenReady() getPath() can hang.
+  _resolveLogsDir() {
+    if (!app?.isReady?.()) return null;
+    return path.join(app.getPath("userData"), "logs");
+  }
+
+  _pruneOldLogs(logsDir, keep) {
+    try {
+      const entries = fs
+        .readdirSync(logsDir)
+        .filter((name) => /^debug-.*\.log$/.test(name))
+        .map((name) => {
+          const full = path.join(logsDir, name);
+          let mtimeMs = 0;
+          try {
+            mtimeMs = fs.statSync(full).mtimeMs;
+          } catch {
+            // Raced with another prune; treat it as oldest.
+          }
+          return { full, mtimeMs };
+        })
+        .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+      for (const entry of entries.slice(Math.max(keep, 0))) {
+        try {
+          fs.rmSync(entry.full, { force: true });
+        } catch {
+          // A log we cannot delete is not worth failing a log write over.
+        }
+      }
+    } catch {
+      // Missing or unreadable directory — nothing to prune.
+    }
   }
 
   initializeFileLogging() {
     if (this.fileLoggingEnabled) return;
 
-    // Check if app is ready before accessing app.getPath()
-    // This is critical because app.getPath() can hang or fail before app.whenReady()
-    if (!app.isReady()) {
-      // App not ready yet, will try again later via ensureFileLogging() or write()
-      return;
-    }
+    const logsDir = this._resolveLogsDir();
+    if (!logsDir) return;
 
     try {
-      const logsDir = path.join(app.getPath("userData"), "logs");
-      if (!fs.existsSync(logsDir)) {
-        fs.mkdirSync(logsDir, { recursive: true });
-      }
+      fs.mkdirSync(logsDir, { recursive: true });
+      this._pruneOldLogs(logsDir, this.maxFiles - 1);
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      this.logFile = path.join(logsDir, `debug-${timestamp}.log`);
+      let candidate = path.join(logsDir, `debug-${timestamp}.log`);
+      for (let seq = 1; fs.existsSync(candidate); seq += 1) {
+        candidate = path.join(logsDir, `debug-${timestamp}-${seq}.log`);
+      }
+      this.logFile = candidate;
 
       this.logStream = fs.createWriteStream(this.logFile, { flags: "a" });
       this.fileLoggingEnabled = true;
-      this.fileLoggingPending = false;
+      this.bytesWritten = 0;
 
-      this.debug("Debug logging enabled", { logFile: this.logFile });
-      this.info("System Info", {
-        platform: process.platform,
-        nodeVersion: process.version,
-        electronVersion: process.versions.electron,
-        appPath: app.getAppPath(),
-        userDataPath: app.getPath("userData"),
-        resourcesPath: process.resourcesPath,
-        environment: process.env.NODE_ENV,
-      });
+      this._writeToStream(
+        `${this.formatLine("info", "Log file opened", {
+          platform: process.platform,
+          nodeVersion: process.version,
+          electronVersion: process.versions.electron,
+          appPath: app?.getAppPath?.() ?? null,
+          resourcesPath: process.resourcesPath,
+          environment: process.env.NODE_ENV,
+          logLevel: this.logLevel,
+        })}\n`
+      );
     } catch (error) {
       this.fileLoggingEnabled = false;
-      this.fileLoggingPending = false;
+      this.logStream = null;
       console.error("Failed to initialize debug logging:", error);
     }
   }
 
   /**
-   * Ensures file logging is initialized if debug mode is enabled.
-   * This should be called after app.whenReady() to safely initialize file logging.
+   * Opens the log file eagerly once the app is ready, so the file exists before
+   * the first warning rather than after it.
    */
   ensureFileLogging() {
-    if (this.fileLoggingPending && !this.fileLoggingEnabled) {
-      this.initializeFileLogging();
+    this.initializeFileLogging();
+  }
+
+  _rotate() {
+    const stream = this.logStream;
+    this.logStream = null;
+    this.fileLoggingEnabled = false;
+    this.bytesWritten = 0;
+    try {
+      stream?.end();
+    } catch {
+      // Already closed.
     }
+    this.initializeFileLogging();
+  }
+
+  _writeToStream(line) {
+    if (!this.logStream) return;
+    this.logStream.write(line);
+    this.bytesWritten += Buffer.byteLength(line);
+    if (this.bytesWritten >= this.maxBytes) {
+      this._rotate();
+    }
+  }
+
+  _shouldPersist(level) {
+    return this.debugMode || LOG_LEVELS[level] >= PERSIST_FROM;
+  }
+
+  // Some call sites warn per audio chunk. Persist the first few of any repeated
+  // message per window, then a single count of what was dropped.
+  _passesThrottle(level, message) {
+    const key = `${level}:${message}`;
+    const now = Date.now();
+    const entry = this._throttle.get(key);
+
+    if (!entry || now - entry.windowStart >= THROTTLE_WINDOW_MS) {
+      if (entry?.suppressed > 0) {
+        this._writeToStream(
+          `${this.formatLine("warn", `suppressed ${entry.suppressed} repeats of: ${message}`)}\n`
+        );
+      }
+      if (this._throttle.size >= THROTTLE_KEYS_MAX) this._throttle.clear();
+      this._throttle.set(key, { windowStart: now, count: 1, suppressed: 0 });
+      return true;
+    }
+
+    entry.count += 1;
+    if (entry.count > THROTTLE_LIMIT) {
+      entry.suppressed += 1;
+      return false;
+    }
+    return true;
+  }
+
+  formatLine(level, message, meta, scope, source) {
+    const scopeTag = scope ? `[${scope}]` : "";
+    const sourceTag = source ? `[${source}]` : "";
+    const metaText = this.formatMeta(meta);
+    const base = `[${new Date().toISOString()}] [${level.toUpperCase()}]${scopeTag}${sourceTag} ${message}`;
+    return metaText ? `${base} ${metaText}` : base;
   }
 
   resolveLogLevel() {
@@ -118,7 +223,7 @@ class DebugLogger {
     this.levelValue = LOG_LEVELS[this.logLevel] || LOG_LEVELS.info;
     this.debugMode = this.isDebugEnabled();
 
-    if (this.debugMode && !this.fileLoggingEnabled) {
+    if (!this.fileLoggingEnabled) {
       this.initializeFileLogging();
     }
   }
@@ -178,18 +283,14 @@ class DebugLogger {
     const normalized = normalizeLevel(level) || "info";
     if (!this.shouldLog(normalized)) return;
 
-    // Try to initialize file logging if pending and app is ready
-    if (this.fileLoggingPending && !this.fileLoggingEnabled) {
+    const persist = this._shouldPersist(normalized);
+    if (persist && !this.fileLoggingEnabled) {
       this.initializeFileLogging();
     }
 
-    const timestamp = new Date().toISOString();
     const scopeTag = scope ? `[${scope}]` : "";
     const sourceTag = source ? `[${source}]` : "";
     const levelTag = `[${normalized.toUpperCase()}]`;
-    const baseLine = `[${timestamp}] ${levelTag}${scopeTag}${sourceTag} ${message}`;
-    const metaText = this.formatMeta(meta);
-    const logLine = metaText ? `${baseLine} ${metaText}\n` : `${baseLine}\n`;
 
     const consoleFn =
       normalized === "error" || normalized === "fatal"
@@ -205,8 +306,8 @@ class DebugLogger {
       consoleFn(`${levelTag}${scopeTag}${sourceTag} ${message}`);
     }
 
-    if (this.logStream) {
-      this.logStream.write(logLine);
+    if (persist && this.logStream && this._passesThrottle(normalized, message)) {
+      this._writeToStream(`${this.formatLine(normalized, message, meta, scope, source)}\n`);
     }
   }
 
@@ -410,12 +511,31 @@ class DebugLogger {
     return this.isDebugEnabled();
   }
 
+  _flushThrottleSummaries() {
+    for (const [key, entry] of this._throttle) {
+      if (entry.suppressed > 0) {
+        const message = key.slice(key.indexOf(":") + 1);
+        this._writeToStream(
+          `${this.formatLine("warn", `suppressed ${entry.suppressed} repeats of: ${message}`)}\n`
+        );
+        entry.suppressed = 0;
+      }
+    }
+  }
+
+  // Resolves once the stream has flushed, so callers can read the file back.
   close() {
     if (this.logStream) {
-      this.log("📝 Debug logger closing");
-      this.logStream.end();
-      this.logStream = null;
+      this._flushThrottleSummaries();
     }
+    if (this.logStream) {
+      this._writeToStream(`${this.formatLine("info", "Log file closing")}\n`);
+    }
+    const stream = this.logStream;
+    this.logStream = null;
+    this.fileLoggingEnabled = false;
+    if (!stream) return Promise.resolve();
+    return new Promise((resolve) => stream.end(resolve));
   }
 }
 
@@ -423,3 +543,4 @@ class DebugLogger {
 const debugLogger = new DebugLogger();
 
 module.exports = debugLogger;
+module.exports.DebugLogger = DebugLogger;

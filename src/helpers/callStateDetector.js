@@ -14,6 +14,7 @@
 const { spawn } = require("child_process");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
+const health = require("./meetingDetectionHealth");
 const { resolveBinaryPath } = require("../utils/serverUtils");
 
 const ACTIVATE_DEBOUNCE_MS = 2500; // avoid firing on brief device blips
@@ -54,6 +55,7 @@ class CallStateDetector extends EventEmitter {
         {},
         "meeting"
       );
+      health.setMode("call", "unavailable", { reason: "binary-not-found" });
       return;
     }
     try {
@@ -61,6 +63,7 @@ class CallStateDetector extends EventEmitter {
     } catch (err) {
       debugLogger.warn("Failed to spawn call-detector", { error: err.message }, "meeting");
       this.proc = null;
+      health.setMode("call", "unavailable", { reason: "spawn-failed" });
       return;
     }
     this.proc.stdout.on("data", (chunk) => this._onData(chunk));
@@ -68,13 +71,19 @@ class CallStateDetector extends EventEmitter {
       debugLogger.debug("call-detector stderr", { msg: d.toString().trim() }, "meeting")
     );
     this.proc.on("close", (code) => {
-      debugLogger.debug("call-detector exited", { code }, "meeting");
+      debugLogger.warn("call-detector exited", { code }, "meeting");
       this.proc = null;
+      health.recordChild("call", { alive: false, exitCode: code });
+      health.setMode("call", "unavailable", { reason: "call-detector-exited" });
     });
     this.proc.on("error", (err) => {
       debugLogger.warn("call-detector process error", { error: err.message }, "meeting");
       this.proc = null;
+      health.recordChild("call", { alive: false });
+      health.setMode("call", "unavailable", { reason: "call-detector-error" });
     });
+    health.setMode("call", "event-driven", { via: "macos-call-detector" });
+    health.recordChild("call", { pid: this.proc.pid, alive: true });
     debugLogger.info("Call-state detector started", { binaryPath }, "meeting");
   }
 
@@ -245,6 +254,7 @@ class CallStateDetector extends EventEmitter {
     this._callUsedCamera = false;
     this._stopEndPoll();
     this.state = { camera: false, microphone: false };
+    health.setMode("call", "stopped");
   }
 }
 

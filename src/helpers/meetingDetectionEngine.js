@@ -1,6 +1,7 @@
 const { BrowserWindow, shell } = require("electron");
 const debugLogger = require("./debugLogger");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
+const health = require("./meetingDetectionHealth");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 const MAX_AUTO_RECORD_MS = 4 * 60 * 60 * 1000; // safety cap for auto-started recordings
@@ -48,6 +49,26 @@ class MeetingDetectionEngine {
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
     this._bindListeners();
+  }
+
+  // Assignment publishes the latch, so a future call site cannot quietly skip
+  // telemetry for the two flags that can silently disable detection.
+  get _meetingModeActive() {
+    return this.__meetingModeActive ?? false;
+  }
+
+  set _meetingModeActive(value) {
+    this.__meetingModeActive = value;
+    health.setLatches({ meetingModeActive: value });
+  }
+
+  get _userRecording() {
+    return this.__userRecording ?? false;
+  }
+
+  set _userRecording(value) {
+    this.__userRecording = value;
+    health.setLatches({ userRecording: value });
   }
 
   _bindListeners() {
@@ -220,39 +241,37 @@ class MeetingDetectionEngine {
     this._handleDetection("calendar", event.id, { event, detectedAt: Date.now() });
   }
 
+  _suppress(reason, detectionId, source) {
+    health.recordSuppression(reason, { detectionId, source });
+    debugLogger.info("Detection suppressed", { reason, detectionId, source }, "meeting");
+  }
+
   _handleDetection(source, key, data) {
     const detectionId = `${source}:${key}`;
 
     if (source === "audio" && !this.preferences.audioDetection) {
-      debugLogger.debug("Audio detection disabled, ignoring", { detectionId }, "meeting");
+      this._suppress("audio-detection-disabled", detectionId, source);
       return;
     }
 
     if (!this._notificationsEnabledFor(source)) {
-      debugLogger.info(
-        "Notification disabled by preference, ignoring",
-        { detectionId, source },
-        "meeting"
-      );
+      this._suppress("notifications-disabled", detectionId, source);
       return;
     }
 
     if (this.activeDetections.has(detectionId)) {
-      debugLogger.debug("Detection already active, skipping", { detectionId }, "meeting");
+      this._suppress("already-active", detectionId, source);
       return;
     }
 
     if (this._meetingModeActive) {
-      debugLogger.info(
-        "Suppressing detection — meeting mode already active",
-        { detectionId },
-        "meeting"
-      );
+      this._suppress("meeting-mode-active", detectionId, source);
       return;
     }
 
     if (this._userRecording || this._postRecordingCooldown) {
       debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
+      health.recordSuppression("queued-user-recording", { detectionId, source });
       this._notificationQueue.push({ source, key, data });
       this.activeDetections.set(detectionId, { source, key, data, dismissed: false });
       return;
@@ -314,6 +333,7 @@ class MeetingDetectionEngine {
       detection.event = event;
     }
 
+    health.recordEvent("engine");
     this.windowManager.showMeetingNotification({
       detectionId,
       source,

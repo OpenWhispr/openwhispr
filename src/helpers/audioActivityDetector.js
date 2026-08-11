@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
+const health = require("./meetingDetectionHealth");
 
 const execAsync = promisify(exec);
 
@@ -50,6 +51,8 @@ class AudioActivityDetector extends EventEmitter {
     const started = await this._tryEventDriven();
     if (started) {
       this._eventDriven = true;
+      health.setMode("audio", "event-driven", { via: process.platform });
+      health.recordChild("audio", { pid: this._listenerProcess?.pid ?? null, alive: true });
       debugLogger.info(
         "Audio activity detector started (event-driven)",
         { platform: process.platform },
@@ -57,6 +60,7 @@ class AudioActivityDetector extends EventEmitter {
       );
     } else {
       this._eventDriven = false;
+      health.setMode("audio", "polling", { reason: "event-driven-unavailable" });
       this._startPolling();
       debugLogger.info(
         "Audio activity detector started (polling)",
@@ -78,6 +82,7 @@ class AudioActivityDetector extends EventEmitter {
     }
     this._reset();
     this._eventDriven = false;
+    health.setMode("audio", "stopped");
     debugLogger.info("Audio activity detector stopped", {}, "meeting");
   }
 
@@ -190,8 +195,10 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   _attachFallbackHandlers(child, label) {
-    const fallbackToPolling = () => {
+    const fallbackToPolling = (reason) => {
       this._listenerProcess = null;
+      health.recordChild("audio", { alive: false });
+      health.setMode("audio", "polling", { reason });
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
         this._startPolling();
@@ -200,12 +207,13 @@ class AudioActivityDetector extends EventEmitter {
 
     child.on("error", (err) => {
       debugLogger.warn(`${label} error`, { error: err.message }, "meeting");
-      fallbackToPolling();
+      fallbackToPolling(`${label}-error`);
     });
 
     child.on("exit", (code) => {
       debugLogger.warn(`${label} exited`, { code }, "meeting");
-      fallbackToPolling();
+      health.recordChild("audio", { alive: false, exitCode: code });
+      fallbackToPolling(`${label}-exited`);
     });
   }
 
@@ -354,19 +362,16 @@ class AudioActivityDetector extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   _onMicStateChanged(active) {
+    health.recordEvent("audio");
     if (this._userRecording) {
-      debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
+      health.recordSuppression("user-recording", { source: "audio", active });
       return;
     }
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) {
-      debugLogger.debug(
-        "Mic state changed but in cooldown",
-        {
-          active,
-          remainingMs: COOLDOWN_MS - (Date.now() - this.lastDismissedAt),
-        },
-        "meeting"
-      );
+      health.recordSuppression("dismiss-cooldown", {
+        source: "audio",
+        remainingMs: COOLDOWN_MS - (Date.now() - this.lastDismissedAt),
+      });
       return;
     }
 
@@ -379,7 +384,7 @@ class AudioActivityDetector extends EventEmitter {
     if (active) {
       this._clearResetTimer();
       if (this.hasPrompted) {
-        debugLogger.debug("Mic active but already prompted, suppressing", {}, "meeting");
+        health.recordSuppression("already-prompted", { source: "audio" });
         return;
       }
       if (!this.audioActiveStart) this.audioActiveStart = Date.now();
