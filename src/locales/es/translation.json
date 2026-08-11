@@ -1318,11 +1318,11 @@
         },
         "business": {
           "name": "Business",
-          "monthlyPrice": "$20",
+          "monthlyPrice": "$16",
           "monthlyPeriod": "/mes",
-          "annualPrice": "$200",
+          "annualPrice": "$160",
           "annualPeriod": "/año",
-          "annualEquivalent": "$16.67",
+          "annualEquivalent": "$13.33",
           "includesPrefix": "Todas las funciones de Pro +",
           "badge": "Más popular",
           "features": [

@@ -1556,11 +1556,11 @@
         },
         "business": {
           "name": "Business",
-          "monthlyPrice": "$20",
+          "monthlyPrice": "$16",
           "monthlyPeriod": "/mois",
-          "annualPrice": "$200",
+          "annualPrice": "$160",
           "annualPeriod": "/an",
-          "annualEquivalent": "$16.67",
+          "annualEquivalent": "$13.33",
           "includesPrefix": "Toutes les fonctionnalités Pro +",
           "badge": "Le plus populaire",
           "features": [

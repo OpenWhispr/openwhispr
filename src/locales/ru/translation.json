@@ -1294,11 +1294,11 @@
         },
         "business": {
           "name": "Business",
-          "monthlyPrice": "$20",
+          "monthlyPrice": "$16",
           "monthlyPeriod": "/мес.",
-          "annualPrice": "$200",
+          "annualPrice": "$160",
           "annualPeriod": "/год",
-          "annualEquivalent": "$16.67",
+          "annualEquivalent": "$13.33",
           "includesPrefix": "Все функции Pro +",
           "badge": "Самый популярный",
           "features": [

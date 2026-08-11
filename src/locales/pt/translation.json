@@ -1269,11 +1269,11 @@
         },
         "business": {
           "name": "Business",
-          "monthlyPrice": "$20",
+          "monthlyPrice": "$16",
           "monthlyPeriod": "/mês",
-          "annualPrice": "$200",
+          "annualPrice": "$160",
           "annualPeriod": "/ano",
-          "annualEquivalent": "$16.67",
+          "annualEquivalent": "$13.33",
           "includesPrefix": "Todos os recursos do Pro +",
           "badge": "Mais popular",
           "features": [
