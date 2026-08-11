@@ -27,6 +27,21 @@ export const DOWNLOAD_ERROR_KEYS: Record<string, string> = {
   SSRF_BLOCKED: "urlDownloadFailed",
 };
 
+// Transcription error codes → notes.upload.* i18n keys. Codes absent here fall
+// back to the raw main-process message.
+const TRANSCRIPTION_ERROR_KEYS: Record<string, string> = {
+  NO_SPEECH_DETECTED: "noSpeechDetected",
+  CHUNK_LOSS_EXCEEDED: "chunkLossExceeded",
+};
+
+// A coded failure arrives either as a returned result (BYOK, local) or as a
+// thrown error — OpenWhispr Cloud rethrows it through withSessionRefresh — so
+// every call site resolves the key from whichever shape it is holding.
+export function transcriptionErrorKey(failure: unknown): string | undefined {
+  const code = (failure as { code?: string } | null | undefined)?.code;
+  return code ? TRANSCRIPTION_ERROR_KEYS[code] : undefined;
+}
+
 export const notesInputClass = cn(
   "w-full h-8 px-3 rounded-md text-xs",
   "bg-foreground/3 dark:bg-white/4 border border-border/30 dark:border-white/6",

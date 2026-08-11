@@ -21,6 +21,7 @@ const {
   createTeardownGate,
   createUploadSlots,
 } = require("../../src/helpers/cloudChunkPolicy");
+const { changeLanguage } = require("../../src/helpers/i18nMain");
 const { createAbortError } = require("../../src/helpers/abortError");
 
 // The numbers are the #1326 contract: a dead upload fails within 2 minutes and
@@ -249,6 +250,18 @@ test("the final missing-audio marker ends at the real input duration", () => {
   const results = new Array(19).fill(SILENT_CHUNK);
   results[18] = null;
   assert.equal(assembleChunkTranscript(results, 240, 73 * 60), "[missing audio 1:12:00-1:13:00]");
+});
+
+// The marker is persisted into notes and pasted by dictation, so it belongs to
+// the UI language like the [Speaker N] labels do.
+test("the missing-audio marker follows the UI language", (t) => {
+  changeLanguage("de");
+  t.after(() => changeLanguage("en"));
+
+  assert.equal(
+    assembleChunkTranscript([{ text: "eins" }, null], 240),
+    "eins [fehlendes Audio 4:00-8:00]"
+  );
 });
 
 test("upload slots cap concurrent holders across independent acquirers", async () => {

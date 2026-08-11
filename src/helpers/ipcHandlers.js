@@ -399,12 +399,11 @@ async function chunkedCloudTranscribe({
               timedOut,
               teardownsDuringAttempt: uploadPoolTeardowns - teardownsAtStart,
             });
-            // Drop the pool while still holding the slot: released first, a
+            // Drop the pool while still holding the slot — released first, a
             // queued sibling is admitted onto the pool microseconds before
-            // closeAllConnections() kills it, burning an attempt it never
-            // owned. No HTTP answer means the pool (not the server) is the
-            // suspect; a fatal TLS/protocol alert means it is provably
-            // poisoned and the drop is forced through the cooldown gate.
+            // closeAllConnections() kills it and burns an attempt it never
+            // owned. A fatal TLS/protocol alert proves the pool is poisoned,
+            // so that drop is forced through the cooldown gate.
             if (!jobSignal.aborted && !collateral) {
               const poisoned = isConnectionPoisoningFailure(err);
               if (poisoned || isNetworkLevelFailure(err, { timedOut })) {
@@ -482,10 +481,9 @@ async function chunkedCloudTranscribe({
     }
 
     if (failed / totalChunks > CLOUD_CHUNK_MAX_LOSS_RATIO) {
-      throw Object.assign(
-        new Error(`Transcription failed: ${failed} of ${totalChunks} audio segments were lost`),
-        { code: "CHUNK_LOSS_EXCEEDED", failedChunks: failed, totalChunks }
-      );
+      throw Object.assign(new Error(`${failed} of ${totalChunks} audio segments were lost`), {
+        code: "CHUNK_LOSS_EXCEEDED",
+      });
     }
 
     const text = assembleChunkTranscript(results, segmentDuration, durationSeconds);
@@ -3004,16 +3002,14 @@ class IPCHandlers {
         try {
           await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
           // Auto-clustering over-splits long single-mic audio at the 0.55
-          // default, so the threshold ramps with duration unless the caller
-          // pinned one. With numSpeakers > 0 sherpa clusters to exactly that
-          // count and the threshold is moot.
+          // default, so the threshold ramps with duration unless pinned.
           const durationSeconds = fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
           const threshold = resolveClusterThreshold(durationSeconds, options.threshold);
 
           let segments = await this.diarizationManager.diarize(wavPath, { numSpeakers, threshold });
           // The meeting path caps clusters via its expectation resolver; this
-          // upload path fed raw sherpa output straight to the merge, which is
-          // how a 2-person voice memo surfaced 46 speakers.
+          // path fed raw sherpa output to the merge, which is how a 2-person
+          // voice memo surfaced 46 speakers.
           segments = dropNegligibleClusters(segments);
           segments = this.diarizationManager.capSpeakerClusters(
             segments,

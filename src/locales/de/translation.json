@@ -597,7 +597,8 @@
         "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
         "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan.",
-        "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut."
+        "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut.",
+        "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -2712,6 +2713,7 @@
       "transcriptionComplete": "Transkription abgeschlossen",
       "partialWarning": "Ein Teil der Audiodatei konnte nicht transkribiert werden.",
       "partialWarningCount": "{{failed}} von {{total}} Audioabschnitten konnten nicht transkribiert werden.",
+      "chunkLossExceeded": "Wegen eines Netzwerkproblems ging zu viel Audio verloren. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
       "openNote": "Notiz öffnen",
       "uploadAnother": "Weitere hochladen",
       "retry": "Erneut versuchen",
@@ -3399,7 +3401,8 @@
     "speaker": {
       "you": "Du",
       "others": "Andere"
-    }
+    },
+    "missingAudio": "[fehlendes Audio {{from}}-{{to}}]"
   },
   "dictationTranslation": {
     "title": "Diktat-Übersetzung",

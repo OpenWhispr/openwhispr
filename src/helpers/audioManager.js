@@ -2619,6 +2619,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!res.success) {
         const err = new Error(res.error || "Cloud transcription failed");
         err.code = res.code;
+        // The recording is kept by saveFailedTranscription, so point the user
+        // at History rather than leaving them with a raw main-process string.
+        if (res.code === "CHUNK_LOSS_EXCEEDED") {
+          err.messageKey = "hooks.audioRecording.errorDescriptions.chunkLoss";
+        }
         throw err;
       }
       return res;

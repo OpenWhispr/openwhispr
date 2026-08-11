@@ -597,7 +597,8 @@
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
         "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
-        "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。"
+        "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。",
+        "chunkLoss": "網路問題導致錄音大部分遺失。請從歷史記錄中重新轉錄。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -2521,6 +2522,7 @@
       "transcriptionComplete": "轉錄完成",
       "partialWarning": "部分音訊內容無法轉錄。",
       "partialWarningCount": "{{total}}個音訊片段中有{{failed}}個無法轉錄。",
+      "chunkLossExceeded": "由於網路問題遺失了過多音訊。請檢查網路連線後重試。",
       "openNote": "開啟筆記",
       "uploadAnother": "上傳另一個",
       "retry": "重試",
@@ -3339,7 +3341,8 @@
     "speaker": {
       "you": "你",
       "others": "其他人"
-    }
+    },
+    "missingAudio": "[音訊缺失 {{from}}-{{to}}]"
   },
   "workspaces": {
     "switcher": {

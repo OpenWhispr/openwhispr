@@ -597,7 +597,8 @@
         "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
         "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan.",
-        "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo."
+        "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+        "chunkLoss": "Un problema de red hizo que se perdiera demasiada parte de la grabación. Vuelve a transcribirla desde el historial."
       },
       "translationFallback": {
         "unreachableTitle": "Traducción no disponible",
@@ -2569,6 +2570,7 @@
       "transcriptionComplete": "Transcripción completada",
       "partialWarning": "No se pudo transcribir una parte del audio.",
       "partialWarningCount": "No se pudieron transcribir {{failed}} de {{total}} secciones del audio.",
+      "chunkLossExceeded": "Se perdió demasiado audio por un problema de red. Comprueba tu conexión e inténtalo de nuevo.",
       "openNote": "Abrir nota",
       "uploadAnother": "Subir otro",
       "retry": "Reintentar",
@@ -3339,7 +3341,8 @@
     "speaker": {
       "you": "Tú",
       "others": "Otros"
-    }
+    },
+    "missingAudio": "[audio faltante {{from}}-{{to}}]"
   },
   "workspaces": {
     "switcher": {

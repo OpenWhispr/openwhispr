@@ -1,5 +1,6 @@
 const { createAbortError } = require("./abortError");
 const { formatTimestamp } = require("./speakerMerge");
+const { i18nMain } = require("./i18nMain");
 
 // Retry/backoff/concurrency policy for the chunked cloud upload path (#1326).
 // Kept free of electron imports so the rules stay unit-testable.
@@ -65,10 +66,10 @@ function isNetworkLevelFailure(err, { timedOut = false } = {}) {
 }
 
 // Fatal TLS alerts and HTTP/2/QUIC protocol errors poison every stream on the
-// connection — the cooldown exists to absorb bursts of ordinary failures, not
-// to keep a provably sick pool alive, so these force the teardown through it.
-// Chromium's session.fetch rejections carry no structured code, only the
-// net::ERR_* name inside the message.
+// connection, so these force the teardown through the cooldown — which exists
+// to absorb bursts of ordinary failures, not to keep a provably sick pool
+// alive. Chromium's fetch rejections carry the net::ERR_* name only in the
+// message, never a structured code.
 const POISONED_CONNECTION_RE = /net::ERR_(SSL|HTTP2|QUIC)_/;
 
 function isConnectionPoisoningFailure(err) {
@@ -113,8 +114,10 @@ function summarizeChunkResults(results) {
 
 // Joins surviving chunk texts in order and marks every failed span with an
 // explicit gap (consecutive failures collapse into one marker), so a partial
-// transcript reads as partial instead of seamlessly wrong. Silent segments
-// are omitted, and a known input duration clamps the final gap to its real end.
+// transcript reads as partial instead of seamlessly wrong. Silent segments are
+// omitted, and a known input duration clamps the final gap to its real end. The
+// marker is read by users and pasted by dictation, so it is localized like the
+// [Speaker N] labels in transcriptFormatter.
 function assembleChunkTranscript(results, segmentDurationSeconds, totalDurationSeconds) {
   const pieces = [];
   for (let i = 0; i < results.length; i++) {
@@ -125,14 +128,17 @@ function assembleChunkTranscript(results, segmentDurationSeconds, totalDurationS
     }
     const gapStart = i;
     while (i + 1 < results.length && results[i + 1] == null) i++;
-    const from = formatTimestamp(gapStart * segmentDurationSeconds);
     const gapEnd = (i + 1) * segmentDurationSeconds;
-    const to = formatTimestamp(
-      Number.isFinite(totalDurationSeconds) && totalDurationSeconds > 0
-        ? Math.min(gapEnd, totalDurationSeconds)
-        : gapEnd
+    pieces.push(
+      i18nMain.t("transcript.missingAudio", {
+        from: formatTimestamp(gapStart * segmentDurationSeconds),
+        to: formatTimestamp(
+          Number.isFinite(totalDurationSeconds) && totalDurationSeconds > 0
+            ? Math.min(gapEnd, totalDurationSeconds)
+            : gapEnd
+        ),
+      })
     );
-    pieces.push(`[missing audio ${from}-${to}]`);
   }
   return pieces.join(" ").replace(/\s+/g, " ").trim();
 }

@@ -29,6 +29,7 @@ import {
   findDefaultFolder,
   findVideosFolder,
   DOWNLOAD_ERROR_KEYS,
+  transcriptionErrorKey,
   MEETINGS_FOLDER_NAME,
 } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
@@ -674,7 +675,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setProgress(100);
         setResult(res.text);
         setPartialWarning(
-          res.warning ? { failed: res.failedChunks ?? 0, total: res.totalChunks ?? 0 } : null
+          res.failedChunks && res.totalChunks
+            ? { failed: res.failedChunks, total: res.totalChunks }
+            : null
         );
 
         let title: string;
@@ -709,9 +712,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setState("complete");
       } else {
         setProgress(0);
+        const errorKey = transcriptionErrorKey(res);
         setError(
-          res.code === "NO_SPEECH_DETECTED"
-            ? t("notes.upload.noSpeechDetected")
+          errorKey
+            ? t(`notes.upload.${errorKey}`)
             : res.error || t("notes.upload.transcriptionFailed")
         );
         setState("error");
@@ -722,7 +726,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (progressCleanupRef.current) progressCleanupRef.current();
       progressCleanupRef.current = null;
       setProgress(0);
-      setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
+      const errorKey = transcriptionErrorKey(err);
+      if (errorKey) {
+        setError(t(`notes.upload.${errorKey}`));
+      } else {
+        setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
+      }
       setState("error");
     }
   };
@@ -1295,7 +1304,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               <div className="mt-2">
                 <label
                   htmlFor="upload-num-speakers"
-                  className="text-xs text-foreground/40 font-medium"
+                  className="block text-xs font-medium text-foreground/50"
                 >
                   {t("notes.upload.numSpeakersLabel")}
                 </label>
@@ -1320,7 +1329,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     "mt-1 w-full h-8 px-2.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   )}
                 />
-                <p className="text-[10px] text-foreground/20 mt-1">
+                <p className="text-[10px] text-foreground/25 mt-1.5">
                   {t("notes.upload.numSpeakersHint")}
                 </p>
               </div>
@@ -1891,12 +1900,10 @@ function CompleteView({
 
       {partialWarning && (
         <p className="text-xs text-destructive/50 max-w-[240px] text-center mb-4 -mt-2">
-          {partialWarning.failed > 0
-            ? t("notes.upload.partialWarningCount", {
-                failed: partialWarning.failed,
-                total: partialWarning.total,
-              })
-            : t("notes.upload.partialWarning")}
+          {t("notes.upload.partialWarningCount", {
+            failed: partialWarning.failed,
+            total: partialWarning.total,
+          })}
         </p>
       )}
 

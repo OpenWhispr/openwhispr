@@ -597,7 +597,8 @@
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
         "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
-        "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。"
+        "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+        "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
@@ -2505,6 +2506,7 @@
       "transcriptionComplete": "文字起こし完了",
       "partialWarning": "音声の一部を文字起こしできませんでした。",
       "partialWarningCount": "{{total}}個の音声セクションのうち{{failed}}個を文字起こしできませんでした。",
+      "chunkLossExceeded": "ネットワークの問題で音声の大部分が失われました。接続を確認してもう一度お試しください。",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
       "retry": "再試行",
@@ -3339,7 +3341,8 @@
     "speaker": {
       "you": "あなた",
       "others": "他の人"
-    }
+    },
+    "missingAudio": "[音声欠落 {{from}}-{{to}}]"
   },
   "workspaces": {
     "switcher": {
