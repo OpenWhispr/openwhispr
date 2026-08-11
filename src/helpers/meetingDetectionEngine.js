@@ -2,9 +2,17 @@ const { BrowserWindow, shell } = require("electron");
 const debugLogger = require("./debugLogger");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
 const health = require("./meetingDetectionHealth");
+const { resetAutomationDenied } = require("./browserMeetingUrlChecker");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 const MAX_AUTO_RECORD_MS = 4 * 60 * 60 * 1000; // safety cap for auto-started recordings
+// Backstop only: the latch is cleared where the session ends. Long enough not to
+// interrupt a meeting being set up, short enough that a missed clear costs one
+// coffee break rather than the rest of the day.
+const MEETING_MODE_WATCHDOG_MS = 15 * 60 * 1000;
+// An unanswered prompt keeps its detection id reserved; without an expiry that id
+// is blocked for the life of the process.
+const DETECTION_TTL_MS = 30 * 60 * 1000;
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 
@@ -60,6 +68,8 @@ class MeetingDetectionEngine {
   set _meetingModeActive(value) {
     this.__meetingModeActive = value;
     health.setLatches({ meetingModeActive: value });
+    if (value) this._armMeetingModeWatchdog();
+    else this._clearMeetingModeWatchdog();
   }
 
   get _userRecording() {
@@ -154,6 +164,9 @@ class MeetingDetectionEngine {
       })
       .catch((error) => {
         this._autoStarted = false;
+        // The latch is set before the navigation is awaited, so a rejection here
+        // would otherwise disable detection for the rest of the process.
+        this._meetingModeActive = false;
         debugLogger.error("Auto-start meeting failed", { error: error?.message }, "meeting");
       });
   }
@@ -166,6 +179,51 @@ class MeetingDetectionEngine {
       this.broadcastToWindows("meeting-auto-stop-request", {});
     }
     this._autoStarted = false;
+  }
+
+  _armMeetingModeWatchdog() {
+    this._clearMeetingModeWatchdog();
+    if (this._userRecording) return; // a live recording is a legitimate reason to stay latched
+    this._meetingModeWatchdog = setTimeout(() => {
+      this._meetingModeWatchdog = null;
+      if (!this.__meetingModeActive || this._userRecording) return;
+      debugLogger.warn(
+        "Meeting mode was still latched with no recording; clearing",
+        { afterMs: MEETING_MODE_WATCHDOG_MS },
+        "meeting"
+      );
+      health.recordSuppression("watchdog-cleared-meeting-mode", {});
+      this.setMeetingModeActive(false);
+    }, MEETING_MODE_WATCHDOG_MS);
+    this._meetingModeWatchdog?.unref?.();
+  }
+
+  _clearMeetingModeWatchdog() {
+    if (this._meetingModeWatchdog) {
+      clearTimeout(this._meetingModeWatchdog);
+      this._meetingModeWatchdog = null;
+    }
+  }
+
+  _sweepStaleDetections() {
+    const now = Date.now();
+    for (const [detectionId, detection] of this.activeDetections) {
+      if (typeof detection?.at === "number" && now - detection.at >= DETECTION_TTL_MS) {
+        this.activeDetections.delete(detectionId);
+        health.recordSuppression("detection-expired", { detectionId });
+      }
+    }
+  }
+
+  // Ask every detector to prove it is still working — used after the machine
+  // wakes, when a child may have died while we were asleep.
+  revalidate(reason = "revalidate") {
+    debugLogger.info("Revalidating meeting detection", { reason }, "meeting");
+    // Automation denial is cached for the process; the user may have granted it
+    // since, and the URL check is what separates a meeting from Photo Booth.
+    resetAutomationDenied();
+    this.audioActivityDetector?.revalidate?.(reason);
+    this.callStateDetector?.revalidate?.(reason);
   }
 
   _armAutoStopSafety() {
@@ -248,6 +306,7 @@ class MeetingDetectionEngine {
 
   _handleDetection(source, key, data) {
     const detectionId = `${source}:${key}`;
+    this._sweepStaleDetections();
 
     if (source === "audio" && !this.preferences.audioDetection) {
       this._suppress("audio-detection-disabled", detectionId, source);
@@ -273,12 +332,12 @@ class MeetingDetectionEngine {
       debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
       health.recordSuppression("queued-user-recording", { detectionId, source });
       this._notificationQueue.push({ source, key, data });
-      this.activeDetections.set(detectionId, { source, key, data, dismissed: false });
+      this.activeDetections.set(detectionId, { source, key, data, dismissed: false, at: Date.now() });
       return;
     }
 
     debugLogger.info("Meeting detection triggered", { detectionId, source }, "meeting");
-    this.activeDetections.set(detectionId, { source, key, data, dismissed: false });
+    this.activeDetections.set(detectionId, { source, key, data, dismissed: false, at: Date.now() });
     this._showPrompt(detectionId, source, key, data);
   }
 
@@ -416,12 +475,17 @@ class MeetingDetectionEngine {
 
     this.broadcastToWindows("note-added", noteResult.note);
 
-    await this.windowManager.queueMeetingNoteNavigation({
-      noteId: noteResult.note.id,
-      folderId: meetingsFolder.id,
-      event,
-      trigger: "hotkey",
-    });
+    try {
+      await this.windowManager.queueMeetingNoteNavigation({
+        noteId: noteResult.note.id,
+        folderId: meetingsFolder.id,
+        event,
+        trigger: "hotkey",
+      });
+    } catch (error) {
+      this._meetingModeActive = false;
+      debugLogger.error("Manual meeting navigation failed", { error: error?.message }, "meeting");
+    }
   }
 
   async joinCalendarMeeting(eventId, trigger = "calendar-join") {
@@ -460,12 +524,17 @@ class MeetingDetectionEngine {
 
     this.broadcastToWindows("note-added", updateResult?.note || noteResult.note);
 
-    await this.windowManager.queueMeetingNoteNavigation({
-      noteId: noteResult.note.id,
-      folderId: meetingsFolder.id,
-      event: calEvent,
-      trigger,
-    });
+    try {
+      await this.windowManager.queueMeetingNoteNavigation({
+        noteId: noteResult.note.id,
+        folderId: meetingsFolder.id,
+        event: calEvent,
+        trigger,
+      });
+    } catch (error) {
+      this._meetingModeActive = false;
+      debugLogger.error("Calendar join navigation failed", { error: error?.message }, "meeting");
+    }
   }
 
   handleNotificationTimeout() {
@@ -499,6 +568,12 @@ class MeetingDetectionEngine {
 
     const best = this._notificationQueue[0];
     const detectionId = `${best.source}:${best.key}`;
+
+    // Only one overlay is shown; the rest are dropped here, so their reservations
+    // have to go with them or they block their ids until the next sweep.
+    for (const { source, key } of this._notificationQueue.slice(1)) {
+      this.activeDetections.delete(`${source}:${key}`);
+    }
 
     const detection = this.activeDetections.get(detectionId);
     if (detection && !detection.dismissed) {
@@ -535,11 +610,13 @@ class MeetingDetectionEngine {
     this.audioActivityDetector.setUserRecording(active);
 
     if (active) {
+      this._clearMeetingModeWatchdog();
       if (this._postRecordingCooldown) {
         clearTimeout(this._postRecordingCooldown);
         this._postRecordingCooldown = null;
       }
     } else {
+      if (this.__meetingModeActive) this._armMeetingModeWatchdog();
       // Recording stopped (manually or auto): stop treating the mic as ours and
       // clear the auto-start bookkeeping.
       this.callStateDetector?.setSelfRecording(false);
@@ -592,6 +669,7 @@ class MeetingDetectionEngine {
     this.callStateDetector?.stop();
     this._autoStarted = false;
     this._clearAutoStopSafety();
+    this._clearMeetingModeWatchdog();
     this.activeDetections.clear();
     this._meetingModeActive = false;
     if (this._postRecordingCooldown) {

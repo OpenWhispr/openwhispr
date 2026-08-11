@@ -84,4 +84,13 @@ async function checkForActiveMeetingUrl() {
     : { matched: false, unavailable: true };
 }
 
-module.exports = { checkForActiveMeetingUrl, MEETING_URL_PATTERNS };
+// The denial is cached for the process, but the permission can be granted while
+// the app runs — re-check after a wake or when the user asks for a health check.
+function resetAutomationDenied() {
+  if (!automationDenied) return false;
+  automationDenied = false;
+  debugLogger.info("Re-checking browser Automation permission", {}, "meeting");
+  return true;
+}
+
+module.exports = { checkForActiveMeetingUrl, MEETING_URL_PATTERNS, resetAutomationDenied };

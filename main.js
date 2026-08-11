@@ -530,6 +530,9 @@ async function startApp() {
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
     }
+    // A native detector child can die while the machine is asleep; nothing else
+    // would notice until the user reported that detection had stopped.
+    meetingDetectionEngine?.revalidate("resume");
     // Sleep evicts the local GPU model from VRAM; reload it once the driver settles. See #766.
     if (wakeRewarmTimer) clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = setTimeout(() => {
