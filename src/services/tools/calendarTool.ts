@@ -22,7 +22,7 @@ function getWindowMinutes(timeRange: TimeRange): number {
 export const calendarTool: ToolDefinition = {
   name: "get_calendar_events",
   description:
-    "Get upcoming Google Calendar events for a given time range. Returns event summaries, times, and locations.",
+    "Get upcoming events from the user's connected calendars for a given time range. Returns event summaries, times, and locations.",
   parameters: {
     type: "object",
     properties: {

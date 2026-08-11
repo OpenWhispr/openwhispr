@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.2] - 2026-08-11
 
-Meetings get reliable speaker identity — labels you set now stick, and live identification works on Windows loopback and Intel Macs. The voice agent gains two ways to act on what's in front of you: edit highlighted text in place, and optionally send a screenshot of your screen along with your command. Organizations get server-enforced policy across every setting, macOS gets native Apple Calendar support, and there's a broad reliability pass on dictation, sync, billing, and translations.
+Meetings get more reliable speaker identity — labels you set now stick, Windows loopback gains live identification, and Intel Mac meetings no longer fail when the optional ONNX binding is unavailable. The voice agent can edit highlighted text in place or use an opt-in screenshot as context. Collaboration is now free for signed-in users, Microsoft and Apple Calendar join Google Calendar, and organizations gain server-enforced policy plus centrally managed Bedrock and Azure OpenAI access.
 
 ### Voice agent
 
@@ -19,7 +19,7 @@ Meetings get reliable speaker identity — labels you set now stick, and live id
 
 - **Speaker labels stay put.** Manual speaker labels persist, identities stay stable across a meeting, and reconciliation no longer deletes a mapping you set by hand when live and offline speaker ids happen to match. (#1501)
 - **Live speaker identification on Windows.** Windows loopback capture now identifies speakers live, matching macOS. (#1502)
-- **Speaker labels fixed on Intel Macs.** (#1538)
+- **Intel Mac meetings no longer fail at startup.** ONNX Runtime no longer ships a macOS x86_64 binding, so live speaker identification and voice fingerprinting remain unavailable on Intel Macs; meeting recording, transcription, offline diarization, and keyword note search continue normally. (#1538)
 - **Diarization writes land on the right note.** Delayed diarization is always persisted to the note it belongs to, and completions are serialized so labels don't get crossed between notes. (#1539, #1495)
 - **Tinfoil realtime meeting transcription.** Tinfoil joins the realtime meeting providers.
 - **Live speaker identification degrades gracefully.** A missing onnxruntime binding disables live identification instead of breaking the meeting.
@@ -29,6 +29,7 @@ Meetings get reliable speaker identity — labels you set now stick, and live id
 ### Organization policy
 
 - **Every policy field is enforced.** Organization policy is now applied across the whole app rather than just the settings UI: restricted options are hidden with safe fallbacks, enforcement covers modes, providers, features, sharing, and retention, and a malformed policy response fails closed. (#1074, #1506)
+- **Managed Enterprise AI.** Enterprise workspaces can centrally configure Amazon Bedrock or Azure OpenAI for cleanup, voice agent, note formatting, note chat, and translation. Employees sign in with company SSO instead of entering cloud keys; short-lived credentials stay in the desktop main process and prompts go directly to the organization's cloud account. (#1530)
 
 ### Dictation
 
@@ -39,17 +40,22 @@ Meetings get reliable speaker identity — labels you set now stick, and live id
 
 ### Notes & sync
 
+- **Collaboration is free.** Any signed-in account can create and join team spaces, share individual notes, and sync shared content even when personal cloud backup is off. New users who missed an invitation email can join when invited or verified through company SSO; otherwise they can request access from workspace admins. (#1549)
+- **Workspace invites no longer stop at prepaid capacity.** Free workspaces can add members without a subscription. Paid workspaces show the estimated prorated seat cost before an invitation is sent and increase Stripe capacity only if it is accepted. (#1549)
+- **Idle collaboration sync backs off.** Accounts with no shared activity gradually reduce background checks to once per hour, while manual syncs and active collaboration remain immediate. (#1549)
 - **Tombstones survive.** Note pulls and deletes are guarded so a tombstone can't be lost and a deleted note resurrected. (#1354, thanks @xAlcahest)
 - **Edits during a push are not lost.** A note edited while its save is being acknowledged stays pending instead of being marked clean.
 
 ### Account & billing
 
-- **Edit your profile.** Name, email, and password can be changed from the app. (#1162)
+- **Edit your profile.** Change your display name in the app; email-and-password accounts can also change their password and optionally sign out other devices. Email address changes still go through support. (#1162)
 - **Correct plan shown for covered workspaces.** Members covered by a workspace plan no longer see "Free", and an unknown entitlement is never reported as a free plan. (#1540, #1424)
+- **Current Business pricing.** Plan cards now show $16 per user monthly or $160 per user annually. (#1551)
 
-### macOS
+### Calendars
 
 - **Apple Calendar support.** Native EventKit integration joins Google Calendar for meeting detection and reminders. (#1237)
+- **Microsoft Calendar support.** Connect Outlook.com or Microsoft 365 on macOS, Windows, or Linux. Microsoft Graph sync adds scheduled-meeting prompts, titles, attendees, and join links alongside Google and Apple Calendar events. (#1251)
 
 ### Models
 
@@ -65,6 +71,8 @@ Meetings get reliable speaker identity — labels you set now stick, and live id
 
 ### Other fixes
 
+- **Security updates.** Better Auth and affected packaged dependencies were updated to patched releases; the release dependency audit now reports no known vulnerabilities.
+- **More reliable cloud audio uploads.** A poisoned TLS connection is discarded before retrying, and upload diarization never requests more speaker clusters than the local model supports. (#1496)
 - **Custom STT endpoint URLs are preserved** when switching provider tabs. (#1463)
 - **Hotkey slots release their accelerators** when unregistered, so a rebound hotkey no longer leaves the old one dead. (#1425, #1420, thanks @hsusul)
 - **Tailscale MagicDNS works over HTTP,** and self-hosted mode is allowed for uploads.

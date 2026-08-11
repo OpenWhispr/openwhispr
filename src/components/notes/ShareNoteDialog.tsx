@@ -20,7 +20,6 @@ import {
   type ShareStateResponse,
 } from "../../services/NoteSharingService.js";
 import { syncService } from "../../services/SyncService.js";
-import { CloudApiError } from "../../services/cloudApi.js";
 import {
   getShareCacheEntry,
   persistNoteShareState,
@@ -331,10 +330,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
           rawToken: previous.rawToken,
         }));
         toast({
-          title:
-            err instanceof CloudApiError && err.code === "upgrade_required"
-              ? t("noteEditor.share.dialog.error.upgradeRequired")
-              : t("noteEditor.share.dialog.error.visibilityFailed"),
+          title: t("noteEditor.share.dialog.error.visibilityFailed"),
           variant: "destructive",
         });
         return null;
@@ -433,11 +429,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
       }
     } catch (err) {
       console.error("Invite failed:", err);
-      setInputError(
-        err instanceof CloudApiError && err.code === "upgrade_required"
-          ? t("noteEditor.share.dialog.error.upgradeRequired")
-          : t("noteEditor.share.dialog.error.inviteFailed")
-      );
+      setInputError(t("noteEditor.share.dialog.error.inviteFailed"));
     } finally {
       setSubmitting(false);
     }

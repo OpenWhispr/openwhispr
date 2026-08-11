@@ -52,8 +52,8 @@ export default function InviteTeammateDialog({
   const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
   const seats = workspace?.seats ?? null;
-  // A subscribed workspace already at capacity bills a seat for this invite.
-  // Say so before sending rather than failing after. Both sides of the
+  // A subscribed workspace already at capacity bills a seat if this invite is
+  // accepted. Say so before sending. Both sides of the
   // comparison come from the same preview so a stale store can't misprice it.
   const addsBilledSeat =
     seatPreview !== null && seatPreview.seats_used >= seatPreview.current_quantity;

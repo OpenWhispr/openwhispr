@@ -14,6 +14,9 @@ on:
 permissions:
   contents: write # Required for creating releases
 
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+
 jobs:
   tests:
     runs-on: ubuntu-latest
@@ -22,8 +25,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+      - name: Validate release inputs
+        env:
+          MICROSOFT_CALENDAR_CLIENT_ID: ${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$RELEASE_TAG" != "v$PACKAGE_VERSION" ]; then
+            echo "::error::Release tag $RELEASE_TAG does not match package version v$PACKAGE_VERSION"
+            exit 1
+          fi
+          if [ -z "$MICROSOFT_CALENDAR_CLIENT_ID" ]; then
+            echo "::error::MICROSOFT_CALENDAR_CLIENT_ID is required for release builds"
+            exit 1
+          fi
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Run quality checks
+        run: npm run quality-check
+      - name: Check translations
+        run: npm run i18n:check
+      - name: Audit dependencies
+        run: npm audit
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build, so DB-backed tests silently
         # skip unless the binding is rebuilt for the CI Node runtime.
@@ -116,7 +138,7 @@ jobs:
         run: npm run build:linux -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
 
@@ -221,7 +243,7 @@ jobs:
         run: npm run build:win -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -341,7 +363,7 @@ jobs:
         env:
           TARGET_ARCH: ${{ matrix.arch }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
           CSC_IDENTITY_AUTO_DISCOVERY: true
@@ -362,7 +384,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           cp dist/latest-mac.yml "dist/latest-${{ matrix.arch }}-mac.yml"
-          gh release upload "${{ github.ref_name }}" "dist/latest-${{ matrix.arch }}-mac.yml" --clobber
+          gh release upload "$RELEASE_TAG" "dist/latest-${{ matrix.arch }}-mac.yml" --clobber
 
       - name: Cleanup Certificates
         if: always()
