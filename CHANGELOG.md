@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2] - 2026-08-11
+
+Meetings get reliable speaker identity — labels you set now stick, and live identification works on Windows loopback and Intel Macs. The voice agent gains two ways to act on what's in front of you: edit highlighted text in place, and optionally send a screenshot of your screen along with your command. Organizations get server-enforced policy across every setting, macOS gets native Apple Calendar support, and there's a broad reliability pass on dictation, sync, billing, and translations.
+
+### Voice agent
+
+- **Edit highlighted text by voice.** Select text anywhere, trigger the voice agent, and say what you want changed — the agent rewrites the selection in place instead of appending a new block. (#1264)
+- **Optional screen context.** With "Share screen context" enabled (Settings → AI Models → Voice Agent, off by default), pressing the voice agent hotkey captures the display your cursor is on and sends it with your command, so you can say things like "reply to this email" or "explain the error on screen". You can route screenshot-carrying commands to a separate vision-capable model, and a screenshot that can't be sent never costs you the command — it silently reruns text-only and tells you.
+- **Agent failures are no longer silent.** If the agent can't process a command, you get an "Agent Unavailable" notice instead of your raw words appearing in whatever app you were in.
+
+### Meetings & speaker identity
+
+- **Speaker labels stay put.** Manual speaker labels persist, identities stay stable across a meeting, and reconciliation no longer deletes a mapping you set by hand when live and offline speaker ids happen to match. (#1501)
+- **Live speaker identification on Windows.** Windows loopback capture now identifies speakers live, matching macOS. (#1502)
+- **Speaker labels fixed on Intel Macs.** (#1538)
+- **Diarization writes land on the right note.** Delayed diarization is always persisted to the note it belongs to, and completions are serialized so labels don't get crossed between notes. (#1539, #1495)
+- **Tinfoil realtime meeting transcription.** Tinfoil joins the realtime meeting providers.
+- **Live speaker identification degrades gracefully.** A missing onnxruntime binding disables live identification instead of breaking the meeting.
+- **Steadier meeting prompts.** Meeting detection re-evaluates gated microphone state, prompts no longer expire early, and the countdown is scoped to its own window. (#1532)
+- **Speaker timestamps anchored correctly.** Live speaker timestamps anchor to the first system chunk, and the roster-driven speaker cap only ever raises.
+
+### Organization policy
+
+- **Every policy field is enforced.** Organization policy is now applied across the whole app rather than just the settings UI: restricted options are hidden with safe fallbacks, enforcement covers modes, providers, features, sharing, and retention, and a malformed policy response fails closed. (#1074, #1506)
+
+### Dictation
+
+- **No more clipped first words.** Cold microphone opens could swallow the beginning of a recording; the mic is warmed so your first words are captured. (#845, #1493)
+- **Dropped transcript segments are retried and surfaced.** Silently dropped segments are retried, and a genuine loss is reported rather than quietly shortening your transcript. (#1462)
+- **VAD is now opt-in.** Voice activity detection is off by default, with dictionary-echo decodes rescued rather than discarded.
+- **Transcripts are no longer replaced unexpectedly.** (#1461)
+
+### Notes & sync
+
+- **Tombstones survive.** Note pulls and deletes are guarded so a tombstone can't be lost and a deleted note resurrected. (#1354, thanks @xAlcahest)
+- **Edits during a push are not lost.** A note edited while its save is being acknowledged stays pending instead of being marked clean.
+
+### Account & billing
+
+- **Edit your profile.** Name, email, and password can be changed from the app. (#1162)
+- **Correct plan shown for covered workspaces.** Members covered by a workspace plan no longer see "Free", and an unknown entitlement is never reported as a free plan. (#1540, #1424)
+
+### macOS
+
+- **Apple Calendar support.** Native EventKit integration joins Google Calendar for meeting detection and reminders. (#1237)
+
+### Models
+
+- **Claude Opus 5.** Added to the Anthropic provider. (#1452)
+- **Retired model ids removed** from the registry. (#1482)
+- **Anthropic temperature compatibility.** Models that reject a `temperature` parameter no longer fail. (#1475)
+
+### Translations & internationalization
+
+- **Chinese locales corrected.** Spanish and untranslated strings that leaked into the Chinese locales are fixed. (#1504)
+- **Simplified vs Traditional Chinese respected** for Chinese speech-to-text. (#1226)
+- **Speaker labels are translated,** including "unknown speaker" and your own voice in exported transcripts.
+
+### Other fixes
+
+- **Custom STT endpoint URLs are preserved** when switching provider tabs. (#1463)
+- **Hotkey slots release their accelerators** when unregistered, so a rebound hotkey no longer leaves the old one dead. (#1425, #1420, thanks @hsusul)
+- **Tailscale MagicDNS works over HTTP,** and self-hosted mode is allowed for uploads.
+- **Local translation models with an empty provider** route through llama.cpp correctly.
+- **The dictation agent's inference mode is authoritative,** with providers normalized for local and self-hosted modes.
+
 ## [1.8.1] - 2026-07-30
 
 A critical fix on top of 1.8.0. If you installed 1.8.0, update to 1.8.1 right away.

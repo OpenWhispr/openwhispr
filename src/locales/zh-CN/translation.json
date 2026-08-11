@@ -106,7 +106,8 @@
     "microphone": "请打开系统设置以配置麦克风权限。",
     "sound": "请打开系统声音设置（例如 pavucontrol）。",
     "accessibility": "此平台不支持辅助功能设置。",
-    "systemAudio": "系统音频设置在此平台上不可用。"
+    "systemAudio": "系统音频设置在此平台上不可用。",
+    "screenRecording": "此平台不提供屏幕录制设置。"
   },
   "upgradePrompt": {
     "paymentFailed": "我们无法处理你的付款",
@@ -569,6 +570,8 @@
       "errorTitles": {
         "sessionExpired": "会话已过期",
         "offline": "你已离线",
+        "agentUnavailable": "助手不可用",
+        "screenContextSkipped": "已跳过屏幕上下文",
         "dailyLimitReached": "已达到每日上限",
         "providerRateLimited": "服务商速率限制"
       },
@@ -598,7 +601,9 @@
         "offline": "你目前离线。云端转录需要互联网连接。",
         "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
         "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。",
-        "chunkLoss": "网络问题导致录音大部分丢失。请从历史记录中重新转录。"
+        "chunkLoss": "网络问题导致录音大部分丢失。请从历史记录中重新转录。",
+        "agentReasoningFailed": "语音助手无法处理该命令，已改为插入原始转录文本。",
+        "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。"
       },
       "translationFallback": {
         "unreachableTitle": "翻译不可用",
@@ -2943,6 +2948,17 @@
   "dictationAgent": {
     "enabled": "启用语音助手",
     "enabledDescription": "向助手口述指令。选中的文本会发送到所配置的模型并就地编辑。说出“{{agentName}}”即可激活。",
+    "screenContext": {
+      "title": "屏幕上下文",
+      "description": "在语音助手命令中附带当前屏幕的截图。",
+      "enable": "共享屏幕上下文",
+      "enableDescription": "语音助手开始录音时，截取光标所在的显示器。绝不保存，也不写入日志。",
+      "unsupported": "Linux Wayland 不支持屏幕截图。",
+      "visionModel": "单独的视觉模型",
+      "visionModelDescription": "将带截图的命令转发给另一个支持图像的模型。",
+      "permissionTitle": "屏幕录制",
+      "permissionDescription": "macOS 需要屏幕录制权限才能截取屏幕。"
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "使用 OpenWhispr 托管的助手，无需 API Key。",

@@ -2,6 +2,7 @@ import { getCleanupSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
 import { resolveCleanupLanguage } from "../utils/chineseScript";
 import { getDictionaryHintWords } from "../utils/snippets";
+import type { ScreenContextImage } from "../types/electron";
 
 export interface ReasoningConfig {
   maxTokens?: number;
@@ -13,6 +14,8 @@ export interface ReasoningConfig {
   customApiKey?: string;
   provider?: string;
   disableThinking?: boolean;
+  /** Screenshot attached to voice-agent requests when screen context is on. */
+  screenContext?: ScreenContextImage;
   language?: string;
   requireCompleteOutput?: boolean;
   requiresAgent?: boolean;

@@ -1,4 +1,4 @@
-function resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted }) {
+export function resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted }) {
   if (mode === "openwhispr") return isCloud;
   if (mode === "self-hosted") return isSelfHosted;
 
@@ -28,6 +28,41 @@ export function resolveDictationAgentReachability({
   });
 }
 
+// Picks which model receives a captured screenshot, or drops it. An
+// explicitly configured vision override is trusted without a capability check
+// (custom and OpenRouter model ids aren't in the registry); an override that
+// is toggled on but never configured inherits the agent's own config, so it
+// falls through to the base rules rather than forcing an image onto a
+// possibly text-only model. Dropping the image always beats failing the
+// dictation.
+export function resolveAgentImageTarget({
+  hasScreenContext,
+  visionOverrideActive,
+  visionProviderImageWired,
+  baseProviderImageWired,
+  isCloudAgent,
+  baseModelSupportsVision,
+}) {
+  if (!hasScreenContext) {
+    return { attach: false, useVisionOverride: false };
+  }
+  if (visionOverrideActive) {
+    // Configured but unable to send images: drop rather than quietly
+    // redirecting the screenshot to a model the user didn't choose.
+    return visionProviderImageWired
+      ? { attach: true, useVisionOverride: true }
+      : { attach: false, useVisionOverride: false };
+  }
+  // Cloud defers the vision-model choice to the server's vision chain.
+  if (baseProviderImageWired && (isCloudAgent || baseModelSupportsVision)) {
+    return { attach: true, useVisionOverride: false };
+  }
+  return { attach: false, useVisionOverride: false };
+}
+
+// Decides which reasoning path ("agent" | "cleanup" | "skip") a finished
+// dictation takes. A recording started via the voice agent hotkey always takes
+// the agent path — no wake word needed — and never falls back to cleanup.
 export function resolveDictationTranslationReachability({
   useDictationTranslation,
   translationTargetLanguage,
@@ -48,7 +83,7 @@ export function resolveDictationTranslationReachability({
   });
 }
 
-function resolveModeProvider({ isCloud, mode, provider }) {
+export function resolveModeProvider({ isCloud, mode, provider }) {
   switch (mode) {
     case "openwhispr":
       return isCloud ? "openwhispr" : undefined;

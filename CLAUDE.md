@@ -624,7 +624,21 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 - Onboarding: optional step right after the dictation hotkey (activation) step
 - Requires the dictation agent to be enabled (Settings → AI Models) for the agent route to apply
 
-**Tests**: `test/helpers/dictationRouting.test.js` (run with `node --test`)
+**Screen Context (opt-in)**:
+
+When "Share screen context" is enabled (Settings → AI Models → Voice Agent → Screen Context, store key `voiceAgentScreenContext`, default off), each voice-agent recording start captures the display the cursor is on and attaches it to the agent request as a base64 JPEG (long edge ≤ 1568 px).
+
+- Capture: `src/helpers/screenContextCapture.js` (main process; `screen.getCursorScreenPoint` + `desktopCapturer`). macOS requires the Screen Recording TCC permission (`useScreenRecordingPermission` hook + `PermissionCard` in `DictationAgentSettings`); Windows/Linux X11 need no permission; Linux Wayland is unsupported (capture silently skipped)
+- Encoding: `encodeWithinBudget()` walks a JPEG quality ladder (82 → 70 → 55), then falls back to a 1024 px resize, keeping the payload under `MAX_ENCODED_BYTES` (1.5 MB ≈ 2.05M base64 chars, inside the API's 2.8M cap). Each rung re-encodes the original bitmap, so quality drops never compound. A screen that still won't fit is dropped
+- Trigger: `useAudioRecording.js` calls `audioManager.beginScreenContextCapture()` at voice-agent start (fire-and-forget); `consumeScreenContext()` (3s guard) is awaited when the reasoning route is built. The dictation overlay gets `setContentProtection` while the setting is on so the pill never appears in captures
+- Routing: `resolveAgentImageTarget()` (`src/helpers/dictationRouting.js`) decides attach/drop. An optional vision override (`dictationAgentVision` inference scope, gated by `useDictationAgentVisionModel`, cloud/BYOK modes only) routes screenshot-carrying requests to a dedicated model; otherwise the base model gets the image only when its provider client is image-wired (`supportsImages` on the `InferenceProvider`) and the model has `supportsVision` in `modelRegistryData.json` (cloud mode defers to the server). Dropping the image never fails the dictation
+- Prompt: `appendScreenContextSuffix()` adds the `screenContextSuffix` prompts key only when an image is attached
+- Image-wired clients: `openai` (Responses `input_image` / Chat `image_url`, also `custom`/`openrouter`), `anthropic` (base64 content block via `process-anthropic-reasoning`), `gemini` (`inlineData`), `openwhispr` (forwards `screenContext` + `promptMode: "agent"` to `/api/reason`; the server routes to its `REASONING_VISION_*` model chain)
+- IPC: `capture-screen-context`, `check-screen-recording-access`, `request-screen-recording-access`, `open-screen-recording-settings`, `screen-context-set-enabled`
+- Privacy: screenshots live only in renderer memory for one request — never written to disk, stored in history, or logged (loggers emit `hasScreenContext` booleans only)
+- Failure UX: a rejected screenshot is retried once text-only from `processWithReasoningModel()` (rebuilding the prompt without the screen-context suffix) and reported via a non-destructive `SCREEN_CONTEXT_SKIPPED` toast, so an image problem never costs the user their command. Only if that retry also fails does the "Agent Unavailable" toast (`AGENT_REASONING_FAILED`) fire and the raw transcript get pasted
+
+**Tests**: `test/helpers/dictationRouting.test.js`, `test/helpers/screenContextCapture.test.js` (run with `node --test`)
 
 ## Development Guidelines
 

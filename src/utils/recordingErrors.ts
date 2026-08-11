@@ -5,6 +5,8 @@ type RecordingError = {
   title: string;
   description?: string;
   messageKey?: string;
+  /** Toast variant; defaults to destructive for genuine failures. */
+  variant?: "default" | "destructive";
 };
 
 export function getRecordingErrorTitle(error: RecordingError, t: TFunction): string {
@@ -16,6 +18,12 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
     return t("hooks.audioRecording.errorTitles.sessionExpired");
   }
   if (error.code === "OFFLINE") return t("hooks.audioRecording.errorTitles.offline");
+  if (error.code === "AGENT_REASONING_FAILED") {
+    return t("hooks.audioRecording.errorTitles.agentUnavailable");
+  }
+  if (error.code === "SCREEN_CONTEXT_SKIPPED") {
+    return t("hooks.audioRecording.errorTitles.screenContextSkipped");
+  }
   if (error.code === "LIMIT_REACHED")
     return t("hooks.audioRecording.errorTitles.dailyLimitReached");
   if (error.code === "PROVIDER_RATE_LIMITED")

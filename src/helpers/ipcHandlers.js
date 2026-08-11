@@ -54,6 +54,7 @@ const {
 } = require("./speakerAssignmentPolicy");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
 const postMigrationDetector = require("./postMigrationDetector");
+const screenContextCapture = require("./screenContextCapture");
 const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
@@ -4148,12 +4149,27 @@ class IPCHandlers {
             throw new Error("No model specified for Anthropic API call");
           }
 
+          const screenContext = config?.screenContext;
+          const userContent = screenContext
+            ? [
+                { type: "text", text: userPrompt },
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: screenContext.mediaType,
+                    data: screenContext.data,
+                  },
+                },
+              ]
+            : userPrompt;
+
           // Claude models from Opus 4.7 onward reject `temperature` with a 400;
           // the renderer derives support from the model registry.
           const useTemperature = config?.supportsTemperature === true;
           const requestBody = {
             model: modelId,
-            messages: [{ role: "user", content: userPrompt }],
+            messages: [{ role: "user", content: userContent }],
             system: systemPrompt,
             max_tokens: config?.maxTokens || Math.max(100, Math.min(text.length * 2, 4096)),
             ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
@@ -4413,6 +4429,8 @@ class IPCHandlers {
           "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
         systemAudio:
           "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+        screenRecording:
+          "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
         calendars: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
       },
       win32: {
@@ -4433,6 +4451,7 @@ class IPCHandlers {
           sound: i18nMain.t("systemSettings.sound"),
           accessibility: i18nMain.t("systemSettings.accessibility"),
           systemAudio: i18nMain.t("systemSettings.systemAudio"),
+          screenRecording: i18nMain.t("systemSettings.screenRecording"),
         };
         return {
           success: false,
@@ -4454,6 +4473,38 @@ class IPCHandlers {
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
+    ipcMain.handle("open-screen-recording-settings", () => openSystemSettings("screenRecording"));
+
+    ipcMain.handle("capture-screen-context", () => screenContextCapture.captureCursorDisplay());
+
+    const buildScreenRecordingAccess = (status) => ({
+      granted: status === "granted",
+      status,
+      supported: status !== "unsupported",
+    });
+
+    ipcMain.handle("check-screen-recording-access", () =>
+      buildScreenRecordingAccess(screenContextCapture.getAccessStatus())
+    );
+
+    ipcMain.handle("request-screen-recording-access", async () => {
+      const status = await screenContextCapture.requestAccess();
+      if (process.platform === "darwin" && status !== "granted") {
+        await openSystemSettings("screenRecording");
+      }
+      return buildScreenRecordingAccess(status);
+    });
+
+    // Keeps the dictation overlay out of its own screenshots (and screen
+    // shares) while the screen-context feature is enabled.
+    ipcMain.handle("screen-context-set-enabled", (event, enabled) => {
+      const mainWindow = this.windowManager?.mainWindow;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setContentProtection(Boolean(enabled));
+      }
+      return { success: true };
+    });
+
     ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
 
     ipcMain.handle("show-emoji-panel", () => {
@@ -7509,6 +7560,7 @@ class IPCHandlers {
             model: opts.model || "(default)",
             agentName: opts.agentName || "(none)",
             textLength: text?.length || 0,
+            hasScreenContext: !!opts.screenContext,
           },
           "cloud-api"
         );
@@ -7528,6 +7580,7 @@ class IPCHandlers {
             systemPrompt: opts.systemPrompt,
             requestPurpose: opts.requestPurpose,
             promptMode: opts.promptMode,
+            screenContext: opts.screenContext,
             language: opts.language,
             locale: opts.locale,
             sessionId: this.sessionId,
@@ -7565,6 +7618,7 @@ class IPCHandlers {
             resultLength: data.text?.length || 0,
             promptMode: data.promptMode,
             matchType: data.matchType,
+            screenContextApplied: data.screenContextApplied,
           },
           "cloud-api"
         );
@@ -7575,6 +7629,7 @@ class IPCHandlers {
           provider: data.provider,
           promptMode: data.promptMode,
           matchType: data.matchType,
+          screenContextApplied: data.screenContextApplied,
         };
       } catch (error) {
         debugLogger.error("Cloud reasoning error:", error);

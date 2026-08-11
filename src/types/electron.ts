@@ -525,6 +525,18 @@ export interface SystemAudioAccessResult {
   error?: string;
 }
 
+export interface ScreenRecordingAccessResult {
+  granted: boolean;
+  status: "granted" | "denied" | "not-determined" | "restricted" | "unknown" | "unsupported";
+  supported: boolean;
+}
+
+export interface ScreenContextImage {
+  mediaType: string;
+  /** Base64 image bytes, no data-URL prefix. */
+  data: string;
+}
+
 export interface UpdateCheckResult {
   updateAvailable: boolean;
   version?: string;
@@ -1603,6 +1615,11 @@ declare global {
       openSoundInputSettings?: () => Promise<{ success: boolean; error?: string }>;
       openAccessibilitySettings?: () => Promise<{ success: boolean; error?: string }>;
       openSystemAudioSettings?: () => Promise<{ success: boolean; error?: string }>;
+      openScreenRecordingSettings?: () => Promise<{ success: boolean; error?: string }>;
+      checkScreenRecordingAccess?: () => Promise<ScreenRecordingAccessResult>;
+      requestScreenRecordingAccess?: () => Promise<ScreenRecordingAccessResult>;
+      captureScreenContext?: () => Promise<ScreenContextImage | null>;
+      setScreenContextEnabled?: (enabled: boolean) => Promise<{ success: boolean }>;
       showEmojiPanel?: () => Promise<boolean>;
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
@@ -1662,7 +1679,8 @@ declare global {
           customPrompt?: string;
           systemPrompt?: string;
           requestPurpose?: "agent";
-          promptMode?: "cleanup";
+          promptMode?: "cleanup" | "agent";
+          screenContext?: ScreenContextImage;
           language?: string;
           locale?: string;
         }
@@ -1673,6 +1691,7 @@ declare global {
         provider?: string;
         promptMode?: string;
         matchType?: string;
+        screenContextApplied?: boolean;
         error?: string;
         code?: string;
       }>;

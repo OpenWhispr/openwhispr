@@ -46,6 +46,7 @@ export interface CloudModelDefinition {
   descriptionKey?: string;
   disableThinking?: boolean;
   supportsThinking?: boolean;
+  supportsVision?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
 }

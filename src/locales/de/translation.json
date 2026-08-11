@@ -106,7 +106,8 @@
     "microphone": "Bitte öffnen Sie die Systemeinstellungen, um Mikrofonberechtigungen zu konfigurieren.",
     "sound": "Bitte öffnen Sie die Sound-Einstellungen des Systems (z. B. pavucontrol).",
     "accessibility": "Bedienungshilfen-Einstellungen sind auf dieser Plattform nicht verfügbar.",
-    "systemAudio": "Systemaudio-Einstellungen sind auf dieser Plattform nicht verfügbar."
+    "systemAudio": "Systemaudio-Einstellungen sind auf dieser Plattform nicht verfügbar.",
+    "screenRecording": "Einstellungen zur Bildschirmaufnahme sind auf dieser Plattform nicht verfügbar."
   },
   "upgradePrompt": {
     "paymentFailed": "Ihre Zahlung konnte nicht verarbeitet werden",
@@ -569,6 +570,8 @@
       "errorTitles": {
         "sessionExpired": "Sitzung abgelaufen",
         "offline": "Sie sind offline",
+        "agentUnavailable": "Agent nicht verfügbar",
+        "screenContextSkipped": "Bildschirmkontext übersprungen",
         "dailyLimitReached": "Tägliches Limit erreicht",
         "providerRateLimited": "Anbieter-Ratenlimit erreicht"
       },
@@ -598,7 +601,9 @@
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
         "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan.",
         "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut.",
-        "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut."
+        "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
+        "agentReasoningFailed": "Ihr Sprachagent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
+        "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -3091,6 +3096,17 @@
   "dictationAgent": {
     "enabled": "Voice Agent aktivieren",
     "enabledDescription": "Diktieren Sie Anweisungen an Ihren Agenten. Markierter Text wird an das konfigurierte Modell gesendet und direkt bearbeitet. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen.",
+    "screenContext": {
+      "title": "Bildschirmkontext",
+      "description": "Hängt einen Screenshot Ihres aktiven Bildschirms an Sprachagent-Befehle an.",
+      "enable": "Bildschirmkontext teilen",
+      "enableDescription": "Erfasst beim Start einer Sprachagent-Aufnahme den Bildschirm, auf dem sich der Cursor befindet. Wird nie gespeichert oder protokolliert.",
+      "unsupported": "Bildschirmaufnahme ist unter Linux Wayland nicht verfügbar.",
+      "visionModel": "Separates Vision-Modell",
+      "visionModelDescription": "Leitet Befehle mit Screenshot an ein anderes Modell mit Bildverständnis weiter.",
+      "permissionTitle": "Bildschirmaufnahme",
+      "permissionDescription": "macOS benötigt die Berechtigung zur Bildschirmaufnahme, um Ihren Bildschirm zu erfassen."
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Den von OpenWhispr verwalteten Agenten nutzen, kein API-Schlüssel nötig.",

@@ -2,8 +2,11 @@ import {
   resolveDictationAgentDisplayProvider,
   resolveDictationAgentProvider,
   resolveDictationAgentReachability,
+  resolveModeProvider,
+  resolveModeReachability,
 } from "./dictationRouting.js";
 import { isProviderValidForMode } from "../models/ModelRegistry";
+import { selectResolvedLLMConfig } from "../stores/settingsStore";
 
 // The dictation agent's inference scope, shared by the dictation route in
 // audioManager and the Prompt Studio test tab so a prompt test hits the same
@@ -48,6 +51,41 @@ export function resolveDictationAgentInference(settings, { isCloudAgent = false 
       customApiKey:
         isCustom || isSelfHosted ? settings.dictationAgentCustomApiKey || undefined : undefined,
       disableThinking: settings.dictationAgentDisableThinking,
+    },
+  };
+}
+
+// The optional vision override: the scope a voice-agent request uses when it
+// carries a screen-context screenshot. Resolved through the store selector so
+// unset fields inherit the agent's own config, and treated as "active" only
+// once the user has actually chosen a target — an inherited config is the
+// agent scope, which the base routing rules already cover.
+export function resolveDictationAgentVisionInference(settings, { isSignedIn = false } = {}) {
+  const resolved = selectResolvedLLMConfig(settings, "dictationAgentVision");
+  const mode = resolved.mode;
+  const isCloud = isSignedIn && mode === "openwhispr" && resolved.cloudMode === "openwhispr";
+  const model = resolved.model?.trim() || "";
+  const storedProvider = resolved.provider?.trim() || "";
+  const providerForMode = isProviderValidForMode(storedProvider, mode) ? storedProvider : undefined;
+  const provider = resolveModeProvider({ isCloud, mode, provider: providerForMode });
+  const isCustom = mode === "providers" && provider === "custom";
+
+  // Cloud needs no model of its own, so selecting it counts as a choice;
+  // otherwise the user must have picked a model for this scope specifically.
+  const chosen = isCloud || !!settings.dictationAgentVisionModel?.trim();
+
+  return {
+    active:
+      !!settings.useDictationAgentVisionModel &&
+      chosen &&
+      resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted: false }),
+    // Cloud picks the model server-side from its vision chain.
+    model: isCloud ? "" : model,
+    config: {
+      provider,
+      baseUrl: isCustom ? resolved.cloudBaseUrl || undefined : undefined,
+      customApiKey: isCustom ? resolved.customApiKey || undefined : undefined,
+      disableThinking: resolved.disableThinking,
     },
   };
 }
