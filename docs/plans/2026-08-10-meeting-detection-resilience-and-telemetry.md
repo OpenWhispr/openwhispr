@@ -219,11 +219,19 @@ consecutive failures, record every transition. Fix the `_startPolling` interval 
 **unavailable** so 2a keeps retrying the listener instead of silently pretending
 to poll. See **Open questions #2**.
 
-### Phase 3 — Meeting identity (defect 8) — **RE-PLAN REQUIRED, do not implement as written**
+### Phase 3 — Meeting identity (defect 8) — **DROPPED (user decision, 2026-08-11)**
 
-Adversarial review found this phase would **silently drop the second meeting
-entirely** — worse than today's merged note. Recorded here for the redesign; it
-is **not** scheduled. Blocking problems:
+Not scheduled, and **not** carried as pending work. The user's instruction was
+"don't do phase 3 if it's not good", and it is not good: adversarial review
+showed it would **silently drop the second meeting entirely** — worse than
+today's merged note.
+
+The *goal* (don't merge consecutive calls) remains valid; this *design* is
+abandoned. If the symptom survives Phases 1–2, design fresh from telemetry
+rather than resurrecting what follows. Everything below is kept only as a record
+of why this approach was rejected — treat it as a warning, not a starting point.
+
+Blocking problems:
 
 - **C1 — the identity fix is defeated by defect 1.** `_handleCallActive` returns
   early at `:81-89` while `_meetingModeActive || _userRecording`. At an id-change
