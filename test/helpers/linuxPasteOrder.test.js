@@ -134,7 +134,7 @@ test("GNOME paste keeps uinput first when no restore token exists", async () => 
   );
 });
 
-test("GNOME paste falls back to uinput when the tokened portal paste fails", async () => {
+test("GNOME paste keeps uinput first after a tokened portal paste fails", async () => {
   const calls = [];
   const failPortalSpawn = (command, args = []) => {
     calls.push({ command, args });
@@ -149,13 +149,14 @@ test("GNOME paste falls back to uinput when the tokened portal paste fails", asy
 
   await withEnv(GNOME_WAYLAND_ENV, async () => {
     const manager = createGnomeManager(ClipboardManager, { portalToken: "token-123" });
-    const result = await manager.pasteLinux(null, {});
-    assert.equal(result.method, "uinput");
+    const firstResult = await manager.pasteLinux(null, {});
+    const secondResult = await manager.pasteLinux(null, {});
+    assert.equal(firstResult.method, "uinput");
+    assert.equal(secondResult.method, "uinput");
   });
 
-  assert.ok(calls[0].args.includes("--portal"), "expected portal to be tried first");
-  assert.ok(
-    calls.some((call) => call.args.includes("--uinput")),
-    "expected uinput fallback after portal failure"
+  assert.deepEqual(
+    calls.map((call) => (call.args.includes("--portal") ? "portal" : "uinput")),
+    ["portal", "uinput", "uinput"]
   );
 });
