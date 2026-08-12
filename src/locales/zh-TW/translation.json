@@ -1325,6 +1325,7 @@
           "cta": "聯繫銷售"
         },
         "currentPlan": "目前方案",
+        "coveredByWorkspace": "已包含在您的工作區方案中",
         "upgrade": "升級",
         "downgrade": "降級",
         "planSwitched": "方案已成功更新",

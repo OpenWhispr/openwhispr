@@ -1305,6 +1305,7 @@
           "cta": "営業に問い合わせる"
         },
         "currentPlan": "現在のプラン",
+        "coveredByWorkspace": "ワークスペースのプランに含まれています",
         "upgrade": "アップグレード",
         "downgrade": "ダウングレード",
         "planSwitched": "プランが正常に更新されました",

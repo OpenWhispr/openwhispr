@@ -1325,6 +1325,7 @@
           "cta": "联系销售"
         },
         "currentPlan": "当前套餐",
+        "coveredByWorkspace": "已包含在您的工作区套餐中",
         "upgrade": "升级",
         "downgrade": "降级",
         "planSwitched": "套餐已成功更新",

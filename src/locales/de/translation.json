@@ -1591,6 +1591,7 @@
           "cta": "Vertrieb kontaktieren"
         },
         "currentPlan": "Aktueller Tarif",
+        "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
         "planSwitched": "Plan erfolgreich aktualisiert",

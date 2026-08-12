@@ -1591,6 +1591,7 @@
           "cta": "Contact Sales"
         },
         "currentPlan": "Current plan",
+        "coveredByWorkspace": "Included with your workspace plan",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
         "planSwitched": "Plan updated successfully",

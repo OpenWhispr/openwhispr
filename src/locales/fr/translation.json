@@ -1591,6 +1591,7 @@
           "cta": "Contacter les ventes"
         },
         "currentPlan": "Forfait actuel",
+        "coveredByWorkspace": "Inclus dans votre plan d'espace de travail",
         "upgrade": "Passer au supérieur",
         "downgrade": "Rétrograder",
         "planSwitched": "Forfait mis à jour avec succès",

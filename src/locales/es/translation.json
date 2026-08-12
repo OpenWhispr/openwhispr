@@ -1353,6 +1353,7 @@
           "cta": "Contactar a ventas"
         },
         "currentPlan": "Plan actual",
+        "coveredByWorkspace": "Incluido en tu plan de espacio de trabajo",
         "upgrade": "Mejorar plan",
         "downgrade": "Reducir plan",
         "planSwitched": "Plan actualizado correctamente",

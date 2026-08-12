@@ -1304,6 +1304,7 @@
           "cta": "Falar com Vendas"
         },
         "currentPlan": "Plano atual",
+        "coveredByWorkspace": "Incluído no plano do seu workspace",
         "upgrade": "Fazer upgrade",
         "downgrade": "Fazer downgrade",
         "planSwitched": "Plano atualizado com sucesso",

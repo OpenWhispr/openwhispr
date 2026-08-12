@@ -113,6 +113,7 @@ import {
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { highestPlan } from "../lib/usageStore";
+import { decideProPlanCardCta } from "../lib/upsell";
 import {
   canChangeCloudBackupPreference,
   effectiveAudioRetentionDays,
@@ -1405,6 +1406,14 @@ export default function SettingsPage({
   // Signed out there is nothing to load and the plan grid is purely
   // promotional; signed in, no card may claim a plan until usage confirms one.
   const planStateKnown = !isSignedIn || usage?.status === "success";
+  const proCardCta = decideProPlanCardCta({
+    isSignedIn,
+    planStateKnown,
+    isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
+    plan: usage?.plan ?? "free",
+    isTrial: usage?.isTrial ?? false,
+    isWorkspaceCovered,
+  });
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
@@ -2209,16 +2218,13 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      {(usage?.isPersonallySubscribed &&
-                        usage?.plan === "pro" &&
-                        !usage?.isTrial) ||
-                      usage?.isTrial ? (
+                      {proCardCta === "currentPlan" ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary">
                             {t("settingsPage.account.pricing.currentPlan")}
                           </span>
                         </div>
-                      ) : usage?.isPersonallySubscribed && usage?.plan === "business" ? (
+                      ) : proCardCta === "downgradeToPro" ? (
                         <Button
                           onClick={() =>
                             handleSwitchPlan(billingState.pro ? "annual" : "monthly", "pro")
@@ -2234,7 +2240,21 @@ export default function SettingsPage({
                             t("settingsPage.account.pricing.downgrade")
                           )}
                         </Button>
-                      ) : planStateKnown ? (
+                      ) : proCardCta === "signUp" ? (
+                        <Button
+                          onClick={startOnboarding}
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {t("settingsPage.account.pricing.pro.cta")}
+                        </Button>
+                      ) : proCardCta === "coveredByWorkspace" ? (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.coveredByWorkspace")}
+                          </span>
+                        </div>
+                      ) : proCardCta === "checkout" ? (
                         <Button
                           onClick={() =>
                             handleCheckout(billingState.pro ? "annual" : "monthly", "pro")

@@ -1325,6 +1325,7 @@
           "cta": "Contatta le vendite"
         },
         "currentPlan": "Piano attuale",
+        "coveredByWorkspace": "Incluso nel piano della tua area di lavoro",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
         "planSwitched": "Piano aggiornato con successo",
