@@ -16,10 +16,11 @@ GPU acceleration for local transcription gets an overhaul: the status you see is
 - **"GPU acceleration active" now means it.** The indicator reflects what the transcription server is actually running on — ready, activating, active, or "GPU could not be activated" with a Retry — instead of turning green whenever a file finished downloading. (#1578)
 - **Enable GPU applies immediately.** Downloading or removing a GPU pack reloads the transcription engine in place; previously nothing changed until the app was restarted, with no hint. (#1578)
 - **A GPU crash never costs you a dictation — and is remembered.** If the GPU engine fails, the same recording is retried on CPU and pasted, and the failed backend isn't silently re-attempted (and its model reload re-paid) on every launch. Retry or re-download clears the memory. (#1578)
-- **Older NVIDIA cards are offered a backend that works.** GTX 10-series (Pascal) and other pre-Turing cards were offered a CUDA build with no kernels for them — it loaded the model, then crashed at the first use while reporting success. They now get the Vulkan pack, like AMD and Intel GPUs. (#1576)
+- **GTX 10-series (Pascal) cards get CUDA.** The CUDA pack now ships Pascal kernels and is offered to those cards; a Pascal machine already running the Vulkan pack keeps it instead of being re-prompted to download a second backend. (#1585)
+- **NVIDIA cards below the CUDA build's floor are offered a backend that works.** Cards the build carries no kernels for (Maxwell and older) were offered a CUDA build that loaded the model, then crashed at first use while reporting success. They now get the Vulkan pack, like AMD and Intel GPUs. (#1576)
 - **GPU packs can no longer corrupt each other.** The whisper CUDA and llama Vulkan packs shipped identically-named runtime libraries into one shared folder, so installing one could silently break the other — and removing one deleted the other's files. Each pack now owns its own directory, and old installs are healed on startup. (#1577)
 - **An interrupted GPU install can no longer fake success.** Installs are staged and swapped in atomically, so a crash or power cut mid-install can't leave a truncated binary the app reports as installed forever. (#1577)
-- **GPU binaries updated (whisper.cpp pack 0.0.9).** Same engine, now built with Pascal CUDA kernels included — groundwork for offering CUDA on those cards once hardware-validated. (#1584)
+- **GPU binaries updated (whisper.cpp pack 0.0.9).** Same engine and source as 0.0.8, rebuilt with the Pascal CUDA kernels included (+17.5 MB per CUDA pack). (#1584)
 
 ### Speech to text
 
