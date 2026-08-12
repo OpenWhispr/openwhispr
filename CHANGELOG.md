@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Speech to text
+
+- **Action required for some Custom endpoints.** If you selected the Custom speech-to-text provider but never changed its pre-filled URL (`https://api.openai.com/v1`), your audio and your custom key were being sent to OpenAI. That now fails with a clear error instead, so set a real endpoint under Settings → Speech to Text — or switch to the OpenAI provider, which the URL field does automatically once you re-enter it. (#1556)
+- **Re-transcribing a Corti recording reaches Corti.** History → Re-transcribe sent Corti recordings to OpenAI. (#1556)
+- **A leftover provider can no longer hijack self-hosted transcription.** With self-hosted selected, a stale Mistral, xAI, or Corti selection could still divert your audio to that provider. (#1556)
+- **Each provider remembers its own model.** Switching speech-to-text providers and back restores the model you had chosen instead of resetting it to the default — including custom model names on your own endpoint. (#1556)
+- **Mistral file uploads authenticate correctly.** Upload was the last path still sending a Bearer token instead of Mistral's `x-api-key`. (#1556)
+- **Azure OpenAI endpoints work on every path.** Dictation, re-transcribe, and upload all build deployment-style URLs, whether the endpoint is configured as Custom or self-hosted. (#1556)
+- **Uploads detect their own language again.** A file you upload is no longer forced into your dictation language. (#1556)
+
 ## [1.8.2] - 2026-08-11
 
 Meetings get more reliable speaker identity — labels you set now stick, Windows loopback gains live identification, and Intel Mac meetings no longer fail when the optional ONNX binding is unavailable. The voice agent can edit highlighted text in place or use an opt-in screenshot as context. Collaboration is now free for signed-in users, Microsoft and Apple Calendar join Google Calendar, and organizations gain server-enforced policy plus centrally managed Bedrock and Azure OpenAI access.

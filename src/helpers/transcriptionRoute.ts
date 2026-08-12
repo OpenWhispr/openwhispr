@@ -50,7 +50,7 @@ export interface TranscriptionRouteInput {
   settings: TranscriptionRouteSettings;
   /** Optional fail-closed floor; renderer callers pass the policy store state, main-process callers omit it. */
   policy?: PolicyDecisionSnapshot | null;
-  /** Transcription provider registry; main-process callers pass [] (renderer pre-flight owns URL-vs-provider guards there). */
+  /** Provider registry, for the Tinfoil-host guard. Renderer passes ModelRegistry, main the raw JSON. */
   providers?: readonly TranscriptionProviderBaseUrl[];
   request?: {
     /** Explicit model override; doubles as the Azure deployment name. */

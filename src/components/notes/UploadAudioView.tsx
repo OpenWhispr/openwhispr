@@ -493,7 +493,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,
     cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
     cloudTranscriptionModel,
-    // Empty string = auto-detect; providers that need a concrete language (Corti) get their default from the route resolver.
+    // Empty = auto-detect; the resolver supplies a default where one is required.
     language: getBaseLanguageCode(preferredLanguage) || "",
     cortiEnvironment,
     cortiTenant,
