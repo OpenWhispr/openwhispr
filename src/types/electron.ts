@@ -455,6 +455,7 @@ export interface ActionItem {
   name: string;
   description: string;
   prompt: string;
+  temperature: number | null;
   icon: string;
   is_builtin: number;
   sort_order: number;
@@ -1130,7 +1131,10 @@ declare global {
         name: string,
         description: string,
         prompt: string,
-        icon?: string
+        icon?: string,
+        options?: {
+          temperature?: number | null;
+        }
       ) => Promise<{ success: boolean; action?: ActionItem; error?: string }>;
       updateAction: (
         id: number,
@@ -1138,6 +1142,7 @@ declare global {
           name?: string;
           description?: string;
           prompt?: string;
+          temperature?: number | null;
           icon?: string;
           sort_order?: number;
         }
