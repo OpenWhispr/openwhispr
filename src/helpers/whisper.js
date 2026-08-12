@@ -501,7 +501,17 @@ class WhisperManager {
       return { success: true, text };
     }
 
-    return { success: false, message: "No audio detected" };
+    // A response with neither shape is a broken backend, not silence. Reporting it
+    // as "No audio detected" sends users chasing their microphone when the engine
+    // is at fault, so surface it as the transcription failure it is.
+    const serverError = typeof result.error === "string" && result.error.trim();
+    return {
+      success: false,
+      error: "invalid_response",
+      message: serverError
+        ? `Transcription engine error: ${serverError}`
+        : "Transcription engine returned an unexpected response",
+    };
   }
 
   // Check if text is a whisper.cpp blank audio marker

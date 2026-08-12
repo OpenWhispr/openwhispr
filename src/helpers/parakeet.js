@@ -258,13 +258,19 @@ class ParakeetManager {
       textLength: output?.text?.length || 0,
     });
 
-    if (!output || !output.text) {
-      return { success: false, message: "No audio detected" };
+    // Missing output or a missing text field is a broken decode, not silence —
+    // only a present-but-empty transcript means the recording was actually blank.
+    if (!output || typeof output.text !== "string") {
+      return {
+        success: false,
+        error: "invalid_response",
+        message: "Transcription engine returned an unexpected response",
+      };
     }
 
     const text = output.text.trim();
 
-    if (!text || text.length === 0) {
+    if (!text) {
       return { success: false, message: "No audio detected" };
     }
 
