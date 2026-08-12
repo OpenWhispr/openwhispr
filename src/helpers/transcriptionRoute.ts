@@ -1,12 +1,11 @@
 // Single source of truth for batch speech-to-text routing across dictation,
-// retry, and upload. Callers resolve their scope's settings into the flat
-// base names and handle the OpenWhispr-cloud pipeline upstream; streaming
-// provider selection is a live-recorder concern and stays in audioManager.
+// retry, and upload. Callers resolve their scope's settings into the flat base
+// names and handle the OpenWhispr-cloud pipeline upstream; streaming provider
+// selection is a live-recorder concern and stays in audioManager.
 //
-// Loaded by both the renderer and the main process (main uses dynamic
-// import): erasable TypeScript syntax only, explicit import extensions,
-// no store imports.
-// Routes never carry secrets: `auth.keyRef` names the key slot the executor
+// Loaded by the renderer and the main process alike (main uses dynamic import):
+// erasable TypeScript syntax only, explicit import extensions, no store imports.
+// Routes never carry secrets — `auth.keyRef` names the key slot the executor
 // resolves itself.
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
 import {
@@ -112,10 +111,11 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
-// Preserve an explicitly chosen model when it matches the provider (settings can
-// hold a stale model after a provider switch or migration), else the provider
-// default. Mirrors audioManager.getTranscriptionModel so retry and upload stop
-// drifting from dictation.
+// Prefix-matched rather than registry-checked on purpose: this module loads in
+// the packaged main process without the registry, and strict validation would
+// reset the model of anyone still on a retired id. The registry-backed picker
+// rules live in settingsStore; transcriptionRouteModelAgreement.test.js pins the
+// two together for every shipping model.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
@@ -136,6 +136,17 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
 
 function error(message: string, code?: string, messageKey?: string): TranscriptionRoute {
   return { transport: "error", message, code, messageKey };
+}
+
+// Azure routes by deployment in the path and needs an api-version query, so the
+// plain {base}/audio/transcriptions shape returns DeploymentNotFound. Takes the
+// raw URL because normalization strips the suffix that marks a pinned deployment.
+// Shared by self-hosted and Custom — deriveTranscriptionMode files Azure
+// endpoints under either, depending on when the user configured them.
+function buildBatchEndpoint(rawUrl: string, base: string, model: string | null): string {
+  const fallback = buildApiUrl(base, "/audio/transcriptions");
+  if (!isAzureOpenAIEndpoint(base)) return fallback;
+  return buildAzureTranscriptionUrl(rawUrl, model || "") || fallback;
 }
 
 function customEndpointError(managed: boolean): TranscriptionRoute {
@@ -191,15 +202,17 @@ export function resolveTranscriptionRoute({
   // instead of breaking that population, and everything else fails closed.
   if (s.transcriptionMode === "self-hosted") {
     if (isSelfHostedTranscription(s)) {
-      const base = normalizeBaseUrl((s.remoteTranscriptionUrl || "").trim());
+      const rawUrl = (s.remoteTranscriptionUrl || "").trim();
+      const base = normalizeBaseUrl(rawUrl);
       if (!base || !isSecureHttpEndpoint(base)) {
         return error("Self-hosted transcription URL is invalid or unsupported");
       }
+      const selfHostedModel = resolveSelfHostedTranscriptionModel(s);
       return {
         transport: "http-batch",
         provider: "self-hosted",
-        endpoint: buildApiUrl(base, "/audio/transcriptions"),
-        model: resolveSelfHostedTranscriptionModel(s),
+        endpoint: buildBatchEndpoint(rawUrl, base, selfHostedModel),
+        model: selfHostedModel,
         auth: { scheme: "none", keyRef: null },
         sizeCapBytes: null,
         language,
@@ -210,8 +223,7 @@ export function resolveTranscriptionRoute({
     }
   }
 
-  // Local decode details (engine, model) stay with the local managers; the
-  // resolver only decides that the request never leaves the machine.
+  // Engine and model selection stay with the local managers.
   if (s.useLocalWhisper) {
     return { transport: "local" };
   }
@@ -259,27 +271,16 @@ export function resolveTranscriptionRoute({
     if (isTinfoilInferenceUrl(base, providers)) {
       return error(TINFOIL_PROXY_REQUIRED_ERROR);
     }
-    if (isAzureOpenAIEndpoint(base)) {
-      // Built from the raw base — normalization strips the /audio/transcriptions
-      // suffix that marks a deployment the user pinned. Missing deployment falls
-      // back to the plain path (Azure then reports DeploymentNotFound itself).
-      const azureUrl = buildAzureTranscriptionUrl(rawUrl, model);
-      return {
-        transport: "http-batch",
-        provider: "custom",
-        endpoint: azureUrl || buildApiUrl(base, "/audio/transcriptions"),
-        model,
-        auth: { scheme: "azure-api-key", keyRef: "custom" },
-        sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
-        language,
-      };
-    }
+    // Azure authenticates with the `api-key` header; Bearer is reserved for Entra ID.
     return {
       transport: "http-batch",
       provider: "custom",
-      endpoint: buildApiUrl(base, "/audio/transcriptions"),
+      endpoint: buildBatchEndpoint(rawUrl, base, model),
       model,
-      auth: { scheme: "bearer", keyRef: "custom" },
+      auth: {
+        scheme: isAzureOpenAIEndpoint(base) ? "azure-api-key" : "bearer",
+        keyRef: "custom",
+      },
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
       language,
     };

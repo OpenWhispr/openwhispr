@@ -312,8 +312,6 @@ const STREAMING_PROVIDERS = {
 
 // Batch providers that must transcribe via a main-process proxy (CORS,
 // non-Bearer auth, OAuth, or attested transport) instead of a renderer fetch.
-// Follows STREAMING_PROVIDERS: per-provider payload quirks are data; the
-// transcribe flow exists once in processWithOpenAIAPI.
 const PROXY_TRANSCRIPTION_PROVIDERS = {
   tinfoil: {
     displayName: "Tinfoil",
@@ -3050,25 +3048,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("stream", "true");
       }
 
-      const isCustomEndpoint =
-        provider === "custom" ||
-        (!endpoint.includes("api.openai.com") &&
-          !endpoint.includes("api.groq.com") &&
-          !endpoint.includes("api.x.ai") &&
-          !endpoint.includes("api.mistral.ai"));
-
       const apiCallStart = performance.now();
 
       logger.debug(
         "Making transcription API request",
-        {
-          endpoint,
-          shouldStream,
-          model,
-          provider,
-          isCustomEndpoint,
-          hasApiKey: !!apiKey,
-        },
+        { endpoint, shouldStream, model, provider, hasApiKey: !!apiKey },
         "transcription"
       );
 
@@ -3300,8 +3284,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const selfHostedModel = resolveSelfHostedTranscriptionModel(s);
       if (selfHostedModel) return selfHostedModel;
       const provider = s.cloudTranscriptionProvider || "openai";
-      // Tinfoil's model lives in the registry; every other provider validates
-      // the stored model through the shared resolver rules.
+      // Tinfoil pins its batch model in the registry rather than in settings.
       if (provider === "tinfoil") {
         return getBatchTranscriptionModel("tinfoil");
       }
@@ -3311,9 +3294,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  // Cloud-endpoint resolution for the batch HTTP path, delegated to the shared
-  // resolver (single source of truth with retry and upload). Local-vs-cloud and
-  // OpenWhispr-cloud decisions happen upstream, so local flags are ignored here —
+  // Local-vs-cloud is decided upstream, so useLocalWhisper is forced off here:
   // the local→cloud fallback resolves its cloud endpoint through this too.
   getTranscriptionEndpoint(deploymentName = "") {
     const route = resolveTranscriptionRoute({

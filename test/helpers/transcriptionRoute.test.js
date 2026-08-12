@@ -179,6 +179,38 @@ test("Azure custom endpoints build deployment URLs from the raw base", async () 
   assert.match(pinned.endpoint, /deployments\/d1\/audio\/transcriptions\?api-version=2024-06-01/);
 });
 
+// migrateProviderSettings files every legacy `custom + byok` user under
+// transcriptionMode "self-hosted" and copies their base URL across, so Azure
+// endpoints reach the resolver through this branch too.
+test("Azure self-hosted endpoints build deployment URLs, like Custom ones", async () => {
+  const route = await resolve({
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "https://myres.openai.azure.com",
+    remoteTranscriptionModel: "my-deployment",
+  });
+  assert.equal(route.provider, "self-hosted");
+  assert.equal(
+    route.endpoint,
+    "https://myres.openai.azure.com/openai/deployments/my-deployment/audio/transcriptions?api-version=2025-03-01-preview"
+  );
+
+  const pinned = await resolve({
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl:
+      "https://myres.openai.azure.com/openai/deployments/d1/audio/transcriptions?api-version=2024-06-01",
+    remoteTranscriptionModel: "ignored",
+  });
+  assert.match(pinned.endpoint, /deployments\/d1\/audio\/transcriptions\?api-version=2024-06-01/);
+
+  // Non-Azure self-hosted servers keep the plain OpenAI-compatible path.
+  const plain = await resolve({
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "https://stt.internal.example.com",
+    remoteTranscriptionModel: "tiny",
+  });
+  assert.equal(plain.endpoint, "https://stt.internal.example.com/audio/transcriptions");
+});
+
 test("openai and groq route to fixed endpoints with provider-validated models", async () => {
   const openai = await resolve({});
   assert.equal(openai.provider, "openai");

@@ -34,6 +34,16 @@ const serializeIpcError =
       return { error: error.message, code: error.code, messageKey: error.messageKey };
     }
   };
+// Which diarization dialect a resolved endpoint speaks, for Custom endpoints
+// that front a known provider. Null when the host offers no known dialect.
+const diarizationHost = (endpoint) => {
+  try {
+    const host = new URL(endpoint).hostname;
+    if (host === "mistral.ai" || host.endsWith(".mistral.ai")) return "mistral";
+    if (host === "openai.com" || host.endsWith(".openai.com")) return "openai";
+  } catch {}
+  return null;
+};
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
@@ -96,8 +106,6 @@ const MEETING_RECONNECT_BUFFER_MAX_BYTES = MEETING_STREAM_SAMPLE_RATE * 2 * 30;
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
 const XAI_STT_URL = "https://api.x.ai/v1/stt";
-
-// xAI STT supports 25 languages; language must be in this set to enable ITN via format=true
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
@@ -8265,7 +8273,7 @@ class IPCHandlers {
             return { success: true, text };
           }
 
-          if (!apiKey && provider !== "custom") {
+          if (!apiKey && route.provider !== "custom") {
             throw new Error("No API key configured. Add your key in Settings.");
           }
 
@@ -8289,24 +8297,29 @@ class IPCHandlers {
             transcriptionUrl =
               route.provider === "mistral" ? MISTRAL_TRANSCRIPTION_URL : route.endpoint;
             multipartFields.model = route.model;
-            if (route.language) multipartFields.language = route.language;
+            // No language field: an uploaded file is often not in the dictation
+            // language, and a wrong hint silently mistranscribes it. Providers
+            // that require one (Corti) are handled on their own branch above.
           }
 
           if (diarize) {
-            if (route.provider === "mistral") {
+            // A Custom endpoint may front OpenAI or Mistral, so fall back to the
+            // resolved host before giving up on speaker labels.
+            const diarizeTarget =
+              route.provider === "custom" ? diarizationHost(route.endpoint) : route.provider;
+            if (diarizeTarget === "mistral") {
               multipartFields.diarize = "true";
               multipartFields.timestamp_granularities = "segment";
-            } else if (route.provider === "openai") {
+            } else if (diarizeTarget === "openai") {
               multipartFields.model = "gpt-4o-transcribe-diarize";
               // Speaker annotations require diarized_json; verbose_json is not supported by this model.
               multipartFields.response_format = "diarized_json";
               multipartFields.chunking_strategy = "auto";
             } else {
-              // Custom gateways may be OpenAI-compatible but diarization models
-              // aren't guaranteed — degrade to a plain transcript, never fail the upload.
+              // Degrade to a plain transcript, never fail the upload.
               debugLogger.warn(
                 "BYOK diarization requested but provider is not OpenAI/Mistral; transcribing without speakers",
-                { provider: route.provider }
+                { provider: route.provider, endpoint: route.endpoint }
               );
             }
           }

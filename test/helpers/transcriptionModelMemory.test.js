@@ -81,6 +81,24 @@ test("per-provider transcription model memory", async (t) => {
     assert.notEqual(state().meetingCloudTranscriptionModel, "");
   });
 
+  // The picker no longer writes the provider itself — switchCloudTranscriptionProvider
+  // is the single writer for both keys, so it must land the provider on its own.
+  await t.test("the switch writes the provider key for every scope", () => {
+    state().switchCloudTranscriptionProvider("dictation", "groq");
+    assert.equal(state().cloudTranscriptionProvider, "groq");
+    state().switchCloudTranscriptionProvider("meeting", "openai");
+    assert.equal(state().meetingCloudTranscriptionProvider, "openai");
+    state().switchCloudTranscriptionProvider("upload", "custom");
+    assert.equal(state().uploadCloudTranscriptionProvider, "custom");
+  });
+
+  await t.test("an unknown context is a no-op, not a crash", () => {
+    const before = { ...state() };
+    state().switchCloudTranscriptionProvider("nonexistent", "groq");
+    assert.equal(state().cloudTranscriptionProvider, before.cloudTranscriptionProvider);
+    assert.equal(state().cloudTranscriptionModel, before.cloudTranscriptionModel);
+  });
+
   await t.test("setCloudTranscriptionForAllScopes seeds memory in every scope", () => {
     state().setCloudTranscriptionForAllScopes({
       useLocalWhisper: false,

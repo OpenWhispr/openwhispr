@@ -194,6 +194,10 @@ interface TranscriptionModelPickerProps {
   /** Settings scope whose provider/model keys this picker edits. */
   transcriptionContext?: TranscriptionPolicyContext;
   selectedCloudProvider: string;
+  /**
+   * Policy reconciliation only — a user-driven pick goes through
+   * switchCloudTranscriptionProvider so the outgoing model survives the swap.
+   */
   onCloudProviderSelect: (providerId: string) => void;
   selectedCloudModel: string;
   onCloudModelSelect: (modelId: string) => void;
@@ -674,20 +678,16 @@ export default function TranscriptionModelPicker({
     [onModeChange]
   );
 
-  // Never writes cloudTranscriptionBaseUrl: that key is the Custom tab's only
-  // storage, and built-in providers resolve their endpoints from the registry
-  // at request time — writing it here destroyed the user's URL (#1459).
-  // switchCloudTranscriptionProvider owns the model slot: it remembers the
-  // outgoing provider's model and restores the incoming one, so this handler
-  // must not write the model itself. onCloudProviderSelect still runs so
-  // parents with derived state (e.g. onboarding) stay in sync.
+  // switchCloudTranscriptionProvider writes both the provider and the model for
+  // this scope: it remembers the outgoing provider's model and restores the
+  // incoming one. It never touches cloudTranscriptionBaseUrl — that key is the
+  // Custom tab's only storage, and writing it here destroyed the URL (#1459).
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
       if (!providerAllowed(providerId)) return;
       switchCloudTranscriptionProvider(transcriptionContext, providerId);
-      onCloudProviderSelect(providerId);
     },
-    [onCloudProviderSelect, providerAllowed, switchCloudTranscriptionProvider, transcriptionContext]
+    [providerAllowed, switchCloudTranscriptionProvider, transcriptionContext]
   );
 
   const handleLocalProviderChange = useCallback(
@@ -734,7 +734,6 @@ export default function TranscriptionModelPicker({
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);
         if (normalized === providerNormalized) {
           switchCloudTranscriptionProvider(transcriptionContext, provider.id);
-          onCloudProviderSelect(provider.id);
           break;
         }
       }
@@ -743,7 +742,6 @@ export default function TranscriptionModelPicker({
     cloudTranscriptionBaseUrl,
     selectedCloudProvider,
     setCloudTranscriptionBaseUrl,
-    onCloudProviderSelect,
     switchCloudTranscriptionProvider,
     transcriptionContext,
     cloudProviders,

@@ -363,3 +363,117 @@ test("upload: a custom URL on Tinfoil's host is refused in the main process", as
   assert.match(result.error, /attested main-process proxy/);
   assert.equal(fetches.length, 0);
 });
+
+// An uploaded file is frequently not in the dictation language, and a wrong hint
+// silently mistranscribes it — so BYOK cloud uploads auto-detect even when the
+// user has pinned a preferred language for dictation.
+test("upload: a preferred language never constrains a BYOK cloud upload", async () => {
+  for (const provider of ["openai", "groq", "custom"]) {
+    fetches.length = 0;
+    const result = await invokeUpload({
+      apiKey: "sk-key",
+      baseUrl: provider === "custom" ? "https://gateway.example.com/v1" : "",
+      model: "whisper-1",
+      provider,
+      language: "de",
+      transcriptionMode: "providers",
+    });
+    assert.equal(result.success, true, provider);
+    assert.doesNotMatch(fetches[0].init.body.toString(), /name="language"/, provider);
+  }
+});
+
+// Providers that require a concrete language still receive one.
+test("upload: corti and xai still get their language", async () => {
+  fetches.length = 0;
+  const xai = await invokeUpload({
+    apiKey: "xk-key",
+    baseUrl: "",
+    model: "grok-stt",
+    provider: "xai",
+    language: "de",
+    transcriptionMode: "providers",
+  });
+  assert.equal(xai.success, true);
+  assert.match(fetches[0].url, /api\.x\.ai/);
+  const xaiBody = fetches[0].init.body.toString();
+  assert.match(xaiBody, /name="language"[\s\S]*?de/);
+  assert.doesNotMatch(xaiBody, /name="model"/);
+
+  const corti = await invokeUpload({
+    apiKey: "",
+    baseUrl: "",
+    model: "corti-transcribe",
+    provider: "corti",
+    language: "",
+    environment: "eu",
+    tenant: " acme ",
+    transcriptionMode: "providers",
+  });
+  assert.equal(corti.success, true);
+  assert.equal(cortiCalls.at(-1).language, "en", "corti needs a concrete primaryLanguage");
+  assert.equal(cortiCalls.at(-1).environment, "eu");
+  assert.equal(cortiCalls.at(-1).tenant, "acme");
+});
+
+// #1459 made cloudTranscriptionBaseUrl Custom-only, so provider id alone can no
+// longer tell whether a Custom endpoint fronts a diarization-capable API.
+test("upload: a Custom endpoint fronting OpenAI or Mistral keeps diarization", async () => {
+  fetches.length = 0;
+  const openaiFronted = await invokeUpload({
+    apiKey: "ck-custom",
+    baseUrl: "https://api.openai.com/v1/audio/transcriptions",
+    model: "whisper-1",
+    provider: "custom",
+    diarize: true,
+    language: "",
+    transcriptionMode: "providers",
+  });
+  assert.equal(openaiFronted.success, true);
+  assert.match(fetches[0].init.body.toString(), /gpt-4o-transcribe-diarize/);
+
+  fetches.length = 0;
+  const mistralFronted = await invokeUpload({
+    apiKey: "ck-custom",
+    baseUrl: "https://api.mistral.ai/v1/audio/transcriptions",
+    model: "voxtral-mini-latest",
+    provider: "custom",
+    diarize: true,
+    language: "",
+    transcriptionMode: "providers",
+  });
+  assert.equal(mistralFronted.success, true);
+  assert.match(fetches[0].init.body.toString(), /name="diarize"/);
+
+  fetches.length = 0;
+  const unknownGateway = await invokeUpload({
+    apiKey: "ck-custom",
+    baseUrl: "https://gateway.example.com/v1",
+    model: "whisper-1",
+    provider: "custom",
+    diarize: true,
+    language: "",
+    transcriptionMode: "providers",
+  });
+  assert.equal(unknownGateway.success, true, "an unknown gateway degrades, never fails");
+  assert.doesNotMatch(fetches[0].init.body.toString(), /diarized_json/);
+});
+
+test("upload: a self-hosted Azure endpoint keeps its deployment URL", async () => {
+  fetches.length = 0;
+  const result = await invokeUpload({
+    apiKey: "",
+    baseUrl: "",
+    model: "",
+    provider: "custom",
+    language: "",
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "https://myorg.openai.azure.com",
+    remoteTranscriptionModel: "my-deployment",
+  });
+  assert.equal(result.success, true);
+  assert.equal(
+    fetches[0].url,
+    "https://myorg.openai.azure.com/openai/deployments/my-deployment/audio/transcriptions?api-version=2025-03-01-preview"
+  );
+});
