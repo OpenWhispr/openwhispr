@@ -317,6 +317,56 @@ const STREAMING_PROVIDERS = {
   },
 };
 
+// Batch providers that must transcribe via a main-process proxy (CORS,
+// non-Bearer auth, OAuth, or attested transport) instead of a renderer fetch.
+// Follows STREAMING_PROVIDERS: per-provider payload quirks are data; the
+// transcribe flow exists once in processWithOpenAIAPI.
+const PROXY_TRANSCRIPTION_PROVIDERS = {
+  tinfoil: {
+    displayName: "Tinfoil",
+    ipc: () => window.electronAPI?.proxyTinfoilTranscription,
+    buildPayload: ({ audioBuffer, language, dictionaryPrompt }) => ({
+      audioBuffer,
+      language,
+      prompt: dictionaryPrompt || undefined,
+    }),
+  },
+  mistral: {
+    displayName: "Mistral",
+    ipc: () => window.electronAPI?.proxyMistralTranscription,
+    buildPayload: ({ audioBuffer, model, language, dictionaryPrompt }) => {
+      const payload = { audioBuffer, model, language };
+      const tokens = (dictionaryPrompt || "")
+        .split(",")
+        .flatMap((entry) => entry.trim().split(/\s+/))
+        .filter(Boolean)
+        .slice(0, 100);
+      if (tokens.length > 0) payload.contextBias = tokens;
+      return payload;
+    },
+  },
+  xai: {
+    displayName: "xAI",
+    ipc: () => window.electronAPI?.proxyXaiTranscription,
+    buildPayload: ({ audioBuffer, language, keyterms }) => {
+      const payload = { audioBuffer, language: language !== "auto" ? language : undefined };
+      if (keyterms.length > 0) payload.keyterms = keyterms;
+      return payload;
+    },
+  },
+  corti: {
+    displayName: "Corti",
+    ipc: () => window.electronAPI?.proxyCortiTranscription,
+    buildPayload: ({ audioBuffer, language, apiSettings }) => ({
+      audioBuffer,
+      // Corti requires a concrete primaryLanguage; default to English when auto-detecting
+      language: language || "en",
+      environment: apiSettings.cortiEnvironment || "us",
+      tenant: (apiSettings.cortiTenant || "").trim() || "base",
+    }),
+  },
+};
+
 class AudioManager {
   constructor() {
     this.mediaRecorder = null;
@@ -2903,18 +2953,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const optimizedAudio = audioBlob;
 
       // Dispatch before endpoint resolution (which defaults to OpenAI and would leak
-      // the key). Self-hosted wins, so a leftover "tinfoil" provider isn't diverted here.
-      if (provider === "tinfoil" && !isSelfHostedTranscription(apiSettings)) {
-        if (!window.electronAPI?.proxyTinfoilTranscription) {
-          throw new Error("Tinfoil transcription is unavailable in this window");
+      // the key). Self-hosted wins, so a leftover proxied provider isn't diverted here.
+      const proxySpec = PROXY_TRANSCRIPTION_PROVIDERS[provider];
+      if (proxySpec && !isSelfHostedTranscription(apiSettings)) {
+        const call = proxySpec.ipc();
+        if (!call) {
+          throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
         }
-        const dictionaryPrompt = this.getWhisperPrompt(apiSettings);
         const apiCallStart = performance.now();
-        const result = await window.electronAPI.proxyTinfoilTranscription({
-          audioBuffer: await optimizedAudio.arrayBuffer(),
-          language,
-          prompt: dictionaryPrompt || undefined,
-        });
+        const result = await call(
+          proxySpec.buildPayload({
+            audioBuffer: await optimizedAudio.arrayBuffer(),
+            model,
+            language,
+            apiSettings,
+            dictionaryPrompt: this.getWhisperPrompt(apiSettings),
+            keyterms: this.getKeyterms()
+              .map((t) => t.trim().slice(0, 50))
+              .filter(Boolean)
+              .slice(0, 100),
+          })
+        );
         if (result?.error) {
           const err = new Error(result.error);
           if (result.code) err.code = result.code;
@@ -2923,17 +2982,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         const proxyText = result?.text;
         if (!proxyText?.trim()) {
-          throw new Error("No text transcribed - Tinfoil response was empty");
+          throw new Error(`No text transcribed - ${proxySpec.displayName} response was empty`);
         }
         if (this.isDictionaryEcho(proxyText)) {
           throw new Error("No audio detected");
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(proxyText, "tinfoil");
+        const text = await this.processTranscription(proxyText, provider);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
-        const source = (await this.isReasoningAvailable()) ? "tinfoil-reasoned" : "tinfoil";
+        const source = (await this.isReasoningAvailable()) ? `${provider}-reasoned` : provider;
         return { success: true, text, rawText: proxyText, source, timings };
       }
 
@@ -3009,120 +3068,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           !endpoint.includes("api.mistral.ai"));
 
       const apiCallStart = performance.now();
-
-      // Mistral uses x-api-key auth (not Bearer) and doesn't allow browser CORS — proxy through main process.
-      // Self-hosted wins here and below, so a leftover BYOK provider can't divert its audio.
-      if (
-        provider === "mistral" &&
-        !isSelfHostedTranscription(apiSettings) &&
-        window.electronAPI?.proxyMistralTranscription
-      ) {
-        const audioBuffer = await optimizedAudio.arrayBuffer();
-        const proxyData = { audioBuffer, model, language };
-
-        if (dictionaryPrompt) {
-          const tokens = dictionaryPrompt
-            .split(",")
-            .flatMap((entry) => entry.trim().split(/\s+/))
-            .filter(Boolean)
-            .slice(0, 100);
-          if (tokens.length > 0) {
-            proxyData.contextBias = tokens;
-          }
-        }
-
-        const result = await window.electronAPI.proxyMistralTranscription(proxyData);
-        const proxyText = result?.text;
-
-        if (proxyText && proxyText.trim().length > 0) {
-          if (this.isDictionaryEcho(proxyText)) {
-            throw new Error("No audio detected");
-          }
-          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
-          const rawText = proxyText;
-          const reasoningStart = performance.now();
-          const text = await this.processTranscription(proxyText, "mistral");
-          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
-
-          const source = (await this.isReasoningAvailable()) ? "mistral-reasoned" : "mistral";
-          return { success: true, text, rawText, source, timings };
-        }
-
-        throw new Error("No text transcribed - Mistral response was empty");
-      }
-
-      // xAI STT has a non-OpenAI-compatible API — proxy through main process. See #910.
-      if (
-        provider === "xai" &&
-        !isSelfHostedTranscription(apiSettings) &&
-        window.electronAPI?.proxyXaiTranscription
-      ) {
-        const audioBuffer = await optimizedAudio.arrayBuffer();
-        const proxyData = { audioBuffer, language: language !== "auto" ? language : undefined };
-
-        const keyterms = this.getKeyterms()
-          .map((t) => t.trim().slice(0, 50))
-          .filter(Boolean)
-          .slice(0, 100);
-        if (keyterms.length > 0) {
-          proxyData.keyterms = keyterms;
-        }
-
-        const result = await window.electronAPI.proxyXaiTranscription(proxyData);
-        const proxyText = result?.text;
-
-        if (proxyText && proxyText.trim().length > 0) {
-          if (this.isDictionaryEcho(proxyText)) {
-            throw new Error("No audio detected");
-          }
-          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
-          const rawText = proxyText;
-          const reasoningStart = performance.now();
-          const text = await this.processTranscription(proxyText, "xai");
-          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
-
-          const source = (await this.isReasoningAvailable()) ? "xai-reasoned" : "xai";
-          return { success: true, text, rawText, source, timings };
-        }
-
-        throw new Error("No text transcribed - xAI response was empty");
-      }
-
-      // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through
-      // main process. A missing bridge must throw: falling through would resolve Corti to the
-      // OpenAI default endpoint.
-      if (provider === "corti" && !isSelfHostedTranscription(apiSettings)) {
-        if (!window.electronAPI?.proxyCortiTranscription) {
-          throw new Error("Corti transcription is unavailable in this window");
-        }
-        const audioBuffer = await optimizedAudio.arrayBuffer();
-        const proxyData = {
-          audioBuffer,
-          // Corti requires a concrete primaryLanguage; default to English when auto-detecting
-          language: language || "en",
-          environment: apiSettings.cortiEnvironment || "us",
-          tenant: (apiSettings.cortiTenant || "").trim() || "base",
-        };
-
-        const result = await window.electronAPI.proxyCortiTranscription(proxyData);
-        const proxyText = result?.text;
-
-        if (proxyText && proxyText.trim().length > 0) {
-          if (this.isDictionaryEcho(proxyText)) {
-            throw new Error("No audio detected");
-          }
-          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
-          const rawText = proxyText;
-          const reasoningStart = performance.now();
-          const text = await this.processTranscription(proxyText, "corti");
-          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
-
-          const source = (await this.isReasoningAvailable()) ? "corti-reasoned" : "corti";
-          return { success: true, text, rawText, source, timings };
-        }
-
-        throw new Error("No text transcribed - Corti response was empty");
-      }
 
       logger.debug(
         "Making transcription API request",

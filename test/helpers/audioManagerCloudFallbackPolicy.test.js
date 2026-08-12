@@ -437,3 +437,132 @@ test("corti without a preload bridge throws instead of falling through to OpenAI
   );
   assert.equal(fetchCalls, 0);
 });
+
+test("proxied providers dispatch through the registry", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-proxy-registry-test-",
+    mockModules: {
+      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__proxyRegistrySettings;
+        export const getEffectiveCleanupModel = () => null;
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+      `,
+      "/services/ReasoningService": "export default class ReasoningService {};",
+      "/services/SyncService.js": "export const syncService = {};",
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
+      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
+    },
+  });
+
+  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error("proxied providers must not fetch from the renderer");
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__proxyRegistrySettings;
+  });
+
+  const payloads = {};
+  const respondWith = { text: "proxied text" };
+  for (const [provider, channel] of [
+    ["tinfoil", "proxyTinfoilTranscription"],
+    ["mistral", "proxyMistralTranscription"],
+    ["xai", "proxyXaiTranscription"],
+    ["corti", "proxyCortiTranscription"],
+  ]) {
+    window.electronAPI[channel] = async (payload) => {
+      payloads[provider] = payload;
+      return respondWith;
+    };
+  }
+
+  const dictionary = Array.from({ length: 30 }, (_, i) => `term${i}`.padEnd(40, "x")).join(", ");
+  const manager = Object.create(AudioManager.prototype);
+  manager.getEffectiveSttLanguage = () => "auto";
+  manager.getTranscriptionModel = () => "voxtral-mini-latest";
+  manager.getAPIKey = async () => "key";
+  manager.getWhisperPrompt = () => dictionary;
+  manager.getKeyterms = () => ["Alpha", "  Beta  ", ""];
+  manager.shouldStreamTranscription = () => false;
+  manager.isDictionaryEcho = () => false;
+  manager.processTranscription = async (text) => text;
+  manager.isReasoningAvailable = async () => false;
+
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  const settingsFor = (provider) => ({
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: provider,
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+    cortiEnvironment: "eu",
+    cortiTenant: " acme ",
+  });
+
+  await t.test("each provider gets its own payload shape and source label", async () => {
+    for (const provider of ["tinfoil", "mistral", "xai", "corti"]) {
+      globalThis.__proxyRegistrySettings = settingsFor(provider);
+      const result = await manager.processWithOpenAIAPI(audioBlob);
+      assert.equal(result.success, true);
+      assert.equal(result.source, provider);
+    }
+    assert.equal(payloads.tinfoil.prompt, dictionary);
+    // contextBias is built from the untruncated dictionary: all 30 terms survive.
+    assert.equal(payloads.mistral.contextBias.length, 30);
+    assert.equal(payloads.mistral.model, "voxtral-mini-latest");
+    assert.deepEqual(payloads.xai.keyterms, ["Alpha", "Beta"]);
+    assert.equal(payloads.xai.language, undefined);
+    assert.equal(payloads.corti.language, "en");
+    assert.equal(payloads.corti.environment, "eu");
+    assert.equal(payloads.corti.tenant, "acme");
+    assert.equal(fetchCalls, 0);
+  });
+
+  await t.test("structured proxy errors are rebuilt with code and messageKey", async () => {
+    globalThis.__proxyRegistrySettings = settingsFor("mistral");
+    window.electronAPI.proxyMistralTranscription = async () => ({
+      error: "Mistral API Error: 401 unauthorized",
+      code: "INVALID_KEY",
+      messageKey: "some.key",
+    });
+    await assert.rejects(manager.processWithOpenAIAPI(audioBlob), (error) => {
+      assert.equal(error.code, "INVALID_KEY");
+      assert.equal(error.messageKey, "some.key");
+      return true;
+    });
+  });
+
+  await t.test("empty responses name the provider", async () => {
+    globalThis.__proxyRegistrySettings = settingsFor("xai");
+    window.electronAPI.proxyXaiTranscription = async () => ({ text: "   " });
+    await assert.rejects(
+      manager.processWithOpenAIAPI(audioBlob),
+      /No text transcribed - xAI response was empty/
+    );
+  });
+
+  await t.test("a missing preload bridge throws for every proxied provider", async () => {
+    for (const [provider, channel, name] of [
+      ["tinfoil", "proxyTinfoilTranscription", "Tinfoil"],
+      ["mistral", "proxyMistralTranscription", "Mistral"],
+      ["xai", "proxyXaiTranscription", "xAI"],
+      ["corti", "proxyCortiTranscription", "Corti"],
+    ]) {
+      delete window.electronAPI[channel];
+      globalThis.__proxyRegistrySettings = settingsFor(provider);
+      await assert.rejects(
+        manager.processWithOpenAIAPI(audioBlob),
+        new RegExp(`${name} transcription is unavailable in this window`)
+      );
+    }
+    assert.equal(fetchCalls, 0);
+  });
+});

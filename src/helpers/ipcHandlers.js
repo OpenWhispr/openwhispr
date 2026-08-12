@@ -3558,74 +3558,86 @@ class IPCHandlers {
     ipcMain.handle(
       "proxy-xai-transcription",
       async (event, { audioBuffer, language, keyterms }) => {
-        const apiKey = this.environmentManager.getXaiKey();
-        if (!apiKey) {
-          throw new Error("xAI API key not configured");
-        }
-
-        const formData = new FormData();
-        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
-        formData.append("file", audioBlob, "audio.webm");
-        if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
-          formData.append("language", language);
-          formData.append("format", "true");
-        }
-        if (keyterms && keyterms.length > 0) {
-          for (const term of keyterms) {
-            formData.append("keyterm", term);
+        try {
+          const apiKey = this.environmentManager.getXaiKey();
+          if (!apiKey) {
+            throw new Error("xAI API key not configured");
           }
+
+          const formData = new FormData();
+          const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+          formData.append("file", audioBlob, "audio.webm");
+          if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
+            formData.append("language", language);
+            formData.append("format", "true");
+          }
+          if (keyterms && keyterms.length > 0) {
+            for (const term of keyterms) {
+              formData.append("keyterm", term);
+            }
+          }
+
+          const response = await proxyFetch(XAI_STT_URL, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${apiKey}` },
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`xAI API Error: ${response.status} ${errorText}`);
+          }
+
+          return await response.json();
+        } catch (error) {
+          // ipcMain.handle keeps only the message when a promise rejects, dropping
+          // custom props — return the code so the renderer can rebuild the error.
+          return { error: error.message, code: error.code, messageKey: error.messageKey };
         }
-
-        const response = await proxyFetch(XAI_STT_URL, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}` },
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`xAI API Error: ${response.status} ${errorText}`);
-        }
-
-        return await response.json();
       }
     );
 
     ipcMain.handle(
       "proxy-mistral-transcription",
       async (event, { audioBuffer, model, language, contextBias }) => {
-        const apiKey = this.environmentManager.getMistralKey();
-        if (!apiKey) {
-          throw new Error("Mistral API key not configured");
-        }
-
-        const formData = new FormData();
-        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
-        formData.append("file", audioBlob, "audio.webm");
-        formData.append("model", model || "voxtral-mini-latest");
-        if (language && language !== "auto") {
-          formData.append("language", language);
-        }
-        if (contextBias && contextBias.length > 0) {
-          for (const token of contextBias) {
-            formData.append("context_bias", token);
+        try {
+          const apiKey = this.environmentManager.getMistralKey();
+          if (!apiKey) {
+            throw new Error("Mistral API key not configured");
           }
+
+          const formData = new FormData();
+          const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+          formData.append("file", audioBlob, "audio.webm");
+          formData.append("model", model || "voxtral-mini-latest");
+          if (language && language !== "auto") {
+            formData.append("language", language);
+          }
+          if (contextBias && contextBias.length > 0) {
+            for (const token of contextBias) {
+              formData.append("context_bias", token);
+            }
+          }
+
+          const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+            },
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Mistral API Error: ${response.status} ${errorText}`);
+          }
+
+          return await response.json();
+        } catch (error) {
+          // ipcMain.handle keeps only the message when a promise rejects, dropping
+          // custom props — return the code so the renderer can rebuild the error.
+          return { error: error.message, code: error.code, messageKey: error.messageKey };
         }
-
-        const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
-          method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-          },
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Mistral API Error: ${response.status} ${errorText}`);
-        }
-
-        return await response.json();
       }
     );
 
@@ -3648,21 +3660,27 @@ class IPCHandlers {
     ipcMain.handle(
       "proxy-corti-transcription",
       async (event, { audioBuffer, language, environment, tenant }) => {
-        const clientId = this.environmentManager.getCortiClientId();
-        const clientSecret = this.environmentManager.getCortiClientSecret();
-        if (!clientId || !clientSecret) {
-          throw new Error("Corti credentials not configured");
-        }
+        try {
+          const clientId = this.environmentManager.getCortiClientId();
+          const clientSecret = this.environmentManager.getCortiClientSecret();
+          if (!clientId || !clientSecret) {
+            throw new Error("Corti credentials not configured");
+          }
 
-        const { transcribeAudio } = require("./cortiTranscription");
-        return transcribeAudio({
-          environment,
-          tenant,
-          clientId,
-          clientSecret,
-          audioBuffer,
-          language,
-        });
+          const { transcribeAudio } = require("./cortiTranscription");
+          return await transcribeAudio({
+            environment,
+            tenant,
+            clientId,
+            clientSecret,
+            audioBuffer,
+            language,
+          });
+        } catch (error) {
+          // ipcMain.handle keeps only the message when a promise rejects, dropping
+          // custom props — return the code so the renderer can rebuild the error.
+          return { error: error.message, code: error.code, messageKey: error.messageKey };
+        }
       }
     );
 
