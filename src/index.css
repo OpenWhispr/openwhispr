@@ -4,20 +4,25 @@
 
 @theme {
   /* OpenWhispr Theme — registers color tokens with Tailwind v4.
-     These are the light-mode defaults; .dark overrides them below. */
-  --color-primary: #2563eb;
+     These are the light-mode defaults; .dark overrides them below.
+
+     Design language v2: color is state, never decoration.
+     - primary = inverse (black in light, white in dark) — owns primary actions
+     - accent  = selection blue — ONLY for selected/active states
+     - warm-neutral sunken surfaces, alpha hairlines, no decorative color */
+  --color-primary: #171717;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f5f5f5;
+  --color-secondary: #f7f4f4;
   --color-secondary-foreground: #171717;
-  --color-muted: #f5f5f5;
-  --color-muted-foreground: #525252;
-  --color-accent: oklch(0.55 0.22 285);
+  --color-muted: #f7f4f4;
+  --color-muted-foreground: oklch(0 0 0 / 0.55);
+  --color-accent: #4079ed;
   --color-accent-foreground: #ffffff;
   --color-destructive: #dc2626;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e5e5e5;
-  --color-input: #f9f6f1;
-  --color-ring: #2563eb;
+  --color-border: #eeecea;
+  --color-input: #f7f4f4;
+  --color-ring: #4079ed;
   --color-background: #ffffff;
   --color-foreground: #171717;
   --color-card: #ffffff;
@@ -32,17 +37,26 @@
   --color-info: #2563eb;
   --color-info-foreground: #ffffff;
 
-  /* Surface hierarchy — light mode equivalents */
+  /* Surface hierarchy — warm paper neutrals (sunken = one step down) */
   --color-surface-0: #ffffff;
-  --color-surface-1: #fafafa;
+  --color-surface-1: #faf9f7;
   --color-surface-2: #ffffff;
-  --color-surface-3: #f5f5f5;
-  --color-surface-raised: #f0f0f0;
+  --color-surface-3: #f7f4f4;
+  --color-surface-raised: #f0eeec;
 
-  /* Border states — light mode equivalents */
-  --color-border-subtle: #e5e5e5;
-  --color-border-hover: #d4d4d4;
-  --color-border-active: #2563eb;
+  /* Border states — hairlines; dividers use alpha so they sit on any tint */
+  --color-border-subtle: oklch(0 0 0 / 0.05);
+  --color-border-hover: #ddd9d5;
+  --color-border-active: #4079ed;
+
+  /* Radius tiers — fixed by role, never per-instance.
+     control 8 / tile 12 / card 16 / floating 20 / window 44 / actions = pill */
+  --radius-sm: 0.375rem; /* 6px  - micro elements */
+  --radius-md: 0.5rem; /* 8px  - controls: inputs, selects, quiet rows */
+  --radius-lg: 0.75rem; /* 12px - tiles, small grid cells */
+  --radius-xl: 1rem; /* 16px - cards, panels, list containers */
+  --radius-2xl: 1.25rem; /* 20px - dialogs, floating layers */
+  --radius-window: 2.75rem; /* 44px - outermost floating surface */
 }
 
 :root {
@@ -56,12 +70,8 @@
   --opacity-medium: 0.5;
   --opacity-high: 0.9;
 
-  /* Border Radius — ultra-tight, premium macOS-style rounding */
-  --radius: 0.375rem; /* 6px - default for buttons, inputs */
-  --radius-sm: 0.25rem; /* 4px - minimal rounding */
-  --radius-md: 0.375rem; /* 6px - standard */
-  --radius-lg: 0.5rem; /* 8px - cards, panels */
-  --radius-xl: 0.625rem; /* 10px - large cards */
+  /* Default radius — control tier (inputs, selects) */
+  --radius: 0.5rem; /* 8px */
 
   /* Custom Light Mode Brand Colors (Parchment Theme) */
   --color-parchment-bg: #f9f6f1;
@@ -74,34 +84,36 @@
   --color-brand-link: #2e3659;
   --color-pattern: #e7e5e4;
 
-  /* Model picker premium effects (light mode) */
-  --shadow-metallic-light: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-card-hover-subtle: 0 2px 8px -2px rgba(0, 0, 0, 0.1);
+  /* Depth is fill alternation + hairlines — surfaces carry no shadows.
+     Transient layers (menus, popovers, dialogs) keep one restrained shadow. */
+  --shadow-metallic-light: none;
+  --shadow-card-hover-subtle: none;
+  --shadow-transient: 0 8px 24px -8px rgba(0, 0, 0, 0.16);
 }
 
 .dark {
-  /* Dark mode — charcoal surfaces with clear elevation hierarchy
-     Base L=0.22 (charcoal) with 0.05 steps between layers.
-     Hue 260 (neutral blue) with minimal chroma for sophistication. */
-  --color-background: oklch(0.22 0.006 260);
+  /* Dark mode — near-black charcoal, flat depth via fill steps.
+     primary inverts to white (inverse capsule), accent stays selection blue,
+     hairlines are white-alpha so they sit on any surface step. */
+  --color-background: oklch(0.2 0.005 260);
   --color-foreground: oklch(0.93 0 0);
-  --color-card: oklch(0.27 0.008 260);
+  --color-card: oklch(0.24 0.006 260);
   --color-card-foreground: oklch(0.93 0 0);
-  --color-popover: oklch(0.29 0.009 260);
+  --color-popover: oklch(0.26 0.007 260);
   --color-popover-foreground: oklch(0.93 0 0);
-  --color-primary: oklch(0.65 0.2 260);
-  --color-primary-foreground: oklch(0.99 0 0);
-  --color-secondary: oklch(0.28 0.007 260);
+  --color-primary: oklch(0.96 0 0);
+  --color-primary-foreground: oklch(0.17 0 0);
+  --color-secondary: oklch(0.26 0.006 260);
   --color-secondary-foreground: oklch(0.9 0 0);
-  --color-muted: oklch(0.24 0.006 260);
-  --color-muted-foreground: oklch(0.65 0 0);
-  --color-accent: oklch(0.68 0.18 285);
+  --color-muted: oklch(0.25 0.006 260);
+  --color-muted-foreground: oklch(1 0 0 / 0.6);
+  --color-accent: oklch(0.62 0.17 262);
   --color-accent-foreground: oklch(0.99 0 0);
   --color-destructive: oklch(0.62 0.22 25);
   --color-destructive-foreground: oklch(0.99 0 0);
-  --color-border: oklch(0.35 0.007 260);
-  --color-input: oklch(0.19 0.005 260);
-  --color-ring: oklch(0.65 0.2 260);
+  --color-border: oklch(1 0 0 / 0.08);
+  --color-input: oklch(0.25 0.006 260);
+  --color-ring: oklch(0.62 0.17 262);
   --color-success: oklch(0.7 0.18 145);
   --color-success-foreground: oklch(0.99 0 0);
   --color-warning: oklch(0.75 0.15 70);
@@ -109,30 +121,28 @@
   --color-info: oklch(0.68 0.18 240);
   --color-info-foreground: oklch(0.99 0 0);
 
-  /* Surface hierarchy — charcoal depth system (0.22 → 0.33) */
-  --color-surface-0: oklch(0.22 0.006 260);
-  --color-surface-1: oklch(0.25 0.007 260);
-  --color-surface-2: oklch(0.27 0.008 260);
-  --color-surface-3: oklch(0.3 0.009 260);
-  --color-surface-raised: oklch(0.33 0.01 260);
+  /* Surface hierarchy — flat fill steps (0.20 → 0.29) */
+  --color-surface-0: oklch(0.2 0.005 260);
+  --color-surface-1: oklch(0.23 0.006 260);
+  --color-surface-2: oklch(0.24 0.006 260);
+  --color-surface-3: oklch(0.27 0.007 260);
+  --color-surface-raised: oklch(0.29 0.008 260);
 
-  /* Border states */
-  --color-border-subtle: oklch(0.33 0.006 260);
-  --color-border-hover: oklch(0.42 0.01 260);
-  --color-border-active: oklch(0.5 0.15 260);
+  /* Border states — alpha hairlines */
+  --color-border-subtle: oklch(1 0 0 / 0.05);
+  --color-border-hover: oklch(1 0 0 / 0.14);
+  --color-border-active: oklch(0.62 0.17 262);
   --color-link: oklch(0.67 0.1 250);
 
-  /* Card depth shadows — softer for charcoal, with top highlight for premium depth */
-  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.2), inset 0 1px 0 oklch(1 0 0 / 0.03);
-  --shadow-card-hover: 0 4px 12px oklch(0 0 0 / 0.25), inset 0 1px 0 oklch(1 0 0 / 0.04);
-  --shadow-elevated: 0 8px 24px oklch(0 0 0 / 0.3);
-  --shadow-modal: 0 24px 48px -12px oklch(0 0 0 / 0.4);
-
-  /* Premium effects */
-  --shadow-metallic-dark: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-selected-glow:
-    inset 0 0 0 1px oklch(0.65 0.2 260 / 0.2), 0 0 16px -4px oklch(0.65 0.2 260 / 0.2);
-  --shadow-card-hover-subtle: 0 2px 8px -2px rgba(0, 0, 0, 0.12);
+  /* Surfaces carry no shadows; transient layers keep one restrained shadow */
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --shadow-elevated: none;
+  --shadow-modal: 0 16px 40px -12px oklch(0 0 0 / 0.45);
+  --shadow-metallic-dark: none;
+  --shadow-selected-glow: none;
+  --shadow-card-hover-subtle: none;
+  --shadow-transient: 0 8px 24px -8px oklch(0 0 0 / 0.5);
 }
 
 @layer base {
@@ -240,7 +250,8 @@ a svg:hover,
   cursor: pointer;
 }
 
-/* Premium input styling with subtle depth */
+/* Inputs — sunken fill, borderless; affordance comes from the fill.
+   Transparent border keeps layout stable and hosts the focus state. */
 input:not(.input-inline),
 textarea:not(.input-inline) {
   border-radius: var(--radius);
@@ -250,64 +261,27 @@ textarea:not(.input-inline) {
     color 0.2s ease,
     box-shadow 0.2s ease;
   font-family: var(--font-family-sans);
-  box-shadow: inset 0 1px 2px oklch(from var(--color-foreground) l c h / 0.06);
-}
-
-/* Light mode inputs */
-:root input:not(.input-inline),
-:root textarea:not(.input-inline) {
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  color: var(--color-foreground);
-}
-
-:root input:not(.input-inline):focus,
-:root textarea:not(.input-inline):focus {
-  border-color: var(--color-border-active);
-  box-shadow: 0 0 0 2px oklch(from var(--color-ring) l c h / 0.15);
-  background-color: var(--color-background);
-}
-
-/* Dark mode inputs — flat, no embossed shadow */
-.dark input:not(.input-inline),
-.dark textarea:not(.input-inline) {
   background-color: var(--color-input);
-  border: 1px solid var(--color-border);
+  border: 1px solid transparent;
   color: var(--color-foreground);
   box-shadow: none;
 }
 
-.dark input:not(.input-inline):focus,
-.dark textarea:not(.input-inline):focus {
+input:not(.input-inline):focus,
+textarea:not(.input-inline):focus {
   border-color: var(--color-border-active);
   box-shadow: 0 0 0 2px oklch(from var(--color-ring) l c h / 0.15);
 }
 
-/* Card styling - elevated parchment */
+/* Card — flat surface: fill + one hairline, no shadow, no hover lift */
 .card {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card, 0 1px 3px oklch(from var(--color-foreground) l c h / 0.08));
-  transition:
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+  border-radius: var(--radius-xl);
+  transition: border-color 0.2s ease;
 }
 
 .card:hover {
-  box-shadow: var(--shadow-card-hover, 0 4px 12px oklch(from var(--color-foreground) l c h / 0.1));
-  transform: translateY(-1px);
-}
-
-/* Dark mode cards — grounded, no lift, subtle border glow */
-.dark .card {
-  border-color: var(--color-border-subtle);
-  box-shadow: var(--shadow-card);
-}
-
-.dark .card:hover {
-  box-shadow: var(--shadow-card-hover);
-  transform: none;
   border-color: var(--color-border-hover);
 }
 
@@ -356,26 +330,9 @@ a:hover {
   border-radius: var(--radius-xl);
 }
 
-/* Gradient accent bar — top border highlight for panels */
+/* Accent bar — retired decorative gradient; kept as a no-op for call sites */
 .accent-bar {
   position: relative;
-}
-
-.dark .accent-bar::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    oklch(0.65 0.2 260 / 0.5),
-    oklch(0.7 0.18 280 / 0.3),
-    transparent 80%
-  );
-  pointer-events: none;
-  z-index: 1;
 }
 
 /* Monochrome icon theming - explicit light/dark handling */

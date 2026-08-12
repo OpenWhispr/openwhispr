@@ -205,7 +205,7 @@ export default function LanguageSelector({
               left: `${dropdownPosition.left}px`,
               width: `${dropdownPosition.width}px`,
             }}
-            className="z-9999 bg-popover/95 backdrop-blur-xl border border-border/70 rounded shadow-xl overflow-hidden"
+            className="z-9999 bg-popover border border-border rounded-md shadow-(--shadow-transient) overflow-hidden"
           >
             {showSearch && (
               <div className="px-2 pt-2 pb-1.5 border-b border-border/50">

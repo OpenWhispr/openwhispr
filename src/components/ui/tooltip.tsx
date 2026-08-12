@@ -59,7 +59,7 @@ export const Tooltip = ({ children, content }: TooltipProps) => {
         createPortal(
           <div
             ref={tooltipRef}
-            className="fixed px-2.5 py-1.5 text-xs font-medium text-popover-foreground bg-popover border border-border rounded-md whitespace-nowrap z-[9999] shadow-lg animate-in fade-in-0 zoom-in-95 duration-150 pointer-events-none"
+            className="fixed px-2.5 py-1.5 text-xs font-medium text-popover-foreground bg-popover border border-border rounded-md whitespace-nowrap z-[9999] shadow-(--shadow-transient) animate-in fade-in-0 zoom-in-95 duration-150 pointer-events-none"
             style={{
               top: position.top,
               left: position.left,
