@@ -47,7 +47,7 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
     reset: () => {},
   };
 
-  const manager = new GoogleCalendarManager(databaseManager, reminderScheduler);
+  const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
 
   const apiCalls = [];
   manager._apiGet = async (path, email) => {
@@ -75,6 +75,16 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
   await manager._syncCalendar(calendar);
 
   assert.equal(apiCalls.length, 2, "should make 2 API calls for 2 pages");
+  const firstPageParams = new URL(apiCalls[0].path, "https://www.googleapis.com").searchParams;
+  const secondPageParams = new URL(apiCalls[1].path, "https://www.googleapis.com").searchParams;
+  for (const name of ["singleEvents", "orderBy", "timeMin", "timeMax"]) {
+    assert.equal(
+      secondPageParams.get(name),
+      firstPageParams.get(name),
+      `should preserve ${name} across pages`
+    );
+  }
+  assert.equal(secondPageParams.get("pageToken"), "token-page-2");
   assert.equal(upsertedEvents.length, 2, "should upsert events from both pages");
   assert.equal(upsertedEvents[0].id, "event-1");
   assert.equal(upsertedEvents[1].id, "event-2");
@@ -84,4 +94,45 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
     ["event-1", "event-2"],
     "full sync prune should keep events from all pages"
   );
+});
+
+test("_syncCalendar preserves incremental sync parameters across pages", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: () => {},
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: () => {},
+    upsertContacts: () => {},
+  };
+  const reminderScheduler = {
+    scheduleNextMeeting: () => {},
+    reset: () => {},
+  };
+  const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
+
+  const apiCalls = [];
+  manager._apiGet = async (path, email) => {
+    apiCalls.push({ path, email });
+    return apiCalls.length === 1
+      ? { items: [], nextPageToken: "token-page-2" }
+      : { items: [], nextSyncToken: "sync-token-final" };
+  };
+
+  await manager._syncCalendar({
+    id: "cal-1",
+    account_email: "test@example.com",
+    sync_token: "sync-token-previous",
+  });
+
+  assert.equal(apiCalls.length, 2);
+  const firstPageParams = new URL(apiCalls[0].path, "https://www.googleapis.com").searchParams;
+  const secondPageParams = new URL(apiCalls[1].path, "https://www.googleapis.com").searchParams;
+  assert.equal(firstPageParams.get("singleEvents"), "true");
+  assert.equal(firstPageParams.get("syncToken"), "sync-token-previous");
+  assert.equal(secondPageParams.get("singleEvents"), "true");
+  assert.equal(secondPageParams.get("syncToken"), "sync-token-previous");
+  assert.equal(secondPageParams.get("pageToken"), "token-page-2");
 });

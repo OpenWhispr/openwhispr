@@ -166,16 +166,19 @@ class GoogleCalendarManager {
       });
 
     let isFullSync = !calendar.sync_token;
+    let baseParams = isFullSync
+      ? buildFullParams()
+      : new URLSearchParams({
+          singleEvents: "true",
+          syncToken: calendar.sync_token,
+        });
     let pageToken = null;
     let nextSyncToken = null;
     const allItems = [];
 
     while (true) {
-      const params = pageToken
-        ? new URLSearchParams({ pageToken })
-        : calendar.sync_token && !isFullSync
-          ? new URLSearchParams({ syncToken: calendar.sync_token })
-          : buildFullParams();
+      const params = new URLSearchParams(baseParams);
+      if (pageToken) params.set("pageToken", pageToken);
 
       let data;
       try {
@@ -187,6 +190,7 @@ class GoogleCalendarManager {
         // 410 Gone means syncToken is invalid; fall back to full sync
         if (err.statusCode === 410 && !pageToken && !isFullSync) {
           isFullSync = true;
+          baseParams = buildFullParams();
           continue;
         }
         throw err;
