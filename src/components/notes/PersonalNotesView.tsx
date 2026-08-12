@@ -57,6 +57,7 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
+import { notesEmptyTitleKey } from "./shared";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
@@ -978,7 +979,7 @@ export default function PersonalNotesView({
             {notes.length === 0 ? (
               <>
                 <h3 className="text-xs font-semibold text-foreground/60 mb-1">
-                  {t("notes.empty.title")}
+                  {t(notesEmptyTitleKey(activeFolderId != null))}
                 </h3>
                 <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-55 mb-4">
                   {t("notes.empty.description")}

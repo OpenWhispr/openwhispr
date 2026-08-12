@@ -43,6 +43,11 @@ export function transcriptionErrorKey(failure: unknown): string | undefined {
   return code ? TRANSCRIPTION_ERROR_KEYS[code] : undefined;
 }
 
+// Folder scopes get the folder-specific empty title; space roots keep the generic one.
+export function notesEmptyTitleKey(inFolder: boolean): string {
+  return inFolder ? "notes.empty.emptyFolder" : "notes.empty.title";
+}
+
 export const notesInputClass = cn(
   "w-full h-8 px-3 rounded-md text-xs",
   "bg-foreground/3 dark:bg-white/4 border border-border/30 dark:border-white/6",

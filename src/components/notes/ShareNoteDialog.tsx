@@ -91,6 +91,8 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
   const [submitting, setSubmitting] = useState(false);
   const [suggestions, setSuggestions] = useState<AccessPrincipalSuggestion[]>([]);
   const [searchingSuggestions, setSearchingSuggestions] = useState(false);
+  // True once a search resolved for the current input, so zero matches can say so.
+  const [suggestionsSettled, setSuggestionsSettled] = useState(false);
   const [copied, setCopied] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [busyGrantId, setBusyGrantId] = useState<string | null>(null);
@@ -234,14 +236,19 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     if (!open || !cloudId || !canSearchPrincipals || !query) {
       setSuggestions([]);
       setSearchingSuggestions(false);
+      setSuggestionsSettled(false);
       return;
     }
     let cancelled = false;
     setSearchingSuggestions(true);
+    setSuggestionsSettled(false);
     const timer = window.setTimeout(() => {
       NoteSharingService.searchAccessPrincipals(cloudId, query)
         .then((res) => {
-          if (!cancelled) setSuggestions(res.suggestions.filter((item) => !item.existing_grant_id));
+          if (!cancelled) {
+            setSuggestions(res.suggestions.filter((item) => !item.existing_grant_id));
+            setSuggestionsSettled(true);
+          }
         })
         .catch(() => {
           if (!cancelled) setSuggestions([]);
@@ -720,11 +727,17 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
 
                 {access &&
                   emailInput.trim() &&
-                  (searchingSuggestions || suggestions.length > 0) && (
+                  (searchingSuggestions || suggestions.length > 0 || suggestionsSettled) && (
                     <div className="absolute z-20 top-9 left-0 right-[72px] max-h-44 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
                       {searchingSuggestions && suggestions.length === 0 ? (
                         <div className="h-8 flex items-center justify-center">
                           <Loader2 size={12} className="animate-spin text-foreground/40" />
+                        </div>
+                      ) : suggestions.length === 0 ? (
+                        <div className="h-8 flex items-center justify-center">
+                          <span className="text-xs text-foreground/40">
+                            {t("noteEditor.share.dialog.noResults")}
+                          </span>
                         </div>
                       ) : (
                         suggestions.map((principal) => (
