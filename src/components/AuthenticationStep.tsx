@@ -654,12 +654,14 @@ export default function AuthenticationStep({
   return (
     <div>
       {/* Hero bleeds the 24px padding both call sites apply; they clip the corners */}
-      <div className="brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center">
-        <BrandMark className="mx-auto size-16 text-white" />
-        <p className="mt-4 text-2xl font-medium tracking-tight text-white">
+      {/* Bleeds the 24px padding both call sites apply. pt-12 clears the macOS
+          traffic lights, which float over this band during onboarding. */}
+      <div className="brand-hero -mx-6 -mt-6 mb-6 px-6 pb-10 pt-12 text-center">
+        <BrandMark className="mx-auto size-20 text-white" />
+        <p className="mt-5 text-[26px] font-medium leading-tight tracking-tight text-white">
           {t("auth.welcomeTitle")}
         </p>
-        <p className="mt-2 text-sm text-white/75">{t("auth.welcomeSubtitle")}</p>
+        <p className="mt-2.5 text-[15px] text-white/75">{t("auth.welcomeSubtitle")}</p>
       </div>
 
       <form

@@ -1014,18 +1014,19 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         onOk={() => {}}
       />
 
-      {/* Title Bar / drag region */}
+      {/* Title Bar / drag region. The auth step has none: its hero runs to the
+          top of the window, with a transparent drag strip laid over it. */}
       {currentStep === 0 ? (
-        <div
-          className="flex items-center justify-end w-full h-10 shrink-0"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-        >
-          {onboardingPlatform !== "darwin" && (
+        onboardingPlatform !== "darwin" && (
+          <div
+            className="flex items-center justify-end w-full h-10 shrink-0"
+            style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+          >
             <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
               <WindowControls />
             </div>
-          )}
-        </div>
+          </div>
+        )
       ) : (
         <div className="shrink-0 z-10">
           <TitleBar
@@ -1052,10 +1053,24 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       {/* Content - This will grow to fill available space */}
       <div
-        className={`flex-1 px-6 md:px-12 overflow-y-auto ${currentStep === 0 ? "flex items-center" : "py-6"}`}
+        className={`relative flex-1 overflow-y-auto ${
+          currentStep === 0 ? "flex" : "px-6 md:px-12 py-6"
+        }`}
       >
-        <div className={`w-full ${currentStep === 0 ? "max-w-lg" : "max-w-3xl"} mx-auto`}>
-          <Card className="bg-card border border-border rounded-xl overflow-hidden">
+        {currentStep === 0 && onboardingPlatform === "darwin" && (
+          <div
+            className="absolute inset-x-0 top-0 h-10 z-10"
+            style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+          />
+        )}
+        <div className={currentStep === 0 ? "w-full" : "w-full max-w-3xl mx-auto"}>
+          <Card
+            className={
+              currentStep === 0
+                ? "bg-card border-0 rounded-none h-full"
+                : "bg-card border border-border rounded-xl overflow-hidden"
+            }
+          >
             <CardContent className={currentStep === 0 ? "p-6" : "p-6 md:p-8"}>
               {renderStep()}
             </CardContent>
