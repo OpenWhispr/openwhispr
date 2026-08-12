@@ -591,8 +591,10 @@ export default function TranscriptionModelPicker({
     if (getCachedPlatform() === "darwin") return;
     const detect = async () => {
       try {
+        // Cards below the CUDA build's kernel floor (e.g. Pascal) crash at the
+        // first kernel launch, so they get the Vulkan pack like AMD/Intel GPUs.
         const cuda = await window.electronAPI?.getCudaWhisperStatus?.();
-        if (cuda?.gpuInfo.hasNvidiaGpu) {
+        if (cuda?.gpuInfo.hasNvidiaGpu && cuda.gpuInfo.cudaSupported) {
           setGpuBackend("cuda");
           setGpuDownloaded(cuda.downloaded);
           return;

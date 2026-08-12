@@ -484,6 +484,9 @@ export interface GpuInfo {
   gpuName?: string;
   driverVersion?: string;
   vramMb?: number;
+  computeCap?: number;
+  /** Whether the card meets the shipped CUDA build's minimum compute capability. */
+  cudaSupported?: boolean;
 }
 
 export interface CudaWhisperStatus {

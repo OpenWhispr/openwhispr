@@ -1,47 +1,62 @@
 const { execFile } = require("child_process");
 
+// The shipped CUDA whisper build only carries kernels for Turing (compute
+// capability 7.5) and newer. On older cards (e.g. Pascal / GTX 10-series,
+// 6.1) the server starts, loads the model into VRAM, then aborts on the first
+// kernel launch with "no kernel image is available for execution on the
+// device" — so those cards must be offered Vulkan instead, which works on any
+// NVIDIA GPU.
+const MIN_CUDA_COMPUTE_CAP = 7.5;
+
 let cachedGpuInfo = null;
 
-function detectNvidiaGpu() {
-  if (cachedGpuInfo) return Promise.resolve(cachedGpuInfo);
-
-  if (process.platform === "darwin") {
-    cachedGpuInfo = { hasNvidiaGpu: false };
-    return Promise.resolve(cachedGpuInfo);
-  }
-
+function queryNvidiaSmi(fields) {
   return new Promise((resolve) => {
     execFile(
       "nvidia-smi",
-      ["--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"],
+      ["--query-gpu=" + fields, "--format=csv,noheader,nounits"],
       { timeout: 5000, windowsHide: true },
-      (error, stdout) => {
-        if (error || !stdout) {
-          cachedGpuInfo = { hasNvidiaGpu: false };
-          resolve(cachedGpuInfo);
-          return;
-        }
-
-        const parts = stdout
-          .trim()
-          .split(",")
-          .map((s) => s.trim());
-        if (parts.length < 3) {
-          cachedGpuInfo = { hasNvidiaGpu: false };
-          resolve(cachedGpuInfo);
-          return;
-        }
-
-        cachedGpuInfo = {
-          hasNvidiaGpu: true,
-          gpuName: parts[0],
-          driverVersion: parts[1],
-          vramMb: parseInt(parts[2], 10) || undefined,
-        };
-        resolve(cachedGpuInfo);
-      }
+      (error, stdout) => resolve(error || !stdout ? null : stdout)
     );
   });
+}
+
+function parseNvidiaSmiGpuInfo(stdout) {
+  const parts = stdout
+    .trim()
+    .split("\n")[0]
+    .split(",")
+    .map((s) => s.trim());
+  if (parts.length < 3) return { hasNvidiaGpu: false };
+
+  const computeCap = parts.length >= 4 ? parseFloat(parts[3]) : NaN;
+  return {
+    hasNvidiaGpu: true,
+    gpuName: parts[0],
+    driverVersion: parts[1],
+    vramMb: parseInt(parts[2], 10) || undefined,
+    ...(Number.isFinite(computeCap) ? { computeCap } : {}),
+    cudaSupported: Number.isFinite(computeCap) && computeCap >= MIN_CUDA_COMPUTE_CAP,
+  };
+}
+
+async function detectNvidiaGpu() {
+  if (cachedGpuInfo) return cachedGpuInfo;
+
+  if (process.platform === "darwin") {
+    cachedGpuInfo = { hasNvidiaGpu: false };
+    return cachedGpuInfo;
+  }
+
+  let stdout = await queryNvidiaSmi("name,driver_version,memory.total,compute_cap");
+  if (stdout === null) {
+    // Drivers too old to answer the compute_cap query (pre-R470) also predate
+    // the CUDA 12 runtime the pack ships with, so cudaSupported stays false.
+    stdout = await queryNvidiaSmi("name,driver_version,memory.total");
+  }
+
+  cachedGpuInfo = stdout === null ? { hasNvidiaGpu: false } : parseNvidiaSmiGpuInfo(stdout);
+  return cachedGpuInfo;
 }
 
 let cachedGpuList = null;
@@ -87,4 +102,4 @@ function listNvidiaGpus() {
   });
 }
 
-module.exports = { detectNvidiaGpu, listNvidiaGpus };
+module.exports = { detectNvidiaGpu, listNvidiaGpus, parseNvidiaSmiGpuInfo, MIN_CUDA_COMPUTE_CAP };
