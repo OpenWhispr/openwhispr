@@ -3,6 +3,7 @@ const { promisify } = require("util");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
 const { resolveBundledBinary } = require("./binaryResolver");
+const { getOwnProcessPids } = require("./ownProcessPids");
 
 const execAsync = promisify(exec);
 
@@ -325,6 +326,10 @@ class AudioActivityDetector extends EventEmitter {
     const startMatch = line.match(/^MIC_START\s+(\d+)$/);
     if (startMatch) {
       const pid = parseInt(startMatch[1], 10);
+      // --exclude-pid only covers the main process, but dictation captures from
+      // Chromium's audio service, so our own mic reads arrive here as if they
+      // were another app's (#1392).
+      if (getOwnProcessPids().has(pid)) return;
       this._activeMicPids.add(pid);
       this._onMicStateChanged(true);
       return;

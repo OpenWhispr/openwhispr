@@ -17,7 +17,7 @@ function setPlatform(platform) {
 
 afterEach(() => setPlatform(originalPlatform));
 
-function loadDetector(platform, spawn) {
+function loadDetector(platform, spawn, ownPids) {
   delete require.cache[detectorModulePath];
   setPlatform(platform);
 
@@ -33,6 +33,11 @@ function loadDetector(platform, spawn) {
     // on the host rather than by setPlatform().
     if (request === "./binaryResolver") {
       return { resolveBundledBinary: (name) => `/fake/bin/${name}` };
+    }
+    // Outside Electron the real module can only see the main pid, so the
+    // child-process PIDs that matter for #1392 have to be injected.
+    if (request === "./ownProcessPids" && ownPids) {
+      return { getOwnProcessPids: () => new Set(ownPids) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -63,15 +68,19 @@ function createFakeChild(spawnError) {
   return child;
 }
 
-function createDetector(platform, { spawnError } = {}) {
+function createDetector(platform, { spawnError, ownPids } = {}) {
   const children = [];
   const calls = [];
-  const AudioActivityDetector = loadDetector(platform, (command, args, options) => {
-    calls.push({ command, args, options });
-    const child = createFakeChild(spawnError);
-    children.push(child);
-    return child;
-  });
+  const AudioActivityDetector = loadDetector(
+    platform,
+    (command, args, options) => {
+      calls.push({ command, args, options });
+      const child = createFakeChild(spawnError);
+      children.push(child);
+      return child;
+    },
+    ownPids
+  );
 
   const detector = new AudioActivityDetector();
   detector._isMicActive = async () => false;
@@ -368,5 +377,53 @@ test("win32: an unrelated app's mic session ending does not hide an ongoing dism
   t.mock.timers.tick(SUSTAINED_MS);
 
   assert.equal(emitted.length, 2, "the still-running call must re-prompt after the cooldown");
+  detector.stop();
+});
+
+// #1392: the helper is given a single --exclude-pid for the main process, but
+// dictation opens the mic from Chromium's audio service, so OpenWhispr's own
+// capture is reported back to us under a child PID and read as a meeting.
+test("win32: a mic session from one of our own child processes is ignored", async () => {
+  const AUDIO_SERVICE_PID = 4242;
+  const { detector, children } = createDetector("win32", {
+    ownPids: [process.pid, AUDIO_SERVICE_PID],
+  });
+
+  await detector.start();
+  children[0].stdout.emit("data", `MIC_START ${AUDIO_SERVICE_PID}\n`);
+
+  assert.equal(detector._activeMicPids.size, 0);
+  assert.equal(detector._sustainedTimer, null, "our own dictation must not arm detection");
+  assert.equal(detector._lastKnownMicState, false, "and must not leave stale state behind");
+  detector.stop();
+});
+
+test("win32: a mic session from another application is still detected", async () => {
+  const { detector, children } = createDetector("win32", {
+    ownPids: [process.pid, 4242],
+  });
+
+  await detector.start();
+  children[0].stdout.emit("data", "MIC_START 9001\n");
+
+  assert.deepEqual([...detector._activeMicPids], [9001]);
+  assert.notEqual(detector._sustainedTimer, null);
+  detector.stop();
+});
+
+test("win32: our own capture cannot cancel a real meeting already in progress", async () => {
+  const AUDIO_SERVICE_PID = 4242;
+  const { detector, children } = createDetector("win32", {
+    ownPids: [process.pid, AUDIO_SERVICE_PID],
+  });
+
+  await detector.start();
+  children[0].stdout.emit("data", "MIC_START 9001\n");
+  children[0].stdout.emit("data", `MIC_START ${AUDIO_SERVICE_PID}\n`);
+  children[0].stdout.emit("data", `MIC_STOP ${AUDIO_SERVICE_PID}\n`);
+
+  // Dropping our own stop must not empty the set while the other app holds it.
+  assert.deepEqual([...detector._activeMicPids], [9001]);
+  assert.notEqual(detector._sustainedTimer, null);
   detector.stop();
 });
