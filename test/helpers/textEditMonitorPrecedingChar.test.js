@@ -77,3 +77,103 @@ test(
     assert.equal(m._pollInterval, null);
   }
 );
+
+// AXError -25212 (kAXErrorNoValue) marks apps whose AX tree never yields a
+// focused element to us (Chromium/Electron); the native binary's retry loop is
+// deterministic dead time there, so one failure routes the PID to AppleScript
+// for the rest of the session.
+test("getSelectedText caches a -25212 native failure per PID", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  m.resolveBinary = () => ({
+    command: "/bin/sh",
+    args: [
+      "-c",
+      'echo "Attempt 1/5: Cannot get focused element for PID 42 (error: -25212)" >&2; echo "UNAVAILABLE:"; exit 1',
+    ],
+  });
+  m._getSelectedTextViaAppleScript = (pid, timeoutMs, resolve) => resolve({ state: "none" });
+
+  assert.deepEqual(await m.getSelectedText(42), { state: "none" });
+  assert.ok(m._nativeSelectionUnsupportedPids.has(42));
+});
+
+test("getSelectedText skips the native binary for a cached PID", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  // The trailing --selected-text args land in the -c script's $0/$1.
+  m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "SELECTED:native"'] });
+  m._getSelectedTextViaAppleScript = (pid, timeoutMs, resolve) => resolve({ state: "none" });
+
+  assert.deepEqual(await m.getSelectedText(42), { state: "selected", text: "native" });
+
+  m._nativeSelectionUnsupportedPids.add(42);
+  assert.deepEqual(await m.getSelectedText(42), { state: "none" });
+});
+
+test("a non--25212 native failure is not cached", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  m.resolveBinary = () => ({
+    command: "/bin/sh",
+    args: [
+      "-c",
+      'echo "Attempt 1/5: Cannot get focused element for PID 42 (error: -25204)" >&2; echo "UNAVAILABLE:"; exit 1',
+    ],
+  });
+  m._getSelectedTextViaAppleScript = (pid, timeoutMs, resolve) => resolve({ state: "none" });
+
+  assert.deepEqual(await m.getSelectedText(42), { state: "none" });
+  assert.equal(m._nativeSelectionUnsupportedPids.has(42), false);
+});
+
+test("a run where the AX tree woke mid-retry is not cached", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  // -25212 on attempt 1 was transient: the element resolved later, so the app
+  // must stay eligible for native reads even though this read failed.
+  m.resolveBinary = () => ({
+    command: "/bin/sh",
+    args: [
+      "-c",
+      'echo "Attempt 1/5: Cannot get focused element for PID 42 (error: -25212)" >&2; echo "Got focused element on attempt 3" >&2; echo "UNAVAILABLE:"; exit 1',
+    ],
+  });
+  m._getSelectedTextViaAppleScript = (pid, timeoutMs, resolve) => resolve({ state: "none" });
+
+  assert.deepEqual(await m.getSelectedText(42), { state: "none" });
+  assert.equal(m._nativeSelectionUnsupportedPids.has(42), false);
+});
+
+test(
+  "a monitor run ending in NO_ELEMENT with uniform -25212 teaches the cache",
+  darwinOnly,
+  async () => {
+    const m = new TextEditMonitor();
+    // The sleep lets the stderr chunk land before NO_ELEMENT is processed;
+    // production stderr arrives over ~1.2s of retries, far ahead of stdout.
+    m.resolveBinary = () => ({
+      command: "/bin/sh",
+      args: [
+        "-c",
+        'echo "Attempt 5/5: Cannot get focused element for PID 4242 (error: -25212)" >&2; sleep 0.2; echo "NO_ELEMENT"',
+      ],
+    });
+
+    m.startMonitoring("pasted text", 4000, { targetPid: 4242 });
+    const deadline = Date.now() + 6000;
+    while (m.currentOriginalText !== null && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    assert.equal(m.currentOriginalText, null);
+    assert.ok(m._nativeSelectionUnsupportedPids.has(4242));
+  }
+);
+
+test("startMonitoring skips the native monitor for a cached PID", darwinOnly, () => {
+  const m = new TextEditMonitor();
+  m.resolveBinary = () => ({ command: "/bin/echo", args: [] });
+  m._nativeSelectionUnsupportedPids.add(42);
+  m.startMonitoring("pasted text", 4000, { targetPid: 42 });
+  // The cache check runs before the initial settle delay, so monitoring ends
+  // synchronously — no doomed child process is ever spawned.
+  assert.equal(m.currentOriginalText, null);
+  assert.equal(m.process, null);
+});
