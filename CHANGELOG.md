@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.3] - 2026-08-11
+
+Patch release fixing a 1.8.2 regression in realtime streaming dictation and improving calendar sync error reporting.
+
+### Fixed
+
+- **Realtime dictation no longer errors on every stop.** The capture pipeline's internal stop marker was forwarded to the transcription provider as audio, so every Tinfoil realtime dictation ended with an "Invalid audio data" error and a spurious connection-lost auto-stop. (#1553)
+- **Calendar sync errors report their real cause.** Google and Microsoft calendar requests that failed with an empty or non-JSON body were logged as "Invalid JSON response" instead of the actual HTTP status. (#1553)
+
 ## [1.8.2] - 2026-08-11
 
 Meetings get more reliable speaker identity — labels you set now stick, Windows loopback gains live identification, and Intel Mac meetings no longer fail when the optional ONNX binding is unavailable. The voice agent can edit highlighted text in place or use an opt-in screenshot as context. Collaboration is now free for signed-in users, Microsoft and Apple Calendar join Google Calendar, and organizations gain server-enforced policy plus centrally managed Bedrock and Azure OpenAI access.
