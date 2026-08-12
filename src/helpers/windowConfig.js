@@ -53,7 +53,6 @@ const MAIN_WINDOW_CONFIG = {
   show: false,
   skipTaskbar: true,
   focusable: false,
-  visibleOnAllWorkspaces: process.platform !== "win32",
   fullScreenable: false,
   hasShadow: false,
   acceptsFirstMouse: true,
@@ -116,7 +115,6 @@ const NOTIFICATION_WINDOW_CONFIG = {
     contextIsolation: true,
     sandbox: true,
   },
-  visibleOnAllWorkspaces: process.platform !== "win32",
   type: FLOATING_OVERLAY_TYPE,
 };
 
@@ -147,7 +145,6 @@ const TRANSCRIPTION_PREVIEW_CONFIG = {
     contextIsolation: true,
     sandbox: true,
   },
-  visibleOnAllWorkspaces: process.platform !== "win32",
   type: FLOATING_OVERLAY_TYPE,
 };
 
@@ -216,6 +213,10 @@ class WindowPositionUtil {
 
       if (window.isVisible()) {
         window.setAlwaysOnTop(true, "floating", 1);
+        window.setVisibleOnAllWorkspaces(true, {
+          visibleOnFullScreen: true,
+          skipTransformProcessType: true,
+        });
       }
     } else if (process.platform === "win32") {
       window.setAlwaysOnTop(true, "pop-up-menu");
@@ -246,7 +247,6 @@ const AGENT_OVERLAY_CONFIG = {
   fullScreenable: false,
   acceptsFirstMouse: true,
   type: FLOATING_OVERLAY_TYPE,
-  visibleOnAllWorkspaces: process.platform !== "win32",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
