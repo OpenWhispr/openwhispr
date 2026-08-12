@@ -603,7 +603,8 @@
         "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。",
         "chunkLoss": "网络问题导致录音大部分丢失。请从历史记录中重新转录。",
         "agentReasoningFailed": "语音助手无法处理该命令，已改为插入原始转录文本。",
-        "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。"
+        "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。",
+        "customEndpointInvalid": "自定义转写端点未配置或其 URL 无效。请在“设置 → 语音转文字”中更新。"
       },
       "translationFallback": {
         "unreachableTitle": "翻译不可用",
@@ -2603,7 +2604,8 @@
       "urlsSkipped": "部分链接无法添加（{{n}} 个）",
       "queueFailed": "{{n}} 个失败",
       "urlFileTooLarge": "文件过大，无法下载。最大大小为 500 MB。",
-      "urlYoutubeBlocked": "YouTube 暂时阻止了来自您网络的下载。请稍后重试。"
+      "urlYoutubeBlocked": "YouTube 暂时阻止了来自您网络的下载。请稍后重试。",
+      "customEndpointInvalid": "自定义转写端点未配置或无效。请在设置中更新。"
     },
     "meeting": {
       "title": "会议笔记",

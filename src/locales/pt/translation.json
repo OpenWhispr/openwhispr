@@ -582,7 +582,8 @@
         "providerRateLimited": "Seu provedor de transcrição limitou a solicitação. Aguarde um momento e tente novamente.",
         "chunkLoss": "Um problema de rede fez perder grande parte da gravação. Retranscreva-a a partir do histórico.",
         "agentReasoningFailed": "Seu agente de voz não conseguiu processar o comando; a transcrição bruta foi inserida no lugar.",
-        "screenContextSkipped": "Não foi possível enviar a captura, então seu comando foi executado sem contexto de tela."
+        "screenContextSkipped": "Não foi possível enviar a captura, então seu comando foi executado sem contexto de tela.",
+        "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Fala para texto."
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",
@@ -2603,7 +2604,8 @@
       "urlsSkipped": "Alguns links não puderam ser adicionados ({{n}})",
       "queueFailed": "{{n}} com falha",
       "urlFileTooLarge": "O arquivo é grande demais para baixar. O tamanho máximo é 500 MB.",
-      "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes."
+      "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes.",
+      "customEndpointInvalid": "O endpoint de transcrição personalizado não está configurado ou é inválido. Atualize-o nas Configurações."
     },
     "meeting": {
       "title": "Notas de reunião",

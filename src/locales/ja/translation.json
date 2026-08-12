@@ -603,7 +603,8 @@
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "ボイスエージェントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
-        "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。"
+        "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
+        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
@@ -2587,7 +2588,8 @@
       "urlsSkipped": "追加できなかったリンクがあります（{{n}}件）",
       "queueFailed": "{{n}}件失敗",
       "urlFileTooLarge": "ファイルが大きすぎてダウンロードできません。最大サイズは500 MBです。",
-      "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。"
+      "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。",
+      "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か無効です。設定から更新してください。"
     },
     "meeting": {
       "title": "議事録",

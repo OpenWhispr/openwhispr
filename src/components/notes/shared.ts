@@ -32,6 +32,7 @@ export const DOWNLOAD_ERROR_KEYS: Record<string, string> = {
 const TRANSCRIPTION_ERROR_KEYS: Record<string, string> = {
   NO_SPEECH_DETECTED: "noSpeechDetected",
   CHUNK_LOSS_EXCEEDED: "chunkLossExceeded",
+  CUSTOM_ENDPOINT_INVALID: "customEndpointInvalid",
 };
 
 // A coded failure arrives either as a returned result (BYOK, local) or as a

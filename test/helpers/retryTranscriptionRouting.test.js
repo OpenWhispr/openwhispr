@@ -109,10 +109,14 @@ test("custom transcription routes require a configured secure endpoint", async (
     "http://public.example.com/v1",
     "ftp://192.168.1.20/v1",
     "ws://192.168.1.20/v1",
+    // The untouched store default must not route the custom key to OpenAI.
+    "https://api.openai.com/v1",
   ]) {
     assert.deepEqual(resolveCustomTranscriptionRoute({ provider: "custom", baseUrl }), {
       kind: "configuration-error",
       error: "Custom transcription endpoint is invalid or unsupported",
+      code: "CUSTOM_ENDPOINT_INVALID",
+      messageKey: "hooks.audioRecording.errorDescriptions.customEndpointInvalid",
     });
   }
 

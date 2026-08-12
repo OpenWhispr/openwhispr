@@ -603,7 +603,8 @@
         "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez.",
         "chunkLoss": "Un problème réseau a fait perdre une trop grande partie de l'enregistrement. Retranscrivez-le depuis l'historique.",
         "agentReasoningFailed": "Votre agent vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place.",
-        "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran."
+        "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran.",
+        "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte."
       },
       "translationFallback": {
         "unreachableTitle": "Traduction indisponible",
@@ -2811,7 +2812,8 @@
       "urlsSkipped": "Certains liens n'ont pas pu être ajoutés ({{n}})",
       "queueFailed": "{{n}} en échec",
       "urlFileTooLarge": "Le fichier est trop volumineux pour être téléchargé. La taille maximale est de 500 Mo.",
-      "urlYoutubeBlocked": "YouTube bloque temporairement les téléchargements depuis votre réseau. Réessayez dans un moment."
+      "urlYoutubeBlocked": "YouTube bloque temporairement les téléchargements depuis votre réseau. Réessayez dans un moment.",
+      "customEndpointInvalid": "Le point de terminaison de transcription personnalisé n'est pas configuré ou est invalide. Mettez-le à jour dans les réglages."
     },
     "meeting": {
       "title": "Notes de réunion",

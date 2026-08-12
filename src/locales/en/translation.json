@@ -603,7 +603,8 @@
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice agent couldn't process the command — the raw transcript was inserted instead.",
-        "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context."
+        "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
+        "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
@@ -2811,7 +2812,8 @@
       "urlsSkipped": "Some links couldn't be added ({{n}})",
       "queueFailed": "{{n}} failed",
       "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
-      "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while."
+      "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while.",
+      "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings."
     },
     "meeting": {
       "title": "Meeting Notes",

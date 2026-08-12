@@ -51,6 +51,7 @@ export type TranscriptionErrorCode =
   | "API_KEY_MISSING"
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"
+  | "CUSTOM_ENDPOINT_INVALID"
   | null;
 
 export interface AuthTokenState {
@@ -947,6 +948,8 @@ declare global {
           cloudTranscriptionProvider: string;
           cloudTranscriptionModel: string;
           cloudTranscriptionBaseUrl?: string;
+          cortiEnvironment?: string;
+          cortiTenant?: string;
           parakeetModel: string;
           whisperModel: string;
           preferredLanguage?: string;

@@ -603,7 +603,8 @@
         "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut.",
         "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
         "agentReasoningFailed": "Ihr Sprachagent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
-        "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext."
+        "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext.",
+        "customEndpointInvalid": "Dein benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisiere ihn unter Einstellungen → Sprache zu Text."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -2811,7 +2812,8 @@
       "urlsSkipped": "Einige Links konnten nicht hinzugefügt werden ({{n}})",
       "queueFailed": "{{n}} fehlgeschlagen",
       "urlFileTooLarge": "Die Datei ist zu groß zum Herunterladen. Die maximale Größe beträgt 500 MB.",
-      "urlYoutubeBlocked": "YouTube blockiert Downloads aus Ihrem Netzwerk vorübergehend. Versuchen Sie es später erneut."
+      "urlYoutubeBlocked": "YouTube blockiert Downloads aus Ihrem Netzwerk vorübergehend. Versuchen Sie es später erneut.",
+      "customEndpointInvalid": "Benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder ungültig. Aktualisiere ihn in den Einstellungen."
     },
     "meeting": {
       "title": "Besprechungsnotizen",

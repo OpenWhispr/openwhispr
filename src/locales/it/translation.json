@@ -603,7 +603,8 @@
         "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova.",
         "chunkLoss": "Un problema di rete ha fatto perdere troppa parte della registrazione. Ritrascrivila dalla cronologia.",
         "agentReasoningFailed": "L'agente vocale non è riuscito a elaborare il comando; è stata inserita la trascrizione grezza.",
-        "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo."
+        "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo.",
+        "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o il suo URL non è valido. Aggiornalo in Impostazioni → Da voce a testo."
       },
       "translationFallback": {
         "unreachableTitle": "Traduzione non disponibile",
@@ -2603,7 +2604,8 @@
       "urlsSkipped": "Alcuni link non sono stati aggiunti ({{n}})",
       "queueFailed": "{{n}} non riusciti",
       "urlFileTooLarge": "Il file è troppo grande per essere scaricato. La dimensione massima è 500 MB.",
-      "urlYoutubeBlocked": "YouTube sta bloccando temporaneamente i download dalla tua rete. Riprova tra poco."
+      "urlYoutubeBlocked": "YouTube sta bloccando temporaneamente i download dalla tua rete. Riprova tra poco.",
+      "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o non è valido. Aggiornalo nelle Impostazioni."
     },
     "meeting": {
       "title": "Note delle riunioni",

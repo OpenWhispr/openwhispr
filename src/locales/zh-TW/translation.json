@@ -603,7 +603,8 @@
         "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。",
         "chunkLoss": "網路問題導致錄音大部分遺失。請從歷史記錄中重新轉錄。",
         "agentReasoningFailed": "語音助理無法處理該指令，已改為插入原始逐字稿。",
-        "screenContextSkipped": "截圖無法傳送，因此已在沒有螢幕內容的情況下執行你的指令。"
+        "screenContextSkipped": "截圖無法傳送，因此已在沒有螢幕內容的情況下執行你的指令。",
+        "customEndpointInvalid": "自訂轉錄端點未設定或其 URL 無效。請在「設定 → 語音轉文字」中更新。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -2603,7 +2604,8 @@
       "urlsSkipped": "部分連結無法新增（{{n}} 個）",
       "queueFailed": "{{n}} 個失敗",
       "urlFileTooLarge": "檔案過大，無法下載。大小上限為 500 MB。",
-      "urlYoutubeBlocked": "YouTube 暫時封鎖了來自您網路的下載。請稍後再試。"
+      "urlYoutubeBlocked": "YouTube 暫時封鎖了來自您網路的下載。請稍後再試。",
+      "customEndpointInvalid": "自訂轉錄端點未設定或無效。請在設定中更新。"
     },
     "meeting": {
       "title": "會議筆記",

@@ -3010,8 +3010,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const apiCallStart = performance.now();
 
-      // Mistral uses x-api-key auth (not Bearer) and doesn't allow browser CORS — proxy through main process
-      if (provider === "mistral" && window.electronAPI?.proxyMistralTranscription) {
+      // Mistral uses x-api-key auth (not Bearer) and doesn't allow browser CORS — proxy through main process.
+      // Self-hosted wins here and below, so a leftover BYOK provider can't divert its audio.
+      if (
+        provider === "mistral" &&
+        !isSelfHostedTranscription(apiSettings) &&
+        window.electronAPI?.proxyMistralTranscription
+      ) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = { audioBuffer, model, language };
 
@@ -3047,7 +3052,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // xAI STT has a non-OpenAI-compatible API — proxy through main process. See #910.
-      if (provider === "xai" && window.electronAPI?.proxyXaiTranscription) {
+      if (
+        provider === "xai" &&
+        !isSelfHostedTranscription(apiSettings) &&
+        window.electronAPI?.proxyXaiTranscription
+      ) {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = { audioBuffer, language: language !== "auto" ? language : undefined };
 
@@ -3079,8 +3088,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw new Error("No text transcribed - xAI response was empty");
       }
 
-      // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through main process
-      if (provider === "corti" && window.electronAPI?.proxyCortiTranscription) {
+      // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through
+      // main process. A missing bridge must throw: falling through would resolve Corti to the
+      // OpenAI default endpoint.
+      if (provider === "corti" && !isSelfHostedTranscription(apiSettings)) {
+        if (!window.electronAPI?.proxyCortiTranscription) {
+          throw new Error("Corti transcription is unavailable in this window");
+        }
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = {
           audioBuffer,
@@ -3332,9 +3346,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (fallbackError.selectionEditFatal) {
             throw fallbackError;
           }
-          throw new Error(
+          const wrapped = new Error(
             `OpenAI API failed: ${error.message}. Local fallback also failed: ${fallbackError.message}`
           );
+          if (error.code) wrapped.code = error.code;
+          if (error.messageKey) wrapped.messageKey = error.messageKey;
+          throw wrapped;
         }
       }
 
@@ -3427,12 +3444,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     }
 
-    // A managed Custom-only fallback has no safe implicit destination. Reusing
-    // OpenAI here would send audio and credentials to a policy-denied provider.
-    if (isManagedCustomEndpoint && !currentBaseUrl.trim()) {
-      rejectManagedCustomEndpoint();
-    }
-
     // The provider-id guard above can't catch a Custom base URL that points at
     // Tinfoil's inference host (e.g. persisted by the pre-#1459 tab clobber) —
     // check the URL too. Must stay outside the try below: its catch swallows
@@ -3443,6 +3454,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       isTinfoilInferenceUrl(currentBaseUrl, getTranscriptionProviders())
     ) {
       throw new Error(TINFOIL_PROXY_REQUIRED_ERROR);
+    }
+
+    // Custom never falls open to the OpenAI default: an empty URL, the untouched
+    // default (the picker treats URL === TRANSCRIPTION_BASE as "not configured"),
+    // or an invalid/insecure URL would silently send audio and the custom key to
+    // a provider the user never chose. Must stay outside the try below and above
+    // the cache-hit return.
+    if (currentProvider === "custom" && !isSelfHosted) {
+      const trimmedBaseUrl = currentBaseUrl.trim();
+      const normalizedCustom = normalizeBaseUrl(trimmedBaseUrl);
+      if (
+        !trimmedBaseUrl ||
+        trimmedBaseUrl === API_ENDPOINTS.TRANSCRIPTION_BASE ||
+        !normalizedCustom ||
+        !isSecureHttpEndpoint(normalizedCustom)
+      ) {
+        if (isManagedCustomEndpoint) {
+          rejectManagedCustomEndpoint();
+        }
+        const error = new Error("Custom transcription endpoint is invalid or unsupported");
+        error.code = "CUSTOM_ENDPOINT_INVALID";
+        error.messageKey = "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
+        throw error;
+      }
     }
 
     if (
@@ -3479,7 +3514,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (isSelfHosted) {
         base = remoteUrl;
       } else if (currentProvider === "custom") {
-        base = currentBaseUrl.trim() || API_ENDPOINTS.TRANSCRIPTION_BASE;
+        base = currentBaseUrl.trim();
       } else if (currentProvider === "groq") {
         base = API_ENDPOINTS.GROQ_BASE;
       } else if (currentProvider === "xai") {
@@ -3529,28 +3564,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
         return endpoint;
       };
-
-      if (!normalizedBase) {
-        logger.debug(
-          "STT endpoint: using default (normalization failed)",
-          { rawBase: base },
-          "transcription"
-        );
-        return cacheResult(API_ENDPOINTS.TRANSCRIPTION);
-      }
-
-      // Only validate HTTPS for custom endpoints (known providers are already HTTPS)
-      if (isCustomEndpoint && !isSecureHttpEndpoint(normalizedBase)) {
-        if (isManagedCustomEndpoint) {
-          rejectManagedCustomEndpoint();
-        }
-        logger.warn(
-          "STT endpoint: HTTPS required, falling back to default",
-          { attemptedUrl: normalizedBase },
-          "transcription"
-        );
-        return cacheResult(API_ENDPOINTS.TRANSCRIPTION);
-      }
 
       let endpoint;
       if (isCustomEndpoint && isAzureOpenAIEndpoint(normalizedBase)) {

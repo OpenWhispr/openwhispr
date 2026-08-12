@@ -190,3 +190,250 @@ test("managed custom transcription never falls through to OpenAI", async (t) => 
 
   assert.equal(fetchCalls, 0);
 });
+
+test("unmanaged custom transcription fails closed instead of defaulting to OpenAI", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-custom-endpoint-guard-test-",
+    mockModules: {
+      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__customGuardSettings;
+        export const getEffectiveCleanupModel = () => null;
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+      `,
+      "/services/ReasoningService": "export default class ReasoningService {};",
+      "/services/SyncService.js": "export const syncService = {};",
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
+      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
+    },
+  });
+
+  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+  const { API_ENDPOINTS } = await vite.ssrLoadModule("/config/constants.ts");
+
+  const originalFetch = globalThis.fetch;
+  const fetchedEndpoints = [];
+  globalThis.fetch = async (endpoint) => {
+    fetchedEndpoints.push(String(endpoint));
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      text: async () => JSON.stringify({ text: "custom text" }),
+    };
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__customGuardSettings;
+  });
+
+  const manager = Object.create(AudioManager.prototype);
+  manager.getEffectiveSttLanguage = () => "auto";
+  manager.getTranscriptionModel = () => "whisper-1";
+  manager.getAPIKey = async () => "custom-key";
+  manager.getWhisperPrompt = () => null;
+  manager.shouldStreamTranscription = () => false;
+  manager.isDictionaryEcho = () => false;
+  manager.processTranscription = async (text) => text;
+  manager.isReasoningAvailable = async () => false;
+
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  const buildSettings = (cloudTranscriptionBaseUrl) => ({
+    allowLocalFallback: false,
+    cloudTranscriptionBaseUrl,
+    cloudTranscriptionProvider: "custom",
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+
+  await t.test("empty, default-sentinel, and invalid URLs throw CUSTOM_ENDPOINT_INVALID", async () => {
+    for (const baseUrl of [
+      "",
+      "   ",
+      API_ENDPOINTS.TRANSCRIPTION_BASE,
+      "not a url",
+      "http://public.example.com/v1",
+      "ftp://192.168.1.20/v1",
+    ]) {
+      globalThis.__customGuardSettings = buildSettings(baseUrl);
+      await assert.rejects(manager.processWithOpenAIAPI(audioBlob), (error) => {
+        assert.equal(error.code, "CUSTOM_ENDPOINT_INVALID", `baseUrl: ${JSON.stringify(baseUrl)}`);
+        assert.equal(
+          error.messageKey,
+          "hooks.audioRecording.errorDescriptions.customEndpointInvalid"
+        );
+        return true;
+      });
+    }
+    assert.equal(fetchedEndpoints.length, 0, "no misconfigured request may leave the app");
+  });
+
+  await t.test("a configured custom URL still routes to that URL", async () => {
+    globalThis.__customGuardSettings = buildSettings("https://stt.parasail.example.com/v1");
+    const result = await manager.processWithOpenAIAPI(audioBlob);
+    assert.equal(result.success, true);
+    assert.deepEqual(fetchedEndpoints, [
+      "https://stt.parasail.example.com/v1/audio/transcriptions",
+    ]);
+  });
+
+  await t.test("error after a valid resolve does not cache the OpenAI default", async () => {
+    fetchedEndpoints.length = 0;
+    globalThis.__customGuardSettings = buildSettings("https://stt.parasail.example.com/v1");
+    globalThis.fetch = async (endpoint) => {
+      fetchedEndpoints.push(String(endpoint));
+      throw new Error("network down");
+    };
+    await assert.rejects(manager.processWithOpenAIAPI(audioBlob));
+    globalThis.__customGuardSettings = buildSettings("");
+    await assert.rejects(manager.processWithOpenAIAPI(audioBlob), (error) => {
+      assert.equal(error.code, "CUSTOM_ENDPOINT_INVALID");
+      return true;
+    });
+    assert.deepEqual(fetchedEndpoints, [
+      "https://stt.parasail.example.com/v1/audio/transcriptions",
+    ]);
+  });
+});
+
+test("self-hosted mode is never hijacked by a leftover proxied provider", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-selfhosted-hijack-test-",
+    mockModules: {
+      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__hijackSettings;
+        export const getEffectiveCleanupModel = () => null;
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+      `,
+      "/services/ReasoningService": "export default class ReasoningService {};",
+      "/services/SyncService.js": "export const syncService = {};",
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
+      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
+    },
+  });
+
+  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+
+  const proxyCalls = { mistral: 0, xai: 0, corti: 0 };
+  window.electronAPI.proxyMistralTranscription = async () => {
+    proxyCalls.mistral += 1;
+    throw new Error("must not be called in self-hosted mode");
+  };
+  window.electronAPI.proxyXaiTranscription = async () => {
+    proxyCalls.xai += 1;
+    throw new Error("must not be called in self-hosted mode");
+  };
+  window.electronAPI.proxyCortiTranscription = async () => {
+    proxyCalls.corti += 1;
+    throw new Error("must not be called in self-hosted mode");
+  };
+
+  const originalFetch = globalThis.fetch;
+  const fetchedEndpoints = [];
+  globalThis.fetch = async (endpoint) => {
+    fetchedEndpoints.push(String(endpoint));
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      text: async () => JSON.stringify({ text: "self-hosted text" }),
+    };
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__hijackSettings;
+  });
+
+  const manager = Object.create(AudioManager.prototype);
+  manager.getEffectiveSttLanguage = () => "auto";
+  manager.getTranscriptionModel = () => "self-hosted-model";
+  manager.getAPIKey = async () => null;
+  manager.getWhisperPrompt = () => null;
+  manager.getKeyterms = () => [];
+  manager.shouldStreamTranscription = () => false;
+  manager.isDictionaryEcho = () => false;
+  manager.processTranscription = async (text) => text;
+  manager.isReasoningAvailable = async () => false;
+
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  for (const provider of ["mistral", "xai", "corti"]) {
+    globalThis.__hijackSettings = {
+      allowLocalFallback: false,
+      cloudTranscriptionProvider: provider,
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "https://stt.internal.example.com",
+      useLocalWhisper: false,
+    };
+    const result = await manager.processWithOpenAIAPI(audioBlob);
+    assert.equal(result.success, true);
+  }
+
+  assert.deepEqual(proxyCalls, { mistral: 0, xai: 0, corti: 0 });
+  assert.equal(
+    fetchedEndpoints.every((e) => e.startsWith("https://stt.internal.example.com")),
+    true,
+    `unexpected endpoints: ${fetchedEndpoints.join(", ")}`
+  );
+});
+
+test("corti without a preload bridge throws instead of falling through to OpenAI", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-corti-preload-test-",
+    mockModules: {
+      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__cortiPreloadSettings;
+        export const getEffectiveCleanupModel = () => null;
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+      `,
+      "/services/ReasoningService": "export default class ReasoningService {};",
+      "/services/SyncService.js": "export const syncService = {};",
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
+      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
+    },
+  });
+
+  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+  delete window.electronAPI.proxyCortiTranscription;
+
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error("fetch must not run");
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__cortiPreloadSettings;
+  });
+
+  const manager = Object.create(AudioManager.prototype);
+  manager.getEffectiveSttLanguage = () => "auto";
+  manager.getTranscriptionModel = () => "corti-transcribe";
+  manager.getAPIKey = async () => null;
+  manager.getWhisperPrompt = () => null;
+  manager.shouldStreamTranscription = () => false;
+
+  globalThis.__cortiPreloadSettings = {
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: "corti",
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  };
+
+  await assert.rejects(
+    manager.processWithOpenAIAPI(new Blob([new Uint8Array([1])], { type: "audio/webm" })),
+    /Corti transcription is unavailable in this window/
+  );
+  assert.equal(fetchCalls, 0);
+});

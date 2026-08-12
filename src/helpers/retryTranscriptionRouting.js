@@ -1,4 +1,4 @@
-import { buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
+import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
 import { isSecureHttpEndpoint } from "../utils/urlUtils.ts";
 import { resolveSelfHostedTranscriptionModel } from "./selfHostedTranscription.js";
 
@@ -39,10 +39,18 @@ export function resolveCustomTranscriptionRoute({ provider, baseUrl }) {
 
   const configuredUrl = typeof baseUrl === "string" ? baseUrl.trim() : "";
   const normalizedBaseUrl = normalizeBaseUrl(configuredUrl);
-  if (!normalizedBaseUrl || !isSecureHttpEndpoint(normalizedBaseUrl)) {
+  if (
+    !normalizedBaseUrl ||
+    !isSecureHttpEndpoint(normalizedBaseUrl) ||
+    // The untouched store default — Custom was selected but never configured;
+    // passing it through would route the custom key + audio to OpenAI.
+    configuredUrl === API_ENDPOINTS.TRANSCRIPTION_BASE
+  ) {
     return {
       kind: "configuration-error",
       error: "Custom transcription endpoint is invalid or unsupported",
+      code: "CUSTOM_ENDPOINT_INVALID",
+      messageKey: "hooks.audioRecording.errorDescriptions.customEndpointInvalid",
     };
   }
 

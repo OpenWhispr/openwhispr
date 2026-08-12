@@ -5163,6 +5163,25 @@ class IPCHandlers {
             apiKey: this.environmentManager.getTinfoilKey(),
           });
           if (text) result = { text, source: "tinfoil", model };
+        } else if (settings?.cloudTranscriptionProvider === "corti") {
+          // OAuth + interaction-based REST flow — without this branch Corti audio
+          // fell through to the OpenAI default below.
+          const clientId = this.environmentManager.getCortiClientId();
+          const clientSecret = this.environmentManager.getCortiClientSecret();
+          if (!clientId || !clientSecret) {
+            throw new Error("Corti credentials not configured. Add them in Settings.");
+          }
+          const { transcribeAudio } = require("./cortiTranscription");
+          const { text } = await transcribeAudio({
+            environment: settings?.cortiEnvironment || "us",
+            tenant: (settings?.cortiTenant || "").trim() || "base",
+            clientId,
+            clientSecret,
+            audioBuffer: buffer,
+            // Corti requires a concrete primaryLanguage; default to English when auto-detecting
+            language: language || "en",
+          });
+          if (text) result = { text, source: "corti", model: "corti-transcribe" };
         } else {
           const provider = settings?.cloudTranscriptionProvider || "openai";
           const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);
@@ -5184,9 +5203,12 @@ class IPCHandlers {
               baseUrl: settings?.cloudTranscriptionBaseUrl,
             });
             if (customRoute?.kind !== "custom") {
-              throw new Error(
+              const err = new Error(
                 customRoute?.error || "Custom transcription endpoint is not configured"
               );
+              if (customRoute?.code) err.code = customRoute.code;
+              if (customRoute?.messageKey) err.messageKey = customRoute.messageKey;
+              throw err;
             }
             endpoint = customRoute.endpoint;
           } else {
