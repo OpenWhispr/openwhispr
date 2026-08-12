@@ -4,7 +4,7 @@ import { getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import logger from "../../../utils/logger";
-import { resolveConfiguredOpenAIBase } from "../openaiBase";
+import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import { applyThinkingSuppression } from "../thinkingSuppression";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "../apiErrorMessage";
@@ -135,10 +135,15 @@ export const openaiProvider: InferenceProvider = {
       isCustomProvider,
     });
 
+    // A custom scope without its own key may only borrow the shared cleanup
+    // key when it targets the cleanup endpoint; otherwise it goes keyless.
     const overrideKey = isCustomProvider ? config.customApiKey?.trim() : "";
+    const canFallBackToSharedKey = !isCustomProvider || canBorrowCleanupCustomKey(config.baseUrl);
     const apiKey =
       overrideKey ||
-      (await ctx.getApiKey(isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai"));
+      (canFallBackToSharedKey
+        ? await ctx.getApiKey(isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai")
+        : "");
 
     logger.logReasoning("OPENAI_API_KEY", {
       hasApiKey: !!apiKey,
@@ -247,7 +252,7 @@ export const openaiProvider: InferenceProvider = {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
+              ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
             },
             body: JSON.stringify(requestBody),
             signal: controller.signal,

@@ -228,9 +228,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
       const cleanupProvider = isCloudMode
         ? "openwhispr"
-        : cleanupModel
-          ? getModelProvider(cleanupModel)
-          : "openai";
+        : (cleanupModel && getModelProvider(cleanupModel)) || "openai";
 
       logger.debug(
         "PromptStudio test starting",
@@ -479,7 +477,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 ? scopeProvider
                 : testIsCloud
                   ? "openwhispr"
-                  : scopeProvider || (testModel ? getModelProvider(testModel) : "openai");
+                  : scopeProvider || (testModel && getModelProvider(testModel)) || "openai";
             const providerConfig = PROVIDER_CONFIG[testProvider] || {
               label: testProvider.charAt(0).toUpperCase() + testProvider.slice(1),
             };
