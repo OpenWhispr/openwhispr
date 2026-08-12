@@ -2198,8 +2198,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // A screenshot the model or transport rejects must not cost the user
       // their command — rerun it text-only, swapping in the pre-built prompt
       // that never had the screen-context suffix. Rebuilding from scratch
-      // would drop the selection-edit instructions and completion marker a
-      // selection edit layered on top, making its result unverifiable.
+      // would drop the selection-edit instructions and completion marker.
       if (config?.screenContext) {
         const { screenContext, textOnlySystemPrompt, ...textOnlyConfig } = config;
         const result = await ReasoningService.processText(text, model, agentName, {

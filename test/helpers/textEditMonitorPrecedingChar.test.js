@@ -146,19 +146,18 @@ test(
   darwinOnly,
   async () => {
     const m = new TextEditMonitor();
-    // The sleep lets the stderr chunk land before NO_ELEMENT is processed;
-    // production stderr arrives over ~1.2s of retries, far ahead of stdout.
     m.resolveBinary = () => ({
       command: "/bin/sh",
       args: [
         "-c",
-        'echo "Attempt 5/5: Cannot get focused element for PID 4242 (error: -25212)" >&2; sleep 0.2; echo "NO_ELEMENT"',
+        'echo "Attempt 5/5: Cannot get focused element for PID 4242 (error: -25212)" >&2; echo "NO_ELEMENT"',
       ],
     });
 
     m.startMonitoring("pasted text", 4000, { targetPid: 4242 });
+    // The verdict lands on the child's "close" event, after monitoring stops.
     const deadline = Date.now() + 6000;
-    while (m.currentOriginalText !== null && Date.now() < deadline) {
+    while (!m._nativeSelectionUnsupportedPids.has(4242) && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 100));
     }
 
@@ -166,6 +165,23 @@ test(
     assert.ok(m._nativeSelectionUnsupportedPids.has(4242));
   }
 );
+
+test("a timeout-killed selection read is not cached", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  // The child hangs after a -25212 line, so execFile kills it at the deadline
+  // — the ladder never completed and a later attempt might have succeeded.
+  m.resolveBinary = () => ({
+    command: "/bin/sh",
+    args: [
+      "-c",
+      'echo "Attempt 1/5: Cannot get focused element for PID 42 (error: -25212)" >&2; sleep 5',
+    ],
+  });
+  m._getSelectedTextViaAppleScript = (pid, timeoutMs, resolve) => resolve({ state: "none" });
+
+  assert.deepEqual(await m.getSelectedText(42, 400), { state: "none" });
+  assert.equal(m._nativeSelectionUnsupportedPids.has(42), false);
+});
 
 test("startMonitoring skips the native monitor for a cached PID", darwinOnly, () => {
   const m = new TextEditMonitor();
