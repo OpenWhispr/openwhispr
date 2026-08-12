@@ -121,6 +121,7 @@ export function MeetingTranscriptionPanel() {
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
     <TranscriptionModelPicker
       streamingOnly
+      transcriptionContext="meeting"
       selectedCloudProvider={meetingCloudTranscriptionProvider}
       onCloudProviderSelect={setMeetingCloudTranscriptionProvider}
       selectedCloudModel={meetingCloudTranscriptionModel}

@@ -603,7 +603,8 @@
         "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。",
         "chunkLoss": "網路問題導致錄音大部分遺失。請從歷史記錄中重新轉錄。",
         "agentReasoningFailed": "語音助理無法處理該指令，已改為插入原始逐字稿。",
-        "screenContextSkipped": "截圖無法傳送，因此已在沒有螢幕內容的情況下執行你的指令。"
+        "screenContextSkipped": "截圖無法傳送，因此已在沒有螢幕內容的情況下執行你的指令。",
+        "customEndpointInvalid": "自訂轉錄端點未設定或其 URL 無效。請在「設定 → 語音轉文字」中更新。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -2411,6 +2412,7 @@
         "you": "你",
         "addFailed": "{{total}} 人中有 {{failed}} 人無法加入",
         "searchPlaceholder": "搜尋成員…",
+        "noResults": "找不到成員",
         "roleAdmin": "管理員",
         "roleMember": "成員",
         "remove": "移除",
@@ -2602,7 +2604,8 @@
       "urlsSkipped": "部分連結無法新增（{{n}} 個）",
       "queueFailed": "{{n}} 個失敗",
       "urlFileTooLarge": "檔案過大，無法下載。大小上限為 500 MB。",
-      "urlYoutubeBlocked": "YouTube 暫時封鎖了來自您網路的下載。請稍後再試。"
+      "urlYoutubeBlocked": "YouTube 暫時封鎖了來自您網路的下載。請稍後再試。",
+      "customEndpointInvalid": "自訂轉錄端點未設定或無效。請在設定中更新。"
     },
     "meeting": {
       "title": "會議筆記",
@@ -2969,7 +2972,8 @@
       "visionModel": "獨立的視覺模型",
       "visionModelDescription": "將附有截圖的指令改由另一個支援影像的模型處理。",
       "permissionTitle": "螢幕錄製",
-      "permissionDescription": "macOS 需要螢幕錄製權限才能擷取螢幕。"
+      "permissionDescription": "macOS 需要螢幕錄製權限才能擷取螢幕。",
+      "relaunchHint": "螢幕錄製權限是在 OpenWhispr 執行期間授予的。請結束並重新開啟 OpenWhispr 以開始擷取螢幕截圖。"
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
@@ -3243,6 +3247,7 @@
         "title": "分享筆記",
         "description": "透過電子郵件邀請成員，或分享此筆記的連結。",
         "searchPlaceholder": "搜尋人員、資料夾或電子郵件",
+        "noResults": "找不到符合的結果",
         "emailLabel": "人員、資料夾或電子郵件",
         "shareButton": "分享",
         "createLink": "建立連結",
@@ -3480,7 +3485,7 @@
       "title": "翻譯提示詞",
       "description": "自訂模型翻譯聽寫內容的方式"
     },
-    "hotkeyHint": "在 設定 → 一般 → 翻譯快捷鍵 中設定快捷鍵",
+    "hotkeyHint": "在 設定 → 快捷鍵 → 翻譯快捷鍵 中設定快捷鍵",
     "targetsLabel": "目標語言",
     "addTarget": "新增語言…",
     "activeTarget": "目前目標語言",

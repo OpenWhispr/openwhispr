@@ -101,7 +101,7 @@ test("every direct OpenWhispr API route is policy-protected or explicitly exempt
 });
 
 test("policy headers are not injected into BYOK or self-hosted transports", () => {
-  for (const anchor of ['provider === "tinfoil"', 'kind === "self-hosted"']) {
+  for (const anchor of ['provider === "tinfoil"', 'provider === "self-hosted"']) {
     const anchorIndex = source.indexOf(anchor);
     assert.notEqual(anchorIndex, -1, `anchor ${anchor} must exist in ipcHandlers.js`);
     assert.doesNotMatch(source.slice(anchorIndex, anchorIndex + 1200), /withPolicyHeaders/);

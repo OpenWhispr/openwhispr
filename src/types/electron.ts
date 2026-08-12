@@ -51,7 +51,16 @@ export type TranscriptionErrorCode =
   | "API_KEY_MISSING"
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"
+  | "CUSTOM_ENDPOINT_INVALID"
   | null;
+
+/**
+ * Proxied-transcription IPC results. `ipcMain.handle` drops custom error props on
+ * rejection, so these handlers resolve with a serialized error instead of throwing.
+ */
+export type ProxyTranscriptionResult =
+  | { text: string; model?: string; error?: undefined }
+  | { error: string; code?: string; messageKey?: string; text?: undefined };
 
 export interface AuthTokenState {
   token: string | null;
@@ -566,6 +575,8 @@ export interface ScreenRecordingAccessResult {
   granted: boolean;
   status: "granted" | "denied" | "not-determined" | "restricted" | "unknown" | "unsupported";
   supported: boolean;
+  /** macOS only: granted mid-session, so capture stays broken until the app relaunches. */
+  needsRelaunch?: boolean;
 }
 
 export interface ScreenContextImage {
@@ -947,6 +958,8 @@ declare global {
           cloudTranscriptionProvider: string;
           cloudTranscriptionModel: string;
           cloudTranscriptionBaseUrl?: string;
+          cortiEnvironment?: string;
+          cortiTenant?: string;
           parakeetModel: string;
           whisperModel: string;
           preferredLanguage?: string;
@@ -1536,7 +1549,7 @@ declare global {
         audioBuffer: ArrayBuffer;
         language?: string;
         keyterms?: string[];
-      }) => Promise<{ text: string }>;
+      }) => Promise<ProxyTranscriptionResult>;
 
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
@@ -1546,7 +1559,7 @@ declare global {
         model?: string;
         language?: string;
         contextBias?: string[];
-      }) => Promise<{ text: string }>;
+      }) => Promise<ProxyTranscriptionResult>;
 
       // Corti credential management
       getCortiClientId?: () => Promise<string | null>;
@@ -1560,7 +1573,7 @@ declare global {
         language: string;
         environment: string;
         tenant: string;
-      }) => Promise<{ text: string }>;
+      }) => Promise<ProxyTranscriptionResult>;
       getTinfoilKey?: () => Promise<string | null>;
       saveTinfoilKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
@@ -1568,9 +1581,7 @@ declare global {
         audioBuffer: ArrayBuffer;
         language?: string;
         prompt?: string;
-      }) => Promise<
-        { text: string; model: string } | { error: string; code?: string; messageKey?: string }
-      >;
+      }) => Promise<ProxyTranscriptionResult>;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;

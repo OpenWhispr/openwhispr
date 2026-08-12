@@ -603,7 +603,8 @@
         "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut.",
         "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
         "agentReasoningFailed": "Ihr Sprachagent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
-        "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext."
+        "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext.",
+        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -2619,6 +2620,7 @@
         "you": "Du",
         "addFailed": "{{failed}} von {{total}} Personen konnten nicht hinzugefügt werden",
         "searchPlaceholder": "Personen suchen…",
+        "noResults": "Keine Personen gefunden",
         "roleAdmin": "Administrator",
         "roleMember": "Mitglied",
         "remove": "Entfernen",
@@ -2810,7 +2812,8 @@
       "urlsSkipped": "Einige Links konnten nicht hinzugefügt werden ({{n}})",
       "queueFailed": "{{n}} fehlgeschlagen",
       "urlFileTooLarge": "Die Datei ist zu groß zum Herunterladen. Die maximale Größe beträgt 500 MB.",
-      "urlYoutubeBlocked": "YouTube blockiert Downloads aus Ihrem Netzwerk vorübergehend. Versuchen Sie es später erneut."
+      "urlYoutubeBlocked": "YouTube blockiert Downloads aus Ihrem Netzwerk vorübergehend. Versuchen Sie es später erneut.",
+      "customEndpointInvalid": "Benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder ungültig. Aktualisieren Sie ihn in den Einstellungen."
     },
     "meeting": {
       "title": "Besprechungsnotizen",
@@ -3134,7 +3137,8 @@
       "visionModel": "Separates Vision-Modell",
       "visionModelDescription": "Leitet Befehle mit Screenshot an ein anderes Modell mit Bildverständnis weiter.",
       "permissionTitle": "Bildschirmaufnahme",
-      "permissionDescription": "macOS benötigt die Berechtigung zur Bildschirmaufnahme, um Ihren Bildschirm zu erfassen."
+      "permissionDescription": "macOS benötigt die Berechtigung zur Bildschirmaufnahme, um Ihren Bildschirm zu erfassen.",
+      "relaunchHint": "Die Bildschirmaufnahme wurde erteilt, während OpenWhispr lief. Beenden und öffnen Sie OpenWhispr erneut, um Screenshots aufzunehmen."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
@@ -3368,6 +3372,7 @@
         "title": "Notiz teilen",
         "description": "Lade Personen per E-Mail ein oder teile einen Link zu dieser Notiz.",
         "searchPlaceholder": "Personen, Ordner oder E-Mails suchen",
+        "noResults": "Keine Treffer gefunden",
         "emailLabel": "Personen, Ordner oder E-Mail",
         "shareButton": "Teilen",
         "createLink": "Link erstellen",
@@ -3480,7 +3485,7 @@
       "title": "Übersetzungs-Prompt",
       "description": "Passe an, wie das Modell dein Diktat übersetzt"
     },
-    "hotkeyHint": "Lege den Hotkey unter Einstellungen → Allgemein → Übersetzungs-Hotkey fest",
+    "hotkeyHint": "Lege den Hotkey unter Einstellungen → Hotkeys → Übersetzungs-Hotkey fest",
     "targetsLabel": "Zielsprachen",
     "addTarget": "Sprache hinzufügen…",
     "activeTarget": "Aktive Zielsprache",

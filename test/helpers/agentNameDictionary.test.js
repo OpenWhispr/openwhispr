@@ -54,3 +54,22 @@ test("never names a word outside the agent name itself", async () => {
   const { add, remove } = agentNameDictionaryChanges(dictionary, "Jarvis", "OpenWhispr");
   assert.deepEqual([...add, ...remove].sort(), ["Jarvis", "OpenWhispr"]);
 });
+
+test("does not remove agent name when only surrounding whitespace changes", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["OpenWhispr"], "  OpenWhispr  ", "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
+});
+
+test("removes previous agent name when oldName contains surrounding whitespace", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(
+    agentNameDictionaryChanges(["OpenWhispr", "Alice"], "Jarvis", "  OpenWhispr  "),
+    {
+      add: ["Jarvis"],
+      remove: ["OpenWhispr"],
+    }
+  );
+});

@@ -603,7 +603,8 @@
         "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova.",
         "chunkLoss": "Un problema di rete ha fatto perdere troppa parte della registrazione. Ritrascrivila dalla cronologia.",
         "agentReasoningFailed": "L'agente vocale non è riuscito a elaborare il comando; è stata inserita la trascrizione grezza.",
-        "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo."
+        "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo.",
+        "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o il suo URL non è valido. Aggiornalo in Impostazioni → Da voce a testo."
       },
       "translationFallback": {
         "unreachableTitle": "Traduzione non disponibile",
@@ -2411,6 +2412,7 @@
         "you": "Tu",
         "addFailed": "Impossibile aggiungere {{failed}} persone su {{total}}",
         "searchPlaceholder": "Cerca persone…",
+        "noResults": "Nessuna persona trovata",
         "roleAdmin": "Amministratore",
         "roleMember": "Membro",
         "remove": "Rimuovi",
@@ -2602,7 +2604,8 @@
       "urlsSkipped": "Alcuni link non sono stati aggiunti ({{n}})",
       "queueFailed": "{{n}} non riusciti",
       "urlFileTooLarge": "Il file è troppo grande per essere scaricato. La dimensione massima è 500 MB.",
-      "urlYoutubeBlocked": "YouTube sta bloccando temporaneamente i download dalla tua rete. Riprova tra poco."
+      "urlYoutubeBlocked": "YouTube sta bloccando temporaneamente i download dalla tua rete. Riprova tra poco.",
+      "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o non è valido. Aggiornalo nelle Impostazioni."
     },
     "meeting": {
       "title": "Note delle riunioni",
@@ -2969,7 +2972,8 @@
       "visionModel": "Modello di visione separato",
       "visionModelDescription": "Instrada i comandi che includono uno screenshot verso un altro modello con capacità di visione.",
       "permissionTitle": "Registrazione schermo",
-      "permissionDescription": "macOS richiede l'autorizzazione alla registrazione dello schermo per catturare lo schermo."
+      "permissionDescription": "macOS richiede l'autorizzazione alla registrazione dello schermo per catturare lo schermo.",
+      "relaunchHint": "La registrazione dello schermo è stata concessa mentre OpenWhispr era in esecuzione. Chiudi e riapri OpenWhispr per iniziare a catturare gli screenshot."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
@@ -3243,6 +3247,7 @@
         "title": "Condividi nota",
         "description": "Invita persone tramite email o condividi un link a questa nota.",
         "searchPlaceholder": "Cerca persone, cartelle o email",
+        "noResults": "Nessun risultato trovato",
         "emailLabel": "Persone, cartelle o email",
         "shareButton": "Condividi",
         "createLink": "Crea link",
@@ -3480,7 +3485,7 @@
       "title": "Prompt di Traduzione",
       "description": "Personalizza come il modello traduce la tua dettatura"
     },
-    "hotkeyHint": "Imposta la hotkey in Impostazioni → Generali → Hotkey Traduzione",
+    "hotkeyHint": "Imposta la hotkey in Impostazioni → Scorciatoie → Hotkey Traduzione",
     "targetsLabel": "Lingue di destinazione",
     "addTarget": "Aggiungi lingua…",
     "activeTarget": "Lingua di destinazione attiva",

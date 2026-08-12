@@ -24,27 +24,6 @@ const PROVIDERS = [
   { id: "tinfoil", baseUrl: "https://inference.tinfoil.sh/v1" },
 ];
 
-test("custom provider resolves to the stored URL, untouched", async () => {
-  const { resolveByokBaseUrl } = await load();
-  assert.equal(
-    resolveByokBaseUrl("custom", "http://127.0.0.1:8587/v1", PROVIDERS),
-    "http://127.0.0.1:8587/v1"
-  );
-});
-
-test("built-in provider resolves from the registry, ignoring a stored custom URL", async () => {
-  const { resolveByokBaseUrl } = await load();
-  assert.equal(
-    resolveByokBaseUrl("groq", "http://127.0.0.1:8587/v1", PROVIDERS),
-    "https://api.groq.com/openai/v1"
-  );
-});
-
-test("unknown provider resolves to empty so callers fail closed", async () => {
-  const { resolveByokBaseUrl } = await load();
-  assert.equal(resolveByokBaseUrl("nonexistent", "http://127.0.0.1:8587/v1", PROVIDERS), "");
-});
-
 test("detects Tinfoil's inference host regardless of path or trailing slash", async () => {
   const { isTinfoilInferenceUrl } = await load();
   assert.equal(isTinfoilInferenceUrl("https://inference.tinfoil.sh/v1", PROVIDERS), true);

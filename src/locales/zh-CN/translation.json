@@ -603,7 +603,8 @@
         "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。",
         "chunkLoss": "网络问题导致录音大部分丢失。请从历史记录中重新转录。",
         "agentReasoningFailed": "语音助手无法处理该命令，已改为插入原始转录文本。",
-        "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。"
+        "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。",
+        "customEndpointInvalid": "自定义转写端点未配置或其 URL 无效。请在“设置 → 语音转文字”中更新。"
       },
       "translationFallback": {
         "unreachableTitle": "翻译不可用",
@@ -2411,6 +2412,7 @@
         "you": "你",
         "addFailed": "{{total}} 人中有 {{failed}} 人无法添加",
         "searchPlaceholder": "搜索成员…",
+        "noResults": "未找到成员",
         "roleAdmin": "管理员",
         "roleMember": "成员",
         "remove": "移除",
@@ -2602,7 +2604,8 @@
       "urlsSkipped": "部分链接无法添加（{{n}} 个）",
       "queueFailed": "{{n}} 个失败",
       "urlFileTooLarge": "文件过大，无法下载。最大大小为 500 MB。",
-      "urlYoutubeBlocked": "YouTube 暂时阻止了来自您网络的下载。请稍后重试。"
+      "urlYoutubeBlocked": "YouTube 暂时阻止了来自您网络的下载。请稍后重试。",
+      "customEndpointInvalid": "自定义转写端点未配置或无效。请在设置中更新。"
     },
     "meeting": {
       "title": "会议笔记",
@@ -2969,7 +2972,8 @@
       "visionModel": "单独的视觉模型",
       "visionModelDescription": "将带截图的命令转发给另一个支持图像的模型。",
       "permissionTitle": "屏幕录制",
-      "permissionDescription": "macOS 需要屏幕录制权限才能截取屏幕。"
+      "permissionDescription": "macOS 需要屏幕录制权限才能截取屏幕。",
+      "relaunchHint": "屏幕录制权限是在 OpenWhispr 运行期间授予的。请退出并重新打开 OpenWhispr 以开始捕获屏幕截图。"
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
@@ -3243,6 +3247,7 @@
         "title": "分享笔记",
         "description": "通过电子邮件邀请他人，或分享此笔记的链接。",
         "searchPlaceholder": "搜索人员、文件夹或邮箱",
+        "noResults": "未找到匹配结果",
         "emailLabel": "人员、文件夹或邮箱",
         "shareButton": "分享",
         "createLink": "创建链接",
@@ -3480,7 +3485,7 @@
       "title": "翻译提示词",
       "description": "自定义模型翻译听写内容的方式"
     },
-    "hotkeyHint": "在 设置 → 通用 → 翻译快捷键 中设置快捷键",
+    "hotkeyHint": "在 设置 → 快捷键 → 翻译快捷键 中设置快捷键",
     "targetsLabel": "目标语言",
     "addTarget": "添加语言…",
     "activeTarget": "当前目标语言",

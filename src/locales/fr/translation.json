@@ -603,7 +603,8 @@
         "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez.",
         "chunkLoss": "Un problème réseau a fait perdre une trop grande partie de l'enregistrement. Retranscrivez-le depuis l'historique.",
         "agentReasoningFailed": "Votre agent vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place.",
-        "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran."
+        "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran.",
+        "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte."
       },
       "translationFallback": {
         "unreachableTitle": "Traduction indisponible",
@@ -2619,6 +2620,7 @@
         "you": "Vous",
         "addFailed": "Impossible d'ajouter {{failed}} personnes sur {{total}}",
         "searchPlaceholder": "Rechercher des personnes…",
+        "noResults": "Aucune personne trouvée",
         "roleAdmin": "Administrateur",
         "roleMember": "Membre",
         "remove": "Retirer",
@@ -2810,7 +2812,8 @@
       "urlsSkipped": "Certains liens n'ont pas pu être ajoutés ({{n}})",
       "queueFailed": "{{n}} en échec",
       "urlFileTooLarge": "Le fichier est trop volumineux pour être téléchargé. La taille maximale est de 500 Mo.",
-      "urlYoutubeBlocked": "YouTube bloque temporairement les téléchargements depuis votre réseau. Réessayez dans un moment."
+      "urlYoutubeBlocked": "YouTube bloque temporairement les téléchargements depuis votre réseau. Réessayez dans un moment.",
+      "customEndpointInvalid": "Le point de terminaison de transcription personnalisé n'est pas configuré ou est invalide. Mettez-le à jour dans les réglages."
     },
     "meeting": {
       "title": "Notes de réunion",
@@ -3134,7 +3137,8 @@
       "visionModel": "Modèle de vision distinct",
       "visionModelDescription": "Envoie les commandes incluant une capture vers un autre modèle capable de vision.",
       "permissionTitle": "Enregistrement de l'écran",
-      "permissionDescription": "macOS exige l'autorisation d'enregistrement de l'écran pour capturer votre écran."
+      "permissionDescription": "macOS exige l'autorisation d'enregistrement de l'écran pour capturer votre écran.",
+      "relaunchHint": "L'enregistrement d'écran a été autorisé pendant qu'OpenWhispr était en cours d'exécution. Quittez et rouvrez OpenWhispr pour commencer à capturer des captures d'écran."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
@@ -3368,6 +3372,7 @@
         "title": "Partager la note",
         "description": "Invitez des personnes par e-mail ou partagez un lien vers cette note.",
         "searchPlaceholder": "Rechercher des personnes, dossiers ou e-mails",
+        "noResults": "Aucun résultat trouvé",
         "emailLabel": "Personnes, dossiers ou e-mail",
         "shareButton": "Partager",
         "createLink": "Créer un lien",
@@ -3480,7 +3485,7 @@
       "title": "Prompt de Traduction",
       "description": "Personnalisez la façon dont le modèle traduit votre dictée"
     },
-    "hotkeyHint": "Définissez le raccourci dans Réglages → Général → Raccourci de Traduction",
+    "hotkeyHint": "Définissez le raccourci dans Paramètres → Raccourcis → Raccourci de Traduction",
     "targetsLabel": "Langues cibles",
     "addTarget": "Ajouter une langue…",
     "activeTarget": "Langue cible active",

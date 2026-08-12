@@ -53,10 +53,15 @@ class ParakeetServerManager {
   async _ensureWav(audioBuffer) {
     if (isWavFormat(audioBuffer)) {
       const format = parseWavFormat(audioBuffer);
-      if (format?.sampleRate === SAMPLE_RATE && format?.channels === 1) {
+      if (
+        format?.audioFormat === 1 &&
+        format?.bitsPerSample === 16 &&
+        format?.sampleRate === SAMPLE_RATE &&
+        format?.channels === 1
+      ) {
         return { wavBuffer: audioBuffer, filesToCleanup: [] };
       }
-      debugLogger.debug("WAV input needs resampling", { format });
+      debugLogger.debug("WAV input needs normalization", { format });
     }
 
     const ffmpegPath = getFFmpegPath();

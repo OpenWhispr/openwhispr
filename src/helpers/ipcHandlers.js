@@ -18,6 +18,32 @@ const {
   toPolicyFailure,
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
+// The renderer's ModelRegistry is not main-loadable; the raw registry data is
+// packaged, and the route resolver only needs {id, baseUrl} per provider.
+const transcriptionProviderBaseUrls = () =>
+  require("../models/modelRegistryData.json").transcriptionProviders;
+// ipcMain.handle keeps only the message when a promise rejects, dropping custom
+// props — proxy handlers return {error, code, messageKey} so the renderer can
+// rebuild the error.
+const serializeIpcError =
+  (fn) =>
+  async (...args) => {
+    try {
+      return await fn(...args);
+    } catch (error) {
+      return { error: error.message, code: error.code, messageKey: error.messageKey };
+    }
+  };
+// Which diarization dialect a resolved endpoint speaks, for Custom endpoints
+// that front a known provider. Null when the host offers no known dialect.
+const diarizationHost = (endpoint) => {
+  try {
+    const host = new URL(endpoint).hostname;
+    if (host === "mistral.ai" || host.endsWith(".mistral.ai")) return "mistral";
+    if (host === "openai.com" || host.endsWith(".openai.com")) return "openai";
+  } catch {}
+  return null;
+};
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
@@ -53,6 +79,7 @@ const {
   canAutoRelabelSpeaker,
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
+const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
 const postMigrationDetector = require("./postMigrationDetector");
 const screenContextCapture = require("./screenContextCapture");
@@ -80,35 +107,6 @@ const MEETING_RECONNECT_BUFFER_MAX_BYTES = MEETING_STREAM_SAMPLE_RATE * 2 * 30;
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
 const XAI_STT_URL = "https://api.x.ai/v1/stt";
-
-// xAI STT supports 25 languages; language must be in this set to enable ITN via format=true
-const XAI_STT_LANGUAGES = new Set([
-  "ar",
-  "cs",
-  "da",
-  "de",
-  "en",
-  "es",
-  "fa",
-  "fil",
-  "fr",
-  "hi",
-  "id",
-  "it",
-  "ja",
-  "ko",
-  "mk",
-  "ms",
-  "nl",
-  "pl",
-  "pt",
-  "ro",
-  "ru",
-  "sv",
-  "th",
-  "tr",
-  "vi",
-]);
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
@@ -569,6 +567,7 @@ class IPCHandlers {
     this.audioStorageManager = new AudioStorageManager();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
+    this._retentionSettingsSynced = false;
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
@@ -789,9 +788,9 @@ class IPCHandlers {
   }
 
   _noteExpectedSpeakerCountOrNull(note) {
-    const stored = Number(note?.expected_speaker_count);
-    if (Number.isFinite(stored) && stored > 0) {
-      return Math.min(stored, MAX_SPEAKER_COUNT);
+    const stored = normalizeStoredSpeakerCount(note?.expected_speaker_count);
+    if (stored != null) {
+      return stored;
     }
     const others = this._parseNonSelfParticipants(note?.participants).length;
     if (others > 0) {
@@ -878,23 +877,6 @@ class IPCHandlers {
     }
   }
 
-  _resolveByokModel(provider, configuredModel) {
-    const trimmed = (configuredModel || "").trim();
-    if (provider === "custom") return trimmed || "whisper-1";
-    if (trimmed) {
-      const isGroq = trimmed.startsWith("whisper-large-v3");
-      const isOpenAI = trimmed.startsWith("gpt-4o") || trimmed === "whisper-1";
-      const isMistral = trimmed.startsWith("voxtral-");
-      if (provider === "groq" && isGroq) return trimmed;
-      if (provider === "openai" && isOpenAI) return trimmed;
-      if (provider === "mistral" && isMistral) return trimmed;
-    }
-    if (provider === "groq") return "whisper-large-v3-turbo";
-    if (provider === "xai") return "grok-stt";
-    if (provider === "mistral") return "voxtral-mini-latest";
-    return "gpt-4o-mini-transcribe";
-  }
-
   _cleanupTextEditMonitor() {
     if (this._autoLearnDebounceTimer) {
       clearTimeout(this._autoLearnDebounceTimer);
@@ -926,8 +908,13 @@ class IPCHandlers {
 
   _setupRetentionCleanup() {
     const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-    this._runRetentionCleanup();
-    this._retentionCleanupInterval = setInterval(() => this._runRetentionCleanup(), SIX_HOURS_MS);
+    // No sweep at startup: _retentionSettings still holds the 30-day default
+    // until the renderer syncs, so sweeping here deletes audio a user set to
+    // keep for 60/90 days or forever (#1370). The first sync runs the first
+    // sweep instead.
+    this._retentionCleanupInterval = setInterval(() => {
+      if (this._retentionSettingsSynced) this._runRetentionCleanup();
+    }, SIX_HOURS_MS);
   }
 
   _runRetentionCleanup() {
@@ -1260,8 +1247,10 @@ class IPCHandlers {
       createRetentionSettingsHandler({
         getCurrentSettings: () => this._retentionSettings,
         getOwner: () => this.windowManager.mainWindow?.webContents,
+        hasSynced: () => this._retentionSettingsSynced,
         onSettingsChanged: (settings) => {
           this._retentionSettings = settings;
+          this._retentionSettingsSynced = true;
           this._runRetentionCleanup();
         },
       })
@@ -2171,7 +2160,7 @@ class IPCHandlers {
         if (format === "txt") {
           exportContent = transcriptFormatter.formatTxt(note, segments, speakerMappings);
         } else if (format === "srt") {
-          exportContent = transcriptFormatter.formatSrt(segments, speakerMappings);
+          exportContent = transcriptFormatter.formatSrt(segments, speakerMappings, note);
         } else if (format === "md") {
           exportContent = transcriptFormatter.formatMd(note, segments, speakerMappings);
         } else {
@@ -3557,7 +3546,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-xai-transcription",
-      async (event, { audioBuffer, language, keyterms }) => {
+      serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
         const apiKey = this.environmentManager.getXaiKey();
         if (!apiKey) {
           throw new Error("xAI API key not configured");
@@ -3566,6 +3555,7 @@ class IPCHandlers {
         const formData = new FormData();
         const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
         formData.append("file", audioBlob, "audio.webm");
+        const { XAI_STT_LANGUAGES } = await import("./transcriptionRoute.ts");
         if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
           formData.append("language", language);
           formData.append("format", "true");
@@ -3588,12 +3578,12 @@ class IPCHandlers {
         }
 
         return await response.json();
-      }
+      })
     );
 
     ipcMain.handle(
       "proxy-mistral-transcription",
-      async (event, { audioBuffer, model, language, contextBias }) => {
+      serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
         const apiKey = this.environmentManager.getMistralKey();
         if (!apiKey) {
           throw new Error("Mistral API key not configured");
@@ -3626,7 +3616,7 @@ class IPCHandlers {
         }
 
         return await response.json();
-      }
+      })
     );
 
     ipcMain.handle("get-corti-client-id", async () => {
@@ -3647,7 +3637,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-corti-transcription",
-      async (event, { audioBuffer, language, environment, tenant }) => {
+      serializeIpcError(async (event, { audioBuffer, language, environment, tenant }) => {
         const clientId = this.environmentManager.getCortiClientId();
         const clientSecret = this.environmentManager.getCortiClientSecret();
         if (!clientId || !clientSecret) {
@@ -3655,7 +3645,7 @@ class IPCHandlers {
         }
 
         const { transcribeAudio } = require("./cortiTranscription");
-        return transcribeAudio({
+        return await transcribeAudio({
           environment,
           tenant,
           clientId,
@@ -3663,7 +3653,7 @@ class IPCHandlers {
           audioBuffer,
           language,
         });
-      }
+      })
     );
 
     ipcMain.handle("get-tinfoil-chat-models", async () => {
@@ -3673,22 +3663,16 @@ class IPCHandlers {
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
     ipcMain.handle(
       "proxy-tinfoil-transcription",
-      async (event, { audioBuffer, language, prompt }) => {
-        try {
-          return await transcribeWithTinfoil({
-            audioBuffer: Buffer.from(audioBuffer),
-            fileName: "audio.webm",
-            contentType: "audio/webm",
-            language,
-            prompt,
-            apiKey: this.environmentManager.getTinfoilKey(),
-          });
-        } catch (error) {
-          // ipcMain.handle keeps only the message when a promise rejects, dropping
-          // custom props — return the code so the renderer can rebuild the error.
-          return { error: error.message, code: error.code, messageKey: error.messageKey };
-        }
-      }
+      serializeIpcError(async (event, { audioBuffer, language, prompt }) => {
+        return await transcribeWithTinfoil({
+          audioBuffer: Buffer.from(audioBuffer),
+          fileName: "audio.webm",
+          contentType: "audio/webm",
+          language,
+          prompt,
+          apiKey: this.environmentManager.getTinfoilKey(),
+        });
+      })
     );
 
     ipcMain.handle("get-custom-transcription-key", async () => {
@@ -4501,22 +4485,19 @@ class IPCHandlers {
 
     ipcMain.handle("capture-screen-context", () => screenContextCapture.captureCursorDisplay());
 
-    const buildScreenRecordingAccess = (status) => ({
-      granted: status === "granted",
-      status,
-      supported: status !== "unsupported",
-    });
+    // Snapshot the launch-time TCC status so a mid-session grant (which macOS
+    // only honors after a relaunch) is detectable even if the renderer never
+    // checked before the user granted.
+    screenContextCapture.getAccessStatus();
 
-    ipcMain.handle("check-screen-recording-access", () =>
-      buildScreenRecordingAccess(screenContextCapture.getAccessStatus())
-    );
+    ipcMain.handle("check-screen-recording-access", () => screenContextCapture.getAccessResult());
 
     ipcMain.handle("request-screen-recording-access", async () => {
       const status = await screenContextCapture.requestAccess();
       if (process.platform === "darwin" && status !== "granted") {
         await openSystemSettings("screenRecording");
       }
-      return buildScreenRecordingAccess(status);
+      return screenContextCapture.getAccessResult();
     });
 
     // Keeps the dictation overlay out of its own screenshots (and screen
@@ -5057,25 +5038,39 @@ class IPCHandlers {
           preferredLanguage && preferredLanguage !== "auto"
             ? preferredLanguage.split("-")[0]
             : undefined;
-        const { resolveCustomTranscriptionRoute, resolveSelfHostedRetryRoute } =
-          await import("./retryTranscriptionRouting.js");
-        const selfHostedRoute = resolveSelfHostedRetryRoute(settings);
+        const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        // Renderer pre-flight owns policy; retry re-routes stored audio through
+        // whatever is selected NOW.
+        const route = resolveTranscriptionRoute({
+          settings: settings || {},
+          providers: transcriptionProviderBaseUrls(),
+          request: { effectiveLanguage: language },
+        });
 
-        if (selfHostedRoute?.kind === "configuration-error") {
-          throw new Error(selfHostedRoute.error);
+        // An error route is fatal unless OpenWhispr cloud is selected — a
+        // leftover BYOK misconfiguration must not block the cloud pipeline.
+        if (
+          route.transport === "error" &&
+          (settings?.transcriptionMode === "self-hosted" ||
+            settings?.cloudTranscriptionMode !== "openwhispr")
+        ) {
+          const err = new Error(route.message);
+          if (route.code) err.code = route.code;
+          if (route.messageKey) err.messageKey = route.messageKey;
+          throw err;
         }
 
-        if (selfHostedRoute?.kind === "self-hosted") {
+        if (route.transport === "http-batch" && route.provider === "self-hosted") {
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          if (selfHostedRoute.model) {
-            formData.append("model", selfHostedRoute.model);
+          if (route.model) {
+            formData.append("model", route.model);
           }
-          if (language) {
-            formData.append("language", language);
+          if (route.language) {
+            formData.append("language", route.language);
           }
 
-          const response = await proxyFetch(selfHostedRoute.endpoint, {
+          const response = await proxyFetch(route.endpoint, {
             method: "POST",
             body: formData,
           });
@@ -5088,10 +5083,10 @@ class IPCHandlers {
             result = {
               text: data.text,
               source: "self-hosted",
-              model: selfHostedRoute.model,
+              model: route.model,
             };
           }
-        } else if (settings?.useLocalWhisper) {
+        } else if (route.transport === "local") {
           if (settings.localTranscriptionProvider === "nvidia") {
             const model =
               settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
@@ -5153,46 +5148,54 @@ class IPCHandlers {
               }
             }
           }
-        } else if (settings?.cloudTranscriptionProvider === "tinfoil") {
+        } else if (route.transport === "proxied" && route.provider === "tinfoil") {
           // Attested transport, so this can't reuse the generic fetch below.
           const { text, model } = await transcribeWithTinfoil({
             audioBuffer: buffer,
             fileName: "audio.webm",
             contentType: "audio/webm",
-            language,
+            language: route.language,
             apiKey: this.environmentManager.getTinfoilKey(),
           });
           if (text) result = { text, source: "tinfoil", model };
-        } else {
-          const provider = settings?.cloudTranscriptionProvider || "openai";
-          const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);
-
-          let apiKey, endpoint;
-          if (provider === "groq") {
-            apiKey = this.environmentManager.getGroqKey();
-            endpoint = "https://api.groq.com/openai/v1/audio/transcriptions";
-          } else if (provider === "xai") {
-            apiKey = this.environmentManager.getXaiKey();
-            endpoint = XAI_STT_URL;
-          } else if (provider === "mistral") {
-            apiKey = this.environmentManager.getMistralKey();
-            endpoint = MISTRAL_TRANSCRIPTION_URL;
-          } else if (provider === "custom") {
-            apiKey = this.environmentManager.getCustomTranscriptionKey();
-            const customRoute = resolveCustomTranscriptionRoute({
-              provider,
-              baseUrl: settings?.cloudTranscriptionBaseUrl,
-            });
-            if (customRoute?.kind !== "custom") {
-              throw new Error(
-                customRoute?.error || "Custom transcription endpoint is not configured"
-              );
-            }
-            endpoint = customRoute.endpoint;
-          } else {
-            apiKey = this.environmentManager.getOpenAIKey();
-            endpoint = "https://api.openai.com/v1/audio/transcriptions";
+        } else if (route.transport === "proxied" && route.provider === "corti") {
+          // Corti uses OAuth + an interaction-based REST flow, so it can't use
+          // the generic fetch below.
+          const clientId = this.environmentManager.getCortiClientId();
+          const clientSecret = this.environmentManager.getCortiClientSecret();
+          if (!clientId || !clientSecret) {
+            throw new Error("Corti credentials not configured. Add them in Settings.");
           }
+          const { transcribeAudio } = require("./cortiTranscription");
+          const { text } = await transcribeAudio({
+            environment: route.cortiEnvironment,
+            tenant: route.cortiTenant,
+            clientId,
+            clientSecret,
+            audioBuffer: buffer,
+            language: route.language,
+          });
+          if (text) result = { text, source: "corti", model: route.model };
+        } else {
+          // mistral/xai have no OpenAI-compatible endpoint — main talks to them
+          // directly; everything else consumes the route endpoint as-is.
+          const provider = route.provider;
+          const endpoint =
+            provider === "mistral"
+              ? MISTRAL_TRANSCRIPTION_URL
+              : provider === "xai"
+                ? XAI_STT_URL
+                : route.endpoint;
+          const apiKey =
+            provider === "mistral"
+              ? this.environmentManager.getMistralKey()
+              : provider === "xai"
+                ? this.environmentManager.getXaiKey()
+                : route.auth.keyRef === "custom"
+                  ? this.environmentManager.getCustomTranscriptionKey()
+                  : route.auth.keyRef === "groq"
+                    ? this.environmentManager.getGroqKey()
+                    : this.environmentManager.getOpenAIKey();
           if (!apiKey && provider !== "custom") {
             throw new Error(`${provider} API key not configured`);
           }
@@ -5200,20 +5203,24 @@ class IPCHandlers {
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
           if (provider === "xai") {
-            // xAI STT does not accept a model field; language only when in supported set
-            if (language && XAI_STT_LANGUAGES.has(language)) {
-              formData.append("language", language);
+            // xAI STT does not accept a model field; the route pre-filters language
+            if (route.language) {
+              formData.append("language", route.language);
               formData.append("format", "true");
             }
           } else {
-            formData.append("model", model);
-            if (language) formData.append("language", language);
+            formData.append("model", route.model);
+            if (route.language) formData.append("language", route.language);
           }
           const headers = {};
           if (provider === "mistral") {
             headers["x-api-key"] = apiKey;
           } else if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
+            if (route.transport === "http-batch" && route.auth.scheme === "azure-api-key") {
+              headers["api-key"] = apiKey;
+            } else {
+              headers.Authorization = `Bearer ${apiKey}`;
+            }
           }
 
           const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
@@ -5223,7 +5230,7 @@ class IPCHandlers {
           }
           const data = await response.json();
           if (data?.text) {
-            result = { text: data.text, source: provider, model };
+            result = { text: data.text, source: provider, model: route.model };
           }
         }
 
@@ -8186,7 +8193,6 @@ class IPCHandlers {
         }
       ) => {
         const fs = require("fs");
-        const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
           if (typeof filePath !== "string") {
             return { success: false, error: "Invalid file path" };
@@ -8194,29 +8200,37 @@ class IPCHandlers {
           const realByok = resolveAllowedAudioPath(filePath);
           if (!realByok) return { success: false, error: "File path not allowed" };
 
-          const { resolveCustomTranscriptionRoute, resolveSelfHostedRetryRoute } =
-            await import("./retryTranscriptionRouting.js");
-          const selfHostedRoute = resolveSelfHostedRetryRoute({
-            transcriptionMode,
-            remoteTranscriptionUrl,
-            remoteTranscriptionModel,
+          const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+          const route = resolveTranscriptionRoute({
+            settings: {
+              transcriptionMode,
+              remoteTranscriptionUrl,
+              remoteTranscriptionModel,
+              cloudTranscriptionProvider: provider,
+              cloudTranscriptionModel: model,
+              cloudTranscriptionBaseUrl: baseUrl,
+              cortiEnvironment: environment,
+              cortiTenant: tenant,
+            },
+            providers: transcriptionProviderBaseUrls(),
+            request: { effectiveLanguage: language || undefined },
           });
 
-          // Fail closed: a misconfigured self-hosted setup must never fall through to BYOK.
-          if (selfHostedRoute?.kind === "configuration-error") {
-            return { success: false, error: selfHostedRoute.error };
+          // Fail closed: a misconfigured route must never fall through to a default.
+          if (route.transport === "error") {
+            return { success: false, error: route.message, code: route.code };
           }
 
-          if (selfHostedRoute?.kind === "self-hosted") {
+          if (route.transport === "http-batch" && route.provider === "self-hosted") {
             // User's own server, so the 25 MB third-party cap does not apply.
             const ext = path.extname(realByok).toLowerCase().replace(".", "");
             const { body, boundary } = buildMultipartBody(
               fs.readFileSync(realByok),
               path.basename(realByok),
               AUDIO_MIME_TYPES[ext] || "audio/mpeg",
-              { model: selfHostedRoute.model, language }
+              { model: route.model, language: route.language }
             );
-            const data = await postMultipart(new URL(selfHostedRoute.endpoint), body, boundary);
+            const data = await postMultipart(new URL(route.endpoint), body, boundary);
             if (data.statusCode !== 200) {
               throw new Error(
                 data.data?.error?.message ||
@@ -8228,14 +8242,14 @@ class IPCHandlers {
           }
 
           const fileSize = fs.statSync(realByok).size;
-          if (fileSize > BYOK_FILE_SIZE_LIMIT) {
+          if (route.sizeCapBytes && fileSize > route.sizeCapBytes) {
             return {
               success: false,
               error: "File too large. Maximum size for bring-your-own-key is 25 MB.",
             };
           }
 
-          if (provider === "corti") {
+          if (route.transport === "proxied" && route.provider === "corti") {
             const clientId = this.environmentManager.getCortiClientId();
             const clientSecret = this.environmentManager.getCortiClientSecret();
             if (!clientId || !clientSecret) {
@@ -8243,37 +8257,30 @@ class IPCHandlers {
             }
             const { transcribeAudio } = require("./cortiTranscription");
             const { text } = await transcribeAudio({
-              environment,
-              tenant,
+              environment: route.cortiEnvironment,
+              tenant: route.cortiTenant,
               clientId,
               clientSecret,
               audioBuffer: fs.readFileSync(realByok),
-              language: language || "en",
+              language: route.language,
             });
             return { success: true, text };
           }
 
-          if (provider === "tinfoil") {
+          if (route.transport === "proxied" && route.provider === "tinfoil") {
             const ext = path.extname(realByok).toLowerCase().replace(".", "");
             const { text } = await transcribeWithTinfoil({
               audioBuffer: fs.readFileSync(realByok),
               fileName: path.basename(realByok),
               contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
-              language,
+              language: route.language,
               apiKey: this.environmentManager.getTinfoilKey(),
             });
             return { success: true, text };
           }
 
-          if (!apiKey && provider !== "custom") {
+          if (!apiKey && route.provider !== "custom") {
             throw new Error("No API key configured. Add your key in Settings.");
-          }
-          const customRoute = resolveCustomTranscriptionRoute({ provider, baseUrl });
-          if (customRoute?.kind === "configuration-error") {
-            throw new Error(customRoute.error);
-          }
-          if (!baseUrl && provider !== "xai") {
-            throw new Error("No transcription endpoint configured.");
           }
 
           const audioBuffer = fs.readFileSync(realByok);
@@ -8281,47 +8288,44 @@ class IPCHandlers {
           const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
           const fileName = path.basename(realByok);
 
+          // mistral/xai have no OpenAI-compatible endpoint — talk to them
+          // directly; everything else consumes the route endpoint as-is.
           let transcriptionUrl;
           const multipartFields = {};
-          if (provider === "xai") {
-            // xAI STT has a fixed endpoint and accepts no model field. See #910.
+          if (route.provider === "xai") {
             transcriptionUrl = XAI_STT_URL;
-            if (language && XAI_STT_LANGUAGES.has(language)) {
-              multipartFields.language = language;
+            // xAI STT accepts no model field; the route pre-filters language
+            if (route.language) {
+              multipartFields.language = route.language;
               multipartFields.format = "true";
             }
           } else {
-            transcriptionUrl = customRoute?.endpoint ?? baseUrl.replace(/\/+$/, "");
-            if (!customRoute && !transcriptionUrl.endsWith("/audio/transcriptions")) {
-              transcriptionUrl += "/audio/transcriptions";
-            }
-            multipartFields.model = model || "whisper-1";
+            transcriptionUrl =
+              route.provider === "mistral" ? MISTRAL_TRANSCRIPTION_URL : route.endpoint;
+            multipartFields.model = route.model;
+            // No language field: an uploaded file is often not in the dictation
+            // language, and a wrong hint silently mistranscribes it. Providers
+            // that require one (Corti) are handled on their own branch above.
           }
 
           if (diarize) {
-            let isMistral = false;
-            let isOpenAi = false;
-            try {
-              const h = new URL(baseUrl).hostname;
-              isMistral = h.endsWith(".mistral.ai") || h === "mistral.ai";
-              isOpenAi = h.endsWith(".openai.com") || h === "openai.com";
-            } catch {}
-            if (isMistral) {
-              multipartFields.model = model || "voxtral-mini-latest";
+            // A Custom endpoint may front OpenAI or Mistral, so fall back to the
+            // resolved host before giving up on speaker labels.
+            const diarizeTarget =
+              route.provider === "custom" ? diarizationHost(route.endpoint) : route.provider;
+            if (diarizeTarget === "mistral") {
               multipartFields.diarize = "true";
               multipartFields.timestamp_granularities = "segment";
-            } else if (isOpenAi) {
+            } else if (diarizeTarget === "openai") {
               multipartFields.model = "gpt-4o-transcribe-diarize";
               // Speaker annotations require diarized_json; verbose_json is not supported by this model.
               multipartFields.response_format = "diarized_json";
               multipartFields.chunking_strategy = "auto";
             } else {
-              // The renderer gates on provider name; this re-check is by hostname.
-              // A non-canonical base URL (Azure/OpenAI-compatible gateway) can
-              // disagree — degrade to a plain transcript, never fail the upload.
+              // Degrade to a plain transcript, never fail the upload.
               debugLogger.warn(
-                "BYOK diarization requested but base URL is not OpenAI/Mistral; transcribing without speakers",
-                { baseUrl }
+                "BYOK diarization requested but provider is not OpenAI/Mistral; transcribing without speakers",
+                { provider: route.provider, endpoint: route.endpoint }
               );
             }
           }
@@ -8334,7 +8338,14 @@ class IPCHandlers {
           );
 
           const url = new URL(transcriptionUrl);
-          const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
+          // Mistral authenticates with x-api-key, not Bearer.
+          const headers = apiKey
+            ? route.provider === "mistral"
+              ? { "x-api-key": apiKey }
+              : route.transport === "http-batch" && route.auth.scheme === "azure-api-key"
+                ? { "api-key": apiKey }
+                : { Authorization: `Bearer ${apiKey}` }
+            : undefined;
           const data = await postMultipart(url, body, boundary, headers);
 
           if (data.statusCode === 401) {

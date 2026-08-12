@@ -36,7 +36,11 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
-import { getAllReasoningModels, getBatchTranscriptionModel } from "../../models/ModelRegistry";
+import {
+  getAllReasoningModels,
+  getBatchTranscriptionModel,
+  getTranscriptionProviders,
+} from "../../models/ModelRegistry";
 import {
   useSettingsStore,
   selectIsCloudCleanupMode,
@@ -59,7 +63,7 @@ import { getBaseLanguageCode } from "../../utils/languageSupport";
 import { isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
-import { resolveCustomTranscriptionRoute } from "../../helpers/retryTranscriptionRouting";
+import { resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -381,11 +385,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         if (isSelfHosted) {
           if (!cancelled) setProviderReady(!!remoteTranscriptionUrl?.trim());
         } else if (cloudTranscriptionProvider === "custom") {
-          const customRoute = resolveCustomTranscriptionRoute({
-            provider: cloudTranscriptionProvider,
-            baseUrl: cloudTranscriptionBaseUrl,
+          const route = resolveTranscriptionRoute({
+            settings: { cloudTranscriptionProvider, cloudTranscriptionBaseUrl },
+            providers: getTranscriptionProviders(),
           });
-          if (!cancelled) setProviderReady(customRoute?.kind === "custom");
+          if (!cancelled) setProviderReady(route.transport !== "error");
         } else if (cloudTranscriptionProvider === "corti") {
           if (!cancelled) setProviderReady(!!(cortiClientId && cortiClientSecret));
         } else {
@@ -489,7 +493,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,
     cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
     cloudTranscriptionModel,
-    language: getBaseLanguageCode(preferredLanguage) || "en",
+    // Empty = auto-detect; the resolver supplies a default where one is required.
+    language: getBaseLanguageCode(preferredLanguage) || "",
     cortiEnvironment,
     cortiTenant,
     transcriptionMode,

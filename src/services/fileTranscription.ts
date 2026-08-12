@@ -1,11 +1,6 @@
 import { withSessionRefresh } from "../lib/auth";
-import { resolveCustomTranscriptionRoute } from "../helpers/retryTranscriptionRouting.js";
+import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
-import {
-  TINFOIL_PROXY_REQUIRED_ERROR,
-  isTinfoilInferenceUrl,
-  resolveByokBaseUrl,
-} from "./transcriptionBaseUrl";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -71,39 +66,26 @@ export async function transcribeFile(
     });
   }
 
-  // Built-in providers resolve from the registry; only Custom uses the
-  // stored URL, which provider tab switches no longer overwrite (#1459).
-  const providers = getTranscriptionProviders();
-  let baseUrl = resolveByokBaseUrl(
-    cfg.cloudTranscriptionProvider,
-    cfg.cloudTranscriptionBaseUrl || "",
-    providers
-  );
-
-  if (cfg.transcriptionMode !== "self-hosted") {
-    const customRoute = resolveCustomTranscriptionRoute({
-      provider: cfg.cloudTranscriptionProvider,
-      baseUrl,
-    });
-    if (customRoute?.kind === "configuration-error") {
-      return {
-        success: false,
-        error: customRoute.error,
-        code: "CUSTOM_ENDPOINT_INVALID",
-      };
-    }
-    if (customRoute) baseUrl = customRoute.baseUrl;
-  }
-
-  // A Custom URL pointing at Tinfoil (e.g. persisted by the pre-#1459 tab
-  // clobber) must not bypass the attested main-process proxy. Self-hosted
-  // mode is exempt: the handler routes it to remoteTranscriptionUrl.
-  if (
-    cfg.cloudTranscriptionProvider === "custom" &&
-    cfg.transcriptionMode !== "self-hosted" &&
-    isTinfoilInferenceUrl(baseUrl, providers)
-  ) {
-    throw new Error(TINFOIL_PROXY_REQUIRED_ERROR);
+  // Pre-flight through the shared resolver: code-carrying errors (incl. the
+  // Tinfoil-URL and fail-closed custom guards) surface here without an IPC
+  // round-trip; the main-process handler re-resolves the same fields as
+  // defense in depth.
+  const route = resolveTranscriptionRoute({
+    settings: {
+      transcriptionMode: cfg.transcriptionMode,
+      remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,
+      remoteTranscriptionModel: cfg.remoteTranscriptionModel,
+      cloudTranscriptionProvider: cfg.cloudTranscriptionProvider,
+      cloudTranscriptionModel: cfg.cloudTranscriptionModel,
+      cloudTranscriptionBaseUrl: cfg.cloudTranscriptionBaseUrl,
+      cortiEnvironment: cfg.cortiEnvironment,
+      cortiTenant: cfg.cortiTenant,
+    },
+    providers: getTranscriptionProviders(),
+    request: { effectiveLanguage: cfg.language || undefined },
+  });
+  if (route.transport === "error") {
+    return { success: false, error: route.message, code: route.code };
   }
 
   // Self-hosted fields make the handler route to the configured server
@@ -111,7 +93,7 @@ export async function transcribeFile(
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
     apiKey: cfg.getApiKey(),
-    baseUrl,
+    baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
     provider: cfg.cloudTranscriptionProvider,

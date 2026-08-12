@@ -582,7 +582,8 @@
         "providerRateLimited": "Seu provedor de transcrição limitou a solicitação. Aguarde um momento e tente novamente.",
         "chunkLoss": "Um problema de rede fez perder grande parte da gravação. Retranscreva-a a partir do histórico.",
         "agentReasoningFailed": "Seu agente de voz não conseguiu processar o comando; a transcrição bruta foi inserida no lugar.",
-        "screenContextSkipped": "Não foi possível enviar a captura, então seu comando foi executado sem contexto de tela."
+        "screenContextSkipped": "Não foi possível enviar a captura, então seu comando foi executado sem contexto de tela.",
+        "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Fala para texto."
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",
@@ -2411,6 +2412,7 @@
         "you": "Você",
         "addFailed": "Não foi possível adicionar {{failed}} de {{total}} pessoas",
         "searchPlaceholder": "Pesquisar pessoas…",
+        "noResults": "Nenhuma pessoa encontrada",
         "roleAdmin": "Administrador",
         "roleMember": "Membro",
         "remove": "Remover",
@@ -2602,7 +2604,8 @@
       "urlsSkipped": "Alguns links não puderam ser adicionados ({{n}})",
       "queueFailed": "{{n}} com falha",
       "urlFileTooLarge": "O arquivo é grande demais para baixar. O tamanho máximo é 500 MB.",
-      "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes."
+      "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes.",
+      "customEndpointInvalid": "O endpoint de transcrição personalizado não está configurado ou é inválido. Atualize-o nas Configurações."
     },
     "meeting": {
       "title": "Notas de reunião",
@@ -2969,7 +2972,8 @@
       "visionModel": "Modelo de visão separado",
       "visionModelDescription": "Encaminha comandos que incluem captura de tela para outro modelo com visão.",
       "permissionTitle": "Gravação de tela",
-      "permissionDescription": "O macOS exige permissão de gravação de tela para capturar sua tela."
+      "permissionDescription": "O macOS exige permissão de gravação de tela para capturar sua tela.",
+      "relaunchHint": "A permissão de gravação de tela foi concedida enquanto o OpenWhispr estava em execução. Feche e reabra o OpenWhispr para começar a capturar a tela."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
@@ -3243,6 +3247,7 @@
         "title": "Compartilhar nota",
         "description": "Convide pessoas por e-mail ou compartilhe um link para esta nota.",
         "searchPlaceholder": "Buscar pessoas, pastas ou emails",
+        "noResults": "Nenhum resultado encontrado",
         "emailLabel": "Pessoas, pastas ou email",
         "shareButton": "Compartilhar",
         "createLink": "Criar link",
@@ -3480,7 +3485,7 @@
       "title": "Prompt de Tradução",
       "description": "Personalize como o modelo traduz seu ditado"
     },
-    "hotkeyHint": "Defina o atalho em Configurações → Geral → Atalho de Tradução",
+    "hotkeyHint": "Defina o atalho em Configurações → Atalhos → Atalho de Tradução",
     "targetsLabel": "Idiomas de destino",
     "addTarget": "Adicionar idioma…",
     "activeTarget": "Idioma de destino ativo",

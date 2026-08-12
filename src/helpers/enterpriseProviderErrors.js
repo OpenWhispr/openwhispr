@@ -211,6 +211,14 @@ function isPrivateIPv4(hostname) {
 function isPrivateIPv6(hostname) {
   if (hostname === "::1") return true;
   if (/^(fe80|fc[0-9a-f]{2}|fd[0-9a-f]{2}):/i.test(hostname)) return true;
+  // The URL parser rewrites an IPv4-mapped address to its hex form, so
+  // "::ffff:169.254.169.254" reaches us as "::ffff:a9fe:a9fe".
+  const mappedHex = hostname.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (mappedHex) {
+    const hi = parseInt(mappedHex[1], 16);
+    const lo = parseInt(mappedHex[2], 16);
+    return isPrivateIPv4(`${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`);
+  }
   const mapped = hostname.match(/^::ffff:(.+)$/i);
   return mapped ? isPrivateIPv4(mapped[1]) : false;
 }
@@ -226,7 +234,9 @@ function validateEnterpriseEndpoint(endpoint) {
   if (url.protocol !== "https:") {
     throw new Error("Endpoint must use HTTPS.");
   }
-  const hostname = url.hostname.toLowerCase();
+  // URL.hostname keeps the brackets around an IPv6 literal ("[::1]"), which no
+  // isPrivateIPv6 branch can match — strip them or the whole IPv6 arm is dead.
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
     BLOCKED_HOSTS.has(hostname) ||
     BLOCKED_SUFFIXES.some((suffix) => hostname.endsWith(suffix)) ||

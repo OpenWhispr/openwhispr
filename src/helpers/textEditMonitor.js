@@ -15,6 +15,19 @@ const ACTIVATE_CONFIRM_DELAY_MS = 25;
 // across that burst. Kept short so back-to-back dictations in different apps
 // still get a fresh capture.
 const TARGET_CAPTURE_FRESHNESS_MS = 250;
+// AXError -25212 (kAXErrorNoValue) on the focused-element read is how
+// Chromium/Electron apps respond while their AX tree is dormant, making the
+// native binary's 5-attempt retry (~1.2s) dead time on every read. A single
+// -25212 line can also be transient (the tree may wake mid-run — the binary
+// then logs "Got focused element on attempt N"), so only a run where the
+// element never resolved and every attempt failed with -25212 marks the app
+// as unsupported for this session.
+function isPersistentAxNoValueFailure(stderr) {
+  const text = stderr || "";
+  if (text.includes("Got focused element")) return false;
+  const attemptCodes = text.match(/\(error: -?\d+\)/g) || [];
+  return attemptCodes.length > 0 && attemptCodes.every((code) => code === "(error: -25212)");
+}
 
 // Monitoring is strictly read-only: never write AXEnhancedUserInterface (or any
 // AX attribute) on the target app to force its accessibility tree. Flipping that
@@ -106,6 +119,10 @@ class TextEditMonitor extends EventEmitter {
     this.lastTargetPid = null;
     this._captureTargetPromise = null;
     this._lastCaptureAt = 0;
+    // PIDs whose AX tree never yields a focused element (see
+    // isPersistentAxNoValueFailure). A recycled PID only costs a detour via
+    // AppleScript, which is still correct.
+    this._nativeSelectionUnsupportedPids = new Set();
   }
 
   /**
@@ -220,7 +237,7 @@ class TextEditMonitor extends EventEmitter {
       }
 
       const resolved = this.resolveBinary();
-      if (resolved) {
+      if (resolved && !this._nativeSelectionUnsupportedPids.has(pid)) {
         execFile(
           resolved.command,
           [...resolved.args, "--selected-text", String(pid)],
@@ -251,12 +268,19 @@ class TextEditMonitor extends EventEmitter {
               return;
             }
 
+            // A timeout-killed child never finished the retry ladder — the
+            // tree could have woken on a later attempt — so only a completed
+            // run's verdict counts (the untimed monitor path also teaches).
+            if (!error?.killed && isPersistentAxNoValueFailure(stderr || error?.message || "")) {
+              this._nativeSelectionUnsupportedPids.add(pid);
+            }
             debugLogger.debug(
               "[TextEditMonitor] Native selected-text read unavailable; trying AppleScript",
               {
                 pid,
                 error: error?.message || null,
                 stderr: stderr?.trim() || null,
+                nativeSkippedNextTime: this._nativeSelectionUnsupportedPids.has(pid),
               }
             );
             this._getSelectedTextViaAppleScript(pid, timeoutMs, resolve);
@@ -495,6 +519,17 @@ class TextEditMonitor extends EventEmitter {
       return;
     }
 
+    // The native monitor for these apps always burns its retries and ends in
+    // NO_ELEMENT -> stopMonitoring; skip the doomed child process entirely.
+    if (this._nativeSelectionUnsupportedPids.has(targetPid)) {
+      debugLogger.debug(
+        "[TextEditMonitor] macOS native: AX reads unsupported for target this session, skipping monitor",
+        { targetPid }
+      );
+      this.stopMonitoring();
+      return;
+    }
+
     debugLogger.debug("[TextEditMonitor] macOS native: starting", {
       targetPid,
       textPreview: originalText.substring(0, 80),
@@ -516,6 +551,9 @@ class TextEditMonitor extends EventEmitter {
       return;
     }
 
+    // Per-child verdict state, so overlapping monitor runs can never cache
+    // each other's target.
+    const axRun = { stderr: "", noElement: false };
     this.process = spawn(command, [...args, String(targetPid)], {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
@@ -528,12 +566,14 @@ class TextEditMonitor extends EventEmitter {
     this.process.stdout.setEncoding("utf8");
     this.process.stdout.on("data", (chunk) => {
       debugLogger.debug("[TextEditMonitor] stdout", { data: chunk.trim() });
+      if (chunk.includes("NO_ELEMENT")) axRun.noElement = true;
       this._handleProcessStdoutChunk(chunk);
     });
 
     this.process.stderr.setEncoding("utf8");
     this.process.stderr.on("data", (data) => {
       debugLogger.debug("[TextEditMonitor] stderr", { data: data.trim() });
+      axRun.stderr += data;
     });
 
     this.process.on("error", (err) => {
@@ -548,6 +588,16 @@ class TextEditMonitor extends EventEmitter {
     this.process.on("exit", (code, signal) => {
       debugLogger.debug("[TextEditMonitor] Process exited", { code, signal });
       this.process = null;
+    });
+
+    // "close" fires after both stdio streams have flushed. The monitor child
+    // runs the full retry ladder with no exec timeout, so NO_ELEMENT after a
+    // uniform -25212 run is a terminal verdict — teach the cache so plain
+    // dictation stops spawning doomed monitors.
+    this.process.on("close", () => {
+      if (axRun.noElement && isPersistentAxNoValueFailure(axRun.stderr)) {
+        this._nativeSelectionUnsupportedPids.add(targetPid);
+      }
     });
 
     this.timeout = setTimeout(() => this.stopMonitoring(), timeoutMs);

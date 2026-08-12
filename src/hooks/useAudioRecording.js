@@ -66,6 +66,13 @@ export const useAudioRecording = (toast, options = {}) => {
 
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
         audioManagerRef.current.setTranslationRequested(translationRequested);
+        if (voiceAgentRequested) {
+          logger.info(
+            "Voice agent recording start",
+            { screenContextEnabled: !!getSettings().voiceAgentScreenContext },
+            "reasoning"
+          );
+        }
         if (voiceAgentRequested && getSettings().voiceAgentScreenContext) {
           audioManagerRef.current.beginScreenContextCapture();
         }
@@ -205,6 +212,17 @@ export const useAudioRecording = (toast, options = {}) => {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
+      },
+      onNoAudio: () => {
+        window.electronAPI?.hideDictationPreview?.();
+        if (getSettings().pauseMediaOnDictation) {
+          window.electronAPI?.resumeMediaPlayback?.();
+        }
+        toast({
+          title: t("hooks.audioRecording.noAudio.title"),
+          description: t("hooks.audioRecording.noAudio.description"),
+          variant: "default",
+        });
       },
       onPartialTranscript: (text) => {
         setPartialTranscript(text);

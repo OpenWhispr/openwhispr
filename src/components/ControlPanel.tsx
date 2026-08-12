@@ -612,6 +612,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cloudTranscriptionProvider: s.cloudTranscriptionProvider,
           cloudTranscriptionModel: s.cloudTranscriptionModel,
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
+          cortiEnvironment: s.cortiEnvironment,
+          cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,

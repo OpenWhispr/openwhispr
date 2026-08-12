@@ -603,7 +603,8 @@
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "ボイスエージェントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
-        "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。"
+        "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
+        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
@@ -2339,6 +2340,7 @@
         "you": "自分",
         "addFailed": "{{total}}人中{{failed}}人を追加できませんでした",
         "searchPlaceholder": "メンバーを検索…",
+        "noResults": "メンバーが見つかりません",
         "roleAdmin": "管理者",
         "roleMember": "メンバー",
         "remove": "削除",
@@ -2586,7 +2588,8 @@
       "urlsSkipped": "追加できなかったリンクがあります（{{n}}件）",
       "queueFailed": "{{n}}件失敗",
       "urlFileTooLarge": "ファイルが大きすぎてダウンロードできません。最大サイズは500 MBです。",
-      "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。"
+      "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。",
+      "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か無効です。設定から更新してください。"
     },
     "meeting": {
       "title": "議事録",
@@ -2969,7 +2972,8 @@
       "visionModel": "専用のビジョンモデル",
       "visionModelDescription": "スクリーンショット付きのコマンドを、画像対応の別モデルに振り分けます。",
       "permissionTitle": "画面収録",
-      "permissionDescription": "画面をキャプチャするには macOS の画面収録の許可が必要です。"
+      "permissionDescription": "画面をキャプチャするには macOS の画面収録の許可が必要です。",
+      "relaunchHint": "画面収録の許可は OpenWhispr の実行中に付与されました。スクリーンショットのキャプチャを開始するには、OpenWhispr を終了して再度開いてください。"
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
@@ -3243,6 +3247,7 @@
         "title": "ノートを共有",
         "description": "メールで招待するか、このノートへのリンクを共有します。",
         "searchPlaceholder": "ユーザー、フォルダー、メールを検索",
+        "noResults": "一致する結果が見つかりません",
         "emailLabel": "ユーザー、フォルダー、メール",
         "shareButton": "共有",
         "createLink": "リンクを作成",
@@ -3480,7 +3485,7 @@
       "title": "翻訳プロンプト",
       "description": "モデルによる音声入力の翻訳方法をカスタマイズします"
     },
-    "hotkeyHint": "ホットキーは 設定 → 一般 → 翻訳ホットキー で設定できます",
+    "hotkeyHint": "ホットキーは 設定 → ホットキー → 翻訳ホットキー で設定できます",
     "targetsLabel": "翻訳先の言語",
     "addTarget": "言語を追加…",
     "activeTarget": "使用中の翻訳先言語",
