@@ -1928,7 +1928,10 @@
         "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。",
         "actionFailed": "操作失败",
         "promptTooLong": "这次通话对本地模型来说太长了。请使用云端模型，或缩短笔记。",
-        "partialResult": "本次通话的部分内容无法处理，已在笔记中标注。"
+        "partialResult": "本次通话的部分内容无法处理，已在笔记中标注。",
+        "runTimedOut": "笔记生成耗时过长已停止。请尝试更短的内容或使用云端模型。",
+        "runDegraded": "笔记生成明显变慢，已停止以保持系统响应。请关闭部分应用或使用云端模型。",
+        "notEnoughMemory": "当前可用内存不足以运行本地模型。请关闭部分应用，或对这条笔记使用云端模型。"
       },
       "passProgress": "第 {{current}} 遍，共 {{total}} 遍"
     },

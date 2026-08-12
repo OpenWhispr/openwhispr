@@ -6,12 +6,16 @@ const http = require("http");
 const debugLogger = require("./debugLogger");
 const { readGgufMetadata } = require("./ggufMetadata");
 const { resolveContextSize } = require("./llamaContext");
+const { availableMemBytes } = require("./systemMemory");
 
 // Codes travel with the error so the multi-pass runner can tell a broken machine
 // (retry) from an unreadable section (record a gap) without matching substrings.
 const DEFAULT_REQUEST_TIMEOUT_MS = 300000;
-// A single extraction pass on the CPU backend can prefill for many minutes.
-const BATCH_REQUEST_TIMEOUT_MS = 900000;
+// Batch passes get the same bound as everything else. 900000 was chosen for the
+// CPU backend, which this project cannot measure, and it gave a wedged pass 15
+// minutes to grind the desktop instead of 5. The smaller chunkBudget on non-GPU
+// backends already addresses the case it was meant to serve.
+const BATCH_REQUEST_TIMEOUT_MS = 300000;
 
 function llamaError(message, code) {
   const error = new Error(message);
@@ -153,9 +157,13 @@ class LlamaServerManager {
     // size is derived from the model's own geometry and the machine's memory.
     const gguf = readGgufMetadata(modelPath);
     const modelFileBytes = fs.statSync(modelPath).size;
+    // Budgeting from total RAM reserved more memory than the machine had and
+    // drove the desktop into swap on 2026-08-12. What matters is what is free.
+    const available = await availableMemBytes();
     const resolved = resolveContextSize({
       gguf,
       totalMemBytes: os.totalmem(),
+      availableMemBytes: available.bytes,
       modelFileBytes,
       requested: options.contextSize,
     });
@@ -185,6 +193,8 @@ class LlamaServerManager {
         requestedContext: resolved.requested,
         estimatedKvBytes: resolved.estimatedKvBytes,
         kvBudgetBytes: resolved.kvBudgetBytes,
+        availableMemBytes: available.bytes,
+        memorySource: available.source,
         source: resolved.source,
         totalMemBytes: os.totalmem(),
       },

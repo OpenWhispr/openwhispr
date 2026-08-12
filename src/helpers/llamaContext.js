@@ -17,6 +17,11 @@ const FALLBACK_MAX = 32768;
 // Share of RAM the KV cache may occupy once the weights are accounted for. The
 // rest belongs to the OS, the browser the user has open, and this app.
 const MEMORY_SHARE = 0.35;
+// Share of what is *actually* free. The total-RAM share above is a ceiling for
+// polite behaviour on a big machine; this is a floor of reality. Budgeting 35%
+// of 24 GB on a machine with 17 GB already committed is what put the desktop
+// into swap on 2026-08-12 — the resolver was right, its input was not.
+const AVAILABLE_SHARE = 0.8;
 const MIN_KV_BUDGET = 256 * 1024 * 1024;
 const MAX_KV_BUDGET = 8 * 1024 ** 3;
 
@@ -26,9 +31,30 @@ const roundDownToPowerOfTwo = (value) => 2 ** Math.floor(Math.log2(value));
  * @returns {{contextSize:number, trainedContext:number|null, kvBytesPerToken:number|null,
  *   estimatedKvBytes:number|null, kvBudgetBytes:number, source:string}}
  */
-function resolveContextSize({ gguf, totalMemBytes, modelFileBytes = 0, requested } = {}) {
+function resolveContextSize({
+  gguf,
+  totalMemBytes,
+  modelFileBytes = 0,
+  requested,
+  availableMemBytes,
+  modelAlreadyResident = false,
+} = {}) {
+  const shareOfTotal = Math.floor((totalMemBytes || 0) * MEMORY_SHARE);
+  // A resident model's weights are already excluded from the available figure,
+  // so subtracting the file size again would double-count them and collapse the
+  // context to the floor on the second run.
+  const weights = modelAlreadyResident ? 0 : modelFileBytes;
+
+  const bounds = [shareOfTotal - modelFileBytes];
+  let availableBound = false;
+  if (Number.isFinite(availableMemBytes)) {
+    const shareOfAvailable = Math.floor(availableMemBytes * AVAILABLE_SHARE) - weights;
+    availableBound = shareOfAvailable < bounds[0];
+    bounds.push(shareOfAvailable);
+  }
+
   const kvBudgetBytes = Math.min(
-    Math.max(Math.floor((totalMemBytes || 0) * MEMORY_SHARE) - modelFileBytes, MIN_KV_BUDGET),
+    Math.max(Math.min(...bounds), MIN_KV_BUDGET),
     MAX_KV_BUDGET
   );
 
@@ -60,7 +86,12 @@ function resolveContextSize({ gguf, totalMemBytes, modelFileBytes = 0, requested
     kvBytesPerToken: perToken,
     estimatedKvBytes: contextSize * perToken,
     kvBudgetBytes,
-    source: contextSize >= gguf.contextLength ? "trained-context" : "memory-bound",
+    source:
+      contextSize >= gguf.contextLength
+        ? "trained-context"
+        : availableBound
+          ? "available-bound"
+          : "memory-bound",
     // Recorded only so the log can show what the caller wanted and did not get.
     requested: requested ?? null,
   };

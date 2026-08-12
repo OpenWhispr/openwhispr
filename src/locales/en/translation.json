@@ -2022,7 +2022,10 @@
         "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
         "actionFailed": "Action failed",
         "promptTooLong": "This call is too long for the local model. Use a cloud model, or shorten the note.",
-        "partialResult": "Some sections of this call could not be processed and are marked in the notes."
+        "partialResult": "Some sections of this call could not be processed and are marked in the notes.",
+        "runTimedOut": "Note generation took too long and was stopped. Try a shorter selection or a cloud model.",
+        "runDegraded": "Note generation was slowing down sharply and was stopped to keep your machine responsive. Close some apps or use a cloud model.",
+        "notEnoughMemory": "Not enough free memory for the local model right now. Close some apps, or use a cloud model for this note."
       },
       "passProgress": "pass {{current}} of {{total}}"
     },

@@ -171,3 +171,66 @@ test("the resolution explains itself for the log", () => {
   assert.equal(resolved.trainedContext, 131072);
   assert.ok(resolved.source);
 });
+
+// ── Available-memory bound (1.16.1) ────────────────────────────────────────
+
+test("the incident case: 24GB total but 3.7GB available does not resolve 32768", () => {
+  // The exact numbers from the 2026-08-12 stall. 1.16.0 resolved 32768 here and
+  // reserved 3.5GB of KV on a machine with 3.7GB left, which put it into swap.
+  const gguf = { contextLength: 131072, blockCount: 42, headCountKv: 2, embeddingLength: 2560, headCount: 8 };
+  const before = resolveContextSize({
+    gguf, totalMemBytes: 25769803776, modelFileBytes: 5405168384,
+  });
+  assert.equal(before.contextSize, 32768, "guard: this is what shipped and stalled");
+
+  const after = resolveContextSize({
+    gguf, totalMemBytes: 25769803776, modelFileBytes: 5405168384,
+    availableMemBytes: 3.7 * 1024 ** 3,
+  });
+  assert.ok(after.contextSize < before.contextSize, "must not claim memory that is not there");
+  assert.equal(after.source, "available-bound");
+});
+
+test("a machine with plenty available reproduces today's answer exactly", () => {
+  const gguf = { contextLength: 131072, blockCount: 42, headCountKv: 2, embeddingLength: 2560, headCount: 8 };
+  const without = resolveContextSize({ gguf, totalMemBytes: 68719476736, modelFileBytes: 5405168384 });
+  const with_ = resolveContextSize({
+    gguf, totalMemBytes: 68719476736, modelFileBytes: 5405168384,
+    availableMemBytes: 40 * 1024 ** 3,
+  });
+  assert.equal(with_.contextSize, without.contextSize, "no regression on a healthy machine");
+});
+
+test("the total-RAM ceiling still binds when available memory is huge", () => {
+  const gguf = { contextLength: 131072, blockCount: 42, headCountKv: 2, embeddingLength: 2560, headCount: 8 };
+  const capped = resolveContextSize({
+    gguf, totalMemBytes: 25769803776, modelFileBytes: 5405168384,
+    availableMemBytes: 24 * 1024 ** 3,
+  });
+  const total = resolveContextSize({ gguf, totalMemBytes: 25769803776, modelFileBytes: 5405168384 });
+  assert.equal(capped.contextSize, total.contextSize, "never hog a machine just because it is idle");
+});
+
+test("omitting availableMemBytes behaves exactly as before", () => {
+  const gguf = { contextLength: 131072, blockCount: 42, headCountKv: 2, embeddingLength: 2560, headCount: 8 };
+  const a = resolveContextSize({ gguf, totalMemBytes: 25769803776, modelFileBytes: 5405168384 });
+  const b = resolveContextSize({
+    gguf, totalMemBytes: 25769803776, modelFileBytes: 5405168384, availableMemBytes: undefined,
+  });
+  assert.deepEqual(a, b);
+});
+
+test("weights are not subtracted when the server is already running", () => {
+  // Available memory already excludes a resident model; subtracting the file
+  // size again double-counts and collapses the context to the floor.
+  const gguf = { contextLength: 131072, blockCount: 42, headCountKv: 2, embeddingLength: 2560, headCount: 8 };
+  const cold = resolveContextSize({
+    gguf, totalMemBytes: 25769803776, modelFileBytes: 5405168384,
+    availableMemBytes: 8 * 1024 ** 3,
+  });
+  const warm = resolveContextSize({
+    gguf, totalMemBytes: 25769803776, modelFileBytes: 5405168384,
+    availableMemBytes: 8 * 1024 ** 3, modelAlreadyResident: true,
+  });
+  assert.ok(warm.contextSize >= cold.contextSize);
+});

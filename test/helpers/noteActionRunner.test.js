@@ -19,7 +19,7 @@ function harness(overrides = {}) {
   const calls = [];
   const progress = [];
   const base = {
-    contextSize: 4096,
+    contextSize: overrides.contextSize ?? 4096,
     isGpuBackend: true,
     systemPrompt: "SYS",
     noteContent: "",
@@ -284,4 +284,161 @@ test("a non-meeting note with no segments still chunks its own text", async () =
   const result = await runNoteAction(h.options);
   assert.ok(result.passes > 2, "long manual notes must be split, not rejected");
   assert.equal(result.partial, false);
+});
+
+// ── 1.16.1: fail fast instead of grinding toward a provable failure ─────────
+
+test("a run that provably cannot compose fails before any inference", async () => {
+  // At a small context the chunk budget collapses, so a long transcript needs
+  // more extracts than the compose step can ever hold — even after the fold cap.
+  // Discovering that after 150 passes and three hours is strictly worse than
+  // discovering it in a millisecond.
+  const h = harness({ contextSize: 2048, segments: manySegments(400) });
+  await assert.rejects(
+    () => runNoteAction(h.options),
+    (err) => err.code === "LOCAL_CONTEXT_EXCEEDED"
+  );
+  assert.equal(h.calls.length, 0, "must not run a single pass it cannot finish");
+});
+
+test("a viable run at a small context still proceeds", async () => {
+  const h = harness({ contextSize: 2048, segments: manySegments(4, 200) });
+  const result = await runNoteAction(h.options);
+  assert.ok(result.text);
+  assert.ok(h.calls.length >= 1);
+});
+
+test("the fail-fast check does not fire on the healthy incident-sized run", async () => {
+  // Enough transcript to actually need several chunks at a 32768 context —
+  // roughly the shape of the run that stalled on 2026-08-12.
+  const h = harness({ contextSize: 32768, segments: manySegments(200) });
+  const result = await runNoteAction(h.options);
+  assert.ok(result.passes > 1);
+  assert.ok(h.calls.length > 1);
+});
+
+test("compose output is clamped to the resolved context", async () => {
+  // 2048 output tokens at a 2048 context leaves nothing for the prompt.
+  const h = harness({ contextSize: 2048, segments: manySegments(4, 200) });
+  await runNoteAction(h.options);
+  const compose = h.calls[h.calls.length - 1];
+  assert.ok(compose.opts.maxTokens < 2048, "output cannot claim the whole context");
+  assert.ok(compose.opts.maxTokens > 0);
+});
+
+test("exceeding the run deadline aborts with a typed error", async () => {
+  let now = 0;
+  const h = harness({
+    segments: manySegments(24),
+    infer: async () => {
+      now += 60_000;
+      return "out";
+    },
+  });
+  h.options.deadlineMs = 90_000;
+  h.options.now = () => now;
+
+  await assert.rejects(
+    () => runNoteAction(h.options),
+    (err) => err.code === "LOCAL_MULTIPASS_TIMEOUT"
+  );
+});
+
+test("a normal run is unaffected by the deadline", async () => {
+  let now = 0;
+  const h = harness({
+    segments: manySegments(24),
+    infer: async () => {
+      now += 1000;
+      return "out";
+    },
+  });
+  h.options.deadlineMs = 30 * 60_000;
+  h.options.now = () => now;
+  const result = await runNoteAction(h.options);
+  assert.ok(result.text);
+});
+
+test("a timeout is retried once, not three times", async () => {
+  let n = 0;
+  const h = harness({
+    segments: manySegments(24),
+    infer: async () => {
+      n++;
+      throw coded("llama-server request timed out", "LLAMA_REQUEST_TIMEOUT");
+    },
+  });
+  await assert.rejects(() => runNoteAction(h.options), (err) => err.code === "LOCAL_MULTIPASS_FAILED");
+  assert.equal(n, 2, "a request that already burned the full timeout is not a blip");
+});
+
+test("a startup failure is retried at most twice", async () => {
+  let n = 0;
+  const h = harness({
+    segments: manySegments(24),
+    infer: async () => {
+      n++;
+      throw coded("died during startup (signal: SIGKILL)", "LLAMA_START_FAILED");
+    },
+  });
+  await assert.rejects(() => runNoteAction(h.options));
+  assert.equal(n, 2, "four consecutive 5.4GB model loads under thrash is not a retry policy");
+});
+
+test("a pass far slower than the established median aborts the run", async () => {
+  // Passes 1 and 2 took 43s and 40s in the 2026-08-12 incident; pass 3 was
+  // still going at 88s. A machine whose passes are stretching is thrashing,
+  // and running passes 4 and 5 into it only prolongs the stall.
+  let now = 0;
+  let n = 0;
+  const h = harness({
+    segments: manySegments(600),
+    contextSize: 32768,
+    infer: async () => {
+      n++;
+      now += n >= 3 ? 400_000 : 40_000;
+      return "out";
+    },
+  });
+  h.options.now = () => now;
+
+  await assert.rejects(
+    () => runNoteAction(h.options),
+    (err) => err.code === "LOCAL_MULTIPASS_DEGRADED"
+  );
+});
+
+test("the degradation check needs a median before it can fire", async () => {
+  // One slow pass with nothing to compare against must not abort the run.
+  let now = 0;
+  let n = 0;
+  const h = harness({
+    segments: manySegments(600),
+    contextSize: 32768,
+    infer: async () => {
+      n++;
+      now += n === 1 ? 300_000 : 1000;
+      return "out";
+    },
+  });
+  h.options.now = () => now;
+  const result = await runNoteAction(h.options);
+  assert.ok(result.text);
+});
+
+test("normal pass-to-pass variation does not abort", async () => {
+  let now = 0;
+  const times = [40_000, 43_000, 51_000, 39_000, 47_000, 60_000];
+  let i = 0;
+  const h = harness({
+    segments: manySegments(600),
+    contextSize: 32768,
+    infer: async () => {
+      now += times[i++ % times.length];
+      return "out";
+    },
+  });
+  h.options.now = () => now;
+  const result = await runNoteAction(h.options);
+  assert.ok(result.text);
 });
