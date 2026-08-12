@@ -243,6 +243,7 @@ const BOOLEAN_SETTINGS = new Set([
   "telemetryEnabled",
   "audioCuesEnabled",
   "pauseMediaOnDictation",
+  "duckAudioOnDictation",
   "floatingIconAutoHide",
   "startMinimized",
   "meetingProcessDetection",
@@ -283,6 +284,7 @@ const ARRAY_SETTINGS = new Set([
 const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
   "audioRetentionDays",
+  "duckVolumeLevel",
   "transcriptRetentionDays",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
@@ -538,6 +540,8 @@ export interface SettingsState
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
+  duckAudioOnDictation: boolean;
+  duckVolumeLevel: number;
   floatingIconAutoHide: boolean;
   startMinimized: boolean;
   gcalAccounts: CalendarAccount[];
@@ -824,6 +828,8 @@ export interface SettingsState
   setSaveDiscardedTranscriptions: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
+  setDuckAudioOnDictation: (value: boolean) => void;
+  setDuckVolumeLevel: (value: number) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: CalendarAccount[]) => void;
@@ -1189,6 +1195,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   saveDiscardedTranscriptions: readBoolean("saveDiscardedTranscriptions", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
+  duckAudioOnDictation: readBoolean("duckAudioOnDictation", false),
+  duckVolumeLevel: readNumber("duckVolumeLevel", 25),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   startMinimized: readBoolean("startMinimized", false),
   notificationsEnabled: readBoolean("notificationsEnabled", true),
@@ -1859,6 +1867,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setSaveDiscardedTranscriptions: createBooleanSetter("saveDiscardedTranscriptions"),
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
   setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
+  setDuckAudioOnDictation: createBooleanSetter("duckAudioOnDictation"),
+  setDuckVolumeLevel: createNumberSetter("duckVolumeLevel"),
 
   setFloatingIconAutoHide: (enabled: boolean) => {
     if (get().floatingIconAutoHide === enabled) return;

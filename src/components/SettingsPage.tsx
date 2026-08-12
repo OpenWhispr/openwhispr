@@ -163,6 +163,8 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
 
 const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
 
+const DUCK_LEVEL_OPTIONS = [10, 25, 50, 75];
+
 const RETENTION_SELECT_CLASS =
   "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
@@ -830,6 +832,10 @@ export default function SettingsPage({
     setAudioCuesEnabled,
     pauseMediaOnDictation,
     setPauseMediaOnDictation,
+    duckAudioOnDictation,
+    setDuckAudioOnDictation,
+    duckVolumeLevel,
+    setDuckVolumeLevel,
     showTranscriptionPreview,
     setShowTranscriptionPreview,
     autoPasteEnabled,
@@ -2563,6 +2569,34 @@ export default function SettingsPage({
                     <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.soundEffects.duckAudio")}
+                    description={t("settingsPage.general.soundEffects.duckAudioDescription")}
+                  >
+                    <Toggle checked={duckAudioOnDictation} onChange={setDuckAudioOnDictation} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                {duckAudioOnDictation && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.soundEffects.duckAudioLevel")}
+                      description={t("settingsPage.general.soundEffects.duckAudioLevelDescription")}
+                    >
+                      <select
+                        value={duckVolumeLevel}
+                        onChange={(e) => setDuckVolumeLevel(parseInt(e.target.value, 10))}
+                        className={RETENTION_SELECT_CLASS}
+                      >
+                        {DUCK_LEVEL_OPTIONS.map((level) => (
+                          <option key={level} value={level}>
+                            {`${level}%`}
+                          </option>
+                        ))}
+                      </select>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 

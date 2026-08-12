@@ -1866,6 +1866,11 @@
       "soundEffects": {
         "dictationSounds": "Sons de dictée",
         "dictationSoundsDescription": "Jouer un son au début et à la fin de l'enregistrement",
+        "_duckAudioAutoTranslatedNote": "duckAudio, duckAudioDescription, duckAudioLevel and duckAudioLevelDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
+        "duckAudio": "Baisser le volume du système",
+        "duckAudioDescription": "Baisse la sortie audio du système pendant la dictée au lieu de la mettre en pause",
+        "duckAudioLevel": "Volume pendant la dictée",
+        "duckAudioLevelDescription": "La sortie du système est réglée à ce niveau, puis rétablie à la fin de la dictée",
         "pauseMedia": "Mettre en pause le média",
         "pauseMediaDescription": "Mettre automatiquement la musique en pause au début de la dictée",
         "title": "Effets sonores"

@@ -1841,4 +1841,6 @@ function performSyncTeardown() {
   if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
   if (textEditMonitor) textEditMonitor.stopMonitoring();
   if (updateManager) updateManager.cleanup();
+  // Sync: an async spawn started during teardown never gets to run.
+  require("./src/helpers/mediaPlayer").restoreSystemVolumeSync();
 }

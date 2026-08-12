@@ -1584,6 +1584,11 @@
       "soundEffects": {
         "dictationSounds": "Звуки диктовки",
         "dictationSoundsDescription": "Воспроизводить звуковой сигнал при начале и окончании записи",
+        "_duckAudioAutoTranslatedNote": "duckAudio, duckAudioDescription, duckAudioLevel and duckAudioLevelDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
+        "duckAudio": "Уменьшать громкость системы",
+        "duckAudioDescription": "Уменьшает громкость системы во время диктовки вместо её приостановки",
+        "duckAudioLevel": "Громкость во время диктовки",
+        "duckAudioLevelDescription": "Громкость системы устанавливается на этот уровень и восстанавливается после диктовки",
         "pauseMedia": "Пауза медиа",
         "pauseMediaDescription": "Автоматически приостанавливать музыку при начале диктовки",
         "title": "Звуковые эффекты"
