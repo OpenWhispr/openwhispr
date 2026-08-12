@@ -325,16 +325,20 @@ class GoogleCalendarManager {
       useSessionCookies: false,
     });
     const text = await response.text();
-    let parsed;
+    let parsed = null;
     try {
       parsed = JSON.parse(text);
     } catch {
-      throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
+      // Error statuses can arrive with empty or non-JSON bodies; surface the
+      // status below instead of masking it as a parse failure.
     }
     if (response.status >= 400) {
-      const err = new Error(parsed.error?.message || `API error ${response.status}`);
+      const err = new Error(parsed?.error?.message || `API error ${response.status}`);
       err.statusCode = response.status;
       throw err;
+    }
+    if (parsed === null) {
+      throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
     }
     return parsed;
   }
