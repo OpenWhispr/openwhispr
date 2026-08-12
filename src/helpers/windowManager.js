@@ -55,9 +55,21 @@ class WindowManager {
     this._isDictatingToggle = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
+    this._displayChangeDebounceId = null;
+    this._displayChangeHandlersRegistered = false;
+    this._displayChangeHandlers = [];
 
     app.on("before-quit", () => {
       this.isQuitting = true;
+      if (this._displayChangeDebounceId) {
+        clearTimeout(this._displayChangeDebounceId);
+        this._displayChangeDebounceId = null;
+      }
+      for (const { eventName, handler } of this._displayChangeHandlers) {
+        screen.off(eventName, handler);
+      }
+      this._displayChangeHandlers = [];
+      this._displayChangeHandlersRegistered = false;
       this.hotkeyManager.unregisterAll();
     });
   }
@@ -112,6 +124,7 @@ class WindowManager {
     await this.initializeHotkey();
     this.dragManager.setTargetWindow(this.mainWindow);
     MenuManager.setupMainMenu(() => this.openSettings());
+    this.registerDisplayChangeHandlers();
   }
 
   setMainWindowInteractivity(shouldCapture) {
@@ -158,6 +171,7 @@ class WindowManager {
     }
 
     const newSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
+    this.ensureMainWindowOnVisibleDisplay("before-resize");
     const currentBounds = this.mainWindow.getBounds();
     const position = this._panelStartPosition;
 
@@ -1098,12 +1112,88 @@ class WindowManager {
     this.agentWindow.setBounds(bounds);
   }
 
+  registerDisplayChangeHandlers() {
+    if (this._displayChangeHandlersRegistered) return;
+    this._displayChangeHandlersRegistered = true;
+
+    const scheduleReconcile = (reason) => {
+      if (this._displayChangeDebounceId) {
+        clearTimeout(this._displayChangeDebounceId);
+      }
+      this._displayChangeDebounceId = setTimeout(() => {
+        this._displayChangeDebounceId = null;
+        this.ensureMainWindowOnVisibleDisplay(reason);
+      }, 150);
+    };
+
+    for (const eventName of ["display-added", "display-removed", "display-metrics-changed"]) {
+      const handler = () => scheduleReconcile(eventName);
+      this._displayChangeHandlers.push({ eventName, handler });
+      screen.on(eventName, handler);
+    }
+  }
+
+  _describeDisplay(display) {
+    if (!display) return null;
+    return {
+      id: display.id,
+      bounds: display.bounds,
+      workArea: display.workArea,
+      scaleFactor: display.scaleFactor,
+    };
+  }
+
+  ensureMainWindowOnVisibleDisplay(reason = "manual") {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return null;
+    if (this.dragManager?.isDragActive?.()) return null;
+
+    const currentBounds = this.mainWindow.getBounds();
+    const displays = screen.getAllDisplays();
+    const cursorPos = screen.getCursorScreenPoint();
+    const cursorDisplay = screen.getDisplayNearestPoint(cursorPos);
+    const decision = WindowPositionUtil.getReconciledMainWindowBounds(
+      currentBounds,
+      displays,
+      cursorDisplay,
+      this._panelStartPosition
+    );
+
+    if (!decision) return null;
+
+    const nextBounds = decision.bounds;
+    const changed =
+      currentBounds.x !== nextBounds.x ||
+      currentBounds.y !== nextBounds.y ||
+      currentBounds.width !== nextBounds.width ||
+      currentBounds.height !== nextBounds.height;
+
+    debugLogger.debug(
+      "Main window geometry reconciliation",
+      {
+        reason,
+        decision: decision.reason,
+        changed,
+        currentBounds,
+        nextBounds,
+        cursorPos,
+        targetDisplay: this._describeDisplay(decision.display),
+        displays: displays.map((display) => this._describeDisplay(display)),
+      },
+      "window"
+    );
+
+    if (changed) {
+      this.mainWindow.setBounds(nextBounds);
+    }
+
+    return { changed, bounds: nextBounds, reason: decision.reason };
+  }
+
   _repositionToCursorDisplay() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
 
     const cursorPos = screen.getCursorScreenPoint();
     const cursorDisplay = screen.getDisplayNearestPoint(cursorPos);
-
     const currentBounds = this.mainWindow.getBounds();
     const currentDisplay = screen.getDisplayNearestPoint({
       x: currentBounds.x + currentBounds.width / 2,
@@ -1123,6 +1213,7 @@ class WindowManager {
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.ensureMainWindowOnVisibleDisplay("show");
       this._repositionToCursorDisplay();
 
       if (this.mainWindow.isMinimized()) {
@@ -1188,6 +1279,7 @@ class WindowManager {
     this.mainWindow.once("ready-to-show", () => {
       clearTimeout(showTimeout);
       this.enforceMainWindowOnTop();
+      this.ensureMainWindowOnVisibleDisplay("ready-to-show");
       if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide) {
         if (typeof this.mainWindow.showInactive === "function") {
           this.mainWindow.showInactive();
