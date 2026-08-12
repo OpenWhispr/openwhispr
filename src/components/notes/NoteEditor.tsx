@@ -92,6 +92,8 @@ interface NoteEditorProps {
   enhancement?: Enhancement;
   actionPicker?: React.ReactNode;
   actionProcessingState?: ActionProcessingState;
+  actionCurrentPass?: number | null;
+  actionTotalPasses?: number | null;
   actionName?: string | null;
   diarizationSessionId?: string | null;
   meetingTranscript?: string;
@@ -128,6 +130,8 @@ export default function NoteEditor({
   enhancement,
   actionPicker,
   actionProcessingState,
+  actionCurrentPass,
+  actionTotalPasses,
   actionName,
   diarizationSessionId,
   meetingTranscript,
@@ -987,6 +991,8 @@ export default function NoteEditor({
             )}
           </div>
           <ActionProcessingOverlay
+            currentPass={actionCurrentPass}
+            totalPasses={actionTotalPasses}
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
           />

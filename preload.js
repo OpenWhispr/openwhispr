@@ -333,6 +333,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveNoteSpeakerEmbeddings: (noteId, embeddings) =>
     ipcRenderer.invoke("save-note-speaker-embeddings", noteId, embeddings),
 
+  // Multi-pass note actions (local models only)
+  runNoteAction: (payload) => ipcRenderer.invoke("run-note-action", payload),
+  cancelNoteAction: (noteId) => ipcRenderer.invoke("cancel-note-action", noteId),
+  onNoteActionProgress: registerListener(
+    "note-action-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+  acquireLocalInferenceLease: (options) =>
+    ipcRenderer.invoke("acquire-local-inference-lease", options),
+  releaseLocalInferenceLease: (leaseId) =>
+    ipcRenderer.invoke("release-local-inference-lease", leaseId),
+
   // Post-call pipeline
   getPipelineStatus: () => ipcRenderer.invoke("get-pipeline-status"),
   retryPipelineStep: (noteId, fromStep) =>

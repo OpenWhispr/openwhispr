@@ -499,6 +499,8 @@ export default function PersonalNotesView({
   const {
     state: actionProcessingState,
     actionName,
+    currentPass: actionCurrentPass,
+    totalPasses: actionTotalPasses,
     runAction,
   } = useActionProcessing(activeNoteId ?? null);
 
@@ -1022,6 +1024,8 @@ export default function PersonalNotesView({
               onMoveToFolder={handleMoveToFolder}
               onCreateFolderAndMove={handleCreateFolderAndMove}
               actionProcessingState={actionProcessingState}
+              actionCurrentPass={actionCurrentPass}
+              actionTotalPasses={actionTotalPasses}
               actionName={actionName}
               actionPicker={
                 <ActionPicker
@@ -1033,19 +1037,25 @@ export default function PersonalNotesView({
 
                     let formattedTranscript = "";
                     let isMeetingNote = false;
+                    // Carried through to the action so a local run can split a
+                    // long transcript on segment boundaries rather than failing.
+                    let labelledSegments: Array<{ label: string; text: string }> = [];
                     if (activeNoteRawTranscript) {
                       const segments = parseTranscriptSegments(activeNoteRawTranscript);
                       if (segments.length > 0) {
                         isMeetingNote = true;
-                        formattedTranscript = segments
-                          .map(
-                            (s) =>
-                              `${s.source === "mic" ? t("notes.speaker.you") : t("notes.speaker.them")}: ${s.text}`
-                          )
+                        labelledSegments = segments.map((s) => ({
+                          label:
+                            s.source === "mic" ? t("notes.speaker.you") : t("notes.speaker.them"),
+                          text: s.text,
+                        }));
+                        formattedTranscript = labelledSegments
+                          .map((s) => `${s.label}: ${s.text}`)
                           .join("\n");
                       }
                       if (!formattedTranscript) {
                         formattedTranscript = activeNoteRawTranscript;
+                        labelledSegments = [];
                       }
                     }
 
@@ -1062,6 +1072,7 @@ export default function PersonalNotesView({
                       {
                         modelId: effectiveModelId,
                         isMeetingNote,
+                        segments: labelledSegments,
                         allowTitleGeneration: isRegenerableNoteTitle(
                           editorNote.title,
                           [

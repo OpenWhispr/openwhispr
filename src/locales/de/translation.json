@@ -1927,8 +1927,10 @@
         "noModel": "Kein KI-Modell ausgewählt. Konfigurieren Sie eins in den Einstellungen.",
         "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen.",
         "actionFailed": "Aktion fehlgeschlagen",
-        "promptTooLong": "Dieses Gespräch ist zu lang für das lokale Modell. Verwenden Sie ein Cloud-Modell oder kürzen Sie die Notiz."
-      }
+        "promptTooLong": "Dieses Gespräch ist zu lang für das lokale Modell. Verwenden Sie ein Cloud-Modell oder kürzen Sie die Notiz.",
+        "partialResult": "Einige Abschnitte dieses Gesprächs konnten nicht verarbeitet werden und sind in den Notizen markiert."
+      },
+      "passProgress": "Durchlauf {{current}} von {{total}}"
     },
     "empty": {
       "title": "Noch keine Notizen hier",

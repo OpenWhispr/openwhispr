@@ -7,11 +7,15 @@ import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 interface ActionProcessingOverlayProps {
   state: ActionProcessingState;
   actionName: string | null;
+  currentPass?: number | null;
+  totalPasses?: number | null;
 }
 
 export default function ActionProcessingOverlay({
   state,
   actionName,
+  currentPass,
+  totalPasses,
 }: ActionProcessingOverlayProps) {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
@@ -34,6 +38,8 @@ export default function ActionProcessingOverlay({
 
   const isSuccess = state === "success";
   const isFadingOut = state === "idle";
+  // A single-call run has nothing to count, so it keeps the indeterminate bar.
+  const isMultiPass = !!currentPass && !!totalPasses && totalPasses > 1;
 
   return (
     <div
@@ -87,10 +93,22 @@ export default function ActionProcessingOverlay({
         ) : (
           <>
             <span className="text-xs font-medium text-accent/70 tracking-tight">{actionName}</span>
+            {isMultiPass ? (
+              <span className="text-[10px] text-accent/50 tracking-tight tabular-nums">
+                {t("notes.actions.passProgress", { current: currentPass, total: totalPasses })}
+              </span>
+            ) : null}
             <div className="w-32 h-0.5 bg-accent/10 rounded-full overflow-hidden">
               <div
-                className="h-full w-1/3 bg-accent/40 rounded-full"
-                style={{ animation: "indeterminate 1.5s ease-in-out infinite" }}
+                className="h-full bg-accent/40 rounded-full"
+                style={
+                  isMultiPass
+                    ? {
+                        width: `${Math.round((currentPass! / totalPasses!) * 100)}%`,
+                        transition: "width 300ms ease-out",
+                      }
+                    : { width: "33%", animation: "indeterminate 1.5s ease-in-out infinite" }
+                }
                 data-scanner-progress=""
               />
             </div>

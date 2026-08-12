@@ -1927,8 +1927,10 @@
         "noModel": "未選擇 AI 模型。請在設定中進行配置。",
         "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。",
         "actionFailed": "操作失敗",
-        "promptTooLong": "這次通話對本機模型來說太長了。請使用雲端模型，或縮短筆記。"
-      }
+        "promptTooLong": "這次通話對本機模型來說太長了。請使用雲端模型，或縮短筆記。",
+        "partialResult": "本次通話的部分內容無法處理，已在筆記中標註。"
+      },
+      "passProgress": "第 {{current}} 遍，共 {{total}} 遍"
     },
     "empty": {
       "title": "這裡還沒有筆記",

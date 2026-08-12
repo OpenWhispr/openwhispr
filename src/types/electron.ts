@@ -815,6 +815,41 @@ declare global {
       }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
 
+      /**
+       * Runs a note action in the main process, splitting a transcript that
+       * exceeds the local model's context into extraction passes followed by a
+       * single compose. Local models only — cloud providers keep the renderer path.
+       */
+      runNoteAction: (payload: {
+        noteId: number;
+        noteContent: string;
+        segments: Array<{ label: string; text: string }>;
+        systemPrompt: string;
+        modelId: string;
+        disableThinking?: boolean;
+      }) => Promise<{
+        success: boolean;
+        text?: string;
+        passes?: number;
+        partial?: boolean;
+        gapCount?: number;
+        error?: string;
+        code?: string;
+      }>;
+      cancelNoteAction: (noteId: number) => Promise<{ success: boolean }>;
+      onNoteActionProgress: (
+        callback: (data: {
+          noteId: number;
+          phase: "extracting" | "folding" | "composing";
+          currentPass: number;
+          totalPasses: number;
+        }) => void
+      ) => () => void;
+      acquireLocalInferenceLease: (options?: {
+        priority?: "interactive" | "batch";
+      }) => Promise<{ success: boolean; leaseId?: string; error?: string; code?: string }>;
+      releaseLocalInferenceLease: (leaseId: string) => Promise<{ success: boolean }>;
+
       // Anthropic reasoning
       processAnthropicReasoning: (
         text: string,

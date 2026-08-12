@@ -380,7 +380,59 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
+  /**
+   * Holds a scheduler lease for the duration of a local stream.
+   *
+   * The local chat path talks to llama-server's HTTP port directly from the
+   * renderer, so it cannot sit inside a main-process lock. Without the lease its
+   * `llamaServerStart` would stop the server out from under an in-flight
+   * multi-pass note action, and the two would restart each other's models.
+   */
+  private async *_withLocalLease<T>(
+    isLocal: boolean,
+    makeGen: () => AsyncGenerator<T, void, unknown>
+  ): AsyncGenerator<T, void, unknown> {
+    if (!isLocal || !window.electronAPI?.acquireLocalInferenceLease) {
+      yield* makeGen();
+      return;
+    }
+
+    const lease = await window.electronAPI.acquireLocalInferenceLease({
+      priority: "interactive",
+    });
+    if (!lease.success || !lease.leaseId) {
+      const error: Error & { code?: string } = new Error(
+        lease.error || "The local model is busy"
+      );
+      error.code = lease.code || "LOCAL_INFERENCE_BUSY";
+      throw error;
+    }
+
+    try {
+      yield* makeGen();
+    } finally {
+      await window.electronAPI.releaseLocalInferenceLease(lease.leaseId);
+    }
+  }
+
   async *processTextStreaming(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string }
+  ): AsyncGenerator<string, void, unknown> {
+    const isLocal =
+      resolveChatRoute({
+        provider,
+        lanUrl: config.lanUrl,
+        customApiKey: config.customApiKey,
+      }).kind === "local";
+    yield* this._withLocalLease(isLocal, () =>
+      this._streamTokens(messages, model, provider, config)
+    );
+  }
+
+  private async *_streamTokens(
     messages: Array<{ role: string; content: string }>,
     model: string,
     provider: string,
@@ -597,6 +649,25 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    const isLocal =
+      resolveChatRoute({
+        provider,
+        lanUrl: config.lanUrl,
+        customApiKey: config.customApiKey,
+        isEnterpriseProvider: isEnterpriseProvider(provider),
+      }).kind === "local";
+    yield* this._withLocalLease(isLocal, () =>
+      this._streamAI(messages, model, provider, config, tools)
+    );
+  }
+
+  private async *_streamAI(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    tools?: Record<string, import("ai").Tool>
+  ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     const route = resolveChatRoute({
       provider,
       lanUrl: config.lanUrl,
@@ -608,7 +679,8 @@ class ReasoningService extends BaseReasoningService {
     const isLanChat = route.kind === "self-hosted";
 
     if ((isLocalProvider || isLanChat) && !tools) {
-      const contentGen = this.processTextStreaming(messages, model, provider, config);
+      // Inner generator: this call already holds the lease.
+      const contentGen = this._streamTokens(messages, model, provider, config);
       for await (const text of contentGen) {
         yield { type: "content", text };
       }

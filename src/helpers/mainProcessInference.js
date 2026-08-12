@@ -11,7 +11,10 @@ class MainProcessInference {
     this._env = environmentManager;
   }
 
-  async processText(text, { provider, model, systemPrompt, temperature = 0.3, maxTokens }) {
+  async processText(
+    text,
+    { provider, model, systemPrompt, temperature = 0.3, maxTokens, priority = "batch" }
+  ) {
     const resolved = MainProcessInference.resolveProvider(provider, model);
     const handler = this._providers[resolved];
     if (!handler) {
@@ -21,7 +24,7 @@ class MainProcessInference {
           `Set this in Settings > AI Models > Note Formatting.`
       );
     }
-    return handler.call(this, text, { model, systemPrompt, temperature, maxTokens });
+    return handler.call(this, text, { model, systemPrompt, temperature, maxTokens, priority });
   }
 
   /**
@@ -47,12 +50,15 @@ class MainProcessInference {
     };
   }
 
-  async _callLocal(text, { model, systemPrompt, temperature, maxTokens }) {
+  async _callLocal(text, { model, systemPrompt, temperature, maxTokens, priority }) {
     const LocalReasoningService = require("../services/localReasoningBridge").default;
     return LocalReasoningService.processText(text, model, {
       systemPrompt,
       temperature,
       maxTokens,
+      // The post-call pipeline is background work; it must never preempt the
+      // dictation the user is waiting on.
+      priority: priority || "batch",
     });
   }
 

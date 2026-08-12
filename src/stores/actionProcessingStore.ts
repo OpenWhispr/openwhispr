@@ -11,11 +11,24 @@ export type ActionProcessingStatus = "idle" | "processing" | "success";
 export interface NoteActionState {
   status: ActionProcessingStatus;
   actionName: string | null;
+  /** Only set for a multi-pass local run; a single call leaves these null. */
+  phase?: "extracting" | "folding" | "composing" | null;
+  currentPass?: number | null;
+  totalPasses?: number | null;
+  /** True when some section could not be extracted and was marked as a gap. */
+  partial?: boolean;
+}
+
+export interface TranscriptSegmentPayload {
+  label: string;
+  text: string;
 }
 
 export interface ActionErrorEvent {
   noteId: number;
   message: string;
+  /** "warning" is used for a run that finished with a gap in it. */
+  severity?: "error" | "warning";
 }
 
 interface ActionProcessingStoreState {
@@ -27,7 +40,31 @@ const cancelledFlags = new Map<number, boolean>();
 const processingFlags = new Map<number, boolean>();
 const successTimers = new Map<number, NodeJS.Timeout>();
 
-const IDLE_STATE: NoteActionState = { status: "idle", actionName: null };
+const IDLE_STATE: NoteActionState = {
+  status: "idle",
+  actionName: null,
+  phase: null,
+  currentPass: null,
+  totalPasses: null,
+  partial: false,
+};
+
+let progressUnsubscribe: (() => void) | null = null;
+
+/**
+ * Multi-pass runs report progress from the main process. Subscribing lazily
+ * keeps this store usable in tests and in the dictation window, neither of which
+ * has the listener bridged.
+ */
+function ensureProgressSubscription() {
+  if (progressUnsubscribe || typeof window === "undefined") return;
+  const onProgress = window.electronAPI?.onNoteActionProgress;
+  if (!onProgress) return;
+  progressUnsubscribe = onProgress(({ noteId, phase, currentPass, totalPasses }) => {
+    if (!processingFlags.get(noteId)) return;
+    setNoteState(noteId, { phase, currentPass, totalPasses });
+  });
+}
 
 function setNoteState(noteId: number, patch: Partial<NoteActionState>) {
   const { noteStates } = useActionProcessingStore.getState();
@@ -108,6 +145,13 @@ export interface RunActionOptions {
   isMeetingNote?: boolean;
   /** Opt-in so enhancement never renames a note the user has titled. */
   allowTitleGeneration?: boolean;
+  /**
+   * Speaker-labelled transcript segments, carried so a local run can split a
+   * transcript on segment boundaries. The main process cannot read these from
+   * the database: the editor buffer and the realtime transcript are both ahead
+   * of the stored copy, which is only flushed every 30 seconds.
+   */
+  segments?: TranscriptSegmentPayload[];
 }
 
 export interface RunActionLabels {
@@ -115,6 +159,7 @@ export interface RunActionLabels {
   noEndpoint: string;
   actionFailed: string;
   promptTooLong: string;
+  partialResult: string;
 }
 
 /**
@@ -161,12 +206,40 @@ export function runBackgroundAction(
         options.isMeetingNote ? settings.customDictionary : undefined,
         settings.uiLanguage
       );
-      const enhanced = await reasoningService.processText(noteContent, modelId, null, {
-        systemPrompt,
-        temperature: 0.3,
-        disableThinking: settings.noteFormattingDisableThinking,
-        ...providerOverrides,
-      });
+      // Local models get the main-process runner: it can split a transcript
+      // that exceeds the context into passes, and it shares the scheduler that
+      // keeps a long run from starving dictation. Every other provider keeps
+      // today's single renderer call — no cloud model declares a context length,
+      // so there is nothing to chunk against.
+      let enhanced: string;
+      let partial = false;
+      if (noteFormatting.mode === "local" && window.electronAPI?.runNoteAction) {
+        ensureProgressSubscription();
+        const result = await window.electronAPI.runNoteAction({
+          noteId,
+          noteContent,
+          segments: options.segments ?? [],
+          systemPrompt,
+          modelId,
+          disableThinking: settings.noteFormattingDisableThinking,
+        });
+        if (!result.success || typeof result.text !== "string") {
+          const error: Error & { code?: string } = new Error(
+            result.error || labels.actionFailed
+          );
+          error.code = result.code;
+          throw error;
+        }
+        enhanced = result.text;
+        partial = result.partial === true;
+      } else {
+        enhanced = await reasoningService.processText(noteContent, modelId, null, {
+          systemPrompt,
+          temperature: 0.3,
+          disableThinking: settings.noteFormattingDisableThinking,
+          ...providerOverrides,
+        });
+      }
 
       if (cancelledFlags.get(noteId)) return;
 
@@ -186,7 +259,21 @@ export function runBackgroundAction(
       if (title) updates.title = title;
       await window.electronAPI.updateNote(noteId, updates);
 
-      setNoteState(noteId, { status: "success", actionName: action.name });
+      if (partial) {
+        // A note with a hole in it must say so. Silently handing back notes
+        // that are missing a stretch of the call is the failure this whole
+        // feature exists to prevent.
+        pushErrorEvent({ noteId, message: labels.partialResult, severity: "warning" });
+      }
+
+      setNoteState(noteId, {
+        status: "success",
+        actionName: action.name,
+        phase: null,
+        currentPass: null,
+        totalPasses: null,
+        partial,
+      });
 
       const timer = setTimeout(() => {
         processingFlags.set(noteId, false);
@@ -212,10 +299,15 @@ export function runBackgroundAction(
   })();
 }
 
-/** Soft cancel: the HTTP request continues but the result is discarded. */
+/**
+ * Cloud calls are cancelled softly — the request continues and the result is
+ * discarded. A local multi-pass run is told to stop for real, so cancelling a
+ * ten-minute job stops it after the pass in flight rather than at the end.
+ */
 export function cancelAction(noteId: number): void {
   cancelledFlags.set(noteId, true);
   processingFlags.set(noteId, false);
+  window.electronAPI?.cancelNoteAction?.(noteId).catch(() => {});
   const timer = successTimers.get(noteId);
   if (timer) {
     clearTimeout(timer);
