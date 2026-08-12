@@ -30,6 +30,7 @@ import {
   isProviderAllowedByPolicy,
   reconcileCloudProviderSelection,
   shouldPersistProviderFallback,
+  type TranscriptionPolicyContext,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
@@ -190,6 +191,8 @@ function LocalModelCard({
 }
 
 interface TranscriptionModelPickerProps {
+  /** Settings scope whose provider/model keys this picker edits. */
+  transcriptionContext?: TranscriptionPolicyContext;
   selectedCloudProvider: string;
   onCloudProviderSelect: (providerId: string) => void;
   selectedCloudModel: string;
@@ -327,6 +330,7 @@ function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
 }
 
 export default function TranscriptionModelPicker({
+  transcriptionContext = "dictation",
   selectedCloudProvider,
   onCloudProviderSelect,
   selectedCloudModel,
@@ -345,6 +349,9 @@ export default function TranscriptionModelPicker({
   streamingOnly = false,
 }: TranscriptionModelPickerProps) {
   const { t } = useTranslation();
+  const switchCloudTranscriptionProvider = useSettingsStore(
+    (s) => s.switchCloudTranscriptionProvider
+  );
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
@@ -670,22 +677,17 @@ export default function TranscriptionModelPicker({
   // Never writes cloudTranscriptionBaseUrl: that key is the Custom tab's only
   // storage, and built-in providers resolve their endpoints from the registry
   // at request time — writing it here destroyed the user's URL (#1459).
+  // switchCloudTranscriptionProvider owns the model slot: it remembers the
+  // outgoing provider's model and restores the incoming one, so this handler
+  // must not write the model itself. onCloudProviderSelect still runs so
+  // parents with derived state (e.g. onboarding) stay in sync.
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
       if (!providerAllowed(providerId)) return;
+      switchCloudTranscriptionProvider(transcriptionContext, providerId);
       onCloudProviderSelect(providerId);
-      const provider = cloudProviders.find((p) => p.id === providerId);
-
-      if (providerId === "custom") {
-        onCloudModelSelect("whisper-1");
-        return;
-      }
-
-      if (provider?.models?.length) {
-        onCloudModelSelect(provider.models[0].id);
-      }
     },
-    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, providerAllowed]
+    [onCloudProviderSelect, providerAllowed, switchCloudTranscriptionProvider, transcriptionContext]
   );
 
   const handleLocalProviderChange = useCallback(
@@ -731,8 +733,8 @@ export default function TranscriptionModelPicker({
       for (const provider of cloudProviders) {
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);
         if (normalized === providerNormalized) {
+          switchCloudTranscriptionProvider(transcriptionContext, provider.id);
           onCloudProviderSelect(provider.id);
-          onCloudModelSelect("whisper-1");
           break;
         }
       }
@@ -742,7 +744,8 @@ export default function TranscriptionModelPicker({
     selectedCloudProvider,
     setCloudTranscriptionBaseUrl,
     onCloudProviderSelect,
-    onCloudModelSelect,
+    switchCloudTranscriptionProvider,
+    transcriptionContext,
     cloudProviders,
   ]);
 

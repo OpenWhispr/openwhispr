@@ -599,6 +599,9 @@ export interface SettingsState
   uploadCloudTranscriptionBaseUrl: string;
   uploadCloudTranscriptionMode: string;
 
+  /** Last model used per scope+provider (`"<context>:<providerId>"`), so switching providers restores it. */
+  transcriptionModelByProvider: Record<string, string>;
+
   noteFormattingMode: InferenceMode;
   noteFormattingProvider: string;
   noteFormattingModel: string;
@@ -734,6 +737,10 @@ export interface SettingsState
   setCloudTranscriptionModel: (value: string) => void;
   setCloudTranscriptionBaseUrl: (value: string) => void;
   setCloudTranscriptionMode: (value: string) => void;
+  switchCloudTranscriptionProvider: (
+    context: TranscriptionPolicyContext,
+    providerId: string
+  ) => void;
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
@@ -876,6 +883,11 @@ function createStringSetter(key: string) {
     if (isBrowser) localStorage.setItem(key, value);
     useSettingsStore.setState({ [key]: value });
   };
+}
+
+function persistTranscriptionModelMemory(memory: Record<string, string>) {
+  if (isBrowser) localStorage.setItem("transcriptionModelByProvider", JSON.stringify(memory));
+  useSettingsStore.setState({ transcriptionModelByProvider: memory });
 }
 
 /** Writes a string setting whose key is computed rather than known up front. */
@@ -1098,6 +1110,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "cloudTranscriptionBaseUrl",
     API_ENDPOINTS.TRANSCRIPTION_BASE
   ),
+  transcriptionModelByProvider: (() => {
+    try {
+      const parsed = JSON.parse(readString("transcriptionModelByProvider", "{}"));
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, string>)
+        : {};
+    } catch {
+      return {};
+    }
+  })(),
   // Secrets aren't hydrated yet at construction; the BYOK default is set
   // post-hydration in initializeSettings.
   cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
@@ -1557,6 +1579,37 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
+
+  // Every provider shares one model slot per scope, so a plain provider write
+  // destroys the outgoing provider's model (the "Parasail" wipe). This setter
+  // remembers the outgoing model and restores the incoming provider's last one.
+  switchCloudTranscriptionProvider: (context, providerId) => {
+    const s = useSettingsStore.getState();
+    const keys = TRANSCRIPTION_CONTEXT_KEYS.find((entry) => entry.context === context);
+    if (!keys) return;
+    // Meeting/upload raw keys default to "" (inherit from dictation), so work
+    // against resolved values. Restoring writes a concrete model — the scope
+    // stops inheriting the dictation model from that point on.
+    const outgoingProvider = (s[keys.provider] as string) || s.cloudTranscriptionProvider;
+    if (outgoingProvider === providerId) {
+      setStringSetting(keys.provider, providerId);
+      return;
+    }
+    const outgoingModel = (s[keys.model] as string) || s.cloudTranscriptionModel;
+    const memory = { ...s.transcriptionModelByProvider };
+    if (outgoingProvider && outgoingModel) {
+      memory[`${context}:${outgoingProvider}`] = outgoingModel;
+      persistTranscriptionModelMemory(memory);
+    }
+    const remembered = memory[`${context}:${providerId}`];
+    setStringSetting(keys.provider, providerId);
+    setStringSetting(
+      keys.model,
+      remembered && transcriptionModelBelongsToProvider(providerId, remembered, context)
+        ? remembered
+        : defaultTranscriptionModel(providerId, context)
+    );
+  },
   setCloudTranscriptionMode: createStringSetter("cloudTranscriptionMode"),
   setCleanupCloudMode: createStringSetter("cleanupCloudMode"),
   setCleanupCloudBaseUrl: createStringSetter("cleanupCloudBaseUrl"),
@@ -2084,6 +2137,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
     s.setUploadCloudTranscriptionProvider(cloudTranscriptionProvider);
     s.setUploadCloudTranscriptionModel(cloudTranscriptionModel);
+    // Seed the per-provider model memory so a later provider switch-and-return
+    // in any scope restores the model onboarding chose.
+    if (cloudTranscriptionProvider && cloudTranscriptionModel) {
+      const memory = { ...useSettingsStore.getState().transcriptionModelByProvider };
+      for (const { context } of TRANSCRIPTION_CONTEXT_KEYS) {
+        memory[`${context}:${cloudTranscriptionProvider}`] = cloudTranscriptionModel;
+      }
+      persistTranscriptionModelMemory(memory);
+    }
   },
 
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => {

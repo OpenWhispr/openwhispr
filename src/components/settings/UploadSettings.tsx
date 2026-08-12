@@ -99,6 +99,7 @@ export function UploadTranscriptionPanel() {
 
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
     <TranscriptionModelPicker
+      transcriptionContext="upload"
       selectedCloudProvider={uploadCloudTranscriptionProvider}
       onCloudProviderSelect={setUploadCloudTranscriptionProvider}
       selectedCloudModel={uploadCloudTranscriptionModel}
