@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = () => import("../../src/utils/participants.ts");
+const load = async () => {
+  const m = await import("../../src/utils/participants.ts");
+  return m.default || m;
+};
 
 test("returns positive integer expected_speaker_count verbatim", async () => {
   const { resolveExpectedSpeakerCount } = await load();
