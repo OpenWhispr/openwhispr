@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A long note that cannot be processed now says so immediately** instead of working through it for hours and failing at the end. When the available memory is too small for a transcript of that length, the app can tell in a moment, and it now says which of the two problems it is — not enough memory, or a note that is too long — rather than a generic message.
 - **Note generation stops itself if it starts dragging.** If passes begin taking far longer than the ones before them — the sign that the machine is struggling — the run stops rather than continuing and making things worse. There is also an overall time limit.
 - **A stuck pass is no longer retried three times.** A request that has already run out of time, or a model that was killed while loading, is retried once rather than three more times, which previously meant tens of minutes of the same problem. The window before a stuck pass gives up is back to 5 minutes, from the 15 introduced in 1.16.0.
+- **Saved meeting audio is no longer deleted while the meeting is still unprocessed.** Recordings were cleared after 30 days regardless of whether notes had ever been generated from them — so a meeting you put off would quietly become unprocessable. A meeting with no notes yet now keeps its audio until it has been processed. Recording itself was never affected; the audio was always saved.
 - Every one of these now shows a message in your language rather than raw English.
 
 ## [1.16.0] - 2026-08-12

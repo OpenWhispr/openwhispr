@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
+const { planAudioCleanup } = require("./audioRetention");
 
 class AudioStorageManager {
   constructor() {
@@ -102,40 +103,58 @@ class AudioStorageManager {
   cleanupExpiredAudio(retentionDays, databaseManager) {
     try {
       const cutoffMs = Date.now() - retentionDays * 86400000;
-      const files = fs.readdirSync(this.audioDir).filter(
-        (f) => f.endsWith(".webm") || f.endsWith(".opus")
-      );
-      const expiredTranscriptionIds = [];
-      const expiredNoteIds = new Set();
-      let kept = 0;
+      const names = fs
+        .readdirSync(this.audioDir)
+        .filter((f) => f.endsWith(".webm") || f.endsWith(".opus"));
 
-      for (const file of files) {
-        const filePath = path.join(this.audioDir, file);
+      const files = [];
+      for (const name of names) {
         try {
-          const stats = fs.statSync(filePath);
-          if (stats.mtimeMs < cutoffMs) {
-            fs.unlinkSync(filePath);
-            if (file.endsWith(".webm")) {
-              // Extract ID from "OpenWhispr-...-{id}.webm" or legacy "{id}.webm"
-              const basename = path.basename(file, ".webm");
-              const lastDash = basename.lastIndexOf("-");
-              const id = lastDash !== -1 ? basename.slice(lastDash + 1) : basename;
-              expiredTranscriptionIds.push(id);
-            } else if (file.endsWith(".opus")) {
-              // Extract noteId from "OpenWhispr-meeting-{noteId}-{stamp}-{track}.opus"
-              const match = file.match(/^OpenWhispr-meeting-(\d+)-/);
-              if (match) expiredNoteIds.add(Number(match[1]));
-            }
-          } else {
-            kept++;
-          }
+          files.push({ name, mtimeMs: fs.statSync(path.join(this.audioDir, name)).mtimeMs });
         } catch (error) {
           debugLogger.error(
             "Failed to process audio file during cleanup",
-            { file, error: error.message },
+            { file: name, error: error.message },
             "audio-storage"
           );
         }
+      }
+
+      // A meeting with no generated notes keeps its audio however old it is:
+      // the app asks users to defer processing when memory is tight, and a
+      // deferral that expires is data loss, not housekeeping.
+      const plan = planAudioCleanup({
+        files,
+        cutoffMs,
+        isMeetingUnprocessed: (noteId) => {
+          const note = databaseManager?.getNote?.(noteId);
+          if (!note) return false;
+          return !String(note.enhanced_content || "").trim();
+        },
+      });
+
+      for (const name of plan.deleteFiles) {
+        try {
+          fs.unlinkSync(path.join(this.audioDir, name));
+        } catch (error) {
+          debugLogger.error(
+            "Failed to delete expired audio file",
+            { file: name, error: error.message },
+            "audio-storage"
+          );
+        }
+      }
+
+      const expiredTranscriptionIds = plan.expiredTranscriptionIds;
+      const expiredNoteIds = plan.expiredNoteIds;
+      const kept = plan.keptCount;
+
+      if (plan.retainedNoteIds.size > 0) {
+        debugLogger.notice(
+          "Kept expired audio for meetings that were never processed",
+          { noteIds: [...plan.retainedNoteIds], retentionDays },
+          "audio-storage"
+        );
       }
 
       if (expiredTranscriptionIds.length > 0 && databaseManager) {
