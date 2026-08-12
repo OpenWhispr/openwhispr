@@ -109,6 +109,14 @@ export function isWebSearchAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.webSearchEnabled);
 }
 
+/**
+ * Whether the voice agent may attach screen context. Servers that predate the
+ * field send none; absent means allowed.
+ */
+export function isScreenContextAllowed(state: PolicyDecisionSnapshot): boolean {
+  return managedPolicyDecision(state, (policy) => policy.features.screenContextEnabled !== false);
+}
+
 /** Whether cloud backup/sync is allowed. */
 export function isCloudBackupAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.dataRetention.cloudBackupAllowed);

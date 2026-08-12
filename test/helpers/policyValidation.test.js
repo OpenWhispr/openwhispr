@@ -46,6 +46,25 @@ test("ignores stale additive analytics metadata", () => {
   assert.equal(isValidPolicyShape(policy), true);
 });
 
+test("accepts screenContextEnabled as an optional boolean", () => {
+  for (const value of [true, false]) {
+    const policy = validPolicy();
+    policy.features.screenContextEnabled = value;
+    assert.equal(isValidPolicyShape(policy), true, String(value));
+  }
+
+  // Servers that predate the field omit it — the old-server contract.
+  assert.equal(isValidPolicyShape(validPolicy()), true);
+});
+
+test("rejects a malformed screenContextEnabled", () => {
+  for (const value of [null, "off", 1]) {
+    const policy = validPolicy();
+    policy.features.screenContextEnabled = value;
+    assert.equal(isValidPolicyShape(policy), false, String(value));
+  }
+});
+
 test("requires the supported policy schema version", () => {
   for (const version of [undefined, null, 0, 2, "1"]) {
     const policy = validPolicy();

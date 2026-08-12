@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Monitor } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { isAgentAllowed } from "../../stores/policyRules";
+import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useAgentName } from "../../utils/agentName";
 import { useDialogs } from "../../hooks/useDialogs";
@@ -33,6 +33,10 @@ export default function DictationAgentSettings() {
     request: requestScreenAccess,
   } = useScreenRecordingPermission();
   const agentAllowed = usePolicyStore(isAgentAllowed);
+  const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
+  // Display the effective value: an org that forces the feature off shows the
+  // toggle off while the raw preference survives for when the policy lifts.
+  const screenContextActive = voiceAgentScreenContext && screenContextAllowed;
 
   const { agentName, setAgentName } = useAgentName();
   const [agentNameInput, setAgentNameInput] = useState(agentName);
@@ -173,19 +177,21 @@ export default function DictationAgentSettings() {
               <SettingsRow
                 label={t("dictationAgent.screenContext.enable")}
                 description={
-                  screenSupported
-                    ? t("dictationAgent.screenContext.enableDescription")
-                    : t("dictationAgent.screenContext.unsupported")
+                  !screenContextAllowed
+                    ? t("common.managedByOrg")
+                    : screenSupported
+                      ? t("dictationAgent.screenContext.enableDescription")
+                      : t("dictationAgent.screenContext.unsupported")
                 }
               >
                 <Toggle
-                  checked={voiceAgentScreenContext}
+                  checked={screenContextActive}
                   onChange={handleScreenContextToggle}
-                  disabled={!screenSupported}
+                  disabled={!screenSupported || !screenContextAllowed}
                 />
               </SettingsRow>
             </SettingsPanelRow>
-            {voiceAgentScreenContext && (
+            {screenContextActive && (
               <SettingsPanelRow>
                 <SettingsRow
                   label={t("dictationAgent.screenContext.visionModel")}
@@ -199,7 +205,7 @@ export default function DictationAgentSettings() {
               </SettingsPanelRow>
             )}
           </SettingsPanel>
-          {voiceAgentScreenContext && isMacOS && !screenGranted && (
+          {screenContextActive && isMacOS && !screenGranted && (
             <PermissionCard
               icon={Monitor}
               title={t("dictationAgent.screenContext.permissionTitle")}
@@ -209,12 +215,12 @@ export default function DictationAgentSettings() {
               buttonText={t("onboarding.permissions.grantAccess")}
             />
           )}
-          {voiceAgentScreenContext && isMacOS && screenNeedsRelaunch && (
+          {screenContextActive && isMacOS && screenNeedsRelaunch && (
             <p className="text-[11px] text-warning/80 leading-snug">
               {t("dictationAgent.screenContext.relaunchHint")}
             </p>
           )}
-          {voiceAgentScreenContext && useDictationAgentVisionModel && (
+          {screenContextActive && useDictationAgentVisionModel && (
             <InferenceConfigEditor
               scope="dictationAgentVision"
               allowedModes={["openwhispr", "providers"]}

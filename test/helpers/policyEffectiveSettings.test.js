@@ -236,3 +236,41 @@ test("Note Recording never inherits an unsupported self-hosted policy fallback",
   assert.equal(effective.meetingTranscriptionMode, "local");
   assert.equal(effective.meetingUseLocalWhisper, true);
 });
+
+test("a managed screen-context denial forces the effective setting off without touching the preference", async (t) => {
+  const browser = installBrowserGlobals(t, {
+    initialStorage: { voiceAgentScreenContext: "true" },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-policy-screen-context-test-",
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { getSettings, useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+
+  usePolicyStore.setState({
+    status: "managed",
+    managed: true,
+    policy: {
+      ...managedPolicy,
+      features: { ...managedPolicy.features, screenContextEnabled: false },
+    },
+    appVersion: "1.8.1",
+  });
+
+  assert.equal(getSettings().voiceAgentScreenContext, false);
+  // The raw preference survives the policy for when it lifts.
+  assert.equal(useSettingsStore.getState().voiceAgentScreenContext, true);
+  assert.equal(browser.storage.getItem("voiceAgentScreenContext"), "true");
+
+  // A policy that omits the field (older server) leaves the setting alone.
+  usePolicyStore.setState({
+    status: "managed",
+    managed: true,
+    policy: managedPolicy,
+    appVersion: "1.8.1",
+  });
+  assert.equal(getSettings().voiceAgentScreenContext, true);
+
+  usePolicyStore.setState({ status: "unmanaged", managed: false, policy: null });
+  assert.equal(getSettings().voiceAgentScreenContext, true);
+});

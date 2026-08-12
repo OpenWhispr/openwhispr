@@ -38,6 +38,9 @@ function isValidPolicyShape(policy) {
     isKnownList(policy.llm.allowedEnterpriseProviders, ENTERPRISE_PROVIDERS) &&
     typeof policy.features?.agentEnabled === "boolean" &&
     typeof policy.features?.webSearchEnabled === "boolean" &&
+    // Additive within policy version 1: absent (older server) means allowed.
+    (policy.features?.screenContextEnabled === undefined ||
+      typeof policy.features.screenContextEnabled === "boolean") &&
     SHARING_MODES.includes(policy.sharing?.externalLinkSharing) &&
     LOCAL_HISTORY_MODES.includes(policy.dataRetention?.localHistoryMode) &&
     typeof policy.dataRetention?.cloudBackupAllowed === "boolean" &&

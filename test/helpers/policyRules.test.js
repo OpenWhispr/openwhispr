@@ -661,6 +661,42 @@ test("active control-panel views reroute on their specific policy capability", a
   assert.equal(isControlPanelViewAllowed("home", false, false), true);
 });
 
+test("screen context is allowed unless a managed policy turns it off", async () => {
+  const { isScreenContextAllowed } = await load();
+
+  assert.equal(isScreenContextAllowed({ status: "idle", policy: null, appVersion: null }), true);
+  assert.equal(
+    isScreenContextAllowed({ status: "unmanaged", policy: null, appVersion: null }),
+    true
+  );
+  // Fail closed while the managed verdict is unknown.
+  assert.equal(
+    isScreenContextAllowed({ status: "loading", policy: null, appVersion: null }),
+    false
+  );
+  assert.equal(isScreenContextAllowed({ status: "error", policy: null, appVersion: null }), false);
+
+  // The shared fixture omits the field — the old-server contract: allowed.
+  assert.equal(isScreenContextAllowed({ status: "managed", policy, appVersion: null }), true);
+  const withFlag = (screenContextEnabled) => ({
+    status: "managed",
+    policy: { ...policy, features: { ...policy.features, screenContextEnabled } },
+    appVersion: null,
+  });
+  assert.equal(isScreenContextAllowed(withFlag(true)), true);
+  assert.equal(isScreenContextAllowed(withFlag(false)), false);
+
+  // An org-required update denies everything, screen context included.
+  assert.equal(
+    isScreenContextAllowed({
+      status: "managed",
+      policy: { ...policy, minAppVersion: "9.9.9" },
+      appVersion: "1.8.1",
+    }),
+    false
+  );
+});
+
 test("cloud-backup resume fires only on a denial-to-grant transition", async () => {
   const { cloudBackupResumed } = await load();
   const unmanaged = { status: "unmanaged", policy: null, appVersion: null };

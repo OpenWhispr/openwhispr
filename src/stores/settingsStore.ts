@@ -31,6 +31,7 @@ import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
 import {
   getTranscriptionSelection,
+  isScreenContextAllowed,
   resolveEffectivePolicySelection,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
@@ -2530,6 +2531,8 @@ export function selectPolicyEffectiveSettings(
 
   const effective = { ...state };
   const writable = effective as unknown as Record<string, unknown>;
+
+  if (!isScreenContextAllowed(policyState)) writable.voiceAgentScreenContext = false;
 
   for (const keys of TRANSCRIPTION_CONTEXT_KEYS) {
     const rawSelection = getTranscriptionSelection(state, keys.context);

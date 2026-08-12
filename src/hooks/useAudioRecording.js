@@ -7,7 +7,11 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
-import { isAgentAllowed, isTranscriptionContextAllowed } from "../stores/policyRules";
+import {
+  isAgentAllowed,
+  isScreenContextAllowed,
+  isTranscriptionContextAllowed,
+} from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
@@ -73,7 +77,14 @@ export const useAudioRecording = (toast, options = {}) => {
             "reasoning"
           );
         }
-        if (voiceAgentRequested && getSettings().voiceAgentScreenContext) {
+        // getSettings() already reflects a managed policy that forces the
+        // setting off; the predicate additionally fails closed while the
+        // policy is still loading or errored.
+        if (
+          voiceAgentRequested &&
+          getSettings().voiceAgentScreenContext &&
+          isScreenContextAllowed(policyState)
+        ) {
           audioManagerRef.current.beginScreenContextCapture();
         }
 
@@ -358,6 +369,11 @@ export const useAudioRecording = (toast, options = {}) => {
     // Keep overlay content protection in sync with the screen-context setting
     // so the dictation pill stays out of captures (survives window recreation).
     window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
+    // A policy refresh can flip the effective screen-context value mid-session;
+    // re-sync overlay content protection when it does.
+    const unsubscribePolicy = usePolicyStore.subscribe(() => {
+      window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
+    });
     window.electronAPI.getSttConfig?.().then((config) => {
       if (config?.success && audioManagerRef.current) {
         audioManagerRef.current.setSttConfig(config);
@@ -443,6 +459,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Cleanup
     return () => {
+      unsubscribePolicy();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();
