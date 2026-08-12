@@ -53,6 +53,7 @@ const {
   canAutoRelabelSpeaker,
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
+const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
 const postMigrationDetector = require("./postMigrationDetector");
 const screenContextCapture = require("./screenContextCapture");
@@ -789,9 +790,9 @@ class IPCHandlers {
   }
 
   _noteExpectedSpeakerCountOrNull(note) {
-    const stored = Number(note?.expected_speaker_count);
-    if (Number.isFinite(stored) && stored > 0) {
-      return Math.min(stored, MAX_SPEAKER_COUNT);
+    const stored = normalizeStoredSpeakerCount(note?.expected_speaker_count);
+    if (stored != null) {
+      return stored;
     }
     const others = this._parseNonSelfParticipants(note?.participants).length;
     if (others > 0) {
