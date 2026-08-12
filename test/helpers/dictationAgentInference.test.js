@@ -227,3 +227,52 @@ test("enterprise mode with a missing provider fails closed", async () => {
   assert.equal(result.reachable, false);
   assert.equal(result.config.provider, undefined);
 });
+
+test("vision override runs as the dictation agent scope and inherits key with endpoint", async () => {
+  const { resolveDictationAgentVisionInference } = await load();
+
+  const result = resolveDictationAgentVisionInference({
+    ...baseSettings,
+    dictationAgentProvider: "custom",
+    dictationAgentCloudBaseUrl: "https://agent.example.com/v1",
+    dictationAgentCustomApiKey: "agent-key",
+    useDictationAgentVisionModel: true,
+    dictationAgentVisionMode: "providers",
+    dictationAgentVisionProvider: "",
+    dictationAgentVisionModel: "vision-model",
+    dictationAgentVisionCloudBaseUrl: "",
+    dictationAgentVisionCustomApiKey: "",
+  });
+
+  assert.equal(result.config.inferenceScope, "dictationAgent");
+  assert.equal(result.config.baseUrl, "https://agent.example.com/v1");
+  assert.equal(
+    result.config.customApiKey,
+    "agent-key",
+    "an inherited endpoint must carry the agent's key with it"
+  );
+});
+
+test("a vision scope with its own endpoint never borrows the agent's key", async () => {
+  const { resolveDictationAgentVisionInference } = await load();
+
+  const result = resolveDictationAgentVisionInference({
+    ...baseSettings,
+    dictationAgentProvider: "custom",
+    dictationAgentCloudBaseUrl: "https://agent.example.com/v1",
+    dictationAgentCustomApiKey: "agent-key",
+    useDictationAgentVisionModel: true,
+    dictationAgentVisionMode: "providers",
+    dictationAgentVisionProvider: "custom",
+    dictationAgentVisionModel: "vision-model",
+    dictationAgentVisionCloudBaseUrl: "https://vision.example.com/v1",
+    dictationAgentVisionCustomApiKey: "",
+  });
+
+  assert.equal(result.config.baseUrl, "https://vision.example.com/v1");
+  assert.equal(
+    result.config.customApiKey,
+    undefined,
+    "the agent's key must not ride to the vision scope's own endpoint"
+  );
+});

@@ -180,12 +180,20 @@ if (typeof window !== "undefined") {
   });
 }
 
+// The vision override is the dictation agent's image lane; it has no managed
+// scope of its own (enterprise envelopes predate it), so managed resolution
+// follows the agent scope instead of failing as an unknown scope.
+const MANAGED_SCOPE_ALIASES: Partial<Record<InferenceScope, InferenceScope>> = {
+  dictationAgentVision: "dictationAgent",
+};
+
 function resolveScope(
   config: ManagedEnterpriseConfig | null,
-  scope: InferenceScope,
+  requestedScope: InferenceScope,
   setupMode: EnterpriseSetupMode,
   failClosed: boolean
 ): ManagedEnterpriseScopeResolution {
+  const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
   if (!config && failClosed) {
     return {
       kind: "error",

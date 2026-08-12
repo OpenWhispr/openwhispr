@@ -407,7 +407,9 @@ export function getModelProvider(modelId: string): string {
       return "local";
   }
 
-  return model?.provider || "openai";
+  // No default: an unrecognized model must fail closed at dispatch instead of
+  // being routed to OpenAI with whatever key that attaches.
+  return model?.provider || "";
 }
 
 // Local catalog IDs group models for selection and downloads, but all execute

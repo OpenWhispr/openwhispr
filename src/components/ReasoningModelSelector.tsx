@@ -67,6 +67,11 @@ interface ReasoningModelSelectorProps {
   setCustomReasoningApiKey?: (key: string) => void;
   setReasoningMode?: (mode: InferenceMode) => void;
   mode?: "cloud" | "local";
+  /**
+   * Scope-aware provider switch (switchReasoningProvider) with per-provider
+   * model memory; receives the provider default for when nothing is remembered.
+   */
+  onCloudProviderSelect?: (provider: string, fallbackModel: string) => void;
 }
 
 function GpuStatusBadge() {
@@ -331,6 +336,7 @@ export default function ReasoningModelSelector({
   setCustomReasoningApiKey,
   setReasoningMode: setReasoningModeProp,
   mode,
+  onCloudProviderSelect,
 }: ReasoningModelSelectorProps) {
   const { t } = useTranslation();
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
@@ -475,27 +481,31 @@ export default function ReasoningModelSelector({
     return new Set<string>();
   }, []);
 
-  const selectDefaultModelForProvider = useCallback(
-    (provider: string) => {
+  const defaultModelForProvider = useCallback(
+    (provider: string): string => {
       // Custom/OpenRouter fetch their model list dynamically — clear instead of
       // presetting so another provider's model id can't persist under this one.
-      if (provider === "custom" || provider === OPENROUTER_TAB) {
-        setReasoningModel("");
-        return;
-      }
-
-      if (provider === "tinfoil") {
-        const defaultModel = pickDefaultTinfoilModel(tinfoilModels);
-        if (defaultModel) setReasoningModel(defaultModel.id);
-        return;
-      }
-
+      if (provider === "custom" || provider === OPENROUTER_TAB) return "";
+      if (provider === "tinfoil") return pickDefaultTinfoilModel(tinfoilModels)?.id ?? "";
       const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
-      if (providerData?.models?.length > 0) {
-        setReasoningModel(providerData.models[0].value);
-      }
+      return providerData?.models?.[0]?.value ?? "";
     },
-    [setReasoningModel, tinfoilModels]
+    [tinfoilModels]
+  );
+
+  const applyCloudProvider = useCallback(
+    (provider: string) => {
+      const fallbackModel = defaultModelForProvider(provider);
+      if (onCloudProviderSelect) {
+        onCloudProviderSelect(provider, fallbackModel);
+        return;
+      }
+      setLocalReasoningProvider(provider);
+      // Tinfoil's catalog may still be loading — keep the current model until it lands.
+      if (provider === "tinfoil" && !fallbackModel) return;
+      setReasoningModel(fallbackModel);
+    },
+    [defaultModelForProvider, onCloudProviderSelect, setLocalReasoningProvider, setReasoningModel]
   );
 
   const handleModeChange = async (newMode: "cloud" | "local") => {
@@ -514,8 +524,7 @@ export default function ReasoningModelSelector({
         : cloudProviders[0]?.id;
       if (!nextProvider) return;
       if (nextProvider !== displayedCloudProvider) setSelectedCloudProvider(nextProvider);
-      setLocalReasoningProvider(nextProvider);
-      selectDefaultModelForProvider(nextProvider);
+      applyCloudProvider(nextProvider);
     } else {
       setLocalReasoningProvider(selectedLocalProvider);
       const downloaded = await loadDownloadedModels();
@@ -536,10 +545,9 @@ export default function ReasoningModelSelector({
     (provider: string) => {
       if (!providerAllowed(provider)) return;
       setSelectedCloudProvider(provider);
-      setLocalReasoningProvider(provider);
-      selectDefaultModelForProvider(provider);
+      applyCloudProvider(provider);
     },
-    [providerAllowed, selectDefaultModelForProvider, setLocalReasoningProvider]
+    [providerAllowed, applyCloudProvider]
   );
 
   const handleLocalProviderChange = async (providerId: string) => {

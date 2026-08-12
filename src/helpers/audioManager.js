@@ -2605,7 +2605,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           fallbackToCleanup: true,
         });
         logger.warn("Reasoning failed", { source, error: error.message }, "notes");
-        if (route?.kind === "cleanup") recordCleanupFailure();
+        if (route?.kind === "cleanup") recordCleanupFailure(error.message);
         if (route?.kind === "agent") this._notifyAgentReasoningFailed();
       }
     }
@@ -2929,7 +2929,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           { error: reasonError.message },
           "transcription"
         );
-        if (route.kind === "cleanup") recordCleanupFailure();
+        if (route.kind === "cleanup") recordCleanupFailure(reasonError.message);
         if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
       timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
@@ -4340,7 +4340,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           { error: reasonError.message },
           "streaming"
         );
-        if (route.kind === "cleanup") recordCleanupFailure();
+        if (route.kind === "cleanup") recordCleanupFailure(reasonError.message);
         if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
     }

@@ -162,18 +162,78 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     }
   });
 
-  await t.test("unmanaged Custom endpoint compatibility remains unchanged", () => {
+  await t.test("unmanaged Custom endpoints fail closed instead of falling back to OpenAI", () => {
     usePolicyStore.setState({ status: "unmanaged", appVersion: "1.8.1", policy: null });
 
-    assert.equal(resolveConfiguredOpenAIBase("custom", ""), "https://api.openai.com/v1");
-    assert.equal(
-      resolveConfiguredOpenAIBase("custom", "http://public.example.com/v1"),
-      "https://api.openai.com/v1"
-    );
+    const CUSTOM_ENDPOINT_INVALID = enTranslations.reasoning.custom.endpointInvalid;
+    for (const baseUrl of [
+      "",
+      "http://public.example.com/v1",
+      "https://api.groq.com/openai/v1",
+      "https://inference.tinfoil.sh/v1",
+    ]) {
+      assert.throws(() => resolveConfiguredOpenAIBase("custom", baseUrl), {
+        message: CUSTOM_ENDPOINT_INVALID,
+      });
+    }
+    // HTTP stays allowed for local-network endpoints.
     assert.equal(
       resolveConfiguredOpenAIBase("custom", "http://192.168.1.20:11434/v1"),
       "http://192.168.1.20:11434/v1"
     );
+  });
+
+  await t.test("a scope's custom endpoint never borrows the cleanup key", async () => {
+    setPolicy({ llmModes: ["providers"], llmByokProviders: ["custom"] });
+    useSettingsStore.setState({
+      cleanupMode: "providers",
+      cleanupProvider: "custom",
+      cleanupCloudBaseUrl: "https://cleanup.example.com/v1",
+      cleanupCustomApiKey: "cleanup-secret",
+    });
+
+    const originalFetch = globalThis.fetch;
+    const requests = [];
+    globalThis.fetch = async (url, init) => {
+      requests.push({ url: String(url), auth: init?.headers?.Authorization });
+      return new Response(JSON.stringify({ error: "expected test stop" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    try {
+      await assert.rejects(
+        reasoningService.processText("hi", "other-model", null, {
+          provider: "custom",
+          baseUrl: "https://other-scope.example.com/v1",
+          inferenceScope: "chatIntelligence",
+        }),
+        { message: "expected test stop" }
+      );
+      assert.ok(requests.length > 0);
+      for (const request of requests) {
+        assert.ok(request.url.startsWith("https://other-scope.example.com/v1/"));
+        assert.equal(
+          request.auth,
+          undefined,
+          "the cleanup key must not ride to another scope's endpoint"
+        );
+      }
+
+      // The cleanup endpoint itself still gets the shared key.
+      requests.length = 0;
+      await assert.rejects(
+        reasoningService.processText("hi", "cleanup-model", null, {
+          provider: "custom",
+          baseUrl: "https://cleanup.example.com/v1",
+        }),
+        { message: "expected test stop" }
+      );
+      assert.ok(requests.some((request) => request.auth === "Bearer cleanup-secret"));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   await t.test("normal cleanup uses its saved valid Custom endpoint", async () => {

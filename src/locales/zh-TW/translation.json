@@ -450,6 +450,7 @@
     "custom": {
       "endpointWithProtocol": "請輸入包含通訊協定的完整 URL（例如 https://server/v1）。",
       "httpsRequired": "需使用 HTTPS（僅限本機網路可使用 HTTP）。",
+      "endpointInvalid": "自訂端點無效或未設定。請在設定 → AI 模型中檢查端點 URL。",
       "endpointUnauthorized": "端點拒絕了請求（401/403）。請新增 API Key 或調整伺服器驗證設定。",
       "endpointTitle": "端點 URL",
       "endpointExamples": "範例：",
