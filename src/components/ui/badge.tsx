@@ -15,6 +15,8 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive/15 text-destructive dark:ring-1 dark:ring-destructive/20",
         outline: "text-muted-foreground border-border dark:border-border-hover",
+        // Ambient, non-interactive status — quiet sunken fill, no border
+        muted: "border-transparent bg-surface-3 text-muted-foreground",
         success: "border-transparent bg-success/15 text-success dark:ring-1 dark:ring-success/20",
         warning: "border-transparent bg-warning/15 text-warning dark:ring-1 dark:ring-warning/20",
         info: "border-transparent bg-info/15 text-info dark:ring-1 dark:ring-info/20",

@@ -1157,7 +1157,6 @@
     "defaultTestInputTranslate": "Hace un día precioso hoy, ¿te apetece dar un paseo?"
   },
   "settingsModal": {
-    "managedByOrg": "Algunos ajustes están gestionados por tu organización.",
     "groups": {
       "account": "Cuenta",
       "app": "Aplicación",

@@ -11,7 +11,9 @@ import {
   CreditCard,
   Shield,
   Users,
+  Lock,
 } from "lucide-react";
+import { Badge } from "./ui/badge";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
 import { useAuth } from "../hooks/useAuth";
@@ -163,8 +165,11 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
       onSectionChange={handleSectionChange}
     >
       {policyManaged && (
-        <div className="mx-4 mt-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-          {t("settingsModal.managedByOrg")}
+        <div className="mb-4">
+          <Badge variant="muted" className="gap-2 px-3 py-1">
+            <Lock className="size-3.5 shrink-0" />
+            {t("common.managedByOrg")}
+          </Badge>
         </div>
       )}
       <SettingsPage
