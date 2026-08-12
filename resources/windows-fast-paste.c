@@ -159,6 +159,17 @@ static int SendPasteTerminal(void) {
     return (sent == 6) ? 0 : 1;
 }
 
+static int SendPressEnter(void) {
+    INPUT inputs[2];
+    ZeroMemory(inputs, sizeof(inputs));
+
+    SetKey(&inputs[0], VK_RETURN, 0);
+    SetKey(&inputs[1], VK_RETURN, KEYEVENTF_KEYUP);
+
+    UINT sent = SendInput(2, inputs, sizeof(INPUT));
+    return (sent == 2) ? 0 : 1;
+}
+
 static int SendCopyNormal(void) {
     INPUT inputs[4];
     ZeroMemory(inputs, sizeof(inputs));
@@ -187,17 +198,46 @@ static int SendCopyTerminal(void) {
 
 int main(int argc, char* argv[]) {
     BOOL detectOnly = FALSE;
+    BOOL pressEnter = FALSE;
     BOOL copyMode = FALSE;
     BOOL capabilitiesOnly = FALSE;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--detect-only") == 0) {
             detectOnly = TRUE;
+        } else if (strcmp(argv[i], "--press-enter") == 0) {
+            pressEnter = TRUE;
         } else if (strcmp(argv[i], "--copy") == 0) {
             copyMode = TRUE;
         } else if (strcmp(argv[i], "--capabilities") == 0) {
             capabilitiesOnly = TRUE;
         }
+    }
+
+    if (pressEnter) {
+        /* Release any modifier keys still held by the user's hotkey so the
+           submit keystroke is a bare Enter (Ctrl+Enter etc. trigger different
+           actions in many apps), then restore them. */
+        INPUT releasedInputs[NUM_MODIFIERS];
+        WORD  releasedVKs[NUM_MODIFIERS];
+        ZeroMemory(releasedInputs, sizeof(releasedInputs));
+        int releasedCount = ReleaseModifiers(releasedInputs, releasedVKs);
+        if (releasedCount > 0) {
+            Sleep(10);
+        }
+
+        int result = SendPressEnter();
+        RestoreModifiers(releasedVKs, releasedCount);
+
+        if (result != 0) {
+            fprintf(stderr, "ERROR: SendInput failed (error %lu)\n", GetLastError());
+            return 1;
+        }
+
+        Sleep(20);
+        printf("ENTER_OK\n");
+        fflush(stdout);
+        return 0;
     }
 
     if (capabilitiesOnly) {
@@ -234,6 +274,9 @@ int main(int argc, char* argv[]) {
             printf("EXE_NAME %s\n", exeName);
         }
         printf("IS_TERMINAL %s\n", isTerminal ? "true" : "false");
+        /* Capability marker: lets callers detect that this binary understands
+           --press-enter (older binaries ignore unknown flags and would paste). */
+        printf("SUPPORTS press-enter\n");
         fflush(stdout);
         return 0;
     }

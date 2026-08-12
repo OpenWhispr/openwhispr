@@ -805,6 +805,7 @@ declare global {
           fromStreaming?: boolean;
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
+          submitAfterPaste?: boolean;
         }
       ) => Promise<void>;
       captureSelectedText?: () => Promise<
