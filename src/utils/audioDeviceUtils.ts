@@ -25,7 +25,7 @@ export function isBuiltInMicrophone(label: string): boolean {
   // must flag "iPhone"/"Cell Phone"/"Headphones" without matching the "phone"
   // inside "microphone" itself.
   if (lowerLabel.includes("microphone")) {
-    const labelWithoutMicrophone = lowerLabel.replace(/microphone/g, "");
+    const labelWithoutMicrophone = lowerLabel.replace(/microphone/g, " ");
     const externalIndicators = [
       "bluetooth",
       "airpods",
@@ -36,10 +36,11 @@ export function isBuiltInMicrophone(label: string): boolean {
       "webcam",
       "iphone",
       "ipad",
-      // Phones surfaced via macOS Continuity carry the device's own name (e.g.
-      // "Galaxy Cell Microphone") — nothing above matched, so one was classified
-      // built-in, auto-selected, and cached; dictations then streamed distant
-      // phone-mic audio and transcribed as empty. "phone" also matches
+      // Phones connected to the computer (Continuity, Bluetooth) carry the
+      // device's own name (e.g. "Galaxy Cell Microphone" from a field report) —
+      // nothing above matched, so one was classified built-in, auto-selected,
+      // and cached; dictations then streamed distant phone-mic audio and
+      // transcribed as empty. "phone" also matches
       // "headphones", which is fine: a headphone mic is external too, and the
       // harmful direction is only external-classified-as-built-in.
       "cell",

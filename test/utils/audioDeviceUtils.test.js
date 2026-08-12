@@ -9,7 +9,7 @@ test("a phone microphone is never classified as built-in", async () => {
   const { isBuiltInMicrophone } = await load();
 
   // The bug this pins down: a label like "Galaxy Cell Microphone" (a phone
-  // surfaced via Continuity) contains "microphone" and matched none of the
+  // connected to the computer) contains "microphone" and matched none of the
   // external keywords, so the app classified it built-in, auto-selected it,
   // and cached it. Dictation then streamed distant phone-mic audio and the
   // ASR returned empty transcripts.
