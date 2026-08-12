@@ -4054,7 +4054,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const provider = this.getStreamingProvider();
 
       this.streamingProcessor.port.onmessage = (event) => {
-        if (!this.isStreaming) return;
+        // The worklet posts its remaining PCM followed by a "flushed" sentinel
+        // on stop; the sentinel must not be sent as audio (realtime backends
+        // reject the odd-length non-PCM bytes with "Invalid audio data").
+        if (!this.isStreaming || event.data === "flushed") return;
         provider.send(event.data);
       };
 
