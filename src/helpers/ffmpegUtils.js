@@ -196,6 +196,7 @@ function parseWavFormat(wavBuffer) {
 
     if (chunkId === "fmt ") {
       return {
+        audioFormat: wavBuffer.readUInt16LE(offset + 8),
         channels: wavBuffer.readUInt16LE(offset + 10),
         sampleRate: wavBuffer.readUInt32LE(offset + 12),
         bitsPerSample: wavBuffer.readUInt16LE(offset + 22),

@@ -78,7 +78,11 @@ import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
-import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
+import {
+  DICTIONARY_ECHO_CODE,
+  dictionaryEchoError,
+  matchesDictionaryPrompt,
+} from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import {
   buildSelectionEditSystemPrompt,
@@ -594,6 +598,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   setCallbacks({
     onStateChange,
     onError,
+    // Optional: the agent overlay has no dictation toast surface.
+    onNoAudio = undefined,
     onTranscriptionComplete,
     onPartialTranscript,
     onStreamingCommit,
@@ -601,6 +607,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }) {
     this.onStateChange = onStateChange;
     this.onError = onError;
+    this.onNoAudio = onNoAudio;
     this.onTranscriptionComplete = onTranscriptionComplete;
     this.onPartialTranscript = onPartialTranscript;
     this.onStreamingCommit = onStreamingCommit;
@@ -1748,7 +1755,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "performance"
       );
 
-      if (error.message !== "No audio detected") {
+      if (error.code === DICTIONARY_ECHO_CODE) {
+        // The transcript was discarded as an echo of the dictionary prompt. Only
+        // the local engine's genuine-silence path gets a toast from main, so
+        // surface the same one here and keep the audio for a manual retry —
+        // otherwise the whole utterance disappears with no feedback (#1547).
+        this.onNoAudio?.();
+        if (this.lastAudioBlob) {
+          this.saveFailedTranscription(error.message, error.code, metadata);
+        }
+      } else if (error.message !== "No audio detected") {
         this.onError?.({
           title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
           description: error.selectionEditFatal
@@ -1826,7 +1842,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             skipVad: true,
           });
           if (!retry?.success || !retry.text?.trim() || this.isDictionaryEcho(retry.text)) {
-            throw new Error("No audio detected");
+            throw dictionaryEchoError();
           }
           logger.info(
             "Recovered transcript after dictionary-echo detection",
@@ -2774,7 +2790,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const rawText = result.text;
     if (this.isDictionaryEcho(rawText)) {
-      throw new Error("No audio detected");
+      throw dictionaryEchoError();
     }
     let processedText = result.text;
     if (processedText && !this.skipReasoning) {
@@ -2973,7 +2989,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw new Error(`No text transcribed - ${proxySpec.displayName} response was empty`);
         }
         if (this.isDictionaryEcho(proxyText)) {
-          throw new Error("No audio detected");
+          throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
@@ -3178,7 +3194,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Check for text - handle both empty string and missing field
       if (result.text && result.text.trim().length > 0) {
         if (this.isDictionaryEcho(result.text)) {
-          throw new Error("No audio detected");
+          throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const rawText = result.text;

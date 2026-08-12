@@ -25,13 +25,21 @@ function applyRetentionSettings(current, incoming) {
   return { changed, settings };
 }
 
-function createRetentionSettingsHandler({ getCurrentSettings, getOwner, onSettingsChanged }) {
+function createRetentionSettingsHandler({
+  getCurrentSettings,
+  getOwner,
+  hasSynced,
+  onSettingsChanged,
+}) {
   return (event, incoming) => {
     const owner = getOwner();
     if (!owner || event.sender !== owner) return;
 
     const { changed, settings } = applyRetentionSettings(getCurrentSettings(), incoming);
-    if (changed) onSettingsChanged(settings);
+    // Before the first sync the current values are defaults, not the user's, so
+    // "unchanged" only means they happen to match the default — the consumer
+    // still needs that first sync to know the settings are real (#1370).
+    if (changed || !hasSynced()) onSettingsChanged(settings);
   };
 }
 

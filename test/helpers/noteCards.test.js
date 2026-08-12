@@ -69,3 +69,31 @@ test("incomplete or unknown tools produce nothing", () => {
   ]);
   assert.deepEqual(cards, []);
 });
+
+test("skips non-positive, non-integer, and coerced falsy note ids", () => {
+  const cards = extractCards([
+    completed("create_note", { id: 0, title: "Zero ID" }),
+    completed("update_note", { id: -1, title: "Negative ID" }),
+    completed("get_note", { id: 2.5, title: "Float ID" }),
+    completed("search_notes", [
+      { id: 0, title: "Zero hit" },
+      { id: -3, title: "Negative hit" },
+      { id: 1.8, title: "Float hit" },
+      { id: false, title: "Boolean hit" },
+      { id: "", title: "Empty string hit" },
+      { id: 10, title: "Valid Note" },
+    ]),
+  ]);
+  assert.deepEqual(cards, [{ noteId: 10, title: "Valid Note" }]);
+});
+
+test("falls back to default title for whitespace-only titles in metadata or hits", () => {
+  const cards = extractCards([
+    completed("create_note", { id: 12, title: "   \n\t " }),
+    completed("search_notes", [{ id: 14, title: "   " }]),
+  ]);
+  assert.deepEqual(cards, [
+    { noteId: 12, title: "Note" },
+    { noteId: 14, title: "Note" },
+  ]);
+});

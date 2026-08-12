@@ -4,6 +4,7 @@ const fs = require("fs");
 const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
+const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -4375,7 +4376,7 @@ class DatabaseManager {
         cloudNote.participants || null,
         cloudNote.calendar_event_id || null,
         cloudNote.diarization_enabled ?? null,
-        cloudNote.expected_speaker_count ?? null,
+        normalizeStoredSpeakerCount(cloudNote.expected_speaker_count),
         cloudNote.updated_by_user_id || null,
         cloudNote.user_id || null,
         cloudNote.created_at,

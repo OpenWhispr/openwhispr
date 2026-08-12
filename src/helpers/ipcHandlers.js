@@ -79,6 +79,7 @@ const {
   canAutoRelabelSpeaker,
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
+const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
 const postMigrationDetector = require("./postMigrationDetector");
 const screenContextCapture = require("./screenContextCapture");
@@ -566,6 +567,7 @@ class IPCHandlers {
     this.audioStorageManager = new AudioStorageManager();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
+    this._retentionSettingsSynced = false;
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
@@ -786,9 +788,9 @@ class IPCHandlers {
   }
 
   _noteExpectedSpeakerCountOrNull(note) {
-    const stored = Number(note?.expected_speaker_count);
-    if (Number.isFinite(stored) && stored > 0) {
-      return Math.min(stored, MAX_SPEAKER_COUNT);
+    const stored = normalizeStoredSpeakerCount(note?.expected_speaker_count);
+    if (stored != null) {
+      return stored;
     }
     const others = this._parseNonSelfParticipants(note?.participants).length;
     if (others > 0) {
@@ -906,8 +908,13 @@ class IPCHandlers {
 
   _setupRetentionCleanup() {
     const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-    this._runRetentionCleanup();
-    this._retentionCleanupInterval = setInterval(() => this._runRetentionCleanup(), SIX_HOURS_MS);
+    // No sweep at startup: _retentionSettings still holds the 30-day default
+    // until the renderer syncs, so sweeping here deletes audio a user set to
+    // keep for 60/90 days or forever (#1370). The first sync runs the first
+    // sweep instead.
+    this._retentionCleanupInterval = setInterval(() => {
+      if (this._retentionSettingsSynced) this._runRetentionCleanup();
+    }, SIX_HOURS_MS);
   }
 
   _runRetentionCleanup() {
@@ -1240,8 +1247,10 @@ class IPCHandlers {
       createRetentionSettingsHandler({
         getCurrentSettings: () => this._retentionSettings,
         getOwner: () => this.windowManager.mainWindow?.webContents,
+        hasSynced: () => this._retentionSettingsSynced,
         onSettingsChanged: (settings) => {
           this._retentionSettings = settings;
+          this._retentionSettingsSynced = true;
           this._runRetentionCleanup();
         },
       })
@@ -2151,7 +2160,7 @@ class IPCHandlers {
         if (format === "txt") {
           exportContent = transcriptFormatter.formatTxt(note, segments, speakerMappings);
         } else if (format === "srt") {
-          exportContent = transcriptFormatter.formatSrt(segments, speakerMappings);
+          exportContent = transcriptFormatter.formatSrt(segments, speakerMappings, note);
         } else if (format === "md") {
           exportContent = transcriptFormatter.formatMd(note, segments, speakerMappings);
         } else {

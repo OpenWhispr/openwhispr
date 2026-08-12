@@ -141,13 +141,19 @@ class WindowManager {
     if (!win || win.isDestroyed() || sender !== win.webContents) {
       return;
     }
+    // Linux ignores the `forward` option, so a card returned to click-through
+    // there never sees another mouseenter and Start/Dismiss stay unreachable
+    // for the rest of its life (#1456). It is only click-through on macOS to
+    // begin with, so on Linux leave the hit-testing alone and move the
+    // countdown alone.
+    const togglesClickThrough = process.platform !== "linux";
     // Hovering means the user is reading or about to click — the auto-dismiss
     // countdown must not close the card under their pointer.
     if (interactive) {
-      win.setIgnoreMouseEvents(false);
+      if (togglesClickThrough) win.setIgnoreMouseEvents(false);
       this._notificationDismissTimer.pause();
     } else {
-      win.setIgnoreMouseEvents(true, { forward: true });
+      if (togglesClickThrough) win.setIgnoreMouseEvents(true, { forward: true });
       this._notificationDismissTimer.resume();
     }
   }

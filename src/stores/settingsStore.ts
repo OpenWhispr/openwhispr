@@ -13,6 +13,7 @@ import type {
 } from "../types/electron";
 import type { CalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
+import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
 import {
   deriveReasoningMode,
   buildReasoningScopePatches,
@@ -480,6 +481,32 @@ function migrateCustomPrompts() {
 }
 
 migrateCustomPrompts();
+
+// Overrides that byte-match a retired shipped default were persisted defaults,
+// not user customizations; clear them so current defaults apply again.
+function sweepRetiredCustomPrompts() {
+  if (!isBrowser) return;
+  void sweepRetiredPromptOverrides(localStorage, PROMPT_KIND_LIST)
+    .then((swept) => {
+      if (swept.length === 0) return;
+      useSettingsStore.setState((s) => ({
+        customPrompts: {
+          ...s.customPrompts,
+          ...Object.fromEntries(swept.map((kind) => [kind, ""])),
+        },
+      }));
+      logger.info("Cleared retired default prompt overrides", { kinds: swept }, "settings");
+    })
+    .catch((error) => {
+      logger.warn(
+        "Retired prompt sweep failed",
+        { error: error instanceof Error ? error.message : String(error) },
+        "settings"
+      );
+    });
+}
+
+sweepRetiredCustomPrompts();
 
 // One-time migration of legacy LLM-scope localStorage keys. Safe to delete
 // after a few releases.

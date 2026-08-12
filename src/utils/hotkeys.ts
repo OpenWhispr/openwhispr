@@ -24,7 +24,7 @@ export function parseHotkeyList(value?: string | null): string[] {
   const result: string[] = [];
   for (let i = 0; i < raw.length; i++) {
     let hotkey = raw[i].trim();
-    if (hotkey.endsWith("+") && i < raw.length - 1) {
+    if (hotkey.endsWith("+") && i < raw.length - 1 && raw[i + 1].trim() === "") {
       hotkey += ",";
     }
     if (!hotkey || seen.has(hotkey)) continue;
