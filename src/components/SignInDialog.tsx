@@ -20,7 +20,15 @@ export default function SignInDialog({ open, onOpenChange }: SignInDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      {/* The auth view opens with a full-bleed brand hero: clip it to the dialog
+          corners, and lift the close glyph so it stays legible on the blue. */}
+      <DialogContent
+        className={
+          pendingVerificationEmail
+            ? "max-w-md"
+            : "max-w-md overflow-hidden [&>button>svg]:text-white"
+        }
+      >
         <DialogTitle className="sr-only">{t("auth.welcomeTitle")}</DialogTitle>
         <DialogDescription className="sr-only">{t("auth.welcomeSubtitle")}</DialogDescription>
         {pendingVerificationEmail ? (

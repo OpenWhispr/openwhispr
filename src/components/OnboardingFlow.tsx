@@ -1040,8 +1040,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       <div
         className={`flex-1 px-6 md:px-12 overflow-y-auto ${currentStep === 0 ? "flex items-center" : "py-6"}`}
       >
-        <div className={`w-full ${currentStep === 0 ? "max-w-sm" : "max-w-3xl"} mx-auto`}>
-          <Card className="bg-card/90 backdrop-blur-2xl border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
+        <div className={`w-full ${currentStep === 0 ? "max-w-md" : "max-w-3xl"} mx-auto`}>
+          <Card className="bg-card border border-border rounded-xl overflow-hidden">
             <CardContent className={currentStep === 0 ? "p-6" : "p-6 md:p-8"}>
               {renderStep()}
             </CardContent>

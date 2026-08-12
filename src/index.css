@@ -324,6 +324,19 @@ a:hover {
 
 /* ---- Premium UI Utilities ---- */
 
+/* Brand hero band — the blue welcome/auth header.
+   Atmosphere, not surface depth: a fixed brand gradient with a halftone dot
+   screen over it. Identical in both themes; the brand does not invert. */
+.brand-hero {
+  background-color: #154bd4;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1.5px),
+    linear-gradient(205deg, #5b81e4 12%, #154bd4 45%, #163992 86%);
+  background-size:
+    9px 9px,
+    auto;
+}
+
 /* Section panel — grouped settings container */
 .section-panel {
   background: var(--color-surface-2);
