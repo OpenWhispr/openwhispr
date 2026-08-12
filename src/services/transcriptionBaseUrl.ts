@@ -9,15 +9,6 @@ export interface TranscriptionProviderBaseUrl {
   baseUrl: string;
 }
 
-export function resolveByokBaseUrl(
-  providerId: string,
-  storedBaseUrl: string,
-  providers: readonly TranscriptionProviderBaseUrl[]
-): string {
-  if (providerId === "custom") return storedBaseUrl;
-  return providers.find((p) => p.id === providerId)?.baseUrl || "";
-}
-
 function parseHostname(url: string): string | null {
   for (const candidate of [url, `https://${url}`]) {
     try {

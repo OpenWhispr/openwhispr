@@ -1,13 +1,8 @@
 import ReasoningService from "../services/ReasoningService";
 import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
-import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
 import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import {
-  isSecureHttpEndpoint,
-  isAzureOpenAIEndpoint,
-  buildAzureTranscriptionUrl,
-} from "../utils/urlUtils";
+import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
 import {
@@ -59,10 +54,8 @@ import {
   getTranscriptionProviders,
   isOnlineParakeetModel,
 } from "../models/ModelRegistry";
-import {
-  TINFOIL_PROXY_REQUIRED_ERROR,
-  isTinfoilInferenceUrl,
-} from "../services/transcriptionBaseUrl";
+import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
+import { resolveTranscriptionRoute } from "./transcriptionRoute.ts";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -432,9 +425,6 @@ class AudioManager {
       this.micStreamHold.drop();
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
-    this.cachedTranscriptionEndpoint = null;
-    this.cachedEndpointProvider = null;
-    this.cachedEndpointBaseUrl = null;
     this.recordingStartTime = null;
     this.reasoningAvailabilityCache = { value: false, expiresAt: 0 };
     this.cachedReasoningPreference = null;
@@ -3354,214 +3344,39 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Cloud-endpoint resolution for the batch HTTP path, delegated to the shared
+  // resolver (single source of truth with retry and upload). Local-vs-cloud and
+  // OpenWhispr-cloud decisions happen upstream, so local flags are ignored here —
+  // the local→cloud fallback resolves its cloud endpoint through this too.
   getTranscriptionEndpoint(deploymentName = "") {
-    const s = getSettings();
-    const currentProvider = s.cloudTranscriptionProvider || "openai";
-
-    // Backstop against the OpenAI-default leak: Tinfoil goes through the main-process
-    // proxy, never here — except self-hosted, which resolves its remote URL below.
-    if (currentProvider === "tinfoil" && !isSelfHostedTranscription(s)) {
-      throw new Error(TINFOIL_PROXY_REQUIRED_ERROR);
-    }
-
-    const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
-    const transcriptionMode = s.transcriptionMode || "";
-    const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
-    const deployment = (deploymentName || "").trim();
-
-    const isSelfHosted = isSelfHostedTranscription(s);
-    const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
-    const isManagedCustomEndpoint =
-      currentProvider === "custom" && usePolicyStore.getState().status === "managed";
-
-    const rejectManagedCustomEndpoint = () => {
-      const error = new Error("Transcription is restricted by your organization.");
-      error.code = "POLICY_RESTRICTED";
-      error.messageKey = "common.policyTranscriptionRestricted";
+    const route = resolveTranscriptionRoute({
+      context: "dictation",
+      settings: { ...getSettings(), useLocalWhisper: false },
+      policy: usePolicyStore.getState(),
+      providers: getTranscriptionProviders(),
+      request: { model: deploymentName },
+    });
+    if (route.transport === "error") {
+      const error = new Error(route.message);
+      if (route.code) error.code = route.code;
+      if (route.messageKey) error.messageKey = route.messageKey;
       throw error;
-    };
-
-    // Never fall back to the cloud default for self-hosted — fail closed instead.
-    if (isSelfHosted) {
-      const normalizedRemote = normalizeBaseUrl(remoteUrl);
-      if (!normalizedRemote || !isSecureHttpEndpoint(normalizedRemote)) {
-        throw new Error("Self-hosted transcription URL is invalid or unsupported");
-      }
     }
-
-    // The provider-id guard above can't catch a Custom base URL that points at
-    // Tinfoil's inference host (e.g. persisted by the pre-#1459 tab clobber) —
-    // check the URL too. Must stay outside the try below: its catch swallows
-    // errors into the OpenAI default endpoint.
-    if (
-      currentProvider === "custom" &&
-      !isSelfHosted &&
-      isTinfoilInferenceUrl(currentBaseUrl, getTranscriptionProviders())
-    ) {
-      throw new Error(TINFOIL_PROXY_REQUIRED_ERROR);
-    }
-
-    // Custom never falls open to the OpenAI default: an empty URL, the untouched
-    // default (the picker treats URL === TRANSCRIPTION_BASE as "not configured"),
-    // or an invalid/insecure URL would silently send audio and the custom key to
-    // a provider the user never chose. Must stay outside the try below and above
-    // the cache-hit return.
-    if (currentProvider === "custom" && !isSelfHosted) {
-      const trimmedBaseUrl = currentBaseUrl.trim();
-      const normalizedCustom = normalizeBaseUrl(trimmedBaseUrl);
-      if (
-        !trimmedBaseUrl ||
-        trimmedBaseUrl === API_ENDPOINTS.TRANSCRIPTION_BASE ||
-        !normalizedCustom ||
-        !isSecureHttpEndpoint(normalizedCustom)
-      ) {
-        if (isManagedCustomEndpoint) {
-          rejectManagedCustomEndpoint();
-        }
-        const error = new Error("Custom transcription endpoint is invalid or unsupported");
-        error.code = "CUSTOM_ENDPOINT_INVALID";
-        error.messageKey = "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
-        throw error;
-      }
-    }
-
-    if (
-      this.cachedTranscriptionEndpoint &&
-      (this.cachedEndpointProvider !== currentProvider ||
-        this.cachedEndpointDeployment !== deployment ||
-        this.cachedEndpointBaseUrl !== currentBaseUrl ||
-        this.cachedEndpointMode !== transcriptionMode ||
-        this.cachedEndpointRemoteUrl !== remoteUrl)
-    ) {
-      logger.debug(
-        "STT endpoint cache invalidated",
-        {
-          previousProvider: this.cachedEndpointProvider,
-          newProvider: currentProvider,
-          previousBaseUrl: this.cachedEndpointBaseUrl,
-          newBaseUrl: currentBaseUrl,
-          previousMode: this.cachedEndpointMode,
-          newMode: transcriptionMode,
-          previousRemoteUrl: this.cachedEndpointRemoteUrl,
-          newRemoteUrl: remoteUrl,
-        },
-        "transcription"
+    if (route.transport !== "http-batch") {
+      // Proxied providers are dispatched before endpoint resolution; reaching
+      // here means that guard was bypassed — never fall open to a default.
+      throw new Error(
+        route.provider === "tinfoil"
+          ? TINFOIL_PROXY_REQUIRED_ERROR
+          : `${route.provider} transcription must go through the main-process proxy`
       );
-      this.cachedTranscriptionEndpoint = null;
     }
-
-    if (this.cachedTranscriptionEndpoint) {
-      return this.cachedTranscriptionEndpoint;
-    }
-
-    try {
-      let base;
-      if (isSelfHosted) {
-        base = remoteUrl;
-      } else if (currentProvider === "custom") {
-        base = currentBaseUrl.trim();
-      } else if (currentProvider === "groq") {
-        base = API_ENDPOINTS.GROQ_BASE;
-      } else if (currentProvider === "xai") {
-        base = API_ENDPOINTS.XAI_BASE;
-      } else if (currentProvider === "mistral") {
-        base = API_ENDPOINTS.MISTRAL_BASE;
-      } else {
-        // OpenAI or other standard providers
-        base = API_ENDPOINTS.TRANSCRIPTION_BASE;
-      }
-
-      const normalizedBase = normalizeBaseUrl(base);
-
-      logger.debug(
-        "STT endpoint resolution",
-        {
-          provider: currentProvider,
-          mode: transcriptionMode,
-          isSelfHosted,
-          isCustomEndpoint,
-          rawBaseUrl: currentBaseUrl,
-          remoteUrl,
-          normalizedBase,
-          defaultBase: API_ENDPOINTS.TRANSCRIPTION_BASE,
-        },
-        "transcription"
-      );
-
-      const cacheResult = (endpoint) => {
-        this.cachedTranscriptionEndpoint = endpoint;
-        this.cachedEndpointProvider = currentProvider;
-        this.cachedEndpointBaseUrl = currentBaseUrl;
-        this.cachedEndpointMode = transcriptionMode;
-        this.cachedEndpointRemoteUrl = remoteUrl;
-        this.cachedEndpointDeployment = deployment;
-
-        logger.debug(
-          "STT endpoint resolved",
-          {
-            endpoint,
-            provider: currentProvider,
-            isCustomEndpoint,
-            usingDefault: endpoint === API_ENDPOINTS.TRANSCRIPTION,
-          },
-          "transcription"
-        );
-
-        return endpoint;
-      };
-
-      let endpoint;
-      if (isCustomEndpoint && isAzureOpenAIEndpoint(normalizedBase)) {
-        // Azure OpenAI routes by deployment in the URL path and requires an
-        // api-version query string — the plain {base}/audio/transcriptions
-        // shape returns DeploymentNotFound. Build the deployment-style URL.
-        // The api-version defaults to a transcribe-capable preview; a user can
-        // override it by appending ?api-version=... to their endpoint URL.
-        // Built from the raw base — normalization strips the /audio/transcriptions
-        // suffix that marks a deployment the user pinned.
-        const azureUrl = buildAzureTranscriptionUrl(base, deployment);
-        if (azureUrl) {
-          endpoint = azureUrl;
-          logger.debug(
-            "STT endpoint: built Azure deployment URL",
-            { base, deployment, endpoint },
-            "transcription"
-          );
-        } else {
-          endpoint = buildApiUrl(normalizedBase, "/audio/transcriptions");
-          logger.warn(
-            "STT endpoint: Azure host detected but no deployment name; falling back to default path",
-            { base: normalizedBase, endpoint },
-            "transcription"
-          );
-        }
-      } else if (/\/audio\/(transcriptions|translations)$/i.test(normalizedBase)) {
-        endpoint = normalizedBase;
-        logger.debug("STT endpoint: using full path from config", { endpoint }, "transcription");
-      } else {
-        endpoint = buildApiUrl(normalizedBase, "/audio/transcriptions");
-        logger.debug(
-          "STT endpoint: appending /audio/transcriptions to base",
-          { base: normalizedBase, endpoint },
-          "transcription"
-        );
-      }
-
-      return cacheResult(endpoint);
-    } catch (error) {
-      logger.error(
-        "STT endpoint resolution failed",
-        { error: error.message, stack: error.stack },
-        "transcription"
-      );
-      if (isSelfHosted || isManagedCustomEndpoint) throw error;
-      this.cachedTranscriptionEndpoint = API_ENDPOINTS.TRANSCRIPTION;
-      this.cachedEndpointProvider = currentProvider;
-      this.cachedEndpointBaseUrl = currentBaseUrl;
-      this.cachedEndpointMode = transcriptionMode;
-      this.cachedEndpointRemoteUrl = remoteUrl;
-      return API_ENDPOINTS.TRANSCRIPTION;
-    }
+    logger.debug(
+      "STT endpoint resolved",
+      { endpoint: route.endpoint, provider: route.provider },
+      "transcription"
+    );
+    return route.endpoint;
   }
 
   async safePaste(text, options = {}) {
