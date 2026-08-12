@@ -150,7 +150,7 @@ test("a genuine failure twice yields a gap marker and the run still completes", 
   assert.equal(result.partial, true);
   assert.ok(result.gapCount >= 1);
   const compose = h.calls[h.calls.length - 1];
-  assert.match(compose.prompt, new RegExp(GAP_MARKER.replace(/[[\]]/g, "\\$&")));
+  assert.ok(compose.prompt.includes(GAP_MARKER));
 });
 
 test("three consecutive genuine failures abort the job", async () => {
