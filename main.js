@@ -528,7 +528,10 @@ function initializeDeferredManagers() {
   });
   clipboardManager.preWarmAccessibility();
   trayManager = new TrayManager();
-  globeKeyManager = new GlobeKeyManager();
+  globeKeyManager = new GlobeKeyManager({
+    // Lets the listener put the user's macOS Globe action back after a crash.
+    preferenceStatePath: path.join(app.getPath("userData"), "globe-preference-state.json"),
+  });
 
   if (process.platform === "darwin") {
     globeKeyManager.on("error", (error) => {
@@ -1439,14 +1442,11 @@ async function startApp() {
       }
     });
 
-    const syncSuppressedMouseButtons = () => {
-      const buttons = [];
-      for (const slotName of ["dictation", "agent", "voiceAgent", "translation"]) {
-        for (const hotkey of hotkeyManager.getSlotHotkeys(slotName)) {
-          if (isMouseButtonHotkey(hotkey)) buttons.push(hotkey);
-        }
-      }
-      globeKeyManager.setSuppressedMouseButtons(buttons);
+    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "agent", "voiceAgent", "translation"];
+    const syncMacNativeHotkeyConfiguration = () => {
+      globeKeyManager.setConfiguration(
+        hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
+      );
     };
 
     // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
@@ -1521,15 +1521,17 @@ async function startApp() {
       }
     });
 
-    syncSuppressedMouseButtons();
+    syncMacNativeHotkeyConfiguration();
     globeKeyManager.start();
-    hotkeyManager.once("hotkey-loaded", syncSuppressedMouseButtons);
+    hotkeyManager.on("hotkey-loaded", syncMacNativeHotkeyConfiguration);
 
     ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
       if (enabled) {
-        globeKeyManager.setSuppressedMouseButtons([]);
+        // Let mouse buttons through so they can be captured, but keep macOS's
+        // Globe action down so choosing Globe cannot flash the emoji viewer.
+        globeKeyManager.setConfiguration({ mouseButtons: [], suppressGlobeAction: true });
       } else {
-        syncSuppressedMouseButtons();
+        syncMacNativeHotkeyConfiguration();
       }
     });
 
@@ -1568,7 +1570,7 @@ async function startApp() {
       mouseButtonDownTime = 0;
       mouseButtonIsRecording = false;
       mouseButtonLastStopTime = 0;
-      syncSuppressedMouseButtons();
+      syncMacNativeHotkeyConfiguration();
     });
   }
 

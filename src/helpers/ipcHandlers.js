@@ -607,6 +607,13 @@ class IPCHandlers {
     }
   }
 
+  // The dictation slot reports its own changes from the renderer. Slots
+  // registered through IPC have to announce theirs here so macOS can re-derive
+  // which keys the native Globe listener owns.
+  _notifyHotkeyChanged(hotkey) {
+    ipcMain.emit("hotkey-changed", null, hotkey);
+  }
+
   _releaseMicHold(sender) {
     const release = this._micHoldSenders.get(sender.id);
     if (!release) return;
@@ -9303,6 +9310,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("agent");
         this.environmentManager.saveAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
+        this._notifyHotkeyChanged("");
         return { success: true, message: "Agent hotkey cleared" };
       }
 
@@ -9312,6 +9320,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveAgentKey?.(hotkey);
+        this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
       }
 
@@ -9332,6 +9341,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("voiceAgent");
         this.environmentManager.saveVoiceAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
+        this._notifyHotkeyChanged("");
         return { success: true, message: "Voice agent hotkey cleared" };
       }
 
@@ -9341,6 +9351,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);
+        this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
       }
 
@@ -9365,6 +9376,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("translation");
         this.environmentManager.saveTranslationKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
+        this._notifyHotkeyChanged("");
         return { success: true, message: "Translation hotkey cleared" };
       }
 
@@ -9374,6 +9386,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveTranslationKey?.(hotkey);
+        this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
       }
 
