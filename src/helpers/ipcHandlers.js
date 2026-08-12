@@ -4485,22 +4485,19 @@ class IPCHandlers {
 
     ipcMain.handle("capture-screen-context", () => screenContextCapture.captureCursorDisplay());
 
-    const buildScreenRecordingAccess = (status) => ({
-      granted: status === "granted",
-      status,
-      supported: status !== "unsupported",
-    });
+    // Snapshot the launch-time TCC status so a mid-session grant (which macOS
+    // only honors after a relaunch) is detectable even if the renderer never
+    // checked before the user granted.
+    screenContextCapture.getAccessStatus();
 
-    ipcMain.handle("check-screen-recording-access", () =>
-      buildScreenRecordingAccess(screenContextCapture.getAccessStatus())
-    );
+    ipcMain.handle("check-screen-recording-access", () => screenContextCapture.getAccessResult());
 
     ipcMain.handle("request-screen-recording-access", async () => {
       const status = await screenContextCapture.requestAccess();
       if (process.platform === "darwin" && status !== "granted") {
         await openSystemSettings("screenRecording");
       }
-      return buildScreenRecordingAccess(status);
+      return screenContextCapture.getAccessResult();
     });
 
     // Keeps the dictation overlay out of its own screenshots (and screen

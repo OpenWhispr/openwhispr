@@ -2972,7 +2972,8 @@
       "visionModel": "Modello di visione separato",
       "visionModelDescription": "Instrada i comandi che includono uno screenshot verso un altro modello con capacità di visione.",
       "permissionTitle": "Registrazione schermo",
-      "permissionDescription": "macOS richiede l'autorizzazione alla registrazione dello schermo per catturare lo schermo."
+      "permissionDescription": "macOS richiede l'autorizzazione alla registrazione dello schermo per catturare lo schermo.",
+      "relaunchHint": "La registrazione dello schermo è stata concessa mentre OpenWhispr era in esecuzione. Chiudi e riapri OpenWhispr per iniziare a catturare gli screenshot."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",

@@ -3137,7 +3137,8 @@
       "visionModel": "Separates Vision-Modell",
       "visionModelDescription": "Leitet Befehle mit Screenshot an ein anderes Modell mit Bildverständnis weiter.",
       "permissionTitle": "Bildschirmaufnahme",
-      "permissionDescription": "macOS benötigt die Berechtigung zur Bildschirmaufnahme, um Ihren Bildschirm zu erfassen."
+      "permissionDescription": "macOS benötigt die Berechtigung zur Bildschirmaufnahme, um Ihren Bildschirm zu erfassen.",
+      "relaunchHint": "Die Bildschirmaufnahme wurde erteilt, während OpenWhispr lief. Beenden und öffnen Sie OpenWhispr erneut, um Screenshots aufzunehmen."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",

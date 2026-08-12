@@ -2972,7 +2972,8 @@
       "visionModel": "専用のビジョンモデル",
       "visionModelDescription": "スクリーンショット付きのコマンドを、画像対応の別モデルに振り分けます。",
       "permissionTitle": "画面収録",
-      "permissionDescription": "画面をキャプチャするには macOS の画面収録の許可が必要です。"
+      "permissionDescription": "画面をキャプチャするには macOS の画面収録の許可が必要です。",
+      "relaunchHint": "画面収録の許可は OpenWhispr の実行中に付与されました。スクリーンショットのキャプチャを開始するには、OpenWhispr を終了して再度開いてください。"
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",

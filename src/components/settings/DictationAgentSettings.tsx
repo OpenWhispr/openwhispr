@@ -29,6 +29,7 @@ export default function DictationAgentSettings() {
     isMacOS,
     granted: screenGranted,
     supported: screenSupported,
+    needsRelaunch: screenNeedsRelaunch,
     request: requestScreenAccess,
   } = useScreenRecordingPermission();
   const agentAllowed = usePolicyStore(isAgentAllowed);
@@ -207,6 +208,11 @@ export default function DictationAgentSettings() {
               onRequest={requestScreenAccess}
               buttonText={t("onboarding.permissions.grantAccess")}
             />
+          )}
+          {voiceAgentScreenContext && isMacOS && screenNeedsRelaunch && (
+            <p className="text-[11px] text-warning/80 leading-snug">
+              {t("dictationAgent.screenContext.relaunchHint")}
+            </p>
           )}
           {voiceAgentScreenContext && useDictationAgentVisionModel && (
             <InferenceConfigEditor

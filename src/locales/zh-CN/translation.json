@@ -2972,7 +2972,8 @@
       "visionModel": "单独的视觉模型",
       "visionModelDescription": "将带截图的命令转发给另一个支持图像的模型。",
       "permissionTitle": "屏幕录制",
-      "permissionDescription": "macOS 需要屏幕录制权限才能截取屏幕。"
+      "permissionDescription": "macOS 需要屏幕录制权限才能截取屏幕。",
+      "relaunchHint": "屏幕录制权限是在 OpenWhispr 运行期间授予的。请退出并重新打开 OpenWhispr 以开始捕获屏幕截图。"
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",

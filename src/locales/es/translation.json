@@ -3020,7 +3020,8 @@
       "visionModel": "Modelo de visión aparte",
       "visionModelDescription": "Envía los comandos que incluyen una captura a otro modelo con capacidad de visión.",
       "permissionTitle": "Grabación de pantalla",
-      "permissionDescription": "macOS requiere permiso de grabación de pantalla para capturar tu pantalla."
+      "permissionDescription": "macOS requiere permiso de grabación de pantalla para capturar tu pantalla.",
+      "relaunchHint": "El permiso de grabación de pantalla se concedió mientras OpenWhispr estaba en ejecución. Cierra y vuelve a abrir OpenWhispr para empezar a capturar la pantalla."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",

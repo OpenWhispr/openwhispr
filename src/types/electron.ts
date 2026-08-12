@@ -575,6 +575,8 @@ export interface ScreenRecordingAccessResult {
   granted: boolean;
   status: "granted" | "denied" | "not-determined" | "restricted" | "unknown" | "unsupported";
   supported: boolean;
+  /** macOS only: granted mid-session, so capture stays broken until the app relaunches. */
+  needsRelaunch?: boolean;
 }
 
 export interface ScreenContextImage {

@@ -3137,7 +3137,8 @@
       "visionModel": "Separate vision model",
       "visionModelDescription": "Route commands that include a screenshot to a different, vision-capable model.",
       "permissionTitle": "Screen Recording",
-      "permissionDescription": "macOS requires Screen Recording permission to capture your screen."
+      "permissionDescription": "macOS requires Screen Recording permission to capture your screen.",
+      "relaunchHint": "Screen Recording was granted while OpenWhispr was running. Quit and reopen OpenWhispr to start capturing screenshots."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",

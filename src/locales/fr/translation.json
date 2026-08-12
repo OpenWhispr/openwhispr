@@ -3137,7 +3137,8 @@
       "visionModel": "Modèle de vision distinct",
       "visionModelDescription": "Envoie les commandes incluant une capture vers un autre modèle capable de vision.",
       "permissionTitle": "Enregistrement de l'écran",
-      "permissionDescription": "macOS exige l'autorisation d'enregistrement de l'écran pour capturer votre écran."
+      "permissionDescription": "macOS exige l'autorisation d'enregistrement de l'écran pour capturer votre écran.",
+      "relaunchHint": "L'enregistrement d'écran a été autorisé pendant qu'OpenWhispr était en cours d'exécution. Quittez et rouvrez OpenWhispr pour commencer à capturer des captures d'écran."
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",

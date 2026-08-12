@@ -2972,7 +2972,8 @@
       "visionModel": "獨立的視覺模型",
       "visionModelDescription": "將附有截圖的指令改由另一個支援影像的模型處理。",
       "permissionTitle": "螢幕錄製",
-      "permissionDescription": "macOS 需要螢幕錄製權限才能擷取螢幕。"
+      "permissionDescription": "macOS 需要螢幕錄製權限才能擷取螢幕。",
+      "relaunchHint": "螢幕錄製權限是在 OpenWhispr 執行期間授予的。請結束並重新開啟 OpenWhispr 以開始擷取螢幕截圖。"
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",

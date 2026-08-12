@@ -30,7 +30,14 @@ function fakeImage(bytesAtQuality, { edge = 1568, resizes = [] } = {}) {
 // branch is skipped on Linux CI and every status looks granted.
 function loadCapture(t, { image, platform = "darwin", accessStatus = "granted" }) {
   delete require.cache[modulePath];
-  const calls = { thumbnailSizes: [] };
+  let currentAccessStatus = accessStatus;
+  const calls = {
+    thumbnailSizes: [],
+    warns: [],
+    setAccessStatus: (status) => {
+      currentAccessStatus = status;
+    },
+  };
 
   const originalPlatform = process.platform;
   Object.defineProperty(process, "platform", { value: platform, configurable: true });
@@ -55,7 +62,14 @@ function loadCapture(t, { image, platform = "darwin", accessStatus = "granted" }
             return [{ display_id: "1", thumbnail: image }];
           },
         },
-        systemPreferences: { getMediaAccessStatus: () => accessStatus },
+        systemPreferences: { getMediaAccessStatus: () => currentAccessStatus },
+      };
+    }
+    if (request.endsWith("debugLogger")) {
+      return {
+        warn: (message, meta, category) => calls.warns.push({ message, meta, category }),
+        debug: () => {},
+        info: () => {},
       };
     }
     return originalLoad.call(this, request, parent, isMain);
@@ -115,6 +129,57 @@ test("capture is skipped when screen recording access is not granted", async (t)
 
   assert.equal(await capture.captureCursorDisplay(), null);
   assert.equal(calls.thumbnailSizes.length, 0);
+  // The skip must be diagnosable from the debug log, with the TCC status.
+  assert.deepEqual(calls.warns, [
+    {
+      message: "Screen context capture skipped",
+      meta: { accessStatus: "denied" },
+      category: "screenContext",
+    },
+  ]);
+});
+
+test("a grant made while the app is running is flagged as needing a relaunch", (t) => {
+  const { capture, calls } = loadCapture(t, {
+    image: fakeImage(() => 300_000),
+    accessStatus: "denied",
+  });
+
+  // Prime the launch-time snapshot, as ipcHandlers does at registration.
+  capture.getAccessStatus();
+  calls.setAccessStatus("granted");
+
+  assert.deepEqual(capture.getAccessResult(), {
+    granted: true,
+    status: "granted",
+    supported: true,
+    needsRelaunch: true,
+  });
+});
+
+test("a grant that predates launch never asks for a relaunch", (t) => {
+  const { capture } = loadCapture(t, { image: fakeImage(() => 300_000) });
+
+  assert.deepEqual(capture.getAccessResult(), {
+    granted: true,
+    status: "granted",
+    supported: true,
+    needsRelaunch: false,
+  });
+});
+
+test("non-macOS platforms never need a relaunch", (t) => {
+  const { capture } = loadCapture(t, {
+    image: fakeImage(() => 300_000),
+    platform: "win32",
+  });
+
+  assert.deepEqual(capture.getAccessResult(), {
+    granted: true,
+    status: "granted",
+    supported: true,
+    needsRelaunch: false,
+  });
 });
 
 test("the captured thumbnail is bounded to the vision-model edge", async (t) => {
