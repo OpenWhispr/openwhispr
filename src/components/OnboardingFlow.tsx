@@ -1054,7 +1054,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       {/* Content - This will grow to fill available space */}
       <div
         className={`relative flex-1 overflow-y-auto ${
-          currentStep === 0 ? "flex" : "px-6 md:px-12 py-6"
+          currentStep === 0
+            ? // No scrollbar gutter: it would inset the content and crop the
+              // full-bleed hero short of the window edge. Still scrollable.
+              "flex [&::-webkit-scrollbar]:hidden"
+            : "px-6 md:px-12 py-6"
         }`}
       >
         {currentStep === 0 && onboardingPlatform === "darwin" && (
