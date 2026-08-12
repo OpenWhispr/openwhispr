@@ -20,7 +20,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Primary — inverse capsule (black in light, white in dark)
+        // Primary — brand blue capsule
         default: [
           "text-primary-foreground bg-primary",
           "hover:bg-primary/90",

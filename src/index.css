@@ -6,23 +6,24 @@
   /* OpenWhispr Theme — registers color tokens with Tailwind v4.
      These are the light-mode defaults; .dark overrides them below.
 
-     Design language v2: color is state, never decoration.
-     - primary = inverse (black in light, white in dark) — owns primary actions
-     - accent  = selection blue — ONLY for selected/active states
+     Design language v2: color carries meaning, never decoration.
+     - primary = OpenWhispr brand blue (#2563eb / blue-600) — owns primary actions
+     - accent  = the same brand blue — selected/active states
+     - one blue only: primary, accent, ring, link, focus border all share it
      - warm-neutral sunken surfaces, alpha hairlines, no decorative color */
-  --color-primary: #171717;
+  --color-primary: #2563eb;
   --color-primary-foreground: #ffffff;
   --color-secondary: #f7f4f4;
   --color-secondary-foreground: #171717;
   --color-muted: #f7f4f4;
   --color-muted-foreground: oklch(0 0 0 / 0.55);
-  --color-accent: #4079ed;
+  --color-accent: #2563eb;
   --color-accent-foreground: #ffffff;
   --color-destructive: #dc2626;
   --color-destructive-foreground: #ffffff;
   --color-border: #eeecea;
   --color-input: #f7f4f4;
-  --color-ring: #4079ed;
+  --color-ring: #2563eb;
   --color-background: #ffffff;
   --color-foreground: #171717;
   --color-card: #ffffff;
@@ -47,7 +48,7 @@
   /* Border states — hairlines; dividers use alpha so they sit on any tint */
   --color-border-subtle: oklch(0 0 0 / 0.05);
   --color-border-hover: #ddd9d5;
-  --color-border-active: #4079ed;
+  --color-border-active: #2563eb;
 
   /* Radius tiers — fixed by role, never per-instance.
      control 8 / tile 12 / card 16 / floating 20 / window 44 / actions = pill */
@@ -93,27 +94,27 @@
 
 .dark {
   /* Dark mode — near-black charcoal, flat depth via fill steps.
-     primary inverts to white (inverse capsule), accent stays selection blue,
-     hairlines are white-alpha so they sit on any surface step. */
+     primary stays the brand blue (lifted for dark surfaces), links lighter
+     still for text contrast, hairlines white-alpha to sit on any surface step. */
   --color-background: oklch(0.2 0.005 260);
   --color-foreground: oklch(0.93 0 0);
   --color-card: oklch(0.24 0.006 260);
   --color-card-foreground: oklch(0.93 0 0);
   --color-popover: oklch(0.26 0.007 260);
   --color-popover-foreground: oklch(0.93 0 0);
-  --color-primary: oklch(0.96 0 0);
-  --color-primary-foreground: oklch(0.17 0 0);
+  --color-primary: oklch(0.65 0.2 262);
+  --color-primary-foreground: oklch(0.99 0 0);
   --color-secondary: oklch(0.26 0.006 260);
   --color-secondary-foreground: oklch(0.9 0 0);
   --color-muted: oklch(0.25 0.006 260);
   --color-muted-foreground: oklch(1 0 0 / 0.6);
-  --color-accent: oklch(0.62 0.17 262);
+  --color-accent: oklch(0.65 0.2 262);
   --color-accent-foreground: oklch(0.99 0 0);
   --color-destructive: oklch(0.62 0.22 25);
   --color-destructive-foreground: oklch(0.99 0 0);
   --color-border: oklch(1 0 0 / 0.08);
   --color-input: oklch(0.25 0.006 260);
-  --color-ring: oklch(0.62 0.17 262);
+  --color-ring: oklch(0.65 0.2 262);
   --color-success: oklch(0.7 0.18 145);
   --color-success-foreground: oklch(0.99 0 0);
   --color-warning: oklch(0.75 0.15 70);
@@ -131,8 +132,8 @@
   /* Border states — alpha hairlines */
   --color-border-subtle: oklch(1 0 0 / 0.05);
   --color-border-hover: oklch(1 0 0 / 0.14);
-  --color-border-active: oklch(0.62 0.17 262);
-  --color-link: oklch(0.67 0.1 250);
+  --color-border-active: oklch(0.65 0.2 262);
+  --color-link: oklch(0.72 0.14 260);
 
   /* Surfaces carry no shadows; transient layers keep one restrained shadow */
   --shadow-card: none;
