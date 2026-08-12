@@ -394,7 +394,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       if (useLocalWhisper && localTranscriptionProvider === "whisper") {
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu) {
+          if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
             if (!status.downloaded) results.transcription = true;
           } else {
             const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();

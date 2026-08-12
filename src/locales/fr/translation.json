@@ -107,7 +107,8 @@
     "sound": "Veuillez ouvrir les paramètres son du système (par exemple, pavucontrol).",
     "accessibility": "Les paramètres d'accessibilité ne sont pas disponibles sur cette plateforme.",
     "systemAudio": "Les paramètres audio système ne sont pas disponibles sur cette plateforme.",
-    "screenRecording": "Les réglages d'enregistrement de l'écran ne sont pas disponibles sur cette plateforme."
+    "screenRecording": "Les réglages d'enregistrement de l'écran ne sont pas disponibles sur cette plateforme.",
+    "loginItems": "Les réglages des éléments d'ouverture ne sont pas disponibles sur cette plateforme."
   },
   "upgradePrompt": {
     "paymentFailed": "Nous n'avons pas pu traiter votre paiement",
@@ -449,6 +450,7 @@
     "custom": {
       "endpointWithProtocol": "Saisissez une URL de base complète avec protocole (ex : https://server/v1).",
       "httpsRequired": "HTTPS requis (HTTP autorisé seulement en réseau local).",
+      "endpointInvalid": "Le point de terminaison personnalisé est invalide ou non configuré. Vérifiez l'URL du point de terminaison dans Réglages → Modèles d'IA.",
       "endpointUnauthorized": "Le endpoint a rejeté la requête (401/403). Ajoutez une clé API ou ajustez l'authentification du serveur.",
       "endpointTitle": "URL du endpoint",
       "endpointExamples": "Exemples :",
@@ -1891,11 +1893,16 @@
       },
       "startup": {
         "launchAtLogin": "Lancer au démarrage",
-        "launchAtLoginDescription": "Démarrer OpenWhispr automatiquement à la connexion",
+        "launchAtLoginDescription": "Lancer OpenWhispr en arrière-plan à l'ouverture de session",
         "title": "Démarrage",
         "description": "Contrôlez le comportement d'OpenWhispr au lancement",
         "startMinimized": "Démarrer réduit",
-        "startMinimizedDescription": "Lancer sans afficher la fenêtre du panneau de contrôle"
+        "startMinimizedDescription": "Lancer sans afficher la fenêtre du panneau de contrôle",
+        "needsApproval": {
+          "title": "Autorisation requise dans Réglages Système",
+          "description": "macOS a enregistré OpenWhispr comme élément d'ouverture, mais attend que vous l'autorisiez dans Éléments d'ouverture.",
+          "action": "Ouvrir Éléments d'ouverture"
+        }
       },
       "waylandPaste": {
         "title": "Configuration du collage Wayland",

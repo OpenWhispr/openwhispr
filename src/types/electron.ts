@@ -484,6 +484,9 @@ export interface GpuInfo {
   gpuName?: string;
   driverVersion?: string;
   vramMb?: number;
+  computeCap?: number;
+  /** Whether the card meets the shipped CUDA build's minimum compute capability. */
+  cudaSupported?: boolean;
 }
 
 export interface CudaWhisperStatus {
@@ -491,6 +494,8 @@ export interface CudaWhisperStatus {
   downloading: boolean;
   path: string | null;
   gpuInfo: GpuInfo;
+  /** CUDA fell back to CPU on this machine and stays off until retried. */
+  gpuFailed?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -498,6 +503,21 @@ export interface VulkanWhisperStatus {
   downloading: boolean;
   vulkan: VulkanGpuResult;
   hasNvidiaGpu: boolean;
+  /** Vulkan fell back to CPU on this machine and stays off until retried. */
+  gpuFailed?: boolean;
+}
+
+export interface WhisperServerStatus {
+  available: boolean;
+  running: boolean;
+  port: number | null;
+  hostname: string;
+  isRemote: boolean;
+  modelPath: string | null;
+  modelName: string | null;
+  gpuBackend: "cuda" | "vulkan" | null;
+  /** True only when the running server is actually using a local GPU backend. */
+  gpuAccelerated: boolean;
 }
 
 export interface WhisperCheckResult {
@@ -1275,6 +1295,10 @@ declare global {
         error?: string;
       }>;
 
+      // Whisper server lifecycle
+      whisperServerStatus: () => Promise<WhisperServerStatus>;
+      whisperGpuRetry: () => Promise<{ success: boolean; willRestart: boolean }>;
+
       // CUDA GPU acceleration
       listGpus?: () => Promise<GpuDevice[]>;
       setGpuDeviceIndex?: (
@@ -1284,7 +1308,11 @@ declare global {
       getGpuDeviceIndex?: (purpose: "transcription" | "intelligence") => Promise<string>;
       detectGpu: () => Promise<GpuInfo>;
       getCudaWhisperStatus: () => Promise<CudaWhisperStatus>;
-      downloadCudaWhisperBinary: () => Promise<{ success: boolean; error?: string }>;
+      downloadCudaWhisperBinary: () => Promise<{
+        success: boolean;
+        willRestart?: boolean;
+        error?: string;
+      }>;
       cancelCudaWhisperDownload: () => Promise<{ success: boolean }>;
       deleteCudaWhisperBinary: () => Promise<{ success: boolean }>;
       onCudaDownloadProgress: (
@@ -1298,7 +1326,11 @@ declare global {
 
       // Vulkan GPU acceleration (whisper on AMD/Intel GPUs)
       getVulkanWhisperStatus: () => Promise<VulkanWhisperStatus>;
-      downloadVulkanWhisperBinary: () => Promise<{ success: boolean; error?: string }>;
+      downloadVulkanWhisperBinary: () => Promise<{
+        success: boolean;
+        willRestart?: boolean;
+        error?: string;
+      }>;
       cancelVulkanWhisperDownload: () => Promise<{ success: boolean }>;
       deleteVulkanWhisperBinary: () => Promise<{ success: boolean; deletedCount?: number }>;
       onVulkanWhisperDownloadProgress: (
@@ -1588,6 +1620,16 @@ declare global {
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
       getCleanupCustomKey?: () => Promise<string | null>;
       saveCleanupCustomKey?: (key: string) => Promise<void>;
+      getNoteFormattingCustomKey?: () => Promise<string | null>;
+      saveNoteFormattingCustomKey?: (key: string) => Promise<void>;
+      getTranslationCustomKey?: () => Promise<string | null>;
+      saveTranslationCustomKey?: (key: string) => Promise<void>;
+      getDictationAgentCustomKey?: () => Promise<string | null>;
+      saveDictationAgentCustomKey?: (key: string) => Promise<void>;
+      getDictationAgentVisionCustomKey?: () => Promise<string | null>;
+      saveDictationAgentVisionCustomKey?: (key: string) => Promise<void>;
+      getChatAgentCustomKey?: () => Promise<string | null>;
+      saveChatAgentCustomKey?: (key: string) => Promise<void>;
 
       // Enterprise provider key persistence
       getBedrockRegion?: () => Promise<string | null>;
@@ -1692,6 +1734,7 @@ declare global {
       openAccessibilitySettings?: () => Promise<{ success: boolean; error?: string }>;
       openSystemAudioSettings?: () => Promise<{ success: boolean; error?: string }>;
       openScreenRecordingSettings?: () => Promise<{ success: boolean; error?: string }>;
+      openLoginItemsSettings?: () => Promise<{ success: boolean; error?: string }>;
       checkScreenRecordingAccess?: () => Promise<ScreenRecordingAccessResult>;
       requestScreenRecordingAccess?: () => Promise<ScreenRecordingAccessResult>;
       captureScreenContext?: () => Promise<ScreenContextImage | null>;
@@ -1711,8 +1754,10 @@ declare global {
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
       notifyPanelStartPositionChanged?: (position: string) => void;
 
-      // Auto-start at login
-      getAutoStartEnabled?: () => Promise<boolean>;
+      // Auto-start at login. requiresApproval is macOS-only: SMAppService can
+      // register the login item and still leave it awaiting approval in System
+      // Settings, which otherwise looks like a toggle that will not stick.
+      getAutoStartEnabled?: () => Promise<{ enabled: boolean; requiresApproval: boolean }>;
       setAutoStartEnabled?: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
 
       // Auth

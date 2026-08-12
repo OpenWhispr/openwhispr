@@ -392,6 +392,12 @@ export default function TranscriptionModelPicker({
     percentage: 0,
   });
   const [gpuDismissed, setGpuDismissed] = useState(false);
+  // The pack fell back to CPU on this machine (persisted by main until retried)
+  const [gpuFailed, setGpuFailed] = useState(false);
+  // A server reload with the new backend is in flight (Vulkan cold starts are slow)
+  const [gpuActivating, setGpuActivating] = useState(false);
+  // Live truth from the running server; "active" is never inferred from a download
+  const [gpuActive, setGpuActive] = useState(false);
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -591,16 +597,20 @@ export default function TranscriptionModelPicker({
     if (getCachedPlatform() === "darwin") return;
     const detect = async () => {
       try {
+        // Cards below the CUDA build's kernel floor (e.g. Pascal) crash at the
+        // first kernel launch, so they get the Vulkan pack like AMD/Intel GPUs.
         const cuda = await window.electronAPI?.getCudaWhisperStatus?.();
-        if (cuda?.gpuInfo.hasNvidiaGpu) {
+        if (cuda?.gpuInfo.hasNvidiaGpu && cuda.gpuInfo.cudaSupported) {
           setGpuBackend("cuda");
           setGpuDownloaded(cuda.downloaded);
+          setGpuFailed(!!cuda.gpuFailed);
           return;
         }
         const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
         if (vulkan?.vulkan.available) {
           setGpuBackend("vulkan");
           setGpuDownloaded(vulkan.downloaded);
+          setGpuFailed(!!vulkan.gpuFailed);
         }
       } catch {}
     };
@@ -616,6 +626,48 @@ export default function TranscriptionModelPicker({
     return subscribe?.((data) => setGpuProgress(data));
   }, [gpuDownloading, gpuBackend]);
 
+  // Live server state: "GPU acceleration active" reflects what the server is
+  // actually running on, not just that a pack is on disk (a crashed GPU server
+  // silently falls back to CPU). Faster poll while an activation is in flight.
+  useEffect(() => {
+    if (!effectiveLocal || internalLocalProvider !== "whisper" || !gpuDownloaded) return;
+    const poll = () => {
+      window.electronAPI
+        ?.whisperServerStatus?.()
+        .then((status) => {
+          setGpuActive(!!status?.gpuAccelerated);
+          if (status?.gpuAccelerated) setGpuActivating(false);
+        })
+        .catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, gpuActivating ? 1000 : 5000);
+    return () => clearInterval(id);
+  }, [effectiveLocal, internalLocalProvider, gpuDownloaded, gpuActivating]);
+
+  // Safety valve: a Vulkan cold start can take up to ~2 minutes (see #698);
+  // past that the live status or a fallback notification settles the state.
+  useEffect(() => {
+    if (!gpuActivating) return;
+    const timeout = setTimeout(() => setGpuActivating(false), 150_000);
+    return () => clearTimeout(timeout);
+  }, [gpuActivating]);
+
+  // Main falls back to CPU (and remembers it) when a GPU server crashes
+  useEffect(() => {
+    const onFallback = () => {
+      setGpuFailed(true);
+      setGpuActivating(false);
+      setGpuActive(false);
+    };
+    const disposeCuda = window.electronAPI?.onCudaFallbackNotification?.(onFallback);
+    const disposeVulkan = window.electronAPI?.onGpuFallbackNotification?.(onFallback);
+    return () => {
+      disposeCuda?.();
+      disposeVulkan?.();
+    };
+  }, []);
+
   const handleGpuDownload = async () => {
     setGpuDownloading(true);
     try {
@@ -623,10 +675,22 @@ export default function TranscriptionModelPicker({
         gpuBackend === "cuda"
           ? await window.electronAPI?.downloadCudaWhisperBinary?.()
           : await window.electronAPI?.downloadVulkanWhisperBinary?.();
-      if (result?.success) setGpuDownloaded(true);
+      if (result?.success) {
+        setGpuDownloaded(true);
+        setGpuFailed(false);
+        // Main reloads the server with the new backend only when one is loaded;
+        // otherwise the pack simply engages on the next dictation.
+        setGpuActivating(!!result.willRestart);
+      }
     } finally {
       setGpuDownloading(false);
     }
+  };
+
+  const handleGpuRetry = async () => {
+    setGpuFailed(false);
+    const result = await window.electronAPI?.whisperGpuRetry?.();
+    setGpuActivating(!!result?.willRestart);
   };
 
   const handleGpuDelete = async () => {
@@ -634,7 +698,12 @@ export default function TranscriptionModelPicker({
       gpuBackend === "cuda"
         ? await window.electronAPI?.deleteCudaWhisperBinary?.()
         : await window.electronAPI?.deleteVulkanWhisperBinary?.();
-    if (result?.success) setGpuDownloaded(false);
+    if (result?.success) {
+      setGpuDownloaded(false);
+      setGpuFailed(false);
+      setGpuActivating(false);
+      setGpuActive(false);
+    }
   };
 
   const handleGpuCancel = async () => {
@@ -1145,8 +1214,41 @@ export default function TranscriptionModelPicker({
                 {gpuDownloaded ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Check size={13} className="text-success" />
-                      <span className="text-xs font-medium text-foreground">{t("gpu.active")}</span>
+                      {gpuFailed ? (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
+                          <span className="text-xs font-medium text-foreground">
+                            {t("gpu.activationFailed")}
+                          </span>
+                          <button
+                            onClick={handleGpuRetry}
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+                          >
+                            {t("gpu.retry")}
+                          </button>
+                        </>
+                      ) : gpuActivating ? (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
+                          <span className="text-xs font-medium text-foreground">
+                            {t("gpu.activating")}
+                          </span>
+                        </>
+                      ) : gpuActive ? (
+                        <>
+                          <Check size={13} className="text-success" />
+                          <span className="text-xs font-medium text-foreground">
+                            {t("gpu.active")}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
+                          <span className="text-xs font-medium text-foreground">
+                            {t("gpu.ready")}
+                          </span>
+                        </>
+                      )}
                     </div>
                     <Button
                       onClick={handleGpuDelete}

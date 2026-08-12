@@ -13,10 +13,13 @@ const EXPECTED_DIGESTS = {
   },
 };
 
+const BIN_SUBDIR = "whisper-cuda";
+
 class WhisperCudaManager extends GpuBinaryManager {
   constructor() {
     super({
       name: "CUDA whisper",
+      dirName: BIN_SUBDIR,
       releaseUrl: `https://api.github.com/repos/OpenWhispr/whisper.cpp/releases/tags/${WHISPER_CPP_TAG}`,
       expectedDigests: EXPECTED_DIGESTS[WHISPER_CPP_TAG],
       assets: {
@@ -71,3 +74,4 @@ class WhisperCudaManager extends GpuBinaryManager {
 }
 
 module.exports = WhisperCudaManager;
+module.exports.BIN_SUBDIR = BIN_SUBDIR;

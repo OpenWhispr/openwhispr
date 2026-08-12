@@ -107,7 +107,8 @@
     "sound": "Abre la configuración de sonido del sistema (por ejemplo, pavucontrol).",
     "accessibility": "La configuración de accesibilidad no está disponible en esta plataforma.",
     "systemAudio": "La configuración de audio del sistema no está disponible en esta plataforma.",
-    "screenRecording": "La configuración de grabación de pantalla no está disponible en esta plataforma."
+    "screenRecording": "La configuración de grabación de pantalla no está disponible en esta plataforma.",
+    "loginItems": "La configuración de elementos de inicio no está disponible en esta plataforma."
   },
   "upgradePrompt": {
     "paymentFailed": "No pudimos procesar tu pago",
@@ -449,6 +450,7 @@
     "custom": {
       "endpointWithProtocol": "Introduce una URL base completa con protocolo (por ejemplo, https://server/v1).",
       "httpsRequired": "Se requiere HTTPS (HTTP solo para red local).",
+      "endpointInvalid": "El endpoint personalizado no es válido o no está configurado. Revisa la URL del endpoint en Ajustes → Modelos de IA.",
       "endpointUnauthorized": "El endpoint rechazó la solicitud (401/403). Agrega una clave API o ajusta la autenticación del servidor.",
       "endpointTitle": "URL del endpoint",
       "endpointExamples": "Ejemplos:",
@@ -1653,11 +1655,16 @@
       },
       "startup": {
         "launchAtLogin": "Abrir al iniciar sesión",
-        "launchAtLoginDescription": "Inicia OpenWhispr automáticamente al iniciar sesión",
+        "launchAtLoginDescription": "Inicia OpenWhispr en segundo plano al iniciar sesión",
         "title": "Inicio",
         "description": "Controla el comportamiento de OpenWhispr al iniciar",
         "startMinimized": "Iniciar minimizado",
-        "startMinimizedDescription": "Iniciar sin mostrar la ventana del panel de control"
+        "startMinimizedDescription": "Iniciar sin mostrar la ventana del panel de control",
+        "needsApproval": {
+          "title": "Se necesita aprobación en Configuración del Sistema",
+          "description": "macOS registró OpenWhispr como elemento de inicio, pero espera que lo permitas en Elementos de inicio.",
+          "action": "Abrir Elementos de inicio"
+        }
       },
       "waylandPaste": {
         "title": "Configuración de pegado en Wayland",

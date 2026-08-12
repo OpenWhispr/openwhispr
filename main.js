@@ -266,6 +266,7 @@ const ParakeetManager = require("./src/helpers/parakeet");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
 const dockManager = require("./src/helpers/dockManager");
+const autoStart = require("./src/helpers/autoStart");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
 const CliBridge = require("./src/helpers/cliBridge");
 const UpdateManager = require("./src/updater");
@@ -277,6 +278,7 @@ const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
+const { migrateLegacyBinDir } = require("./src/helpers/gpuBinaryManager");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
 const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
@@ -382,6 +384,28 @@ function cleanupOrphanedLinuxRestoreToken() {
   } catch {}
 }
 
+function syncAutoStartEntry() {
+  try {
+    if (autoStart.syncAutoStartEntry()) {
+      debugLogger.info("Re-pointed the launch-at-login entry at the current executable");
+    }
+  } catch (error) {
+    debugLogger.warn("Failed to sync the launch-at-login entry", { error: error?.message });
+  }
+}
+
+// Reading the login item touches the OS, and failing to answer "did the session
+// start us?" must not stop the app from starting at all. Falling back to false
+// just shows the window, which is what every launch did before.
+function wasLaunchedAtLoginHidden() {
+  try {
+    return autoStart.wasLaunchedAtLoginHidden();
+  } catch (error) {
+    if (debugLogger) debugLogger.warn("Failed to detect a login launch", { error: error?.message });
+    return false;
+  }
+}
+
 function initializeCoreManagers() {
   setupProductionPath();
 
@@ -402,6 +426,12 @@ function initializeCoreManagers() {
   if (process.platform !== "darwin") {
     whisperCudaManager = new WhisperCudaManager();
     whisperVulkanManager = new WhisperVulkanManager();
+    // Heal installs from before GPU packs got per-pack directories; must run
+    // before startup pre-warm resolves any GPU binary path.
+    const LlamaVulkanManager = require("./src/helpers/llamaVulkanManager");
+    migrateLegacyBinDir([whisperCudaManager, whisperVulkanManager, new LlamaVulkanManager()]);
+    // Lets every server start resolve its GPU backend from installed packs
+    whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
   }
   parakeetManager = new ParakeetManager();
   diarizationManager = new DiarizationManager();
@@ -438,6 +468,7 @@ function initializeCoreManagers() {
   // doesn't pay the probe spawn. No-ops on non-Windows.
   windowsLoopbackAudioManager.getCapability().catch(() => {});
   cleanupOrphanedLinuxRestoreToken();
+  syncAutoStartEntry();
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
   windowManager.selectionManager = selectionManager;
@@ -497,7 +528,10 @@ function initializeDeferredManagers() {
   });
   clipboardManager.preWarmAccessibility();
   trayManager = new TrayManager();
-  globeKeyManager = new GlobeKeyManager();
+  globeKeyManager = new GlobeKeyManager({
+    // Lets the listener put the user's macOS Globe action back after a crash.
+    preferenceStatePath: path.join(app.getPath("userData"), "globe-preference-state.json"),
+  });
 
   if (process.platform === "darwin") {
     globeKeyManager.on("error", (error) => {
@@ -945,9 +979,12 @@ async function startApp() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
-  // Create windows FIRST so the user sees UI as soon as possible
-  const startMinimized = environmentManager.getStartMinimized();
-  if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized });
+  // Create windows FIRST so the user sees UI as soon as possible.
+  // A login launch goes to the tray whatever the preference says: the user asked
+  // the OS to start us, not to put a window in front of them at every login.
+  const launchedHidden = wasLaunchedAtLoginHidden();
+  const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
+  if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
@@ -1101,16 +1138,10 @@ async function startApp() {
     }, WHISPER_WAKE_REWARM_DELAY_MS);
   });
 
-  // Non-blocking server pre-warming. CUDA wins when both GPU backends are enabled.
-  const useCuda = process.env.WHISPER_CUDA_ENABLED === "true" && whisperCudaManager?.isDownloaded();
+  // Non-blocking server pre-warming; GPU backend resolved by the manager
   const whisperSettings = {
     localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
     whisperModel: process.env.LOCAL_WHISPER_MODEL,
-    useCuda,
-    useVulkan:
-      !useCuda &&
-      process.env.WHISPER_VULKAN_ENABLED === "true" &&
-      whisperVulkanManager?.isDownloaded(),
   };
   whisperManager.initializeAtStartup(whisperSettings).catch((err) => {
     debugLogger.debug("Whisper startup init error (non-fatal)", { error: err.message });
@@ -1411,14 +1442,11 @@ async function startApp() {
       }
     });
 
-    const syncSuppressedMouseButtons = () => {
-      const buttons = [];
-      for (const slotName of ["dictation", "agent", "voiceAgent", "translation"]) {
-        for (const hotkey of hotkeyManager.getSlotHotkeys(slotName)) {
-          if (isMouseButtonHotkey(hotkey)) buttons.push(hotkey);
-        }
-      }
-      globeKeyManager.setSuppressedMouseButtons(buttons);
+    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "agent", "voiceAgent", "translation"];
+    const syncMacNativeHotkeyConfiguration = () => {
+      globeKeyManager.setConfiguration(
+        hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
+      );
     };
 
     // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
@@ -1493,15 +1521,17 @@ async function startApp() {
       }
     });
 
-    syncSuppressedMouseButtons();
+    syncMacNativeHotkeyConfiguration();
     globeKeyManager.start();
-    hotkeyManager.once("hotkey-loaded", syncSuppressedMouseButtons);
+    hotkeyManager.on("hotkey-loaded", syncMacNativeHotkeyConfiguration);
 
     ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
       if (enabled) {
-        globeKeyManager.setSuppressedMouseButtons([]);
+        // Let mouse buttons through so they can be captured, but keep macOS's
+        // Globe action down so choosing Globe cannot flash the emoji viewer.
+        globeKeyManager.setConfiguration({ mouseButtons: [], suppressGlobeAction: true });
       } else {
-        syncSuppressedMouseButtons();
+        syncMacNativeHotkeyConfiguration();
       }
     });
 
@@ -1540,7 +1570,7 @@ async function startApp() {
       mouseButtonDownTime = 0;
       mouseButtonIsRecording = false;
       mouseButtonLastStopTime = 0;
-      syncSuppressedMouseButtons();
+      syncMacNativeHotkeyConfiguration();
     });
   }
 

@@ -13,11 +13,14 @@ const EXPECTED_DIGESTS = {
   },
 };
 
-// Statically linked — no companion libs to copy, nothing to clobber in userData/bin
+const BIN_SUBDIR = "whisper-vulkan";
+
+// Statically linked — no companion libs to copy
 class WhisperVulkanManager extends GpuBinaryManager {
   constructor() {
     super({
       name: "Vulkan whisper",
+      dirName: BIN_SUBDIR,
       releaseUrl: `https://api.github.com/repos/OpenWhispr/whisper.cpp/releases/tags/${WHISPER_CPP_TAG}`,
       expectedDigests: EXPECTED_DIGESTS[WHISPER_CPP_TAG],
       assets: {
@@ -37,3 +40,4 @@ class WhisperVulkanManager extends GpuBinaryManager {
 }
 
 module.exports = WhisperVulkanManager;
+module.exports.BIN_SUBDIR = BIN_SUBDIR;

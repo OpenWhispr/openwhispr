@@ -125,6 +125,18 @@ function canonicalTranscriptionBaseUrl(providerId: string): string | null {
   );
 }
 
+function reasoningModelBelongsToProvider(providerId: string, modelId: string): boolean {
+  if (!modelId) return false;
+  // Custom and OpenRouter ids are free-form; any remembered id is valid.
+  // Tinfoil's registry entry is refreshed in place from its live catalog.
+  if (providerId === "custom" || providerId === "openrouter") return true;
+  return (
+    modelRegistryData.cloudProviders
+      .find((provider) => provider.id === providerId)
+      ?.models.some((model) => model.id === modelId) ?? false
+  );
+}
+
 function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion: string): string {
   const providers =
     mode === "local"
@@ -629,6 +641,9 @@ export interface SettingsState
   /** Last model used per scope+provider (`"<context>:<providerId>"`), so switching providers restores it. */
   transcriptionModelByProvider: Record<string, string>;
 
+  /** LLM twin of transcriptionModelByProvider, keyed `"<scope>:<providerId>"`. */
+  reasoningModelByProvider: Record<string, string>;
+
   noteFormattingMode: InferenceMode;
   noteFormattingProvider: string;
   noteFormattingModel: string;
@@ -767,6 +782,11 @@ export interface SettingsState
   switchCloudTranscriptionProvider: (
     context: TranscriptionPolicyContext,
     providerId: string
+  ) => void;
+  switchReasoningProvider: (
+    scope: InferenceScope,
+    providerId: string,
+    fallbackModel?: string
   ) => void;
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
@@ -917,6 +937,22 @@ function persistTranscriptionModelMemory(memory: Record<string, string>) {
   useSettingsStore.setState({ transcriptionModelByProvider: memory });
 }
 
+function persistReasoningModelMemory(memory: Record<string, string>) {
+  if (isBrowser) localStorage.setItem("reasoningModelByProvider", JSON.stringify(memory));
+  useSettingsStore.setState({ reasoningModelByProvider: memory });
+}
+
+function readModelMemory(key: string): Record<string, string> {
+  try {
+    const parsed = JSON.parse(readString(key, "{}"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, string>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 /** Writes a string setting whose key is computed rather than known up front. */
 export function setStringSetting(key: keyof SettingsState, value: string): void {
   createStringSetter(key)(value);
@@ -1014,6 +1050,11 @@ const SECRET_IPC_SAVERS = {
   tinfoil: "saveTinfoilKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
+  noteFormattingCustom: "saveNoteFormattingCustomKey",
+  translationCustom: "saveTranslationCustomKey",
+  dictationAgentCustom: "saveDictationAgentCustomKey",
+  dictationAgentVisionCustom: "saveDictationAgentVisionCustomKey",
+  chatAgentCustom: "saveChatAgentCustomKey",
   bedrockAccessKeyId: "saveBedrockAccessKeyId",
   bedrockSecretAccessKey: "saveBedrockSecretAccessKey",
   bedrockSessionToken: "saveBedrockSessionToken",
@@ -1057,6 +1098,11 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "customTranscriptionApiKey",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
+  "noteFormattingCustomApiKey",
+  "translationCustomApiKey",
+  "dictationAgentCustomApiKey",
+  "dictationAgentVisionCustomApiKey",
+  "chatAgentCustomApiKey",
   "bedrockAccessKeyId",
   "bedrockSecretAccessKey",
   "bedrockSessionToken",
@@ -1137,16 +1183,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "cloudTranscriptionBaseUrl",
     API_ENDPOINTS.TRANSCRIPTION_BASE
   ),
-  transcriptionModelByProvider: (() => {
-    try {
-      const parsed = JSON.parse(readString("transcriptionModelByProvider", "{}"));
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? (parsed as Record<string, string>)
-        : {};
-    } catch {
-      return {};
-    }
-  })(),
+  transcriptionModelByProvider: readModelMemory("transcriptionModelByProvider"),
+  reasoningModelByProvider: readModelMemory("reasoningModelByProvider"),
   // Secrets aren't hydrated yet at construction; the BYOK default is set
   // post-hydration in initializeSettings.
   cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
@@ -1473,7 +1511,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNoteFormattingCloudMode: createStringSetter("noteFormattingCloudMode"),
   setNoteFormattingCloudBaseUrl: createStringSetter("noteFormattingCloudBaseUrl"),
   setNoteFormattingRemoteUrl: createStringSetter("noteFormattingRemoteUrl"),
-  setNoteFormattingCustomApiKey: createStringSetter("noteFormattingCustomApiKey"),
+  setNoteFormattingCustomApiKey: createSecretSetter(
+    "noteFormattingCustomApiKey",
+    "noteFormattingCustom",
+    "custom"
+  ),
 
   setTranslationMode: createStringSetter("translationMode") as (mode: InferenceMode) => void,
   setTranslationProvider: createStringSetter("translationProvider"),
@@ -1481,7 +1523,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setTranslationCloudMode: createStringSetter("translationCloudMode"),
   setTranslationCloudBaseUrl: createStringSetter("translationCloudBaseUrl"),
   setTranslationRemoteUrl: createStringSetter("translationRemoteUrl"),
-  setTranslationCustomApiKey: createStringSetter("translationCustomApiKey"),
+  setTranslationCustomApiKey: createSecretSetter(
+    "translationCustomApiKey",
+    "translationCustom",
+    "custom"
+  ),
   setTranslationDisableThinking: createBooleanSetter("translationDisableThinking"),
   setUseDictationTranslation: createBooleanSetter("useDictationTranslation"),
   setTranslationSourceLanguage: createStringSetter("translationSourceLanguage"),
@@ -1569,7 +1615,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDictationAgentCloudMode: createStringSetter("dictationAgentCloudMode"),
   setDictationAgentCloudBaseUrl: createStringSetter("dictationAgentCloudBaseUrl"),
   setDictationAgentRemoteUrl: createStringSetter("dictationAgentRemoteUrl"),
-  setDictationAgentCustomApiKey: createStringSetter("dictationAgentCustomApiKey"),
+  setDictationAgentCustomApiKey: createSecretSetter(
+    "dictationAgentCustomApiKey",
+    "dictationAgentCustom",
+    "custom"
+  ),
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
   setUseDictationAgentVisionModel: createBooleanSetter("useDictationAgentVisionModel"),
@@ -1580,7 +1630,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDictationAgentVisionModel: createStringSetter("dictationAgentVisionModel"),
   setDictationAgentVisionCloudMode: createStringSetter("dictationAgentVisionCloudMode"),
   setDictationAgentVisionCloudBaseUrl: createStringSetter("dictationAgentVisionCloudBaseUrl"),
-  setDictationAgentVisionCustomApiKey: createStringSetter("dictationAgentVisionCustomApiKey"),
+  setDictationAgentVisionCustomApiKey: createSecretSetter(
+    "dictationAgentVisionCustomApiKey",
+    "dictationAgentVisionCustom",
+    "custom"
+  ),
 
   setCleanupDisableThinking: createBooleanSetter("cleanupDisableThinking"),
   setDictationAgentDisableThinking: createBooleanSetter("dictationAgentDisableThinking"),
@@ -1636,6 +1690,34 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         ? remembered
         : defaultTranscriptionModel(providerId, context)
     );
+  },
+
+  // LLM twin of switchCloudTranscriptionProvider. The caller supplies the
+  // provider's default model because dynamic catalogs (Tinfoil) live in the UI.
+  switchReasoningProvider: (scope, providerId, fallbackModel = "") => {
+    const s = useSettingsStore.getState();
+    const cfg = selectResolvedLLMConfig(s, scope);
+    const memory = { ...s.reasoningModelByProvider };
+    // Only remember a model the outgoing provider actually owns — after a
+    // local/cloud mode round-trip the shared slot can hold a foreign id.
+    if (cfg.provider && cfg.provider !== providerId) {
+      if (reasoningModelBelongsToProvider(cfg.provider, cfg.model)) {
+        memory[`${scope}:${cfg.provider}`] = cfg.model;
+        persistReasoningModelMemory(memory);
+      }
+    } else if (reasoningModelBelongsToProvider(providerId, cfg.model)) {
+      // Reselecting the current provider with a model it owns: keep it.
+      setResolvedLLMConfig(scope, { provider: providerId });
+      return;
+    }
+    const remembered = memory[`${scope}:${providerId}`];
+    setResolvedLLMConfig(scope, {
+      provider: providerId,
+      model:
+        remembered && reasoningModelBelongsToProvider(providerId, remembered)
+          ? remembered
+          : fallbackModel,
+    });
   },
   setCloudTranscriptionMode: createStringSetter("cloudTranscriptionMode"),
   setCleanupCloudMode: createStringSetter("cleanupCloudMode"),
@@ -2097,7 +2179,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setChatAgentMode: createStringSetter("chatAgentMode") as (mode: InferenceMode) => void,
   setChatAgentCloudBaseUrl: createStringSetter("chatAgentCloudBaseUrl"),
   setChatAgentRemoteUrl: createStringSetter("chatAgentRemoteUrl"),
-  setChatAgentCustomApiKey: createStringSetter("chatAgentCustomApiKey"),
+  setChatAgentCustomApiKey: createSecretSetter(
+    "chatAgentCustomApiKey",
+    "chatAgentCustom",
+    "custom"
+  ),
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => {
     const s = useSettingsStore.getState();
@@ -2443,6 +2529,18 @@ export const selectResolvedLLMConfig = (
   };
 };
 
+// Scope custom keys are secrets kept in the OS secure store, not localStorage
+// (which is stripped on startup). Writes must go through their dedicated
+// setters so the values survive restarts.
+const SECRET_SCOPE_KEY_SETTERS = {
+  cleanupCustomApiKey: "setCleanupCustomApiKey",
+  noteFormattingCustomApiKey: "setNoteFormattingCustomApiKey",
+  translationCustomApiKey: "setTranslationCustomApiKey",
+  dictationAgentCustomApiKey: "setDictationAgentCustomApiKey",
+  dictationAgentVisionCustomApiKey: "setDictationAgentVisionCustomApiKey",
+  chatAgentCustomApiKey: "setChatAgentCustomApiKey",
+} as const;
+
 export function setResolvedLLMConfig(
   scope: InferenceScope,
   patch: Partial<Omit<ResolvedLLMConfig, "scope">>
@@ -2453,11 +2551,10 @@ export function setResolvedLLMConfig(
     if (value === undefined) continue;
     const storeKey = def.storeKeys[field as keyof InferenceScopeStoreKeys];
     if (!storeKey) continue;
-    // cleanupCustomApiKey is a secret kept in the OS secure store, not
-    // localStorage (which is stripped on startup). Route it through the
-    // dedicated setter so it survives restarts.
-    if (storeKey === "cleanupCustomApiKey") {
-      useSettingsStore.getState().setCleanupCustomApiKey(value as string);
+    const secretSetter =
+      SECRET_SCOPE_KEY_SETTERS[storeKey as keyof typeof SECRET_SCOPE_KEY_SETTERS];
+    if (secretSetter) {
+      useSettingsStore.getState()[secretSetter](value as string);
       continue;
     }
     if (isBrowser) {
@@ -2658,6 +2755,32 @@ export async function reconcileLocalModelSelections(): Promise<void> {
   clearMissingLocalModelSelections((modelId) => installed.has(modelId));
 }
 
+/**
+ * Repoints any scope still selecting a cloud model the registry no longer ships
+ * (e.g. a retired Groq id) at that provider's current default — otherwise every
+ * request 404s with an error the user can't act on. Custom, OpenRouter and
+ * Tinfoil ids are skipped: they're free-form or reconciled from the live
+ * catalog in tinfoilModels.ts.
+ */
+export function reconcileRetiredCloudModelSelections(): void {
+  const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
+  for (const scope of Object.values(INFERENCE_SCOPES)) {
+    const provider = state[scope.storeKeys.provider] as string;
+    const model = state[scope.storeKeys.model] as string;
+    if (!provider || !model || provider === "tinfoil") continue;
+    const providerDef = modelRegistryData.cloudProviders.find((p) => p.id === provider);
+    if (!providerDef || reasoningModelBelongsToProvider(provider, model)) continue;
+    const replacement = providerDef.models[0]?.id;
+    if (!replacement) continue;
+    setStringSetting(scope.storeKeys.model as keyof SettingsState, replacement);
+    logger.info(
+      "Repointed retired cloud model selection",
+      { scope: scope.storeKeys.model, from: model, to: replacement },
+      "settings"
+    );
+  }
+}
+
 export function getEffectiveCleanupModel() {
   const state = getSettings();
   if (selectIsCloudCleanupMode(state)) {
@@ -2679,6 +2802,30 @@ export function isCloudTranslationMode() {
 }
 
 // --- Initialization ---
+
+// One-time migration: scope custom keys lived in plaintext localStorage before
+// moving to the OS secure store. Prefer the secure value; otherwise push the
+// legacy plaintext copy into the secure store — the stale-secret sweep in
+// initializeSettings then strips it from localStorage.
+async function migrateScopeCustomKeys(
+  entries: ReadonlyArray<[keyof SettingsState & string, string | null | undefined, string]>
+): Promise<Partial<SettingsState>> {
+  const updates: Record<string, string> = {};
+  for (const [storeKey, secureValue, saverName] of entries) {
+    let value = secureValue || "";
+    if (!value) {
+      const legacy = localStorage.getItem(storeKey)?.trim() || "";
+      if (legacy) {
+        value = legacy;
+        const save = window.electronAPI?.[saverName as keyof typeof window.electronAPI] as
+          ((key: string) => Promise<unknown>) | undefined;
+        await save?.(legacy);
+      }
+    }
+    updates[storeKey] = value;
+  }
+  return updates as Partial<SettingsState>;
+}
 
 let hasInitialized = false;
 
@@ -2706,6 +2853,11 @@ export async function initializeSettings(): Promise<void> {
         tinfoil,
         customTx,
         customRx,
+        noteFormattingCustom,
+        translationCustom,
+        dictationAgentCustom,
+        dictationAgentVisionCustom,
+        chatAgentCustom,
         bedrockAccessKeyId,
         bedrockSecretAccessKey,
         bedrockSessionToken,
@@ -2725,6 +2877,11 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getTinfoilKey?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
+        window.electronAPI.getNoteFormattingCustomKey?.(),
+        window.electronAPI.getTranslationCustomKey?.(),
+        window.electronAPI.getDictationAgentCustomKey?.(),
+        window.electronAPI.getDictationAgentVisionCustomKey?.(),
+        window.electronAPI.getChatAgentCustomKey?.(),
         window.electronAPI.getBedrockAccessKeyId?.(),
         window.electronAPI.getBedrockSecretAccessKey?.(),
         window.electronAPI.getBedrockSessionToken?.(),
@@ -2747,6 +2904,17 @@ export async function initializeSettings(): Promise<void> {
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
         bedrockAccessKeyId: bedrockAccessKeyId || "",
+        ...(await migrateScopeCustomKeys([
+          ["noteFormattingCustomApiKey", noteFormattingCustom, "saveNoteFormattingCustomKey"],
+          ["translationCustomApiKey", translationCustom, "saveTranslationCustomKey"],
+          ["dictationAgentCustomApiKey", dictationAgentCustom, "saveDictationAgentCustomKey"],
+          [
+            "dictationAgentVisionCustomApiKey",
+            dictationAgentVisionCustom,
+            "saveDictationAgentVisionCustomKey",
+          ],
+          ["chatAgentCustomApiKey", chatAgentCustom, "saveChatAgentCustomKey"],
+        ])),
         bedrockSecretAccessKey: bedrockSecretAccessKey || "",
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
@@ -3060,6 +3228,8 @@ export async function initializeSettings(): Promise<void> {
         "settings"
       );
     }
+
+    reconcileRetiredCloudModelSelections();
 
     try {
       await reconcileLocalModelSelections();

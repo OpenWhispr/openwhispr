@@ -4,13 +4,187 @@ import Darwin
 var fnIsDown = false
 var fnInterrupted = false
 var lastModifierFlags: NSEvent.ModifierFlags = []
+var suppressedMouseButtons: Set<String> = []
 
-let suppressedMouseButtons = Set(
-    CommandLine.arguments.dropFirst()
-        .flatMap { $0.split(separator: ",") }
-        .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { !$0.isEmpty }
-)
+struct ListenerConfig: Decodable {
+    var mouseButtons: Set<String> = []
+    var suppressGlobeAction: Bool = false
+}
+
+func emit(_ message: String) {
+    FileHandle.standardOutput.write((message + "\n").data(using: .utf8)!)
+    fflush(stdout)
+}
+
+func emitWarning(_ message: String) {
+    FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
+}
+
+// Mouse buttons arrive as a positional comma-separated list; everything else is
+// an explicit flag.
+func parseArguments() -> (config: ListenerConfig, statePath: String?) {
+    var config = ListenerConfig()
+    var statePath: String?
+    var arguments = CommandLine.arguments.dropFirst().makeIterator()
+
+    while let argument = arguments.next() {
+        switch argument {
+        case "--suppress-system-globe-action":
+            config.suppressGlobeAction = true
+        case "--globe-preference-state":
+            statePath = arguments.next()
+        default:
+            config.mouseButtons.formUnion(
+                argument.split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
+        }
+    }
+
+    return (config, statePath)
+}
+
+struct GlobePreferenceState: Codable {
+    let version: Int
+    let originalValue: Int32
+    let keyExisted: Bool
+}
+
+// macOS runs the standalone Globe action (emoji viewer, input-source switch,
+// dictation) from WindowServer ahead of every event tap, so a listener cannot
+// consume the key — the only way to stop it firing alongside an OpenWhispr Globe
+// hotkey is to hold AppleFnUsageType at "Do Nothing" while we own the key.
+// TISUpdateFnUsageType is what System Settings itself calls: it persists the
+// preference and broadcasts the change so it applies live. Writing the
+// preference directly is ignored until the user's next login.
+enum GlobeSystemAction {
+    private typealias GetUsageType = @convention(c) () -> Int32
+    private typealias UpdateUsageType = @convention(c) (Int32) -> Void
+
+    private static let doNothing: Int32 = 0
+    private static let stateVersion = 1
+    private static let domain = "com.apple.HIToolbox" as CFString
+    private static let key = "AppleFnUsageType" as CFString
+
+    private static let entryPoints: (get: GetUsageType, update: UpdateUsageType)? = {
+        guard let carbon = dlopen("/System/Library/Frameworks/Carbon.framework/Carbon", RTLD_LAZY),
+              let get = dlsym(carbon, "TISGetFnUsageType"),
+              let update = dlsym(carbon, "TISUpdateFnUsageType")
+        else { return nil }
+        return (unsafeBitCast(get, to: GetUsageType.self), unsafeBitCast(update, to: UpdateUsageType.self))
+    }()
+
+    static var statePath: String?
+    private static var owned: GlobePreferenceState?
+
+    // Adopts a marker left by a crashed run so its recorded original value is
+    // used instead of mistaking our own override for the user's preference.
+    static func recoverLeftoverState() {
+        guard let state = readMarker(), let entryPoints else { return }
+        if entryPoints.get() == doNothing {
+            owned = state
+        } else {
+            // The user picked a new action since we died — theirs wins.
+            removeMarker()
+        }
+    }
+
+    static func apply() {
+        guard owned == nil else { return }
+        guard let entryPoints else {
+            emitWarning("Cannot suppress the macOS Globe action: TISUpdateFnUsageType unavailable")
+            return
+        }
+
+        let original = entryPoints.get()
+        guard original != doNothing else { return }
+
+        let state = GlobePreferenceState(
+            version: stateVersion,
+            originalValue: original,
+            keyExisted: rawValueExists()
+        )
+        // Record how to get back before changing anything.
+        guard writeMarker(state) else { return }
+
+        owned = state
+        entryPoints.update(doNothing)
+    }
+
+    static func restore() {
+        guard let state = owned, let entryPoints else { return }
+        owned = nil
+
+        // Only put the value back while it is still ours: if the user picked a
+        // new action while we were running, that choice wins.
+        if entryPoints.get() == doNothing {
+            entryPoints.update(state.originalValue)
+            // The value was a macOS-computed default before we touched it, so
+            // clear the key again to keep it tracking hardware and input sources.
+            if !state.keyExisted {
+                clearRawValue()
+            }
+        }
+
+        removeMarker()
+    }
+
+    // CFPreferencesCopyAppValue caches foreign domains for the life of the
+    // process and would miss changes made after launch.
+    private static func rawValueExists() -> Bool {
+        CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+        return CFPreferencesCopyValue(key, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost) != nil
+    }
+
+    private static func clearRawValue() {
+        CFPreferencesSetValue(key, nil, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+        CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+    }
+
+    private static func readMarker() -> GlobePreferenceState? {
+        guard let statePath, let data = FileManager.default.contents(atPath: statePath) else { return nil }
+        guard let state = try? JSONDecoder().decode(GlobePreferenceState.self, from: data),
+              state.version == stateVersion
+        else {
+            removeMarker()
+            return nil
+        }
+        return state
+    }
+
+    private static func writeMarker(_ state: GlobePreferenceState) -> Bool {
+        guard let statePath else {
+            emitWarning("Cannot suppress the macOS Globe action: no state path provided")
+            return false
+        }
+        do {
+            try JSONEncoder().encode(state).write(to: URL(fileURLWithPath: statePath), options: .atomic)
+            return true
+        } catch {
+            emitWarning("Cannot suppress the macOS Globe action: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private static func removeMarker() {
+        guard let statePath else { return }
+        try? FileManager.default.removeItem(atPath: statePath)
+    }
+}
+
+func applyConfiguration(_ config: ListenerConfig) {
+    suppressedMouseButtons = config.mouseButtons
+    if config.suppressGlobeAction {
+        GlobeSystemAction.apply()
+    } else {
+        GlobeSystemAction.restore()
+    }
+}
+
+let launchOptions = parseArguments()
+GlobeSystemAction.statePath = launchOptions.statePath
+GlobeSystemAction.recoverLeftoverState()
 
 let rightModifiers: [(UInt16, NSEvent.ModifierFlags, String)] = [
     (61, .option, "RightOption"),
@@ -27,11 +201,6 @@ let releases: [(NSEvent.ModifierFlags, String)] = [
     (.option, "option"),
     (.shift, "shift"),
 ]
-
-func emit(_ message: String) {
-    FileHandle.standardOutput.write((message + "\n").data(using: .utf8)!)
-    fflush(stdout)
-}
 
 func mouseButtonName(_ buttonNumber: Int) -> String? {
     switch buttonNumber {
@@ -89,7 +258,7 @@ if let mouseEventTap {
     CFRunLoopAddSource(CFRunLoopGetMain(), mouseRunLoopSource, .commonModes)
     CGEvent.tapEnable(tap: mouseEventTap, enable: true)
 } else {
-    FileHandle.standardError.write("Failed to create mouse event tap\n".data(using: .utf8)!)
+    emitWarning("Failed to create mouse event tap")
 }
 
 guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: { event in
@@ -125,7 +294,8 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
         lastModifierFlags = currentModifiers
     }
 }) else {
-    FileHandle.standardError.write("Failed to create event monitor\n".data(using: .utf8)!)
+    emitWarning("Failed to create event monitor")
+    GlobeSystemAction.restore()
     exit(1)
 }
 
@@ -138,9 +308,8 @@ let keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { _ in
     }
 }
 
-let signalSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-signal(SIGTERM, SIG_IGN)
-signalSource.setEventHandler {
+func shutdownListener() -> Never {
+    GlobeSystemAction.restore()
     NSEvent.removeMonitor(monitor)
     if let keyMonitor {
         NSEvent.removeMonitor(keyMonitor)
@@ -153,7 +322,49 @@ signalSource.setEventHandler {
     }
     exit(0)
 }
-signalSource.resume()
+
+// Only take over the system Globe action once the listener is known to work.
+applyConfiguration(launchOptions.config)
+
+// Reconfiguration arrives as one JSON object per line so the hotkey can change
+// without restarting; EOF means the app is gone and the Globe key goes back.
+var stdinBuffer = [UInt8]()
+let stdinSource = DispatchSource.makeReadSource(fileDescriptor: STDIN_FILENO, queue: .main)
+stdinSource.setEventHandler {
+    var chunk = [UInt8](repeating: 0, count: 4096)
+    let bytesRead = read(STDIN_FILENO, &chunk, chunk.count)
+
+    guard bytesRead > 0 else {
+        if bytesRead == 0 || (errno != EAGAIN && errno != EINTR) {
+            shutdownListener()
+        }
+        return
+    }
+
+    stdinBuffer.append(contentsOf: chunk[0..<bytesRead])
+    while let newline = stdinBuffer.firstIndex(of: UInt8(ascii: "\n")) {
+        let line = Data(stdinBuffer[..<newline])
+        stdinBuffer.removeSubrange(...newline)
+        if let config = try? JSONDecoder().decode(ListenerConfig.self, from: line) {
+            applyConfiguration(config)
+        } else {
+            emitWarning("Ignored malformed configuration line")
+        }
+    }
+}
+stdinSource.resume()
+
+func installTerminationSource(for signalNumber: Int32) -> DispatchSourceSignal {
+    signal(signalNumber, SIG_IGN)
+    let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+    source.setEventHandler { shutdownListener() }
+    source.resume()
+    return source
+}
+
+// Held for the process lifetime: releasing these sources would drop the signal
+// handlers and with them the preference restore on quit.
+let terminationSources = [SIGTERM, SIGINT].map(installTerminationSource(for:))
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)

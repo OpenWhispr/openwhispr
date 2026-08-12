@@ -1172,26 +1172,23 @@ export default function SettingsPage({
   const platform = getCachedPlatform();
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
+  const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
 
-  useEffect(() => {
-    if (platform === "linux") {
-      setAutoStartLoading(false);
-      return;
+  const readAutoStartState = useCallback(async () => {
+    if (!window.electronAPI?.getAutoStartEnabled) return;
+    try {
+      const state = await window.electronAPI.getAutoStartEnabled();
+      setAutoStartEnabled(state.enabled);
+      setAutoStartNeedsApproval(state.requiresApproval);
+    } catch (error) {
+      logger.error("Failed to get auto-start status", error, "settings");
     }
-    const loadAutoStart = async () => {
-      if (window.electronAPI?.getAutoStartEnabled) {
-        try {
-          const enabled = await window.electronAPI.getAutoStartEnabled();
-          setAutoStartEnabled(enabled);
-        } catch (error) {
-          logger.error("Failed to get auto-start status", error, "settings");
-        }
-      }
-      setAutoStartLoading(false);
-    };
-    loadAutoStart();
-  }, [platform]);
+  }, []);
+
+  useEffect(() => {
+    readAutoStartState().finally(() => setAutoStartLoading(false));
+  }, [readAutoStartState]);
 
   useEffect(() => {
     window.electronAPI?.syncNotificationPreferences?.({
@@ -1203,18 +1200,17 @@ export default function SettingsPage({
   }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders, notifyUpdates]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
-    if (window.electronAPI?.setAutoStartEnabled) {
-      try {
-        setAutoStartLoading(true);
-        const result = await window.electronAPI.setAutoStartEnabled(enabled);
-        if (result.success) {
-          setAutoStartEnabled(enabled);
-        }
-      } catch (error) {
-        logger.error("Failed to set auto-start", error, "settings");
-      } finally {
-        setAutoStartLoading(false);
-      }
+    if (!window.electronAPI?.setAutoStartEnabled) return;
+    try {
+      setAutoStartLoading(true);
+      const result = await window.electronAPI.setAutoStartEnabled(enabled);
+      // Read the state back rather than assuming: on Windows the OS can have the
+      // item disabled out from under us, and on macOS it can need approval first.
+      if (result.success) await readAutoStartState();
+    } catch (error) {
+      logger.error("Failed to set auto-start", error, "settings");
+    } finally {
+      setAutoStartLoading(false);
     }
   };
 
@@ -2824,18 +2820,39 @@ export default function SettingsPage({
                 description={t("settingsPage.general.startup.description")}
               />
               <SettingsPanel>
-                {platform !== "linux" && (
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.startup.launchAtLogin")}
+                    description={t("settingsPage.general.startup.launchAtLoginDescription")}
+                  >
+                    <Toggle
+                      checked={autoStartEnabled}
+                      onChange={(checked: boolean) => handleAutoStartChange(checked)}
+                      disabled={autoStartLoading}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                {autoStartNeedsApproval && (
                   <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.general.startup.launchAtLogin")}
-                      description={t("settingsPage.general.startup.launchAtLoginDescription")}
+                    <Alert
+                      variant="warning"
+                      className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
                     >
-                      <Toggle
-                        checked={autoStartEnabled}
-                        onChange={(checked: boolean) => handleAutoStartChange(checked)}
-                        disabled={autoStartLoading}
-                      />
-                    </SettingsRow>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>
+                        {t("settingsPage.general.startup.needsApproval.title")}
+                      </AlertTitle>
+                      <AlertDescription className="space-y-2">
+                        <p>{t("settingsPage.general.startup.needsApproval.description")}</p>
+                        <Button
+                          onClick={() => void window.electronAPI?.openLoginItemsSettings?.()}
+                          variant="outline"
+                          size="sm"
+                        >
+                          {t("settingsPage.general.startup.needsApproval.action")}
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
                   </SettingsPanelRow>
                 )}
                 <SettingsPanelRow>

@@ -8,6 +8,7 @@ import {
 import { isProviderValidForMode } from "../models/ModelRegistry";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { selectResolvedLLMConfig } from "../stores/settingsStore";
+import { inheritsFallbackEndpoint } from "./reasoningRouting.js";
 
 // The dictation agent's inference scope, shared by the dictation route in
 // audioManager and the Prompt Studio test tab so a prompt test hits the same
@@ -89,6 +90,17 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
   // otherwise the user must have picked a model for this scope specifically.
   const chosen = isCloud || !!settings.dictationAgentVisionModel?.trim();
 
+  // The endpoint falls back to the agent scope, so the key that opens it must
+  // too — an inherited endpoint with only the vision key (or none) would call
+  // the agent's host with the wrong credential.
+  const agent = selectResolvedLLMConfig(settings, "dictationAgent");
+  const borrowsAgentEndpoint = inheritsFallbackEndpoint(
+    { mode, cloudBaseUrl: settings.dictationAgentVisionCloudBaseUrl },
+    agent.mode
+  );
+  const customApiKey =
+    resolved.customApiKey || (borrowsAgentEndpoint ? agent.customApiKey || "" : "");
+
   return {
     active:
       !!settings.useDictationAgentVisionModel &&
@@ -97,9 +109,12 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
     // Cloud picks the model server-side from its vision chain.
     model: isCloud ? "" : model,
     config: {
+      // The vision override is the agent's image lane: policy and managed
+      // enforcement must judge it as the agent scope, not dictation cleanup.
+      inferenceScope: /** @type {const} */ ("dictationAgent"),
       provider,
       baseUrl: isCustom ? resolved.cloudBaseUrl || undefined : undefined,
-      customApiKey: isCustom ? resolved.customApiKey || undefined : undefined,
+      customApiKey: isCustom ? customApiKey || undefined : undefined,
       disableThinking: resolved.disableThinking,
     },
   };

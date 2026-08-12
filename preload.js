@@ -14,6 +14,23 @@ const BYOK_KEY_BRIDGES = [
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
+  {
+    base: "note-formatting-custom",
+    get: "getNoteFormattingCustomKey",
+    save: "saveNoteFormattingCustomKey",
+  },
+  { base: "translation-custom", get: "getTranslationCustomKey", save: "saveTranslationCustomKey" },
+  {
+    base: "dictation-agent-custom",
+    get: "getDictationAgentCustomKey",
+    save: "saveDictationAgentCustomKey",
+  },
+  {
+    base: "dictation-agent-vision-custom",
+    get: "getDictationAgentVisionCustomKey",
+    save: "saveDictationAgentVisionCustomKey",
+  },
+  { base: "chat-agent-custom", get: "getChatAgentCustomKey", save: "saveChatAgentCustomKey" },
 ];
 const secretKeyApi = {};
 for (const k of BYOK_KEY_BRIDGES) {
@@ -312,6 +329,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   whisperServerStart: (modelName) => ipcRenderer.invoke("whisper-server-start", modelName),
   whisperServerStop: () => ipcRenderer.invoke("whisper-server-stop"),
   whisperServerStatus: () => ipcRenderer.invoke("whisper-server-status"),
+  whisperGpuRetry: () => ipcRenderer.invoke("whisper-gpu-retry"),
 
   // CUDA GPU acceleration
   listGpus: () => ipcRenderer.invoke("list-gpus"),
@@ -597,6 +615,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openAccessibilitySettings: () => ipcRenderer.invoke("open-accessibility-settings"),
   openSystemAudioSettings: () => ipcRenderer.invoke("open-system-audio-settings"),
   openScreenRecordingSettings: () => ipcRenderer.invoke("open-screen-recording-settings"),
+  openLoginItemsSettings: () => ipcRenderer.invoke("open-login-items-settings"),
   checkScreenRecordingAccess: () => ipcRenderer.invoke("check-screen-recording-access"),
   requestScreenRecordingAccess: () => ipcRenderer.invoke("request-screen-recording-access"),
   captureScreenContext: () => ipcRenderer.invoke("capture-screen-context"),

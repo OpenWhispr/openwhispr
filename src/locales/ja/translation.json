@@ -107,7 +107,8 @@
     "sound": "システムのサウンド設定を開いてください（例: pavucontrol）。",
     "accessibility": "このプラットフォームではアクセシビリティ設定を利用できません。",
     "systemAudio": "システムオーディオの設定はこのプラットフォームでは利用できません。",
-    "screenRecording": "このプラットフォームでは画面収録の設定を利用できません。"
+    "screenRecording": "このプラットフォームでは画面収録の設定を利用できません。",
+    "loginItems": "ログイン項目の設定はこのプラットフォームでは利用できません。"
   },
   "upgradePrompt": {
     "paymentFailed": "お支払いを処理できませんでした",
@@ -449,6 +450,7 @@
     "custom": {
       "endpointWithProtocol": "プロトコルを含む完全なベース URL を入力してください（例: https://server/v1）。",
       "httpsRequired": "HTTPS が必要です（ローカルネットワークのみ HTTP を許可）。",
+      "endpointInvalid": "カスタムエンドポイントが無効か未設定です。設定 → AIモデルでエンドポイントURLを確認してください。",
       "endpointUnauthorized": "エンドポイントがリクエストを拒否しました（401/403）。API キーを追加するか、サーバーの認証設定を調整してください。",
       "endpointTitle": "エンドポイント URL",
       "endpointExamples": "例:",
@@ -1605,11 +1607,16 @@
       },
       "startup": {
         "launchAtLogin": "ログイン時に起動",
-        "launchAtLoginDescription": "ログイン時に OpenWhispr を自動的に起動",
+        "launchAtLoginDescription": "ログイン時に OpenWhispr をバックグラウンドで起動します",
         "title": "起動設定",
         "description": "OpenWhispr の起動時の動作を制御",
         "startMinimized": "最小化で起動",
-        "startMinimizedDescription": "コントロールパネルウィンドウを表示せずに起動"
+        "startMinimizedDescription": "コントロールパネルウィンドウを表示せずに起動",
+        "needsApproval": {
+          "title": "システム設定での許可が必要です",
+          "description": "macOS は OpenWhispr をログイン項目として登録しましたが、「ログイン項目」での許可を待っています。",
+          "action": "ログイン項目を開く"
+        }
       },
       "waylandPaste": {
         "title": "Wayland 貼り付け設定",

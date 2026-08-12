@@ -385,6 +385,26 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
+  // Which mouse buttons the macOS listener must swallow for these slots, and
+  // whether OpenWhispr owns Globe — if it does, macOS's own standalone Globe
+  // action has to stand down.
+  getMacNativeListenerConfig(slotNames) {
+    const mouseButtons = new Set();
+    let suppressGlobeAction = false;
+
+    for (const slotName of slotNames) {
+      for (const hotkey of this.getSlotHotkeys(slotName)) {
+        if (isMouseButtonHotkey(hotkey)) {
+          mouseButtons.add(hotkey);
+        } else if (isGlobeLikeHotkey(hotkey)) {
+          suppressGlobeAction = true;
+        }
+      }
+    }
+
+    return { mouseButtons: [...mouseButtons], suppressGlobeAction };
+  }
+
   // Register one hotkey without mutating any slot. `accelerator` is null for
   // hotkeys handled by native listeners.
   _registerSingleHotkey(hotkey, callback) {

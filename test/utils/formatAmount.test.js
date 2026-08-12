@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = () => import("../../src/utils/formatAmount.ts");
+const load = async () => {
+  const m = await import("../../src/utils/formatAmount.ts");
+  return m.default || m;
+};
 
 // Reference formatting through the same Intl path, so expectations
 // track the host locale instead of hardcoding "$1.00".

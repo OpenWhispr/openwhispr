@@ -5,6 +5,7 @@ const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { resolveFailedGpuBackends } = require("./whisper");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
@@ -45,6 +46,7 @@ const diarizationHost = (endpoint) => {
   return null;
 };
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
+const autoStart = require("./autoStart");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
@@ -592,13 +594,24 @@ class IPCHandlers {
     });
 
     if (this.whisperManager?.serverManager) {
+      // Remember the failed backend so it isn't re-attempted (and its model
+      // reload re-paid) on every launch; cleared by retry, re-download, delete.
       this.whisperManager.serverManager.on("cuda-fallback", () => {
+        this._recordWhisperGpuFailure("cuda");
         broadcastToWindows("cuda-fallback-notification", {});
       });
       this.whisperManager.serverManager.on("gpu-fallback", () => {
+        this._recordWhisperGpuFailure("vulkan");
         broadcastToWindows("gpu-fallback-notification", {});
       });
     }
+  }
+
+  // The dictation slot reports its own changes from the renderer. Slots
+  // registered through IPC have to announce theirs here so macOS can re-derive
+  // which keys the native Globe listener owns.
+  _notifyHotkeyChanged(hotkey) {
+    ipcMain.emit("hotkey-changed", null, hotkey);
   }
 
   _releaseMicHold(sender) {
@@ -1014,6 +1027,44 @@ class IPCHandlers {
     } catch (error) {
       debugLogger.debug("[AutoLearn] Error processing corrections", { error: error.message });
     }
+  }
+
+  _whisperGpuFailedBackends() {
+    return resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+  }
+
+  _recordWhisperGpuFailure(backend) {
+    const failed = this._whisperGpuFailedBackends();
+    if (!failed.includes(backend)) failed.push(backend);
+    this._syncStartupEnv({ WHISPER_GPU_FAILED: failed.join(",") });
+  }
+
+  _clearWhisperGpuFailure(backend) {
+    const failed = this._whisperGpuFailedBackends().filter((b) => b !== backend);
+    if (failed.length > 0) {
+      this._syncStartupEnv({ WHISPER_GPU_FAILED: failed.join(",") });
+    } else {
+      this._syncStartupEnv({}, ["WHISPER_GPU_FAILED"]);
+    }
+  }
+
+  // Captured before a handler stops the server to touch pack files (stopServer
+  // clears currentServerModel); tells _applyWhisperGpuPreference what to reload.
+  _whisperReloadModel() {
+    return this.whisperManager.serverManager.isRemote
+      ? null
+      : this.whisperManager.currentServerModel;
+  }
+
+  // Apply a GPU pack change to the loaded server without blocking the caller's
+  // IPC reply (a Vulkan cold start can take minutes); the renderer follows
+  // progress by polling whisper-server-status. Returns whether a reload was
+  // kicked off so the UI shows "activating" only when one is coming.
+  _applyWhisperGpuPreference(modelName) {
+    this.whisperManager.restartServerWithGpuPreference(modelName).catch((err) => {
+      debugLogger.error("whisper-server GPU preference restart failed", { error: err.message });
+    });
+    return !!modelName;
   }
 
   _syncStartupEnv(setVars, clearVars = []) {
@@ -2584,13 +2635,10 @@ class IPCHandlers {
     });
 
     ipcMain.handle("whisper-server-start", async (event, modelName) => {
-      const useCuda =
-        process.env.WHISPER_CUDA_ENABLED === "true" && this.whisperCudaManager?.isDownloaded();
-      const useVulkan =
-        !useCuda &&
-        process.env.WHISPER_VULKAN_ENABLED === "true" &&
-        this.whisperVulkanManager?.isDownloaded();
-      return this.whisperManager.startServer(modelName, { useCuda, useVulkan });
+      return this.whisperManager.startServer(
+        modelName,
+        this.whisperManager.resolveGpuStartOptions()
+      );
     });
 
     ipcMain.handle("whisper-server-stop", async () => {
@@ -2634,13 +2682,7 @@ class IPCHandlers {
               { from: oldUuid, to: uuid },
               "gpu"
             );
-            const modelName = this.whisperManager.currentServerModel;
-            await this.whisperManager.stopServer();
-            if (modelName) {
-              await this.whisperManager.startServer(modelName, {
-                useCuda: !!process.env.WHISPER_CUDA_ENABLED,
-              });
-            }
+            await this.whisperManager.restartServerWithGpuPreference();
           }
           if (purpose === "intelligence") {
             const modelManager = require("./modelManagerBridge").default;
@@ -2688,6 +2730,7 @@ class IPCHandlers {
         downloading: this.whisperCudaManager.isDownloading(),
         path: this.whisperCudaManager.getCudaBinaryPath(),
         gpuInfo,
+        gpuFailed: this._whisperGpuFailedBackends().includes("cuda"),
       };
     });
 
@@ -2696,6 +2739,10 @@ class IPCHandlers {
         return { success: false, error: "CUDA not supported on this platform" };
       }
       try {
+        const reloadModel = this._whisperReloadModel();
+        // Stop the server first: swapping in a pack a running binary is loaded
+        // from EBUSYs on Windows (same rule as the Vulkan handler below)
+        await this.whisperManager.stopServer().catch(() => {});
         await this.whisperCudaManager.download((downloaded, total) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send("cuda-download-progress", {
@@ -2706,9 +2753,8 @@ class IPCHandlers {
           }
         });
         this._syncStartupEnv({ WHISPER_CUDA_ENABLED: "true" });
-        // Restart whisper-server so it picks up the CUDA binary
-        await this.whisperManager.stopServer().catch(() => {});
-        return { success: true };
+        this._clearWhisperGpuFailure("cuda");
+        return { success: true, willRestart: this._applyWhisperGpuPreference(reloadModel) };
       } catch (error) {
         debugLogger.error("CUDA binary download failed", {
           error: error.message,
@@ -2725,11 +2771,14 @@ class IPCHandlers {
 
     ipcMain.handle("delete-cuda-whisper-binary", async () => {
       if (!this.whisperCudaManager) return { success: false };
+      const reloadModel = this._whisperReloadModel();
       // Stop the server first so the running binary can be deleted on Windows
       await this.whisperManager.stopServer().catch(() => {});
       const result = await this.whisperCudaManager.delete();
       if (result.success) {
         this._syncStartupEnv({}, ["WHISPER_CUDA_ENABLED"]);
+        this._clearWhisperGpuFailure("cuda");
+        this._applyWhisperGpuPreference(reloadModel);
       }
       return result;
     });
@@ -2743,6 +2792,7 @@ class IPCHandlers {
         downloading: this.whisperVulkanManager?.isDownloading() ?? false,
         vulkan,
         hasNvidiaGpu: gpuInfo.hasNvidiaGpu,
+        gpuFailed: this._whisperGpuFailedBackends().includes("vulkan"),
       };
     });
 
@@ -2751,6 +2801,7 @@ class IPCHandlers {
         return { success: false, error: "Vulkan not supported on this platform" };
       }
       try {
+        const reloadModel = this._whisperReloadModel();
         // Stop the server first: overwriting a running binary EBUSYs on Windows
         await this.whisperManager.stopServer().catch(() => {});
         await this.whisperVulkanManager.download((downloaded, total) => {
@@ -2763,7 +2814,8 @@ class IPCHandlers {
           }
         });
         this._syncStartupEnv({ WHISPER_VULKAN_ENABLED: "true" });
-        return { success: true };
+        this._clearWhisperGpuFailure("vulkan");
+        return { success: true, willRestart: this._applyWhisperGpuPreference(reloadModel) };
       } catch (error) {
         debugLogger.error("Vulkan whisper binary download failed", {
           error: error.message,
@@ -2780,11 +2832,24 @@ class IPCHandlers {
 
     ipcMain.handle("delete-vulkan-whisper-binary", async () => {
       if (!this.whisperVulkanManager) return { success: false };
+      const reloadModel = this._whisperReloadModel();
       // Stop the server first so the running binary can be deleted on Windows
       await this.whisperManager.stopServer().catch(() => {});
       const { deletedCount } = await this.whisperVulkanManager.delete();
       this._syncStartupEnv({}, ["WHISPER_VULKAN_ENABLED"]);
+      this._clearWhisperGpuFailure("vulkan");
+      this._applyWhisperGpuPreference(reloadModel);
       return { success: true, deletedCount };
+    });
+
+    // Clears the remembered GPU failure and reloads the server with the GPU
+    // backend re-enabled (Retry on the "GPU could not be activated" state)
+    ipcMain.handle("whisper-gpu-retry", async () => {
+      this._syncStartupEnv({}, ["WHISPER_GPU_FAILED"]);
+      return {
+        success: true,
+        willRestart: this._applyWhisperGpuPreference(this._whisperReloadModel()),
+      };
     });
 
     ipcMain.handle("check-ffmpeg-availability", async (event) => {
@@ -3390,20 +3455,16 @@ class IPCHandlers {
 
     ipcMain.handle("get-auto-start-enabled", async () => {
       try {
-        const loginSettings = app.getLoginItemSettings();
-        return loginSettings.openAtLogin;
+        return autoStart.getAutoStartState();
       } catch (error) {
         debugLogger.error("Error getting auto-start status:", error);
-        return false;
+        return { enabled: false, requiresApproval: false };
       }
     });
 
     ipcMain.handle("set-auto-start-enabled", async (event, enabled) => {
       try {
-        app.setLoginItemSettings({
-          openAtLogin: enabled,
-          openAsHidden: true, // Start minimized to tray
-        });
+        autoStart.setAutoStartEnabled(enabled);
         debugLogger.debug("Auto-start setting updated", { enabled });
         return { success: true };
       } catch (error) {
@@ -4440,10 +4501,12 @@ class IPCHandlers {
         screenRecording:
           "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
         calendars: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
+        loginItems: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension",
       },
       win32: {
         microphone: "ms-settings:privacy-microphone",
         sound: "ms-settings:sound",
+        loginItems: "ms-settings:startupapps",
       },
     };
 
@@ -4460,6 +4523,7 @@ class IPCHandlers {
           accessibility: i18nMain.t("systemSettings.accessibility"),
           systemAudio: i18nMain.t("systemSettings.systemAudio"),
           screenRecording: i18nMain.t("systemSettings.screenRecording"),
+          loginItems: i18nMain.t("systemSettings.loginItems"),
         };
         return {
           success: false,
@@ -4482,6 +4546,7 @@ class IPCHandlers {
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
     ipcMain.handle("open-screen-recording-settings", () => openSystemSettings("screenRecording"));
+    ipcMain.handle("open-login-items-settings", () => openSystemSettings("loginItems"));
 
     ipcMain.handle("capture-screen-context", () => screenContextCapture.captureCursorDisplay());
 
@@ -9245,6 +9310,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("agent");
         this.environmentManager.saveAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
+        this._notifyHotkeyChanged("");
         return { success: true, message: "Agent hotkey cleared" };
       }
 
@@ -9254,6 +9320,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveAgentKey?.(hotkey);
+        this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
       }
 
@@ -9274,6 +9341,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("voiceAgent");
         this.environmentManager.saveVoiceAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
+        this._notifyHotkeyChanged("");
         return { success: true, message: "Voice agent hotkey cleared" };
       }
 
@@ -9283,6 +9351,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);
+        this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
       }
 
@@ -9307,6 +9376,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("translation");
         this.environmentManager.saveTranslationKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
+        this._notifyHotkeyChanged("");
         return { success: true, message: "Translation hotkey cleared" };
       }
 
@@ -9316,6 +9386,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveTranslationKey?.(hotkey);
+        this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
       }
 

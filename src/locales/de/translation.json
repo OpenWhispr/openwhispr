@@ -107,7 +107,8 @@
     "sound": "Bitte öffnen Sie die Sound-Einstellungen des Systems (z. B. pavucontrol).",
     "accessibility": "Bedienungshilfen-Einstellungen sind auf dieser Plattform nicht verfügbar.",
     "systemAudio": "Systemaudio-Einstellungen sind auf dieser Plattform nicht verfügbar.",
-    "screenRecording": "Einstellungen zur Bildschirmaufnahme sind auf dieser Plattform nicht verfügbar."
+    "screenRecording": "Einstellungen zur Bildschirmaufnahme sind auf dieser Plattform nicht verfügbar.",
+    "loginItems": "Einstellungen für Anmeldeobjekte sind auf dieser Plattform nicht verfügbar."
   },
   "upgradePrompt": {
     "paymentFailed": "Ihre Zahlung konnte nicht verarbeitet werden",
@@ -449,6 +450,7 @@
     "custom": {
       "endpointWithProtocol": "Geben Sie eine vollständige Basis-URL mit Protokoll ein (z. B. https://server/v1).",
       "httpsRequired": "HTTPS erforderlich (HTTP nur im lokalen Netzwerk erlaubt).",
+      "endpointInvalid": "Der benutzerdefinierte Endpunkt ist ungültig oder nicht konfiguriert. Prüfe die Endpunkt-URL unter Einstellungen → KI-Modelle.",
       "endpointUnauthorized": "Der Endpoint hat die Anfrage abgelehnt (401/403). Fügen Sie einen API-Schlüssel hinzu oder passen Sie die Server-Authentifizierung an.",
       "endpointTitle": "Endpoint-URL",
       "endpointExamples": "Beispiele:",
@@ -1891,11 +1893,16 @@
       },
       "startup": {
         "launchAtLogin": "Beim Anmelden starten",
-        "launchAtLoginDescription": "OpenWhispr automatisch starten, wenn Sie sich anmelden",
+        "launchAtLoginDescription": "OpenWhispr bei der Anmeldung im Hintergrund starten",
         "title": "Autostart",
         "description": "Steuern Sie das Verhalten von OpenWhispr beim Start",
         "startMinimized": "Minimiert starten",
-        "startMinimizedDescription": "Starten, ohne das Einstellungsfenster anzuzeigen"
+        "startMinimizedDescription": "Starten, ohne das Einstellungsfenster anzuzeigen",
+        "needsApproval": {
+          "title": "Bestätigung in den Systemeinstellungen erforderlich",
+          "description": "macOS hat OpenWhispr als Anmeldeobjekt registriert, wartet aber darauf, dass du es unter Anmeldeobjekte erlaubst.",
+          "action": "Anmeldeobjekte öffnen"
+        }
       },
       "waylandPaste": {
         "title": "Wayland-Einfügen einrichten",

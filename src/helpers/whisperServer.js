@@ -11,6 +11,8 @@ const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
+const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
+const { BIN_SUBDIR: VULKAN_BIN_SUBDIR } = require("./whisperVulkanManager");
 const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
 const {
   computeTranscriptionTimeoutMs,
@@ -325,7 +327,8 @@ class WhisperServerManager extends EventEmitter {
     if (gpuBackend) {
       const ext = process.platform === "win32" ? ".exe" : "";
       const gpuBinary = `whisper-server-${process.platform}-${process.arch}-${gpuBackend}${ext}`;
-      const gpuPath = path.join(app.getPath("userData"), "bin", gpuBinary);
+      const subdir = gpuBackend === "cuda" ? CUDA_BIN_SUBDIR : VULKAN_BIN_SUBDIR;
+      const gpuPath = path.join(app.getPath("userData"), "bin", subdir, gpuBinary);
       if (fs.existsSync(gpuPath)) return gpuPath;
     }
 
@@ -540,7 +543,6 @@ class WhisperServerManager extends EventEmitter {
 
     let stderrBuffer = "";
     let exitCode = null;
-    let earlyExit = false;
 
     this.process.stdout.on("data", (data) => {
       debugLogger.debug("whisper-server stdout", { data: data.toString().trim() });
@@ -558,7 +560,6 @@ class WhisperServerManager extends EventEmitter {
 
     this.process.on("close", (code) => {
       exitCode = code;
-      if (Date.now() - startTime < 10000) earlyExit = true;
       debugLogger.debug("whisper-server process exited", { code });
       this.ready = false;
       this.process = null;
@@ -574,25 +575,22 @@ class WhisperServerManager extends EventEmitter {
     } catch (err) {
       // An intentional stop() during startup is not a GPU/thread failure
       if (err.isStopped) throw err;
-      if (usingVulkan) {
-        // Fall back on ANY startup rejection — Vulkan can die late (VRAM OOM
-        // mid-model-load) or hang, not just exit early like the CUDA rule below
-        debugLogger.warn("Vulkan whisper-server failed, falling back to CPU", {
-          error: err.message,
-          exitCode,
-          stderr: stderrBuffer.slice(0, 200),
-        });
-        this.emit("gpu-fallback");
+      if (usingCuda || usingVulkan) {
+        // Fall back on ANY startup rejection — a GPU server can exit early
+        // (missing kernels), die late (VRAM OOM mid-model-load), or hang, and
+        // in every case the CPU binary is the working answer. stop() reaps a
+        // hung process before the CPU restart.
+        debugLogger.warn(
+          `${usingCuda ? "CUDA" : "Vulkan"} whisper-server failed, falling back to CPU`,
+          {
+            error: err.message,
+            exitCode,
+            stderr: stderrBuffer.slice(0, 200),
+          }
+        );
+        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback");
         await this.stop();
         return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
-      }
-      if (usingCuda && earlyExit) {
-        debugLogger.warn("CUDA whisper-server failed, falling back to CPU", {
-          exitCode,
-          stderr: stderrBuffer.slice(0, 200),
-        });
-        this.emit("cuda-fallback");
-        return this._doStart(modelPath, { ...options, useCuda: false });
       }
       if (shouldFallbackToDefaultThreads(threadResolution)) {
         const defaultThreadResolution = createThreadResolution(
@@ -1002,14 +1000,20 @@ class WhisperServerManager extends EventEmitter {
   }
 
   getStatus() {
+    const running = this.ready && (this.process !== null || this.isRemote);
+    const gpuBackend = this.useCuda ? "cuda" : this.useVulkan ? "vulkan" : null;
     return {
       available: this.isAvailable(),
-      running: this.ready && (this.process !== null || this.isRemote),
+      running,
       port: this.port,
       hostname: this.hostname,
       isRemote: this.isRemote,
       modelPath: this.modelPath,
       modelName: this.modelPath ? path.basename(this.modelPath, ".bin").replace("ggml-", "") : null,
+      // What the server is actually running on right now — the UI must never
+      // infer this from "the GPU pack is downloaded" (see the CPU fallbacks)
+      gpuBackend,
+      gpuAccelerated: running && !this.isRemote && gpuBackend !== null,
     };
   }
 }

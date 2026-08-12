@@ -107,7 +107,8 @@
     "sound": "Abra as configurações de som do sistema (por exemplo, pavucontrol).",
     "accessibility": "As configurações de acessibilidade não estão disponíveis nesta plataforma.",
     "systemAudio": "As configurações de áudio do sistema não estão disponíveis nesta plataforma.",
-    "screenRecording": "As configurações de gravação de tela não estão disponíveis nesta plataforma."
+    "screenRecording": "As configurações de gravação de tela não estão disponíveis nesta plataforma.",
+    "loginItems": "As configurações de itens de início não estão disponíveis nesta plataforma."
   },
   "windows": {
     "pttUnavailable": "O listener nativo de Push-to-Talk não está disponível"
@@ -428,6 +429,7 @@
     "custom": {
       "endpointWithProtocol": "Informe uma URL base completa com protocolo (por exemplo, https://server/v1).",
       "httpsRequired": "HTTPS obrigatório (HTTP permitido apenas em rede local).",
+      "endpointInvalid": "O endpoint personalizado é inválido ou não está configurado. Verifique o URL do endpoint em Configurações → Modelos de IA.",
       "endpointUnauthorized": "O endpoint rejeitou a requisição (401/403). Adicione uma chave API ou ajuste a autenticação do servidor.",
       "endpointTitle": "URL do endpoint",
       "endpointExamples": "Exemplos:",
@@ -1584,11 +1586,16 @@
       },
       "startup": {
         "launchAtLogin": "Iniciar ao fazer login",
-        "launchAtLoginDescription": "Iniciar o OpenWhispr automaticamente ao fazer login",
+        "launchAtLoginDescription": "Iniciar o OpenWhispr em segundo plano ao fazer login",
         "title": "Inicialização",
         "description": "Controle o comportamento do OpenWhispr ao iniciar",
         "startMinimized": "Iniciar minimizado",
-        "startMinimizedDescription": "Iniciar sem mostrar a janela do painel de controle"
+        "startMinimizedDescription": "Iniciar sem mostrar a janela do painel de controle",
+        "needsApproval": {
+          "title": "Aprovação necessária nas Configurações do Sistema",
+          "description": "O macOS registrou o OpenWhispr como item de início, mas está aguardando que você o permita em Itens de Início.",
+          "action": "Abrir Itens de Início"
+        }
       },
       "waylandPaste": {
         "title": "Configuração de colagem no Wayland",
