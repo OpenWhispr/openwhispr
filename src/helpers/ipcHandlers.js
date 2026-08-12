@@ -3238,7 +3238,9 @@ class IPCHandlers {
         const result = await LocalReasoningService.processText(text, modelId, config);
         return { success: true, text: result };
       } catch (error) {
-        return { success: false, error: error.message };
+        // The code lets the renderer say something useful about an over-long
+        // prompt instead of surfacing a raw server error.
+        return { success: false, error: error.message, code: error.code, details: error.details };
       }
     });
 

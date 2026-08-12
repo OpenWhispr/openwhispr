@@ -1926,7 +1926,8 @@
       "errors": {
         "noModel": "Nenhum modelo de IA selecionado. Configure um nas Configurações.",
         "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações.",
-        "actionFailed": "A ação falhou"
+        "actionFailed": "A ação falhou",
+        "promptTooLong": "Esta chamada é longa demais para o modelo local. Use um modelo na nuvem ou encurte a nota."
       }
     },
     "empty": {

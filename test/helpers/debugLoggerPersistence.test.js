@@ -59,10 +59,17 @@ test("debug persists when the log level asks for it", async () => {
 test("initialization prunes to the newest N log files", async () => {
   const { logger, dir } = makeLogger({ maxFiles: 3 });
 
+  // All well inside the retention window, so this exercises the count backstop
+  // rather than the age bound (which has its own test).
+  const now = Date.now();
+  const names = [];
   for (let i = 0; i < 6; i += 1) {
-    const name = `debug-2020-01-0${i + 1}T00-00-00-000Z.log`;
-    fs.writeFileSync(path.join(dir, name), "old\n");
-    fs.utimesSync(path.join(dir, name), 1000 + i, 1000 + i);
+    const name = `debug-2026-01-0${i + 1}T00-00-00-000Z.log`;
+    names.push(name);
+    const full = path.join(dir, name);
+    fs.writeFileSync(full, "old\n");
+    const seconds = (now - (6 - i) * 3600 * 1000) / 1000;
+    fs.utimesSync(full, seconds, seconds);
   }
   fs.writeFileSync(path.join(dir, "onnx-worker.log"), "not ours\n");
 
@@ -71,8 +78,8 @@ test("initialization prunes to the newest N log files", async () => {
 
   const remaining = logFiles(dir).sort();
   assert.equal(remaining.length, 3, "the newest N-1 plus the new one");
-  assert.ok(remaining.includes("debug-2020-01-06T00-00-00-000Z.log"), "newest kept");
-  assert.ok(!remaining.includes("debug-2020-01-01T00-00-00-000Z.log"), "oldest pruned");
+  assert.ok(remaining.includes(names[5]), "newest kept");
+  assert.ok(!remaining.includes(names[0]), "oldest pruned");
   assert.ok(fs.existsSync(path.join(dir, "onnx-worker.log")), "other logs are left alone");
 });
 

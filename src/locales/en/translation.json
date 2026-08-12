@@ -2020,7 +2020,8 @@
       "errors": {
         "noModel": "No AI model selected. Configure one in Settings.",
         "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
-        "actionFailed": "Action failed"
+        "actionFailed": "Action failed",
+        "promptTooLong": "This call is too long for the local model. Use a cloud model, or shorten the note."
       }
     },
     "onboarding": {

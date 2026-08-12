@@ -1,8 +1,11 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const http = require("http");
 const debugLogger = require("./debugLogger");
+const { readGgufMetadata } = require("./ggufMetadata");
+const { resolveContextSize } = require("./llamaContext");
 const { killProcess } = require("../utils/process");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
@@ -19,6 +22,9 @@ const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+// Past this a request is worth flagging on its own: it is long enough that the
+// user is already wondering whether the app has hung.
+const SLOW_INFERENCE_MS = 60 * 1000;
 
 class LlamaServerManager {
   constructor() {
@@ -128,6 +134,21 @@ class LlamaServerManager {
     this.port = await this.findAvailablePort();
     this.modelPath = modelPath;
 
+    // llama-server's default is "-c 0", i.e. the context the model was trained
+    // for — 131072 tokens on some models, which is more KV cache than the
+    // machine has. Neither caller can be trusted to bound it (one asks for 4096,
+    // the registry says 262144 for a model whose header says 131072), so the
+    // size is derived from the model's own geometry and the machine's memory.
+    const gguf = readGgufMetadata(modelPath);
+    const modelFileBytes = fs.statSync(modelPath).size;
+    const resolved = resolveContextSize({
+      gguf,
+      totalMemBytes: os.totalmem(),
+      modelFileBytes,
+      requested: options.contextSize,
+    });
+    this.contextSize = resolved.contextSize;
+
     const baseArgs = [
       "--model",
       modelPath,
@@ -137,8 +158,26 @@ class LlamaServerManager {
       String(this.port),
       "--threads",
       String(options.threads || 4),
+      "--ctx-size",
+      String(resolved.contextSize),
       "--jinja",
     ];
+
+    debugLogger.notice(
+      "Starting llama-server",
+      {
+        model: path.basename(modelPath),
+        modelBytes: modelFileBytes,
+        contextSize: resolved.contextSize,
+        trainedContext: resolved.trainedContext,
+        requestedContext: resolved.requested,
+        estimatedKvBytes: resolved.estimatedKvBytes,
+        kvBudgetBytes: resolved.kvBudgetBytes,
+        source: resolved.source,
+        totalMemBytes: os.totalmem(),
+      },
+      "llama"
+    );
 
     if (process.platform === "darwin") {
       const args = [...baseArgs, "--n-gpu-layers", "99"];
@@ -488,6 +527,21 @@ class LlamaServerManager {
               const response = JSON.parse(data);
               const message = response.choices?.[0]?.message;
               const text = message?.content || message?.reasoning_content || "";
+              const elapsedMs = Date.now() - startTime;
+              // A local inference is the most expensive thing this app does; how
+              // long it took and how big the prompt was is the first question
+              // asked when someone reports that it "hung".
+              const meta = {
+                elapsedMs,
+                promptChars: body.length,
+                outputChars: text.length,
+                contextSize: this.contextSize,
+              };
+              if (elapsedMs >= SLOW_INFERENCE_MS) {
+                debugLogger.warn("Local inference was slow", meta, "llama");
+              } else {
+                debugLogger.notice("Local inference finished", meta, "llama");
+              }
               resolve(text.trim());
             } catch (e) {
               reject(new Error(`Failed to parse llama-server response: ${e.message}`));

@@ -11,6 +11,7 @@ const {
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 const LlamaServerManager = require("./llamaServer");
+const { checkPromptFitsContext } = require("./llamaContext");
 const debugLogger = require("./debugLogger");
 
 const MIN_FILE_SIZE = 1_000_000; // 1MB minimum for valid model files
@@ -367,7 +368,8 @@ class ModelManager {
       });
 
       await this.serverManager.start(modelPath, {
-        contextSize: options.contextSize || modelInfo.model.contextLength || 4096,
+        // The server derives its own context; the registry is unreliable (it claims
+        // 262144 for a model whose header says 131072).
         threads: options.threads || 4,
         gpuLayers: 99,
       });
@@ -377,6 +379,30 @@ class ModelManager {
         port: this.serverManager.port,
         model: modelId,
       });
+    }
+
+    // Refuse a prompt the server cannot hold rather than letting it grind. An
+    // over-context prompt used to be accepted and processed for minutes on end.
+    const fit = checkPromptFitsContext({
+      text: `${options.systemPrompt || ""}${prompt}`,
+      contextSize: this.serverManager.contextSize || 4096,
+    });
+    if (!fit.fits) {
+      debugLogger.warn(
+        "Prompt exceeds the local model's context",
+        {
+          modelId,
+          estimatedTokens: fit.estimatedTokens,
+          budgetTokens: fit.budgetTokens,
+          contextSize: this.serverManager.contextSize,
+        },
+        "llama"
+      );
+      throw new ModelError(
+        `Prompt is too long for this model: about ${fit.estimatedTokens} tokens against a budget of ${fit.budgetTokens}`,
+        fit.code,
+        { estimatedTokens: fit.estimatedTokens, budgetTokens: fit.budgetTokens }
+      );
     }
 
     // Build messages for chat completion
@@ -441,7 +467,6 @@ class ModelManager {
 
     try {
       await this.serverManager.start(modelPath, {
-        contextSize: modelInfo.model.contextLength || 4096,
         threads: 4,
         gpuLayers: 99,
       });

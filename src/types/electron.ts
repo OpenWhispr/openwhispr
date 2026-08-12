@@ -805,7 +805,14 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        /** e.g. "LOCAL_CONTEXT_EXCEEDED" — lets callers translate a known failure. */
+        code?: string;
+        details?: Record<string, unknown>;
+      }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
 
       // Anthropic reasoning
