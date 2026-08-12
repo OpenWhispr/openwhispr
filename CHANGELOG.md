@@ -7,15 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-08-12
+
+GPU acceleration for local transcription gets an overhaul: the status you see is now the truth, enabling it works without a restart, older NVIDIA cards are routed to a backend that actually works on them, and a GPU failure can never cost you a dictation. LLM routing gains the same fail-closed treatment speech-to-text received in 1.8.2. Launch at login arrives on Linux, and transcription errors stop blaming your microphone.
+
+### GPU acceleration
+
+- **"GPU acceleration active" now means it.** The indicator reflects what the transcription server is actually running on — ready, activating, active, or "GPU could not be activated" with a Retry — instead of turning green whenever a file finished downloading. (#1578)
+- **Enable GPU applies immediately.** Downloading or removing a GPU pack reloads the transcription engine in place; previously nothing changed until the app was restarted, with no hint. (#1578)
+- **A GPU crash never costs you a dictation — and is remembered.** If the GPU engine fails, the same recording is retried on CPU and pasted, and the failed backend isn't silently re-attempted (and its model reload re-paid) on every launch. Retry or re-download clears the memory. (#1578)
+- **Older NVIDIA cards are offered a backend that works.** GTX 10-series (Pascal) and other pre-Turing cards were offered a CUDA build with no kernels for them — it loaded the model, then crashed at the first use while reporting success. They now get the Vulkan pack, like AMD and Intel GPUs. (#1576)
+- **GPU packs can no longer corrupt each other.** The whisper CUDA and llama Vulkan packs shipped identically-named runtime libraries into one shared folder, so installing one could silently break the other — and removing one deleted the other's files. Each pack now owns its own directory, and old installs are healed on startup. (#1577)
+- **An interrupted GPU install can no longer fake success.** Installs are staged and swapped in atomically, so a crash or power cut mid-install can't leave a truncated binary the app reports as installed forever. (#1577)
+- **GPU binaries updated (whisper.cpp pack 0.0.9).** Same engine, now built with Pascal CUDA kernels included — groundwork for offering CUDA on those cards once hardware-validated. (#1584)
+
 ### Speech to text
 
 - **Action required for some Custom endpoints.** If you selected the Custom speech-to-text provider but never changed its pre-filled URL (`https://api.openai.com/v1`), your audio and your custom key were being sent to OpenAI. That now fails with a clear error instead, so set a real endpoint under Settings → Speech to Text — or switch to the OpenAI provider, which the URL field does automatically once you re-enter it. (#1556)
+- **"No Audio Detected" means silence again.** A broken transcription engine used to blame your microphone; it now reports the real error, keeps the recording for retry, and still falls back to your cloud provider when enabled. (#1575)
 - **Re-transcribing a Corti recording reaches Corti.** History → Re-transcribe sent Corti recordings to OpenAI. (#1556)
 - **A leftover provider can no longer hijack self-hosted transcription.** With self-hosted selected, a stale Mistral, xAI, or Corti selection could still divert your audio to that provider. (#1556)
 - **Each provider remembers its own model.** Switching speech-to-text providers and back restores the model you had chosen instead of resetting it to the default — including custom model names on your own endpoint. (#1556)
 - **Mistral file uploads authenticate correctly.** Upload was the last path still sending a Bearer token instead of Mistral's `x-api-key`. (#1556)
 - **Azure OpenAI endpoints work on every path.** Dictation, re-transcribe, and upload all build deployment-style URLs, whether the endpoint is configured as Custom or self-hosted. (#1556)
 - **Uploads detect their own language again.** A file you upload is no longer forced into your dictation language. (#1556)
+- **Realtime streaming waits for the transcript tail.** Stopping a streamed dictation no longer races a fixed delay against the last words arriving. (#1573)
+- **Recordings discarded as dictionary echo are kept and surfaced.** (#1559)
+- **Parakeet accepts non-PCM16 WAV uploads.** (#1376)
+
+### AI models & routing
+
+- **Custom LLM endpoints fail closed.** An empty, unparseable, or non-OpenAI custom URL no longer falls back to sending your prompt — and your custom API key — to OpenAI; it fails with a clear, localized error. Unknown providers are rejected instead of routed to OpenAI. (#1583)
+- **Your cleanup key stays on the cleanup endpoint.** The dictation-cleanup custom key no longer rides along to other scopes' custom endpoints. (#1583)
+- **Every LLM scope remembers its model per provider.** Switching provider tabs and back restores your previous choice across all six scopes, and retired cloud models are repointed to the provider's current default instead of failing forever. (#1583)
+- **The voice-agent vision override works.** Screenshot-carrying commands can actually route to the configured vision model, and are enforced under the correct policy scope. (#1583)
+- **Custom-endpoint API keys move to the OS secure store.** Five scopes stored their keys in plaintext; existing keys are migrated automatically. (#1583)
+
+### Voice agent
+
+- **Screen context, selection edits, and calendar answers are more reliable.** Screenshot capture failures retry text-only without losing the command, selection edits recover from a rejected screenshot, and the agent's calendar tool and accessibility reads are fixed. (#1566)
+
+### Meetings & speakers
+
+- **Your own dictation no longer triggers meeting detection.** (#1570)
+- **Manual speaker reassignments win.** A segment you reassign keeps your label instead of being pulled back to its diarization cluster. (#1569)
+- **Gap segments follow the nearest speaker.** (#1423)
+- **Realtime meeting streams stop cleanly.** (#1553)
+- **Expected speaker counts are validated in one place.** (#1555, #1522)
+
+### Calendar
+
+- **Large Google Calendars sync completely.** Sync now follows all result pages instead of stopping after the first. (#1572)
+- **Meeting reminders re-arm after a provider reset.** (#1486)
+- **Calendar API failures are reported with their cause.** (#1553)
+
+### Startup & Linux
+
+- **Launch at login on Linux.** Via an XDG autostart entry, with correct behavior across GNOME and KDE autostart editors — plus start-hidden fixes on Windows and a hardened Linux launcher probe. (#1518, #1574, thanks @edwin-luu)
+- **Linux text monitor builds link AT-SPI2 correctly.** (#1544, thanks @iSparsh)
+- **Meeting notifications stay clickable after the first hover on Linux.** (#1562)
+
+### macOS
+
+- **The Globe hotkey no longer also triggers the system Globe action.** (#1567)
+
+### Notes & interface
+
+- **Meeting transcript timestamps export correctly to Markdown.** (#1560)
+- **Retired default prompts are cleared from persisted settings.** (#1561)
+- **Empty states close their layout gaps.** (#1565)
+- **Hotkey parsing handles left/right modifiers and trailing `+` correctly.** (#1437, #1433)
+- **Retention cleanup waits for the first renderer sync.** A fresh install can no longer sweep history before settings arrive. (#1558)
+
+### Security & enterprise
+
+- **IPv6 private and metadata addresses are blocked for enterprise endpoints.** (#1440)
+
+### CLI
+
+- **Validation errors return HTTP 400 with a structured body.** (#1521)
 
 ## [1.8.2] - 2026-08-11
 
