@@ -68,10 +68,8 @@ interface ReasoningModelSelectorProps {
   setReasoningMode?: (mode: InferenceMode) => void;
   mode?: "cloud" | "local";
   /**
-   * Scope-aware provider switch (settingsStore.switchReasoningProvider): remembers
-   * the outgoing provider's model and restores the incoming provider's last one.
-   * Receives the provider's default model for when nothing is remembered.
-   * Without it, switching falls back to plain provider + default-model writes.
+   * Scope-aware provider switch (switchReasoningProvider) with per-provider
+   * model memory; receives the provider default for when nothing is remembered.
    */
   onCloudProviderSelect?: (provider: string, fallbackModel: string) => void;
 }

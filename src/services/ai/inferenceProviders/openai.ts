@@ -135,8 +135,6 @@ export const openaiProvider: InferenceProvider = {
       isCustomProvider,
     });
 
-    // A custom scope without its own key may only borrow the shared cleanup
-    // key when it targets the cleanup endpoint; otherwise it goes keyless.
     const overrideKey = isCustomProvider ? config.customApiKey?.trim() : "";
     const canFallBackToSharedKey = !isCustomProvider || canBorrowCleanupCustomKey(config.baseUrl);
     const apiKey =

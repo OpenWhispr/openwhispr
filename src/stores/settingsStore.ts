@@ -1700,11 +1700,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const memory = { ...s.reasoningModelByProvider };
     // Only remember a model the outgoing provider actually owns — after a
     // local/cloud mode round-trip the shared slot can hold a foreign id.
-    if (cfg.provider && reasoningModelBelongsToProvider(cfg.provider, cfg.model)) {
-      memory[`${scope}:${cfg.provider}`] = cfg.model;
-      persistReasoningModelMemory(memory);
-    }
-    if (cfg.provider === providerId) {
+    if (cfg.provider && cfg.provider !== providerId) {
+      if (reasoningModelBelongsToProvider(cfg.provider, cfg.model)) {
+        memory[`${scope}:${cfg.provider}`] = cfg.model;
+        persistReasoningModelMemory(memory);
+      }
+    } else if (reasoningModelBelongsToProvider(providerId, cfg.model)) {
+      // Reselecting the current provider with a model it owns: keep it.
       setResolvedLLMConfig(scope, { provider: providerId });
       return;
     }

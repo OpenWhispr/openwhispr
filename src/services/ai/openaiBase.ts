@@ -5,8 +5,8 @@ import { isSecureHttpEndpoint } from "../../utils/urlUtils";
 import logger from "../../utils/logger";
 import i18n from "../../i18n";
 
-// Never falls back: an invalid Custom endpoint used to silently reroute the
-// prompt and the custom API key to api.openai.com (#1459's LLM twin).
+// Never falls back: rerouting an invalid Custom endpoint to api.openai.com
+// would send the prompt and the custom API key to a host the user never chose.
 function invalidCustomEndpoint(reason: string, attempted?: string): never {
   logger.logReasoning("OPENAI_BASE_REJECTED", { reason, attempted });
 
