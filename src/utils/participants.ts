@@ -36,17 +36,18 @@ export const resolveInitialSpeakerCountOverride = (
   expectedCountIsExplicit?: boolean
 ): boolean => expectedCountIsExplicit ?? expectedCount != null;
 
+// A stored count only counts as the user's own choice when it is usable; the
+// cloud pull persists the server value unvalidated, so 0 and friends get here.
+export const isExplicitSpeakerCount = (value?: number | null): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value > 0;
+
 // Expected total speaker count for a meeting note: the stored value, else derived from
 // calendar participants (non-self attendees + you), else null so callers use their default.
 export const resolveExpectedSpeakerCount = (note?: {
   expected_speaker_count?: number | null;
   participants?: string | null;
 }): number | null => {
-  if (
-    typeof note?.expected_speaker_count === "number" &&
-    Number.isInteger(note.expected_speaker_count) &&
-    note.expected_speaker_count > 0
-  ) {
+  if (isExplicitSpeakerCount(note?.expected_speaker_count)) {
     return note.expected_speaker_count;
   }
   if (!note?.participants) return null;

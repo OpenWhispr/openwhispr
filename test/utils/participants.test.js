@@ -53,3 +53,15 @@ test("returns null when participants has no non-self attendees or is malformed",
   assert.equal(resolveExpectedSpeakerCount({}), null);
   assert.equal(resolveExpectedSpeakerCount(), null);
 });
+
+test("isExplicitSpeakerCount only accepts a usable stored count", async () => {
+  const { isExplicitSpeakerCount } = await load();
+  assert.equal(isExplicitSpeakerCount(3), true);
+  assert.equal(isExplicitSpeakerCount(1), true);
+
+  // The values that made expectedCountIsExplicit disagree with the resolved
+  // count, which pinned userTouchedStepper on and killed participant auto-sync.
+  for (const value of [0, -1, 1.5, NaN, Infinity, null, undefined]) {
+    assert.equal(isExplicitSpeakerCount(value), false, `expected ${value} to be rejected`);
+  }
+});

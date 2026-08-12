@@ -23,7 +23,7 @@ import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
-import { resolveExpectedSpeakerCount } from "../../utils/participants";
+import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   useNotes,
   useSpaces,
@@ -344,7 +344,7 @@ export default function PersonalNotesView({
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
       expectedCount: resolveExpectedSpeakerCount(note),
-      expectedCountIsExplicit: note?.expected_speaker_count != null,
+      expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
     });
   }, [activeNote]);
 
@@ -639,7 +639,7 @@ export default function PersonalNotesView({
         diarizationEnabled:
           note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
         expectedCount: resolveExpectedSpeakerCount(note),
-        expectedCountIsExplicit: note?.expected_speaker_count != null,
+        expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
       },
       startRecording: storeStartRecording,
       restoreFromMeetingMode: async () => {

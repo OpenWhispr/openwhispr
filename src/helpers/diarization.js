@@ -496,9 +496,8 @@ class DiarizationManager {
           }
         }
 
-        // Overlap decides outright; the nearest cluster is only the fallback for
-        // a segment that lands between clusters. Tracking the two candidates
-        // separately keeps the fallback from freezing on the first cluster.
+        // Tracked separately so the between-clusters fallback compares every
+        // distance instead of latching onto the first cluster it sees.
         const bestSpeaker = overlapSpeaker ?? nearestSpeaker;
 
         if (bestSpeaker) {
