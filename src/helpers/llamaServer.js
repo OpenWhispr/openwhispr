@@ -8,6 +8,7 @@ const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
+const { BIN_SUBDIR: LLAMA_VULKAN_BIN_SUBDIR } = require("./llamaVulkanManager");
 
 // Range kept clear of cliBridge (8200-8219) to avoid port-bind collisions.
 const PORT_RANGE_START = 8221;
@@ -74,11 +75,16 @@ class LlamaServerManager {
         resolveBinary(`llama-server-${platformArch}`) || resolveBinary(`llama-server${ext}`);
       paths = defaultBin ? { default: defaultBin } : {};
     } else {
-      const userBinDir = path.join(app.getPath("userData"), "bin");
       const vulkanName = `llama-server-vulkan${ext}`;
       let vulkanBin = null;
       try {
-        const vulkanPath = path.join(userBinDir, vulkanName);
+        // Installed by LlamaVulkanManager into its own pack directory
+        const vulkanPath = path.join(
+          app.getPath("userData"),
+          "bin",
+          LLAMA_VULKAN_BIN_SUBDIR,
+          vulkanName
+        );
         if (fs.existsSync(vulkanPath)) vulkanBin = vulkanPath;
       } catch {}
 

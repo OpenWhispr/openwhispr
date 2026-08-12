@@ -2697,6 +2697,9 @@ class IPCHandlers {
         return { success: false, error: "CUDA not supported on this platform" };
       }
       try {
+        // Stop the server first: swapping in a pack a running binary is loaded
+        // from EBUSYs on Windows (same rule as the Vulkan handler below)
+        await this.whisperManager.stopServer().catch(() => {});
         await this.whisperCudaManager.download((downloaded, total) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send("cuda-download-progress", {
@@ -2707,8 +2710,6 @@ class IPCHandlers {
           }
         });
         this._syncStartupEnv({ WHISPER_CUDA_ENABLED: "true" });
-        // Restart whisper-server so it picks up the CUDA binary
-        await this.whisperManager.stopServer().catch(() => {});
         return { success: true };
       } catch (error) {
         debugLogger.error("CUDA binary download failed", {

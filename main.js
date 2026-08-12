@@ -278,6 +278,7 @@ const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
+const { migrateLegacyBinDir } = require("./src/helpers/gpuBinaryManager");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
 const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
@@ -425,6 +426,10 @@ function initializeCoreManagers() {
   if (process.platform !== "darwin") {
     whisperCudaManager = new WhisperCudaManager();
     whisperVulkanManager = new WhisperVulkanManager();
+    // Heal installs from before GPU packs got per-pack directories; must run
+    // before startup pre-warm resolves any GPU binary path.
+    const LlamaVulkanManager = require("./src/helpers/llamaVulkanManager");
+    migrateLegacyBinDir([whisperCudaManager, whisperVulkanManager, new LlamaVulkanManager()]);
   }
   parakeetManager = new ParakeetManager();
   diarizationManager = new DiarizationManager();

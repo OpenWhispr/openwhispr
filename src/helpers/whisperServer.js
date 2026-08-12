@@ -11,6 +11,8 @@ const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
+const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
+const { BIN_SUBDIR: VULKAN_BIN_SUBDIR } = require("./whisperVulkanManager");
 const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
 const {
   computeTranscriptionTimeoutMs,
@@ -325,7 +327,8 @@ class WhisperServerManager extends EventEmitter {
     if (gpuBackend) {
       const ext = process.platform === "win32" ? ".exe" : "";
       const gpuBinary = `whisper-server-${process.platform}-${process.arch}-${gpuBackend}${ext}`;
-      const gpuPath = path.join(app.getPath("userData"), "bin", gpuBinary);
+      const subdir = gpuBackend === "cuda" ? CUDA_BIN_SUBDIR : VULKAN_BIN_SUBDIR;
+      const gpuPath = path.join(app.getPath("userData"), "bin", subdir, gpuBinary);
       if (fs.existsSync(gpuPath)) return gpuPath;
     }
 
