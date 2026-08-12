@@ -34,12 +34,42 @@ test("file transcription enforces Custom endpoint security before IPC", async (t
     return { success: true, text: "must not run" };
   };
 
-  for (const baseUrl of ["", "http://public.example.com/v1", "ftp://192.168.1.20/v1"]) {
+  for (const baseUrl of [
+    "",
+    // The untouched store default — Custom selected but never configured.
+    "https://api.openai.com/v1",
+    "http://public.example.com/v1",
+    "ftp://192.168.1.20/v1",
+  ]) {
     const result = await transcribeFile("/tmp/audio.webm", customConfig(baseUrl), false);
-    assert.equal(result.success, false);
-    assert.equal(result.code, "CUSTOM_ENDPOINT_INVALID");
+    assert.equal(result.success, false, baseUrl);
+    assert.equal(result.code, "CUSTOM_ENDPOINT_INVALID", baseUrl);
   }
+
+  // A Custom URL pointing at Tinfoil's host returns a failure (not a throw)
+  // so the upload UI shows it like any other config error.
+  const tinfoilResult = await transcribeFile(
+    "/tmp/audio.webm",
+    customConfig("https://inference.tinfoil.sh/v1"),
+    false
+  );
+  assert.equal(tinfoilResult.success, false);
+  assert.match(tinfoilResult.error, /attested main-process proxy/);
   assert.equal(ipcCalls, 0);
+
+  // Built-in providers ignore the stored custom URL entirely.
+  window.electronAPI.transcribeAudioFileByok = async () => {
+    ipcCalls += 1;
+    return { success: true, text: "groq ok" };
+  };
+  const groqResult = await transcribeFile(
+    "/tmp/audio.webm",
+    { ...customConfig("ftp://garbage"), cloudTranscriptionProvider: "groq" },
+    false
+  );
+  assert.equal(groqResult.success, true);
+  assert.equal(ipcCalls, 1);
+  ipcCalls = 0;
 
   let receivedOptions = null;
   window.electronAPI.transcribeAudioFileByok = async (options) => {

@@ -8,7 +8,7 @@ const load = () => import("../../src/components/notes/shared.ts");
 // Codes chunkedCloudTranscribe and interpretTranscribeResponse surface to the
 // upload UI. Anything added there needs a locale key or it reaches the user as
 // a raw English main-process string.
-const MAPPED_CODES = ["NO_SPEECH_DETECTED", "CHUNK_LOSS_EXCEEDED"];
+const MAPPED_CODES = ["NO_SPEECH_DETECTED", "CHUNK_LOSS_EXCEEDED", "CUSTOM_ENDPOINT_INVALID"];
 
 test("every mapped code resolves to a key that exists in en", async () => {
   const { transcriptionErrorKey } = await load();

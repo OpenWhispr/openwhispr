@@ -192,7 +192,7 @@ test("managed custom transcription never falls through to OpenAI", async (t) => 
 });
 
 test("unmanaged custom transcription fails closed instead of defaulting to OpenAI", async (t) => {
-  const { window } = installBrowserGlobals(t);
+  installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-custom-endpoint-guard-test-",
     mockModules: {
@@ -249,27 +249,34 @@ test("unmanaged custom transcription fails closed instead of defaulting to OpenA
     useLocalWhisper: false,
   });
 
-  await t.test("empty, default-sentinel, and invalid URLs throw CUSTOM_ENDPOINT_INVALID", async () => {
-    for (const baseUrl of [
-      "",
-      "   ",
-      API_ENDPOINTS.TRANSCRIPTION_BASE,
-      "not a url",
-      "http://public.example.com/v1",
-      "ftp://192.168.1.20/v1",
-    ]) {
-      globalThis.__customGuardSettings = buildSettings(baseUrl);
-      await assert.rejects(manager.processWithOpenAIAPI(audioBlob), (error) => {
-        assert.equal(error.code, "CUSTOM_ENDPOINT_INVALID", `baseUrl: ${JSON.stringify(baseUrl)}`);
-        assert.equal(
-          error.messageKey,
-          "hooks.audioRecording.errorDescriptions.customEndpointInvalid"
-        );
-        return true;
-      });
+  await t.test(
+    "empty, default-sentinel, and invalid URLs throw CUSTOM_ENDPOINT_INVALID",
+    async () => {
+      for (const baseUrl of [
+        "",
+        "   ",
+        API_ENDPOINTS.TRANSCRIPTION_BASE,
+        "not a url",
+        "http://public.example.com/v1",
+        "ftp://192.168.1.20/v1",
+      ]) {
+        globalThis.__customGuardSettings = buildSettings(baseUrl);
+        await assert.rejects(manager.processWithOpenAIAPI(audioBlob), (error) => {
+          assert.equal(
+            error.code,
+            "CUSTOM_ENDPOINT_INVALID",
+            `baseUrl: ${JSON.stringify(baseUrl)}`
+          );
+          assert.equal(
+            error.messageKey,
+            "hooks.audioRecording.errorDescriptions.customEndpointInvalid"
+          );
+          return true;
+        });
+      }
+      assert.equal(fetchedEndpoints.length, 0, "no misconfigured request may leave the app");
     }
-    assert.equal(fetchedEndpoints.length, 0, "no misconfigured request may leave the app");
-  });
+  );
 
   await t.test("a configured custom URL still routes to that URL", async () => {
     globalThis.__customGuardSettings = buildSettings("https://stt.parasail.example.com/v1");
@@ -565,4 +572,61 @@ test("proxied providers dispatch through the registry", async (t) => {
     }
     assert.equal(fetchCalls, 0);
   });
+});
+
+test("config-error code survives a failed local fallback", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-fallback-wrap-test-",
+    mockModules: {
+      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
+      "/stores/settingsStore": `
+        export const getSettings = () => globalThis.__fallbackWrapSettings;
+        export const getEffectiveCleanupModel = () => null;
+        export const isCloudCleanupMode = () => false;
+        export const isCloudDictationAgentMode = () => false;
+        export const isCloudTranslationMode = () => false;
+      `,
+      "/services/ReasoningService": "export default class ReasoningService {};",
+      "/services/SyncService.js": "export const syncService = {};",
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
+      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
+    },
+  });
+
+  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+  window.electronAPI.transcribeLocalWhisper = async () => {
+    throw new Error("local model missing");
+  };
+
+  const manager = Object.create(AudioManager.prototype);
+  manager.getEffectiveSttLanguage = () => "auto";
+  manager.getTranscriptionModel = () => "whisper-1";
+  manager.getAPIKey = async () => "custom-key";
+  manager.getWhisperPrompt = () => null;
+  manager.shouldStreamTranscription = () => false;
+
+  globalThis.__fallbackWrapSettings = {
+    allowLocalFallback: true,
+    fallbackWhisperModel: "base",
+    cloudTranscriptionBaseUrl: "",
+    cloudTranscriptionProvider: "custom",
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  };
+  t.after(() => {
+    delete globalThis.__fallbackWrapSettings;
+  });
+
+  await assert.rejects(
+    manager.processWithOpenAIAPI(new Blob([new Uint8Array([1])], { type: "audio/webm" })),
+    (error) => {
+      assert.equal(error.code, "CUSTOM_ENDPOINT_INVALID");
+      assert.equal(
+        error.messageKey,
+        "hooks.audioRecording.errorDescriptions.customEndpointInvalid"
+      );
+      return true;
+    }
+  );
 });

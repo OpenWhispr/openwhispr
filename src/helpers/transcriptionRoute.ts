@@ -3,9 +3,9 @@
 // base names and handle the OpenWhispr-cloud pipeline upstream; streaming
 // provider selection is a live-recorder concern and stays in audioManager.
 //
-// Loaded by BOTH the renderer and the main process (dynamic import, same
-// precedent as the deleted retryTranscriptionRouting.js) — erasable
-// TypeScript syntax only, explicit import extensions, no store imports.
+// Loaded by both the renderer and the main process (main uses dynamic
+// import): erasable TypeScript syntax only, explicit import extensions,
+// no store imports.
 // Routes never carry secrets: `auth.keyRef` names the key slot the executor
 // resolves itself.
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
@@ -28,19 +28,14 @@ import {
   type TranscriptionProviderBaseUrl,
 } from "../services/transcriptionBaseUrl.ts";
 
-export const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
+const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
-export const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
+const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
-
-export type TranscriptionRouteContext = "dictation" | "meeting" | "upload";
 
 export interface TranscriptionRouteSettings {
   transcriptionMode?: string;
   useLocalWhisper?: boolean;
-  localTranscriptionProvider?: string;
-  whisperModel?: string;
-  parakeetModel?: string;
   remoteTranscriptionUrl?: string;
   remoteTranscriptionModel?: string;
   cloudTranscriptionProvider?: string;
@@ -52,7 +47,6 @@ export interface TranscriptionRouteSettings {
 }
 
 export interface TranscriptionRouteInput {
-  context: TranscriptionRouteContext;
   /** Policy-EFFECTIVE, scope-resolved snapshot — the resolver never re-maps selections. */
   settings: TranscriptionRouteSettings;
   /** Optional fail-closed floor; renderer callers pass the policy store state, main-process callers omit it. */
@@ -69,7 +63,7 @@ export interface TranscriptionRouteInput {
 
 export type TranscriptionRoute =
   | { transport: "error"; message: string; code?: string; messageKey?: string }
-  | { transport: "local"; provider: "whisper" | "nvidia"; model: string; language?: string }
+  | { transport: "local" }
   | {
       transport: "proxied";
       provider: "tinfoil" | "mistral" | "xai" | "corti";
@@ -83,7 +77,7 @@ export type TranscriptionRoute =
       transport: "http-batch";
       provider: "self-hosted" | "custom" | "openai" | "groq";
       endpoint: string;
-      model: string;
+      model: string | null;
       auth: { scheme: "bearer" | "azure-api-key" | "none"; keyRef: string | null };
       sizeCapBytes: number | null;
       language?: string;
@@ -216,14 +210,10 @@ export function resolveTranscriptionRoute({
     }
   }
 
+  // Local decode details (engine, model) stay with the local managers; the
+  // resolver only decides that the request never leaves the machine.
   if (s.useLocalWhisper) {
-    const isNvidia = s.localTranscriptionProvider === "nvidia";
-    return {
-      transport: "local",
-      provider: isNvidia ? "nvidia" : "whisper",
-      model: isNvidia ? s.parakeetModel || "parakeet-tdt-0.6b-v3" : s.whisperModel || "base",
-      language,
-    };
+    return { transport: "local" };
   }
 
   const provider = s.cloudTranscriptionProvider || "openai";

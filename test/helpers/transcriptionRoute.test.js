@@ -5,7 +5,7 @@ const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
 const resolve = async (settings, extra = {}) => {
   const { resolveTranscriptionRoute } = await load();
-  return resolveTranscriptionRoute({ context: "dictation", settings, ...extra });
+  return resolveTranscriptionRoute({ settings, ...extra });
 };
 
 const MANAGED_OPENAI_ONLY = {
@@ -81,21 +81,10 @@ test("self-hosted fails closed on invalid or public-http URLs", async () => {
   }
 });
 
-test("local mode selects whisper or parakeet with model defaults", async () => {
+test("local mode yields a bare local route; decode details stay with the local managers", async () => {
   assert.deepEqual(await resolve({ useLocalWhisper: true, whisperModel: "small" }), {
     transport: "local",
-    provider: "whisper",
-    model: "small",
-    language: undefined,
   });
-  const nvidia = await resolve({
-    useLocalWhisper: true,
-    localTranscriptionProvider: "nvidia",
-    preferredLanguage: "de-DE",
-  });
-  assert.equal(nvidia.provider, "nvidia");
-  assert.equal(nvidia.model, "parakeet-tdt-0.6b-v3");
-  assert.equal(nvidia.language, "de");
 });
 
 test("proxied providers carry their quirks as route data", async () => {
@@ -139,7 +128,6 @@ test("custom requires a configured secure endpoint (empty, sentinel, garbage all
     "ftp://192.168.1.20/v1",
   ]) {
     const route = resolveTranscriptionRoute({
-      context: "dictation",
       settings: { cloudTranscriptionProvider: "custom", cloudTranscriptionBaseUrl },
     });
     assert.equal(route.transport, "error", cloudTranscriptionBaseUrl);

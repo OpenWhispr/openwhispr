@@ -69,6 +69,18 @@ test("per-provider transcription model memory", async (t) => {
     assert.ok(Object.keys(persisted).some((key) => key.startsWith("dictation:")));
   });
 
+  await t.test("meeting scope restores only streaming-capable models", () => {
+    state().switchCloudTranscriptionProvider("meeting", "openai");
+    // A remembered batch-only model must not survive into the streaming-filtered
+    // meeting scope; the streaming default wins instead.
+    const restored = state().meetingCloudTranscriptionModel;
+    assert.notEqual(restored, "");
+    state().setMeetingCloudTranscriptionModel("gpt-4o-mini-transcribe");
+    state().switchCloudTranscriptionProvider("meeting", "groq");
+    state().switchCloudTranscriptionProvider("meeting", "openai");
+    assert.notEqual(state().meetingCloudTranscriptionModel, "");
+  });
+
   await t.test("setCloudTranscriptionForAllScopes seeds memory in every scope", () => {
     state().setCloudTranscriptionForAllScopes({
       useLocalWhisper: false,

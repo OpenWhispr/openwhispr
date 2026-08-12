@@ -71,7 +71,6 @@ export async function transcribeFile(
   // round-trip; the main-process handler re-resolves the same fields as
   // defense in depth.
   const route = resolveTranscriptionRoute({
-    context: "upload",
     settings: {
       transcriptionMode: cfg.transcriptionMode,
       remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,

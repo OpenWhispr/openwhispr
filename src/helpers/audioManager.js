@@ -55,7 +55,7 @@ import {
   isOnlineParakeetModel,
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
-import { resolveTranscriptionRoute } from "./transcriptionRoute.ts";
+import { resolveByokModel, resolveTranscriptionRoute } from "./transcriptionRoute.ts";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -3300,45 +3300,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const selfHostedModel = resolveSelfHostedTranscriptionModel(s);
       if (selfHostedModel) return selfHostedModel;
       const provider = s.cloudTranscriptionProvider || "openai";
-      const trimmedModel = (s.cloudTranscriptionModel || "").trim();
-
-      // For custom provider, use whatever model is set (or fallback to whisper-1)
-      if (provider === "custom") {
-        return trimmedModel || "whisper-1";
-      }
-
+      // Tinfoil's model lives in the registry; every other provider validates
+      // the stored model through the shared resolver rules.
       if (provider === "tinfoil") {
         return getBatchTranscriptionModel("tinfoil");
       }
-
-      // Validate model matches provider to handle settings migration
-      if (trimmedModel) {
-        const isGroqModel = trimmedModel.startsWith("whisper-large-v3");
-        const isOpenAIModel = trimmedModel.startsWith("gpt-4o") || trimmedModel === "whisper-1";
-        const isMistralModel = trimmedModel.startsWith("voxtral-");
-        const isCortiModel = trimmedModel.startsWith("corti-");
-
-        if (provider === "groq" && isGroqModel) {
-          return trimmedModel;
-        }
-        if (provider === "openai" && isOpenAIModel) {
-          return trimmedModel;
-        }
-        if (provider === "mistral" && isMistralModel) {
-          return trimmedModel;
-        }
-        if (provider === "corti" && isCortiModel) {
-          return trimmedModel;
-        }
-        // Model doesn't match provider - fall through to default
-      }
-
-      // Return provider-appropriate default
-      if (provider === "groq") return "whisper-large-v3-turbo";
-      if (provider === "xai") return "grok-stt";
-      if (provider === "mistral") return "voxtral-mini-latest";
-      if (provider === "corti") return "corti-transcribe";
-      return "gpt-4o-mini-transcribe";
+      return resolveByokModel(provider, s.cloudTranscriptionModel);
     } catch (error) {
       return "gpt-4o-mini-transcribe";
     }
@@ -3350,7 +3317,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // the local→cloud fallback resolves its cloud endpoint through this too.
   getTranscriptionEndpoint(deploymentName = "") {
     const route = resolveTranscriptionRoute({
-      context: "dictation",
       settings: { ...getSettings(), useLocalWhisper: false },
       policy: usePolicyStore.getState(),
       providers: getTranscriptionProviders(),

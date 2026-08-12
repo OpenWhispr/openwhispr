@@ -18,6 +18,22 @@ const {
   toPolicyFailure,
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
+// The renderer's ModelRegistry is not main-loadable; the raw registry data is
+// packaged, and the route resolver only needs {id, baseUrl} per provider.
+const transcriptionProviderBaseUrls = () =>
+  require("../models/modelRegistryData.json").transcriptionProviders;
+// ipcMain.handle keeps only the message when a promise rejects, dropping custom
+// props — proxy handlers return {error, code, messageKey} so the renderer can
+// rebuild the error.
+const serializeIpcError =
+  (fn) =>
+  async (...args) => {
+    try {
+      return await fn(...args);
+    } catch (error) {
+      return { error: error.message, code: error.code, messageKey: error.messageKey };
+    }
+  };
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
@@ -82,33 +98,6 @@ const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcription
 const XAI_STT_URL = "https://api.x.ai/v1/stt";
 
 // xAI STT supports 25 languages; language must be in this set to enable ITN via format=true
-const XAI_STT_LANGUAGES = new Set([
-  "ar",
-  "cs",
-  "da",
-  "de",
-  "en",
-  "es",
-  "fa",
-  "fil",
-  "fr",
-  "hi",
-  "id",
-  "it",
-  "ja",
-  "ko",
-  "mk",
-  "ms",
-  "nl",
-  "pl",
-  "pt",
-  "ro",
-  "ru",
-  "sv",
-  "th",
-  "tr",
-  "vi",
-]);
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
@@ -3540,88 +3529,77 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-xai-transcription",
-      async (event, { audioBuffer, language, keyterms }) => {
-        try {
-          const apiKey = this.environmentManager.getXaiKey();
-          if (!apiKey) {
-            throw new Error("xAI API key not configured");
-          }
-
-          const formData = new FormData();
-          const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
-          formData.append("file", audioBlob, "audio.webm");
-          if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
-            formData.append("language", language);
-            formData.append("format", "true");
-          }
-          if (keyterms && keyterms.length > 0) {
-            for (const term of keyterms) {
-              formData.append("keyterm", term);
-            }
-          }
-
-          const response = await proxyFetch(XAI_STT_URL, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${apiKey}` },
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`xAI API Error: ${response.status} ${errorText}`);
-          }
-
-          return await response.json();
-        } catch (error) {
-          // ipcMain.handle keeps only the message when a promise rejects, dropping
-          // custom props — return the code so the renderer can rebuild the error.
-          return { error: error.message, code: error.code, messageKey: error.messageKey };
+      serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
+        const apiKey = this.environmentManager.getXaiKey();
+        if (!apiKey) {
+          throw new Error("xAI API key not configured");
         }
-      }
+
+        const formData = new FormData();
+        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+        formData.append("file", audioBlob, "audio.webm");
+        const { XAI_STT_LANGUAGES } = await import("./transcriptionRoute.ts");
+        if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
+          formData.append("language", language);
+          formData.append("format", "true");
+        }
+        if (keyterms && keyterms.length > 0) {
+          for (const term of keyterms) {
+            formData.append("keyterm", term);
+          }
+        }
+
+        const response = await proxyFetch(XAI_STT_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}` },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`xAI API Error: ${response.status} ${errorText}`);
+        }
+
+        return await response.json();
+      })
     );
 
     ipcMain.handle(
       "proxy-mistral-transcription",
-      async (event, { audioBuffer, model, language, contextBias }) => {
-        try {
-          const apiKey = this.environmentManager.getMistralKey();
-          if (!apiKey) {
-            throw new Error("Mistral API key not configured");
-          }
-
-          const formData = new FormData();
-          const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
-          formData.append("file", audioBlob, "audio.webm");
-          formData.append("model", model || "voxtral-mini-latest");
-          if (language && language !== "auto") {
-            formData.append("language", language);
-          }
-          if (contextBias && contextBias.length > 0) {
-            for (const token of contextBias) {
-              formData.append("context_bias", token);
-            }
-          }
-
-          const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
-            method: "POST",
-            headers: {
-              "x-api-key": apiKey,
-            },
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Mistral API Error: ${response.status} ${errorText}`);
-          }
-
-          return await response.json();
-        } catch (error) {
-          // ipcMain.handle keeps only the message when a promise rejects, dropping
-          // custom props — return the code so the renderer can rebuild the error.
-          return { error: error.message, code: error.code, messageKey: error.messageKey };
+      serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
+        const apiKey = this.environmentManager.getMistralKey();
+        if (!apiKey) {
+          throw new Error("Mistral API key not configured");
         }
-      }
+
+        const formData = new FormData();
+        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+        formData.append("file", audioBlob, "audio.webm");
+        formData.append("model", model || "voxtral-mini-latest");
+        if (language && language !== "auto") {
+          formData.append("language", language);
+        }
+        if (contextBias && contextBias.length > 0) {
+          for (const token of contextBias) {
+            formData.append("context_bias", token);
+          }
+        }
+
+        const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Mistral API Error: ${response.status} ${errorText}`);
+        }
+
+        return await response.json();
+      })
     );
 
     ipcMain.handle("get-corti-client-id", async () => {
@@ -3642,29 +3620,23 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-corti-transcription",
-      async (event, { audioBuffer, language, environment, tenant }) => {
-        try {
-          const clientId = this.environmentManager.getCortiClientId();
-          const clientSecret = this.environmentManager.getCortiClientSecret();
-          if (!clientId || !clientSecret) {
-            throw new Error("Corti credentials not configured");
-          }
-
-          const { transcribeAudio } = require("./cortiTranscription");
-          return await transcribeAudio({
-            environment,
-            tenant,
-            clientId,
-            clientSecret,
-            audioBuffer,
-            language,
-          });
-        } catch (error) {
-          // ipcMain.handle keeps only the message when a promise rejects, dropping
-          // custom props — return the code so the renderer can rebuild the error.
-          return { error: error.message, code: error.code, messageKey: error.messageKey };
+      serializeIpcError(async (event, { audioBuffer, language, environment, tenant }) => {
+        const clientId = this.environmentManager.getCortiClientId();
+        const clientSecret = this.environmentManager.getCortiClientSecret();
+        if (!clientId || !clientSecret) {
+          throw new Error("Corti credentials not configured");
         }
-      }
+
+        const { transcribeAudio } = require("./cortiTranscription");
+        return await transcribeAudio({
+          environment,
+          tenant,
+          clientId,
+          clientSecret,
+          audioBuffer,
+          language,
+        });
+      })
     );
 
     ipcMain.handle("get-tinfoil-chat-models", async () => {
@@ -3674,22 +3646,16 @@ class IPCHandlers {
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
     ipcMain.handle(
       "proxy-tinfoil-transcription",
-      async (event, { audioBuffer, language, prompt }) => {
-        try {
-          return await transcribeWithTinfoil({
-            audioBuffer: Buffer.from(audioBuffer),
-            fileName: "audio.webm",
-            contentType: "audio/webm",
-            language,
-            prompt,
-            apiKey: this.environmentManager.getTinfoilKey(),
-          });
-        } catch (error) {
-          // ipcMain.handle keeps only the message when a promise rejects, dropping
-          // custom props — return the code so the renderer can rebuild the error.
-          return { error: error.message, code: error.code, messageKey: error.messageKey };
-        }
-      }
+      serializeIpcError(async (event, { audioBuffer, language, prompt }) => {
+        return await transcribeWithTinfoil({
+          audioBuffer: Buffer.from(audioBuffer),
+          fileName: "audio.webm",
+          contentType: "audio/webm",
+          language,
+          prompt,
+          apiKey: this.environmentManager.getTinfoilKey(),
+        });
+      })
     );
 
     ipcMain.handle("get-custom-transcription-key", async () => {
@@ -5059,11 +5025,11 @@ class IPCHandlers {
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
-        // Renderer pre-flight owns policy and URL-vs-provider guards; retry
-        // re-routes stored audio through whatever is selected NOW.
+        // Renderer pre-flight owns policy; retry re-routes stored audio through
+        // whatever is selected NOW.
         const route = resolveTranscriptionRoute({
-          context: "dictation",
           settings: settings || {},
+          providers: transcriptionProviderBaseUrls(),
           request: { effectiveLanguage: language },
         });
 
@@ -5179,8 +5145,8 @@ class IPCHandlers {
           });
           if (text) result = { text, source: "tinfoil", model };
         } else if (route.transport === "proxied" && route.provider === "corti") {
-          // OAuth + interaction-based REST flow — without this branch Corti audio
-          // fell through to the OpenAI default below.
+          // Corti uses OAuth + an interaction-based REST flow, so it can't use
+          // the generic fetch below.
           const clientId = this.environmentManager.getCortiClientId();
           const clientSecret = this.environmentManager.getCortiClientSecret();
           if (!clientId || !clientSecret) {
@@ -8222,7 +8188,6 @@ class IPCHandlers {
 
           const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
           const route = resolveTranscriptionRoute({
-            context: "upload",
             settings: {
               transcriptionMode,
               remoteTranscriptionUrl,
@@ -8233,6 +8198,7 @@ class IPCHandlers {
               cortiEnvironment: environment,
               cortiTenant: tenant,
             },
+            providers: transcriptionProviderBaseUrls(),
             request: { effectiveLanguage: language || undefined },
           });
 
@@ -8353,8 +8319,7 @@ class IPCHandlers {
           );
 
           const url = new URL(transcriptionUrl);
-          // Mistral authenticates with x-api-key — its docs reject Bearer here
-          // (the old Bearer header was the one path still doing it wrong).
+          // Mistral authenticates with x-api-key, not Bearer.
           const headers = apiKey
             ? route.provider === "mistral"
               ? { "x-api-key": apiKey }

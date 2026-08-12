@@ -386,7 +386,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           if (!cancelled) setProviderReady(!!remoteTranscriptionUrl?.trim());
         } else if (cloudTranscriptionProvider === "custom") {
           const route = resolveTranscriptionRoute({
-            context: "upload",
             settings: { cloudTranscriptionProvider, cloudTranscriptionBaseUrl },
             providers: getTranscriptionProviders(),
           });
@@ -494,7 +493,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,
     cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
     cloudTranscriptionModel,
-    language: getBaseLanguageCode(preferredLanguage) || "en",
+    // Empty string = auto-detect; providers that need a concrete language (Corti) get their default from the route resolver.
+    language: getBaseLanguageCode(preferredLanguage) || "",
     cortiEnvironment,
     cortiTenant,
     transcriptionMode,
