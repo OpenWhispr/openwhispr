@@ -28,3 +28,14 @@ export function matchesDictionaryPrompt(text, dictionaryPrompt) {
 
   return textComposition >= 0.9 && dictionaryUsage >= 0.7;
 }
+
+export const DICTIONARY_ECHO_CODE = "DICTIONARY_ECHO";
+
+// Keeps the "No audio detected" message so the existing message comparisons and
+// the main-process no-audio contract still match, while letting the pipeline
+// tell a discarded dictionary echo apart from genuine silence (#1547).
+export function dictionaryEchoError() {
+  const error = new Error("No audio detected");
+  error.code = DICTIONARY_ECHO_CODE;
+  return error;
+}
