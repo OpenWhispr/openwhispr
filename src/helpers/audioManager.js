@@ -260,10 +260,8 @@ const isValidApiKey = (key, provider = "openai") => {
   return key !== placeholder;
 };
 
-// Realtime providers deliver the tail of the transcript after the audio stops,
-// and unlike Deepgram/AssemblyAI/Corti they expose no finalize handshake. Wait
-// for the text to settle rather than sleeping a fixed window that dropped the
-// last words whenever the provider answered slower than it.
+// Realtime providers expose no finalize handshake (unlike Deepgram/AssemblyAI/
+// Corti), so the transcript tail lands whenever it lands — wait, don't sleep.
 const STREAMING_FINAL_QUIET_MS = 250;
 const STREAMING_FINAL_CEILING_MS = 2000;
 
@@ -4042,9 +4040,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  // Resolves once the transcript stops moving. An outstanding partial means its
+  // Resolves once the transcript stops moving. An outstanding partial proves its
   // final is still in flight, so only the ceiling ends the wait until it lands —
-  // a plain debounce would expire on the same slow tail this replaces.
+  // a plain debounce would expire on the very tail this exists to catch.
   awaitStreamingTextSettled() {
     return new Promise((resolve) => {
       const settle = () => {
