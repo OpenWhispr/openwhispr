@@ -156,50 +156,62 @@ class GoogleCalendarManager {
 
   async _syncCalendar(calendar) {
     const accountEmail = calendar.account_email;
-    const params = new URLSearchParams({
-      singleEvents: "true",
-      orderBy: "startTime",
-      timeMin: new Date().toISOString(),
-      timeMax: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    });
 
-    if (calendar.sync_token) {
-      params.delete("timeMin");
-      params.delete("timeMax");
-      params.delete("orderBy");
-      params.set("syncToken", calendar.sync_token);
-    }
+    const buildFullParams = () =>
+      new URLSearchParams({
+        singleEvents: "true",
+        orderBy: "startTime",
+        timeMin: new Date().toISOString(),
+        timeMax: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      });
 
     let isFullSync = !calendar.sync_token;
-    let data;
-    try {
-      data = await this._apiGet(
-        `/calendars/${encodeURIComponent(calendar.id)}/events?${params.toString()}`,
-        accountEmail
-      );
-    } catch (err) {
-      // 410 Gone means syncToken is invalid; fall back to full sync
-      if (err.statusCode === 410) {
-        isFullSync = true;
-        const fullParams = new URLSearchParams({
+    let baseParams = isFullSync
+      ? buildFullParams()
+      : new URLSearchParams({
           singleEvents: "true",
-          orderBy: "startTime",
-          timeMin: new Date().toISOString(),
-          timeMax: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          syncToken: calendar.sync_token,
         });
+    let pageToken = null;
+    let nextSyncToken = null;
+    const allItems = [];
+
+    while (true) {
+      const params = new URLSearchParams(baseParams);
+      if (pageToken) params.set("pageToken", pageToken);
+
+      let data;
+      try {
         data = await this._apiGet(
-          `/calendars/${encodeURIComponent(calendar.id)}/events?${fullParams.toString()}`,
+          `/calendars/${encodeURIComponent(calendar.id)}/events?${params.toString()}`,
           accountEmail
         );
-      } else {
+      } catch (err) {
+        // 410 Gone means syncToken is invalid; fall back to full sync
+        if (err.statusCode === 410 && !pageToken && !isFullSync) {
+          isFullSync = true;
+          baseParams = buildFullParams();
+          continue;
+        }
         throw err;
       }
+
+      if (data.items) {
+        allItems.push(...data.items);
+      }
+      pageToken = data.nextPageToken || null;
+      if (data.nextSyncToken) {
+        nextSyncToken = data.nextSyncToken;
+      }
+
+      if (!pageToken) break;
     }
 
     const toUpsert = [];
     const toRemove = [];
+    const contactsToUpsert = [];
 
-    for (const item of data.items || []) {
+    for (const item of allItems) {
       if (item.status === "cancelled") {
         toRemove.push(item.id);
         continue;
@@ -230,6 +242,13 @@ class GoogleCalendarManager {
             )
           : null,
       });
+
+      if (item.attendees) {
+        for (const a of item.attendees) {
+          if (a.email)
+            contactsToUpsert.push({ email: a.email, displayName: a.displayName || null });
+        }
+      }
     }
 
     // A full sync has no incremental baseline, so deletions that happened
@@ -244,18 +263,7 @@ class GoogleCalendarManager {
     }
     if (toUpsert.length > 0) this.databaseManager.upsertCalendarEvents(toUpsert);
     if (toRemove.length > 0) this.databaseManager.removeCalendarEvents(toRemove);
-    if (data.nextSyncToken)
-      this.databaseManager.updateCalendarSyncToken(calendar.id, data.nextSyncToken);
-
-    const contactsToUpsert = [];
-    for (const item of data.items || []) {
-      if (item.attendees) {
-        for (const a of item.attendees) {
-          if (a.email)
-            contactsToUpsert.push({ email: a.email, displayName: a.displayName || null });
-        }
-      }
-    }
+    if (nextSyncToken) this.databaseManager.updateCalendarSyncToken(calendar.id, nextSyncToken);
     if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
   }
 

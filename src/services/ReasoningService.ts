@@ -20,7 +20,11 @@ import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
-import { resolveConfiguredOpenAIBase, resolveSelfHostedOpenAIBase } from "./ai/openaiBase";
+import {
+  canBorrowCleanupCustomKey,
+  resolveConfiguredOpenAIBase,
+  resolveSelfHostedOpenAIBase,
+} from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
@@ -35,6 +39,26 @@ interface ToolExecutionResult {
   data: string;
   displayText: string;
   metadata?: ToolMetadata;
+}
+
+const BYOK_STREAM_PROVIDERS = [
+  "openai",
+  "groq",
+  "gemini",
+  "anthropic",
+  "tinfoil",
+  "custom",
+  "openrouter",
+  "corti",
+] as const;
+
+type ByokStreamProvider = (typeof BYOK_STREAM_PROVIDERS)[number];
+
+function toByokStreamProvider(provider: string): ByokStreamProvider {
+  if (!(BYOK_STREAM_PROVIDERS as readonly string[]).includes(provider)) {
+    throw new Error(`Unsupported reasoning provider: ${provider}`);
+  }
+  return provider as ByokStreamProvider;
 }
 
 export type AgentStreamChunk =
@@ -221,6 +245,27 @@ class ReasoningService extends BaseReasoningService {
     }
 
     return apiKey;
+  }
+
+  // Single source for BYOK streaming credentials and endpoint overrides:
+  // rejects unknown providers instead of defaulting them to OpenAI, and only
+  // lets a custom scope borrow the shared cleanup key for the cleanup endpoint.
+  private async resolveByokAccess(
+    provider: string,
+    config: Pick<ReasoningConfig, "baseUrl" | "customApiKey">
+  ): Promise<{ apiKey: string; baseURL?: string }> {
+    const providerKey = toByokStreamProvider(provider);
+    const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() || "" : "";
+    const canFallBackToSharedKey =
+      providerKey !== "custom" || canBorrowCleanupCustomKey(config.baseUrl);
+    const apiKey = overrideKey || (canFallBackToSharedKey ? await this.getApiKey(providerKey) : "");
+    const baseURL =
+      providerKey === "openrouter"
+        ? API_ENDPOINTS.OPENROUTER_BASE
+        : providerKey === "custom"
+          ? resolveConfiguredOpenAIBase(providerKey, config.baseUrl)
+          : undefined;
+    return { apiKey, baseURL };
   }
 
   private async callChatCompletionsApi(
@@ -422,6 +467,9 @@ class ReasoningService extends BaseReasoningService {
     const providerId = isLanCleanup
       ? "lan"
       : resolveInferenceProvider(dispatchConfig.provider, trimmedModel);
+    if (!providerId) {
+      throw new Error("No reasoning provider selected");
+    }
     if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
     assertReasoningAllowedByPolicy(providerId, resolveLlmDispatchMode(providerId, dispatchConfig));
 
@@ -501,39 +549,26 @@ class ReasoningService extends BaseReasoningService {
       }
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
-      const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom" | "openrouter" | "corti";
-      const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
-      apiKey = overrideKey || (await this.getApiKey(providerKey));
-
-      switch (providerKey) {
-        case "groq":
-          endpoint = buildApiUrl(API_ENDPOINTS.GROQ_BASE, "/chat/completions");
-          break;
-        case "corti":
-          endpoint = buildApiUrl(API_ENDPOINTS.CORTI_MODELS_BASE, "/chat/completions");
-          break;
-        case "gemini":
-          endpoint = buildApiUrl(API_ENDPOINTS.GEMINI, "/openai/chat/completions");
-          break;
-        case "openrouter":
-          endpoint = buildApiUrl(API_ENDPOINTS.OPENROUTER_BASE, "/chat/completions");
-          break;
-        case "tinfoil":
-          throw new Error("Tinfoil streaming must use the verified SDK transport");
-        case "openai":
-          endpoint = buildApiUrl(API_ENDPOINTS.OPENAI_BASE, "/chat/completions");
-          break;
-        case "custom":
-          endpoint = buildApiUrl(
-            resolveConfiguredOpenAIBase(providerKey, config.baseUrl),
-            "/chat/completions"
-          );
-          break;
-        default:
-          endpoint = buildApiUrl(API_ENDPOINTS.OPENAI_BASE, "/chat/completions");
-          break;
+      const access = await this.resolveByokAccess(provider, config);
+      apiKey = access.apiKey;
+      const chatBase =
+        access.baseURL ??
+        (
+          {
+            openai: API_ENDPOINTS.OPENAI_BASE,
+            groq: API_ENDPOINTS.GROQ_BASE,
+            corti: API_ENDPOINTS.CORTI_MODELS_BASE,
+            gemini: API_ENDPOINTS.GEMINI,
+          } as Partial<Record<string, string>>
+        )[provider];
+      // anthropic and tinfoil have no raw Chat Completions transport here.
+      if (!chatBase) {
+        throw new Error(`${provider} streaming must use the AI SDK transport`);
       }
+      endpoint = buildApiUrl(
+        chatBase,
+        provider === "gemini" ? "/openai/chat/completions" : "/chat/completions"
+      );
     }
 
     // A known endpoint host knows its own request shape better than the model id does.
@@ -739,16 +774,7 @@ class ReasoningService extends BaseReasoningService {
       }
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
-      const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom" | "openrouter" | "corti";
-      const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
-      apiKey = overrideKey || (await this.getApiKey(providerKey));
-      baseURL =
-        provider === "openrouter"
-          ? API_ENDPOINTS.OPENROUTER_BASE
-          : provider === "custom"
-            ? resolveConfiguredOpenAIBase(provider, config.baseUrl)
-            : undefined;
+      ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config));
     }
     const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
     // OpenRouter ids are never in the local registry, so the supportsThinking

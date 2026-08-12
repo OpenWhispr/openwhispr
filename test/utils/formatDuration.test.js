@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = () => import("../../src/utils/formatDuration.ts");
+const load = async () => {
+  const m = await import("../../src/utils/formatDuration.ts");
+  return m.default || m;
+};
 
 test("formatMmSs formats valid positive seconds", async () => {
   const { formatMmSs } = await load();
