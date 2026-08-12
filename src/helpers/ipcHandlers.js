@@ -3235,7 +3235,13 @@ class IPCHandlers {
     ipcMain.handle("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
       try {
         const LocalReasoningService = require("../services/localReasoningBridge").default;
-        const result = await LocalReasoningService.processText(text, modelId, config);
+        // Everything that reaches this handler is something a person is waiting
+        // on — dictation cleanup, the dictation agent, a chat turn — so it may
+        // preempt a queued multi-pass job. Batch work calls the bridge directly.
+        const result = await LocalReasoningService.processText(text, modelId, {
+          ...config,
+          priority: config?.priority || "interactive",
+        });
         return { success: true, text: result };
       } catch (error) {
         // The code lets the renderer say something useful about an over-long
@@ -3362,6 +3368,102 @@ class IPCHandlers {
       } catch (error) {
         return { success: false, error: error.message };
       }
+    });
+
+    // The chat agent streams tokens straight from llama-server's HTTP port, so
+    // it cannot hold the scheduler slot inside a single main-process call. It
+    // takes a lease instead — which also means its `llama-server-start` can no
+    // longer stop the server out from under an in-flight multi-pass job.
+    // Multi-pass note actions run here rather than in the renderer: the
+    // scheduler that keeps them from starving dictation lives in this process,
+    // and a run of this length must survive the control panel being closed.
+    ipcMain.handle("run-note-action", async (event, payload) => {
+      const { noteId, noteContent, segments, systemPrompt, modelId, disableThinking } = payload;
+      const controller = new AbortController();
+      this._noteActionRuns = this._noteActionRuns || new Map();
+      this._noteActionRuns.set(noteId, controller);
+
+      try {
+        const modelManager = require("./modelManagerBridge").default;
+        const LocalReasoningService = require("../services/localReasoningBridge").default;
+        const { runNoteAction } = require("./noteActionRunner");
+        const { BATCH_REQUEST_TIMEOUT_MS } = require("./llamaServer");
+
+        const { contextSize, isGpuBackend } = modelManager.resolveModelContext(modelId);
+
+        const result = await runNoteAction({
+          noteContent,
+          segments,
+          systemPrompt,
+          contextSize,
+          isGpuBackend,
+          signal: controller.signal,
+          onProgress: (progress) =>
+            this.broadcastToWindows("note-action-progress", { noteId, ...progress }),
+          infer: (prompt, options) =>
+            LocalReasoningService.processText(prompt, modelId, {
+              ...options,
+              disableThinking,
+              priority: "batch",
+              requestTimeoutMs: BATCH_REQUEST_TIMEOUT_MS,
+            }),
+        });
+
+        debugLogger.notice(
+          "Multi-pass note action finished",
+          {
+            noteId,
+            passes: result.passes,
+            partial: result.partial,
+            gapCount: result.gapCount,
+            foldLevels: result.foldLevels,
+            contextSize,
+            isGpuBackend,
+          },
+          "llama"
+        );
+
+        return { success: true, ...result };
+      } catch (error) {
+        return { success: false, error: error.message, code: error.code };
+      } finally {
+        this._noteActionRuns.delete(noteId);
+      }
+    });
+
+    ipcMain.handle("cancel-note-action", async (_event, noteId) => {
+      const controller = this._noteActionRuns?.get(noteId);
+      if (!controller) return { success: false };
+      controller.abort();
+      return { success: true };
+    });
+
+    ipcMain.handle("acquire-local-inference-lease", async (event, options = {}) => {
+      try {
+        const LocalReasoningService = require("../services/localReasoningBridge").default;
+        const lease = await LocalReasoningService.acquireLease({
+          owner: event.sender.id,
+          priority: options.priority || "interactive",
+        });
+        const sender = event.sender;
+        if (!this._leaseOwners?.has(sender.id)) {
+          this._leaseOwners = this._leaseOwners || new Set();
+          this._leaseOwners.add(sender.id);
+          // A window that goes away must not keep owning the local model.
+          sender.once("destroyed", () => {
+            LocalReasoningService.releaseLeasesForOwner(sender.id);
+            this._leaseOwners.delete(sender.id);
+          });
+        }
+        return { success: true, leaseId: lease.id };
+      } catch (error) {
+        return { success: false, error: error.message, code: error.code };
+      }
+    });
+
+    ipcMain.handle("release-local-inference-lease", async (_event, leaseId) => {
+      const LocalReasoningService = require("../services/localReasoningBridge").default;
+      return { success: LocalReasoningService.releaseLease(leaseId) };
     });
 
     ipcMain.handle("llama-server-stop", async () => {

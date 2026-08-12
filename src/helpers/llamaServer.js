@@ -6,6 +6,18 @@ const http = require("http");
 const debugLogger = require("./debugLogger");
 const { readGgufMetadata } = require("./ggufMetadata");
 const { resolveContextSize } = require("./llamaContext");
+
+// Codes travel with the error so the multi-pass runner can tell a broken machine
+// (retry) from an unreadable section (record a gap) without matching substrings.
+const DEFAULT_REQUEST_TIMEOUT_MS = 300000;
+// A single extraction pass on the CPU backend can prefill for many minutes.
+const BATCH_REQUEST_TIMEOUT_MS = 900000;
+
+function llamaError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
 const { killProcess } = require("../utils/process");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
@@ -332,8 +344,9 @@ class LlamaServerManager {
           const diagStr = diagParts.length ? ` (${diagParts.join(", ")})` : "";
           settle(() =>
             reject(
-              new Error(
-                `llama-server process died during startup${diagStr}${oomHint}${stderr ? `\nProcess output: ${stderr}` : ""}`
+              llamaError(
+                `llama-server process died during startup${diagStr}${oomHint}${stderr ? `\nProcess output: ${stderr}` : ""}`,
+                "LLAMA_START_FAILED"
               )
             )
           );
@@ -352,7 +365,11 @@ class LlamaServerManager {
         }
 
         if (Date.now() - startTime >= timeoutMs) {
-          settle(() => reject(new Error(`llama-server failed to start within ${timeoutMs}ms`)));
+          settle(() =>
+            reject(
+              llamaError(`llama-server failed to start within ${timeoutMs}ms`, "LLAMA_START_TIMEOUT")
+            )
+          );
           return;
         }
 
@@ -505,7 +522,7 @@ class LlamaServerManager {
             "Content-Type": "application/json",
             "Content-Length": Buffer.byteLength(body),
           },
-          timeout: 300000,
+          timeout: options.requestTimeoutMs || DEFAULT_REQUEST_TIMEOUT_MS,
         },
         (res) => {
           let data = "";
@@ -519,7 +536,12 @@ class LlamaServerManager {
             });
 
             if (res.statusCode !== 200) {
-              reject(new Error(`llama-server returned status ${res.statusCode}: ${data}`));
+              reject(
+                llamaError(
+                  `llama-server returned status ${res.statusCode}: ${data}`,
+                  "LLAMA_BAD_STATUS"
+                )
+              );
               return;
             }
 
@@ -551,11 +573,11 @@ class LlamaServerManager {
       );
 
       req.on("error", (error) => {
-        reject(new Error(`llama-server request failed: ${error.message}`));
+        reject(llamaError(`llama-server request failed: ${error.message}`, "LLAMA_REQUEST_FAILED"));
       });
       req.on("timeout", () => {
         req.destroy();
-        reject(new Error("llama-server request timed out"));
+        reject(llamaError("llama-server request timed out", "LLAMA_REQUEST_TIMEOUT"));
       });
 
       req.write(body);
@@ -566,6 +588,9 @@ class LlamaServerManager {
   async stop() {
     this.clearIdleTimer();
     this.stopHealthCheck();
+    // A stale contextSize would let a caller size chunks against a context the
+    // next model does not have.
+    this.contextSize = null;
 
     if (!this.process) {
       this.ready = false;
@@ -625,3 +650,5 @@ class LlamaServerManager {
 }
 
 module.exports = LlamaServerManager;
+module.exports.DEFAULT_REQUEST_TIMEOUT_MS = DEFAULT_REQUEST_TIMEOUT_MS;
+module.exports.BATCH_REQUEST_TIMEOUT_MS = BATCH_REQUEST_TIMEOUT_MS;

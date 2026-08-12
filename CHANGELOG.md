@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.15.0] - 2026-08-11
+## [1.16.0] - 2026-08-12
+
+### Added
+- **Long calls are now processed in passes instead of being refused.** A meeting too long to fit a local model's context used to stop with "this call is too long". The app now works through it: it reads the transcript in sections, pulling out decisions, action items with their owners and deadlines, figures, open questions and direct quotes close to word-for-word, then writes your notes once from everything it gathered. Nothing is cut off the end of the call. A long call takes several minutes and shows "pass 3 of 12" while it works, and you can cancel it — cancelling now genuinely stops it rather than just hiding it. This applies to local models only; cloud models were never limited this way and are unchanged.
+- **If a section genuinely cannot be processed, the notes say so.** It is marked in place and you get a warning when the run finishes, rather than the app quietly handing back notes with a hole in them.
+
+### Fixed
+- **Dictation no longer fails while something else is using the local model.** Dictation, the dictation agent and the chat agent used to fail outright with "Already processing a request" whenever the local model was busy — and with note generation now taking several minutes, that would have made dictation unusable for the duration. Work is queued instead, and anything you are waiting on goes first: dictation waits for the pass in flight rather than for the whole job.
+- **The chat agent and note generation can no longer stop each other's model.** Opening the chat agent with a different local model while notes were being generated could restart the model server underneath the running job, and the two would then take turns interrupting each other.
+- **A failure while the model server is starting is retried instead of being treated as bad audio.** If the server is killed for memory while starting, that section of the call is retried rather than being permanently marked as unreadable.
 
 ### Fixed
 - **Generating notes with a local model could make the whole machine unresponsive.** The local model server was never told how much context to allocate, so it reserved as much as the model was trained for — on the bundled Gemma that is 131,072 tokens, about 13 GB of memory set aside before any work starts, next to the 5 GB the model itself needs. On a 24 GB machine that is enough to push everything else into swap and stall the desktop. The app now works out a context the machine can actually hold from the model's own properties and the memory available, which on that same machine means about 3 GB instead of 13.

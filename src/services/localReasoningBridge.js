@@ -1,9 +1,20 @@
 const modelManager = require("../helpers/modelManagerBridge").default;
 const debugLogger = require("../helpers/debugLogger");
+const { LocalInferenceScheduler } = require("../helpers/localInferenceScheduler");
 
 class LocalReasoningService {
   constructor() {
-    this.isProcessing = false;
+    // One llama-server, one request at a time. This used to be a boolean that
+    // threw "Already processing a request", which made a multi-minute batch job
+    // break dictation outright for its whole duration.
+    this.scheduler = new LocalInferenceScheduler({
+      onLeaseReclaimed: (id, owner) =>
+        debugLogger.notice("Reclaimed a stale local inference lease", { id, owner }, "llama"),
+    });
+  }
+
+  get isProcessing() {
+    return this.scheduler.busy;
   }
 
   async isAvailable() {
@@ -23,12 +34,14 @@ class LocalReasoningService {
       hasConfig: Object.keys(config).length > 0,
     });
 
-    if (this.isProcessing) {
-      throw new Error("Already processing a request");
-    }
-
-    this.isProcessing = true;
     const startTime = Date.now();
+    // Batch is the safe default: an unlabelled caller must never be able to
+    // preempt dictation, and the post-call pipeline reaches us without a
+    // priority of its own.
+    const release = await this.scheduler.acquire({
+      priority: config.priority === "interactive" ? "interactive" : "batch",
+      signal: config.signal,
+    });
 
     try {
       const inferenceConfig = {
@@ -41,6 +54,7 @@ class LocalReasoningService {
         threads: config.threads || 4,
         systemPrompt: config.systemPrompt || "",
         disableThinking: config.disableThinking !== false,
+        requestTimeoutMs: config.requestTimeoutMs,
       };
 
       debugLogger.logReasoning("LOCAL_BRIDGE_INFERENCE", {
@@ -79,8 +93,20 @@ class LocalReasoningService {
 
       throw error;
     } finally {
-      this.isProcessing = false;
+      release();
     }
+  }
+
+  acquireLease(options) {
+    return this.scheduler.acquireLease(options);
+  }
+
+  releaseLease(id) {
+    return this.scheduler.releaseLease(id);
+  }
+
+  releaseLeasesForOwner(owner) {
+    return this.scheduler.releaseLeasesForOwner(owner);
   }
 
   calculateMaxTokens(textLength, minTokens = 512, maxTokens = 2048, multiplier = 2) {

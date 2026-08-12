@@ -19,7 +19,7 @@ export default function BackgroundActionToastListener() {
       toast({
         title: t("notes.enhance.title"),
         description: event.message,
-        variant: "destructive",
+        variant: event.severity === "warning" ? "default" : "destructive",
       });
     }
   }, [errorCount, toast, t]);

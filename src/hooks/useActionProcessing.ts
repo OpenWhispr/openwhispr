@@ -17,9 +17,13 @@ export type ActionProcessingState = ActionProcessingStatus;
 export function useActionProcessing(noteId: number | null) {
   const { t } = useTranslation();
 
-  const { status: state, actionName } = useActionProcessingStore(
-    useShallow((s) => selectNoteActionState(s, noteId))
-  );
+  const {
+    status: state,
+    actionName,
+    phase,
+    currentPass,
+    totalPasses,
+  } = useActionProcessingStore(useShallow((s) => selectNoteActionState(s, noteId)));
 
   const runAction = useCallback(
     (action: ActionItem, noteContent: string, contentHash: string, options: RunActionOptions) => {
@@ -29,6 +33,7 @@ export function useActionProcessing(noteId: number | null) {
         noEndpoint: t("notes.actions.errors.noEndpoint"),
         actionFailed: t("notes.actions.errors.actionFailed"),
         promptTooLong: t("notes.actions.errors.promptTooLong"),
+        partialResult: t("notes.actions.errors.partialResult"),
       });
     },
     [noteId, t]
@@ -38,5 +43,5 @@ export function useActionProcessing(noteId: number | null) {
     if (noteId != null) storeCancelAction(noteId);
   }, [noteId]);
 
-  return { state, actionName, runAction, cancel };
+  return { state, actionName, phase, currentPass, totalPasses, runAction, cancel };
 }

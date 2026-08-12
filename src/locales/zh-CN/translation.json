@@ -1927,8 +1927,10 @@
         "noModel": "未选择 AI 模型。请在设置中配置。",
         "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。",
         "actionFailed": "操作失败",
-        "promptTooLong": "这次通话对本地模型来说太长了。请使用云端模型，或缩短笔记。"
-      }
+        "promptTooLong": "这次通话对本地模型来说太长了。请使用云端模型，或缩短笔记。",
+        "partialResult": "本次通话的部分内容无法处理，已在笔记中标注。"
+      },
+      "passProgress": "第 {{current}} 遍，共 {{total}} 遍"
     },
     "empty": {
       "title": "这里还没有笔记",

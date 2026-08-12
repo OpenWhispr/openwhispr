@@ -1983,8 +1983,10 @@
         "noModel": "Aucun modèle IA sélectionné. Configurez-en un dans les Paramètres.",
         "noEndpoint": "Aucune URL de serveur auto-hébergé définie. Configurez-en une dans les Paramètres.",
         "actionFailed": "L'action a échoué",
-        "promptTooLong": "Cet appel est trop long pour le modèle local. Utilisez un modèle cloud ou raccourcissez la note."
-      }
+        "promptTooLong": "Cet appel est trop long pour le modèle local. Utilisez un modèle cloud ou raccourcissez la note.",
+        "partialResult": "Certaines parties de cet appel n'ont pas pu être traitées et sont signalées dans les notes."
+      },
+      "passProgress": "passe {{current}} sur {{total}}"
     },
     "onboarding": {
       "llm": {

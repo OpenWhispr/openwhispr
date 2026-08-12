@@ -11,7 +11,9 @@ const {
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 const LlamaServerManager = require("./llamaServer");
-const { checkPromptFitsContext } = require("./llamaContext");
+const { checkPromptFitsContext, resolveContextSize } = require("./llamaContext");
+const { readGgufMetadata } = require("./ggufMetadata");
+const os = require("os");
 const debugLogger = require("./debugLogger");
 
 const MIN_FILE_SIZE = 1_000_000; // 1MB minimum for valid model files
@@ -367,12 +369,20 @@ class ModelManager {
         serverReady: this.serverManager.ready,
       });
 
-      await this.serverManager.start(modelPath, {
-        // The server derives its own context; the registry is unreliable (it claims
-        // 262144 for a model whose header says 131072).
-        threads: options.threads || 4,
-        gpuLayers: 99,
-      });
+      try {
+        await this.serverManager.start(modelPath, {
+          // The server derives its own context; the registry is unreliable (it claims
+          // 262144 for a model whose header says 131072).
+          threads: options.threads || 4,
+          gpuLayers: 99,
+        });
+      } catch (error) {
+        // Preserve the code so a startup OOM is retried rather than recorded as
+        // an unreadable section of the user's call.
+        throw new ModelError(error.message, error.code || "LLAMA_START_FAILED", {
+          modelId,
+        });
+      }
       this.currentServerModelId = modelId;
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
@@ -422,6 +432,7 @@ class ModelManager {
         temperature: options.temperature ?? 0.7,
         max_tokens: options.maxTokens ?? 512,
         disableThinking: options.disableThinking,
+        requestTimeoutMs: options.requestTimeoutMs,
       });
 
       const totalTime = Date.now() - startTime;
@@ -438,10 +449,47 @@ class ModelManager {
         totalTimeMs: totalTime,
         error: error.message,
       });
-      throw new ModelError(`Inference failed: ${error.message}`, "INFERENCE_FAILED", {
+      throw new ModelError(`Inference failed: ${error.message}`, error.code || "INFERENCE_FAILED", {
         error: error.message,
       });
     }
+  }
+
+  /**
+   * The context a model will get, computed without starting the server.
+   *
+   * `serverManager.contextSize` is only set inside `_doStart`, so at planning
+   * time it is null on a cold server and stale after a model switch — and the
+   * pre-flight guard's fallback of 4096 would split a two-hour call into
+   * seventy-odd chunks. Reading the GGUF header costs microseconds and agrees
+   * with what `_doStart` will resolve, by construction.
+   */
+  resolveModelContext(modelId) {
+    this.ensureInitialized();
+    const modelInfo = this.findModelById(modelId);
+    if (!modelInfo) throw new ModelNotFoundError(modelId);
+
+    const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
+    let modelFileBytes = 0;
+    try {
+      modelFileBytes = fs.statSync(modelPath).size;
+    } catch {
+      modelFileBytes = 0;
+    }
+
+    const resolved = resolveContextSize({
+      gguf: readGgufMetadata(modelPath),
+      totalMemBytes: os.totalmem(),
+      modelFileBytes,
+    });
+
+    return {
+      contextSize: resolved.contextSize,
+      isGpuBackend: this.serverManager.activeBackend
+        ? this.serverManager.activeBackend !== "cpu"
+        : process.platform === "darwin",
+      source: resolved.source,
+    };
   }
 
   async stopServer() {

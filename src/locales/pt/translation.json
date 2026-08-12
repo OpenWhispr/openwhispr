@@ -1927,8 +1927,10 @@
         "noModel": "Nenhum modelo de IA selecionado. Configure um nas Configurações.",
         "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações.",
         "actionFailed": "A ação falhou",
-        "promptTooLong": "Esta chamada é longa demais para o modelo local. Use um modelo na nuvem ou encurte a nota."
-      }
+        "promptTooLong": "Esta chamada é longa demais para o modelo local. Use um modelo na nuvem ou encurte a nota.",
+        "partialResult": "Algumas partes desta chamada não puderam ser processadas e estão marcadas nas notas."
+      },
+      "passProgress": "passagem {{current}} de {{total}}"
     },
     "empty": {
       "title": "Ainda não há notas aqui",
