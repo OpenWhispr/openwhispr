@@ -829,6 +829,8 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<void>;
+      /** Size the control panel for onboarding's auth card, or restore full size. */
+      setControlPanelCompact?: (compact: boolean) => Promise<boolean>;
       captureSelectedText?: () => Promise<
         | {
             status: "selected";

@@ -230,6 +230,20 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const currentStepId = steps[currentStep]?.id;
 
+  // The auth card is designed as a small floating window; the panel grows to
+  // full size once the user moves past it. Restoring on unmount covers
+  // finishing or dismissing onboarding while still on the auth step.
+  const isAuthStep = currentStepId === "welcome";
+  useEffect(() => {
+    void window.electronAPI?.setControlPanelCompact?.(isAuthStep);
+  }, [isAuthStep]);
+  useEffect(
+    () => () => {
+      void window.electronAPI?.setControlPanelCompact?.(false);
+    },
+    []
+  );
+
   // The steps array can shrink (e.g. meeting step removed after deselecting
   // meetings on the way back) — keep the index in range.
   useEffect(() => {
@@ -1040,7 +1054,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       <div
         className={`flex-1 px-6 md:px-12 overflow-y-auto ${currentStep === 0 ? "flex items-center" : "py-6"}`}
       >
-        <div className={`w-full ${currentStep === 0 ? "max-w-md" : "max-w-3xl"} mx-auto`}>
+        <div className={`w-full ${currentStep === 0 ? "max-w-lg" : "max-w-3xl"} mx-auto`}>
           <Card className="bg-card border border-border rounded-xl overflow-hidden">
             <CardContent className={currentStep === 0 ? "p-6" : "p-6 md:p-8"}>
               {renderStep()}

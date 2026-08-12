@@ -12,6 +12,7 @@ const { DEV_SERVER_PORT } = DevServerManager;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  CONTROL_PANEL_SIZES,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
   TRANSCRIPTION_PREVIEW_CONFIG,
@@ -1145,6 +1146,39 @@ class WindowManager {
         this.mainWindow.focus();
       }
     }
+  }
+
+  /**
+   * Size the control panel for onboarding's auth card (compact) or the full app.
+   * Grows from the current centre so the window expands outward rather than
+   * jumping. The animate flag is honoured on macOS only; elsewhere Electron
+   * applies the bounds immediately, which is preferable to tweening bounds
+   * frame-by-frame from the main process.
+   */
+  setControlPanelCompact(compact) {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return false;
+    // Never fight a user who has taken the window full-screen or maximised it.
+    if (win.isFullScreen() || win.isMaximized()) return false;
+
+    const target = compact ? CONTROL_PANEL_SIZES.COMPACT : CONTROL_PANEL_SIZES.FULL;
+    const current = win.getContentBounds();
+    const { workArea } = screen.getDisplayMatching(win.getBounds());
+    const width = Math.min(target.width, workArea.width);
+    const height = Math.min(target.height, workArea.height);
+    if (current.width === width && current.height === height) return true;
+
+    const centerX = current.x + current.width / 2;
+    const centerY = current.y + current.height / 2;
+    const x = Math.round(
+      Math.max(workArea.x, Math.min(centerX - width / 2, workArea.x + workArea.width - width))
+    );
+    const y = Math.round(
+      Math.max(workArea.y, Math.min(centerY - height / 2, workArea.y + workArea.height - height))
+    );
+
+    win.setContentBounds({ x, y, width, height }, true);
+    return true;
   }
 
   hideControlPanelToTray() {

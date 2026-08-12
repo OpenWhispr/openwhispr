@@ -62,6 +62,7 @@ const registerListener = (channel, handlerFactory) => {
 
 contextBridge.exposeInMainWorld("electronAPI", {
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
+  setControlPanelCompact: (compact) => ipcRenderer.invoke("control-panel-set-compact", compact),
   captureSelectedText: () => ipcRenderer.invoke("capture-selected-text"),
   replaceSelectedText: (sessionId, text, options) =>
     ipcRenderer.invoke("replace-selected-text", sessionId, text, options),
