@@ -17,6 +17,8 @@ export interface ReasoningConfig {
   disableThinking?: boolean;
   /** Screenshot attached to voice-agent requests when screen context is on. */
   screenContext?: ScreenContextImage;
+  /** Suffix-free prompt used when a screenshot-carrying request is retried text-only. */
+  textOnlySystemPrompt?: string;
   language?: string;
   requireCompleteOutput?: boolean;
   requiresAgent?: boolean;

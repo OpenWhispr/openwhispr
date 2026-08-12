@@ -643,7 +643,7 @@ When "Share screen context" is enabled (Settings → AI Models → Voice Agent �
 - Image-wired clients: `openai` (Responses `input_image` / Chat `image_url`, also `custom`/`openrouter`), `anthropic` (base64 content block via `process-anthropic-reasoning`), `gemini` (`inlineData`), `openwhispr` (forwards `screenContext` + `promptMode: "agent"` to `/api/reason`; the server routes to its `REASONING_VISION_*` model chain)
 - IPC: `capture-screen-context`, `check-screen-recording-access`, `request-screen-recording-access`, `open-screen-recording-settings`, `screen-context-set-enabled`
 - Privacy: screenshots live only in renderer memory for one request — never written to disk, stored in history, or logged (loggers emit `hasScreenContext` booleans only)
-- Failure UX: a rejected screenshot is retried once text-only from `processWithReasoningModel()` (rebuilding the prompt without the screen-context suffix) and reported via a non-destructive `SCREEN_CONTEXT_SKIPPED` toast, so an image problem never costs the user their command. Only if that retry also fails does the "Agent Unavailable" toast (`AGENT_REASONING_FAILED`) fire and the raw transcript get pasted
+- Failure UX: a rejected screenshot is retried once text-only from `processWithReasoningModel()` (swapping in the pre-built `textOnlySystemPrompt`, so selection-edit instructions and the completion marker survive the retry) and reported via a non-destructive `SCREEN_CONTEXT_SKIPPED` toast, so an image problem never costs the user their command. Only if that retry also fails does the "Agent Unavailable" toast (`AGENT_REASONING_FAILED`) fire and the raw transcript get pasted
 
 **Tests**: `test/helpers/dictationRouting.test.js`, `test/helpers/screenContextCapture.test.js` (run with `node --test`)
 

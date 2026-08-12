@@ -66,6 +66,13 @@ export const useAudioRecording = (toast, options = {}) => {
 
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
         audioManagerRef.current.setTranslationRequested(translationRequested);
+        if (voiceAgentRequested) {
+          logger.info(
+            "Voice agent recording start",
+            { screenContextEnabled: !!getSettings().voiceAgentScreenContext },
+            "reasoning"
+          );
+        }
         if (voiceAgentRequested && getSettings().voiceAgentScreenContext) {
           audioManagerRef.current.beginScreenContextCapture();
         }

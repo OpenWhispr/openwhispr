@@ -161,6 +161,15 @@ function resolveReasoningRoute(
     translationRequested,
     translationReachable: translation.reachable,
   });
+  logger.logReasoning("ROUTE_RESOLVED", {
+    kind,
+    voiceAgentRequested,
+    agentReachable: agent.reachable,
+    agentMode: settings.dictationAgentMode,
+    agentProvider: agent.displayProvider,
+    agentModel: agent.model,
+    hasScreenContext: !!screenContext,
+  });
   if (translationRequested && kind !== "translation") {
     logger.warn(
       "Translation requested but unreachable, falling back",
@@ -205,6 +214,12 @@ function resolveReasoningRoute(
       baseModelSupportsVision: !!getCloudModel(agent.model)?.supportsVision,
     });
     const target = useVisionOverride ? vision : agent;
+    logger.logReasoning("AGENT_IMAGE_TARGET", {
+      hasScreenContext: !!screenContext,
+      visionOverrideActive: vision.active,
+      attach,
+      useVisionOverride,
+    });
 
     const systemPrompt = dictationAgentPrompt(settings, agentName);
 
@@ -216,7 +231,7 @@ function resolveReasoningRoute(
         systemPrompt: attach
           ? appendScreenContextSuffix(systemPrompt, settings.uiLanguage)
           : systemPrompt,
-        ...(attach ? { screenContext } : {}),
+        ...(attach ? { screenContext, textOnlySystemPrompt: systemPrompt } : {}),
       },
     };
   }
@@ -680,6 +695,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   setVoiceAgentRequested(requested) {
     this.voiceAgentRequested = requested;
     this.pendingSelectionEdit = null;
+    // No recording must ever see a stale capture (e.g. left over from a
+    // cancelled voice-agent recording, even after the setting was turned
+    // off). A live voice-agent start re-captures right after this call.
+    this.screenContextPromise = null;
   }
 
   setTranslationRequested(requested) {
@@ -694,9 +713,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return settings.translationSourceLanguage || "auto";
     }
     return settings.preferredLanguage;
-    // A non-voice-agent recording must never see a stale capture (e.g. left
-    // over from a cancelled voice-agent recording).
-    if (!requested) this.screenContextPromise = null;
   }
 
   // Kicked off at voice-agent recording start (so the screenshot reflects the
@@ -712,10 +728,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       // Capture resolves in well under a second; the race only protects the
       // paste path if the IPC ever hangs.
-      return await Promise.race([
+      const image = await Promise.race([
         pending,
         new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
       ]);
+      if (!image) logger.logReasoning("SCREEN_CONTEXT_UNAVAILABLE", {});
+      return image;
     } catch {
       return null;
     }
@@ -2178,14 +2196,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
 
       // A screenshot the model or transport rejects must not cost the user
-      // their command — rerun it text-only. Only the agent route attaches one,
-      // so rebuilding its prompt also drops the screen-context instructions
-      // that would otherwise reference an image we are no longer sending.
+      // their command — rerun it text-only, swapping in the pre-built prompt
+      // that never had the screen-context suffix. Rebuilding from scratch
+      // would drop the selection-edit instructions and completion marker a
+      // selection edit layered on top, making its result unverifiable.
       if (config?.screenContext) {
-        const { screenContext, ...textOnlyConfig } = config;
+        const { screenContext, textOnlySystemPrompt, ...textOnlyConfig } = config;
         const result = await ReasoningService.processText(text, model, agentName, {
           ...textOnlyConfig,
-          systemPrompt: dictationAgentPrompt(getSettings(), agentName),
+          systemPrompt: textOnlySystemPrompt ?? dictationAgentPrompt(getSettings(), agentName),
         });
         this._notifyScreenContextSkipped();
         return result;
@@ -2258,6 +2277,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       config?.systemPrompt,
       completionMarker
     );
+    if (selectionConfig.textOnlySystemPrompt) {
+      // The text-only retry prompt must carry the same selection-edit
+      // instructions and marker, or a rejected screenshot loses the command.
+      selectionConfig.textOnlySystemPrompt = buildSelectionEditSystemPrompt(
+        selectionConfig.textOnlySystemPrompt,
+        completionMarker
+      );
+    }
     const userPrompt = buildSelectionEditUserPrompt(text, capture.text);
 
     try {
