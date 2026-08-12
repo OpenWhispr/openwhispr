@@ -19,15 +19,22 @@ test("Turing and newer report cudaSupported", () => {
   });
 });
 
-test("Pascal is detected but not CUDA-supported (gets Vulkan instead)", () => {
+test("Pascal is CUDA-supported since the 0.0.9 build ships sm_61 kernels", () => {
   const info = parseNvidiaSmiGpuInfo("NVIDIA GeForce GTX 1080 Ti, 582.66, 11264, 6.1");
   assert.equal(info.hasNvidiaGpu, true);
   assert.equal(info.computeCap, 6.1);
+  assert.equal(info.cudaSupported, true);
+});
+
+test("Maxwell is detected but not CUDA-supported (gets Vulkan instead)", () => {
+  const info = parseNvidiaSmiGpuInfo("NVIDIA GeForce GTX 970, 560.94, 4096, 5.2");
+  assert.equal(info.hasNvidiaGpu, true);
+  assert.equal(info.computeCap, 5.2);
   assert.equal(info.cudaSupported, false);
 });
 
 test("exactly the minimum compute capability is supported", () => {
-  const info = parseNvidiaSmiGpuInfo(`RTX 2060, 560.94, 6144, ${MIN_CUDA_COMPUTE_CAP}`);
+  const info = parseNvidiaSmiGpuInfo(`Some GPU, 560.94, 6144, ${MIN_CUDA_COMPUTE_CAP}`);
   assert.equal(info.cudaSupported, true);
 });
 
@@ -46,9 +53,9 @@ test("an unparseable compute_cap ([N/A]) stays conservative", () => {
 
 test("multi-GPU output uses the primary card", () => {
   const info = parseNvidiaSmiGpuInfo(
-    "NVIDIA GeForce GTX 1080 Ti, 582.66, 11264, 6.1\nNVIDIA T400, 582.66, 2048, 7.5"
+    "NVIDIA GeForce GTX 970, 560.94, 4096, 5.2\nNVIDIA T400, 582.66, 2048, 7.5"
   );
-  assert.equal(info.gpuName, "NVIDIA GeForce GTX 1080 Ti");
+  assert.equal(info.gpuName, "NVIDIA GeForce GTX 970");
   assert.equal(info.cudaSupported, false);
 });
 

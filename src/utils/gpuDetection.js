@@ -1,12 +1,13 @@
 const { execFile } = require("child_process");
 
-// The shipped CUDA whisper build only carries kernels for Turing (compute
-// capability 7.5) and newer. On older cards (e.g. Pascal / GTX 10-series,
-// 6.1) the server starts, loads the model into VRAM, then aborts on the first
-// kernel launch with "no kernel image is available for execution on the
-// device" — so those cards must be offered Vulkan instead, which works on any
-// NVIDIA GPU.
-const MIN_CUDA_COMPUTE_CAP = 7.5;
+// The shipped CUDA whisper build (release 0.0.9) carries kernels for Pascal
+// (compute capability 6.1) and newer; 6.1's embedded PTX also covers Volta via
+// driver JIT. On cards below the floor the server starts, loads the model into
+// VRAM, then aborts on the first kernel launch with "no kernel image is
+// available for execution on the device" — so those cards must be offered
+// Vulkan instead, which works on any NVIDIA GPU. Keep this floor in lockstep
+// with CUDA_ARCHITECTURES in OpenWhispr/whisper.cpp's build-binaries.yml.
+const MIN_CUDA_COMPUTE_CAP = 6.1;
 
 let cachedGpuInfo = null;
 
