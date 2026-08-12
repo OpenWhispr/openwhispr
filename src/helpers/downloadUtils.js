@@ -5,6 +5,7 @@ const { net } = require("electron");
 const { execFile } = require("child_process");
 const { pipeline } = require("stream");
 const debugLogger = require("./debugLogger");
+const { runSystemTar } = require("./systemTar");
 
 const USER_AGENT = "OpenWhispr/1.0";
 const PROGRESS_THROTTLE_MS = 100;
@@ -78,6 +79,7 @@ function downloadAttempt(url, tempPath, options) {
     let downloadedSize = startOffset;
     let totalSize = 0;
     let lastProgressUpdate = 0;
+    let settled = false;
 
     const cleanup = () => {
       if (stallTimer) {
@@ -88,15 +90,29 @@ function downloadAttempt(url, tempPath, options) {
         request.abort();
         request = null;
       }
-      if (activeFile) {
-        activeFile.destroy();
-        activeFile = null;
-      }
+      if (!activeFile) return Promise.resolve();
+
+      const file = activeFile;
+      activeFile = null;
+      if (file.closed) return Promise.resolve();
+
+      // createWriteStream() opens asynchronously. Wait for close so callers
+      // never unlink the temp path before a pending open can recreate it.
+      return new Promise((done) => {
+        file.once("close", done);
+        file.destroy();
+      });
+    };
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      if (signal) signal.onAbort = null;
+      cleanup().then(() => reject(error));
     };
 
     const onAbort = () => {
-      cleanup();
-      reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+      fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
     };
 
     if (signal) {
@@ -111,8 +127,7 @@ function downloadAttempt(url, tempPath, options) {
     request.on("response", (response) => {
       if (signal?.aborted) {
         response.resume();
-        cleanup();
-        reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+        fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
         return;
       }
 
@@ -139,11 +154,10 @@ function downloadAttempt(url, tempPath, options) {
         totalSize = parseInt(headerValue(response.headers, "content-length"), 10) || 0;
       } else {
         response.resume();
-        cleanup();
         const err = new Error(`HTTP ${statusCode}`);
         err.isHttpError = true;
         err.statusCode = statusCode;
-        reject(err);
+        fail(err);
         return;
       }
 
@@ -155,8 +169,7 @@ function downloadAttempt(url, tempPath, options) {
       const resetStallTimer = () => {
         if (stallTimer) clearTimeout(stallTimer);
         stallTimer = setTimeout(() => {
-          cleanup();
-          reject(
+          fail(
             Object.assign(new Error("Download stalled — no data received for 30s"), {
               code: "ETIMEDOUT",
             })
@@ -168,7 +181,7 @@ function downloadAttempt(url, tempPath, options) {
 
       response.on("data", (chunk) => {
         if (signal?.aborted) {
-          cleanup();
+          fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
           return;
         }
         downloadedSize += chunk.length;
@@ -177,6 +190,7 @@ function downloadAttempt(url, tempPath, options) {
       });
 
       pipeline(response, activeFile, (err) => {
+        if (settled) return;
         if (stallTimer) {
           clearTimeout(stallTimer);
           stallTimer = null;
@@ -184,37 +198,36 @@ function downloadAttempt(url, tempPath, options) {
         if (signal) signal.onAbort = null;
         if (err) {
           if (signal?.aborted) {
-            reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+            fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
           } else {
-            reject(err);
+            fail(err);
           }
         } else if (totalSize > 0 && downloadedSize < totalSize) {
-          reject(
+          fail(
             Object.assign(
               new Error(`Download incomplete: received ${downloadedSize} of ${totalSize} bytes`),
               { code: "ERR_DOWNLOAD_INCOMPLETE" }
             )
           );
         } else {
+          settled = true;
           resolve({ downloadedSize, totalSize });
         }
       });
     });
 
     request.on("error", (err) => {
-      if (signal) signal.onAbort = null;
-      cleanup();
       if (signal?.aborted) {
-        reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+        fail(Object.assign(new Error("Download cancelled"), { isAbort: true }));
       } else if (isTlsError(err)) {
-        reject(
+        fail(
           Object.assign(new Error(`Certificate error: ${err.message}`), {
             code: "TLS_ERROR",
             isTlsError: true,
           })
         );
       } else {
-        reject(err);
+        fail(err);
       }
     });
 
@@ -359,6 +372,13 @@ function createDownloadSignal() {
   };
 }
 
+function createDownloadInProgressError(model, activeModel) {
+  return Object.assign(new Error("A model is already being downloaded"), {
+    code: "DOWNLOAD_IN_PROGRESS",
+    details: { model, activeModel },
+  });
+}
+
 async function validateFileSize(filePath, expectedSizeBytes, tolerancePercent = 10) {
   const stats = await fsPromises.stat(filePath);
   const minSize = expectedSizeBytes * (1 - tolerancePercent / 100);
@@ -412,37 +432,45 @@ async function checkDiskSpace(directory, requiredBytes) {
   }
 }
 
-function extractZipWindows(zipPath, destDir) {
+async function extractZipWindows(zipPath, destDir) {
+  try {
+    await runSystemTar(zipPath, destDir);
+    return;
+  } catch (error) {
+    debugLogger.info("tar extraction failed, trying PowerShell", { error: error.message });
+  }
+
   return new Promise((resolve, reject) => {
-    execFile("tar", ["-xf", zipPath, "-C", destDir], (error) => {
-      if (error) {
-        debugLogger.info("tar extraction failed, trying PowerShell", { error: error.message });
-        execFile(
-          "powershell",
-          [
-            "-NoProfile",
-            "-Command",
-            `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`,
-          ],
-          (psError) => {
-            if (psError) reject(new Error(`Zip extraction failed: ${psError.message}`));
-            else resolve();
-          }
-        );
-      } else {
-        resolve();
+    execFile(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`,
+      ],
+      (psError) => {
+        if (psError) reject(new Error(`Zip extraction failed: ${psError.message}`));
+        else resolve();
       }
-    });
+    );
   });
+}
+
+async function extractTarGz(archivePath, destDir) {
+  try {
+    await runSystemTar(archivePath, destDir);
+    return;
+  } catch (error) {
+    debugLogger.info("system tar failed, using JS extraction", { error: error.message });
+  }
+
+  const tar = require("tar");
+  await tar.x({ file: archivePath, cwd: destDir });
 }
 
 function extractArchive(archivePath, destDir) {
   if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
-    return new Promise((resolve, reject) => {
-      execFile("tar", ["-xzf", archivePath, "-C", destDir], (err) => {
-        err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
-      });
-    });
+    return extractTarGz(archivePath, destDir);
   }
 
   if (process.platform === "win32") {
@@ -498,6 +526,7 @@ module.exports = {
   downloadFile,
   fetchJson,
   createDownloadSignal,
+  createDownloadInProgressError,
   validateFileSize,
   cleanupStaleDownloads,
   checkDiskSpace,

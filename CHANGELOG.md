@@ -7,9 +7,388 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Speech to text
+
+- **Action required for some Custom endpoints.** If you selected the Custom speech-to-text provider but never changed its pre-filled URL (`https://api.openai.com/v1`), your audio and your custom key were being sent to OpenAI. That now fails with a clear error instead, so set a real endpoint under Settings → Speech to Text — or switch to the OpenAI provider, which the URL field does automatically once you re-enter it. (#1556)
+- **Re-transcribing a Corti recording reaches Corti.** History → Re-transcribe sent Corti recordings to OpenAI. (#1556)
+- **A leftover provider can no longer hijack self-hosted transcription.** With self-hosted selected, a stale Mistral, xAI, or Corti selection could still divert your audio to that provider. (#1556)
+- **Each provider remembers its own model.** Switching speech-to-text providers and back restores the model you had chosen instead of resetting it to the default — including custom model names on your own endpoint. (#1556)
+- **Mistral file uploads authenticate correctly.** Upload was the last path still sending a Bearer token instead of Mistral's `x-api-key`. (#1556)
+- **Azure OpenAI endpoints work on every path.** Dictation, re-transcribe, and upload all build deployment-style URLs, whether the endpoint is configured as Custom or self-hosted. (#1556)
+- **Uploads detect their own language again.** A file you upload is no longer forced into your dictation language. (#1556)
+
+## [1.8.2] - 2026-08-11
+
+Meetings get more reliable speaker identity — labels you set now stick, Windows loopback gains live identification, and Intel Mac meetings no longer fail when the optional ONNX binding is unavailable. The voice agent can edit highlighted text in place or use an opt-in screenshot as context. Collaboration is now free for signed-in users, Microsoft and Apple Calendar join Google Calendar, and organizations gain server-enforced policy plus centrally managed Bedrock and Azure OpenAI access.
+
+### Voice agent
+
+- **Edit highlighted text by voice.** Select text anywhere, trigger the voice agent, and say what you want changed — the agent rewrites the selection in place instead of appending a new block. (#1264)
+- **Optional screen context.** With "Share screen context" enabled (Settings → AI Models → Voice Agent, off by default), pressing the voice agent hotkey captures the display your cursor is on and sends it with your command, so you can say things like "reply to this email" or "explain the error on screen". You can route screenshot-carrying commands to a separate vision-capable model, and a screenshot that can't be sent never costs you the command — it silently reruns text-only and tells you.
+- **Agent failures are no longer silent.** If the agent can't process a command, you get an "Agent Unavailable" notice instead of your raw words appearing in whatever app you were in.
+
+### Meetings & speaker identity
+
+- **Speaker labels stay put.** Manual speaker labels persist, identities stay stable across a meeting, and reconciliation no longer deletes a mapping you set by hand when live and offline speaker ids happen to match. (#1501)
+- **Live speaker identification on Windows.** Windows loopback capture now identifies speakers live, matching macOS. (#1502)
+- **Intel Mac meetings no longer fail at startup.** ONNX Runtime no longer ships a macOS x86_64 binding, so live speaker identification and voice fingerprinting remain unavailable on Intel Macs; meeting recording, transcription, offline diarization, and keyword note search continue normally. (#1538)
+- **Diarization writes land on the right note.** Delayed diarization is always persisted to the note it belongs to, and completions are serialized so labels don't get crossed between notes. (#1539, #1495)
+- **Tinfoil realtime meeting transcription.** Tinfoil joins the realtime meeting providers.
+- **Live speaker identification degrades gracefully.** A missing onnxruntime binding disables live identification instead of breaking the meeting.
+- **Steadier meeting prompts.** Meeting detection re-evaluates gated microphone state, prompts no longer expire early, and the countdown is scoped to its own window. (#1532)
+- **Speaker timestamps anchored correctly.** Live speaker timestamps anchor to the first system chunk, and the roster-driven speaker cap only ever raises.
+
+### Organization policy
+
+- **Every policy field is enforced.** Organization policy is now applied across the whole app rather than just the settings UI: restricted options are hidden with safe fallbacks, enforcement covers modes, providers, features, sharing, and retention, and a malformed policy response fails closed. (#1074, #1506)
+- **Managed Enterprise AI.** Enterprise workspaces can centrally configure Amazon Bedrock or Azure OpenAI for cleanup, voice agent, note formatting, note chat, and translation. Employees sign in with company SSO instead of entering cloud keys; short-lived credentials stay in the desktop main process and prompts go directly to the organization's cloud account. (#1530)
+
+### Dictation
+
+- **No more clipped first words.** Cold microphone opens could swallow the beginning of a recording; the mic is warmed so your first words are captured. (#845, #1493)
+- **Dropped transcript segments are retried and surfaced.** Silently dropped segments are retried, and a genuine loss is reported rather than quietly shortening your transcript. (#1462)
+- **VAD is now opt-in.** Voice activity detection is off by default, with dictionary-echo decodes rescued rather than discarded.
+- **Transcripts are no longer replaced unexpectedly.** (#1461)
+
+### Notes & sync
+
+- **Collaboration is free.** Any signed-in account can create and join team spaces, share individual notes, and sync shared content even when personal cloud backup is off. New users who missed an invitation email can join when invited or verified through company SSO; otherwise they can request access from workspace admins. (#1549)
+- **Workspace invites no longer stop at prepaid capacity.** Free workspaces can add members without a subscription. Paid workspaces show the estimated prorated seat cost before an invitation is sent and increase Stripe capacity only if it is accepted. (#1549)
+- **Idle collaboration sync backs off.** Accounts with no shared activity gradually reduce background checks to once per hour, while manual syncs and active collaboration remain immediate. (#1549)
+- **Tombstones survive.** Note pulls and deletes are guarded so a tombstone can't be lost and a deleted note resurrected. (#1354, thanks @xAlcahest)
+- **Edits during a push are not lost.** A note edited while its save is being acknowledged stays pending instead of being marked clean.
+
+### Account & billing
+
+- **Edit your profile.** Change your display name in the app; email-and-password accounts can also change their password and optionally sign out other devices. Email address changes still go through support. (#1162)
+- **Correct plan shown for covered workspaces.** Members covered by a workspace plan no longer see "Free", and an unknown entitlement is never reported as a free plan. (#1540, #1424)
+- **Current Business pricing.** Plan cards now show $16 per user monthly or $160 per user annually. (#1551)
+
+### Calendars
+
+- **Apple Calendar support.** Native EventKit integration joins Google Calendar for meeting detection and reminders. (#1237)
+- **Microsoft Calendar support.** Connect Outlook.com or Microsoft 365 on macOS, Windows, or Linux. Microsoft Graph sync adds scheduled-meeting prompts, titles, attendees, and join links alongside Google and Apple Calendar events. (#1251)
+
+### Models
+
+- **Claude Opus 5.** Added to the Anthropic provider. (#1452)
+- **Retired model ids removed** from the registry. (#1482)
+- **Anthropic temperature compatibility.** Models that reject a `temperature` parameter no longer fail. (#1475)
+
+### Translations & internationalization
+
+- **Chinese locales corrected.** Spanish and untranslated strings that leaked into the Chinese locales are fixed. (#1504)
+- **Simplified vs Traditional Chinese respected** for Chinese speech-to-text. (#1226)
+- **Speaker labels are translated,** including "unknown speaker" and your own voice in exported transcripts.
+
+### Other fixes
+
+- **Security updates.** Better Auth and affected packaged dependencies were updated to patched releases; the release dependency audit now reports no known vulnerabilities.
+- **More reliable cloud audio uploads.** A poisoned TLS connection is discarded before retrying, and upload diarization never requests more speaker clusters than the local model supports. (#1496)
+- **Custom STT endpoint URLs are preserved** when switching provider tabs. (#1463)
+- **Hotkey slots release their accelerators** when unregistered, so a rebound hotkey no longer leaves the old one dead. (#1425, #1420, thanks @hsusul)
+- **Tailscale MagicDNS works over HTTP,** and self-hosted mode is allowed for uploads.
+- **Local translation models with an empty provider** route through llama.cpp correctly.
+- **The dictation agent's inference mode is authoritative,** with providers normalized for local and self-hosted modes.
+
+## [1.8.1] - 2026-07-30
+
+A critical fix on top of 1.8.0. If you installed 1.8.0, update to 1.8.1 right away.
+
+### Fixed
+
+- **Note content no longer leaks between notes.** In 1.8.0, switching from one note to another could copy the second note's content into the first — even when you edited neither — because the editor re-mounting on a note switch registered a phantom edit against the note you'd just left. Editor edits and pending saves are now tied to the specific note they came from, and switching notes no longer emits a spurious change. (#1406)
+
+## [1.8.0] - 2026-07-30
+
+Team spaces and web note sharing headline this release: create shared spaces inside your workspace, invite teammates with roles and one-click deep links, and publish notes to the web with link, domain, or invite-only visibility — all local-first, with access enforced server-side and revocation handled gracefully. Alongside it: workspace management lands in Settings, new Gemma 4 local models, configurable privacy retention, custom-dictionary management over the CLI, and a broad reliability pass across transcription, notes sync, translation, exports, and per-platform polish.
+
+### Team spaces & sharing
+
+- **Team spaces in the notes sidebar.** A new TEAM SPACES section sits alongside your private space: create a space with a name and emoji, organize per-space folders and notes, drag notes between containers, and drive the whole tree from the keyboard. The editor shows where a note lives — a breadcrumb chip that jumps to and reveals its space, and an audience pill showing how many people can see it. Content is local-first: your notes stay in the on-device database as the source of truth, with each space syncing to the cloud in the background. (#925)
+- **Membership, roles, and invitations.** Invite teammates by email with team spaces pre-selected; the invitation email lands on notes.openwhispr.com with a one-click "Open in OpenWhispr" deep link straight into the accept flow (and an honest copy-the-link path on phones). Space members are admins or members, workspace owners and admins hold implicit admin access to every space, and rosters are managed from the space's Members dialog or Settings → Workspace → Team spaces — with type-the-name confirmation before a space is deleted, everywhere it can be deleted from. (#925)
+- **Server-enforced access with graceful revocation.** Membership checks live on the server — non-members get existence privacy, and revoked or archived spaces return typed errors the app understands. Losing access to a space removes its synced notes locally and relocates anything you never managed to sync into your private space, with a toast explaining what happened. If a teammate's edit arrives while you have unpushed changes, a conflict banner names who edited it and lets you take their copy or keep yours. (#925)
+- **Share notes on the web.** Personal notes can be published to notes.openwhispr.com under three visibilities: anyone with the link, anyone signed in under your email domain, or invited people only. Rich link previews (title and snippet) are emitted only for link-visibility shares — restricted notes unfurl generically so nothing leaks into chat preview caches. Team notes deliberately have no public link; their audience is the space. (#925)
+- **Changes land live, everywhere.** Space changes now broadcast across windows the way notes and folders already did: a teammate's rename, a role or member-count change, or a freshly accepted invitation appears in an open sidebar without remounting, skeleton rows clear as a new space's content finishes backfilling, and a deleted space vanishes from every window at once. (#925)
+- **Workspace management in Settings.** The new Settings → Workspace section covers members (invite, remove, roles), team spaces, billing with per-seat counts, and developer settings — with workspace creation and switching built in. (#925)
+
+### Transcription & reliability
+
+- **Local transcription no longer splits words mid-word.** Segment boundaries could cut a word in half and drop a fragment on either side; segments now break on natural gaps so words stay intact. (#1348, #1369)
+- **Local transcription timeouts scale with audio length.** A fixed timeout could kill long recordings before they finished decoding — the limit now grows with the duration of the audio. (#1104)
+- **Sturdier chunked cloud uploads.** Chunked cloud transcription gained per-request timeouts, a fresh-connection retry, proper cancellation, and a global cap so a stuck upload can no longer hang the pipeline. (#1330)
+- **Your transcript survives an empty cleanup.** If the cloud cleanup pass returned nothing, the whole transcription used to come back blank; the raw transcript is now kept when cleanup yields no text. (#938)
+- **Recordings are recovered when the mic disconnects.** Unplugging or losing the microphone mid-recording no longer discards what you already said. (#1261)
+- **Steadier NVIDIA Parakeet streaming.** Streaming dictation falls back to a full decode if the live stream loses audio, and it keeps the newer partial result instead of an older one — so the committed text matches what you said. (#1283, #1285)
+- **Cleaner AssemblyAI streaming.** Premature stream closes from AssemblyAI are now rejected rather than treated as a finished transcript. (#1240)
+- **Pinned, verified CUDA Whisper binaries.** The CUDA whisper.cpp binaries are pinned to known versions and checked against their digests before use. (#1372)
+
+### Local models
+
+- **Gemma 4 QAT local models.** Added the quantization-aware-trained Gemma 4 models, including MTP drafters for faster local generation. (#1268, #1269)
+- **Local llama-server pre-warming restored.** The local LLM server warms up ahead of time again, so the first local reasoning request isn't slow. (#1363)
+- **Stale local model selections are cleared.** Removing a downloaded model no longer leaves it selected as your active model. (#1312)
+- **Download state persists across the picker.** A model download keeps its progress when the model picker remounts, instead of appearing to reset. (#1052)
+- **Correct model download filename.** A local model download filename now matches its HuggingFace link so the download succeeds. (#1292)
+- **Canceled downloads clean up properly.** Canceling a model download waits for the file to finish closing, so it no longer leaves a partial file behind. (#1252)
+
+### Translation
+
+- **Local translation routed through llama.cpp.** Dictation translation with a local model now runs through the llama.cpp path like the rest of local reasoning. (#1327)
+- **Empty translation results are handled.** An empty result from the translation chain is guarded instead of surfacing as a broken response. (#1258)
+
+### Notes
+
+- **Chat text selection survives live transcription.** With meeting transcription running in Notes, every incoming transcript update could yank the text selection out of the embedded chat; selections in chat are now left alone while the transcript streams. (#1027)
+- **Cloud sync won't wipe locally-edited notes.** A stale, empty copy arriving from the cloud can no longer overwrite a note you've edited locally. (#1291)
+- **Mirrored notes are distinguished from transcripts.** Notes mirrored from elsewhere are no longer confused with transcription records. (#1276)
+- **Fixed a note race condition.** (#1277)
+
+### History & export
+
+- **See and copy the full raw transcript.** History shows the complete raw transcript with a dedicated "copy raw transcript" action. (#1289)
+- **History groups by your local date.** Entries are grouped by local calendar day instead of UTC, so late-evening items land on the right day. (#1272)
+- **Meeting participants included in exports.** Exported meeting transcripts now carry their participant list. (#1274)
+- **Cleaner exported segments.** Consecutive speaker-less segments within the gap threshold are merged, and SRT millisecond overflow rolls correctly into seconds. (#1335, #1294)
+
+### Custom dictionary
+
+- **Manage your dictionary from the CLI.** The CLI bridge can now list dictionary entries and apply bulk updates. (#1366)
+- **Fresh dictionary on startup.** The dictionary is read from SQLite rather than a stale in-memory cache at launch. (#1304)
+
+### Privacy & security
+
+- **Configurable retention, actually enforced.** Added a 1-day option to audio/transcript retention and made the configured retention periods actually take effect, so saved recordings and transcripts are cleaned up on schedule. (#1368)
+- **Stricter private-endpoint validation.** Private HTTP endpoints (self-hosted / LAN) must use IPv4 literals, closing an SSRF-style hostname bypass. (#1318)
+
+### AI, providers & settings
+
+- **Prompt Studio tests the right scope.** The agent-prompt test now runs against the cleanup scope and echoes its input, so what you test matches what runs. (#1359)
+- **Clearer API error messages.** Top-level and string `detail` fields are extracted from provider error bodies instead of showing an opaque error. (#1339)
+- **Pasted base URLs are parsed correctly.** Paths are joined before query strings, so a base URL with a query string no longer breaks the request. (#1310)
+- **Inherited endpoints keep their key.** Selecting an inherited endpoint now carries the associated API key. (#1364)
+
+### Audio upload & import
+
+- **Opus uploads transcribe correctly.** YouTube imports often arrive as `.opus` files, which were uploaded with a generic MPEG content type and rejected by cloud transcription as an unsupported format. Opus (and a filename-first media-type check) is now part of the upload pipeline, so short YouTube links and direct Opus files transcribe instead of erroring. (#1249)
+
+### Interface
+
+- **The macOS Dock icon follows the control panel.** The Dock icon appears when the control panel opens and disappears when it closes to the tray — and nothing else can resurrect it, which fixes the icon reappearing after dictation. The separate "Show Dock Icon" setting is gone; the Dock now simply reflects whether the panel is open. (#1202)
+- **The tray icon toggles the control panel.** Clicking the tray icon hides the panel if it's visible and shows-and-focuses it otherwise (previously it could only open it), with a matching toggle item in the tray menu. Especially useful on Linux, where a window parked on another workspace no longer gets stuck out of sight. (#1133)
+
+### Windows
+
+- **No more console window flashes.** Native helper launches across dictation, meetings, GPU probes, and media control — `where.exe` lookups, nvidia-smi GPU detection, media pause/resume and paste helpers, the meeting AEC, text-edit monitor, and mic listener — now spawn hidden instead of flashing a console window mid-flow. (#1228, #1232, #1233, #1234)
+
+### Linux
+
+- **Wayland dev/runtime parity.** The Wayland development server is aligned with packaged behavior and runs under XWayland. (#1323)
+- **More reliable portal paste.** Modifier keys settle before the key press in portal-based paste, fixing dropped or garbled pastes. (#1257)
+- **Meeting detection degrades gracefully.** Detection falls back to polling when `pactl` or a native mic listener isn't available. (#1350)
+
+### macOS
+
+- **Accessibility guidance when the app isn't listed.** The permissions flow now handles the case where OpenWhispr is missing from the Accessibility list entirely. (#1302)
+
+## [1.7.6] - 2026-07-18
+
+A feature release across the entire app on top of 1.7.5: dictation translation with its own hotkey and dedicated model, audio import that takes YouTube and direct URLs plus batch uploads with on-device speaker detection, one-click Vulkan GPU acceleration bringing local Whisper GPU support to AMD and Intel, NVIDIA Nemotron streaming models that decode dictation live and commit the moment you stop, Liquid AI LFM2/LFM2.5 local reasoning models, a collapsible sidebar, and meeting prompts unified into the in-app overlay — plus a deep reliability pass on self-hosted routing (uploads, retries, note formatting, chat), Mistral and Groq cleanup, local LLM memory safety, media pause/resume on macOS 15.4+, and Windows/Linux packaging.
+
+### Dictation
+
+- **Translation mode with a dedicated hotkey.** A new Translation Hotkey (Settings → General → Translation Hotkey) starts a dictation that gets cleaned up and then translated before it's pasted — dictate in any language and the text comes out in your chosen one. Configure it under the new Settings → AI Models → Translation tab: an "Enable Dictation Translation" toggle, a "Spoken language" selector (Automatic also handles mixed-language dictation), up to 5 target languages with one active target you can switch between, a dedicated model/provider just for translation, and a customizable Translation Prompt with its own translate-aware test tab in the prompt studio. The hotkey works across every binding type (including the macOS Globe key, mouse buttons, and right-modifiers), translated entries carry a marker in History and can be re-run through the translation chain from the retry menu, and if translation is unavailable or fails your dictation is pasted untranslated with a visible toast instead of being lost. (#1189)
+- **Auto-learn no longer double-initializes at launch.** Both renderer windows sync the auto-learn preference to the main process on mount, so the handler received the same value twice per startup, redoing its setup each time. Repeated same-value syncs are now recognized and ignored, while a real enable or disable behaves exactly as before. (#1109)
+
 ### Transcription
 
-- **Azure AI Foundry / Azure OpenAI speech-to-text.** The custom transcription provider now recognizes Azure endpoints (`*.cognitiveservices.azure.com`, `*.openai.azure.com`, `*.services.ai.azure.com`) and builds the deployment-style URL Azure requires (`/openai/deployments/{model}/audio/transcriptions?api-version=...`) instead of the plain OpenAI `{base}/audio/transcriptions` shape, which returned `404 DeploymentNotFound`. Auth now uses Azure's `api-key` header on Azure hosts. Enter your resource endpoint as the URL and your exact deployment name in the Model field; `api-version` defaults to a transcribe-capable preview and can be overridden by appending `?api-version=...` to the endpoint.
+- **Vulkan GPU acceleration for AMD and Intel GPUs.** Local Whisper's one-click "Enable GPU" flow, previously NVIDIA/CUDA-only, now covers AMD Radeon and Intel Arc/integrated GPUs on Windows and Linux via Vulkan: the GPU card in the transcription model picker and the "GPU acceleration available" banner automatically offer CUDA on NVIDIA machines and Vulkan otherwise. The Vulkan whisper-server binary is downloaded on demand with pinned, SHA-256-verified checksums, and any Vulkan startup failure — early exit, out-of-VRAM, or hang — falls back to CPU transcription automatically with an in-app notice. GPU-accelerated Whisper also re-warms correctly after sleep on both backends now; macOS is unaffected (it already uses Metal). (#1185)
+- **NVIDIA Nemotron streaming transcription models.** Two new local models join the NVIDIA Parakeet family in the transcription model picker: Nemotron Speech Streaming EN 0.6B (632 MB, English) and Nemotron 3.5 ASR Streaming 0.6B (650 MB, multilingual with automatic language detection across 15 languages including Spanish, German, Japanese, Korean, Arabic, and Hindi). These are true streaming models, so the Live Transcription Preview now holds one persistent connection for the whole recording and updates partial text as you speak, instead of re-transcribing 1.5-second chunks — with automatic fallback to the chunked path if the stream can't start. The bundled sherpa-onnx runtime was upgraded to 1.13.4, which Nemotron requires for accurate decoding. (#1131)
+- **Streaming dictation now commits in a single pass.** With a Nemotron streaming model selected, dictation is decoded live during capture — with or without the preview open — and the streamed text is committed the moment you stop, replacing the full re-decode that used to run after every dictation. End-of-dictation latency drops to one tail flush and per-dictation CPU is roughly halved. The stop flush is truncation-aware, and anything short of a clean flush — a dropped connection, truncated results — falls back to the proven record-then-transcribe path (surfacing the partial-transcription warning where applicable). The online sherpa-onnx server is also properly tuned now (ONNX threads sized to CPU cores instead of one, tighter decode loop, tail padding), server startup is race-free under concurrent callers, sidecars start on IPv6-disabled machines, corrupt model archives are deleted and re-downloaded instead of re-extracting forever, and non-16 kHz/mono WAV input is resampled instead of decoded as-is. (#1238)
+- **Local transcription survives a GPU crash instead of failing the dictation.** On some machines the CUDA (or Vulkan) whisper-server aborts at its first kernel launch — an unsupported GPU, for instance — dropping the connection mid-request and failing the dictation outright. A connection error from a local GPU server is now checked against the server process actually having died; on a real crash, whisper-server is restarted on CPU, the same request is retried, and a "using CPU instead" notice appears once the CPU server is up. Intentional stops, remote servers, and model switches are left alone. (#1192)
+- **Retrying a transcription from History now uses your self-hosted server.** Retranscribing audio from History ignored self-hosted transcription settings and routed through stale cloud-provider state and credentials. Retries now normalize your configured URL to an OpenAI-compatible `/audio/transcriptions` endpoint (base URLs, `/v1` URLs, and full paths all accepted), fail closed with a clear configuration error when the URL is missing or malformed instead of silently falling back to the cloud, and never fetch unrelated cloud API keys — with the same fail-closed, key-forwarding behavior extended to chat and dictation streaming. (#1154)
+
+### Audio upload & import
+
+- **Transcribe from URLs, batch uploads, and speaker detection.** The Upload view now takes links, not just files: paste a YouTube link (including youtube.com/live) or a direct HTTPS audio/video URL, or switch to batch mode to queue up to 50 URLs (one per line) alongside multiple dragged-in files — the queue processes sequentially with per-item progress, "Cancel all"/"Clear" controls, and keeps running even if you navigate away. URL downloads land in a new default "Videos" folder and are capped at 500 MB; playlists aren't supported, and a blocked YouTube download tells you to retry later instead of failing cryptically. A new "Speaker detection" toggle labels who said what: it auto-downloads the local diarization models on first use and runs on-device, with an optional speaker count (auto-detect by default); with your own API keys, OpenAI switches to gpt-4o-transcribe-diarize (costs may differ) and Mistral's Voxtral includes diarization at no extra cost, while Groq falls back to local detection. If diarization fails you still get a plain transcript rather than a failed upload. (#754)
+- **Uploading audio files now respects self-hosted transcription mode.** With transcription set to self-hosted, uploaded audio either failed with 401s or was sent to a cloud provider you had switched away from. The upload view only routed cloud, local, and BYOK modes, so self-hosted fell into the BYOK branch carrying stale cloud provider settings. Uploads now resolve the self-hosted route first — failing closed with a clear error if the server URL is missing or invalid — post to your server without the 25 MB third-party size cap, and the upload UI reflects self-hosted readiness and labels. (#1180)
+- **Exported transcripts keep correct start times for merged segments.** When back-to-back segments from the same speaker were merged for export, each addition overwrote the group's timestamp, so TXT, Markdown, SRT, and JSON exports stamped every merged block with the time of its last sentence instead of when the speaker started talking. Merged groups now track their start and end separately: timestamps and SRT cue starts reflect the beginning of speech, while the final cue's end time and the JSON duration still anchor to the end of the last merged segment. (#1194)
+- **Failed or cancelled URL downloads no longer leave partial files behind.** When an audio download from a URL was cancelled, stalled, or produced no output, cleanup destroyed the write stream and deleted the temp file immediately — but `destroy()` returns before the stream's async open finishes, so a still-pending open could recreate the file right after it was removed, orphaning a partial download on disk. Cleanup now waits for the stream's close event before unlinking, so the temp file is reliably gone before the error is reported. (#1212)
+
+### Reasoning & models
+
+- **Liquid AI LFM2/LFM2.5 local reasoning models.** Liquid AI is now a local model provider for on-device AI processing (cleanup, formatting, and other LLM features), with five models downloaded from the official LiquidAI Hugging Face repos: LFM2.5 1.2B (0.73 GB, recommended for its instruction following), LFM2.5 8B MoE (4.8 GB, high quality with only 1.5B active parameters), LFM2 2.6B (1.5 GB), LFM2.5 350M (0.38 GB), and LFM2.5 230M (0.25 GB, instant cleanup on modest hardware). All run on the existing local GGUF runtime with a 32k context window, under the LFM Open License v1.0 (free for commercial use below $10M annual revenue). (#1176)
+- **Local AI cleanup no longer freezes the whole machine.** Starting local LLM cleanup or note formatting could hard-freeze the Mac — on 16 GB machines it escalated to a watchdog kernel panic, even with a small 2 GB model. The bundled `llama-server` was spawned with no `--ctx-size` while auto-fit was disabled, so it allocated the model's full trained context (131K tokens for Llama-3.2-3B) — a ~15 GB KV cache wired into unified memory on top of the weights, which starved the OS until it panicked. Every server start now uses one bounded context policy (16,384 tokens, capped at the model's trained context) across inference, prewarm, and GPU-change restarts, and a model whose weights genuinely don't fit now fails at startup with a visible error instead of taking down the machine. (#1236)
+- **Self-hosted model lists now work when the server URL is missing `/v1`.** Pointing OpenWhispr at LM Studio, Ollama, or vLLM with a bare origin like `http://127.0.0.1:1234` showed no models, and LM Studio's native `/api/v1` base "succeeded" but returned entries with no usable model ids. Those servers serve the OpenAI-compatible API under `/v1`, and while inference already normalized URLs to `/v1`, the model-list UI never did. When the entered base yields no models, the panel now tries the sibling `/v1` base and adopts the one that works — updating the saved URL and the input field so inference targets the same endpoint. (#1235)
+- **Mistral now works as a custom cleanup provider instead of failing with a 422.** Adding Mistral as a custom OpenAI-compatible provider made every cleanup request fail with an error that surfaced as "[object Object]". Mistral validates requests strictly and rejected two fields OpenWhispr always sent — `max_completion_tokens` and `chat_template_kwargs` — and the error parser assumed a string message where Mistral returns a structured detail array. Mistral endpoints are now recognized by host and get their own request dialect (`max_tokens`, temperature kept, `reasoning_effort: "none"` as the thinking switch, and nothing at all for legacy Magistral models, which reason natively) on both the cleanup and agent/chat streaming paths, and API error bodies are parsed properly so failures name the rejected fields. (#1213)
+- **Groq dictation cleanup no longer fails silently after a pointless retry wait.** With the default "disable thinking" setting on, every Groq cleanup request failed with a 400, sat through a 1+2+4 s retry backoff as if it were a network blip, then quietly pasted the raw transcript. The suppression code sent `reasoning_effort: "none"` plus `chat_template_kwargs` to Groq — gpt-oss models only accept low/medium/high, qwen3 only none/default, and `chat_template_kwargs` isn't supported at all — and thrown API errors carried no HTTP status, so deterministic 4xx errors were retried like network faults. Groq now gets a model-aware dialect, retries are reserved for network faults, 429s, and 5xx, and if cleanup still fails a toast tells you the dictation was pasted unpolished instead of leaving you guessing. (#1211)
+- **"Disable thinking output" now actually works on self-hosted Ollama.** Qwen and similar reasoning models on self-hosted endpoints kept generating hidden thinking tokens on every dictation (~570 per cleanup request) even with the toggle on. OpenWhispr sent Ollama's native `think: false` field to the OpenAI-compatible `/v1/chat/completions` endpoint, which silently drops unknown fields, so the toggle did nothing. It now sends `reasoning: {effort: "none"}`, which Ollama v0.12.4+ maps to disabling thinking, while llama.cpp, vLLM, and LM Studio ignore the object and keep their existing mechanism; older Ollama releases that reject the field get one automatic retry without it. (#1103)
+
+### Chat
+
+- **Chat with custom BYOK providers no longer 404s.** Chat agents pointed at custom OpenAI-compatible endpoints (LiteLLM, vLLM, DeepSeek, llama-server proxies) returned 404s or empty responses. The AI SDK's default OpenAI factory targets the Responses API (`POST /responses`), which those endpoints don't implement. Custom providers now go through the Chat Completions endpoint, the same way the OpenRouter, Corti, and local routes already did. (#1181)
+- **Chat no longer borrows Dictation Cleanup's endpoint, and self-hosted Chat keys are kept.** With Chat set to a BYOK custom provider or an authenticated self-hosted server, conversations either inherited the unrelated Dictation Cleanup self-hosted endpoint or dropped the Chat server's API key mid-request. The Chat route is now resolved exclusively from Chat-owned settings — an explicit self-hosted URL wins, then enterprise, provider, or local — and the self-hosted API key is preserved in both the direct Chat Completions stream and the tool-enabled AI SDK stream. (#1146)
+
+### Notes
+
+- **Generate Notes with self-hosted formatting no longer silently calls OpenAI — and note names finally regenerate.** With Note Formatting set to self-hosted, Generate Notes quietly sent note content to api.openai.com because the background action only forwarded endpoint settings for cloud and custom modes; self-hosted fell through with no provider, so the model name resolved to OpenAI and the configured server URL and key were never passed. Formatting and title generation now route to your self-hosted server (failing fast with a clear error if no URL is configured), `<think>` reasoning blocks are stripped from non-streaming self-hosted responses, and auto-assigned note names ("Untitled Note", "New note", unedited calendar-event titles) are regenerated while titles you typed yourself are preserved. (#1156)
+- **Note search now works in every language.** Searching notes in Cyrillic, Chinese, Japanese, Arabic — or even accented Latin words like "café" — returned nothing. The search sanitizer stripped "special" characters with JavaScript's ASCII-only `\w` class, deleting non-ASCII text before the query ever reached the database. Queries are now tokenized with Unicode-aware matching, and each token is safely quoted and prefix-matched in SQLite FTS5 — so "Прив" finds "Привет мир" and "東京" finds "東京駅" — while punctuation-only input and raw FTS5 operators no longer produce invalid or match-all queries. (#1178)
+
+### Meeting notes
+
+- **Meeting reminders join the in-app overlay.** Calendar reminders no longer arrive as native macOS notifications — which Focus/Do Not Disturb silenced and screen sharing hid — they now appear in the same always-on-top overlay as microphone-based meeting detection, one minute before the scheduled start. When the event has a meeting link, the primary button becomes "Join," which opens the meeting and starts the note in one click; otherwise it's the usual "Start Recording." The prompt shows the event title with context-aware copy, mic detection keeps working during scheduled meetings instead of being suppressed by them, and the overlay is content-protected so it never shows up in your screen shares or recordings. Your existing notification preferences for calendar reminders and meeting detection still apply, and the copy is localized in all ten languages. (#1182)
+- **Ignoring a calendar meeting reminder no longer suppresses the "take notes" prompt for that call.** A reminder that expired unanswered went through the same path as clicking X, starting the mic detector's 5-minute cooldown — and since the mic stays hot for the whole call, joining a couple of minutes after the reminder meant no mic-activity event could ever prompt you again. Now only an expired audio-detection prompt cools the detector; a lapsed calendar reminder leaves mic detection armed, while explicitly dismissing any prompt still triggers the cooldown. The prompt buttons were also clarified in all 10 languages: "Join & transcribe" on calendar reminders and "Take notes" on detection prompts. (#1196)
+
+### Interface
+
+- **Collapsible sidebar with hover-to-peek.** The main window's sidebar can now be collapsed to give notes and history the full width: a panel toggle button sits in the top-left corner (next to the traffic lights on macOS), and the collapsed state persists across launches. While collapsed, hovering the left edge or the toggle slides the sidebar in as a floating overlay so you can jump between Home, Chat, Notes, Dictionary, Upload, and Integrations without expanding it — it tucks itself away again shortly after the pointer leaves. The toggle is hidden in the compact meeting side-panel layout, and the button is labeled in all ten languages. (#1011)
+
+### Hotkeys
+
+- **Fn navigation shortcuts no longer turn push-to-talk into stray dictation on macOS.** With bare Fn as push-to-talk, pressing Fn+Arrow (Home/End/Page Up/Page Down) or Fn+Backspace kept recording for the whole Fn hold and then transcribed the captured noise into the focused app — the globe listener only watched modifier-flag changes, so it never knew another key had been pressed. The Swift listener now also monitors keyDown and emits an interrupt once per Fn hold, which cancels the in-flight bare-Fn push-to-talk through the existing cancel pipeline; compound Fn hotkeys and tap mode are unaffected. (#826)
+
+### Audio & media
+
+- **Pausing your music during dictation works again on macOS 15.4+.** macOS 15.4 closed the MediaRemote daemon to ordinary processes, and the old fallback typed an F8 keystroke that isn't a media key on modern Macs, so every player silently ignored pause/resume. OpenWhispr now bundles the mediaremote-adapter framework (v0.7.6, BSD-3) and drives it through `/usr/bin/perl` — the one path Apple still trusts to reach MediaRemote — with pause/resume running asynchronously off the main thread and a rewritten Swift helper that posts a genuine media-key event as the last resort; the macOS release pipeline also verifies the packed framework and its perl entry point in every build. (#806)
+- **A muted microphone no longer produces silent recordings.** If your preferred mic never delivered audio (hardware mute switch, dead device after idle), the single re-acquire retry usually reopened the same silent device and the recording proceeded, capturing nothing. The mic health check now hops to the OS default input when the retry is still silent, remembers the rejected device for the rest of the session so it isn't pinned again, and if no input delivers audio at all the recording fails fast with a "Microphone Muted" error instead of transcribing silence. (#1204)
+- **Your microphone selection survives Chromium device-ID rotation.** The chosen mic was saved by device ID alone, but Chromium rotates media device IDs over time, so the saved ID eventually matched nothing and recordings quietly fell back to the system default until you re-picked the device. The mic's label is now stored alongside its ID, and when the ID no longer resolves, the app remaps to the unique device carrying that label and re-persists the fresh ID — for dictation, meeting recordings, and the Settings picker alike. (#1172)
+
+### Windows
+
+- **Parakeet installation no longer hangs behind an old PATH `tar`.** Model extraction now invokes Windows' built-in `tar.exe` directly and times out a stuck native extractor so the existing JavaScript fallback can finish the installation. The same hardened extraction path is used for diarization model setup and for CUDA whisper / Vulkan llama.cpp runtime archive extraction. (#1173)
+- **The Windows mic-activity listener finally ships.** The native helper that watches when other apps start using the microphone (which drives meeting detection) never compiled under MSVC — ten unresolved externals, because user32 wasn't linked and the WASAPI COM GUIDs are declared by the Windows SDK for C++ `__uuidof` only — so every Windows build silently fell back to mic polling. The GUIDs are now defined in-source and user32 is linked, so Windows builds include the event-driven listener. (#1179)
+
+### Linux
+
+- **`.deb` installs, upgrades, and removals no longer fail or eat your models.** The package's maintainer scripts ran under `set -e`, so any hiccup — no udev or systemd (containers, chroots), a GUI installer with no SUDO_USER or tty — could fail the whole package operation, and the post-remove script also ran during upgrades, deleting your downloaded Whisper models. The scripts are now strictly best-effort, environment-specific steps are skipped where udev or systemd don't exist, and cache cleanup runs only on a genuine remove or purge — never on upgrade. (#1160)
+
+### Updates
+
+- **Update notifications reach windows opened after launch.** The updater captured window references once at startup, so a control panel created later (start minimized) or recreated after being closed held stale references and never received "update available", download progress, or "ready to install" events. The updater now reads the live window references from the window manager each time it sends an event, so every open window hears about updates regardless of when it was created. (#1175)
+
+### Dependencies
+
+- **Dependency updates.** Routine patch bumps: vite 8.1.3 → 8.1.4, tinfoil 1.1.7 → 1.1.8, and i18next 26.3.4 → 26.3.6. (#1147, #1150, #1151)
+
+## [1.7.5] - 2026-07-10
+
+A model-breadth and reliability release on top of 1.7.4: the latest cloud reasoning models (OpenAI GPT-5.6 and Anthropic Claude Fable 5 / Sonnet 5), Corti as a private clinical reasoning provider with in-region routing that keeps transcribed medical text off third-party LLMs, Tinfoil confidential transcription extended to uploaded audio and every batch path, OpenRouter as a first-class LLM provider with a searchable model picker, enterprise Agent Mode chat with region-aware Bedrock and a live model catalog, multiple hotkeys per action, and a broad stack of meeting-notes, notes, transcription, and platform fixes.
+
+### Reasoning & models
+
+- **New cloud reasoning models.** OpenAI's GPT-5.6 family — Sol (flagship, 1M context), Terra (balanced), and Luna (fastest and lowest-cost) — and Anthropic's Claude Fable 5 (Mythos-class flagship, 1M context) and Claude Sonnet 5 are now selectable in their model pickers. Claude Fable 5 is also offered as an AWS Bedrock enterprise inference profile, and the Claude Opus 4.8 description was re-toned now that Fable 5 is the most capable Claude model. (#1130)
+- **Corti — clinical-grade AI reasoning (BYOK).** Corti, added for medical transcription in 1.7.3, is now also a bring-your-own-key reasoning provider built on the Corti Models gateway. When a healthcare user accepts Corti during onboarding, dictation cleanup and every LLM scope route to Corti so transcribed clinical text never reaches a general-purpose model, and Corti's availability now counts toward having a reasoning provider (cleanup was previously skipped silently for Corti-only setups). The gateway is EU-only and speaks Chat Completions, noted at the top of the Corti reasoning tab. (#1111, #1127)
+- **Clinical reasoning stays in-region.** The Corti Models gateway is EU-only and needs its own key, so a US clinical user used to get Corti transcription while every LLM scope stayed on the default provider (OpenAI) — sending transcribed clinical text to a third party. Onboarding now routes reasoning to Corti only in the EU region with a key, and to the HIPAA-compliant OpenWhispr Cloud everywhere else, never a third-party LLM. The region selector drives which fields appear, and the reasoning model selector flags the EU-only requirement in all ten locales. (#1128)
+- **OpenRouter — first-class LLM provider.** OpenRouter is now its own cloud provider tab with its own encrypted API key, instead of requiring the generic Custom OpenAI-compatible field (which leaked the shared custom key on a tab switch). Its 300–400 models render in a new searchable, grouped model picker — filter, grouping by provider with per-vendor icons, virtualized rows, and a pinned "Selected" group — which also kicks in for any OpenAI-compatible provider above 12 models. Outbound partner links (BYOK key pages, HuggingFace model pages) now carry OpenWhispr UTM attribution. (#1002)
+- **Enterprise: region-aware Bedrock, a live model catalog, and Agent Mode chat.** AWS Bedrock inference profiles are geo-scoped, but suggested model cards always used `us.`-prefixed IDs, so non-US regions rejected them with "the provided model identifier is invalid"; model IDs are now region-aware and rewritten when you change region. A new "Browse all models" button loads the live Bedrock catalog resolved against your own credentials and region, so a picked model is always invocable. Agent Mode chat — the tool-using agent overlay — now works with AWS Bedrock through an IPC-proxied model, and the stop button and window unmount actually cancel enterprise streams now instead of billing to completion. Suggested Bedrock models were refreshed to Claude Sonnet 5 and Claude Opus 4.8 and gained on-demand GPT-OSS 120B, DeepSeek V3.2, and Qwen3 Next 80B; enterprise inference now uses the calling scope's provider instead of always reading the cleanup provider. (#1118)
+
+### Transcription
+
+- **Tinfoil — confidential transcription for uploaded audio and retries.** Tinfoil was wired only into the realtime dictation socket, so audio upload, retries, and the streaming fallback all fell through to `api.openai.com` — sending the Tinfoil key, or a user's audio under a valid OpenAI key. Every batch path now runs through the attested Tinfoil client (Voxtral), and the streaming fallback routes to the user's configured provider instead of always calling OpenWhispr Cloud. One Voxtral model now covers both realtime and batch, error codes survive the proxy boundary (so `INVALID_KEY` drives the Settings CTA and 429/5xx map to localized messages), and the custom dictionary is forwarded as a prompt. (#1120)
+- **Tinfoil model list is now dynamic.** The Tinfoil catalog is fetched from `/v1/models` (verified against enclave attestation) and refreshed in the background, with three bundled models as an offline fallback. A refresh that retires a model you're using switches you off it with a toast rather than silently 404-ing, the fetched list is cached across launches, and new users start on a named default instead of whatever the list happens to return first. (#1115)
+- **Cloud recordings retry transient chunk failures.** Long cloud recordings are split into ~4-minute chunks, and a single transient failure (Vercel timeout, 5xx) used to permanently drop a chunk — a silent hole in the transcript, or a failed job. Failed chunks now retry up to twice with backoff (skipping permanent errors: auth, word limit, no speech, other 4xx), non-JSON platform error bodies are classified as coded server errors instead of throwing "Invalid JSON response", and a partial-transcription warning surfaces as a dictation toast and an upload completion notice. (#1094)
+- **Local transcription no longer breaks from binaries stranded inside the app archive.** `fs.existsSync` returns true for paths inside an asar, so a missing unpacked `ffmpeg-static` binary was reported as spawnable and every local transcription failed with a cryptic spawn `ENOENT`; resolution now falls through to the system/PATH scan with an actionable error. On Windows the `ps-list` vendor executable was likewise left inside the asar, breaking meeting-app process detection on every poll. Both binaries are now unpacked, and packaging fails loudly if either is missing rather than shipping broken transcription. (#1124)
+
+### Meeting notes
+
+- **Diarization no longer collapses every remote speaker into one.** A meeting with no stored speaker count and no participants fell back to a default of two, capping "other" speakers at one — so every remote voice merged into a single speaker, and naming it locked that whole side of the call to one person. The live speaker cap is now seeded at meeting start from the note and its calendar participants (held in memory for the session so a later edit or sync can't clobber it mid-call), offline diarization can refine a user-locked cluster that it splits into multiple speakers, and a rolled-back start no longer leaks a stale cap. Local meeting edits (participants, calendar event, transcript) are also re-flagged as sync-pending and preserved on cloud pulls, so a later last-writer-wins pull can't wipe them. (#1126)
+- **Meeting streams survive the 60-minute session limit.** OpenAI Realtime sessions expire after 60 minutes; meeting streams now auto-reconnect across the expiry with a pre-connect buffer so no audio is lost, and a failed reconnect tears down the half-open streams and restores the working ones instead of leaking sockets or stopping transcription. Dictation keeps its existing auto-stop-with-accumulated-transcript behavior at the limit. The ONNX worker is now also verified into production builds (packaging fails if it's missing), fixing a utility-process crash-loop. (#830)
+- **Local speech is no longer silently dropped from meeting transcripts.** Held-back meeting mic segments were discarded on audio-only echo evidence even when no system transcript matched them — field logs showed genuine local speech during double-talk being deleted. A transcript text match is now the only condition that drops a held-back segment; audio evidence can delay a segment but never discard it, and late-arriving system transcripts can still retract released echo within the full duplicate window. (#1093)
+
+### Notes & history
+
+- **Note enhancement stops borrowing another note's transcript and renaming titled notes.** The meeting-recording transcript is global and persists after a recording stops, and the enhance action used it unguarded — enhancing any note after a meeting fed it the last recording's transcript, producing identical enhanced content across notes and leaking one meeting into another. Enhancement is now gated on the transcript belonging to the active note, auto-titling is opt-in per run and only renames empty- or default-titled notes, and the transcript is folded into the staleness hash so edits to it re-trigger enhancement. (#1119)
+- **Line breaks show in the history view.** History entries now render with `whitespace-pre-wrap`, matching how transcripts display everywhere else. (#1015)
+
+### Hotkeys
+
+- **Multiple hotkeys per action.** Each hotkey slot — dictation, agent, voice agent, and meeting — can now be bound to several hotkeys, so the same action fires from different keyboards. A new "Add another hotkey" row stacks bindings with per-slot duplicate guarding and atomic updates (a partial registration failure rolls the slot back rather than leaving a dead entry). Full support across `globalShortcut` and the native listeners (macOS Globe/mouse/right-modifier, Windows/Linux low-level hook, push-to-talk); GNOME, KDE, and Hyprland apply the primary hotkey. Comma-key hotkeys (e.g. `Control+,`) are preserved instead of being split on the list separator, and bindings persist as a backward-compatible comma-separated list. (#1017)
+
+### Clipboard & paste
+
+- **Dictating into Claude Desktop and claude.ai no longer breaks after the first paste.** The auto-learn correction monitor used to force the `AXEnhancedUserInterface` accessibility flag onto the app it pasted into. On some Chromium apps (Claude Desktop, claude.ai in any browser) that flag permanently blurs the message composer, so every dictation after the first pasted into a field that no longer had keyboard focus. Monitoring is now strictly read-only: apps that expose their accessibility tree keep auto-learn working as before, and apps that don't simply skip correction learning for that paste. Restart the affected app once after updating to clear the stuck flag. (#1116)
+
+### Audio & media
+
+- **No more false "No audio detected" on Windows.** The speech gate's AudioContext can stay suspended or stall on Windows (Bluetooth headsets, wedged output devices), so its analyser read flat silence and rejected recordings that actually captured speech. A suspended context is now resumed, gate windows are skipped while the context isn't running (the recording proceeds straight to transcription and the gate reports "unavailable"), and cancelling a recording tears the gate down instead of leaking its interval and AudioContext. (#1125)
+
+### Windows
+
+- **No more Windows Firewall prompt for local Parakeet transcription.** The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but the upstream binary has no loopback-only bind option, so Windows raised an "allow public and private networks" prompt when it started. All-users installs now register a scoped inbound block rule for the server binary: the prompt is gone, the port is closed to the network, and transcription is unaffected because Windows never filters loopback traffic. The rule is removed on uninstall. (#1090)
+
+### Linux
+
+- **Wayland global hotkeys no longer crash on Node 24.** The D-Bus integration for GNOME, KDE, and Hyprland global shortcuts moved off the unmaintained `dbus-next` (last updated in 2021, built on Node APIs removed in Node 24) to `@homebridge/dbus-native`. The switch also fixes the KDE pre-registration conflict check (the invoke callback delivers the unwrapped return value, not a message object, so the check never fired) and attaches an error listener to each session bus, so a stale `DBUS_SESSION_BUS_ADDRESS` can no longer take down the process with an unhandled error. (#1101)
+
+## [1.7.4] - 2026-07-07
+
+A feature-and-hardening release on top of 1.7.3: Tinfoil confidential inference for both transcription and AI reasoning, Azure AI Foundry / Azure OpenAI speech-to-text, native Windows system-audio capture for meeting notes, enterprise SSO in onboarding, cross-device Snippets sync, ambient sync that now runs even in tray-only sessions, and a broad stack of fixes across cleanup routing, clipboard, media playback, hotkeys, local GPU transcription, macOS paste, updates, and Linux packaging — plus SOC 2 dependency remediation.
+
+### Transcription
+
+- **Tinfoil — confidential cloud transcription (BYOK).** New bring-your-own-key provider built on Tinfoil's attested secure enclaves for private cloud speech-to-text in both dictation and uploaded audio. The client verifies enclave attestation before every request and connects over an enclave host assigned dynamically at runtime. (#944)
+- **Azure AI Foundry / Azure OpenAI speech-to-text.** The custom transcription provider now recognizes Azure endpoints (`*.cognitiveservices.azure.com`, `*.openai.azure.com`, `*.services.ai.azure.com`) and builds the deployment-style URL Azure requires (`/openai/deployments/{model}/audio/transcriptions?api-version=...`) instead of the plain OpenAI `{base}/audio/transcriptions` shape, which returned `404 DeploymentNotFound`. Auth now uses Azure's `api-key` header on Azure hosts. Enter your resource endpoint as the URL and your exact deployment name in the Model field; `api-version` defaults to a transcribe-capable preview and can be overridden by appending `?api-version=...` to the endpoint. (#997)
+- **Configurable self-hosted model.** Self-hosted / local transcription endpoints can now specify which model to request instead of being pinned to a fixed default. (#1043)
+- **Hardened realtime dictation streaming.** The realtime streaming connection is more resilient, and 16 kHz capture is now linearly upsampled to the 24 kHz OpenAI's realtime API requires — fixing outright BYOK connection rejections (`invalid_request_error: integer_below_min_value`) and a 1.5× speed mismatch on cloud sessions pinned to 24 kHz. (#1044)
+- **Local GPU model reloads after sleep.** Waking the machine no longer leaves the on-device GPU transcription model in a broken state; it's reloaded automatically. (#1032)
+- **Multi-GPU device selected by UUID.** The local transcription server now pins its GPU by stable UUID instead of a numeric index, so it keeps using the intended device across reboots and driver reordering on multi-GPU machines. (#1018)
+- **Empty recordings no longer crash transcription.** A zero-length recording is handled gracefully instead of taking down the transcription pipeline. (#891)
+- **Bundled VAD model in packaged builds.** The `ggml-silero` voice-activity-detection model is now copied into the packaged app, so production builds run local transcription with VAD instead of logging "model not found" and running without it. (#1000)
+
+### Reasoning & models
+
+- **Tinfoil — confidential AI inference (BYOK).** Tinfoil is also available as a private reasoning/agent provider, with six chat models (reasoning-capable ones expose a disable-thinking toggle, matching Groq) verified against enclave attestation before each request. (#875)
+- **Hardened dictation cleanup and wake-word routing.** The cleanup prompt was rewritten to reliably transform — not reply to — transcripts: transcripts are framed in `<transcript>` tags with a trailing output anchor, cleanup runs deterministically at temperature 0, and cloud cleanup requests now pin `promptMode: "cleanup"` so the server can't flip them to the action prompt when the dictation agent is off. Agent routing now requires the agent to be genuinely addressed (at the start of a dictation, after a greeting cue, or opening a new sentence) instead of firing on any mention of the agent's name anywhere in the transcript. (#1073)
+- **Bundled llama.cpp updated to b9763** for local LLM inference. (#995)
+
+### Meeting notes
+
+- **Native Windows system-audio capture.** Windows previously captured meeting audio only through Chromium's display-media loopback, which hears just the default output device — so a meeting playing to a non-default device produced silent notes with no error. A new native WASAPI process-loopback helper hears every application on every output device while excluding OpenWhispr's own process tree, and transparently falls back to the Chromium loopback path on Windows versions without process-loopback support (< 10 2004). (#960)
+
+### Sync
+
+- **Ambient sync now runs in tray-only sessions.** Auto-sync scheduling (initial pass, window focus/visibility, network reconnect, and a 5-minute interval) moved out of the Control Panel and into `SyncService`, so a start-minimized session that never opens the panel still pushes dictations up and pulls changes from other devices down. Passes are serialized across windows with a Web Lock and share a single throttle window; manual syncs wait for the lock instead of being dropped. (#1070, #1072)
+- **Snippets sync across devices.** Your spoken-trigger Snippets now sync across signed-in devices, matching the cross-device custom-dictionary sync added in 1.7.3. (#1037)
+- **Default folders link to existing cloud folders** instead of registering duplicates, so signing in on a new device no longer creates a second copy of your built-in folders. (#1086)
+
+### Dictation & snippets
+
+- **Snippets match triggers containing Turkish İ and ı.** Trigger matching used `toLowerCase()`, whose lowercase form of İ (U+0130) is "i" plus a combining dot, so a snippet like "İmza" never matched the transcript — and the regex `/i` flag case-folds neither İ nor dotless ı (U+0131). Triggers and matches are now folded to a canonical key, the pattern matches İ/ı explicitly, and the transcript is NFC-normalized, so "imza", "İmza", "İMZA" — and "Işık"/"IŞIK" for an "ışık" trigger — all expand the same snippet. (#1050)
+
+### Onboarding & sign-in
+
+- **Enterprise SSO sign-in.** Onboarding now offers "Sign in with SSO" alongside social and email/password: it reuses your typed work email, opens the external browser to the SSO flow, and returns via the `openwhispr://` callback. (#1034)
+- **API-key drafts are saved on click-outside instead of discarded.** Typing a key and clicking the next field used to silently revert it to empty — worst for Corti BYOK users pasting a client ID and then clicking the client-secret field during onboarding. Click-outside now commits the draft; Escape and the ✕ button still cancel. (#1039)
+
+### Clipboard & paste
+
+- **Rich clipboard formats preserved on restore.** After auto-paste restores your previous clipboard, RTF and other rich formats survive instead of being flattened to plain text. (#1020)
+- **Faster macOS clipboard restore.** Removed an unnecessary delay when restoring the clipboard after pasting on macOS. (#1038)
+- **Reliable target-app focus before pasting on macOS.** The paste keystroke is delivered session-wide, so it only lands in the right field when the captured target app is frontmost. The target is now located by scanning running applications (the previous lookup returned `nil` under JXA, so activation silently no-op'd and #668's fix never ran), an already-frontmost Chromium/Electron app is left alone to avoid dropping its text field's focus, and the voice-agent hotkeys now capture the target PID so their paste can refocus too — all with no added latency. (#1000)
+
+### Audio & media
+
+- **Mic retries on the default device when the pinned one is stale.** If a previously selected `deviceId` no longer resolves, recording falls back to the system default microphone instead of failing. (#978)
+- **Media playback resumes when recording stops, not after transcription** — so paused music or video comes back the moment you finish speaking rather than after the transcript is processed. (#1030)
+- **No media pause for a recording that already ended.** A quick tap during streaming-recording startup could pause media with nothing left to resume it (and play cues out of order); post-start side effects are now gated on the recording still being active. (#1061)
+
+### Hotkeys
+
+- **Modifier-only hotkeys work simultaneously on Windows/Linux.** The native low-level key listener was a singleton hardwired to the dictation slot, so only one modifier-only hotkey (dictation, voice agent, agent, or meeting) worked per session. It's now a multiplexer that watches one hook process per key and routes key-tagged events to the right slot, mirroring macOS — and it skips the listener entirely on GNOME/KDE/Hyprland, where shortcuts arrive via D-Bus. (#1001)
+
+### Linux
+
+- **Fall back to `--no-sandbox` when user namespaces are restricted**, so the app still launches on hardened kernels that disable unprivileged user namespaces. (#1042)
+- **RPM installable on openSUSE.** Fixed packaging so the `.rpm` installs there. (#1014)
+
+### Updates
+
+- **No crash on the first "Install & Restart" click after an update.** The manual `app.emit("before-quit")` passed no event object, so `event.preventDefault()` threw and the first click did nothing (the second only "worked" because the crash had left the app in a shutting-down state). Pre-quit cleanup now hooks the correct `before-quit-for-update` event on Electron's native `autoUpdater` — fixing stalled macOS installs — and shuts sidecars down on the update path. (#1012)
+
+### Security & dependencies
+
+- **Cleared all critical/high dependency alerts** (form-data, tar, undici, ws) as part of SOC 2 Type 2 secure-code remediation — 1 critical + 10 high Dependabot alerts resolved, no source changes. (#1051)
+- **Restored lockfile integrity hashes and added a CI guard.** Regenerated `package-lock.json` on Node 24 so all 967 package entries carry `resolved` + `integrity` fields (up from 53), restoring tamper verification for `npm ci`, and added a `lockfile-lint` workflow to keep it that way. (#1069)
 
 ## [1.7.3] - 2026-06-23
 

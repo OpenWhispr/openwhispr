@@ -6,7 +6,12 @@
       "uiLabel": "界面语言",
       "uiDescription": "选择 OpenWhispr 界面使用的语言",
       "transcriptionLabel": "转录语言",
-      "transcriptionDescription": "选择你说话的语言，以提高转录准确率"
+      "transcriptionDescription": "选择你说话的语言，以提高转录准确率",
+      "chineseScriptLabel": "中文书写（听写）",
+      "chineseScriptDescription": "检测到中文时，将听写的转录结果转换为简体或繁体。口语听起来一样；Whisper 只会输出一种字形。",
+      "chineseScriptAsTranscribed": "保持转录原样",
+      "chineseScriptSimplified": "简体",
+      "chineseScriptTraditional": "繁体"
     },
     "noteFiles": {
       "title": "将笔记保存为文件",
@@ -33,6 +38,7 @@
       "hide": "隐藏听写面板"
     },
     "openControlPanel": "打开控制面板",
+    "hideControlPanel": "隐藏控制面板",
     "quit": "退出 OpenWhispr",
     "tooltip": "OpenWhispr - 语音听写"
   },
@@ -91,6 +97,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
+      "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
       "trySuggestions": "建议尝试：{{suggestions}}",
       "slotConflict": "此快捷键已用于{{slot}}。"
     }
@@ -99,7 +106,8 @@
     "microphone": "请打开系统设置以配置麦克风权限。",
     "sound": "请打开系统声音设置（例如 pavucontrol）。",
     "accessibility": "此平台不支持辅助功能设置。",
-    "systemAudio": "系统音频设置在此平台上不可用。"
+    "systemAudio": "系统音频设置在此平台上不可用。",
+    "screenRecording": "此平台不提供屏幕录制设置。"
   },
   "upgradePrompt": {
     "paymentFailed": "我们无法处理你的付款",
@@ -126,6 +134,8 @@
     "pttUnavailable": "按住说话原生监听器不可用"
   },
   "common": {
+    "add": "添加",
+    "retry": "重试",
     "back": "返回",
     "next": "下一步",
     "complete": "完成",
@@ -135,6 +145,7 @@
     "cancel": "取消",
     "recommended": "推荐",
     "active": "已激活",
+    "managedByOrg": "由您的组织管理",
     "freeAccountRequired": "需要免费账户",
     "cloud": "云端",
     "local": "本地",
@@ -149,17 +160,20 @@
     "tap": "点按",
     "close": "关闭",
     "dismiss": "忽略",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "create": "Crear",
-    "delete": "Eliminar",
-    "actions": "Acciones",
-    "error": "Algo salió mal",
-    "unknownError": "Ocurrió un error desconocido",
-    "copy": "Copiar",
-    "copied": "Copiado",
-    "done": "Listo",
-    "skip": "跳过"
+    "save": "保存",
+    "saving": "保存中…",
+    "create": "创建",
+    "delete": "删除",
+    "actions": "操作",
+    "error": "出了点问题",
+    "unknownError": "发生未知错误",
+    "copy": "复制",
+    "copied": "已复制",
+    "done": "完成",
+    "skip": "跳过",
+    "policyAiProcessingRestricted": "AI 处理已被您的组织限制。",
+    "policyAgentRestricted": "AI 智能体的使用已被您的组织限制。",
+    "policyTranscriptionRestricted": "转录已被您的组织限制。"
   },
   "onboarding": {
     "steps": {
@@ -197,7 +211,7 @@
       "systemAudioDescription": "让会议录音机听到通话另一方的声音 — 会议、讲座、播客。你可以稍后在“设置”中开启。",
       "optional": "可选",
       "recommended": "推荐",
-      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果无效，请将 OpenWhispr 从列表中移除后重新添加。还是不行？请发邮件至 support@openwhispr.com。"
+      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果列表中根本没有 OpenWhispr，请点按 + 并从“应用程序”文件夹中添加。还是不行？请发邮件至 support@openwhispr.com。"
     },
     "transcription": {
       "title": "转录设置",
@@ -220,7 +234,7 @@
       "title": "语音助手设置",
       "description": "一键唤起你的 AI 助手",
       "hotkey": "快捷键",
-      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。{{agentName}} 会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
+      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换所选内容；否则会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
       "test": "试一试",
       "testInstruction": "点击下方，按下 {{hotkey}} 并说出指令",
       "testSetHotkey": "在上方设置快捷键即可试用",
@@ -275,11 +289,6 @@
       "title": "会议笔记",
       "description": "捕捉并总结你的会议",
       "autoDetect": "OpenWhispr 会自动检测你是否在开会，并提议开始记录 — 未经你确认不会录制任何内容。",
-      "notification": {
-        "title": "检测到会议",
-        "body": "你似乎正在开会。要开始记录吗？",
-        "cta": "开始录制"
-      },
       "hotkeyLabel": "会议快捷键",
       "hotkeyHint": "可选 — 在任何会议中按下即可立即开始记录。"
     },
@@ -296,6 +305,7 @@
         "createAccount": "创建你的 Corti 账户",
         "creditBadge": "50 美元免费额度",
         "regionHint": "选择音频处理地区 — 美国或欧盟。",
+        "llmHint": "语言模型功能也将在 Corti 模型上运行。",
         "useCorti": "使用 Corti",
         "skip": "暂不需要",
         "step1": "在 corti.ai 注册",
@@ -318,6 +328,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "需要更新",
+      "description": "您的组织要求使用 OpenWhispr {{version}} 或更高版本。请更新应用。"
+    },
     "update": {
       "readyTitle": "更新已准备就绪",
       "readyDescription": "点击“安装更新”以重启并安装最新版本。",
@@ -380,6 +394,7 @@
       "clearAllErrorTitle": "无法清除历史记录",
       "clearAllErrorDescription": "出了点问题，请重试。",
       "copyText": "复制文本",
+      "copyRawTranscript": "复制原始转录",
       "deleteItem": "删除",
       "viewRawTranscript": "查看原始转录",
       "showInFolder": "在访达中显示",
@@ -400,7 +415,8 @@
         "recordingWithDuration": "已放弃的录音 · {{duration}}",
         "recover": "恢复",
         "recovered": "已恢复"
-      }
+      },
+      "retryTranslationMode": "翻译模式"
     },
     "cloudMigration": {
       "title": "欢迎使用 OpenWhispr 云端",
@@ -449,7 +465,13 @@
       "noModels": "未返回任何模型，请检查端点 URL。",
       "providerName": "自定义",
       "ownerLabel": "所有者：{{owner}}",
-      "unableToLoadModels": "无法从端点加载模型。"
+      "unableToLoadModels": "无法从端点加载模型。",
+      "searchPlaceholder": "搜索模型…",
+      "selectedGroup": "已选择",
+      "otherGroup": "其他",
+      "noSearchResults": "没有与“{{query}}”匹配的模型",
+      "selectModelHint": "尚未选择模型 — 请从下方列表中选择一个。",
+      "keyRequiredHint": "推理需要 API 密钥 — 请添加密钥以使用此提供商。"
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
@@ -486,6 +508,10 @@
       "customModelId": "自定义模型 ID",
       "customModelPlaceholder": "输入模型 ID 或部署名称",
       "suggestedModels": "推荐模型",
+      "browseModels": "浏览全部模型",
+      "loadingModels": "正在获取模型...",
+      "allModels": "{{region}} 的全部模型",
+      "modelListError": "无法加载模型。",
       "bedrock": {
         "ssoHelp": "使用你的 AWS CLI SSO 配置。请确保已运行 'aws sso login'。",
         "keysHelp": "输入你的 AWS IAM 访问密钥。"
@@ -498,6 +524,14 @@
         "adcHelp": "使用 Application Default Credentials。请执行：gcloud auth application-default login",
         "apikeyHelp": "从 Google AI Studio 获取的 Vertex AI Express Mode API 密钥。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "模型已不可用",
+      "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
+      "refreshingModels": "正在刷新模型…"
+    },
+    "corti": {
+      "euOnly": "Corti 模型仅在欧盟地区可用。"
     }
   },
   "transcription": {
@@ -522,8 +556,13 @@
     "corti": {
       "clientId": "客户端 ID",
       "clientSecret": "客户端密钥",
+      "apiKey": "API Key",
       "environment": "数据区域",
       "tenant": "租户"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil 流式转录使用 Voxtral Mini 4B，批量转录使用 Voxtral Small 24B。",
+      "docsLink": "查看文档"
     }
   },
   "hooks": {
@@ -531,6 +570,8 @@
       "errorTitles": {
         "sessionExpired": "会话已过期",
         "offline": "你已离线",
+        "agentUnavailable": "助手不可用",
+        "screenContextSkipped": "已跳过屏幕上下文",
         "dailyLimitReached": "已达到每日上限",
         "providerRateLimited": "服务商速率限制"
       },
@@ -542,11 +583,43 @@
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"
       },
+      "micDisconnected": {
+        "title": "麦克风已断开",
+        "description": "录音仍在进行中，麦克风可用后将自动恢复。",
+        "meetingDescription": "会议仍在录制系统音频，麦克风录制将自动恢复。"
+      },
+      "micRestored": {
+        "title": "麦克风已恢复",
+        "description": "音频采集已恢复。"
+      },
+      "partialTranscription": {
+        "title": "部分转录",
+        "description": "部分录音内容无法转录。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
         "offline": "你目前离线。云端转录需要互联网连接。",
         "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
-        "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。"
+        "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。",
+        "chunkLoss": "网络问题导致录音大部分丢失。请从历史记录中重新转录。",
+        "agentReasoningFailed": "语音助手无法处理该命令，已改为插入原始转录文本。",
+        "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。",
+        "customEndpointInvalid": "自定义转写端点未配置或其 URL 无效。请在“设置 → 语音转文字”中更新。"
+      },
+      "translationFallback": {
+        "unreachableTitle": "翻译不可用",
+        "unreachableDescription": "你的口述内容已按原文粘贴，未经翻译。请检查翻译设置。",
+        "failedTitle": "翻译失败",
+        "failedDescription": "已粘贴原始文本。你可以在历史记录中重试。"
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "未应用选中文本编辑",
+        "changed": "处理期间，选中的文本或目标应用已发生变化。未替换任何内容。",
+        "expired": "选中文本编辑已过期。请重新选择文本后再试。",
+        "pasteFailed": "OpenWhispr 已生成编辑结果，但无法替换选中的文本。",
+        "unavailable": "OpenWhispr 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
+        "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
+        "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。"
       }
     },
     "clipboard": {
@@ -730,7 +803,11 @@
     "sso": {
       "continueWithSSO": "使用 SSO 登录",
       "emailRequired": "输入您的工作邮箱以使用 SSO。",
-      "failed": "单点登录失败，请重试。"
+      "failed": "单点登录失败，请重试。",
+      "companySignInTitle": "使用公司登录",
+      "requiredDescription": "{{domain}} 要求通过 SSO 登录 OpenWhispr。",
+      "availableDescription": "您的 {{domain}} 账户已可使用公司 SSO。",
+      "useEmailInstead": "改用邮箱和密码"
     },
     "social": {
       "completeInBrowser": "在浏览器中完成登录",
@@ -907,7 +984,9 @@
     "recording": "录制中",
     "tryShortcut": "试试 Ctrl+Shift+K",
     "tryShortcutMac": "试试 ⌘⇧K",
-    "remove": "移除快捷键"
+    "remove": "移除快捷键",
+    "addAnother": "添加其他快捷键",
+    "duplicate": "已添加"
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",
@@ -928,7 +1007,18 @@
     "selectPlaceholder": "选择麦克风",
     "systemDefault": "系统默认",
     "unknownDevice": "未知设备",
-    "using": "当前使用：{{device}}"
+    "using": "当前使用：{{device}}",
+    "warmHold": {
+      "label": "保持麦克风预热",
+      "description": "听写结束后短暂保持麦克风开启，让下一次听写即刻开始且不丢字",
+      "privacyNote": "麦克风保持开启期间，系统的麦克风使用指示灯会一直亮起。听写之间不会录制任何内容。",
+      "options": {
+        "0": "关闭",
+        "10": "10 秒",
+        "60": "1 分钟",
+        "900": "15 分钟"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "正在检查系统功能...",
@@ -1004,15 +1094,23 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "服务商",
       "run": "运行测试",
-      "customEndpoint": "自定义端点"
+      "customEndpoint": "自定义端点",
+      "apiKeyMissing": "未配置 {{provider}} API 密钥，请在 AI 模型设置中添加。",
+      "translateHint": "文本将翻译为{{language}}",
+      "translation": "翻译",
+      "translationDisabled": "启用听写翻译以测试此提示词",
+      "noTargetLanguage": "请先选择目标语言",
+      "agentDisabled": "启用语音助手以测试此提示词"
     },
     "view": {
       "customPrompt": "自定义提示词",
       "defaultPrompt": "默认提示词",
       "modified": "已修改"
-    }
+    },
+    "defaultTestInputTranslate": "今天天气真好，要不要出去走走？"
   },
   "settingsModal": {
+    "managedByOrg": "部分设置由您的组织管理。",
     "groups": {
       "account": "账户",
       "app": "应用",
@@ -1053,13 +1151,35 @@
         "label": "系统"
       },
       "workspace": {
-        "label": "Espacio de trabajo",
-        "description": "Miembros, equipos, facturación y claves API"
+        "description": "成员、团队空间和 API 密钥",
+        "label": "工作区"
       }
     },
     "title": "设置"
   },
   "settingsPage": {
+    "unifiedBilling": {
+      "workspaceTitle": "工作区账单",
+      "workspaceDescription": "每个工作区都有自己的套餐、席位和账单负责人。",
+      "billableSeat": "您的席位需计费",
+      "nonBillableSeat": "仅管理员访问 · 无付费席位",
+      "managedBy": "账单由 {{owner}} 管理。",
+      "addSeat": "添加席位",
+      "seatUpdated_one": "工作区容量已更新为 {{count}} 个席位",
+      "seatUpdated_other": "工作区容量已更新为 {{count}} 个席位",
+      "seatUpdateFailed": "无法更新工作区席位",
+      "businessWorkspaceOnly": "适用于工作区",
+      "personalPlanTitle": "个人套餐",
+      "providedBy": "个人套餐：免费版 · 付费权限由 {{workspaces}} 提供",
+      "confirmSeats": {
+        "title": "要添加工作区席位吗？",
+        "description_one": "将 {{workspace}} 增加到 {{count}} 个席位。Stripe 将按比例计费。",
+        "description_other": "将 {{workspace}} 增加到 {{count}} 个席位。Stripe 将按比例计费。",
+        "newCapacity": "新容量",
+        "chargeToday": "今日收费",
+        "confirm": "添加席位"
+      }
+    },
     "account": {
       "badges": {
         "free": "免费版",
@@ -1074,7 +1194,9 @@
         "couldNotOpenTitle": "无法打开账单",
         "manageBilling": "管理账单",
         "opening": "正在打开...",
-        "updatePaymentMethod": "更新支付方式"
+        "updatePaymentMethod": "更新支付方式",
+        "contactOwnerTitle": "请联系工作区所有者",
+        "contactOwnerDescription": "只有工作区所有者才能更新该工作区的账单。"
       },
       "checkout": {
         "couldNotOpenDescription": "打开结账页面时出错，请重试。",
@@ -1106,7 +1228,6 @@
         "business": "Business",
         "trial": "试用"
       },
-      "planTitle": "套餐",
       "rollingWeeklyLimit": "滚动周限额",
       "signOut": {
         "failedDescription": "退出登录时出错，请重试。",
@@ -1159,6 +1280,7 @@
             "无限云端转录",
             "每月 20 小时会议录制",
             "跨设备同步",
+            "通过公开链接分享笔记",
             "个人 API 访问",
             "在所有应用中集成 MCP",
             "移动应用（iOS 即将推出）",
@@ -1169,14 +1291,21 @@
         },
         "business": {
           "name": "Business",
-          "monthlyPrice": "$20",
+          "monthlyPrice": "$16",
           "monthlyPeriod": "/月",
-          "annualPrice": "$200",
+          "annualPrice": "$160",
           "annualPeriod": "/年",
-          "annualEquivalent": "$16.67",
+          "annualEquivalent": "$13.33",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "用于共享笔记的团队空间",
+            "工作区角色与成员管理",
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1207,8 +1336,8 @@
           "accountCredit": "账户余额",
           "newPrice": "新价格",
           "nextBilling": "下次计费",
-          "mo": "mo",
-          "yr": "yr",
+          "mo": "月",
+          "yr": "年",
           "cancel": "取消",
           "confirm": "确认"
         }
@@ -1230,6 +1359,44 @@
         "successDescription": "您的账户和所有数据已被删除。应用将立即重新加载。",
         "failedTitle": "删除失败",
         "failedDescription": "删除您的账户时出错。您的本地数据可能已被部分删除。请重试。"
+      },
+      "profile": {
+        "name": {
+          "label": "显示名称",
+          "placeholder": "您的姓名",
+          "save": "保存",
+          "saving": "保存中...",
+          "saved": "显示名称已更新",
+          "error": "无法更新您的姓名"
+        },
+        "password": {
+          "label": "密码",
+          "description": "更改您用于登录的密码。",
+          "change": "更改密码",
+          "dialogTitle": "更改密码",
+          "dialogDescription": "输入您的当前密码并设置新密码。",
+          "currentLabel": "当前密码",
+          "newLabel": "新密码",
+          "confirmLabel": "确认新密码",
+          "minLength": "密码至少需要 8 个字符",
+          "mismatch": "两次输入的密码不一致",
+          "revokeOthers": "在其他设备上退出登录",
+          "submit": "更新密码",
+          "saving": "更新中...",
+          "cancel": "取消",
+          "saved": "密码已更新"
+        },
+        "errors": {
+          "invalidPassword": "您的当前密码不正确。",
+          "passwordTooShort": "密码至少需要 8 个字符。",
+          "passwordTooLong": "密码过长。",
+          "noPassword": "此账户未设置密码。",
+          "generic": "出了点问题，请重试。"
+        }
+      },
+      "planUnavailable": {
+        "title": "无法获取方案",
+        "description": "暂时无法加载你的方案，你的使用权限不受影响。"
       }
     },
     "agentConfig": {
@@ -1241,7 +1408,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会执行你的命令——撰写内容、格式化文本或回答问题——而不是逐字转写。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会执行你的命令。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1249,7 +1416,7 @@
       "title": "语音助手",
       "examples": {
         "formalEmail": "Hey {{agentName}}，写一封关于预算的正式邮件",
-        "professional": "Hey {{agentName}}，让这个更专业",
+        "professional": "先选中文本，再说：Hey {{agentName}}，让这个更专业",
         "bulletPoints": "Hey {{agentName}}，把这个转换成要点列表"
       }
     },
@@ -1299,6 +1466,15 @@
           "title": "企业级",
           "description": "正在使用你组织的云账号。"
         }
+      },
+      "managedEnterprise": {
+        "errorTitle": "托管企业 AI 需要处理",
+        "title": "由您的组织管理",
+        "description": "登录后会自动获取短期访问权限，无需云密钥或 CLI 配置。",
+        "usePersonalSetup": "使用个人配置",
+        "availableTitle": "可使用组织配置",
+        "availableDescription": "使用 {{provider}}，无需管理凭据。",
+        "useManaged": "使用托管配置"
       }
     },
     "developer": {
@@ -1396,7 +1572,7 @@
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
-        "description": "说出你的需求，AI 助手会输入结果，而不是你说的原话"
+        "description": "说出你的需求——选中的文本会就地编辑，否则助手会把结果输入到光标位置"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -1563,6 +1739,10 @@
         "title": "更新",
         "versionPlaceholder": "—",
         "whatsNew": "v{{version}} 更新内容"
+      },
+      "translationHotkey": {
+        "title": "翻译快捷键",
+        "description": "用任何语言听写——粘贴的文本会自动翻译"
       }
     },
     "permissions": {
@@ -1590,6 +1770,7 @@
     "privacy": {
       "cloudBackup": "云端备份",
       "cloudBackupDescription": "将转录记录和笔记备份到云端，实现跨设备无缝访问。",
+      "cloudBackupTeamCaveat": "团队空间中的笔记和您已分享的笔记会始终同步，不受此设置影响。",
       "cloudNotesMigration": "正在备份笔记… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "所有笔记已备份",
       "description": "控制哪些数据会离开你的设备。默认全部关闭。",
@@ -1598,6 +1779,9 @@
       "usageAnalyticsDescription": "通过分享匿名性能数据帮助我们改进 OpenWhispr。我们绝不发送转录内容——仅发送计时和错误数据。",
       "dataRetention": "数据保留",
       "dataRetentionDescription": "将转录和音频本地保存到历史记录中。禁用后，转录内容会被粘贴但不会被保存。",
+      "transcriptRetention": "转录保留",
+      "transcriptRetentionDescription": "在此期限后自动删除已保存的转录及其音频。",
+      "transcriptRetentionForever": "永久",
       "hoursAgo": "{{count}}小时前",
       "justNow": "刚刚",
       "lastSynced": "上次同步 {{time}}",
@@ -1605,7 +1789,8 @@
       "audioRetention": "音频保留",
       "audioRetentionDescription": "在本地存储音频录制文件以便重新转录和下载。文件会在保留期过后自动删除。",
       "audioRetentionDisabled": "已禁用",
-      "audioRetentionDays": "{{count}} 天",
+      "retentionDays_one": "{{count}} 天",
+      "retentionDays_other": "{{count}} 天",
       "audioStorageUsage": "存储用量",
       "audioStorageUsageDescription": "存储在此设备上的音频文件",
       "audioStorageFiles": "{{count}} 个文件，{{size}}",
@@ -1634,9 +1819,10 @@
       "description": "配置用于听写清理、笔记格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "听写清理",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "语音助手",
         "noteFormatting": "笔记格式化",
-        "chatIntelligence": "聊天"
+        "chatIntelligence": "聊天",
+        "dictationTranslation": "翻译"
       }
     },
     "noteFormatting": {
@@ -1751,97 +1937,213 @@
       "apiKeyOptional": "API Key（可选）"
     },
     "workspace": {
-      "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "title": "工作区",
+      "description": "在一处与同事协作、共享笔记并管理工作区访问权限。",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
-        "create": "Crear espacio de trabajo"
+        "title": "创建你的第一个工作区",
+        "description": "工作区让你与同事协作并共享笔记。",
+        "create": "创建工作区"
+      },
+      "loadError": {
+        "title": "无法加载工作区",
+        "description": "请检查网络连接后重试。",
+        "retry": "重试"
       },
       "tab": {
-        "general": "General",
-        "members": "Miembros",
-        "teams": "Equipos",
-        "billing": "Facturación",
-        "developer": "Desarrollador"
+        "general": "常规",
+        "members": "成员",
+        "teams": "团队",
+        "developer": "开发者"
       },
       "role": {
-        "owner": "Propietario",
-        "admin": "Administrador",
-        "member": "Miembro"
+        "owner": "所有者",
+        "admin": "管理员",
+        "member": "成员"
       },
       "general": {
-        "nameLabel": "Nombre del espacio de trabajo",
-        "slugLabel": "Slug",
-        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
-        "saved": "Espacio de trabajo actualizado",
-        "dangerTitle": "Eliminar espacio de trabajo",
-        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
-        "delete": "Eliminar espacio de trabajo",
-        "confirmTitle": "¿Eliminar {{name}}?",
-        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+        "nameLabel": "工作区名称",
+        "slugLabel": "简短名称",
+        "slugHint": "用于 URL 和邀请链接。仅限小写字母、数字和连字符。",
+        "slugInvalid": "仅限小写字母、数字和连字符。",
+        "saved": "工作区已更新",
+        "dangerTitle": "删除工作区",
+        "dangerDescription": "所有共享笔记、文件夹和集成都将被删除。此操作无法撤销。",
+        "delete": "删除工作区",
+        "confirmTitle": "删除 {{name}}？",
+        "confirmDescription": "这将取消订阅并永久删除工作区的所有数据。",
+        "deleting": "删除中…",
+        "deleted": "工作区已删除",
+        "leaveTitle": "退出工作区",
+        "leaveDescription": "你将失去对此工作区及其共享笔记的访问权限。",
+        "leave": "退出工作区",
+        "leaving": "退出中…",
+        "leaveConfirm": {
+          "title": "退出 {{name}}？",
+          "description": "你将立即失去访问权限。管理员可以重新邀请你。"
+        },
+        "left": "你已退出 {{name}}"
       },
       "members": {
-        "title": "Miembros",
-        "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
-        "roleUpdated": "Rol actualizado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
-        "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo"
+        "title": "成员",
+        "description": "已使用 {{count}}/{{seats}} 个席位。",
+        "invite": "邀请",
+        "empty": "暂无成员。",
+        "loadError": "无法加载成员。",
+        "roleUpdated": "角色已更新",
+        "removed": "已移除 {{name}}",
+        "promote": "设为管理员",
+        "demote": "设为成员",
+        "transferOwnership": "转让所有权",
+        "remove": "从工作区移除",
+        "removeConfirm": {
+          "title": "移除此成员？",
+          "description": "{{name}} 将立即失去对 {{workspace}} 的访问权限。"
+        },
+        "transferConfirm": {
+          "title": "转让所有权？",
+          "description": "{{name}} 将成为 {{workspace}} 的所有者。你的角色将变为管理员，只有新所有者才能转回所有权。"
+        }
       },
-      "invites": {
-        "title": "Invitaciones pendientes",
-        "resend": "Reenviar",
-        "revoke": "Revocar",
-        "resent": "Invitación reenviada"
+      "joinRequests": {
+        "title": "加入申请",
+        "approve": "批准",
+        "deny": "拒绝",
+        "approved": "{{name}} 已加入工作区",
+        "denied": "已拒绝申请",
+        "errorTitle": "无法更新申请"
       },
       "teams": {
-        "title": "Equipos",
-        "description": "Agrupa miembros para compartir con alcance limitado.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
-        "descriptionLabel": "Descripción",
-        "memberCount": "{{count}} miembros"
+        "title": "团队",
+        "description": "授予团队空间访问权限的工作区成员分组。",
+        "new": "新建团队",
+        "empty": "还没有团队。",
+        "createFirst": "创建你的第一个团队",
+        "addMembersLabel": "添加成员",
+        "createTitle": "创建团队",
+        "nameLabel": "团队名称",
+        "memberCount_one": "{{count}} 名成员",
+        "memberCount_other": "{{count}} 名成员",
+        "membersButton": "成员",
+        "grantsAccessToSpaces_one": "授予 {{count}} 个空间的访问权限",
+        "grantsAccessToSpaces_other": "授予 {{count}} 个空间的访问权限",
+        "couldNotCreate": "无法创建团队",
+        "created": "已创建 {{team}}",
+        "deleted": "已删除 {{team}}",
+        "deleteConfirmTitle": "删除 {{team}}？",
+        "deleteConfirmDescription": "这将归档该团队。其成员将失去它授予的访问权限。",
+        "deleteConfirmSpaceAccess_one": "该团队授予 {{count}} 个空间的访问权限。其成员将失去该访问权限。",
+        "deleteConfirmSpaceAccess_other": "该团队授予 {{count}} 个空间的访问权限。其成员将失去该访问权限。",
+        "members": {
+          "title": "{{team}} 的成员",
+          "removeConfirm": "将 {{name}} 从 {{team}} 移除？",
+          "leave": "退出团队",
+          "leftTeam": "你已退出 {{team}}",
+          "leaveConfirm": "退出 {{team}}？",
+          "leaveConfirmDescription": "除非其他团队包含你，否则你将失去通过该团队获得的空间访问权限。"
+        }
+      },
+      "invites": {
+        "title": "待处理的邀请",
+        "expiresIn_one": "{{count}} 天后过期",
+        "expiresIn_other": "{{count}} 天后过期",
+        "expired": "已过期",
+        "loadError": "无法加载邀请。",
+        "resend": "重新发送",
+        "resending": "重新发送中…",
+        "revoke": "撤销",
+        "resent": "邀请已重新发送",
+        "resentNoEmail": "邀请已更新，但邮件无法送达。",
+        "revoked": "邀请已撤销",
+        "revokeFailed": "无法撤销邀请",
+        "revokeConfirm": {
+          "title": "撤销此邀请？",
+          "description": "发送给 {{email}} 的邀请链接将失效。"
+        }
       },
       "billing": {
-        "title": "Facturación",
-        "description": "Plan, asientos y pago.",
-        "plan": "Plan",
-        "seats": "Asientos",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción"
+        "plan": "套餐",
+        "seats": "席位",
+        "ownerOnly": "只有工作区所有者可以管理订阅。",
+        "nextInvoice": "下一张账单",
+        "manageStripe": "在 Stripe 中管理",
+        "startSubscription": "开始订阅",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "免费版",
+          "enterprise": "Enterprise"
+        },
+        "status": {
+          "active": "生效中",
+          "trialing": "试用中",
+          "past_due": "逾期未付",
+          "canceled": "已取消",
+          "incomplete": "未完成",
+          "unpaid": "未支付"
+        }
       },
       "developer": {
-        "title": "Claves API",
-        "description": "Acceso programático limitado a este espacio de trabajo.",
-        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
-        "new": "Nueva clave",
-        "create": "Crear clave",
-        "createTitle": "Crear clave API",
-        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
-        "nameLabel": "Nombre de la clave",
-        "namePlaceholder": "Integración de producción",
-        "revoke": "Revocar clave",
-        "lastUsed": "Último uso {{date}}",
-        "neverUsed": "Nunca utilizada",
-        "keyCreatedTitle": "Clave API creada",
-        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
+        "title": "API 密钥",
+        "description": "仅限此工作区的编程访问。",
+        "empty": "暂无 API 密钥。创建一个即可与此工作区集成。",
+        "loadError": "无法加载 API 密钥。",
+        "new": "新建密钥",
+        "create": "创建密钥",
+        "createTitle": "创建 API 密钥",
+        "createDescription": "选择此密钥所需的权限。你可以随时撤销。",
+        "nameLabel": "密钥名称",
+        "namePlaceholder": "生产环境集成",
+        "revoke": "撤销密钥",
+        "revoked": "已撤销密钥 {{name}}",
+        "lastUsed": "上次使用于 {{date}}",
+        "neverUsed": "从未使用",
+        "keyCreatedTitle": "API 密钥已创建",
+        "keyCreatedDescription": "请立即复制此密钥——之后将无法再次查看。",
+        "revokeConfirm": {
+          "title": "撤销此密钥？",
+          "description": "{{name}} 将立即失效。使用它的所有集成都将开始报错。"
+        },
+        "scopes": {
+          "notes": {
+            "title": "笔记",
+            "read": "读取笔记",
+            "write": "写入笔记"
+          },
+          "folders": {
+            "title": "文件夹",
+            "read": "读取文件夹",
+            "write": "写入文件夹"
+          },
+          "transcriptions": {
+            "title": "转录",
+            "read": "读取转录"
+          },
+          "members": {
+            "title": "成员",
+            "read": "读取成员",
+            "write": "管理成员"
+          },
+          "billing": {
+            "title": "账单",
+            "read": "读取账单"
+          },
+          "full": {
+            "title": "完全访问",
+            "admin": "工作区管理员"
+          }
+        }
       }
     }
   },
   "models": {
     "learnMore": "了解更多",
+    "noneAvailable": "没有可用的模型",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",
-        "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）"
+        "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）",
+        "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron 英语流式语音识别",
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多语言流式语音识别，自动语言检测（15 种语言）"
       },
       "whisper": {
         "tiny": "最快速度，较低质量",
@@ -1860,7 +2162,7 @@
         "mistral_voxtral_mini_latest": "快速多语言转录",
         "corti_transcribe": "临床级医疗转录",
         "xai_grok_stt": "xAI 高精度语音识别",
-        "tinfoil_voxtral_mini_realtime": "可验证的私密流式转录"
+        "tinfoil_voxtral": "可验证的私密转录"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
@@ -1869,6 +2171,8 @@
         "openai_gpt_4_1": "稳定基准，1M 上下文",
         "openai_gpt_4_1_mini": "精简版 GPT-4.1",
         "openai_gpt_4_1_nano": "最低延迟 GPT-4.1",
+        "anthropic_claude_fable_5": "Anthropic 最强大的模型，Mythos 级",
+        "anthropic_claude_sonnet_5": "快速且强大的智能体模型，成本更低",
         "anthropic_claude_sonnet_4_6": "均衡性能",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
@@ -1883,12 +2187,14 @@
         "groq_openai_gpt_oss_20b": "快速开源模型，1000 T/秒",
         "groq_llama_3_3_70b_versatile": "Meta 多功能模型，280 T/秒",
         "groq_llama_3_1_8b_instant": "超快 560 T/秒，131K 上下文",
-        "groq_llama_4_scout": "Meta 高效多模态，750 T/秒",
         "groq_compound": "Groq Compound 系统，450 T/秒",
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
+        "openai_gpt_5_6_sol": "旗舰 GPT-5.6，适用于复杂编码与研究",
+        "openai_gpt_5_6_terra": "均衡的 GPT-5.6，适合日常工作",
+        "openai_gpt_5_6_luna": "速度最快、成本最低的 GPT-5.6",
         "openai_gpt_5_5": "复杂推理前沿模型",
-        "anthropic_claude_opus_4_8": "最强大的 Claude 模型",
+        "anthropic_claude_opus_5": "最强大的 Opus 模型，1M 上下文",
+        "anthropic_claude_opus_4_8": "强大的 Opus 模型，注重诚实与可靠",
         "anthropic_claude_opus_4_7": "强大的 Opus 模型",
         "anthropic_claude_opus_4_6": "上一代 Opus，1M 上下文",
         "anthropic_claude_opus_4_5": "更早的 Opus 模型",
@@ -1897,15 +2203,22 @@
         "tinfoil_kimi_k2_6": "私密长程编码与多模态模型，256K 上下文",
         "tinfoil_gemma4_31b": "支持工具调用的私密多语言推理模型，256K 上下文",
         "tinfoil_gpt_oss_120b": "支持工具使用的私密开源权重推理模型，131K 上下文",
-        "tinfoil_llama3_3_70b": "支持工具调用的私密对话模型，128K 上下文"
+        "tinfoil_llama3_3_70b": "支持工具调用的私密对话模型，128K 上下文",
+        "corti_corti_s1_instant": "快速医疗模型，无推理过程",
+        "corti_corti_s1": "功能最强的临床模型，带推理",
+        "corti_corti_s1_mini_instant": "紧凑型医疗模型，最快且成本最低",
+        "corti_corti_s1_mini": "紧凑型临床模型，半价提供推理"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "最强大的 Claude 模型。最适合最具挑战性的智能助手模式任务。",
         "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
-        "bedrock_claude_sonnet_4_6": "均衡性能。推荐用作智能助手模式的默认模型。",
-        "bedrock_claude_opus_4_7": "最高智能。适用于复杂的智能助手模式任务。",
-        "bedrock_nova_lite": "最便宜的选择。AWS 原生，适合高流量场景。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "bedrock_claude_sonnet_5": "均衡性能。推荐用作智能助手模式的默认模型。",
+        "bedrock_claude_opus_4_8": "最高智能。适用于复杂的智能助手模式任务。",
+        "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
+        "bedrock_deepseek_v3_2": "开放权重前沿模型。智能助手模式的高性价比之选。",
+        "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
+        "vertex_gemini_2_5_flash": "通过 Vertex 提供的快速多模态模型",
+        "vertex_gemini_2_5_pro": "通过 Vertex 提供的高级推理模型"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "强大的混合模型",
@@ -1929,11 +2242,20 @@
         "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 开源模型，适用于消费级硬件",
         "gemma_gemma_3_4b_it_q4_k_m": "谷歌开放权重模型，速度与质量的绝佳平衡",
         "gemma_gemma_4_31b_it_q4_k_m": "Google 最大的 Gemma 4，最佳质量",
+        "gemma_gemma_4_31b_it_qat_q4_0": "Google 官方 QAT 构建，体积更小且质量不减",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "Google MoE Gemma 4，4B 活跃参数，速度快",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "Google 官方 QAT MoE 构建，体积更小且质量不减",
         "gemma_gemma_4_e4b_it_q4_k_m": "Google 最新多模态模型，强大推理能力",
+        "gemma_gemma_4_e4b_it_qat_q4_0": "Google 官方 QAT 构建，强大推理能力，体积更小",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google 紧凑型 Gemma 4，快速高效",
+        "gemma_gemma_4_e2b_it_qat_q4_0": "Google 官方紧凑型 QAT 构建，质量不减",
         "gemma_gemma_3_12b_it_q4_k_m": "Google 中型模型，强推理能力",
-        "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理"
+        "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AI 高效端侧模型，指令遵循出色",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AI 的 MoE 模型，仅 1.5B 激活参数即可实现高质量",
+        "liquidai_lfm2_2_6b_q4_k_m": "更高质量清理的均衡 LFM2 模型",
+        "liquidai_lfm2_5_350m_q8_0": "超轻量模型，快速清理听写文本",
+        "liquidai_lfm2_5_230m_q8_0": "微型模型，低配硬件也能即时清理"
       },
       "diarization": {
         "segmentation": "用于说话人分离的语音边界检测",
@@ -2014,10 +2336,140 @@
     }
   },
   "notes": {
+    "mutationErrors": {
+      "folderNameRequired": "请输入文件夹名称。",
+      "folderAlreadyExists": "已存在同名文件夹。",
+      "folderNotFound": "找不到该文件夹。",
+      "defaultFolderImmutable": "无法更改默认文件夹。",
+      "spaceNameRequired": "请输入空间名称。",
+      "spaceNotFound": "找不到该空间。",
+      "privateSpaceImmutable": "无法更改你的个人空间。",
+      "generic": "无法完成更改，请重试。"
+    },
     "sidebar": {
       "newNote": "新建笔记",
       "searchNotes": "搜索笔记",
       "actions": "操作"
+    },
+    "spaces": {
+      "privateSpaces": "私人空间",
+      "teamSpaces": "团队空间",
+      "personal": "个人",
+      "privateTooltip": "只有你可以看到你的个人空间",
+      "newSpace": "新建团队空间",
+      "newSpaceInWorkspace": "在 {{workspace}} 中新建团队空间",
+      "createTitle": "创建团队空间",
+      "createDescription": "工作区内的共享区域，可供一个或多个团队访问。",
+      "nameLabel": "名称",
+      "emojiLabel": "表情符号",
+      "create": "创建",
+      "couldNotCreate": "无法创建空间",
+      "created": "已创建 {{space}}",
+      "rename": "重命名",
+      "changeEmoji": "更改表情符号",
+      "couldNotRename": "无法重命名空间",
+      "renamed": "已重命名 {{space}}",
+      "deleteSpace": "删除空间",
+      "deleteConfirmTitle": "删除空间？",
+      "deleteConfirmDescription": "这将从此设备永久删除 {{space}} 及其所有文件夹和笔记。",
+      "deleteConfirmTeamDescription": "这将为所有人删除 {{space}}。团队会保留，但成员将失去对其所有文件夹和笔记的访问权限。",
+      "deleteTypeName": "输入 {{space}} 以确认",
+      "couldNotDelete": "无法删除空间",
+      "deleted": "已删除 {{space}}",
+      "moveTo": "移动到",
+      "moveToSpace": "移动到空间…",
+      "searchSpaces": "搜索空间...",
+      "noSpacesFound": "未找到空间",
+      "spaceRoot": "空间根目录",
+      "moveConfirm": "移动",
+      "confirmMoveInTitle": "移动到 {{space}}？",
+      "confirmMoveIn": "{{space}} 中的所有人都将能查看和编辑此笔记。此后笔记将无法移出团队空间。",
+      "confirmMoveInFolder": "{{space}} 中的所有人都将能查看和编辑此文件夹及其笔记。此后文件夹及其笔记将无法移出团队空间。",
+      "cantMoveOut": "笔记无法移出团队空间。",
+      "cantMoveTeammate": "只有笔记所有者或工作区管理员才能将其移至其他空间。",
+      "moved": "已将“{{title}}”移动到 {{target}}",
+      "couldNotMove": "无法移动文件夹",
+      "couldNotMoveNote": "无法移动笔记",
+      "folderNameTaken": "无法移动“{{name}}”：该位置已存在同名文件夹",
+      "undo": "撤销",
+      "emptySpace": "还没有笔记。这里的笔记对 {{space}} 中的所有人可见。",
+      "emptyTeamHint": "与你共享的空间将显示在这里。",
+      "noteCount_one": "{{count}} 条笔记",
+      "noteCount_other": "{{count}} 条笔记",
+      "accessRevoked": "你已无法访问 {{space}}",
+      "accessRevokedActiveNote": "你已无法访问 {{space}} — “{{title}}”在此设备上不再可用",
+      "movedToPersonal": "你已无法访问 {{space}}，“{{title}}”已移至你的个人空间",
+      "updateDeniedNote": "你没有权限更改“{{title}}”——未同步的编辑已作为副本保存到你的个人空间",
+      "deleteDeniedNote": "“{{title}}”未被删除——只有笔记所有者或管理员才能删除它",
+      "updateDeniedFolder": "你没有权限更改“{{name}}”——未同步的内容已保存到你的个人空间",
+      "deleteDeniedFolder": "“{{name}}”未被删除——只有管理员才能删除空间文件夹",
+      "conflictBanner": "此笔记存在更新的版本。",
+      "conflictRefresh": "刷新",
+      "conflictKeep": "继续编辑",
+      "editedBy": "由 {{name}} 编辑 · {{time}}",
+      "members": {
+        "addPeopleToTeam": "向 {{team}} 添加成员",
+        "addedToTeam": "已将 {{name}} 添加到 {{team}}",
+        "removedFromTeam": "已将 {{name}} 从 {{team}} 移除",
+        "roleUpdated": "角色已更新",
+        "you": "你",
+        "addFailed": "{{total}} 人中有 {{failed}} 人无法添加",
+        "searchPlaceholder": "搜索成员…",
+        "roleAdmin": "管理员",
+        "roleMember": "成员",
+        "remove": "移除",
+        "removeConfirm": "将 {{name}} 从 {{space}} 中移除？",
+        "removeConfirmDescription": "对方将无法再访问此空间的所有笔记。",
+        "inviteFooter": "邀请 {{email}} 加入工作区…",
+        "empty": "尚未添加任何成员"
+      },
+      "invitedTo_one": "你将加入 {{count}} 个团队空间",
+      "invitedTo_other": "你将加入 {{count}} 个团队空间",
+      "teamsMembers": {
+        "menu": "团队与成员…",
+        "title": "{{space}} 的团队与成员",
+        "noTeams": "尚无团队可访问此空间。只有工作区管理员可以看到它。",
+        "addTeamLabel": "向此空间添加团队",
+        "chooseTeam": "选择团队…",
+        "teamAdded": "已将 {{team}} 添加到 {{space}}",
+        "teamRemoved": "已将 {{team}} 从 {{space}} 移除",
+        "removeTeamFromSpace": "从空间移除",
+        "removeTeamConfirm": "将 {{team}} 从 {{space}} 移除？",
+        "removeTeamConfirmDescription": "除非其他已分配的团队包含这些成员，否则他们将失去对此空间的访问权限。",
+        "lastTeamWarning": "这是唯一可访问此空间的团队。移除后，只有工作区管理员保留访问权限。",
+        "affectsOtherSpaces_one": "对 {{team}} 的更改也会应用到它可访问的另外 {{count}} 个空间。",
+        "affectsOtherSpaces_other": "对 {{team}} 的更改也会应用到它可访问的另外 {{count}} 个空间。",
+        "accessLabel": "空间访问权限",
+        "accessAdmin": "管理员",
+        "accessMember": "成员",
+        "accessChanged": "已更新 {{team}} 的访问权限",
+        "accessHint": "仅当访问权限设为“管理员”时，{{team}} 的管理员才能管理此空间。"
+      },
+      "teams": {
+        "assignLabel": "团队",
+        "newTeam": "新建团队",
+        "newTeamNameLabel": "团队名称",
+        "loadError": "无法加载团队。"
+      }
+    },
+    "structureIntro": {
+      "title": "笔记存放在哪里",
+      "description": "OpenWhispr 将个人想法与协作内容分开，让合适的人看到合适的笔记。",
+      "personal": {
+        "title": "个人空间",
+        "description": "只有你能看到这里的文件夹和笔记。"
+      },
+      "workspace": {
+        "title": "工作区",
+        "description": "集中管理工作区的成员、角色和团队空间。"
+      },
+      "teamSpace": {
+        "title": "团队空间",
+        "description": "工作区内的共享区域。由一个或多个团队授予访问权限。"
+      },
+      "contents": "每个空间都可以包含文件夹和笔记。",
+      "done": "知道了",
+      "reopen": "了解空间的组织方式"
     },
     "folders": {
       "title": "文件夹",
@@ -2036,6 +2488,7 @@
       "newNote": "新建笔记",
       "untitled": "无标题",
       "untitledNote": "无标题笔记",
+      "shared": "已分享",
       "timeNow": "刚刚",
       "minutesAgo": "{{count}} 分钟前",
       "hoursAgo": "{{count}} 小时前",
@@ -2079,7 +2532,7 @@
       "title": "上传音频",
       "using": "使用 {{model}}",
       "dropOrBrowse": "拖放音频文件或点击浏览",
-      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC",
+      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC、Opus",
       "dropToUpload": "拖放以上传",
       "transcribe": "转录",
       "cancel": "取消",
@@ -2088,6 +2541,9 @@
       "transcribingProvider": "正在通过 {{provider}} 转录...",
       "cancelTranscription": "取消转录",
       "transcriptionComplete": "转录完成",
+      "partialWarning": "部分音频内容无法转录。",
+      "partialWarningCount": "{{total}}个音频片段中有{{failed}}个无法转写。",
+      "chunkLossExceeded": "由于网络问题丢失了过多音频。请检查网络连接后重试。",
       "openNote": "打开笔记",
       "uploadAnother": "上传另一个",
       "retry": "重试",
@@ -2115,16 +2571,54 @@
       "switchToCloudForLargeFiles": "切换到 OpenWhispr Cloud 来转录此文件。",
       "createAccount": "创建账户",
       "upgrade": "升级",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "或",
+      "urlPlaceholder": "粘贴 YouTube 或音频 URL",
+      "urlDownloading": "正在下载音频...",
+      "urlResolving": "正在解析 URL...",
+      "urlInvalid": "无效的 URL。请粘贴 YouTube 链接或直接音频文件 URL。",
+      "urlVideoUnavailable": "此视频不可用。可能是私密、已删除或受地区限制。",
+      "urlPlaylistNotSupported": "不支持播放列表。请粘贴单个视频的 URL。",
+      "urlContentTypeInvalid": "此 URL 不指向音频或视频文件。",
+      "urlDownloadFailed": "下载失败。请检查 URL 后重试。",
+      "urlCancelDownload": "取消下载",
+      "addToQueue": "添加到队列",
+      "queueProgress": "{{completed}}/{{total}} 已完成",
+      "cancelAll": "取消全部",
+      "clearQueue": "清除",
+      "pasteUrls": "粘贴 URL（每行一个）",
+      "speakerDetection": "说话人检测",
+      "speakerDetectionDescription": "识别音频中的不同说话人",
+      "numSpeakersPlaceholder": "自动检测",
+      "numSpeakersLabel": "说话人数",
+      "numSpeakersHint": "设置准确的人数可以提高准确性，尤其是长录音。",
+      "downloadingModels": "正在下载模型...",
+      "openaiDiarizeNote": "将替换您的转录模型为 gpt-4o-transcribe-diarize，这是唯一支持说话人检测的 OpenAI 模型。费用可能与您选择的模型不同。",
+      "mistralDiarizeNote": "使用 Voxtral 时说话人检测无需额外费用。",
+      "groqDiarizeNote": "Groq 不支持说话人检测。将改用本地分离。",
+      "batchCancelled": "已取消",
+      "batchTranscriptionFailed": "转录失败",
+      "batchSaveFailed": "保存笔记失败",
+      "batchUnknownError": "未知错误",
+      "removeFromQueue": "从队列中移除",
+      "diarizationRunsLocally": "说话人检测在您的设备上本地运行。",
+      "urlSubmit": "添加链接",
+      "urlsSkipped": "部分链接无法添加（{{n}} 个）",
+      "queueFailed": "{{n}} 个失败",
+      "urlFileTooLarge": "文件过大，无法下载。最大大小为 500 MB。",
+      "urlYoutubeBlocked": "YouTube 暂时阻止了来自您网络的下载。请稍后重试。",
+      "customEndpointInvalid": "自定义转写端点未配置或无效。请在设置中更新。"
     },
     "meeting": {
       "title": "会议笔记",
       "description": "转录与结构化摘要",
       "comingSoon": "即将推出",
-      "back": "返回"
+      "back": "返回",
+      "restrictedByOrg": "会议转录已被您的组织限制。"
     },
     "meetingPill": {
-      "returnToNote": "返回到录音"
+      "returnToNote": "返回到录音",
+      "waitingForMicrophone": "等待麦克风"
     },
     "context": {
       "moveToFolder": "移动到文件夹",
@@ -2162,7 +2656,8 @@
       },
       "errors": {
         "noModel": "未选择 AI 模型。请在设置中配置。",
-        "actionFailed": "操作失败"
+        "actionFailed": "操作失败",
+        "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。"
       }
     },
     "empty": {
@@ -2213,6 +2708,7 @@
     "speaker": {
       "you": "你",
       "them": "对方",
+      "unknown": "未知发言者",
       "label": "发言者 {{n}}",
       "identifyingSpeakers": "正在识别发言者...",
       "liveAccuracyHint": "正在识别发言者。通话结束后，标签准确性会提升。",
@@ -2251,6 +2747,44 @@
         "othersInCall_one": "通话中还有 {{count}} 人",
         "othersInCall_other": "通话中还有 {{count}} 人"
       }
+    },
+    "overview": {
+      "subtitle": {
+        "team": "此空间中的所有成员都可以查看这些笔记。",
+        "private": "只有你可以查看这些笔记。"
+      },
+      "meta": {
+        "folders_one": "{{count}} 个文件夹",
+        "folders_other": "{{count}} 个文件夹",
+        "members_one": "{{count}} 位成员",
+        "members_other": "{{count}} 位成员"
+      },
+      "banner": {
+        "title": {
+          "team": "你的团队空间",
+          "private": "你的私人空间"
+        },
+        "body": {
+          "team": "把对话变成共享知识。将用户访谈、销售通话和团队会议发布到大家都能找到的地方。",
+          "private": "将会议笔记、想法和草稿集中在一处，并随时询问此空间中的任何内容。"
+        },
+        "dismiss": "关闭"
+      },
+      "ask": {
+        "placeholder": "随便问点什么",
+        "chips": {
+          "catchUp": "帮我补上进展",
+          "keyDecisions": "列出关键决定",
+          "inFlight": "显示进行中的项目"
+        }
+      },
+      "invite": "邀请",
+      "list": {
+        "empty": "这里还没有笔记"
+      },
+      "author": {
+        "you": "你"
+      }
     }
   },
   "dictionary": {
@@ -2262,8 +2796,8 @@
     "addPlaceholder": "用逗号分隔添加多个词——OpenWhispr、Supabase、ARR",
     "add": "添加",
     "importWords": "导入词语",
-    "importPlaceholder": "粘贴以逗号分隔的词语...",
-    "separateWithCommas": "用逗号分隔",
+    "importPlaceholder": "粘贴以逗号或换行分隔的词语...",
+    "separateWithCommas": "每行一个词，或用逗号分隔",
     "wordsReady_other": "{{count}} 个词语就绪",
     "import": "导入",
     "yourDictionary": "你的词典",
@@ -2326,8 +2860,8 @@
     "defaultUser": "用户",
     "notSignedIn": "未登录",
     "chat": "聊天",
-    "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo"
+    "collapse": "折叠侧边栏",
+    "expand": "展开侧边栏"
   },
   "chat": {
     "newChat": "新对话",
@@ -2350,26 +2884,6 @@
     "searchTitle": "搜索对话",
     "searchDescription": "搜索所有对话",
     "newChatEmpty": "询问关于笔记、转录或其他任何内容"
-  },
-  "usage": {
-    "approachingLimit": "即将达到周限额",
-    "approachingLimitDescription": "你本周已使用 {{wordsUsed}} / {{limit}} 个免费词数。",
-    "yourPlan": "你的套餐",
-    "trial": "试用期（剩余 {{days}} 天）",
-    "trial_other": "试用期（剩余 {{days}} 天）",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "试用期间无限转录",
-    "unlimited": "无限转录",
-    "manageSubscription": "管理订阅",
-    "weeklyUsage": "每周用量",
-    "limitReached": "已达上限",
-    "free": "免费版",
-    "wordsRemaining": "剩余 {{remaining}} 个词",
-    "rollingLimit": "滚动周限额",
-    "upgradeToPro": "升级到 Pro",
-    "useYourOwnKey": "使用自己的 API Key",
-    "upgradeUnlimited": "升级到 Pro — 无限转录"
   },
   "support": {
     "documentation": "文档",
@@ -2421,13 +2935,22 @@
       "accessibilityMissing": {
         "title": "需要辅助功能权限",
         "description": "OpenWhispr 需要辅助功能权限来检测快捷键和粘贴文本。请在控制面板中启用。"
+      },
+      "gpuFallback": {
+        "title": "GPU 加速不可用",
+        "description": "转录正在使用 CPU。你可以在设置中关闭 GPU 加速。"
+      },
+      "cleanupFailed": {
+        "title": "清理失败",
+        "description": "你的听写已直接粘贴，未经 AI 清理。"
       }
     },
     "mic": {
       "hotkeyToSpeak": "{{hotkey}} 说话",
       "recording": "录音中...",
       "processing": "处理中...",
-      "clickToSpeak": "点击开始说话"
+      "clickToSpeak": "点击开始说话",
+      "waitingForMicrophone": "等待麦克风…"
     },
     "buttons": {
       "cancelRecording": "取消录音",
@@ -2441,7 +2964,18 @@
   },
   "dictationAgent": {
     "enabled": "启用语音助手",
-    "enabledDescription": "向助手口述指令。说出“{{agentName}}”即可激活，可在下方配置。",
+    "enabledDescription": "向助手口述指令。选中的文本会发送到所配置的模型并就地编辑。说出“{{agentName}}”即可激活。",
+    "screenContext": {
+      "title": "屏幕上下文",
+      "description": "在语音助手命令中附带当前屏幕的截图。",
+      "enable": "共享屏幕上下文",
+      "enableDescription": "语音助手开始录音时，截取光标所在的显示器。绝不保存，也不写入日志。",
+      "unsupported": "Linux Wayland 不支持屏幕截图。",
+      "visionModel": "单独的视觉模型",
+      "visionModelDescription": "将带截图的命令转发给另一个支持图像的模型。",
+      "permissionTitle": "屏幕录制",
+      "permissionDescription": "macOS 需要屏幕录制权限才能截取屏幕。"
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "使用 OpenWhispr 托管的助手，无需 API Key。",
@@ -2550,7 +3084,39 @@
       "disconnectDescription": "将不再从此日历记录会议笔记。",
       "systemAudioRequired": "需要系统音频权限",
       "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
-      "openSettings": "打开系统设置"
+      "openSettings": "打开系统设置",
+      "connectFailed": "连接失败",
+      "connectFailedDescription": "连接 Google Calendar 时出错。请重试。"
+    },
+    "microsoftCalendar": {
+      "title": "Microsoft 日历",
+      "optional": "可选",
+      "description": "从 Outlook 或 Microsoft 365 日历读取会议。",
+      "connect": "连接 Microsoft 日历",
+      "connected": "已连接",
+      "addAnother": "添加其他日历",
+      "primaryOnly": "仅同步主日历",
+      "primaryOnlyDescription": "忽略他人共享给你的日历事件。",
+      "disconnect": "断开",
+      "disconnectConfirm": "断开 {{email}}？",
+      "disconnectDescription": "将不再从此日历记录会议笔记。",
+      "connectFailed": "连接失败",
+      "connectFailedDescription": "连接 Microsoft Calendar 时出错。请重试。"
+    },
+    "appleCalendar": {
+      "title": "Apple 日历",
+      "optional": "可选",
+      "description": "从 Calendar.app 读取会议 — iCloud、Google、Exchange 和 Outlook 一站式接入。",
+      "connect": "连接 Apple 日历",
+      "connected": "已连接",
+      "disconnect": "断开",
+      "disconnectConfirm": "断开 Apple 日历？",
+      "disconnectDescription": "将不再从 Apple 日历记录会议笔记。",
+      "permissionDenied": "需要日历访问权限",
+      "permissionDeniedDescription": "OpenWhispr 需要日历访问权限来检测会议。请在系统设置的「隐私与安全性」→「日历」中启用 OpenWhispr。",
+      "openSettings": "打开系统设置",
+      "connectFailed": "连接失败",
+      "connectFailedDescription": "连接 Calendar.app 时出错。请重启 OpenWhispr 后重试。"
     },
     "sections": {
       "calendar": "日历",
@@ -2680,20 +3246,30 @@
       "button": "分享",
       "dialog": {
         "title": "分享笔记",
-        "searchPlaceholder": "通过电子邮件添加成员",
-        "emailLabel": "收件人邮箱",
+        "description": "通过电子邮件邀请他人，或分享此笔记的链接。",
+        "searchPlaceholder": "搜索人员、文件夹或邮箱",
+        "emailLabel": "人员、文件夹或邮箱",
         "shareButton": "分享",
+        "createLink": "创建链接",
         "copyLink": "复制链接",
         "copied": "已复制",
         "owner": "所有者",
+        "editor": "可编辑",
+        "viewer": "可查看",
+        "teamAudience": "此团队空间中的所有人",
         "pending": "待处理",
         "accepted": "已获得访问权限",
         "resend": "重新发送邀请",
         "revoke": "移除",
         "invitationActions": "邀请操作",
-        "permissionRequired": "只有笔记的所有者可以更改分享设置。",
+        "resendSent": "邀请已发送",
+        "resendThrottled": "邀请刚刚发送过，请一分钟后再试。",
+        "syncPrompt": "分享会在你的 OpenWhispr 云端保留此笔记的副本。在你选择分享对象之前，只有你能看到它。",
+        "syncAndShare": "同步笔记",
         "visibility": {
           "label": "可见性",
+          "private": "私密",
+          "privateOption": "私密 — 仅自己",
           "link": "拥有链接的任何人",
           "domain": "{{domain}} 内拥有链接的所有人",
           "invited": "仅受邀者"
@@ -2702,19 +3278,27 @@
           "invalidEmail": "请输入有效的电子邮件地址",
           "alreadyInvited": "{{email}} 已经被邀请",
           "inviteFailed": "无法发送邀请。请重试。",
-          "linkUnavailable": "生成或更换链接后即可复制"
+          "visibilityFailed": "无法更新分享设置。请重试。",
+          "copyFailed": "无法复制链接。请重试。",
+          "revokeFailed": "无法移除邀请。请重试。",
+          "resendFailed": "无法重新发送邀请。请重试。",
+          "syncFailed": "无法同步此笔记。请重试。",
+          "loadFailed": "无法加载分享设置",
+          "retry": "重试"
         }
       }
     }
   },
   "commandSearch": {
+    "allSpaces": "所有空间",
     "title": "搜索",
     "description": "搜索笔记和转录",
     "shortPlaceholder": "搜索",
     "placeholder": "搜索笔记和转录…",
     "sections": {
       "notes": "笔记",
-      "transcripts": "转录"
+      "transcripts": "转录",
+      "jumpTo": "跳转到"
     },
     "noResults": "无结果",
     "emptyState": "输入内容开始搜索",
@@ -2806,54 +3390,116 @@
     "speaker": {
       "you": "你",
       "others": "其他人"
-    }
+    },
+    "missingAudio": "[音频缺失 {{from}}-{{to}}]"
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
-      "workspaces": "Espacios de trabajo",
-      "empty": "Aún no hay espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "workspaces": "工作区",
+      "create": "创建工作区…"
     },
     "create": {
-      "title": "Crear espacio de trabajo",
-      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
-      "nameLabel": "Nombre del espacio de trabajo",
+      "title": "创建工作区",
+      "description": "工作区集中管理组织的成员和账单。你可以在其中创建团队空间来共享笔记。",
+      "nameLabel": "工作区名称",
       "namePlaceholder": "Acme Corp",
-      "submit": "Crear espacio de trabajo",
-      "submitting": "Creando…",
-      "errorTitle": "No se pudo crear el espacio de trabajo"
+      "freePlanNote": "新工作区默认使用 Free 方案。团队空间需要工作区方案。",
+      "submit": "创建工作区",
+      "submitting": "创建中…",
+      "errorTitle": "无法创建工作区"
     },
     "created": {
-      "title": "Espacio de trabajo creado",
-      "description": "Ahora eres el propietario de {{name}}."
+      "title": "工作区已创建",
+      "description": "你现在是 {{name}} 的所有者。"
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "roleLabel": "Rol",
-      "teamsLabel": "Agregar a equipos",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "title": "邀请加入 {{workspace}}",
+      "description": "通过电子邮件添加同事。他们将收到加入链接。",
+      "emailLabel": "电子邮件",
+      "emailPlaceholder": "teammate@example.com",
+      "roleLabel": "角色",
+      "seatUsage": "已使用 {{used}}/{{seats}} 个席位",
+      "seatCost": "接受邀请后将为你的方案增加一个席位 · 预计按比例收取 {{amount}}。",
+      "submit": "发送邀请",
+      "submitting": "发送中…",
+      "sentTitle": "邀请已发送",
+      "sentDescription": "我们已向 {{email}} 发送邀请。",
+      "sentNoEmailTitle": "邀请已创建，但未发送邮件",
+      "sentNoEmailDescription": "已邀请 {{email}}，但邮件无法送达。请稍后重新发送，或通过其他方式分享邀请链接。",
+      "errorTitle": "无法发送邀请",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "管理员",
+        "member": "成员"
+      },
+      "roleDescription": {
+        "admin": "管理成员和账单",
+        "member": "使用工作区"
       }
     },
+    "join": {
+      "title": "加入你的团队",
+      "domainTitle": "你的团队已在 OpenWhispr",
+      "description": "这些工作区中有与你相同邮箱域名的成员。",
+      "invitedDescription": "有人邀请你加入一个工作区。",
+      "invitedBy": "{{inviter}} 邀请你担任{{role}}",
+      "memberCount_one": "{{count}} 位成员",
+      "memberCount_other": "{{count}} 位成员",
+      "join": "加入",
+      "requestErrorTitle": "无法发送申请",
+      "requestedDescription": "{{workspace}} 的管理员会进行审核。",
+      "requestedTitle": "申请已发送",
+      "requested": "已申请",
+      "request": "申请加入",
+      "notNow": "暂不",
+      "successTitle": "已加入",
+      "successDescription": "你现在是 {{workspace}} 的成员。",
+      "errorTitle": "无法加入"
+    },
     "accept": {
-      "title": "Unirse al espacio de trabajo",
-      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
-      "loading": "Cargando invitación…",
-      "accept": "Aceptar invitación",
-      "accepting": "Aceptando…",
-      "signInToAccept": "Inicia sesión para aceptar",
-      "successTitle": "Te uniste",
-      "successDescription": "Bienvenido a {{name}}.",
-      "errorTitle": "No se pudo aceptar la invitación"
+      "title": "加入工作区",
+      "description": "{{inviter}} 邀请你以{{role}}身份加入 {{workspace}}。",
+      "loading": "正在加载邀请…",
+      "accept": "接受邀请",
+      "accepting": "接受中…",
+      "signInToAccept": "登录以接受",
+      "switchAccount": "切换账号",
+      "successTitle": "你已加入",
+      "successDescription": "你已成为 {{name}} 的成员。可在设置 → 工作区中管理。",
+      "errorTitle": "无法接受邀请",
+      "sentTo": "邀请已发送至 {{email}}",
+      "wrongAccount": "此邀请发送给了 {{email}}，而你当前登录的是 {{current}}。"
     }
+  },
+  "dictationTranslation": {
+    "title": "听写翻译",
+    "description": "专用快捷键，将你的听写翻译成另一种语言后粘贴",
+    "enabled": "启用听写翻译",
+    "enabledDescription": "通过翻译快捷键开始的听写会先整理再翻译，然后粘贴",
+    "sourceLanguage": "口语语言",
+    "sourceLanguageDescription": "你听写时使用的语言——自动检测也能处理混合语言听写",
+    "targetLanguage": "翻译为",
+    "targetLanguageDescription": "粘贴文本的语言",
+    "targetLanguageMissing": "请选择目标语言以启用翻译快捷键",
+    "selectLanguage": "选择语言…",
+    "prompt": {
+      "title": "翻译提示词",
+      "description": "自定义模型翻译听写内容的方式"
+    },
+    "hotkeyHint": "在 设置 → 快捷键 → 翻译快捷键 中设置快捷键",
+    "targetsLabel": "目标语言",
+    "addTarget": "添加语言…",
+    "activeTarget": "当前目标语言",
+    "removeTarget": "移除{{language}}",
+    "maxTargets": "最多 {{max}} 种语言"
+  },
+  "meetingNotification": {
+    "title": "检测到会议",
+    "body": {
+      "detected": "你似乎正在开会。要开始记录吗？",
+      "starting": "你的会议即将开始。要开始记录吗？",
+      "underway": "你的会议似乎已在进行中。要开始记录吗？"
+    },
+    "start": "开始记录",
+    "join": "加入并转录"
   }
 }

@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { MeetingNotificationCard } from "./MeetingNotificationCard";
+
+type PromptVariant = "detected" | "starting" | "underway";
 
 interface NotificationData {
   detectionId: string;
   source: string;
   key: string;
-  title: string;
-  body: string;
-  event: any;
+  event: { summary?: string | null } | null;
+  variant: PromptVariant;
+  joinUrl: string | null;
 }
 
 export default function MeetingNotificationOverlay() {
+  const { t } = useTranslation();
   const [data, setData] = useState<NotificationData | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -59,13 +63,16 @@ export default function MeetingNotificationOverlay() {
     window.electronAPI?.setNotificationInteractivity?.(false);
   }, []);
 
+  const variant: PromptVariant = data?.variant ?? "detected";
+  const title = (variant !== "detected" && data?.event?.summary) || t("meetingNotification.title");
+
   return (
     <div className="meeting-notification-window w-full h-full bg-transparent p-3">
       <MeetingNotificationCard
-        title={data?.title ?? "Meeting Detected"}
-        body={data?.body ?? "Want to take notes?"}
-        startLabel="Start Recording"
-        onStart={() => respond("start")}
+        title={title}
+        body={t(`meetingNotification.body.${variant}`)}
+        startLabel={data?.joinUrl ? t("meetingNotification.join") : t("meetingNotification.start")}
+        onStart={() => respond(data?.joinUrl ? "join" : "start")}
         onDismiss={() => respond("dismiss")}
         closeVisible={isHovered}
         onMouseEnter={handleMouseEnter}

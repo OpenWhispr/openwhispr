@@ -11,6 +11,7 @@ export interface GoogleCalendar {
 export interface CalendarEvent {
   id: string;
   calendar_id: string;
+  provider: string;
   summary: string | null;
   start_time: string;
   end_time: string;
@@ -23,7 +24,7 @@ export interface CalendarEvent {
   attendees: string | null;
 }
 
-export interface GoogleCalendarAccount {
+export interface CalendarAccount {
   email: string;
 }
 
@@ -35,17 +36,6 @@ export interface CalendarConnectionStatus {
 export interface MeetingDetectionPreferences {
   processDetection: boolean;
   audioDetection: boolean;
-}
-
-export interface MeetingDetection {
-  detectionId: string;
-  source: "calendar" | "process" | "audio";
-  data: {
-    appName?: string;
-    durationMs?: number;
-    detectedAt: number;
-  };
-  imminentEvent?: CalendarEvent | null;
 }
 
 export interface CalendarAttendee {

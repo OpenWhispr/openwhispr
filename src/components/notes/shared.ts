@@ -3,9 +3,44 @@ import type { FolderItem } from "../../types/electron";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
 export const MEETINGS_FOLDER_NAME = "Meetings";
+export const VIDEOS_FOLDER_NAME = "Videos";
 
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
   return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+}
+
+// URL downloads route to "Videos" by name: a pre-existing user-created folder with
+// that name is used as-is (the migration never promotes or replaces it).
+export function findVideosFolder(folders: FolderItem[]): FolderItem | undefined {
+  return folders.find((f) => f.name === VIDEOS_FOLDER_NAME);
+}
+
+// URL-download error codes → notes.upload.* i18n keys.
+export const DOWNLOAD_ERROR_KEYS: Record<string, string> = {
+  INVALID_URL: "urlInvalid",
+  VIDEO_UNAVAILABLE: "urlVideoUnavailable",
+  PLAYLIST_URL: "urlPlaylistNotSupported",
+  CONTENT_TYPE_INVALID: "urlContentTypeInvalid",
+  DOWNLOAD_FAILED: "urlDownloadFailed",
+  FILE_TOO_LARGE: "urlFileTooLarge",
+  YOUTUBE_BLOCKED: "urlYoutubeBlocked",
+  SSRF_BLOCKED: "urlDownloadFailed",
+};
+
+// Transcription error codes → notes.upload.* i18n keys. Codes absent here fall
+// back to the raw main-process message.
+const TRANSCRIPTION_ERROR_KEYS: Record<string, string> = {
+  NO_SPEECH_DETECTED: "noSpeechDetected",
+  CHUNK_LOSS_EXCEEDED: "chunkLossExceeded",
+  CUSTOM_ENDPOINT_INVALID: "customEndpointInvalid",
+};
+
+// A coded failure arrives either as a returned result (BYOK, local) or as a
+// thrown error — OpenWhispr Cloud rethrows it through withSessionRefresh — so
+// every call site resolves the key from whichever shape it is holding.
+export function transcriptionErrorKey(failure: unknown): string | undefined {
+  const code = (failure as { code?: string } | null | undefined)?.code;
+  return code ? TRANSCRIPTION_ERROR_KEYS[code] : undefined;
 }
 
 export const notesInputClass = cn(

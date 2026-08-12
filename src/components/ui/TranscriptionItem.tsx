@@ -75,7 +75,8 @@ export default function TranscriptionItem({
     item.audio_duration_ms && item.audio_duration_ms > 0
       ? formatMmSs(Math.round(item.audio_duration_ms / 1000))
       : null;
-  const hasRawText = item.raw_text !== null;
+  const rawText = item.raw_text;
+  const hasRawText = rawText !== null;
   const hasAudio = item.has_audio === 1;
   const showUtilityGroup = hasRawText || hasAudio;
 
@@ -83,19 +84,24 @@ export default function TranscriptionItem({
   const isConfigError =
     errorCode === "API_KEY_MISSING" ||
     errorCode === "INVALID_KEY" ||
-    errorCode === "MODEL_NOT_AVAILABLE";
+    errorCode === "MODEL_NOT_AVAILABLE" ||
+    errorCode === "CUSTOM_ENDPOINT_INVALID";
   const isLimitError = errorCode === "LIMIT_REACHED";
   const isOfflineError = errorCode === "OFFLINE";
 
   return (
     <div
       className={cn(
-        "group rounded-md border px-3 py-2.5 transition-colors duration-150",
+        "group rounded-md border border-l-2 px-3 py-2.5 transition-colors duration-150",
         isFailed
           ? "border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
           : isDiscarded
             ? "border-border/30 bg-muted/20 hover:bg-muted/30 opacity-80"
-            : "border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 hover:bg-muted/30 dark:hover:bg-surface-2/80"
+            : "border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 hover:bg-muted/30 dark:hover:bg-surface-2/80",
+        // Subtle left accent for translation records; transparent keeps others pixel-aligned.
+        item.route_kind === "translation"
+          ? "border-l-primary/70 dark:border-l-primary/70"
+          : "border-l-transparent dark:border-l-transparent"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -167,7 +173,7 @@ export default function TranscriptionItem({
             </span>
           </div>
         ) : (
-          <p className="flex-1 min-w-0 text-foreground text-sm leading-[1.5] break-words">
+          <p className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
             {item.text}
           </p>
         )}
@@ -196,7 +202,13 @@ export default function TranscriptionItem({
             </Tooltip>
           )}
           {isFailed && hasAudio && (
-            <Tooltip content={t("controlPanel.history.retryTranscription")}>
+            <Tooltip
+              content={t(
+                item.route_kind === "translation"
+                  ? "controlPanel.history.retryTranslationMode"
+                  : "controlPanel.history.retryTranscription"
+              )}
+            >
               <Button
                 size="icon"
                 variant="ghost"
@@ -240,7 +252,13 @@ export default function TranscriptionItem({
             </Tooltip>
           )}
           {!isFailed && !isDiscarded && hasAudio && (
-            <Tooltip content={t("controlPanel.history.retryTranscription")}>
+            <Tooltip
+              content={t(
+                item.route_kind === "translation"
+                  ? "controlPanel.history.retryTranslationMode"
+                  : "controlPanel.history.retryTranscription"
+              )}
+            >
               <Button
                 size="icon"
                 variant="ghost"
@@ -282,23 +300,38 @@ export default function TranscriptionItem({
         </div>
       </div>
 
-      {!isFailed && !isDiscarded && (
+      {!isFailed && !isDiscarded && rawText !== null && (
         <div
+          inert={!isExpanded}
           className={cn(
-            "overflow-hidden transition-all duration-200",
-            isExpanded ? "max-h-96" : "max-h-0"
+            "grid transition-[grid-template-rows] duration-200",
+            isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
           )}
         >
-          <div className="border-t border-border/20 mt-2 pt-2">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-              {t("controlPanel.history.rawTranscript")}
-            </span>
-            <p className="text-xs text-muted-foreground/80 leading-relaxed mt-1">{item.raw_text}</p>
-            {item.raw_text === item.text && (
-              <p className="text-[10px] text-muted-foreground/50 italic mt-1">
-                {t("controlPanel.history.noAiProcessing")}
-              </p>
-            )}
+          <div className="min-h-0 overflow-hidden">
+            <div className="border-t border-border/20 mt-2 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  {t("controlPanel.history.rawTranscript")}
+                </span>
+                <Tooltip content={t("controlPanel.history.copyRawTranscript")}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onCopy(rawText)}
+                    className="h-5 w-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-foreground/10"
+                  >
+                    <Copy size={10} />
+                  </Button>
+                </Tooltip>
+              </div>
+              <p className="text-xs text-muted-foreground/80 leading-relaxed mt-1">{rawText}</p>
+              {rawText === item.text && (
+                <p className="text-[10px] text-muted-foreground/50 italic mt-1">
+                  {t("controlPanel.history.noAiProcessing")}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}

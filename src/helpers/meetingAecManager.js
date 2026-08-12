@@ -78,6 +78,7 @@ class MeetingAecManager {
 
     const child = spawn(binaryPath, ["--sample-rate", String(SAMPLE_RATE)], {
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
 
     this.process = child;

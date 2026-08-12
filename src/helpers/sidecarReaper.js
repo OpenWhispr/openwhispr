@@ -3,11 +3,11 @@ const debugLogger = require("./debugLogger");
 const sidecarPidFile = require("./sidecarPidFile");
 
 const EXPECTED_BINARY_FRAGMENTS = {
-  parakeet: "sherpa-onnx-ws",
-  whisper: "whisper-server",
-  llama: "llama-server",
-  qdrant: "qdrant",
-  diarization: "sherpa-onnx-diarize",
+  parakeet: ["sherpa-onnx-ws-", "sherpa-onnx-online-ws-"],
+  whisper: ["whisper-server"],
+  llama: ["llama-server"],
+  qdrant: ["qdrant"],
+  diarization: ["sherpa-onnx-diarize"],
 };
 
 function isProcessAlive(pid) {
@@ -42,8 +42,13 @@ function processCommand(pid) {
 function reapStaleSidecars() {
   const entries = sidecarPidFile.readAll();
   for (const { name, pid } of entries) {
-    const fragment = EXPECTED_BINARY_FRAGMENTS[name];
-    if (fragment && isProcessAlive(pid) && processCommand(pid).includes(fragment)) {
+    const fragments = EXPECTED_BINARY_FRAGMENTS[name];
+    if (fragments && isProcessAlive(pid)) {
+      const command = processCommand(pid);
+      if (!fragments.some((fragment) => command.includes(fragment))) {
+        sidecarPidFile.clear(name);
+        continue;
+      }
       debugLogger.warn("Reaping stale sidecar", { name, pid });
       try {
         process.kill(pid, "SIGTERM");

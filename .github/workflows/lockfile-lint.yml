@@ -1,0 +1,12 @@
+name: Lockfile Lint
+
+on:
+  pull_request:
+
+jobs:
+  lockfile-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint package-lock.json
+        run: npx --yes lockfile-lint --path package-lock.json --type npm --validate-https --allowed-hosts npm --validate-integrity

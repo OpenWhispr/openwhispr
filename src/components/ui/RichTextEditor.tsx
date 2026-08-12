@@ -92,7 +92,7 @@ export function RichTextEditor({
   // Sync editable state
   useEffect(() => {
     if (editor && !editor.isDestroyed) {
-      editor.setEditable(!disabled);
+      editor.setEditable(!disabled, false);
     }
   }, [disabled, editor]);
 

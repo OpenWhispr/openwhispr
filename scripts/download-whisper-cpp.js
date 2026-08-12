@@ -13,8 +13,9 @@ const {
 
 const WHISPER_CPP_REPO = "OpenWhispr/whisper.cpp";
 
-// Version can be pinned via environment variable for reproducible builds
-const VERSION_OVERRIDE = process.env.WHISPER_CPP_VERSION || null;
+// Pinned to a tested build. Tracking the latest release let an upstream whisper.cpp bump
+// change transcription output between app releases with no diff to review. See #1348.
+const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.8";
 
 const BINARIES = {
   "darwin-arm64": {
@@ -47,11 +48,7 @@ let cachedRelease = null;
 async function getRelease() {
   if (cachedRelease) return cachedRelease;
 
-  if (VERSION_OVERRIDE) {
-    cachedRelease = await fetchLatestRelease(WHISPER_CPP_REPO, { tagPrefix: VERSION_OVERRIDE });
-  } else {
-    cachedRelease = await fetchLatestRelease(WHISPER_CPP_REPO);
-  }
+  cachedRelease = await fetchLatestRelease(WHISPER_CPP_REPO, { tag: WHISPER_CPP_TAG });
   return cachedRelease;
 }
 
@@ -112,11 +109,7 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
 }
 
 async function main() {
-  if (VERSION_OVERRIDE) {
-    console.log(`\n[whisper-server] Using pinned version: ${VERSION_OVERRIDE}`);
-  } else {
-    console.log("\n[whisper-server] Fetching latest release...");
-  }
+  console.log(`\n[whisper-server] Using pinned version: ${WHISPER_CPP_TAG}`);
   const release = await getRelease();
 
   if (!release) {

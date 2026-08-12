@@ -1,6 +1,6 @@
-// WebSocket access to Tinfoil's realtime transcription endpoint. The SDK's
-// SecureClient attests the enclave and pins the socket's TLS connection to the
-// attested key; one client is held per session so attestation is paid once.
+// Attested access to Tinfoil.
+// The SDK's SecureClient verifies the enclave and pins the connection to the attested key;
+// one client is held per session so attestation is paid once and shared by every caller.
 let clientPromise = null;
 
 function getSecureClient() {
@@ -23,4 +23,10 @@ async function createTinfoilRealtimeSocket({ model, apiKey }) {
   });
 }
 
-module.exports = { createTinfoilRealtimeSocket };
+/** Fetches an enclave path over the attested transport. Needs no API key. */
+async function tinfoilSecureFetch(path, init) {
+  const client = await getSecureClient();
+  return client.fetch(path, init);
+}
+
+module.exports = { createTinfoilRealtimeSocket, tinfoilSecureFetch };

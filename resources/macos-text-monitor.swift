@@ -51,19 +51,26 @@ func observerCallback(
 }
 
 // Usage: macos-text-monitor <pid>
-guard CommandLine.arguments.count >= 2,
-      let targetPid = Int32(CommandLine.arguments[1]),
+//        macos-text-monitor --selected-text <pid>
+let selectionReadMode = CommandLine.arguments.count >= 3 &&
+    CommandLine.arguments[1] == "--selected-text"
+let pidArgumentIndex = selectionReadMode ? 2 : 1
+
+guard CommandLine.arguments.count > pidArgumentIndex,
+      let targetPid = Int32(CommandLine.arguments[pidArgumentIndex]),
       targetPid > 0 else {
-    writeError("Usage: macos-text-monitor <pid>")
+    writeError("Usage: macos-text-monitor [--selected-text] <pid>")
     writeOutput("NO_ELEMENT")
     exit(1)
 }
 
 monitoredPid = targetPid
 
-// Read original text from stdin
+// Read original text from stdin (monitoring mode only). Selection reads are
+// spawned via execFile, which keeps stdin open without writing — blocking on
+// readLine there would hang until the caller's timeout kills the process.
 var originalText = ""
-if let line = readLine(strippingNewline: true) {
+if !selectionReadMode, let line = readLine(strippingNewline: true) {
     originalText = line
 }
 
@@ -98,6 +105,36 @@ for attempt in 1...maxRetries {
 
 guard let resolvedElement = focusedElement else {
     writeOutput("NO_ELEMENT")
+    exit(1)
+}
+
+// Selection capture is a short-lived, read-only mode used before an AI edit.
+// It deliberately uses the same AX client as the monitor so a packaged app's
+// trusted native helper does not need to rely on System Events automation.
+if selectionReadMode {
+    var selectionValue: AnyObject?
+    let selectionResult = AXUIElementCopyAttributeValue(
+        resolvedElement,
+        kAXSelectedTextAttribute as CFString,
+        &selectionValue
+    )
+
+    if selectionResult == .success, let selection = selectionValue as? String {
+        if selection.isEmpty {
+            writeOutput("NONE:")
+        } else {
+            writeTextOutput("SELECTED", selection)
+        }
+        exit(0)
+    }
+
+    if selectionResult == .noValue || selectionResult == .attributeUnsupported {
+        writeOutput("NONE:")
+        exit(0)
+    }
+
+    writeError("Cannot read selected text for PID \(monitoredPid) (error: \(selectionResult.rawValue))")
+    writeOutput("UNAVAILABLE:")
     exit(1)
 }
 

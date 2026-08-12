@@ -39,4 +39,10 @@ function buildGenericInstruction(langCode: string): string {
   return template.replace("{{code}}", langCode);
 }
 
+export function getLanguageLabel(code: string | null | undefined): string {
+  if (!code) return "";
+  const entry = registry.languages.find((l) => l.code === code);
+  return entry?.label ?? code;
+}
+
 export { WHISPER_LANGUAGES, ASSEMBLYAI_UNIVERSAL3_PRO_LANGUAGES };

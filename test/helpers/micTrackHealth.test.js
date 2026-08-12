@@ -186,3 +186,185 @@ test("reacquireIfDead falls back to the original stream when the retry fails", a
     restore();
   }
 });
+
+// Track that records whether (and how often) reacquireIfDead stopped it.
+function trackWithStop(options) {
+  const track = new FakeTrack(options);
+  track._stopCount = 0;
+  track.stop = () => {
+    track._stopCount += 1;
+    track._stopped = true;
+  };
+  return track;
+}
+
+// Fallback options plus call counters, mirroring what audioManager passes in.
+function spyFallback(getConstraints = () => ({})) {
+  const calls = { getConstraints: 0, onDeviceRejected: 0, onFallbackUnusable: 0 };
+  return {
+    calls,
+    options: {
+      getConstraints: () => {
+        calls.getConstraints += 1;
+        return getConstraints();
+      },
+      onDeviceRejected: () => {
+        calls.onDeviceRejected += 1;
+      },
+      onFallbackUnusable: () => {
+        calls.onFallbackUnusable += 1;
+      },
+    },
+  };
+}
+
+test("reacquireIfDead keeps the re-acquired stream when the retry track woke up", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const stream = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const retry = new FakeStream(trackWithStop({ muted: false }));
+  const fallback = spyFallback();
+  const restore = stubGetUserMedia(async () => retry);
+  try {
+    const result = await reacquireIfDead(stream, () => ({}), noopLogger, fallback.options);
+    assert.equal(result, retry);
+    assert.equal(fallback.calls.getConstraints, 0);
+    assert.equal(fallback.calls.onDeviceRejected, 0);
+    assert.equal(fallback.calls.onFallbackUnusable, 0);
+    assert.equal(retry.track._stopped, undefined);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead falls back to the default mic when the retry track is still dead", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const stream = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const retry = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const fallbackStream = new FakeStream(trackWithStop({ muted: false }));
+  const fallback = spyFallback();
+  let calls = 0;
+  const restore = stubGetUserMedia(async () => {
+    calls += 1;
+    return calls === 1 ? retry : fallbackStream;
+  });
+  try {
+    const result = await reacquireIfDead(stream, () => ({}), noopLogger, fallback.options);
+    assert.equal(result, fallbackStream);
+    assert.equal(fallback.calls.onDeviceRejected, 1);
+    assert.equal(fallback.calls.getConstraints, 1);
+    assert.equal(fallback.calls.onFallbackUnusable, 0);
+    assert.equal(retry.track._stopped, true);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead reports an unusable mic when the fallback track is dead too", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const stream = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const retry = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const fallbackStream = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const fallback = spyFallback();
+  let calls = 0;
+  const restore = stubGetUserMedia(async () => {
+    calls += 1;
+    return calls === 1 ? retry : fallbackStream;
+  });
+  try {
+    const result = await reacquireIfDead(stream, () => ({}), noopLogger, fallback.options);
+    assert.equal(result, fallbackStream);
+    assert.equal(fallback.calls.onDeviceRejected, 1);
+    assert.equal(fallback.calls.onFallbackUnusable, 1);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead reports an unusable mic when the fallback request fails", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const stream = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const retry = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const fallback = spyFallback();
+  let calls = 0;
+  const restore = stubGetUserMedia(async () => {
+    calls += 1;
+    if (calls === 1) return retry;
+    throw new Error("device busy");
+  });
+  try {
+    const result = await reacquireIfDead(stream, () => ({}), noopLogger, fallback.options);
+    assert.equal(result, retry);
+    assert.equal(fallback.calls.onDeviceRejected, 1);
+    assert.equal(fallback.calls.onFallbackUnusable, 1);
+    assert.equal(retry.track._stopped, undefined);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead falls back to the default mic when the retry request fails", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const stream = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const fallbackStream = new FakeStream(trackWithStop({ muted: false }));
+  const fallback = spyFallback();
+  let calls = 0;
+  const restore = stubGetUserMedia(async () => {
+    calls += 1;
+    if (calls === 1) throw new Error("device busy");
+    return fallbackStream;
+  });
+  try {
+    const result = await reacquireIfDead(stream, () => ({}), noopLogger, fallback.options);
+    assert.equal(result, fallbackStream);
+    assert.equal(fallback.calls.onDeviceRejected, 1);
+    assert.equal(fallback.calls.onFallbackUnusable, 0);
+    assert.equal(stream.track._stopCount, 1);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead reports an unusable mic when the retry and the fallback both fail", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const stream = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const fallback = spyFallback();
+  const restore = stubGetUserMedia(async () => {
+    throw new Error("device busy");
+  });
+  try {
+    const result = await reacquireIfDead(stream, () => ({}), noopLogger, fallback.options);
+    assert.equal(result, stream);
+    assert.equal(fallback.calls.onDeviceRejected, 1);
+    assert.equal(fallback.calls.onFallbackUnusable, 1);
+    assert.equal(stream.track._stopCount, 0);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead falls back when the re-acquired track stays muted", async (t) => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const stream = new FakeStream(trackWithStop({ readyState: "ended" }));
+  const retry = new FakeStream(trackWithStop({ muted: true }));
+  const fallbackStream = new FakeStream(trackWithStop({ muted: false }));
+  const fallback = spyFallback();
+  let calls = 0;
+  const restore = stubGetUserMedia(async () => {
+    calls += 1;
+    return calls === 1 ? retry : fallbackStream;
+  });
+  try {
+    const pending = reacquireIfDead(stream, () => ({}), noopLogger, fallback.options);
+    // Let the retry's readiness timer register before firing it.
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(600);
+    assert.equal(await pending, fallbackStream);
+    assert.equal(fallback.calls.onDeviceRejected, 1);
+    assert.equal(fallback.calls.onFallbackUnusable, 0);
+    assert.equal(retry.track._stopped, true);
+    assert.equal(retry.track._listenerCount, 0);
+  } finally {
+    restore();
+  }
+});

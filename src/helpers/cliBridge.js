@@ -5,6 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
+const { broadcastToWindows } = require("./windowBroadcast");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -211,6 +212,10 @@ class CliBridge {
       sendV1Error(res, 404, "not_found", err.message);
       return;
     }
+    if (err.code === "VALIDATION") {
+      sendV1Error(res, 400, "validation_error", err.message);
+      return;
+    }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
     sendV1Error(res, 500, "internal_error", err.message || "Internal server error");
   }
@@ -260,6 +265,16 @@ class CliBridge {
         throw err;
       }
       return id;
+    };
+
+    const requireWordList = (value, field) => {
+      if (value === undefined || value === null) return [];
+      if (!Array.isArray(value) || value.some((w) => typeof w !== "string")) {
+        const err = new Error(`'${field}' must be an array of strings`);
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return value;
     };
 
     const requireSuccess = (result, message) => {
@@ -313,7 +328,7 @@ class CliBridge {
             body.folder_id ?? null
           );
           const note = unwrapMutationResult(result, "note");
-          setImmediate(() => ipc.broadcastToWindows("note-added", note));
+          setImmediate(() => broadcastToWindows("note-added", note));
           ipc._asyncVectorUpsert(note);
           ipc._asyncMirrorWrite(note);
           return { data: note };
@@ -324,7 +339,7 @@ class CliBridge {
         const id = requireId(params, "note");
         const result = db.updateNote(id, body || {});
         const note = unwrapMutationResult(result, "note");
-        setImmediate(() => ipc.broadcastToWindows("note-updated", note));
+        setImmediate(() => broadcastToWindows("note-updated", note));
         ipc._asyncVectorUpsert(note);
         ipc._asyncMirrorWrite(note);
         return { data: note };
@@ -344,11 +359,30 @@ class CliBridge {
         ({ body }) => {
           const result = db.createFolder(body?.name);
           const folder = unwrapMutationResult(result, "folder");
-          setImmediate(() => ipc.broadcastToWindows("folder-created", folder));
+          setImmediate(() => broadcastToWindows("folder-created", folder));
           return { data: folder };
         },
         201
       ),
+      exact("GET", "/v1/dictionary/list", () => {
+        return { data: db.getDictionary(), has_more: false, next_cursor: null };
+      }),
+      // Bulk edits without writing to SQLite by hand, which lost rows on the
+      // next launch and never reached the cloud (#1295). Takes a delta, so an
+      // import cannot delete words it didn't name.
+      exact("POST", "/v1/dictionary/update", ({ body }) => {
+        const add = requireWordList(body?.add, "add");
+        const remove = requireWordList(body?.remove, "remove");
+        if (add.length === 0 && remove.length === 0) {
+          const err = new Error("Provide at least one word in 'add' or 'remove'");
+          err.code = "VALIDATION";
+          throw err;
+        }
+        const result = db.applyDictionaryChanges({ add, remove });
+        const words = db.getDictionary();
+        setImmediate(() => broadcastToWindows("dictionary-updated", words));
+        return { data: { words, added: result.added, removed: result.removed } };
+      }),
       exact("GET", "/v1/transcriptions/list", ({ query }) => {
         const limit = query.get("limit") ? Number(query.get("limit")) : 50;
         return {

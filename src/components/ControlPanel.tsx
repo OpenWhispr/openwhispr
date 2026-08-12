@@ -1,7 +1,16 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { Download, RefreshCw, Loader2, AlertTriangle, Zap, ChevronLeft } from "lucide-react";
+import {
+  Download,
+  RefreshCw,
+  Loader2,
+  AlertTriangle,
+  Zap,
+  ChevronLeft,
+  PanelLeftOpen,
+  PanelLeftClose,
+} from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
@@ -11,7 +20,10 @@ import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
+import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useUsage } from "../hooks/useUsage";
+import { decideUpsell } from "../lib/upsell";
+import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
 import {
   useTranscriptions,
   useShowDiscarded,
@@ -20,7 +32,15 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import { useSettingsStore } from "../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../stores/settingsStore";
+import { usePolicyStore } from "../stores/policyStore";
+import {
+  isAgentAllowed,
+  isControlPanelViewAllowed,
+  isPolicyActionAllowed,
+  isTranscriptionContextAllowed,
+  isUpdateRequiredByOrg,
+} from "../stores/policyRules";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -36,21 +56,35 @@ import { isAccessibilitySkipped } from "../utils/permissions";
 import {
   setActiveNoteId,
   setActiveFolderId,
+  navigateToContainer,
   useActiveNoteId,
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
+import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
+import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
+import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
+import JoinYourTeamModal from "./JoinYourTeamModal";
 import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
-import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
+
+const SIDEBAR_WIDTH_PX = 192;
+
+// Bump to force a one-time full semantic reindex on next launch (see the
+// reindex effect for the per-version history).
+const SEMANTIC_REINDEX_VERSION = 2;
+
+const toggleIconClass =
+  "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -83,10 +117,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
+    workspaceId: string;
+    teamIds: string[];
+  } | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const {
+    collapsed: sidebarCollapsed,
+    peek: sidebarPeek,
+    toggle: toggleSidebar,
+    showPeek: showSidebarPeek,
+    hidePeek: hideSidebarPeek,
+    leaveToggle: leaveSidebarToggle,
+  } = useCollapsibleSidebar();
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
   const activeNoteId = useActiveNoteId();
@@ -99,9 +145,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number;
     event: any;
   } | null>(null);
-  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{ cuda: boolean; vulkan: boolean }>({
-    cuda: false,
-    vulkan: false,
+  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{
+    transcription: boolean;
+    intelligence: boolean;
+  }>({
+    transcription: false,
+    intelligence: false,
   });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
@@ -119,7 +168,19 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setCloudTranscriptionMode,
   } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  // Suppressed while a deep-linked invitation is open so the two never stack.
+  const {
+    joinable,
+    dismiss: dismissJoinable,
+    markRequested,
+  } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
   const usage = useUsage();
+  const upsell = decideUpsell({
+    authLoaded,
+    isSignedIn,
+    hasPaidAccess: usage?.hasPaidAccess ?? null,
+    isPastDue: usage?.isPastDue ?? false,
+  });
 
   const {
     status: updateStatus,
@@ -130,6 +191,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     installUpdate,
     error: updateError,
   } = useUpdater();
+
+  const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
+  const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
+  useEffect(() => {
+    if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
+      setActiveView("home");
+    }
+  }, [activeView, agentAllowedByPolicy, policyActionsAllowed]);
+  const updateRequiredByOrg = usePolicyStore(isUpdateRequiredByOrg);
+  const policyMinAppVersion = usePolicyStore((s) => s.policy?.minAppVersion ?? null);
 
   const {
     confirmDialog,
@@ -167,6 +238,26 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     window.electronAPI?.noteFilesSetEnabled?.(true, noteFilesPath || undefined, {
       skipRebuild: true,
     });
+  }, []);
+
+  // One-time background reindex, versioned: v1 backfilled space_id payloads
+  // after the spaces migration; v2 backfills cloud-pulled notes, which were
+  // never incrementally indexed before the upsert-from-cloud handler gained a
+  // vector upsert. Delayed so the Qdrant sidecar has time to come up; if it
+  // isn't ready yet the flag stays unset and the next launch retries.
+  useEffect(() => {
+    if (Number(localStorage.getItem("semanticReindexVersion")) >= SEMANTIC_REINDEX_VERSION) return;
+    const timer = setTimeout(() => {
+      window.electronAPI
+        ?.semanticReindexAll?.()
+        .then((result) => {
+          if (result?.success) {
+            localStorage.setItem("semanticReindexVersion", String(SEMANTIC_REINDEX_VERSION));
+          }
+        })
+        .catch(() => {});
+    }, 15_000);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -248,7 +339,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [toast, t]);
 
   useEffect(() => {
-    if (!usage?.isPastDue || !usage.hasLoaded) return;
+    if (!usage?.isPastDue) return;
     if (sessionStorage.getItem("pastDueNotified")) return;
     sessionStorage.setItem("pastDueNotified", "true");
     toast({
@@ -257,18 +348,25 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       variant: "destructive",
       duration: 8000,
     });
-  }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
+  }, [usage?.isPastDue, toast, t]);
 
   useEffect(() => {
-    if (!WORKSPACES_ENABLED) return;
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);
+      // Consume the main-process stash so a handled push isn't re-pulled on a
+      // later remount.
+      void window.electronAPI?.getPendingInvitationToken?.();
+    });
+    window.electronAPI?.getPendingInvitationToken?.().then((token) => {
+      if (token) setInvitationToken(token);
     });
     return () => unsubscribe?.();
   }, []);
 
   useEffect(() => {
-    if (!WORKSPACES_ENABLED || !authLoaded || !isSignedIn) return;
+    // Also when signed out (the modal's "Sign in to accept" handles auth);
+    // isSignedIn stays in the deps so a stored token resurfaces after sign-in.
+    if (!authLoaded) return;
     const pending = consumePendingInvitationToken();
     if (pending) {
       setInvitationToken(pending);
@@ -292,11 +390,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   useEffect(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
     const detect = async () => {
-      const results = { cuda: false, vulkan: false };
+      const results = { transcription: false, intelligence: false };
       if (useLocalWhisper && localTranscriptionProvider === "whisper") {
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu && !status.downloaded) results.cuda = true;
+          if (status?.gpuInfo.hasNvidiaGpu) {
+            if (!status.downloaded) results.transcription = true;
+          } else {
+            const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
+            if (vulkan?.vulkan.available && !vulkan.downloaded) results.transcription = true;
+          }
         } catch {}
       }
       if (useCleanupModel) {
@@ -305,7 +408,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             window.electronAPI?.detectVulkanGpu?.(),
             window.electronAPI?.getLlamaVulkanStatus?.(),
           ]);
-          if (gpu?.available && !vulkan?.downloaded) results.vulkan = true;
+          if (gpu?.available && !vulkan?.downloaded) results.intelligence = true;
         } catch {}
       }
       setGpuAccelAvailable(results);
@@ -339,14 +442,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, []);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onNavigateToNote?.((data) => {
+    const drain = async () => {
+      const data = await window.electronAPI?.getPendingNoteNavigation?.();
+      if (!data) return;
       if (data.folderId) {
         setActiveFolderId(data.folderId);
         initializeNotes(null, 50, data.folderId);
       }
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
-    });
+    };
+    drain();
+    const cleanup = window.electronAPI?.onNoteNavigationPending?.(drain);
     return () => cleanup?.();
   }, []);
 
@@ -373,10 +480,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     });
     return () => cleanup?.();
   }, [toast, t]);
-
-  useEffect(() => {
-    syncService.syncAll().catch(console.error);
-  }, []);
 
   useEffect(() => {
     fetchStreamingProviders();
@@ -422,7 +525,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             const result = await window.electronAPI.deleteTranscription(id);
             if (result.success) {
               removeFromStore(id);
-              syncService.syncAll().catch(console.error);
+              syncService.requestSyncAll("manual");
             } else {
               showAlertDialog({
                 title: t("controlPanel.history.couldNotDeleteTitle"),
@@ -451,7 +554,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
-            syncService.syncAll().catch(console.error);
+            syncService.requestSyncAll("manual");
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
               variant: "success",
@@ -497,7 +600,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const retryTranscription = useCallback(
     async (id: number, options?: { isRecover?: boolean }) => {
       try {
-        const s = useSettingsStore.getState();
+        const s = getSettings();
+        if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+          toast({ title: t("common.managedByOrg"), variant: "default" });
+          return;
+        }
         const result = await window.electronAPI.retryTranscription(id, {
           useLocalWhisper: s.useLocalWhisper,
           localTranscriptionProvider: s.localTranscriptionProvider,
@@ -505,19 +612,96 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cloudTranscriptionProvider: s.cloudTranscriptionProvider,
           cloudTranscriptionModel: s.cloudTranscriptionModel,
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
+          cortiEnvironment: s.cortiEnvironment,
+          cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
           transcriptionMode: s.transcriptionMode,
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
+          remoteTranscriptionModel: s.remoteTranscriptionModel,
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;
           let finalTranscription = result.transcription;
 
+          // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
+          let handledTranslation = false;
+          let translationApplied = false;
+          if (result.transcription.route_kind === "translation") {
+            handledTranslation = true;
+            try {
+              const [
+                { default: ReasoningService },
+                { resolveReasoningRoute },
+                { getEffectiveCleanupModel, getSettings: getEffectiveSettings },
+              ] = await Promise.all([
+                import("../services/ReasoningService"),
+                import("../helpers/audioManager"),
+                import("../stores/settingsStore"),
+              ]);
+              const settings = getEffectiveSettings();
+              const agentName = localStorage.getItem("agentName") || null;
+              const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
+              if (route.kind === "translation") {
+                const { text, translated } = await executeTranslationChain({
+                  text: rawText,
+                  cleanupReachable: route.cleanupReachable,
+                  runCleanup: (currentText: string) =>
+                    ReasoningService.processText(
+                      currentText,
+                      getEffectiveCleanupModel(),
+                      agentName,
+                      route.cleanupConfig
+                    ),
+                  runTranslate: (currentText: string) =>
+                    ReasoningService.processText(currentText, route.model, agentName, route.config),
+                  shouldTranslate: shouldRunTranslateStep(
+                    settings.translationSourceLanguage,
+                    settings.translationTargetLanguage
+                  ),
+                  onCleanupError: (cleanupError: Error) =>
+                    logger.warn(
+                      "Cleanup step failed in translation chain, translating raw transcript",
+                      { error: cleanupError.message },
+                      "transcription"
+                    ),
+                  onEmptyTranslate: () =>
+                    logger.warn(
+                      "Translation step returned empty text, keeping previous text",
+                      {},
+                      "transcription"
+                    ),
+                  onUnchangedTranslate: () =>
+                    logger.warn(
+                      "Translation step returned unchanged text, keeping source text",
+                      {},
+                      "transcription"
+                    ),
+                });
+                translationApplied = translated;
+                if (text !== rawText) {
+                  const updated = await window.electronAPI.updateTranscriptionText(
+                    id,
+                    text,
+                    rawText
+                  );
+                  if (updated.success && updated.transcription) {
+                    finalTranscription = updated.transcription;
+                  }
+                }
+              } else {
+                // Translation disabled/unreachable since recording — fall through to cleanup.
+                handledTranslation = false;
+              }
+            } catch {
+              // Reasoning failed — keep the raw STT result
+            }
+          }
+
           // Apply AI reasoning if enabled
-          if (useCleanupModel) {
+          if (!handledTranslation && useCleanupModel) {
             try {
               const [
                 { default: ReasoningService },
@@ -547,6 +731,40 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             } catch {
               // Reasoning failed — keep the raw STT result
             }
+          }
+
+          // Deterministic Chinese script pass, mirroring dictation (#975). Runs last so
+          // it covers the cleaned/translated text, or the raw transcript when neither ran.
+          // Same rule as audioManager.getEffectiveOutputLanguage: only a completed
+          // translate step moves the text into the target language, so anything else
+          // still has to be scripted as the language that was dictated.
+          try {
+            const outputLanguage =
+              result.transcription.route_kind === "translation"
+                ? (translationApplied
+                    ? s.translationTargetLanguage
+                    : s.translationSourceLanguage) || "auto"
+                : s.preferredLanguage;
+            const scripted = await applyChineseScript(
+              finalTranscription.text,
+              resolveChineseScriptTarget(
+                outputLanguage,
+                s.chineseScriptPreference,
+                finalTranscription.text
+              )
+            );
+            if (scripted !== finalTranscription.text) {
+              const updated = await window.electronAPI.updateTranscriptionText(
+                id,
+                scripted,
+                rawText
+              );
+              if (updated.success && updated.transcription) {
+                finalTranscription = updated.transcription;
+              }
+            }
+          } catch {
+            // Conversion failed — keep the text as transcribed
           }
 
           updateInStore(finalTranscription);
@@ -705,16 +923,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      {WORKSPACES_ENABLED && (
-        <AcceptInvitationModal
-          token={invitationToken}
-          onClose={() => setInvitationToken(null)}
-          isSignedIn={isSignedIn}
-          onSignIn={() => {
-            setInvitationToken(null);
-          }}
-        />
-      )}
+      <AcceptInvitationModal
+        token={invitationToken}
+        onClose={() => setInvitationToken(null)}
+        onAccepted={(entry) => {
+          setInvitationNotesEntry(entry);
+          setActiveView("personal-notes");
+        }}
+      />
+
+      <JoinYourTeamModal
+        joinable={joinable}
+        domain={user?.email?.split("@")[1] ?? null}
+        onDismiss={dismissJoinable}
+        onRequested={markRequested}
+        onJoined={() => setActiveView("personal-notes")}
+      />
 
       {showSearch && (
         <Suspense fallback={null}>
@@ -722,9 +946,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             open={showSearch}
             onOpenChange={setShowSearch}
             transcriptions={history}
-            onNoteSelect={(id, folderId) => {
-              if (folderId) setActiveFolderId(folderId);
+            onNoteSelect={(id, folderId, spaceId) => {
+              if (folderId != null) setActiveFolderId(folderId);
+              else if (spaceId != null) navigateToContainer(spaceId, null);
               setActiveNoteId(id);
+              setActiveView("personal-notes");
+            }}
+            onContainerSelect={(spaceId, folderId) => {
+              navigateToContainer(spaceId, folderId);
               setActiveView("personal-notes");
             }}
             onTranscriptSelect={() => {
@@ -734,10 +963,25 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         <div
-          className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out"
-          style={{ width: isSidePanelLayout ? 0 : undefined }}
+          className="shrink-0 transition-[width] duration-300 ease-out"
+          style={{ width: sidebarCollapsed || isSidePanelLayout ? 0 : SIDEBAR_WIDTH_PX }}
+        />
+        <div
+          className={`absolute inset-y-0 left-0 z-30 transition-transform duration-300 ease-out${
+            sidebarCollapsed && sidebarPeek && !isSidePanelLayout
+              ? " shadow-[10px_0_40px_-18px_rgba(0,0,0,0.2)]"
+              : ""
+          }`}
+          style={{
+            transform:
+              !isSidePanelLayout && (!sidebarCollapsed || sidebarPeek)
+                ? "translateX(0)"
+                : "translateX(-100%)",
+          }}
+          onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
+          onMouseLeave={sidebarCollapsed ? hideSidebarPeek : undefined}
         >
           <ControlPanelSidebar
             activeView={activeView}
@@ -758,8 +1002,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             userImage={user?.image}
             isSignedIn={isSignedIn}
             authLoaded={authLoaded}
-            isProUser={!!(usage?.isSubscribed || usage?.isTrial)}
-            usageLoaded={usage?.hasLoaded ?? false}
+            upsell={upsell}
             updateAction={
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
@@ -808,6 +1051,27 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
           </div>
           <div className="flex-1 overflow-y-auto pt-1">
+            {updateRequiredByOrg && (
+              <div className="max-w-3xl mx-auto w-full mb-3">
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                      <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                        {t("controlPanel.updateRequiredByOrg.title")}
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300/80">
+                        {t("controlPanel.updateRequiredByOrg.description", {
+                          version: policyMinAppVersion,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {usage?.isPastDue && activeView === "home" && (
               <div className="max-w-3xl mx-auto w-full mb-3">
                 <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
@@ -840,7 +1104,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 </div>
               </div>
             )}
-            {(gpuAccelAvailable.cuda || gpuAccelAvailable.vulkan) &&
+            {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
               activeView === "home" &&
               !gpuBannerDismissed && (
                 <div className="max-w-3xl mx-auto w-full mb-3">
@@ -863,7 +1127,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                             className="h-7 text-xs"
                             onClick={() => {
                               setSettingsSection(
-                                gpuAccelAvailable.cuda ? "transcription" : "intelligence"
+                                gpuAccelAvailable.transcription ? "transcription" : "intelligence"
                               );
                               setShowSettings(true);
                             }}
@@ -908,7 +1172,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 }}
               />
             )}
-            {activeView === "chat" && (
+            {activeView === "chat" && agentAllowedByPolicy && (
               <Suspense fallback={null}>
                 <ChatView />
               </Suspense>
@@ -923,6 +1187,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   onOpenSearch={() => setShowSearch(true)}
                   meetingRecordingRequest={meetingRecordingRequest}
                   onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
+                  invitationEntry={invitationNotesEntry}
+                  onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
                 />
               </Suspense>
             )}
@@ -931,7 +1197,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <DictionaryView />
               </Suspense>
             )}
-            {activeView === "upload" && (
+            {activeView === "upload" && policyActionsAllowed && (
               <Suspense fallback={null}>
                 <UploadAudioView
                   onNoteCreated={(noteId, folderId) => {
@@ -949,7 +1215,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {activeView === "integrations" && (
               <Suspense fallback={null}>
                 <IntegrationsView
-                  isPaid={!!(usage?.isSubscribed || usage?.isTrial)}
+                  isPaid={usage?.hasPaidAccessOptimistic ?? false}
                   onUpgrade={() => {
                     setSettingsSection("plansBilling");
                     setShowSettings(true);
@@ -959,8 +1225,31 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
           </div>
         </main>
+        {!isSidePanelLayout && (
+          <div
+            className={`absolute z-40 flex h-10 items-center ${
+              platform === "darwin" ? "left-21 top-2" : "left-2 top-0"
+            }`}
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+            onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
+            onMouseLeave={sidebarCollapsed ? leaveSidebarToggle : undefined}
+          >
+            <button
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
+              className="group flex items-center justify-center h-7 w-7 rounded-md outline-none hover:bg-foreground/5 dark:hover:bg-white/5 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen size={15} className={toggleIconClass} />
+              ) : (
+                <PanelLeftClose size={15} className={toggleIconClass} />
+              )}
+            </button>
+          </div>
+        )}
       </div>
       <BackgroundActionToastListener />
+      <SpaceSyncToastListener />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import type { InferenceProvider } from "./types";
 import { getCloudModel } from "../../../models/ModelRegistry";
-import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
+import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
+import { wrapCleanupTranscript } from "../../../config/prompts";
+import { extractApiErrorMessage } from "../apiErrorMessage";
 import logger from "../../../utils/logger";
 
 interface GeminiResponse {
@@ -23,15 +25,17 @@ interface GeminiGenerationConfig {
 
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
+  supportsImages: true,
   async call({ text, model, agentName, config, ctx }) {
     logger.logReasoning("GEMINI_START", { model, agentName, hasApiKey: false });
     const apiKey = await ctx.getApiKey("gemini");
     logger.logReasoning("GEMINI_API_KEY", { hasApiKey: !!apiKey, keyLength: apiKey?.length || 0 });
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
 
     const generationConfig: GeminiGenerationConfig = {
-      temperature: config.temperature || 0.3,
+      temperature: config.temperature ?? (config.systemPrompt ? 0.3 : 0),
       maxOutputTokens:
         config.maxTokens ||
         Math.max(
@@ -49,8 +53,19 @@ export const geminiProvider: InferenceProvider = {
       generationConfig.thinkingConfig = { thinkingLevel: "minimal", includeThoughts: false };
     }
 
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+      { text: `${systemPrompt}\n\n${userContent}` },
+    ];
+    if (config.screenContext) {
+      parts.push({
+        inlineData: {
+          mimeType: config.screenContext.mediaType,
+          data: config.screenContext.data,
+        },
+      });
+    }
     const requestBody = {
-      contents: [{ parts: [{ text: `${systemPrompt}\n\n${text}` }] }],
+      contents: [{ parts }],
       generationConfig,
     };
 
@@ -59,7 +74,13 @@ export const geminiProvider: InferenceProvider = {
         endpoint: `${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`,
         model,
         hasApiKey: !!apiKey,
-        requestBody: JSON.stringify(requestBody).substring(0, 200),
+        hasScreenContext: !!config.screenContext,
+        // A short prompt could let the 200-char preview reach into the base64
+        // image part — preview the text part only, never the full body.
+        requestBody: JSON.stringify({
+          ...requestBody,
+          contents: [{ parts: [parts[0]] }],
+        }).substring(0, 200),
       });
 
       const controller = new AbortController();
@@ -90,12 +111,8 @@ export const geminiProvider: InferenceProvider = {
             fullResponse: errorText.substring(0, 500),
           });
 
-          const errMsg =
-            (typeof errorData.error === "object" && errorData.error?.message) ||
-            errorData.message ||
-            (typeof errorData.error === "string" ? errorData.error : null) ||
-            `Gemini API error: ${res.status}`;
-          throw new Error(errMsg);
+          const errMsg = extractApiErrorMessage(errorData, `Gemini API error: ${res.status}`);
+          throw httpError(errMsg, res.status);
         }
 
         const jsonResponse = (await res.json()) as GeminiResponse;
@@ -116,6 +133,9 @@ export const geminiProvider: InferenceProvider = {
     }, createApiRetryStrategy());
 
     const candidate = response.candidates?.[0];
+    if (config.requireCompleteOutput && candidate?.finishReason === "MAX_TOKENS") {
+      throw new Error("Model output was truncated before the selection edit completed");
+    }
     if (!candidate?.content?.parts?.[0]?.text) {
       logger.logReasoning("GEMINI_EMPTY_RESPONSE", {
         model,

@@ -41,6 +41,21 @@ export const INFERENCE_SCOPES = {
       disableThinking: "dictationAgentDisableThinking",
     },
   },
+  // Optional override used only when a voice-agent request carries a screen
+  // context screenshot. Unset fields resolve to the dictationAgent scope, and
+  // the UI offers only cloud/BYOK modes, so remoteUrl is deliberately absent.
+  dictationAgentVision: {
+    storeKeys: {
+      mode: "dictationAgentVisionMode",
+      provider: "dictationAgentVisionProvider",
+      model: "dictationAgentVisionModel",
+      cloudMode: "dictationAgentVisionCloudMode",
+      cloudBaseUrl: "dictationAgentVisionCloudBaseUrl",
+      customApiKey: "dictationAgentVisionCustomApiKey",
+      disableThinking: "dictationAgentVisionDisableThinking",
+    },
+    fallbackScope: "dictationAgent",
+  },
   noteFormatting: {
     storeKeys: {
       mode: "noteFormattingMode",
@@ -64,6 +79,18 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "chatAgentRemoteUrl",
       customApiKey: "chatAgentCustomApiKey",
       disableThinking: "chatAgentDisableThinking",
+    },
+  },
+  dictationTranslation: {
+    storeKeys: {
+      mode: "translationMode",
+      provider: "translationProvider",
+      model: "translationModel",
+      cloudMode: "translationCloudMode",
+      cloudBaseUrl: "translationCloudBaseUrl",
+      remoteUrl: "translationRemoteUrl",
+      customApiKey: "translationCustomApiKey",
+      disableThinking: "translationDisableThinking",
     },
   },
 } as const satisfies Record<string, InferenceScopeDefinition>;

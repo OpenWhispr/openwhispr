@@ -23,6 +23,10 @@ const SLOT_CONFIG = {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-voice-agent/",
     name: "OpenWhispr Voice Agent",
   },
+  translation: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-translation/",
+    name: "OpenWhispr Translation",
+  },
 };
 
 const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
@@ -66,10 +70,10 @@ let dbus = null;
 function getDBus() {
   if (dbus) return dbus;
   try {
-    dbus = require("dbus-next");
+    dbus = require("@homebridge/dbus-native");
     return dbus;
   } catch (err) {
-    debugLogger.log("[GnomeShortcut] Failed to load dbus-next:", err.message);
+    debugLogger.log("[GnomeShortcut] Failed to load dbus-native:", err.message);
     return null;
   }
 }
@@ -89,6 +93,7 @@ class GnomeShortcutManager {
     this.agentCallback = null;
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
+    this.translationCallback = null;
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -113,26 +118,22 @@ class GnomeShortcutManager {
    */
   setAgentCallback(callback) {
     this.agentCallback = callback;
-    if (this._ifaceRef) {
-      this._ifaceRef._agentCallback = callback;
-    }
     debugLogger.log("[GnomeShortcut] Agent callback registered");
   }
 
   setMeetingCallback(callback) {
     this.meetingCallback = callback;
-    if (this._ifaceRef) {
-      this._ifaceRef._meetingCallback = callback;
-    }
     debugLogger.log("[GnomeShortcut] Meeting callback registered");
   }
 
   setVoiceAgentCallback(callback) {
     this.voiceAgentCallback = callback;
-    if (this._ifaceRef) {
-      this._ifaceRef._voiceAgentCallback = callback;
-    }
     debugLogger.log("[GnomeShortcut] Voice agent callback registered");
+  }
+
+  setTranslationCallback(callback) {
+    this.translationCallback = callback;
+    debugLogger.log("[GnomeShortcut] Translation callback registered");
   }
 
   async initDBusService(dictationCallback) {
@@ -145,76 +146,64 @@ class GnomeShortcutManager {
 
     try {
       this.bus = dbusModule.sessionBus();
-      await this.bus.requestName(DBUS_SERVICE_NAME, 0);
-
-      const InterfaceClass = this._createInterfaceClass(dbusModule);
-      const iface = new InterfaceClass(
-        dictationCallback,
-        this.agentCallback,
-        this.meetingCallback,
-        this.voiceAgentCallback
+      // Without a listener, async socket errors (e.g. a stale
+      // DBUS_SESSION_BUS_ADDRESS) crash the process as an unhandled
+      // "error" event — sessionBus() returns before connecting.
+      this.bus.connection.on("error", (err) => {
+        debugLogger.log("[GnomeShortcut] D-Bus connection error:", err.message);
+      });
+      this.bus.requestName(DBUS_SERVICE_NAME, 0);
+      this.bus.exportInterface(
+        {
+          Toggle: () => {
+            if (this.dictationCallback) {
+              this.dictationCallback();
+            }
+          },
+          ToggleAgent: () => {
+            if (this.agentCallback) {
+              this.agentCallback();
+            }
+          },
+          ToggleMeeting: () => {
+            if (this.meetingCallback) {
+              this.meetingCallback();
+            }
+          },
+          ToggleVoiceAgent: () => {
+            if (this.voiceAgentCallback) {
+              this.voiceAgentCallback();
+            }
+          },
+          ToggleTranslation: () => {
+            if (this.translationCallback) {
+              this.translationCallback();
+            }
+          },
+        },
+        DBUS_OBJECT_PATH,
+        {
+          name: DBUS_INTERFACE,
+          methods: {
+            Toggle: ["", ""],
+            ToggleAgent: ["", ""],
+            ToggleMeeting: ["", ""],
+            ToggleVoiceAgent: ["", ""],
+            ToggleTranslation: ["", ""],
+          },
+        }
       );
-      // Keep a reference so setAgentCallback() can update it later
-      this._ifaceRef = iface;
-      this.bus.export(DBUS_OBJECT_PATH, iface);
 
       debugLogger.log("[GnomeShortcut] D-Bus service initialized successfully");
       return true;
     } catch (err) {
       debugLogger.log("[GnomeShortcut] Failed to initialize D-Bus service:", err.message);
       if (this.bus) {
-        this.bus.disconnect();
+        this.bus.connection.end();
         this.bus = null;
       }
       return false;
     }
-  }
-
-  _createInterfaceClass(dbusModule) {
-    class OpenWhisprInterface extends dbusModule.interface.Interface {
-      constructor(dictationCallback, agentCallback, meetingCallback, voiceAgentCallback) {
-        super(DBUS_INTERFACE);
-        this._dictationCallback = dictationCallback;
-        this._agentCallback = agentCallback || null;
-        this._meetingCallback = meetingCallback || null;
-        this._voiceAgentCallback = voiceAgentCallback || null;
-      }
-
-      Toggle() {
-        if (this._dictationCallback) {
-          this._dictationCallback();
-        }
-      }
-
-      ToggleAgent() {
-        if (this._agentCallback) {
-          this._agentCallback();
-        }
-      }
-
-      ToggleMeeting() {
-        if (this._meetingCallback) {
-          this._meetingCallback();
-        }
-      }
-
-      ToggleVoiceAgent() {
-        if (this._voiceAgentCallback) {
-          this._voiceAgentCallback();
-        }
-      }
-    }
-
-    OpenWhisprInterface.configureMembers({
-      methods: {
-        Toggle: { inSignature: "", outSignature: "" },
-        ToggleAgent: { inSignature: "", outSignature: "" },
-        ToggleMeeting: { inSignature: "", outSignature: "" },
-        ToggleVoiceAgent: { inSignature: "", outSignature: "" },
-      },
-    });
-
-    return OpenWhisprInterface;
   }
 
   static isValidShortcut(shortcut) {
@@ -244,6 +233,7 @@ class GnomeShortcutManager {
       agent: "ToggleAgent",
       meeting: "ToggleMeeting",
       voiceAgent: "ToggleVoiceAgent",
+      translation: "ToggleTranslation",
     };
     const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
     const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
@@ -504,7 +494,7 @@ class GnomeShortcutManager {
 
   close() {
     if (this.bus) {
-      this.bus.disconnect();
+      this.bus.connection.end();
       this.bus = null;
     }
   }

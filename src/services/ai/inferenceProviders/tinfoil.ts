@@ -1,10 +1,10 @@
 import type { InferenceProvider } from "./types";
 import { TOKEN_LIMITS } from "../../../config/constants";
-import { getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { applyThinkingSuppression } from "../thinkingSuppression";
 import { getTinfoilChatClient } from "../tinfoilClient";
+import { wrapCleanupTranscript } from "../../../config/prompts";
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -19,12 +19,12 @@ export const tinfoilProvider: InferenceProvider = {
     const client = await getTinfoilChatClient(apiKey);
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const messages = [
       { role: "system", content: systemPrompt },
-      { role: "user", content: text },
+      { role: "user", content: userContent },
     ];
 
-    const apiConfig = getOpenAiApiConfig(model);
     const maxTokens =
       config.maxTokens ||
       Math.max(
@@ -40,12 +40,9 @@ export const tinfoilProvider: InferenceProvider = {
     const requestBody: Record<string, unknown> = {
       model,
       messages,
-      [apiConfig.tokenParam]: maxTokens,
+      max_tokens: maxTokens,
+      temperature: config.temperature ?? (config.systemPrompt ? 0.3 : 0),
     };
-
-    if (apiConfig.supportsTemperature) {
-      requestBody.temperature = config.temperature ?? 0.3;
-    }
 
     applyThinkingSuppression(requestBody, model, "tinfoil", config);
 
@@ -66,6 +63,15 @@ export const tinfoilProvider: InferenceProvider = {
         .find((content: unknown) => typeof content === "string" && content.trim())
         ?.trim() || "";
 
+    if (
+      config.requireCompleteOutput &&
+      response.choices?.some((choice: any) =>
+        ["length", "max_tokens"].includes(choice?.finish_reason)
+      )
+    ) {
+      throw new Error("Model output was truncated before the selection edit completed");
+    }
+
     logger.logReasoning("TINFOIL_RESPONSE", {
       model,
       responseLength: responseText.length,
@@ -75,6 +81,9 @@ export const tinfoilProvider: InferenceProvider = {
     });
 
     if (!responseText) {
+      if (config.requireCompleteOutput) {
+        throw new Error("Model returned an empty selection edit");
+      }
       logger.logReasoning("TINFOIL_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

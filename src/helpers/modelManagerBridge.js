@@ -15,6 +15,11 @@ const debugLogger = require("./debugLogger");
 
 const MIN_FILE_SIZE = 1_000_000; // 1MB minimum for valid model files
 
+// Bounds the KV cache — registry contextLength is the full trained context
+// (128K+), which can exceed total RAM (#1203). Uniform for all start paths:
+// start() won't restart a ready server when only options change.
+const SERVER_CONTEXT_SIZE = 16384;
+
 function getLocalProviders() {
   return modelRegistryData.localProviders || [];
 }
@@ -40,6 +45,7 @@ class ModelManager {
     this.downloadProgress = new Map();
     this.activeDownloads = new Map();
     this.activeRequests = new Map(); // Track HTTP requests for cancellation
+    this.downloadLifecycleVersion = 0;
     this.serverManager = new LlamaServerManager();
     this.currentServerModelId = null;
     this._initialized = false;
@@ -102,24 +108,46 @@ class ModelManager {
   async getAllModels() {
     this.ensureInitialized();
     try {
-      const models = [];
+      const modelEntries = [];
 
       for (const provider of getLocalProviders()) {
         for (const model of provider.models) {
           const modelPath = path.join(this.modelsDir, model.fileName);
-          const isDownloaded = await this.checkModelValid(modelPath);
-
-          models.push({
-            ...model,
-            providerId: provider.id,
-            providerName: provider.name,
-            isDownloaded,
-            path: isDownloaded ? modelPath : null,
-          });
+          modelEntries.push({ model, provider, modelPath });
         }
       }
 
-      return models;
+      let downloadedStates = [];
+
+      // A download can finish between checking the final file and reading the
+      // in-memory active state. Retry when that lifecycle changes so callers
+      // never receive the impossible "not downloaded and not downloading" gap.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const lifecycleVersion = this.downloadLifecycleVersion;
+        downloadedStates = await Promise.all(
+          modelEntries.map(({ modelPath }) => this.checkModelValid(modelPath))
+        );
+        if (lifecycleVersion === this.downloadLifecycleVersion) break;
+      }
+
+      // Read volatile download state only after all asynchronous filesystem checks
+      // finish so every model belongs to the same main-process snapshot.
+      return modelEntries.map(({ model, provider, modelPath }, index) => {
+        const progress = this.downloadProgress.get(model.id);
+        const isDownloaded = downloadedStates[index];
+
+        return {
+          ...model,
+          providerId: provider.id,
+          providerName: provider.name,
+          isDownloaded,
+          isDownloading: this.activeDownloads.has(model.id),
+          downloadProgress: progress?.progress || 0,
+          downloadedSize: progress?.downloadedSize || 0,
+          totalSize: progress?.totalSize || 0,
+          path: isDownloaded ? modelPath : null,
+        };
+      });
     } catch (error) {
       console.error("[ModelManager] Error getting all models:", error);
       throw error;
@@ -167,6 +195,24 @@ class ModelManager {
     return null;
   }
 
+  serverOptions(modelInfo) {
+    return {
+      contextSize: Math.min(
+        SERVER_CONTEXT_SIZE,
+        modelInfo.model.contextLength || SERVER_CONTEXT_SIZE
+      ),
+      threads: 4,
+      gpuLayers: 99,
+    };
+  }
+
+  async serverStartOptions(modelInfo) {
+    const options = this.serverOptions(modelInfo);
+    const draftPath = await this.resolveDraftPath(modelInfo.model);
+    if (draftPath) options.draftModelPath = draftPath;
+    return options;
+  }
+
   async downloadModel(modelId, onProgress) {
     this.ensureInitialized();
     const modelInfo = this.findModelById(modelId);
@@ -181,20 +227,28 @@ class ModelManager {
       return modelPath;
     }
 
-    if (this.activeDownloads.get(modelId)) {
-      throw new ModelError("Model is already being downloaded", "DOWNLOAD_IN_PROGRESS", {
+    if (this.activeDownloads.size > 0) {
+      const activeModelId = this.activeDownloads.keys().next().value;
+      throw new ModelError("A model is already being downloaded", "DOWNLOAD_IN_PROGRESS", {
         modelId,
+        activeModelId,
       });
     }
 
     this.activeDownloads.set(modelId, true);
+    this.downloadLifecycleVersion += 1;
     const { signal, abort } = createDownloadSignal();
     this.activeRequests.set(modelId, { abort });
 
     try {
       await this.ensureModelsDirExists();
 
-      const requiredBytes = model.sizeBytes || model.sizeMb * 1_000_000 || 0;
+      const hasDrafter = this.modelHasDrafter(model);
+
+      let requiredBytes = model.sizeBytes || model.sizeMb * 1_000_000 || 0;
+      if (requiredBytes > 0 && hasDrafter) {
+        requiredBytes += model.draftSizeBytes;
+      }
       if (requiredBytes > 0) {
         const spaceCheck = await checkDiskSpace(this.modelsDir, requiredBytes * 1.2);
         if (!spaceCheck.ok) {
@@ -209,20 +263,41 @@ class ModelManager {
 
       const downloadUrl = this.getDownloadUrl(provider, model);
 
+      // With a drafter, weight progress across both files by declared bytes and
+      // clamp it so the bar never regresses across the phase boundary. Without a
+      // drafter, keep today's single-file progress exactly.
+      const combinedTotal = hasDrafter ? (model.sizeBytes || 0) + model.draftSizeBytes : 0;
+      let lastCombined = 0;
+      const emitCombined = (rawCombined) => {
+        let combined = Math.min(rawCombined, combinedTotal);
+        if (combined < lastCombined) combined = lastCombined;
+        else lastCombined = combined;
+        const progress = combinedTotal > 0 ? (combined / combinedTotal) * 100 : 0;
+        this.downloadProgress.set(modelId, {
+          modelId,
+          progress,
+          downloadedSize: combined,
+          totalSize: combinedTotal,
+        });
+        if (onProgress) onProgress(progress, combined, combinedTotal);
+      };
+
       await sharedDownloadFile(downloadUrl, modelPath, {
         signal,
-        onProgress: (downloadedBytes, totalBytes) => {
-          const progress = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
-          this.downloadProgress.set(modelId, {
-            modelId,
-            progress,
-            downloadedSize: downloadedBytes,
-            totalSize: totalBytes,
-          });
-          if (onProgress) {
-            onProgress(progress, downloadedBytes, totalBytes);
-          }
-        },
+        onProgress: hasDrafter
+          ? (downloadedBytes) => emitCombined(downloadedBytes)
+          : (downloadedBytes, totalBytes) => {
+              const progress = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
+              this.downloadProgress.set(modelId, {
+                modelId,
+                progress,
+                downloadedSize: downloadedBytes,
+                totalSize: totalBytes,
+              });
+              if (onProgress) {
+                onProgress(progress, downloadedBytes, totalBytes);
+              }
+            },
       });
 
       const stats = await fsPromises.stat(modelPath);
@@ -233,6 +308,29 @@ class ModelManager {
           "DOWNLOAD_CORRUPTED",
           { size: stats.size, minSize: MIN_FILE_SIZE }
         );
+      }
+
+      // Drafter is opportunistic: a failure or cancel here leaves the main model
+      // fully usable, so never fail the download or delete the main file.
+      if (hasDrafter) {
+        const draftPath = path.join(this.modelsDir, model.draftFileName);
+        try {
+          await sharedDownloadFile(this.getDraftDownloadUrl(provider, model), draftPath, {
+            signal,
+            onProgress: (downloadedBytes) => emitCombined(stats.size + downloadedBytes),
+          });
+          const draftStats = await fsPromises.stat(draftPath);
+          if (draftStats.size < MIN_FILE_SIZE) {
+            await fsPromises.unlink(draftPath).catch(() => {});
+            debugLogger.warn("MTP drafter file too small, keeping model without it", { modelId });
+          }
+        } catch (draftError) {
+          await fsPromises.unlink(draftPath).catch(() => {});
+          debugLogger.warn("MTP drafter download failed, keeping model without it", {
+            modelId,
+            error: draftError.message,
+          });
+        }
       }
 
       return modelPath;
@@ -252,7 +350,9 @@ class ModelManager {
       }
       throw error;
     } finally {
-      this.activeDownloads.delete(modelId);
+      if (this.activeDownloads.delete(modelId)) {
+        this.downloadLifecycleVersion += 1;
+      }
       this.activeRequests.delete(modelId);
       this.downloadProgress.delete(modelId);
     }
@@ -263,12 +363,29 @@ class ModelManager {
     return `${baseUrl}/${model.hfRepo}/resolve/main/${model.fileName}`;
   }
 
+  getDraftDownloadUrl(provider, model) {
+    const baseUrl = provider.baseUrl || "https://huggingface.co";
+    return `${baseUrl}/${model.draftHfRepo}/resolve/main/${model.draftFileName}`;
+  }
+
+  modelHasDrafter(model) {
+    return Boolean(model && model.draftHfRepo && model.draftFileName && model.draftSizeBytes);
+  }
+
+  // Opportunistic MTP drafter path: only when declared and the file passes the
+  // same >1MB validity gate as models. Returns null otherwise (start without MTP).
+  async resolveDraftPath(model) {
+    if (!this.modelHasDrafter(model)) return null;
+    const draftPath = path.join(this.modelsDir, model.draftFileName);
+    if (await this.checkModelValid(draftPath)) return draftPath;
+    return null;
+  }
+
   cancelDownload(modelId) {
     const entry = this.activeRequests.get(modelId);
     if (entry) {
-      this.activeDownloads.delete(modelId);
-      this.activeRequests.delete(modelId);
-      this.downloadProgress.delete(modelId);
+      // Keep the guard and status visible until downloadModel's finally block
+      // has finished cleaning up the writer and its temporary file.
       entry.abort();
       return true;
     }
@@ -286,6 +403,12 @@ class ModelManager {
 
     if (await this.checkFileExists(modelPath)) {
       await fsPromises.unlink(modelPath);
+    }
+
+    // Remove the drafter too when present, best effort (ignore ENOENT).
+    if (modelInfo.model.draftFileName) {
+      const draftPath = path.join(this.modelsDir, modelInfo.model.draftFileName);
+      await fsPromises.unlink(draftPath).catch(() => {});
     }
   }
 
@@ -366,11 +489,7 @@ class ModelManager {
         serverReady: this.serverManager.ready,
       });
 
-      await this.serverManager.start(modelPath, {
-        contextSize: options.contextSize || modelInfo.model.contextLength || 4096,
-        threads: options.threads || 4,
-        gpuLayers: 99,
-      });
+      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
       this.currentServerModelId = modelId;
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
@@ -396,6 +515,7 @@ class ModelManager {
         temperature: options.temperature ?? 0.7,
         max_tokens: options.maxTokens ?? 512,
         disableThinking: options.disableThinking,
+        requireCompleteOutput: options.requireCompleteOutput,
       });
 
       const totalTime = Date.now() - startTime;
@@ -440,11 +560,7 @@ class ModelManager {
     if (!this.serverManager.isAvailable()) return false;
 
     try {
-      await this.serverManager.start(modelPath, {
-        contextSize: modelInfo.model.contextLength || 4096,
-        threads: 4,
-        gpuLayers: 99,
-      });
+      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
       this.currentServerModelId = modelId;
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;

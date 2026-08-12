@@ -10,7 +10,6 @@ import {
   Settings,
   HelpCircle,
   UserCircle,
-  UserPlus,
   X,
   Search,
 } from "lucide-react";
@@ -19,21 +18,21 @@ import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
 import { getCachedPlatform } from "../utils/platform";
-import WorkspaceSwitcher from "./WorkspaceSwitcher";
-import InviteTeammateDialog from "./InviteTeammateDialog";
-import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
-import { useWorkspace } from "../hooks/useWorkspace";
-import { WORKSPACES_ENABLED } from "../lib/features";
+import type { UpsellDecision } from "../lib/upsell";
+import { isAgentAllowed, isPolicyActionAllowed } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 
 const platform = getCachedPlatform();
 
+const rowIconClass =
+  "shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
+const rowLabelClass =
+  "text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150";
+const rowButtonClass =
+  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
+
 export type ControlPanelView =
-  | "home"
-  | "chat"
-  | "personal-notes"
-  | "dictionary"
-  | "upload"
-  | "integrations";
+  "home" | "chat" | "personal-notes" | "dictionary" | "upload" | "integrations";
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
@@ -48,8 +47,7 @@ interface ControlPanelSidebarProps {
   userImage?: string | null;
   isSignedIn?: boolean;
   authLoaded?: boolean;
-  isProUser?: boolean;
-  usageLoaded?: boolean;
+  upsell: UpsellDecision;
   updateAction?: React.ReactNode;
 }
 
@@ -66,25 +64,19 @@ export default function ControlPanelSidebar({
   userImage,
   isSignedIn,
   authLoaded,
-  isProUser,
-  usageLoaded,
+  upsell,
   updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
   const [upgradeDismissed, setUpgradeDismissed] = useState(
     () => localStorage.getItem("upgradeProDismissed") === "true"
   );
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
-  const { active: activeWorkspace } = useWorkspace();
 
-  const showLimitBanner = authLoaded && isSignedIn && !isProUser && isOverLimit;
-  const showUpgradeBanner =
-    !showLimitBanner &&
-    authLoaded &&
-    (!isSignedIn || usageLoaded !== false) &&
-    !isProUser &&
-    !upgradeDismissed;
+  const showLimitBanner = upsell === "show" && Boolean(isSignedIn) && Boolean(isOverLimit);
+  const showUpgradeBanner = upsell === "show" && !showLimitBanner && !upgradeDismissed;
+
+  const agentAllowed = usePolicyStore(isAgentAllowed);
+  const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
 
   const navItems: {
     id: ControlPanelView;
@@ -92,9 +84,13 @@ export default function ControlPanelSidebar({
     icon: React.ComponentType<{ size?: number; className?: string }>;
   }[] = [
     { id: "home", label: t("sidebar.home"), icon: Home },
-    { id: "chat", label: t("sidebar.chat"), icon: MessageSquare },
+    ...(agentAllowed
+      ? [{ id: "chat" as const, label: t("sidebar.chat"), icon: MessageSquare }]
+      : []),
     { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
-    { id: "upload", label: t("sidebar.upload"), icon: Upload },
+    ...(policyActionsAllowed
+      ? [{ id: "upload" as const, label: t("sidebar.upload"), icon: Upload }]
+      : []),
     { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
     { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
   ];
@@ -105,12 +101,6 @@ export default function ControlPanelSidebar({
         className="w-full h-10 shrink-0"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
-
-      {WORKSPACES_ENABLED && isSignedIn && (
-        <div className="px-2 pt-1 pb-1">
-          <WorkspaceSwitcher userName={userName} />
-        </div>
-      )}
 
       {onOpenSearch && (
         <div className="px-2 pt-2 pb-1">
@@ -242,63 +232,27 @@ export default function ControlPanelSidebar({
           <button
             onClick={onOpenReferrals}
             aria-label={t("sidebar.referral")}
-            className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+            className={rowButtonClass}
           >
-            <Gift
-              size={15}
-              className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-            />
-            <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-              {t("sidebar.referral")}
-            </span>
-          </button>
-        )}
-
-        {WORKSPACES_ENABLED && isSignedIn && (
-          <button
-            onClick={() => (activeWorkspace ? setInviteOpen(true) : setCreateWorkspaceOpen(true))}
-            aria-label={
-              activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")
-            }
-            className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
-          >
-            <UserPlus
-              size={15}
-              className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-            />
-            <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-              {activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")}
-            </span>
+            <Gift size={15} className={rowIconClass} />
+            <span className={rowLabelClass}>{t("sidebar.referral")}</span>
           </button>
         )}
 
         <button
           onClick={onOpenSettings}
           aria-label={t("sidebar.settings")}
-          className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+          className={rowButtonClass}
         >
-          <Settings
-            size={15}
-            className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-          />
-          <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-            {t("sidebar.settings")}
-          </span>
+          <Settings size={15} className={rowIconClass} />
+          <span className={rowLabelClass}>{t("sidebar.settings")}</span>
         </button>
 
         <SupportDropdown
           trigger={
-            <button
-              aria-label={t("sidebar.support")}
-              className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
-            >
-              <HelpCircle
-                size={15}
-                className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-              />
-              <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-                {t("sidebar.support")}
-              </span>
+            <button aria-label={t("sidebar.support")} className={rowButtonClass}>
+              <HelpCircle size={15} className={rowIconClass} />
+              <span className={rowLabelClass}>{t("sidebar.support")}</span>
             </button>
           }
         />
@@ -331,18 +285,6 @@ export default function ControlPanelSidebar({
           </div>
         </div>
       </div>
-
-      {WORKSPACES_ENABLED && activeWorkspace && (
-        <InviteTeammateDialog
-          open={inviteOpen}
-          onOpenChange={setInviteOpen}
-          workspaceId={activeWorkspace.id}
-          workspaceName={activeWorkspace.name}
-        />
-      )}
-      {WORKSPACES_ENABLED && (
-        <CreateWorkspaceDialog open={createWorkspaceOpen} onOpenChange={setCreateWorkspaceOpen} />
-      )}
     </div>
   );
 }

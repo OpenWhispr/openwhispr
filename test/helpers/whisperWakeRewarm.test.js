@@ -15,6 +15,10 @@ test("re-warms a running local CUDA whisper-server after wake", () => {
   assert.equal(shouldRewarmOnWake(base), true);
 });
 
+test("re-warms a running local Vulkan whisper-server after wake", () => {
+  assert.equal(shouldRewarmOnWake({ ...base, useCuda: false, useVulkan: true }), true);
+});
+
 test("skips CPU whisper-server (model survives sleep in RAM)", () => {
   assert.equal(shouldRewarmOnWake({ ...base, useCuda: false }), false);
 });

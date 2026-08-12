@@ -2,6 +2,7 @@ import * as React from "react";
 import { X, Copy, Check } from "lucide-react";
 import { cn } from "../lib/utils";
 import { ToastContext, type ToastProps } from "./useToast";
+import { isDictationPanelWindow } from "../../utils/windowContext";
 
 interface ToastState extends ToastProps {
   id: string;
@@ -111,12 +112,7 @@ const ToastViewport: React.FC<{
   onPauseTimer: (id: string) => void;
   onResumeTimer: (id: string, remainingTime: number) => void;
 }> = ({ toasts, onDismiss, onPauseTimer, onResumeTimer }) => {
-  const isDictationPanel = React.useMemo(() => {
-    return (
-      window.location.pathname.indexOf("control") === -1 &&
-      window.location.search.indexOf("panel=true") === -1
-    );
-  }, []);
+  const isDictationPanel = React.useMemo(isDictationPanelWindow, []);
 
   if (toasts.length === 0) return null;
 

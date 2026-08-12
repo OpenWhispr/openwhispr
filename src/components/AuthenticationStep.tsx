@@ -19,12 +19,17 @@ import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 
 interface AuthenticationStepProps {
-  onContinueWithoutAccount: () => void;
+  onContinueWithoutAccount?: () => void;
   onAuthComplete: () => void;
   onNeedsVerification: (email: string) => void;
 }
 
 type AuthMode = "sign-in" | "sign-up" | null;
+type SsoDiscovery = {
+  required: boolean;
+  domain: string;
+  exists: boolean;
+};
 
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -82,6 +87,7 @@ export default function AuthenticationStep({
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isSocialLoading, setIsSocialLoading] = useState<SocialProvider | null>(null);
   const [isSSOLoading, setIsSSOLoading] = useState(false);
+  const [ssoDiscovery, setSsoDiscovery] = useState<SsoDiscovery | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState(true);
@@ -141,21 +147,26 @@ export default function AuthenticationStep({
     [t]
   );
 
-  const handleSSOSignIn = useCallback(async () => {
-    if (!email.trim()) {
-      setError(t("auth.sso.emailRequired"));
-      return;
-    }
-    setIsSSOLoading(true);
-    setError(null);
+  const startSSOSignIn = useCallback(
+    async (value: string) => {
+      if (!value.trim()) {
+        setError(t("auth.sso.emailRequired"));
+        return;
+      }
+      setIsSSOLoading(true);
+      setError(null);
 
-    const result = await signInWithSSO(email.trim());
+      const result = await signInWithSSO(value.trim());
 
-    if (result.error) {
-      setError(result.error.message || t("auth.sso.failed"));
-      setIsSSOLoading(false);
-    }
-  }, [email, t]);
+      if (result.error) {
+        setError(result.error.message || t("auth.sso.failed"));
+        setIsSSOLoading(false);
+      }
+    },
+    [t]
+  );
+
+  const handleSSOSignIn = useCallback(() => startSSOSignIn(email), [email, startSSOSignIn]);
 
   const handleEmailContinue = useCallback(async () => {
     if (!email.trim() || !authClient) return;
@@ -185,7 +196,20 @@ export default function AuthenticationStep({
         throw new Error(t("auth.errors.failedUserCheck"));
       }
 
-      const data = await response.json().catch(() => ({}));
+      const data = (await response.json().catch(() => ({}))) as {
+        exists?: boolean;
+        sso?: { available?: boolean; required?: boolean; domain?: string };
+      };
+      if (data.sso?.available) {
+        const discovery = {
+          required: data.sso.required === true,
+          domain: data.sso.domain || email.trim().split("@")[1] || "your organization",
+          exists: data.exists === true,
+        };
+        setSsoDiscovery(discovery);
+        if (discovery.required) await startSSOSignIn(email);
+        return;
+      }
       setAuthMode(data.exists ? "sign-in" : "sign-up");
     } catch (err) {
       logger.error("Error checking user existence", err, "auth");
@@ -193,7 +217,7 @@ export default function AuthenticationStep({
     } finally {
       setIsCheckingEmail(false);
     }
-  }, [email, t]);
+  }, [email, startSSOSignIn, t]);
 
   const errorMessageIncludes = (message: string | undefined, keywords: string[]): boolean => {
     if (!message) return false;
@@ -270,6 +294,7 @@ export default function AuthenticationStep({
 
   const handleBack = useCallback(() => {
     setAuthMode(null);
+    setSsoDiscovery(null);
     setPassword("");
     setFullName("");
     setError(null);
@@ -316,10 +341,12 @@ export default function AuthenticationStep({
           </p>
         </div>
 
-        <Button onClick={onContinueWithoutAccount} className="w-full h-9">
-          <span className="text-sm font-medium">{t("auth.getStarted")}</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Button>
+        {onContinueWithoutAccount && (
+          <Button onClick={onContinueWithoutAccount} className="w-full h-9">
+            <span className="text-sm font-medium">{t("auth.getStarted")}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
     );
   }
@@ -356,6 +383,72 @@ export default function AuthenticationStep({
 
   if (forgotPasswordOpen) {
     return <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />;
+  }
+
+  if (ssoDiscovery && authMode === null) {
+    return (
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronLeft className="h-3 w-3" />
+          {t("auth.common.back")}
+        </button>
+
+        <div className="pb-1 text-center">
+          <p className="mb-2 text-sm leading-tight text-muted-foreground/70">{email}</p>
+          <p className="text-lg font-semibold leading-tight tracking-tight text-foreground">
+            {t("auth.sso.companySignInTitle")}
+          </p>
+          <p className="mt-1 text-xs leading-snug text-muted-foreground">
+            {ssoDiscovery.required
+              ? t("auth.sso.requiredDescription", { domain: ssoDiscovery.domain })
+              : t("auth.sso.availableDescription", { domain: ssoDiscovery.domain })}
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleSSOSignIn}
+          disabled={isSSOLoading || !oauthProtocolRegistered}
+          className="h-9 w-full"
+        >
+          {isSSOLoading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span className="text-sm font-medium">{t("auth.social.completeInBrowser")}</span>
+            </>
+          ) : (
+            <span className="text-sm font-medium">{t("auth.sso.continueWithSSO")}</span>
+          )}
+        </Button>
+
+        {!ssoDiscovery.required && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full font-normal text-muted-foreground"
+            disabled={isSSOLoading}
+            onClick={() => {
+              setSsoDiscovery(null);
+              setAuthMode(ssoDiscovery.exists ? "sign-in" : "sign-up");
+            }}
+          >
+            {t("auth.sso.useEmailInstead")}
+          </Button>
+        )}
+
+        {error && (
+          <div className="flex items-center gap-1.5 rounded border border-destructive/20 bg-destructive/5 px-2.5 py-1.5">
+            <AlertCircle className="h-3 w-3 shrink-0 text-destructive" />
+            <p className="text-xs leading-snug text-destructive">{error}</p>
+          </div>
+        )}
+      </div>
+    );
   }
 
   // Password form (after email is entered)
@@ -646,18 +739,20 @@ export default function AuthenticationStep({
         </div>
       )}
 
-      <div className="pt-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onContinueWithoutAccount}
-          className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
-          disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
-        >
-          {t("auth.emailStep.continueWithoutAccount")}
-        </Button>
-      </div>
+      {onContinueWithoutAccount && (
+        <div className="pt-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onContinueWithoutAccount}
+            className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
+            disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
+          >
+            {t("auth.emailStep.continueWithoutAccount")}
+          </Button>
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground/80 leading-tight text-center">
         {t("auth.legal.prefix")}{" "}

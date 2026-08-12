@@ -5,6 +5,7 @@ const debugLogger = require("./debugLogger");
 const {
   downloadFile,
   createDownloadSignal,
+  createDownloadInProgressError,
   validateFileSize,
   cleanupStaleDownloads,
   checkDiskSpace,
@@ -30,11 +31,18 @@ function getValidModelNames() {
   return Object.keys(modelRegistryData.whisperModels);
 }
 
-function shouldRewarmOnWake({ isRemote, useCuda, modelName, transcribing, rewarmInFlight }) {
-  // Only re-warm a running local CUDA whisper-server: sleep evicts its model from
+function shouldRewarmOnWake({
+  isRemote,
+  useCuda,
+  useVulkan,
+  modelName,
+  transcribing,
+  rewarmInFlight,
+}) {
+  // Only re-warm a running local GPU whisper-server: sleep evicts its model from
   // VRAM. Skip remote/CPU servers, and skip while a transcription (already warming
   // the server) or another re-warm is in flight. See #766.
-  return !isRemote && !!useCuda && !!modelName && !transcribing && !rewarmInFlight;
+  return !isRemote && !!(useCuda || useVulkan) && !!modelName && !transcribing && !rewarmInFlight;
 }
 
 class WhisperManager {
@@ -95,7 +103,7 @@ class WhisperManager {
       await cleanupStaleDownloads(this.getModelsDir());
 
       // Pre-warm whisper-server if local mode enabled (eliminates 2-5s cold-start delay)
-      const { localTranscriptionProvider, whisperModel, useCuda } = settings;
+      const { localTranscriptionProvider, whisperModel, useCuda, useVulkan } = settings;
 
       if (
         localTranscriptionProvider === "whisper" &&
@@ -109,11 +117,15 @@ class WhisperManager {
             model: whisperModel,
             modelPath,
             cuda: !!useCuda,
+            vulkan: !!useVulkan,
           });
 
           try {
             const serverStartTime = Date.now();
-            await this.serverManager.start(modelPath, { useCuda: !!useCuda });
+            await this.serverManager.start(modelPath, {
+              useCuda: !!useCuda,
+              useVulkan: !!useVulkan,
+            });
             this.currentServerModel = whisperModel;
 
             debugLogger.info("whisper-server pre-warmed successfully", {
@@ -251,6 +263,7 @@ class WhisperManager {
       !shouldRewarmOnWake({
         isRemote: sm.isRemote,
         useCuda: sm.useCuda,
+        useVulkan: sm.useVulkan,
         modelName,
         transcribing: this._transcribing,
         rewarmInFlight: this._rewarmInFlight,
@@ -259,10 +272,11 @@ class WhisperManager {
       return false;
     }
 
-    // Replay the last start options (VAD, threads) so the reloaded server matches the
-    // signature the next dictation will use; a bare start would otherwise be rejected
-    // by start()'s no-op guard and reload the model on the first dictation. See #766.
-    const options = { ...sm.lastStartOptions, useCuda: true };
+    // Replay the last start options (VAD, threads, GPU backend) so the reloaded
+    // server matches the signature the next dictation will use; a bare start would
+    // otherwise be rejected by start()'s no-op guard and reload the model on the
+    // first dictation. See #766.
+    const options = { ...sm.lastStartOptions };
     this._rewarmInFlight = true;
     try {
       debugLogger.info("Re-warming whisper-server after wake from sleep", { model: modelName });
@@ -350,6 +364,7 @@ class WhisperManager {
 
     await this.serverManager.start(modelPath, {
       useCuda: this.serverManager.useCuda,
+      useVulkan: this.serverManager.useVulkan,
       vadEnabled,
       vadModelPath,
       vadConfig: options.vadConfig || null,
@@ -503,8 +518,6 @@ class WhisperManager {
     const modelPath = this.getModelPath(modelName);
     const modelsDir = this.getModelsDir();
 
-    await fsPromises.mkdir(modelsDir, { recursive: true });
-
     if (fs.existsSync(modelPath)) {
       const stats = await fsPromises.stat(modelPath);
       return {
@@ -517,23 +530,41 @@ class WhisperManager {
       };
     }
 
-    const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 1.2);
-    if (!spaceCheck.ok) {
-      throw new Error(
-        `Not enough disk space to download model. Need ~${Math.round((modelConfig.size * 1.2) / 1_000_000)}MB, ` +
-          `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
-      );
+    if (this.currentDownloadProcess) {
+      throw createDownloadInProgressError(modelName, this.currentDownloadProcess.model);
     }
 
     const { signal, abort } = createDownloadSignal();
-    this.currentDownloadProcess = { abort };
+    const downloadProcess = {
+      abort,
+      model: modelName,
+      phase: "progress",
+      percentage: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+    };
+    this.currentDownloadProcess = downloadProcess;
 
     try {
+      await fsPromises.mkdir(modelsDir, { recursive: true });
+
+      const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 1.2);
+      if (!spaceCheck.ok) {
+        throw new Error(
+          `Not enough disk space to download model. Need ~${Math.round((modelConfig.size * 1.2) / 1_000_000)}MB, ` +
+            `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
+        );
+      }
+
       await downloadFile(modelConfig.url, modelPath, {
         timeout: 600000,
         signal,
         expectedSize: modelConfig.size,
         onProgress: (downloadedBytes, totalBytes) => {
+          downloadProcess.percentage =
+            totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0;
+          downloadProcess.downloadedBytes = downloadedBytes;
+          downloadProcess.totalBytes = totalBytes;
           if (progressCallback) {
             progressCallback({
               type: "progress",
@@ -564,18 +595,21 @@ class WhisperManager {
       };
     } catch (error) {
       if (error.isAbort) {
-        throw new Error("Download interrupted by user");
+        throw Object.assign(new Error("Download interrupted by user"), {
+          code: "DOWNLOAD_CANCELLED",
+        });
       }
       throw error;
     } finally {
-      this.currentDownloadProcess = null;
+      if (this.currentDownloadProcess === downloadProcess) {
+        this.currentDownloadProcess = null;
+      }
     }
   }
 
   async cancelDownload() {
     if (this.currentDownloadProcess) {
       this.currentDownloadProcess.abort();
-      this.currentDownloadProcess = null;
       return { success: true, message: "Download cancelled" };
     }
     return { success: false, error: "No active download to cancel" };
@@ -583,6 +617,14 @@ class WhisperManager {
 
   async checkModelStatus(modelName) {
     const modelPath = this.getModelPath(modelName);
+    const activeDownload = this.currentDownloadProcess?.model === modelName;
+    const downloadStatus = {
+      isDownloading: activeDownload,
+      isInstalling: false,
+      downloadProgress: activeDownload ? this.currentDownloadProcess.percentage : 0,
+      downloadedBytes: activeDownload ? this.currentDownloadProcess.downloadedBytes : 0,
+      totalBytes: activeDownload ? this.currentDownloadProcess.totalBytes : 0,
+    };
 
     if (fs.existsSync(modelPath)) {
       const stats = await fsPromises.stat(modelPath);
@@ -593,10 +635,11 @@ class WhisperManager {
         size_bytes: stats.size,
         size_mb: Math.round(stats.size / (1024 * 1024)),
         success: true,
+        ...downloadStatus,
       };
     }
 
-    return { model: modelName, downloaded: false, success: true };
+    return { model: modelName, downloaded: false, success: true, ...downloadStatus };
   }
 
   async listWhisperModels() {

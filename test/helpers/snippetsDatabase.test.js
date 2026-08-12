@@ -24,6 +24,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
 process.env.NODE_ENV = "test";
 
 const DatabaseManager = require("../../src/helpers/database.js");
+const { skipOrFail } = require("./harness/db.js");
 
 function createDb(t) {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-snippets-db-"));
@@ -33,21 +34,15 @@ function createDb(t) {
     probe.close();
     fs.rmSync(path.join(userDataDir, "probe.db"), { force: true });
   } catch (error) {
-    if (String(error?.message || error).includes("NODE_MODULE_VERSION")) {
-      t.skip("better-sqlite3 native binding is not compiled for this Node runtime");
-      return null;
-    }
-    throw error;
+    skipOrFail(t, error);
+    return null;
   }
 
   try {
     return new DatabaseManager();
   } catch (error) {
-    if (String(error?.message || error).includes("NODE_MODULE_VERSION")) {
-      t.skip("better-sqlite3 native binding is not compiled for this Node runtime");
-      return null;
-    }
-    throw error;
+    skipOrFail(t, error);
+    return null;
   }
 }
 

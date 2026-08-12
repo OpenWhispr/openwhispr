@@ -1,12 +1,13 @@
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const { spawn } = require("child_process");
 const { pipeline } = require("stream/promises");
 const debugLogger = require("./debugLogger");
+const { runSystemTar } = require("./systemTar");
 const {
   downloadFile,
   createDownloadSignal,
+  createDownloadInProgressError,
   cleanupStaleDownloads,
   checkDiskSpace,
 } = require("./downloadUtils");
@@ -14,6 +15,7 @@ const ParakeetServerManager = require("./parakeetServer");
 const { getModelsDirForService } = require("./modelDirUtils");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
+const { getModelRuntime, REQUIRED_MODEL_FILES } = require("./parakeetModelInfo");
 
 function getParakeetModelConfig(modelName) {
   const modelInfo = modelRegistryData.parakeetModels[modelName];
@@ -72,7 +74,7 @@ class ParakeetManager {
       if (
         localTranscriptionProvider === "nvidia" &&
         parakeetModel &&
-        this.serverManager.isAvailable()
+        this.serverManager.isAvailable(getModelRuntime(parakeetModel))
       ) {
         if (this.serverManager.isModelDownloaded(parakeetModel)) {
           debugLogger.info("Pre-warming parakeet server", { model: parakeetModel });
@@ -112,15 +114,16 @@ class ParakeetManager {
 
     debugLogger.info("Parakeet initialization complete", {
       totalTimeMs: Date.now() - startTime,
-      binaryAvailable: this.serverManager.isAvailable(),
+      binaryAvailable: this.serverManager.hasAnyWsBinary(),
     });
   }
 
   async logDependencyStatus() {
     const status = {
       sherpaOnnx: {
-        available: this.serverManager.isAvailable(),
-        path: this.serverManager.getBinaryPath(),
+        available: this.serverManager.hasAnyWsBinary(),
+        path:
+          this.serverManager.getBinaryPath("offline") || this.serverManager.getBinaryPath("online"),
       },
       models: [],
     };
@@ -154,16 +157,13 @@ class ParakeetManager {
   }
 
   async checkInstallation() {
-    const binaryPath = this.serverManager.getBinaryPath();
+    const binaryPath =
+      this.serverManager.getBinaryPath("offline") || this.serverManager.getBinaryPath("online");
     if (!binaryPath) {
       return { installed: false, working: false };
     }
 
-    return {
-      installed: true,
-      working: this.serverManager.isAvailable(),
-      path: binaryPath,
-    };
+    return { installed: true, working: true, path: binaryPath };
   }
 
   async startServer(modelName) {
@@ -179,21 +179,35 @@ class ParakeetManager {
     return this.serverManager.getServerStatus();
   }
 
+  supportsOnlineStreaming(modelName) {
+    return getModelRuntime(modelName) === "online";
+  }
+
+  async createOnlineStream(modelName, options = {}) {
+    this.validateModelName(modelName);
+    const started = await this.serverManager.startServer(modelName);
+    if (!started.success) {
+      throw new Error(started.reason || "Failed to start parakeet streaming server");
+    }
+    return this.serverManager.createOnlineStream(options);
+  }
+
   async transcribeLocalParakeet(audioBlob, options = {}) {
+    const model = options.model || "parakeet-tdt-0.6b-v3";
+    const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
+
     debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
       options,
       audioBlobType: audioBlob?.constructor?.name,
       audioBlobSize: audioBlob?.byteLength || audioBlob?.size || 0,
-      serverAvailable: this.serverManager.isAvailable(),
+      serverAvailable,
     });
 
-    if (!this.serverManager.isAvailable()) {
+    if (!serverAvailable) {
       throw new Error(
         "sherpa-onnx binary not found. Please ensure the app is installed correctly."
       );
     }
-
-    const model = options.model || "parakeet-tdt-0.6b-v3";
 
     if (!this.serverManager.isModelDownloaded(model)) {
       throw new Error(
@@ -254,7 +268,10 @@ class ParakeetManager {
       return { success: false, message: "No audio detected" };
     }
 
-    return { success: true, text };
+    // Surfaced by the renderer as a partial-transcription warning toast.
+    return output.truncated
+      ? { success: true, text, warning: "truncated" }
+      : { success: true, text };
   }
 
   async downloadParakeetModel(modelName, progressCallback = null) {
@@ -264,34 +281,49 @@ class ParakeetManager {
     const modelPath = this.getModelPath(modelName);
     const modelsDir = this.getModelsDir();
 
-    await fsPromises.mkdir(modelsDir, { recursive: true });
-
     if (this.serverManager.isModelDownloaded(modelName)) {
       return { model: modelName, downloaded: true, path: modelPath, success: true };
     }
 
-    const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 2.5);
-    if (!spaceCheck.ok) {
-      throw new Error(
-        `Not enough disk space to download and extract model. Need ~${Math.round((modelConfig.size * 2.5) / 1_000_000)}MB, ` +
-          `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
-      );
+    if (this.currentDownloadProcess) {
+      throw createDownloadInProgressError(modelName, this.currentDownloadProcess.model);
     }
 
     const archivePath = path.join(modelsDir, `${modelName}.tar.bz2`);
     const { signal, abort } = createDownloadSignal();
-    this.currentDownloadProcess = { abort };
+    const downloadProcess = {
+      abort,
+      model: modelName,
+      phase: "progress",
+      percentage: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+    };
+    this.currentDownloadProcess = downloadProcess;
 
     try {
+      await fsPromises.mkdir(modelsDir, { recursive: true });
+
+      const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 2.5);
+      if (!spaceCheck.ok) {
+        throw new Error(
+          `Not enough disk space to download and extract model. Need ~${Math.round((modelConfig.size * 2.5) / 1_000_000)}MB, ` +
+            `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
+        );
+      }
+
       let archiveReady = false;
       try {
         const stats = await fsPromises.stat(archivePath);
-        if (stats.size > 0) {
+        // A visibly truncated leftover would just fail extraction forever.
+        if (stats.size >= modelConfig.size * 0.9) {
           archiveReady = true;
           debugLogger.info("Reusing existing archive from previous attempt", {
             archivePath,
             size: stats.size,
           });
+        } else if (stats.size > 0) {
+          await fsPromises.unlink(archivePath).catch(() => {});
         }
       } catch {}
 
@@ -300,6 +332,10 @@ class ParakeetManager {
           timeout: 600000,
           signal,
           onProgress: (downloadedBytes, totalBytes) => {
+            downloadProcess.percentage =
+              totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0;
+            downloadProcess.downloadedBytes = downloadedBytes;
+            downloadProcess.totalBytes = totalBytes;
             if (progressCallback) {
               progressCallback({
                 type: "progress",
@@ -313,6 +349,8 @@ class ParakeetManager {
         });
       }
 
+      downloadProcess.phase = "installing";
+      downloadProcess.percentage = 100;
       if (progressCallback) {
         progressCallback({ type: "installing", model: modelName, percentage: 100 });
       }
@@ -329,6 +367,8 @@ class ParakeetManager {
             error: extractError.message,
           });
           if (attempt >= MAX_EXTRACT_RETRIES) {
+            // The archive is the prime suspect; drop it so the next attempt re-downloads.
+            await fsPromises.unlink(archivePath).catch(() => {});
             const err = new Error(`Model installation failed: ${extractError.message}`);
             err.code = "EXTRACTION_FAILED";
             throw err;
@@ -341,7 +381,14 @@ class ParakeetManager {
         progressCallback({ type: "complete", model: modelName, percentage: 100 });
       }
 
-      if (this.serverManager.isAvailable()) {
+      // Pre-warm the downloaded model, but never hijack a server that is already
+      // serving (or starting) another model — e.g. mid-dictation.
+      const serverStatus = this.serverManager.getServerStatus();
+      if (
+        this.serverManager.isAvailable(getModelRuntime(modelName)) &&
+        !serverStatus.running &&
+        !serverStatus.starting
+      ) {
         this.serverManager.startServer(modelName).catch((err) => {
           debugLogger.warn("Post-download server pre-warm failed (non-fatal)", {
             error: err.message,
@@ -354,11 +401,15 @@ class ParakeetManager {
     } catch (error) {
       if (error.isAbort) {
         await fsPromises.unlink(archivePath).catch(() => {});
-        throw new Error("Download interrupted by user");
+        throw Object.assign(new Error("Download interrupted by user"), {
+          code: "DOWNLOAD_CANCELLED",
+        });
       }
       throw error;
     } finally {
-      this.currentDownloadProcess = null;
+      if (this.currentDownloadProcess === downloadProcess) {
+        this.currentDownloadProcess = null;
+      }
     }
   }
 
@@ -392,7 +443,10 @@ class ParakeetManager {
         for (const entry of entries) {
           const entryPath = path.join(extractDir, entry);
           const stat = await fsPromises.stat(entryPath);
-          if (stat.isDirectory() && entry.includes("parakeet")) {
+          if (
+            stat.isDirectory() &&
+            REQUIRED_MODEL_FILES.every((file) => fs.existsSync(path.join(entryPath, file)))
+          ) {
             modelDir = entry;
             break;
           }
@@ -411,13 +465,7 @@ class ParakeetManager {
         }
       }
 
-      const requiredFiles = [
-        "encoder.int8.onnx",
-        "decoder.int8.onnx",
-        "joiner.int8.onnx",
-        "tokens.txt",
-      ];
-      const missing = requiredFiles.filter((f) => !fs.existsSync(path.join(targetDir, f)));
+      const missing = REQUIRED_MODEL_FILES.filter((f) => !fs.existsSync(path.join(targetDir, f)));
       if (missing.length > 0) {
         throw new Error(`Extracted model is missing required files: ${missing.join(", ")}`);
       }
@@ -449,35 +497,19 @@ class ParakeetManager {
   }
 
   _runSystemTar(archivePath, extractDir) {
-    return new Promise((resolve, reject) => {
-      const tarProcess = spawn("tar", ["-xjf", archivePath, "-C", extractDir], {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-
-      let stderr = "";
-
-      tarProcess.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      tarProcess.on("close", (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`tar extraction failed with code ${code}: ${stderr}`));
-        }
-      });
-
-      tarProcess.on("error", (err) => {
-        reject(new Error(`Failed to start tar process: ${err.message}`));
-      });
-    });
+    return runSystemTar(archivePath, extractDir);
   }
 
   async cancelDownload() {
     if (this.currentDownloadProcess) {
+      if (this.currentDownloadProcess.phase === "installing") {
+        return {
+          success: false,
+          error: "Model installation cannot be cancelled once extraction has started",
+          code: "INSTALLATION_IN_PROGRESS",
+        };
+      }
       this.currentDownloadProcess.abort();
-      this.currentDownloadProcess = null;
       return { success: true, message: "Download cancelled" };
     }
     return { success: false, error: "No active download to cancel" };
@@ -485,6 +517,14 @@ class ParakeetManager {
 
   async checkModelStatus(modelName) {
     const modelPath = this.getModelPath(modelName);
+    const activeDownload = this.currentDownloadProcess?.model === modelName;
+    const downloadStatus = {
+      isDownloading: activeDownload,
+      isInstalling: activeDownload && this.currentDownloadProcess.phase === "installing",
+      downloadProgress: activeDownload ? this.currentDownloadProcess.percentage : 0,
+      downloadedBytes: activeDownload ? this.currentDownloadProcess.downloadedBytes : 0,
+      totalBytes: activeDownload ? this.currentDownloadProcess.totalBytes : 0,
+    };
 
     if (this.serverManager.isModelDownloaded(modelName)) {
       try {
@@ -497,13 +537,14 @@ class ParakeetManager {
           size_bytes: stats.size,
           size_mb: Math.round(stats.size / (1024 * 1024)),
           success: true,
+          ...downloadStatus,
         };
       } catch {
-        return { model: modelName, downloaded: false, success: true };
+        return { model: modelName, downloaded: false, success: true, ...downloadStatus };
       }
     }
 
-    return { model: modelName, downloaded: false, success: true };
+    return { model: modelName, downloaded: false, success: true, ...downloadStatus };
   }
 
   async listParakeetModels() {
@@ -600,8 +641,8 @@ class ParakeetManager {
       modelsDir: this.getModelsDir(),
       models: [],
     };
-
-    const binaryPath = this.serverManager.getBinaryPath();
+    const binaryPath =
+      this.serverManager.getBinaryPath("offline") || this.serverManager.getBinaryPath("online");
     if (binaryPath) {
       diagnostics.sherpaOnnx = { available: true, path: binaryPath };
     }

@@ -21,6 +21,17 @@ The first transcription will download the model automatically.
 | small  | 466MB | Medium  | Better  | ~2GB  | Professional use |
 | medium | 1.5GB | Slow    | High    | ~5GB  | High accuracy    |
 | large  | 3GB   | Slowest | Best    | ~10GB | Maximum quality  |
+| turbo  | 1.6GB | Fast    | High    | ~6GB  | Fast + accurate  |
+
+## GPU Acceleration
+
+Local Whisper can run on your GPU for much faster transcription:
+
+- **macOS**: Metal acceleration is built in — no setup needed on Apple Silicon
+- **NVIDIA (Windows/Linux)**: one-click CUDA runtime download from the GPU card in the transcription model picker
+- **AMD / Intel (Windows/Linux)**: one-click Vulkan runtime download from the same GPU card — covers Radeon and Arc/integrated GPUs
+
+The GPU runtime is downloaded on demand with SHA-256-verified checksums. If the GPU server crashes or fails to start (unsupported GPU, out of VRAM), OpenWhispr automatically falls back to CPU transcription and shows a notice — dictation keeps working.
 
 ## How It Works
 

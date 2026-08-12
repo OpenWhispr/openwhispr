@@ -9,6 +9,8 @@ import WindowControls from "./components/WindowControls.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
+import { usePolicyStore } from "./stores/policyStore";
+import { isControlPanelWindow } from "./utils/windowContext.ts";
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
@@ -35,6 +37,14 @@ export default function AppRouter() {
 
 function MainApp() {
   const { isSignedIn, isGracePeriodOnly, isLoaded: authLoaded } = useAuth();
+  const policyStatus = usePolicyStore((state) => state.status);
+  const policyResolved =
+    !isSignedIn ||
+    policyStatus === "managed" ||
+    policyStatus === "unmanaged" ||
+    policyStatus === "error";
+  const isWaitingForPolicyStart = isSignedIn && !policyResolved;
+  const autoSyncReady = authLoaded && policyResolved;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
@@ -42,9 +52,7 @@ function MainApp() {
   const [postOnboardingSettingsSection, setPostOnboardingSettingsSection] = useState(undefined);
 
   const isAgentPanel = window.location.search.includes("agent=true");
-  const isControlPanel =
-    !isAgentPanel &&
-    (window.location.pathname.includes("control") || window.location.search.includes("panel=true"));
+  const isControlPanel = !isAgentPanel && isControlPanelWindow();
   const isDictationPanel = !isControlPanel && !isAgentPanel;
 
   useEffect(() => {
@@ -57,7 +65,17 @@ function MainApp() {
         import("./components/OnboardingFlow.tsx").catch(() => {});
       }
     }
-  }, [isAgentPanel, isControlPanel]);
+
+    // Sync starts only after auth settles, so a new bearer token cannot touch
+    // the previous account's rows while validation is still running. A failed
+    // (guest/offline) resolution also counts as settled: canSync() then no-ops
+    // because no validated auth context exists.
+    if (!isAgentPanel && autoSyncReady) {
+      import("./services/SyncService.js")
+        .then(({ syncService }) => syncService.startAutoSync())
+        .catch(() => {});
+    }
+  }, [autoSyncReady, isAgentPanel, isControlPanel]);
 
   useEffect(() => {
     if (!authLoaded) return;
@@ -101,7 +119,10 @@ function MainApp() {
     localStorage.setItem("onboardingCompleted", "true");
   };
 
+  // The agent waits for auth resolution so account policy can fail closed;
+  // guests still render once the signed-out state resolves.
   if (isAgentPanel) {
+    if (!authLoaded || isWaitingForPolicyStart) return <LoadingFallback />;
     return (
       <Suspense fallback={<LoadingFallback />}>
         <AgentOverlay />
@@ -109,7 +130,10 @@ function MainApp() {
     );
   }
 
-  if (isLoading) {
+  // isLoading clears once the onboarding effect has run, which itself waits
+  // for authLoaded — and authLoaded terminates even when the session cannot
+  // resolve (guest/offline presents as signed out).
+  if (isLoading || isWaitingForPolicyStart) {
     return <LoadingFallback />;
   }
 

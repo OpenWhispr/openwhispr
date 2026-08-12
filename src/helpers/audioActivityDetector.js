@@ -1,9 +1,8 @@
 const { exec, spawn } = require("child_process");
 const { promisify } = require("util");
-const path = require("path");
-const fs = require("fs");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
+const { resolveBundledBinary } = require("./binaryResolver");
 
 const execAsync = promisify(exec);
 
@@ -31,6 +30,10 @@ class AudioActivityDetector extends EventEmitter {
     this._running = false;
     this._eventDriven = false;
     this._resetTimer = null;
+    this._startGeneration = 0;
+    this._micWarmHold = false;
+    this._lastKnownMicState = false;
+    this._cooldownReevalTimer = null;
   }
 
   setUserRecording(active) {
@@ -39,15 +42,36 @@ class AudioActivityDetector extends EventEmitter {
       this.consecutiveChecks = 0;
       this.audioActiveStart = null;
       this._clearSustainedTimer();
+    } else {
+      this._reevaluateAfterGate();
     }
     debugLogger.debug("User recording state changed", { active }, "meeting");
+  }
+
+  // Our own idle-hold keeps the device "in use" after a dictation ends, and the
+  // macOS/Linux mic signals are device-global — they cannot tell us apart from
+  // a meeting app. Mic evidence during the hold is dropped outright (never
+  // queued: it is not a meeting). Sustained state resets on both transitions so
+  // a half-armed detection from before the hold cannot fire after it.
+  setMicWarmHold(active) {
+    this._micWarmHold = active;
+    this.consecutiveChecks = 0;
+    this.audioActiveStart = null;
+    this._clearSustainedTimer();
+    if (!active) {
+      this._reevaluateAfterGate();
+    }
+    debugLogger.debug("Mic warm-hold state changed", { active }, "meeting");
   }
 
   async start() {
     if (this._running) return;
     this._running = true;
+    const generation = ++this._startGeneration;
 
-    const started = await this._tryEventDriven();
+    const started = await this._tryEventDriven(generation);
+    if (this._isStale(generation)) return;
+
     if (started) {
       this._eventDriven = true;
       debugLogger.info(
@@ -72,6 +96,7 @@ class AudioActivityDetector extends EventEmitter {
     this._killListenerProcess();
     this._clearSustainedTimer();
     this._clearResetTimer();
+    this._resetListenerState();
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
@@ -86,6 +111,11 @@ class AudioActivityDetector extends EventEmitter {
     this._reset();
     this._clearSustainedTimer();
     this._clearResetTimer();
+    // Polling parity: polling re-detects a still-running call once the cooldown
+    // lapses, but the edge-triggered listeners will never re-announce it.
+    if (this._eventDriven && this._lastKnownMicState) {
+      this._scheduleCooldownReeval(COOLDOWN_MS);
+    }
     debugLogger.info(
       "Audio detection dismissed, cooldown started",
       { cooldownMs: COOLDOWN_MS },
@@ -104,9 +134,18 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this.hasPrompted = false;
+    this._clearResetTimer();
+  }
+
+  // The pid set and source count mirror what the OS told us is open, not our
+  // own detection state — only losing the listener invalidates them. Clearing
+  // them on dismissal would desync the reference count, so an unrelated app's
+  // mic session ending would report the still-running call as gone.
+  _resetListenerState() {
     this._activeMicPids.clear();
     this._activeSources = 0;
-    this._clearResetTimer();
+    this._lastKnownMicState = false;
+    this._clearCooldownReevalTimer();
   }
 
   _clearSustainedTimer() {
@@ -143,57 +182,90 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
+  // True once stop() or a newer start() has superseded the run that owns `generation`.
+  _isStale(generation) {
+    return !this._running || generation !== this._startGeneration;
+  }
+
   // ---------------------------------------------------------------------------
   // Event-driven approach
   // ---------------------------------------------------------------------------
 
-  async _tryEventDriven() {
+  async _tryEventDriven(generation) {
     switch (process.platform) {
       case "darwin":
-        return this._tryEventDrivenDarwin();
+        return this._tryEventDrivenDarwin(generation);
       case "win32":
-        return this._tryEventDrivenWin32();
+        return this._tryEventDrivenWin32(generation);
       case "linux":
-        return this._tryEventDrivenLinux();
+        return this._tryEventDrivenLinux(generation);
       default:
         return false;
     }
   }
 
-  _resolveBinary(binaryName) {
-    const candidates = [
-      path.join(__dirname, "..", "..", "resources", "bin", binaryName),
-      path.join(__dirname, "..", "..", "resources", binaryName),
-    ];
-
-    if (process.resourcesPath) {
-      candidates.push(
-        path.join(process.resourcesPath, binaryName),
-        path.join(process.resourcesPath, "bin", binaryName),
-        path.join(process.resourcesPath, "resources", "bin", binaryName),
-        path.join(process.resourcesPath, "app.asar.unpacked", "resources", "bin", binaryName)
-      );
-    }
-
-    for (const candidate of candidates) {
+  // Spawns a listener and resolves only once the OS has confirmed it started, so a
+  // failure to launch (missing binary, not executable) is reported as false instead
+  // of being raced by the asynchronous "error" event.
+  _spawnListener({ command, args = [], options, label, generation, onLine }) {
+    return new Promise((resolve) => {
+      let child;
       try {
-        if (fs.existsSync(candidate)) {
-          fs.accessSync(candidate, fs.constants.X_OK);
-          debugLogger.info("Resolved binary", { name: binaryName, path: candidate }, "meeting");
-          return candidate;
-        }
-      } catch {
-        // continue
+        child = spawn(command, args, options);
+      } catch (err) {
+        debugLogger.warn(`Failed to spawn ${label}`, { error: err.message }, "meeting");
+        resolve(false);
+        return;
       }
-    }
-    return null;
+
+      const onSpawn = () => {
+        child.removeListener("error", onError);
+        if (this._isStale(generation)) {
+          child.kill();
+          resolve(false);
+          return;
+        }
+
+        this._listenerProcess = child;
+        this._readLines(child.stdout, onLine);
+        child.stderr.on("data", (data) => {
+          debugLogger.debug(`${label} stderr`, { output: data.toString().trim() }, "meeting");
+        });
+        this._attachFallbackHandlers(child, label);
+        resolve(true);
+      };
+
+      const onError = (err) => {
+        child.removeListener("spawn", onSpawn);
+        debugLogger.warn(`Failed to spawn ${label}`, { error: err.message }, "meeting");
+        resolve(false);
+      };
+
+      child.once("spawn", onSpawn);
+      child.once("error", onError);
+    });
+  }
+
+  _readLines(stream, onLine) {
+    let buffer = "";
+    stream.on("data", (data) => {
+      buffer += data.toString();
+      let newlineIdx;
+      while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+        onLine(line);
+      }
+    });
   }
 
   _attachFallbackHandlers(child, label) {
     const fallbackToPolling = () => {
+      if (this._listenerProcess !== child) return;
       this._listenerProcess = null;
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
+        this._resetListenerState();
         this._startPolling();
       }
     };
@@ -209,87 +281,44 @@ class AudioActivityDetector extends EventEmitter {
     });
   }
 
-  _tryEventDrivenDarwin() {
-    const binaryPath = this._resolveBinary("macos-mic-listener");
+  _tryEventDrivenDarwin(generation) {
+    const binaryPath = resolveBundledBinary("macos-mic-listener", "meeting");
     if (!binaryPath) {
       debugLogger.warn("macos-mic-listener binary not found, will use polling", {}, "meeting");
       return false;
     }
 
-    try {
-      const child = spawn(binaryPath, [], { stdio: ["ignore", "pipe", "pipe"] });
-      this._listenerProcess = child;
-
-      let buffer = "";
-      child.stdout.on("data", (data) => {
-        buffer += data.toString();
-        let newlineIdx;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, newlineIdx).trim();
-          buffer = buffer.slice(newlineIdx + 1);
-          if (line === "MIC_ACTIVE") {
-            this._onMicStateChanged(true);
-          } else if (line === "MIC_INACTIVE") {
-            this._onMicStateChanged(false);
-          }
+    return this._spawnListener({
+      command: binaryPath,
+      options: { stdio: ["ignore", "pipe", "pipe"] },
+      label: "macos-mic-listener",
+      generation,
+      onLine: (line) => {
+        if (line === "MIC_ACTIVE") {
+          this._onMicStateChanged(true);
+        } else if (line === "MIC_INACTIVE") {
+          this._onMicStateChanged(false);
         }
-      });
-
-      child.stderr.on("data", (data) => {
-        debugLogger.debug(
-          "macos-mic-listener stderr",
-          { output: data.toString().trim() },
-          "meeting"
-        );
-      });
-
-      this._attachFallbackHandlers(child, "macos-mic-listener");
-      return true;
-    } catch (err) {
-      debugLogger.warn("Failed to spawn macos-mic-listener", { error: err.message }, "meeting");
-      return false;
-    }
+      },
+    });
   }
 
-  _tryEventDrivenWin32() {
-    const binaryPath = this._resolveBinary("windows-mic-listener.exe");
+  _tryEventDrivenWin32(generation) {
+    const binaryPath = resolveBundledBinary("windows-mic-listener.exe", "meeting");
     if (!binaryPath) {
       debugLogger.warn("windows-mic-listener.exe not found, will use polling", {}, "meeting");
       return false;
     }
 
-    try {
+    return this._spawnListener({
+      command: binaryPath,
+      args: ["--exclude-pid", String(process.pid)],
       // stdin must be "pipe" — the Windows binary monitors stdin for parent death
-      const child = spawn(binaryPath, ["--exclude-pid", String(process.pid)], {
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      this._listenerProcess = child;
-
-      let buffer = "";
-      child.stdout.on("data", (data) => {
-        buffer += data.toString();
-        let newlineIdx;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, newlineIdx).trim();
-          buffer = buffer.slice(newlineIdx + 1);
-          this._parseWin32ListenerLine(line);
-        }
-      });
-
-      child.stderr.on("data", (data) => {
-        debugLogger.debug(
-          "windows-mic-listener stderr",
-          { output: data.toString().trim() },
-          "meeting"
-        );
-      });
-
-      this._attachFallbackHandlers(child, "windows-mic-listener");
-      return true;
-    } catch (err) {
-      debugLogger.warn("Failed to spawn windows-mic-listener", { error: err.message }, "meeting");
-      return false;
-    }
+      options: { stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
+      label: "windows-mic-listener",
+      generation,
+      onLine: (line) => this._parseWin32ListenerLine(line),
+    });
   }
 
   _parseWin32ListenerLine(line) {
@@ -312,27 +341,15 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
-  _tryEventDrivenLinux() {
-    try {
-      const child = spawn("pactl", ["subscribe"], { stdio: ["ignore", "pipe", "pipe"] });
-      this._listenerProcess = child;
-
-      let buffer = "";
-      child.stdout.on("data", (data) => {
-        buffer += data.toString();
-        let newlineIdx;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, newlineIdx).trim();
-          buffer = buffer.slice(newlineIdx + 1);
-          this._parsePactlSubscribeLine(line);
-        }
-      });
-
-      this._attachFallbackHandlers(child, "pactl subscribe");
-      return true;
-    } catch {
-      return false;
-    }
+  _tryEventDrivenLinux(generation) {
+    return this._spawnListener({
+      command: "pactl",
+      args: ["subscribe"],
+      options: { stdio: ["ignore", "pipe", "pipe"] },
+      label: "pactl subscribe",
+      generation,
+      onLine: (line) => this._parsePactlSubscribeLine(line),
+    });
   }
 
   _parsePactlSubscribeLine(line) {
@@ -353,20 +370,62 @@ class AudioActivityDetector extends EventEmitter {
   // Shared event-driven handler
   // ---------------------------------------------------------------------------
 
+  // The listeners are edge-triggered: they announce transitions, never steady
+  // state. A gate may swallow the only edge a call will ever produce, so the
+  // state is recorded unconditionally and re-evaluated when gates lift.
   _onMicStateChanged(active) {
+    if (!this._running) return;
+    this._lastKnownMicState = active;
+    this._evaluateMicState(active);
+  }
+
+  _reevaluateAfterGate() {
+    if (this._running && this._eventDriven && this._lastKnownMicState) {
+      this._evaluateMicState(true);
+    }
+  }
+
+  _cooldownRemainingMs() {
+    if (!this.lastDismissedAt) return 0;
+    return Math.max(0, COOLDOWN_MS - (Date.now() - this.lastDismissedAt));
+  }
+
+  _scheduleCooldownReeval(delayMs) {
+    this._clearCooldownReevalTimer();
+    this._cooldownReevalTimer = setTimeout(() => {
+      this._cooldownReevalTimer = null;
+      this._reevaluateAfterGate();
+    }, delayMs);
+  }
+
+  _clearCooldownReevalTimer() {
+    if (this._cooldownReevalTimer) {
+      clearTimeout(this._cooldownReevalTimer);
+      this._cooldownReevalTimer = null;
+    }
+  }
+
+  _evaluateMicState(active) {
     if (this._userRecording) {
       debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
       return;
     }
-    if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) {
+    if (this._micWarmHold) {
+      debugLogger.debug("Mic state changed during warm-hold, ignoring", { active }, "meeting");
+      return;
+    }
+    const cooldownRemainingMs = this._cooldownRemainingMs();
+    if (cooldownRemainingMs > 0) {
       debugLogger.debug(
         "Mic state changed but in cooldown",
-        {
-          active,
-          remainingMs: COOLDOWN_MS - (Date.now() - this.lastDismissedAt),
-        },
+        { active, remainingMs: cooldownRemainingMs },
         "meeting"
       );
+      if (active) {
+        this._scheduleCooldownReeval(cooldownRemainingMs);
+      } else {
+        this._clearCooldownReevalTimer();
+      }
       return;
     }
 
@@ -387,7 +446,7 @@ class AudioActivityDetector extends EventEmitter {
       if (!this._sustainedTimer) {
         this._sustainedTimer = setTimeout(() => {
           this._sustainedTimer = null;
-          if (this._userRecording || this.hasPrompted) return;
+          if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
           if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
 
           this.hasPrompted = true;
@@ -421,6 +480,7 @@ class AudioActivityDetector extends EventEmitter {
     if (this._checking) return;
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     if (this._userRecording) return;
+    if (this._micWarmHold) return;
 
     this._checking = true;
     try {

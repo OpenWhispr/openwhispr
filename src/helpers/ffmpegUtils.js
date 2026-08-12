@@ -1,7 +1,9 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const debugLogger = require("./debugLogger");
+const { createAbortError } = require("./abortError");
 
 let cachedFFmpegPath = null;
 
@@ -37,8 +39,9 @@ function getFFmpegPath() {
       return unpackedPath;
     }
 
-    // Try original path (development or if not in ASAR)
-    if (fs.existsSync(ffmpegPath)) {
+    // Try original path (development or if not in ASAR). An in-asar path passes
+    // existsSync but can never be spawned, so fall through to system FFmpeg instead.
+    if (!unpackedPath && fs.existsSync(ffmpegPath)) {
       if (process.platform !== "win32") {
         try {
           fs.accessSync(ffmpegPath, fs.constants.X_OK);
@@ -113,7 +116,11 @@ function convertToWav(inputPath, outputPath, options = {}) {
   return new Promise((resolve, reject) => {
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
-      reject(new Error("FFmpeg not found - required for audio conversion"));
+      reject(
+        new Error(
+          "FFmpeg not found - the bundled FFmpeg is missing from this install and no system FFmpeg was found on PATH; reinstalling OpenWhispr should fix this"
+        )
+      );
       return;
     }
 
@@ -179,6 +186,29 @@ function convertToWav(inputPath, outputPath, options = {}) {
   });
 }
 
+function parseWavFormat(wavBuffer) {
+  if (!isWavFormat(wavBuffer)) return null;
+
+  let offset = 12; // Skip RIFF header (4) + size (4) + WAVE (4)
+  while (offset < wavBuffer.length - 8) {
+    const chunkId = wavBuffer.toString("ascii", offset, offset + 4);
+    const chunkSize = wavBuffer.readUInt32LE(offset + 4);
+
+    if (chunkId === "fmt ") {
+      return {
+        audioFormat: wavBuffer.readUInt16LE(offset + 8),
+        channels: wavBuffer.readUInt16LE(offset + 10),
+        sampleRate: wavBuffer.readUInt32LE(offset + 12),
+        bitsPerSample: wavBuffer.readUInt16LE(offset + 22),
+      };
+    }
+
+    offset += 8 + chunkSize;
+  }
+
+  return null;
+}
+
 function wavToFloat32Samples(wavBuffer) {
   if (!isWavFormat(wavBuffer)) {
     throw new Error("Buffer is not a valid WAV file");
@@ -237,10 +267,21 @@ function computeFloat32RMS(float32Buffer) {
   return Math.sqrt(sumSquares / numSamples);
 }
 
+function parseFfmpegDuration(stderr) {
+  const match = stderr?.match(/Duration:\s*(\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)/);
+  if (!match) return null;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
 function splitAudioFile(inputPath, outputDir, options = {}) {
-  const { segmentDuration = 600, audioBitrate = "128k" } = options;
+  const { segmentDuration = 600, audioBitrate = "128k", signal } = options;
 
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
       reject(new Error("FFmpeg not found - required for audio splitting"));
@@ -282,15 +323,31 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
 
     let stderr = "";
 
+    const onAbort = () => {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        // an uncaught throw here would escape the abort dispatch
+      }
+      reject(createAbortError());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
     proc.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
     proc.on("error", (error) => {
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) return;
       reject(new Error(`FFmpeg split error: ${error.message}`));
     });
 
+    // The kill lands here as a non-zero exit; returning early keeps a cancel
+    // from being logged and reported as an ffmpeg failure.
     proc.on("close", (code) => {
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) return;
       if (code !== 0) {
         const stderrPreview = stderr.slice(-500).trim();
         debugLogger.debug("FFmpeg split failed", { code, stderr: stderrPreview });
@@ -313,10 +370,84 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
         return;
       }
 
-      debugLogger.debug("FFmpeg split complete", { chunkCount: chunks.length });
-      resolve(chunks);
+      const durationSeconds = parseFfmpegDuration(stderr);
+      debugLogger.debug("FFmpeg split complete", { chunkCount: chunks.length, durationSeconds });
+      resolve({ chunkPaths: chunks, durationSeconds });
     });
   });
+}
+
+async function mergeAudioSegments(segments) {
+  if (!Array.isArray(segments) || segments.length === 0) {
+    throw new Error("At least one audio segment is required");
+  }
+  if (segments.length === 1) return Buffer.from(segments[0].buffer);
+
+  const ffmpegPath = getFFmpegPath();
+  if (!ffmpegPath) throw new Error("FFmpeg not found - required for audio segment recovery");
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-audio-merge-"));
+  const outputPath = path.join(tempDir, "merged.webm");
+  try {
+    const inputPaths = segments.map((segment, index) => {
+      const mimeType = segment.mimeType || "audio/webm";
+      const extension = mimeType.includes("ogg")
+        ? "ogg"
+        : mimeType.includes("mp4")
+          ? "m4a"
+          : "webm";
+      const inputPath = path.join(tempDir, `segment-${index}.${extension}`);
+      fs.writeFileSync(inputPath, Buffer.from(segment.buffer));
+      return inputPath;
+    });
+
+    const filters = inputPaths.map(
+      (_, index) =>
+        `[${index}:a]aresample=16000,aformat=sample_fmts=fltp:channel_layouts=mono[s${index}]`
+    );
+    filters.push(
+      `${inputPaths.map((_, index) => `[s${index}]`).join("")}concat=n=${inputPaths.length}:v=0:a=1[out]`
+    );
+
+    await new Promise((resolve, reject) => {
+      const args = inputPaths.flatMap((inputPath) => ["-i", inputPath]);
+      args.push(
+        "-filter_complex",
+        filters.join(";"),
+        "-map",
+        "[out]",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "64k",
+        "-y",
+        outputPath
+      );
+      const proc = spawn(ffmpegPath, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      let stderr = "";
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+      proc.on("error", (error) => reject(new Error(`FFmpeg process error: ${error.message}`)));
+      proc.on("close", (code) => {
+        if (code !== 0) {
+          const preview = stderr.slice(-500).trim();
+          reject(
+            new Error(`FFmpeg audio merge exited with code ${code}${preview ? `: ${preview}` : ""}`)
+          );
+          return;
+        }
+        resolve();
+      });
+    });
+
+    return fs.readFileSync(outputPath);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 }
 
 function clearCache() {
@@ -326,9 +457,12 @@ function clearCache() {
 module.exports = {
   getFFmpegPath,
   isWavFormat,
+  parseWavFormat,
   convertToWav,
   splitAudioFile,
+  parseFfmpegDuration,
   wavToFloat32Samples,
   computeFloat32RMS,
+  mergeAudioSegments,
   clearCache,
 };

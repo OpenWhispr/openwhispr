@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { usePolicyStore } from "../stores/policyStore";
 import {
   Sliders,
   Mic,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
-import { WORKSPACES_ENABLED } from "../lib/features";
+import { useAuth } from "../hooks/useAuth";
 
 export type { SettingsSectionType };
 
@@ -54,8 +55,10 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ open, onOpenChange, initialSection }: SettingsModalProps) {
   const { t } = useTranslation();
-  const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(
-    () => [
+  const { isSignedIn } = useAuth();
+  const policyManaged = usePolicyStore((s) => s.managed);
+  const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(() => {
+    const items: SidebarItem<SettingsSectionType>[] = [
       {
         id: "account",
         label: t("settingsModal.sections.account.label"),
@@ -70,17 +73,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         description: t("settingsModal.sections.plansBilling.description"),
         group: t("settingsModal.groups.account"),
       },
-      ...(WORKSPACES_ENABLED
-        ? [
-            {
-              id: "workspace" as const,
-              label: t("settingsModal.sections.workspace.label"),
-              icon: Users,
-              description: t("settingsModal.sections.workspace.description"),
-              group: t("settingsModal.groups.account"),
-            },
-          ]
-        : []),
+      {
+        id: "workspace" as const,
+        label: t("settingsModal.sections.workspace.label"),
+        icon: Users,
+        description: t("settingsModal.sections.workspace.description"),
+        group: t("settingsModal.groups.account"),
+      },
       {
         id: "general",
         label: t("settingsModal.sections.general.label"),
@@ -123,15 +122,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         description: t("settingsModal.sections.system.description"),
         group: t("settingsModal.groups.system"),
       },
-    ],
-    [t]
-  );
+    ];
+    return isSignedIn ? items : items.filter((item) => item.id !== "workspace");
+  }, [t, isSignedIn]);
 
   const resolveSection = (section: string | undefined): SettingsSectionType => {
     if (!section) return "account";
-    const resolved = (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
-    if (resolved === "workspace" && !WORKSPACES_ENABLED) return "account";
-    return resolved;
+    return (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
   };
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(() =>
@@ -165,6 +162,11 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
       activeSection={activeSection}
       onSectionChange={handleSectionChange}
     >
+      {policyManaged && (
+        <div className="mx-4 mt-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+          {t("settingsModal.managedByOrg")}
+        </div>
+      )}
       <SettingsPage
         activeSection={activeSection}
         onNavigateToSection={handleSectionChange}

@@ -1,11 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
-import { getSettings } from "../../stores/settingsStore";
+import { isEnterpriseProvider } from "../../models/ModelRegistry";
+import { getSettings, selectResolvedLLMConfig } from "../../stores/settingsStore";
+import {
+  isAgentAllowed,
+  isLlmSelectionAllowed,
+  isWebSearchAllowed,
+} from "../../stores/policyRules";
+import { usePolicyStore } from "../../stores/policyStore";
 import { getAgentSystemPrompt } from "../../config/prompts";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
 import type { Message, AgentState, ToolCallInfo } from "./types";
+import type { ContainerScope } from "../../types/chat";
 
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
@@ -17,10 +25,15 @@ function estimateModelSizeB(modelId: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-async function buildRAGContext(userText: string): Promise<string> {
+async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
   try {
-    const results = await window.electronAPI.semanticSearchNotes(userText, RAG_NOTE_LIMIT);
+    const results = await window.electronAPI.semanticSearchNotes(
+      userText,
+      RAG_NOTE_LIMIT,
+      scope?.spaceId ?? null,
+      scope?.folderId ?? null
+    );
     if (!results || results.length === 0) return "";
 
     const snippets = await Promise.all(
@@ -43,6 +56,8 @@ interface UseChatStreamingOptions {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   /** Optional note context to prepend to the system prompt (used by embedded note chat). */
   noteContext?: string;
+  /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
+  searchScope?: ContainerScope;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
 }
 
@@ -58,6 +73,7 @@ export function useChatStreaming({
   messages,
   setMessages,
   noteContext: externalNoteContext,
+  searchScope,
   onStreamComplete,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
@@ -68,6 +84,8 @@ export function useChatStreaming({
   const messagesRef = useRef<Message[]>([]);
   const noteContextRef = useRef(externalNoteContext);
   noteContextRef.current = externalNoteContext;
+  const searchScopeRef = useRef(searchScope);
+  searchScopeRef.current = searchScope;
   const toolRegistryRef = useRef<{ key: string; registry: ToolRegistry } | null>(null);
 
   useEffect(() => {
@@ -91,42 +109,76 @@ export function useChatStreaming({
 
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[]) => {
-      setAgentState("thinking");
-
       const settings = getSettings();
-      const chatAgentMode = settings.chatAgentMode || "openwhispr";
+      const chatConfig = selectResolvedLLMConfig(settings, "chatIntelligence");
+      const chatAgentMode = chatConfig.mode || "openwhispr";
+      const policyState = usePolicyStore.getState();
+      const policyProvider =
+        chatAgentMode === "openwhispr"
+          ? "openwhispr"
+          : chatAgentMode === "local"
+            ? "local"
+            : chatConfig.provider;
+      if (
+        !isAgentAllowed(policyState) ||
+        !isLlmSelectionAllowed(policyState, { mode: chatAgentMode, provider: policyProvider })
+      ) {
+        // The user message is already appended; answer it instead of dead-ending silently.
+        const restriction = !isAgentAllowed(policyState)
+          ? t("common.policyAgentRestricted")
+          : t("common.policyAiProcessingRestricted");
+        setMessages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), role: "assistant", content: restriction, isStreaming: false },
+        ]);
+        return;
+      }
+
+      setAgentState("thinking");
       const isCloudAgent = chatAgentMode === "openwhispr" && settings.isSignedIn;
-      const isLanAgent = chatAgentMode === "self-hosted" && !!settings.chatAgentRemoteUrl;
-      const isCustomAgent =
-        chatAgentMode === "providers" && settings.chatAgentProvider === "custom";
-      const isLocalProvider = ![
-        "openai",
-        "groq",
-        "custom",
-        "anthropic",
-        "gemini",
-        "tinfoil",
-      ].includes(settings.chatAgentProvider);
+      const isLanAgent = chatAgentMode === "self-hosted" && !!chatConfig.remoteUrl;
+      const isCustomAgent = chatAgentMode === "providers" && chatConfig.provider === "custom";
+      const isLocalProvider =
+        !isEnterpriseProvider(chatConfig.provider) &&
+        ![
+          "openai",
+          "groq",
+          "custom",
+          "anthropic",
+          "gemini",
+          "tinfoil",
+          "openrouter",
+          "corti",
+        ].includes(chatConfig.provider);
       const localModelCanUseTool =
-        isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;
+        isLocalProvider && estimateModelSizeB(chatConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
 
+      const scope = searchScopeRef.current;
       let registry: ToolRegistry | null = null;
       if (supportsTools) {
-        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}-${settings.cloudBackupEnabled}`;
+        const scopeKey = scope ? `${scope.spaceId}:${scope.folderId ?? ""}` : "";
+        // The calendar tool reads the shared provider-deduped events table,
+        // so any connected provider enables it.
+        const calendarConnected =
+          settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
+        const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
           registry = createToolRegistry({
             isSignedIn: settings.isSignedIn,
-            gcalConnected: settings.gcalConnected,
+            calendarConnected,
             cloudBackupEnabled: settings.cloudBackupEnabled,
+            searchScope: scope,
+            webSearchEnabled,
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }
       }
 
-      const ragContext = await buildRAGContext(userText);
+      const ragContext = await buildRAGContext(userText, scope);
       const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
       const systemPrompt = getAgentSystemPrompt(
         registry?.getAll().map((t) => t.name),
@@ -175,7 +227,7 @@ export function useChatStreaming({
                   : result.displayText;
                 const metadata =
                   result.success && result.data && typeof result.data === "object"
-                    ? (result.data as Record<string, unknown>)
+                    ? (result.data as Record<string, unknown> | Array<Record<string, unknown>>)
                     : undefined;
                 return { data, displayText: result.displayText, metadata };
               }
@@ -194,14 +246,16 @@ export function useChatStreaming({
           const aiTools = registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
-            settings.chatAgentModel,
-            settings.chatAgentProvider,
+            chatConfig.model,
+            chatConfig.provider,
             {
               systemPrompt,
-              lanUrl: isLanAgent ? settings.chatAgentRemoteUrl : undefined,
-              baseUrl: isCustomAgent ? settings.chatAgentCloudBaseUrl || undefined : undefined,
-              customApiKey: isCustomAgent ? settings.chatAgentCustomApiKey || undefined : undefined,
-              disableThinking: settings.chatAgentDisableThinking,
+              inferenceScope: "chatIntelligence",
+              lanUrl: isLanAgent ? chatConfig.remoteUrl : undefined,
+              baseUrl: isCustomAgent ? chatConfig.cloudBaseUrl || undefined : undefined,
+              customApiKey:
+                isCustomAgent || isLanAgent ? chatConfig.customApiKey || undefined : undefined,
+              disableThinking: chatConfig.disableThinking,
             },
             aiTools
           );

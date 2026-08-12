@@ -2,8 +2,6 @@ const { autoUpdater } = require("electron-updater");
 
 class UpdateManager {
   constructor() {
-    this.mainWindow = null;
-    this.controlPanelWindow = null;
     this.updateAvailable = false;
     this.updateDownloaded = false;
     this.lastUpdateInfo = null;
@@ -17,11 +15,6 @@ class UpdateManager {
     this._suppressNotification = false;
 
     this.setupAutoUpdater();
-  }
-
-  setWindows(mainWindow, controlPanelWindow) {
-    this.mainWindow = mainWindow;
-    this.controlPanelWindow = controlPanelWindow;
   }
 
   setWindowManager(windowManager) {
@@ -158,15 +151,13 @@ class UpdateManager {
   }
 
   notifyRenderers(channel, data) {
-    if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.webContents) {
-      this.mainWindow.webContents.send(channel, data);
-    }
-    if (
-      this.controlPanelWindow &&
-      !this.controlPanelWindow.isDestroyed() &&
-      this.controlPanelWindow.webContents
-    ) {
-      this.controlPanelWindow.webContents.send(channel, data);
+    // Read window refs live from windowManager: cached refs go stale when the
+    // control panel is created after boot (start minimized) or recreated.
+    const { mainWindow, controlPanelWindow } = this.windowManager ?? {};
+    for (const win of [mainWindow, controlPanelWindow]) {
+      if (win && !win.isDestroyed() && win.webContents) {
+        win.webContents.send(channel, data);
+      }
     }
   }
 

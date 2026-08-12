@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Square } from "lucide-react";
 import { stopRecording, useMeetingRecordingStore } from "../../stores/meetingRecordingStore";
 import { cn } from "../lib/utils";
+import { isControlPanelWindow } from "../../utils/windowContext";
 
 interface MeetingRecordingPillProps {
   activeView: string;
@@ -13,12 +14,6 @@ interface MeetingRecordingPillProps {
 
 const BAR_COUNT = 4;
 const BAR_FLOOR = 12;
-
-const isControlPanelWindow = () => {
-  if (typeof window === "undefined") return false;
-  const { search, pathname } = window.location;
-  return pathname.includes("control") || search.includes("panel=true");
-};
 
 const truncateTitle = (title: string) =>
   title.length > 20 ? `${title.slice(0, 19).trimEnd()}…` : title;
@@ -42,6 +37,8 @@ export default function MeetingRecordingPill({
   const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
   const recordingNoteTitle = useMeetingRecordingStore((s) => s.recordingNoteTitle);
   const micLevel = useMeetingRecordingStore((s) => s.currentMicLevel);
+  const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
+  const isWaitingForMic = micCaptureStatus === "reconnecting" || micCaptureStatus === "unavailable";
   const [isStopping, setIsStopping] = useState(false);
 
   const isViewingRecordingNote =
@@ -100,13 +97,16 @@ export default function MeetingRecordingPill({
             {Array.from({ length: BAR_COUNT }, (_, i) => (
               <div
                 key={i}
-                className="w-0.75 rounded-full bg-primary/60 dark:bg-primary/70 origin-bottom"
+                className={cn(
+                  "w-0.75 rounded-full origin-bottom",
+                  isWaitingForMic ? "bg-amber-500" : "bg-primary/60 dark:bg-primary/70"
+                )}
                 style={{ height: computeBarHeight(micLevel, i) }}
               />
             ))}
           </div>
           <span className="text-xs font-medium text-foreground/80 truncate max-w-[12rem]">
-            {title}
+            {isWaitingForMic ? t("notes.meetingPill.waitingForMicrophone") : title}
           </span>
         </button>
 
