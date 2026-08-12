@@ -1053,16 +1053,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           <div className="flex-1 overflow-y-auto pt-1">
             {updateRequiredByOrg && (
               <div className="max-w-3xl mx-auto w-full mb-3">
-                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
+                <div className="rounded-md bg-warning/8 dark:bg-warning/12 p-3">
                   <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                      <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                    <div className="shrink-0 w-8 h-8 rounded-md bg-warning/15 flex items-center justify-center">
+                      <AlertTriangle size={16} className="text-warning" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                      <p className="text-xs font-medium text-foreground mb-0.5">
                         {t("controlPanel.updateRequiredByOrg.title")}
                       </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300/80">
+                      <p className="text-xs text-muted-foreground">
                         {t("controlPanel.updateRequiredByOrg.description", {
                           version: policyMinAppVersion,
                         })}
@@ -1074,16 +1074,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             {usage?.isPastDue && activeView === "home" && (
               <div className="max-w-3xl mx-auto w-full mb-3">
-                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
+                <div className="rounded-md bg-warning/8 dark:bg-warning/12 p-3">
                   <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                      <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                    <div className="shrink-0 w-8 h-8 rounded-md bg-warning/15 flex items-center justify-center">
+                      <AlertTriangle size={16} className="text-warning" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                      <p className="text-xs font-medium text-foreground mb-0.5">
                         {t("controlPanel.billing.pastDueTitle")}
                       </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300/80 mb-2">
+                      <p className="text-xs text-muted-foreground mb-2">
                         {t("controlPanel.billing.bannerDescription", {
                           limit: usage.limit.toLocaleString(),
                         })}

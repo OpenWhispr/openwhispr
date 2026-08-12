@@ -3273,7 +3273,7 @@ EOF`,
                                         {item.desc}
                                       </span>
                                       {item.note && (
-                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                                        <p className="text-[11px] text-warning mt-0.5">
                                           {item.note}
                                         </p>
                                       )}
