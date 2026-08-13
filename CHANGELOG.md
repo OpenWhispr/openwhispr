@@ -61,6 +61,7 @@ GPU acceleration for local transcription gets an overhaul: the status you see is
 - **Large Google Calendars sync completely.** Sync now follows all result pages instead of stopping after the first. (#1572)
 - **Meeting reminders re-arm after a provider reset.** (#1486)
 - **Calendar API failures are reported with their cause.** (#1553)
+- **Meeting join links tolerate malformed calendar data.** Whitespace-only or missing join URLs no longer break the join flow. (#1580)
 
 ### Startup & Linux
 
