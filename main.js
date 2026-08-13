@@ -429,7 +429,16 @@ function initializeCoreManagers() {
     // Heal installs from before GPU packs got per-pack directories; must run
     // before startup pre-warm resolves any GPU binary path.
     const LlamaVulkanManager = require("./src/helpers/llamaVulkanManager");
-    migrateLegacyBinDir([whisperCudaManager, whisperVulkanManager, new LlamaVulkanManager()]);
+    const clearedPacks = migrateLegacyBinDir([
+      whisperCudaManager,
+      whisperVulkanManager,
+      new LlamaVulkanManager(),
+    ]);
+    if (clearedPacks.length > 0) {
+      // No window exists yet — persist the notice; a control panel window
+      // shows it as a toast and clears it. See #1606.
+      require("./src/helpers/gpuPackMigrationNotice").record(clearedPacks);
+    }
     // Lets every server start resolve its GPU backend from installed packs
     whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
   }

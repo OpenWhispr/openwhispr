@@ -363,6 +363,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
 
+  // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
+  getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),
+  dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
+
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),

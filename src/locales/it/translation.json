@@ -2947,6 +2947,10 @@
         "title": "Accelerazione GPU non disponibile",
         "description": "La trascrizione sta usando la CPU. Puoi disattivare l'accelerazione GPU nelle Impostazioni."
       },
+      "gpuPackMigration": {
+        "title": "Il pacchetto GPU deve essere scaricato di nuovo",
+        "description": "Un aggiornamento ha rimosso un'installazione obsoleta del pacchetto GPU ({{packs}}). Scaricalo di nuovo nelle Impostazioni per ripristinare l'accelerazione GPU."
+      },
       "cleanupFailed": {
         "title": "Pulizia non riuscita",
         "description": "La dettatura è stata incollata senza pulizia IA."

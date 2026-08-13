@@ -2947,6 +2947,10 @@
         "title": "Aceleração GPU indisponível",
         "description": "A transcrição está usando a CPU. Você pode desativar a aceleração GPU nas Configurações."
       },
+      "gpuPackMigration": {
+        "title": "O pacote GPU precisa ser baixado novamente",
+        "description": "Uma atualização removeu uma instalação desatualizada do pacote GPU ({{packs}}). Baixe-o novamente nas Configurações para restaurar a aceleração GPU."
+      },
       "cleanupFailed": {
         "title": "Falha na limpeza",
         "description": "Seu ditado foi colado sem limpeza por IA."

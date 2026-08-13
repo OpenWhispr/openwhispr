@@ -2947,6 +2947,10 @@
         "title": "GPU 加速不可用",
         "description": "转录正在使用 CPU。你可以在设置中关闭 GPU 加速。"
       },
+      "gpuPackMigration": {
+        "title": "需要重新下载 GPU 加速包",
+        "description": "更新移除了过时的 GPU 加速包安装（{{packs}}）。请在设置中重新下载以恢复 GPU 加速。"
+      },
       "cleanupFailed": {
         "title": "清理失败",
         "description": "你的听写已直接粘贴，未经 AI 清理。"

@@ -3112,6 +3112,10 @@
         "title": "GPU acceleration unavailable",
         "description": "Transcription is using the CPU instead. You can disable GPU acceleration in Settings."
       },
+      "gpuPackMigration": {
+        "title": "GPU pack needs re-downloading",
+        "description": "An update removed an outdated GPU pack installation ({{packs}}). Re-download it in Settings to restore GPU acceleration."
+      },
       "cleanupFailed": {
         "title": "Cleanup failed",
         "description": "Your dictation was pasted without AI cleanup."

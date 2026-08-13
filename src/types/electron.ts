@@ -1342,6 +1342,10 @@ declare global {
       ) => () => void;
       onGpuFallbackNotification: (callback: () => void) => () => void;
 
+      // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
+      getGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
+      dismissGpuPackMigrationNotice: () => Promise<{ success: boolean }>;
+
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,

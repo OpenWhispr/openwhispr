@@ -2853,6 +2853,17 @@ class IPCHandlers {
       return { success: true, deletedCount };
     });
 
+    // One-time "GPU pack needs re-downloading" notice recorded by the
+    // legacy-layout migration before any window existed. See #1606.
+    ipcMain.handle("get-gpu-pack-migration-notice", () => {
+      return require("./gpuPackMigrationNotice").read();
+    });
+
+    ipcMain.handle("dismiss-gpu-pack-migration-notice", () => {
+      require("./gpuPackMigrationNotice").clear();
+      return { success: true };
+    });
+
     // Clears the remembered GPU failure and reloads the server with the GPU
     // backend re-enabled (Retry on the "GPU could not be activated" state)
     ipcMain.handle("whisper-gpu-retry", async () => {

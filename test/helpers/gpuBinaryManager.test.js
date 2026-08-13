@@ -406,7 +406,7 @@ test("legacy migration: lib-free pack is moved, lib-carrying packs are cleared f
   const cuda = new WhisperCudaManager();
   const vulkan = new WhisperVulkanManager();
   const llama = new LlamaVulkanManager();
-  migrateLegacyBinDir([cuda, vulkan, llama]);
+  const clearedPacks = migrateLegacyBinDir([cuda, vulkan, llama]);
 
   assert.equal(vulkan.isDownloaded(), true, "statically-linked pack migrated in place");
   assert.ok(fs.existsSync(path.join(binRoot, "whisper-vulkan", "whisper-server-linux-x64-vulkan")));
@@ -417,9 +417,14 @@ test("legacy migration: lib-free pack is moved, lib-carrying packs are cleared f
     ["whisper-vulkan"],
     "legacy binaries and orphaned libs removed"
   );
+  assert.deepEqual(
+    clearedPacks,
+    ["CUDA whisper", "Vulkan llama"],
+    "cleared (not migrated) packs are reported for the re-download notice"
+  );
 
-  // Idempotent on the healed layout
-  migrateLegacyBinDir([cuda, vulkan, llama]);
+  // Idempotent on the healed layout — and nothing left to report
+  assert.deepEqual(migrateLegacyBinDir([cuda, vulkan, llama]), []);
   assert.equal(vulkan.isDownloaded(), true);
 });
 

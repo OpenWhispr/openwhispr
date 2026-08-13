@@ -3112,6 +3112,10 @@
         "title": "GPU-Beschleunigung nicht verfügbar",
         "description": "Die Transkription verwendet stattdessen die CPU. Du kannst die GPU-Beschleunigung in den Einstellungen deaktivieren."
       },
+      "gpuPackMigration": {
+        "title": "GPU-Paket muss erneut heruntergeladen werden",
+        "description": "Ein Update hat eine veraltete GPU-Paket-Installation entfernt ({{packs}}). Lade es in den Einstellungen erneut herunter, um die GPU-Beschleunigung wiederherzustellen."
+      },
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",
         "description": "Dein Diktat wurde ohne KI-Bereinigung eingefügt."

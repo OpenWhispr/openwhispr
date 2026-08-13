@@ -3112,6 +3112,10 @@
         "title": "Accélération GPU indisponible",
         "description": "La transcription utilise le CPU à la place. Vous pouvez désactiver l'accélération GPU dans les paramètres."
       },
+      "gpuPackMigration": {
+        "title": "Le pack GPU doit être retéléchargé",
+        "description": "Une mise à jour a supprimé une installation obsolète du pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour rétablir l'accélération GPU."
+      },
       "cleanupFailed": {
         "title": "Échec du nettoyage",
         "description": "Votre dictée a été collée sans nettoyage par IA."
