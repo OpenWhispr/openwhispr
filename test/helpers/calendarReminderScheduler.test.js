@@ -11,8 +11,52 @@ function activeEvent(provider, id) {
     summary: `${provider} meeting`,
     start_time: new Date(now - 1000).toISOString(),
     end_time: new Date(now + 60_000).toISOString(),
+    attendees_count: 1,
   };
 }
+
+test("does not remind for a Google time block without attendees or a meeting link", () => {
+  const timeBlock = activeEvent("google", "time-block");
+  timeBlock.attendees_count = 0;
+  const databaseManager = {
+    getUpcomingEvents: () => [timeBlock],
+    getActiveEvents: () => [timeBlock],
+  };
+  const scheduler = new CalendarReminderScheduler(databaseManager);
+  let promptCount = 0;
+  scheduler.meetingDetectionEngine = {
+    handleCalendarReminder: () => {
+      promptCount += 1;
+    },
+  };
+
+  scheduler.scheduleNextMeeting();
+
+  assert.equal(promptCount, 0);
+  scheduler.stop();
+});
+
+test("reminds for a Google time block with a Google Meet link", () => {
+  const timeBlock = activeEvent("google", "meet-block");
+  timeBlock.attendees_count = 0;
+  timeBlock.hangout_link = "https://meet.google.com/abc-defg-hij";
+  const databaseManager = {
+    getUpcomingEvents: () => [timeBlock],
+    getActiveEvents: () => [timeBlock],
+  };
+  const scheduler = new CalendarReminderScheduler(databaseManager);
+  let promptCount = 0;
+  scheduler.meetingDetectionEngine = {
+    handleCalendarReminder: () => {
+      promptCount += 1;
+    },
+  };
+
+  scheduler.scheduleNextMeeting();
+
+  assert.equal(promptCount, 1);
+  scheduler.stop();
+});
 
 test("resetting one provider preserves reminders delivered by another provider", () => {
   const googleEvent = activeEvent("google", "meeting-1");
@@ -94,6 +138,7 @@ test("resetting a provider re-arms the next meeting timer for upcoming events", 
     summary: "Future meeting",
     start_time: new Date(Date.now() + 600_000).toISOString(),
     end_time: new Date(Date.now() + 1200_000).toISOString(),
+    attendees_count: 1,
   };
   const databaseManager = {
     getUpcomingEvents: () => [futureEvent],
