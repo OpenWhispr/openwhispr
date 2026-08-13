@@ -1137,6 +1137,11 @@ class WindowManager {
       { width: currentBounds.width, height: currentBounds.height },
       this._panelStartPosition
     );
+    debugLogger.debug(
+      "[WindowManager] Moving dictation panel to the active display",
+      { from: currentBounds, to: newPos, displayId: activeDisplay.id },
+      "window"
+    );
     this.mainWindow.setBounds(newPos);
   }
 
