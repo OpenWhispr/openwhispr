@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { ChatPersistence } from "./useChatPersistence";
-import type { ChatStreaming } from "./useChatStreaming";
+import type { ChatStreaming, SendToAIOptions } from "./useChatStreaming";
 import type { Message } from "./types";
 
 interface PersistedMessageContext {
@@ -25,9 +25,9 @@ export function useChatMessageSender({
   createConversation,
   onBeforeSend,
   onMessagePersisted,
-}: UseChatMessageSenderOptions): (text: string) => Promise<void> {
+}: UseChatMessageSenderOptions): (text: string, options?: SendToAIOptions) => Promise<void> {
   return useCallback(
-    async (text: string) => {
+    async (text: string, options?: SendToAIOptions) => {
       onBeforeSend?.();
       const convId = conversationId ?? (await createConversation(text));
       const previousMessages = persistence.messages;
@@ -45,7 +45,7 @@ export function useChatMessageSender({
         text,
         isFirstMessage: previousMessages.length === 0,
       });
-      await streaming.sendToAI(text, [...previousMessages, userMessage]);
+      await streaming.sendToAI(text, [...previousMessages, userMessage], options);
     },
     [conversationId, createConversation, onBeforeSend, onMessagePersisted, persistence, streaming]
   );

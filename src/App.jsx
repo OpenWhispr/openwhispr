@@ -3,49 +3,20 @@ import { useTranslation } from "react-i18next";
 import "./index.css";
 import { X } from "lucide-react";
 import { useToast } from "./components/ui/useToast";
-import { LoadingDots } from "./components/ui/LoadingDots";
 import { useHotkey } from "./hooks/useHotkey";
 import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useSettingsStore } from "./stores/settingsStore";
+import { isAgentAllowed } from "./stores/policyRules";
+import { usePolicyStore } from "./stores/policyStore";
+import { BrandMarkIcon } from "./components/dictation/BrandMarkIcon";
+import { LiveWaveform } from "./components/dictation/LiveWaveform";
+import { AssistantPanel } from "./components/dictation/AssistantPanel";
 
-// Sound Wave Icon Component (for idle/hover states)
-const SoundWaveIcon = ({ size = 16 }) => {
-  return (
-    <div className="flex items-center justify-center gap-1">
-      <div
-        className={`bg-white rounded-full`}
-        style={{ width: size * 0.25, height: size * 0.6 }}
-      ></div>
-      <div className={`bg-white rounded-full`} style={{ width: size * 0.25, height: size }}></div>
-      <div
-        className={`bg-white rounded-full`}
-        style={{ width: size * 0.25, height: size * 0.6 }}
-      ></div>
-    </div>
-  );
-};
-
-// Voice Wave Animation Component (for processing state)
-const VoiceWaveIndicator = ({ isListening }) => {
-  return (
-    <div className="flex items-center justify-center gap-0.5">
-      {[...Array(4)].map((_, i) => (
-        <div
-          key={i}
-          className={`w-0.5 bg-white rounded-full transition-[height] duration-150 ${
-            isListening ? "animate-pulse h-4" : "h-2"
-          }`}
-          style={{
-            animationDelay: isListening ? `${i * 0.1}s` : "0s",
-            animationDuration: isListening ? `${0.6 + i * 0.1}s` : "0s",
-          }}
-        />
-      ))}
-    </div>
-  );
-};
+// Study motion tokens: layout growth is slow-eased, state changes are fast.
+const GROW_TRANSITION = "320ms cubic-bezier(0.2, 0, 0, 1)";
+const SIZE_RANK = { BASE: 0, RECORDING: 1, WITH_MENU: 2, WITH_TOAST: 3, EXPANDED: 4 };
 
 // Tooltip Component
 const Tooltip = ({ children, content, emoji, align = "center" }) => {
@@ -179,43 +150,95 @@ export default function App() {
   }, [toast, dismiss, t]);
 
   useEffect(() => {
-    if (isCommandMenuOpen || toastCount > 0) {
+    if (isCommandMenuOpen || toastCount > 0 || assistantPanelOpen) {
       setWindowInteractivity(true);
     } else if (!isHovered) {
       setWindowInteractivity(false);
     }
-  }, [isCommandMenuOpen, isHovered, toastCount, setWindowInteractivity]);
+  }, [isCommandMenuOpen, isHovered, toastCount, assistantPanelOpen, setWindowInteractivity]);
+
+  // Assistant panel: voice commands stream into it; typed follow-ups continue it.
+  const agentAllowed = usePolicyStore(isAgentAllowed);
+  const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
+  const [pendingCommand, setPendingCommand] = useState(null);
+  const [panelConversationId, setPanelConversationId] = useState(null);
+  const assistantPanelOpenRef = useRef(assistantPanelOpen);
+  const commandIdRef = useRef(0);
+
+  useLayoutEffect(() => {
+    assistantPanelOpenRef.current = assistantPanelOpen;
+  }, [assistantPanelOpen]);
+
+  const handleAssistantCommand = React.useCallback((command) => {
+    commandIdRef.current += 1;
+    setPendingCommand({
+      id: commandIdRef.current,
+      text: command.text,
+      attachment: command.attachment ?? null,
+    });
+    setAssistantPanelOpen(true);
+  }, []);
+
+  const handleCommandConsumed = React.useCallback((id) => {
+    setPendingCommand((current) => (current?.id === id ? null : current));
+  }, []);
+
+  const handleAssistantPanelClose = React.useCallback(() => {
+    setAssistantPanelOpen(false);
+    setPendingCommand(null);
+  }, []);
 
   useEffect(() => {
-    const resizeWindow = () => {
-      if (isCommandMenuOpen && toastCount > 0) {
-        window.electronAPI?.resizeMainWindow?.("EXPANDED");
-      } else if (isCommandMenuOpen) {
-        window.electronAPI?.resizeMainWindow?.("WITH_MENU");
-      } else if (toastCount > 0) {
-        window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
-      } else {
-        window.electronAPI?.resizeMainWindow?.("BASE");
-      }
-    };
-    resizeWindow();
-  }, [isCommandMenuOpen, toastCount]);
+    window.electronAPI?.setAssistantPanelOpen?.(assistantPanelOpen);
+  }, [assistantPanelOpen]);
 
   const handleDictationToggle = React.useCallback(() => {
     setIsCommandMenuOpen(false);
-    setWindowInteractivity(false);
+    if (!assistantPanelOpenRef.current) {
+      setWindowInteractivity(false);
+    }
   }, [setWindowInteractivity]);
 
   const {
     isRecording,
     isProcessing,
     micCaptureStatus,
+    partialTranscript,
     toggleListening,
     cancelRecording,
     cancelProcessing,
+    getAudioLevel,
   } = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
+    onAssistantCommand: handleAssistantCommand,
   });
+
+  // Single owner of the window size: panel > menu > toast > capsule > base.
+  // Grows apply immediately so content never clips; shrinks wait for the
+  // content collapse animation to finish before the window snaps down.
+  const isCapsule = isRecording || isProcessing;
+  const lastSizeKeyRef = useRef(null);
+  useEffect(() => {
+    const target = assistantPanelOpen
+      ? "EXPANDED"
+      : isCommandMenuOpen && (toastCount > 0 || isCapsule)
+        ? "EXPANDED"
+        : isCommandMenuOpen
+          ? "WITH_MENU"
+          : toastCount > 0
+            ? "WITH_TOAST"
+            : isCapsule
+              ? "RECORDING"
+              : "BASE";
+    const prev = lastSizeKeyRef.current;
+    lastSizeKeyRef.current = target;
+    if (!prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {
+      window.electronAPI?.resizeMainWindow?.(target);
+      return;
+    }
+    const timeout = setTimeout(() => window.electronAPI?.resizeMainWindow?.(target), 340);
+    return () => clearTimeout(timeout);
+  }, [assistantPanelOpen, isCommandMenuOpen, toastCount, isCapsule]);
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -243,7 +266,13 @@ export default function App() {
   useEffect(() => {
     let hideTimeout;
 
-    if (floatingIconAutoHide && !isRecording && !isProcessing && toastCount === 0) {
+    if (
+      floatingIconAutoHide &&
+      !isRecording &&
+      !isProcessing &&
+      toastCount === 0 &&
+      !assistantPanelOpen
+    ) {
       // Delay briefly so processing can start after recording stops without a flash
       hideTimeout = setTimeout(() => {
         window.electronAPI?.hideWindow?.();
@@ -254,7 +283,7 @@ export default function App() {
 
     prevAutoHideRef.current = floatingIconAutoHide;
     return () => clearTimeout(hideTimeout);
-  }, [isRecording, isProcessing, floatingIconAutoHide, toastCount]);
+  }, [isRecording, isProcessing, floatingIconAutoHide, toastCount, assistantPanelOpen]);
 
   const handleClose = () => {
     window.electronAPI.hideWindow();
@@ -283,6 +312,8 @@ export default function App() {
   useEffect(() => {
     const handleKeyPress = (e) => {
       if (e.key === "Escape") {
+        // The assistant panel owns Escape while it is open.
+        if (assistantPanelOpen) return;
         if (isCommandMenuOpen) {
           setIsCommandMenuOpen(false);
         } else {
@@ -293,7 +324,7 @@ export default function App() {
 
     document.addEventListener("keydown", handleKeyPress);
     return () => document.removeEventListener("keydown", handleKeyPress);
-  }, [isCommandMenuOpen]);
+  }, [isCommandMenuOpen, assistantPanelOpen]);
 
   // Determine current mic state
   const getMicState = () => {
@@ -308,41 +339,35 @@ export default function App() {
   const micState = getMicState();
 
   const getMicButtonProps = () => {
-    const baseClasses =
-      "rounded-full w-10 h-10 flex items-center justify-center relative overflow-hidden border-2 border-white/70 cursor-pointer";
-
     switch (micState) {
-      case "idle":
-      case "hover":
-        return {
-          className: `${baseClasses} bg-black/50 cursor-pointer`,
-          tooltip: formatHotkeyListLabel(hotkey),
-        };
       case "recording":
-        return {
-          className: `${baseClasses} bg-primary cursor-pointer`,
-          tooltip: t("app.mic.recording"),
-        };
+        return { background: "bg-primary", tooltip: t("app.mic.recording") };
       case "unavailable":
-        return {
-          className: `${baseClasses} bg-amber-500 cursor-pointer`,
-          tooltip: t("app.mic.waitingForMicrophone"),
-        };
+        return { background: "bg-primary", tooltip: t("app.mic.waitingForMicrophone") };
       case "processing":
-        return {
-          className: `${baseClasses} bg-accent cursor-not-allowed`,
-          tooltip: t("app.mic.processing"),
-        };
+        return { background: "bg-accent", tooltip: t("app.mic.processing") };
       default:
-        return {
-          className: `${baseClasses} bg-black/50 cursor-pointer`,
-          style: { transform: "scale(0.8)" },
-          tooltip: t("app.mic.clickToSpeak"),
-        };
+        return { background: "bg-black/70", tooltip: formatHotkeyListLabel(hotkey) };
     }
   };
 
   const micProps = getMicButtonProps();
+
+  if (assistantPanelOpen) {
+    return (
+      <div className="dictation-window">
+        <AssistantPanel
+          pendingCommand={pendingCommand}
+          onCommandConsumed={handleCommandConsumed}
+          initialConversationId={panelConversationId}
+          onConversationIdChange={setPanelConversationId}
+          voiceState={isRecording ? "listening" : isProcessing ? "transcribing" : "idle"}
+          partialTranscript={partialTranscript}
+          onClose={handleAssistantPanelClose}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="dictation-window">
@@ -369,24 +394,6 @@ export default function App() {
             }
           }}
         >
-          {(isRecording || isProcessing) && isHovered && (
-            <button
-              aria-label={
-                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
-              }
-              onClick={(e) => {
-                e.stopPropagation();
-                isRecording ? cancelRecording() : cancelProcessing();
-              }}
-              className="group/cancel w-5 h-5 rounded-full bg-surface-2/90 hover:bg-destructive border border-border hover:border-destructive/70 flex items-center justify-center transition-colors duration-150 shadow-sm backdrop-blur-sm"
-            >
-              <X
-                size={10}
-                strokeWidth={2.5}
-                className="text-foreground group-hover/cancel:text-destructive-foreground transition-colors duration-150"
-              />
-            </button>
-          )}
           <Tooltip
             content={micProps.tooltip}
             align={
@@ -397,8 +404,10 @@ export default function App() {
                   : "right"
             }
           >
-            <button
+            <div
               ref={buttonRef}
+              role="button"
+              aria-label={micProps.tooltip}
               onMouseDown={(e) => {
                 setIsCommandMenuOpen(false);
                 setDragStartPos({ x: e.clientX, y: e.clientY });
@@ -422,7 +431,7 @@ export default function App() {
                 setDragStartPos(null);
               }}
               onClick={(e) => {
-                if (!hasDragged) {
+                if (!hasDragged && micState !== "processing") {
                   setIsCommandMenuOpen(false);
                   toggleListening();
                 }
@@ -435,57 +444,75 @@ export default function App() {
                   setIsCommandMenuOpen((prev) => !prev);
                 }
               }}
-              onFocus={() => setIsHovered(true)}
-              onBlur={() => setIsHovered(false)}
-              className={micProps.className}
+              className={`relative flex items-center justify-center overflow-hidden rounded-full ${micProps.background}`}
               style={{
-                ...micProps.style,
+                width: isCapsule ? 264 : 40,
+                height: isCapsule ? 48 : 40,
                 cursor:
-                  micState === "processing"
-                    ? "not-allowed !important"
-                    : isDragging
-                      ? "grabbing !important"
-                      : "pointer !important",
-                transition:
-                  "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s ease-out",
+                  micState === "processing" ? "not-allowed" : isDragging ? "grabbing" : "pointer",
+                transform: micState === "hover" ? "scale(1.05)" : "scale(1)",
+                transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
               }}
             >
-              {/* Background effects */}
               <div
-                className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent transition-opacity duration-150"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 to-transparent transition-opacity duration-150"
                 style={{ opacity: micState === "hover" ? 0.8 : 0 }}
               ></div>
+              <BrandMarkIcon
+                size={micState === "hover" ? 24 : 22}
+                className={`shrink-0 transition-[color,width,height] duration-200 ${
+                  micState === "unavailable"
+                    ? "animate-pulse text-amber-300"
+                    : micState === "processing"
+                      ? "animate-pulse text-white"
+                      : "text-white"
+                }`}
+              />
               <div
-                className="absolute inset-0 transition-colors duration-150"
+                className="h-8 shrink-0 overflow-hidden text-white"
                 style={{
-                  backgroundColor: micState === "hover" ? "rgba(0,0,0,0.1)" : "transparent",
+                  width: isCapsule ? 148 : 0,
+                  marginLeft: isCapsule ? 10 : 0,
+                  opacity: isCapsule ? 1 : 0,
+                  transition: `width ${GROW_TRANSITION}, margin-left ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
                 }}
-              ></div>
-
-              {/* Dynamic content based on state */}
-              {micState === "idle" || micState === "hover" ? (
-                <SoundWaveIcon size={micState === "idle" ? 12 : 14} />
-              ) : micState === "recording" ? (
-                <LoadingDots />
-              ) : micState === "processing" ? (
-                <VoiceWaveIndicator isListening={true} />
-              ) : micState === "unavailable" ? (
-                <span className="text-white text-base font-bold">!</span>
-              ) : null}
-
-              {/* State indicator ring for recording */}
-              {micState === "recording" && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary/50 animate-pulse"></div>
-              )}
+              >
+                <LiveWaveform
+                  getLevel={getAudioLevel}
+                  active={micState === "recording"}
+                  className={micState === "recording" ? "" : "opacity-60"}
+                />
+              </div>
+              <div
+                className="shrink-0 overflow-hidden"
+                style={{
+                  width: isCapsule ? 32 : 0,
+                  marginLeft: isCapsule ? 6 : 0,
+                  opacity: isCapsule ? 1 : 0,
+                  transition: `width ${GROW_TRANSITION}, margin-left ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
+                }}
+              >
+                <button
+                  aria-label={
+                    isRecording
+                      ? t("app.buttons.cancelRecording")
+                      : t("app.buttons.cancelProcessing")
+                  }
+                  tabIndex={isCapsule ? 0 : -1}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    isRecording ? cancelRecording() : cancelProcessing();
+                  }}
+                  className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-white/15 transition-colors duration-150 hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                >
+                  <X size={12} strokeWidth={2.5} className="text-white" />
+                </button>
+              </div>
               {micState === "unavailable" && (
-                <div className="absolute inset-0 rounded-full border-2 border-amber-200/70 animate-pulse"></div>
+                <div className="pointer-events-none absolute inset-0 rounded-full border-2 border-amber-200/70 animate-pulse"></div>
               )}
-
-              {/* State indicator ring for processing */}
-              {micState === "processing" && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary/30 opacity-50"></div>
-              )}
-            </button>
+            </div>
           </Tooltip>
           {isCommandMenuOpen && (
             <div
@@ -510,6 +537,20 @@ export default function App() {
                   ? t("app.commandMenu.stopListening")
                   : t("app.commandMenu.startListening")}
               </button>
+              {agentAllowed && (
+                <>
+                  <div className="h-px bg-border" />
+                  <button
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                    onClick={() => {
+                      setIsCommandMenuOpen(false);
+                      setAssistantPanelOpen(true);
+                    }}
+                  >
+                    {t("app.commandMenu.askAssistant")}
+                  </button>
+                </>
+              )}
               <div className="h-px bg-border" />
               <button
                 className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"

@@ -37,7 +37,14 @@ export const useAudioRecording = (toast, options = {}) => {
   const stopLockRef = useRef(false);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
-  const { onToggle } = options;
+  const { onToggle, onAssistantCommand } = options;
+
+  // Read through a ref so a re-render never tears down the AudioManager
+  // (the mount effect below must not depend on this callback).
+  const onAssistantCommandRef = useRef(onAssistantCommand);
+  useEffect(() => {
+    onAssistantCommandRef.current = onAssistantCommand;
+  });
 
   const performStartRecording = useCallback(
     async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
@@ -267,7 +274,20 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
-          window.electronAPI?.completeDictationPreview?.({ text: result.text });
+          if (result.assistantConversation) {
+            // Panel-first: the command streams into the assistant panel;
+            // nothing types at the cursor and nothing lands in the clipboard.
+            window.electronAPI?.hideDictationPreview?.();
+            const { screenContext } = result.assistantConversation;
+            onAssistantCommandRef.current?.({
+              text: result.text,
+              attachment: screenContext
+                ? { image: screenContext.data, mediaType: screenContext.mediaType }
+                : null,
+            });
+          } else {
+            window.electronAPI?.completeDictationPreview?.({ text: result.text });
+          }
 
           if (result.warning) {
             toast({
@@ -280,7 +300,7 @@ export const useAudioRecording = (toast, options = {}) => {
           const isStreaming = result.source?.includes("streaming");
           const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
 
-          if (autoPasteEnabled) {
+          if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
             let pasteSucceeded = true;
             if (result.selectionEdit?.sessionId) {
@@ -323,7 +343,7 @@ export const useAudioRecording = (toast, options = {}) => {
               },
               "streaming"
             );
-          } else if (keepTranscriptionInClipboard) {
+          } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
             await navigator.clipboard.writeText(result.text);
           }
 
@@ -503,6 +523,11 @@ export const useAudioRecording = (toast, options = {}) => {
     return false;
   };
 
+  const getAudioLevel = useCallback(
+    () => audioManagerRef.current?.getRecordingAudioLevel() ?? null,
+    []
+  );
+
   const toggleListening = async () => {
     if (!isRecording && !isProcessing) {
       await performStartRecording();
@@ -523,5 +548,6 @@ export const useAudioRecording = (toast, options = {}) => {
     cancelRecording,
     cancelProcessing,
     toggleListening,
+    getAudioLevel,
   };
 };

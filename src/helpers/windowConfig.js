@@ -30,6 +30,7 @@ const FLOATING_OVERLAY_TYPE =
 
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
+  RECORDING: { width: 280, height: 96 },
   WITH_MENU: { width: 240, height: 280 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },

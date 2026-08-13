@@ -718,7 +718,9 @@ class ReasoningService extends BaseReasoningService {
   }
 
   async *processTextStreamingAI(
-    messages: Array<{ role: string; content: string }>,
+    // Content is a string, or text+image parts when a screenshot rides along
+    // (image-capable BYOK providers only — the caller drops it elsewhere).
+    messages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>,
     model: string,
     provider: string,
     config: ReasoningConfig & { systemPrompt: string },
@@ -750,7 +752,13 @@ class ReasoningService extends BaseReasoningService {
     const isLanChat = route.kind === "self-hosted";
 
     if ((isLocalProvider || isLanChat) && !tools) {
-      const contentGen = this.processTextStreaming(messages, model, provider, config);
+      // Attachments are never routed to local/LAN providers, so content is string-only here.
+      const contentGen = this.processTextStreaming(
+        messages as Array<{ role: string; content: string }>,
+        model,
+        provider,
+        config
+      );
       for await (const text of contentGen) {
         yield { type: "content", text };
       }
@@ -821,7 +829,7 @@ class ReasoningService extends BaseReasoningService {
       messages: messages.map((m) => ({
         role: m.role as "system" | "user" | "assistant",
         content: m.content,
-      })),
+      })) as import("ai").ModelMessage[],
       tools: tools || undefined,
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
       abortSignal: abortController.signal,

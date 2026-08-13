@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
-import { isEnterpriseProvider } from "../../models/ModelRegistry";
+import { getCloudModel, isEnterpriseProvider } from "../../models/ModelRegistry";
 import { getSettings, selectResolvedLLMConfig } from "../../stores/settingsStore";
 import {
   isAgentAllowed,
@@ -9,10 +9,11 @@ import {
   isWebSearchAllowed,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
-import { getAgentSystemPrompt } from "../../config/prompts";
+import { appendDictionarySuffix, getAgentSystemPrompt } from "../../config/prompts";
+import { getDictionaryHintWords } from "../../utils/snippets";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
-import type { Message, AgentState, ToolCallInfo } from "./types";
+import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
 import type { ContainerScope } from "../../types/chat";
 
 const RAG_NOTE_LIMIT = 5;
@@ -61,13 +62,28 @@ interface UseChatStreamingOptions {
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
 }
 
+export interface SendToAIOptions {
+  /** Screenshot for this message; attached only when the resolved model can see it. */
+  attachment?: ChatImageAttachment;
+}
+
 export interface ChatStreaming {
   agentState: AgentState;
   toolStatus: string;
   activeToolName: string;
-  sendToAI: (userText: string, allMessages: Message[]) => Promise<void>;
+  sendToAI: (userText: string, allMessages: Message[], options?: SendToAIOptions) => Promise<void>;
   cancelStream: () => void;
 }
+
+// Providers whose AI-SDK clients accept image content parts on the streaming
+// path. The cloud agent drops attachments until the API grows vision routing.
+const IMAGE_CAPABLE_STREAM_PROVIDERS = new Set([
+  "openai",
+  "anthropic",
+  "gemini",
+  "openrouter",
+  "custom",
+]);
 
 export function useChatStreaming({
   messages,
@@ -108,7 +124,7 @@ export function useChatStreaming({
   }, []);
 
   const sendToAI = useCallback(
-    async (userText: string, allMessages: Message[]) => {
+    async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
       const settings = getSettings();
       const chatConfig = selectResolvedLLMConfig(settings, "chatIntelligence");
       const chatAgentMode = chatConfig.mode || "openwhispr";
@@ -180,15 +196,50 @@ export function useChatStreaming({
 
       const ragContext = await buildRAGContext(userText, scope);
       const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
-      const systemPrompt = getAgentSystemPrompt(
-        registry?.getAll().map((t) => t.name),
-        combinedContext || undefined
+      // The user's dictionary rides on every conversation so replies use their
+      // jargon — same suffix the dictation prompts carry.
+      const systemPrompt = appendDictionarySuffix(
+        getAgentSystemPrompt(
+          registry?.getAll().map((t) => t.name),
+          combinedContext || undefined
+        ),
+        getDictionaryHintWords(settings),
+        settings.uiLanguage
       );
 
-      const llmMessages = [
-        { role: "system", content: systemPrompt },
-        ...allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
-      ];
+      const history: Array<{
+        role: string;
+        content: string | Array<Record<string, unknown>>;
+      }> = allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
+
+      // Attach the screenshot to the command it came with, but only when the
+      // resolved chat model can actually see it; otherwise drop it silently —
+      // an image problem must never cost the user their command.
+      const attachment =
+        options?.attachment &&
+        !isCloudAgent &&
+        !isLanAgent &&
+        !isLocalProvider &&
+        IMAGE_CAPABLE_STREAM_PROVIDERS.has(chatConfig.provider) &&
+        getCloudModel(chatConfig.model)?.supportsVision
+          ? options.attachment
+          : null;
+      if (attachment) {
+        for (let i = history.length - 1; i >= 0; i--) {
+          if (history[i].role === "user") {
+            history[i] = {
+              role: "user",
+              content: [
+                { type: "text", text: history[i].content as string },
+                { type: "image", image: attachment.image, mediaType: attachment.mediaType },
+              ],
+            };
+            break;
+          }
+        }
+      }
+
+      const llmMessages = [{ role: "system", content: systemPrompt }, ...history];
 
       const assistantId = crypto.randomUUID();
       setMessages((prev) => [

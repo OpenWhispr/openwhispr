@@ -231,6 +231,13 @@ function resolveReasoningRoute(
           ? appendScreenContextSuffix(systemPrompt, settings.uiLanguage)
           : systemPrompt,
         ...(attach ? { screenContext, textOnlySystemPrompt: systemPrompt } : {}),
+        // Selection edits run on this (dictation) scope, so they need it
+        // reachable; standalone commands run on the chat scope in the panel.
+        selectionEditReachable: agent.reachable,
+        // The panel re-decides attach/drop against the chat scope's model,
+        // which may see images even when this scope's cannot — carry the raw
+        // screenshot past the attach gate for that path.
+        ...(screenContext ? { rawScreenContext: screenContext } : {}),
       },
     };
   }
@@ -476,6 +483,7 @@ class AudioManager {
     this.translationRequested = false;
     this.translationApplied = false;
     this.pendingSelectionEdit = null;
+    this.pendingAssistantConversation = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
     this.context = "dictation";
@@ -702,6 +710,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   setVoiceAgentRequested(requested) {
     this.voiceAgentRequested = requested;
     this.pendingSelectionEdit = null;
+    this.pendingAssistantConversation = null;
     // No recording must ever see a stale capture (e.g. left over from a
     // cancelled voice-agent recording, even after the setting was turned
     // off). A live voice-agent start re-captures right after this call.
@@ -1549,6 +1558,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._silenceCtx = null;
     this._silenceAnalyser = null;
     this._silenceSource = null;
+    this._levelData = null;
+  }
+
+  // Live input level (RMS 0..~1) off the speech-gate analyser, or null when no
+  // analyser is attached (e.g. streaming-commit recordings) so the waveform rests.
+  getRecordingAudioLevel() {
+    if (!this._silenceAnalyser || this._silenceCtx?.state !== "running") return null;
+    if (!this._levelData) this._levelData = new Uint8Array(this._silenceAnalyser.fftSize);
+    this._silenceAnalyser.getByteTimeDomainData(this._levelData);
+    let sum = 0;
+    for (let i = 0; i < this._levelData.length; i++) {
+      const v = (this._levelData[i] - 128) / 128;
+      sum += v * v;
+    }
+    return Math.sqrt(sum / this._levelData.length);
   }
 
   cancelRecording() {
@@ -1661,6 +1685,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this.isProcessing) {
       this.isProcessing = false;
       this.pendingSelectionEdit = null;
+      this.pendingAssistantConversation = null;
       this.onStateChange?.({ isRecording: false, isProcessing: false });
       return true;
     }
@@ -1755,6 +1780,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       result = withSalvageWarning(result, metadata.salvagedRecording);
 
+      if (this.pendingAssistantConversation) {
+        result = { ...result, assistantConversation: this.pendingAssistantConversation };
+        this.pendingAssistantConversation = null;
+      }
       if (this.pendingSelectionEdit) {
         result = { ...result, selectionEdit: this.pendingSelectionEdit };
         this.pendingSelectionEdit = null;
@@ -2269,10 +2298,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const captureDisposition = getSelectionCaptureDisposition(capture);
 
-    if (captureDisposition === "standalone") {
-      // Nothing selected, or a target that can never report one: type at the
-      // cursor (see STANDALONE_CAPTURE_CODES).
-      return this.processWithReasoningModel(text, model, agentName, config);
+    // A selection with the dictation agent unconfigured can't be edited in
+    // place; route it to the panel with the selected text quoted so the
+    // command still succeeds instead of pasting over the selection.
+    const selectionWithoutEditor =
+      captureDisposition === "selection" && !config?.selectionEditReachable;
+
+    if (captureDisposition === "standalone" || selectionWithoutEditor) {
+      // Panel-first: the command streams into the assistant panel with the
+      // chat's tools and memory; nothing types at the cursor. The transcript
+      // flows back as the result text so history and previews stay truthful.
+      this.pendingAssistantConversation = {
+        transcript: selectionWithoutEditor ? `${text}\n\n"${capture.text}"` : text,
+        screenContext: config?.screenContext ?? config?.rawScreenContext ?? null,
+      };
+      return text;
     }
 
     if (capture?.status !== "selected") {
@@ -4419,9 +4459,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         text: finalText,
         rawText: rawStreamingText || finalText,
         source: `${this.getStreamingProviderName()}-streaming`,
+        ...(this.pendingAssistantConversation
+          ? { assistantConversation: this.pendingAssistantConversation }
+          : {}),
         ...(this.pendingSelectionEdit ? { selectionEdit: this.pendingSelectionEdit } : {}),
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
+      this.pendingAssistantConversation = null;
       this.pendingSelectionEdit = null;
 
       if (!usedBatchFallback) {

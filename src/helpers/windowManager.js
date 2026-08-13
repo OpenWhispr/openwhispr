@@ -114,6 +114,35 @@ class WindowManager {
     MenuManager.setupMainMenu(() => this.openSettings());
   }
 
+  // Content protection keeps the overlay out of screenshots and screen shares.
+  // Two independent reasons demand it: the screen-context capture setting and
+  // an open assistant panel (which renders AI responses over anything).
+  _updateMainContentProtection() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.setContentProtection(
+      Boolean(this._screenContextProtection || this._assistantPanelOpen)
+    );
+  }
+
+  setScreenContextProtection(enabled) {
+    this._screenContextProtection = Boolean(enabled);
+    this._updateMainContentProtection();
+  }
+
+  // The pill window is created focusable:false so it never steals focus; the
+  // assistant panel's follow-up input needs keyboard focus for its lifetime.
+  setAssistantPanelOpen(open) {
+    this._assistantPanelOpen = Boolean(open);
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.setFocusable(this._assistantPanelOpen);
+      if (this._assistantPanelOpen) {
+        this.mainWindow.focus();
+      }
+      this.enforceMainWindowOnTop();
+    }
+    this._updateMainContentProtection();
+  }
+
   setMainWindowInteractivity(shouldCapture) {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return;
@@ -165,6 +194,38 @@ class WindowManager {
 
     const newSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
     const currentBounds = this.mainWindow.getBounds();
+
+    // A window moved since the last resize (dragged) means the captured BASE
+    // bounds no longer describe where the user wants the pill — drop them.
+    if (
+      this._lastResizeBounds &&
+      (currentBounds.x !== this._lastResizeBounds.x ||
+        currentBounds.y !== this._lastResizeBounds.y)
+    ) {
+      this._baseBoundsBeforeResize = null;
+    }
+
+    // Returning to BASE restores the exact pre-grow bounds. Anchoring the
+    // shrink on the grown bounds instead would re-anchor on whatever the
+    // work-area clamp did on the way up, walking the pill away from where the
+    // user put it a little more on every grow/shrink cycle.
+    if (sizeKey === "BASE" && this._baseBoundsBeforeResize) {
+      const restored = { ...this._baseBoundsBeforeResize };
+      this._baseBoundsBeforeResize = null;
+      this._lastResizeBounds = restored;
+      this.mainWindow.setBounds(restored);
+      return { success: true, bounds: restored };
+    }
+
+    if (
+      sizeKey !== "BASE" &&
+      !this._baseBoundsBeforeResize &&
+      currentBounds.width === WINDOW_SIZES.BASE.width &&
+      currentBounds.height === WINDOW_SIZES.BASE.height
+    ) {
+      this._baseBoundsBeforeResize = { ...currentBounds };
+    }
+
     const position = this._panelStartPosition;
 
     const display = screen.getDisplayNearestPoint({
@@ -191,10 +252,12 @@ class WindowManager {
     }
 
     const clamped = WindowPositionUtil.clampToWorkArea({ x: newX, y: newY, ...newSize }, display);
+    const newBounds = { ...clamped, ...newSize };
 
-    this.mainWindow.setBounds({ ...clamped, ...newSize });
+    this.mainWindow.setBounds(newBounds);
+    this._lastResizeBounds = newBounds;
 
-    return { success: true, bounds: { ...clamped, ...newSize } };
+    return { success: true, bounds: newBounds };
   }
 
   async loadWindowContent(window, isControlPanel = false, isAgent = false) {

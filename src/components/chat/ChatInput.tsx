@@ -11,6 +11,8 @@ interface ChatInputProps {
   onCancel?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
+  /** Overrides the default wrapper padding (compact hosts like the assistant panel). */
+  className?: string;
 }
 
 function RecordingIndicator() {
@@ -48,6 +50,7 @@ export function ChatInput({
   onCancel,
   autoFocus = false,
   placeholder,
+  className,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const [inputText, setInputText] = useState("");
@@ -84,7 +87,7 @@ export function ChatInput({
   }, [isIdle]);
 
   return (
-    <div className="shrink-0 px-3 pb-3 pt-1">
+    <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
         className={cn(
           "flex items-center gap-2 min-h-11 px-3 rounded-lg",
