@@ -2,6 +2,7 @@ const { net } = require("electron");
 const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
 const CalendarSyncInterval = require("./calendarSyncInterval");
+const { extractMeetingUrl } = require("./meetingJoinUrl");
 const { broadcastToWindows } = require("./windowBroadcast");
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
@@ -227,7 +228,7 @@ class GoogleCalendarManager {
         end_time: item.end?.dateTime || item.end?.date,
         is_all_day: isAllDay,
         status: item.status || "confirmed",
-        hangout_link: item.hangoutLink || null,
+        hangout_link: item.hangoutLink || extractMeetingUrl([item.location, item.description]),
         conference_data: item.conferenceData ? JSON.stringify(item.conferenceData) : null,
         organizer_email: item.organizer?.email || null,
         attendees_count: item.attendees?.length || 0,
