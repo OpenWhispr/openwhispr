@@ -171,7 +171,6 @@ class WindowManager {
       x: currentBounds.x + currentBounds.width / 2,
       y: currentBounds.y + currentBounds.height,
     });
-    const workArea = display.workArea || display.bounds;
 
     let newX, newY;
 
@@ -191,18 +190,11 @@ class WindowManager {
       newY = currentBounds.y + currentBounds.height - newSize.height;
     }
 
-    // Clamp to work area
-    newX = Math.max(workArea.x, Math.min(newX, workArea.x + workArea.width - newSize.width));
-    newY = Math.max(workArea.y, Math.min(newY, workArea.y + workArea.height - newSize.height));
+    const clamped = WindowPositionUtil.clampToWorkArea({ x: newX, y: newY, ...newSize }, display);
 
-    this.mainWindow.setBounds({
-      x: newX,
-      y: newY,
-      width: newSize.width,
-      height: newSize.height,
-    });
+    this.mainWindow.setBounds({ ...clamped, ...newSize });
 
-    return { success: true, bounds: { x: newX, y: newY, ...newSize } };
+    return { success: true, bounds: { ...clamped, ...newSize } };
   }
 
   async loadWindowContent(window, isControlPanel = false, isAgent = false) {
@@ -1116,7 +1108,17 @@ class WindowManager {
       y: currentBounds.y + currentBounds.height / 2,
     });
 
-    if (currentDisplay.id === cursorDisplay.id) return;
+    if (currentDisplay.id === cursorDisplay.id) {
+      // Nearest-display math can't tell "on this display" from "just past its
+      // edge", so a rearranged monitor or a drag that ended over another
+      // display can leave the panel stranded in dead space, looking like the
+      // overlay vanished. Pull it back before showing it.
+      const clamped = WindowPositionUtil.clampToWorkArea(currentBounds, currentDisplay);
+      if (clamped.x !== currentBounds.x || clamped.y !== currentBounds.y) {
+        this.mainWindow.setBounds({ ...currentBounds, ...clamped });
+      }
+      return;
+    }
 
     const newPos = WindowPositionUtil.getMainWindowPosition(
       cursorDisplay,

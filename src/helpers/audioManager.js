@@ -90,7 +90,6 @@ import {
   extractSelectionEditReplacement,
   getSelectionCaptureDisposition,
 } from "./selectionEditing";
-import { isAccessibilitySkipped } from "../utils/permissions";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
@@ -2248,12 +2247,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
-    const captureDisposition = getSelectionCaptureDisposition(capture, isAccessibilitySkipped());
+    const captureDisposition = getSelectionCaptureDisposition(capture);
 
     if (captureDisposition === "standalone") {
-      // No selection, or selection capture is unavailable by design (for
-      // example, the user explicitly skipped macOS Accessibility): preserve
-      // the existing Voice Agent behavior and type at the cursor.
+      // No selection, or a target that can never report one (the user skipped
+      // macOS Accessibility, or neither accessibility nor a synthetic copy can
+      // inspect the app): preserve the Voice Agent behavior of typing at the
+      // cursor rather than losing the command.
       return this.processWithReasoningModel(text, model, agentName, config);
     }
 

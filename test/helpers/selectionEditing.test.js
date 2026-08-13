@@ -41,15 +41,11 @@ test("builds a structured prompt that keeps instruction and selection separate",
     getSelectionCaptureDisposition({ status: "unavailable", code: "copy_helper_unavailable" }),
     "standalone"
   );
+  // An app whose accessibility tree never yields a focused element can't report
+  // a selection at all, so the command runs as plain agent dictation instead of
+  // failing — otherwise the Voice Agent is unusable in Chromium browsers.
   assert.equal(
     getSelectionCaptureDisposition({ status: "unavailable", code: "accessibility_unavailable" }),
-    "unavailable"
-  );
-  assert.equal(
-    getSelectionCaptureDisposition(
-      { status: "unavailable", code: "accessibility_unavailable" },
-      true
-    ),
     "standalone"
   );
   assert.equal(getSelectionCaptureDisposition({ status: "target_changed" }), "changed");

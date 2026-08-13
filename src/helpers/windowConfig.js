@@ -173,6 +173,18 @@ class WindowPositionUtil {
     return { x, y, width, height };
   }
 
+  // Keeps a window's whole frame inside one display's work area. Displays of
+  // different sizes leave dead space beside the smaller one (a 1512px laptop
+  // screen under a wider external monitor), and a window parked there is
+  // invisible even though the window server still reports it on screen.
+  static clampToWorkArea(bounds, display) {
+    const workArea = display.workArea || display.bounds;
+    return {
+      x: Math.max(workArea.x, Math.min(bounds.x, workArea.x + workArea.width - bounds.width)),
+      y: Math.max(workArea.y, Math.min(bounds.y, workArea.y + workArea.height - bounds.height)),
+    };
+  }
+
   static getNotificationPosition(display) {
     const { width, height } = NOTIFICATION_WINDOW_CONFIG;
     const MARGIN = 16;

@@ -22,22 +22,27 @@ export function buildSelectionEditUserPrompt(spokenInstruction, selectedText) {
   });
 }
 
-export function getSelectionCaptureDisposition(capture, accessibilitySkipped = false) {
+// Capture codes that mean "this target can never report a selection", as
+// opposed to "a selection may exist and the read of it failed". They keep the
+// pre-selection-editing Voice Agent behavior — type at the cursor — because
+// aborting would make the agent unusable in the app instead of merely
+// unable to edit in place.
+const STANDALONE_CAPTURE_CODES = new Set([
+  "target_unavailable",
+  "copy_helper_unavailable",
+  "selection_manager_unavailable",
+  "unsupported_platform",
+  // macOS reports this once neither the accessibility tree nor a synthetic copy
+  // could inspect the target, leaving a selection neither readable nor ruled
+  // out. Losing in-place editing there is acceptable; losing the command is not.
+  "accessibility_unavailable",
+]);
+
+export function getSelectionCaptureDisposition(capture) {
   if (!capture || capture.status === "none") return "standalone";
   if (capture.status === "selected") return "selection";
-  if (capture.status === "unavailable") {
-    const structuralUnavailable = new Set([
-      "target_unavailable",
-      "copy_helper_unavailable",
-      "selection_manager_unavailable",
-      "unsupported_platform",
-    ]);
-    if (
-      structuralUnavailable.has(capture.code) ||
-      (capture.code === "accessibility_unavailable" && accessibilitySkipped)
-    ) {
-      return "standalone";
-    }
+  if (capture.status === "unavailable" && STANDALONE_CAPTURE_CODES.has(capture.code)) {
+    return "standalone";
   }
   return capture.status === "target_changed" ? "changed" : "unavailable";
 }

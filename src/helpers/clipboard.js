@@ -91,6 +91,11 @@ const LINUX_TERMINAL_CLASSES = [
   "waveterm",
 ];
 
+// macOS reports localized app names rather than window classes, and iTerm2 has
+// no entry above because it has no Linux window class. Matching it on Linux too
+// is harmless — no such window class exists there.
+const TERMINAL_SIGNATURES = [...LINUX_TERMINAL_CLASSES, "iterm"];
+
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
     return Promise.reject(new Error("Invalid webContents for clipboard write"));
@@ -256,10 +261,15 @@ class ClipboardManager {
     return null;
   }
 
+  // Accepts a Linux window class or a macOS app name.
+  isTerminalSignature(signature) {
+    if (!signature) return false;
+    const normalized = String(signature).toLowerCase();
+    return TERMINAL_SIGNATURES.some((term) => normalized.includes(term));
+  }
+
   isLinuxTerminalWindowClass(windowClass) {
-    if (!windowClass) return false;
-    const normalized = String(windowClass).toLowerCase();
-    return LINUX_TERMINAL_CLASSES.some((term) => normalized.includes(term));
+    return this.isTerminalSignature(windowClass);
   }
 
   // Selection capture (SelectionManager) seeds a sentinel and polls until a

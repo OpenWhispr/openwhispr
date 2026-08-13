@@ -15,6 +15,11 @@ const ACTIVATE_CONFIRM_DELAY_MS = 25;
 // across that burst. Kept short so back-to-back dictations in different apps
 // still get a fresh capture.
 const TARGET_CAPTURE_FRESHNESS_MS = 250;
+// The binary retries the focused-element read 5 times with 300ms between
+// attempts, so a run where every attempt fails takes just over 1.2s. A tighter
+// timeout kills it mid-ladder, and a killed run's verdict is discarded, so the
+// app would never be learned and every read would pay the full ladder.
+const SELECTED_TEXT_TIMEOUT_MS = 1600;
 // AXError -25212 (kAXErrorNoValue) on the focused-element read is how
 // Chromium/Electron apps respond while their AX tree is dormant, making the
 // native binary's 5-attempt retry (~1.2s) dead time on every read. A single
@@ -229,7 +234,7 @@ class TextEditMonitor extends EventEmitter {
     return false;
   }
 
-  getSelectedText(pid, timeoutMs = 1200) {
+  getSelectedText(pid, timeoutMs = SELECTED_TEXT_TIMEOUT_MS) {
     return new Promise((resolve) => {
       if (process.platform !== "darwin" || !pid) {
         resolve({ state: "unavailable" });

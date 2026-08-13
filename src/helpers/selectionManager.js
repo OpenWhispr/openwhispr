@@ -15,10 +15,12 @@ const CLIPBOARD_POLL_MS = 20;
 // back to standalone dictation, pasting over the selection.
 const ATSPI_TARGET_TIMEOUT_MS = 2000;
 
-// Editors that copy the whole current line when Ctrl+C lands with an empty
-// selection (VS Code's editor.emptySelectionClipboard, Scintilla, JetBrains,
-// Visual Studio), making a bare caret look like a selection to the
-// synthetic-copy capture. Matched against the target's exe name and window class.
+// Editors that copy the whole current line when Ctrl+C (⌘C on macOS) lands with
+// an empty selection (VS Code's editor.emptySelectionClipboard, Scintilla,
+// JetBrains, Visual Studio), making a bare caret look like a selection to the
+// synthetic-copy capture. Matched against the target's exe name and window class
+// on Windows/Linux, and against the localized app name on macOS — which is why
+// the JetBrains IDEs need both their executable and app-name spellings.
 const LINE_COPY_EDITOR_SIGNATURES = [
   "code", // VS Code and forks (VSCodium, code-oss)
   "cursor",
@@ -27,10 +29,13 @@ const LINE_COPY_EDITOR_SIGNATURES = [
   "sublime",
   "jetbrains",
   "idea64",
+  "intellij", // macOS app name for idea64
   "pycharm",
   "webstorm",
   "phpstorm",
   "rider64",
+  "rider", // macOS app name for rider64
+  "android studio", // macOS app name for studio64
   "clion",
   "goland",
   "rubymine",
@@ -263,7 +268,53 @@ class SelectionManager {
     if (result.state === "none") {
       return { status: "none", target: { kind: "mac-pid", pid } };
     }
-    return { status: "unavailable", code: "accessibility_unavailable" };
+    // Chromium browsers (and any app whose accessibility tree stays dormant)
+    // never resolve a focused element, so the read above cannot tell a selection
+    // from an empty field. A synthetic copy still can — the same route Windows
+    // and Linux take by default.
+    return this._readMacSelectionViaClipboard(pid, expectedTarget);
+  }
+
+  async _readMacSelectionViaClipboard(pid, expectedTarget) {
+    const binary = this.clipboardManager.resolveFastPasteBinary?.();
+    // Without the CGEvent helper nothing is left that can inspect this app, and
+    // an unreadable target must cost the user in-place editing, not the command
+    // itself — accessibility_unavailable falls back to standalone dictation.
+    if (!binary) return { status: "unavailable", code: "accessibility_unavailable" };
+
+    const capture = await this._captureViaClipboard(
+      async () => {
+        const result = await this._runCopyHelper(binary, ["--copy"]);
+        const match = result.stdout.match(/COPY_OK\s+(\d+)\s*(.*)/);
+        if (!result.success || !match) return { success: false };
+        return {
+          success: true,
+          target: { kind: "mac-pid", pid: Number(match[1]), appName: match[2].trim() || null },
+        };
+      },
+      expectedTarget || { kind: "mac-pid", pid }
+    );
+
+    // A copy that never landed leaves the selection exactly as unknown as the
+    // accessibility read did, so it gets the same non-fatal treatment.
+    if (capture.status === "unavailable" && capture.code === "copy_failed") {
+      return { status: "unavailable", code: "accessibility_unavailable" };
+    }
+    // GPU-rendered terminals (Ghostty, Alacritty, kitty) expose no accessibility
+    // tree but do honor ⌘C, so they only reach selection editing through this
+    // path. Replacement text typed back into a shell executes on its embedded
+    // newlines, so their selections are declined here exactly as on Linux.
+    if (
+      capture.status === "selected" &&
+      this.clipboardManager.isTerminalSignature?.(capture.target?.appName)
+    ) {
+      return { status: "none", target: capture.target };
+    }
+    return capture;
+  }
+
+  _runCopyHelper(binary, args) {
+    return runSpawn(binary, args, { timeout: COPY_TIMEOUT_MS });
   }
 
   async _readWindowsSelection(expectedTarget) {
@@ -481,14 +532,24 @@ class SelectionManager {
     // trailing terminator; treat that shape from a known line-copy editor as
     // "no selection" so a bare caret never gets its line rewritten. Proper
     // fix: a real selection read (UIA TextPattern), like --atspi-selection.
-    if (/^[^\n]*\r?\n$/.test(copiedText) && this._isLineCopyEditor(expectedTarget)) {
+    if (
+      /^[^\n]*\r?\n$/.test(copiedText) &&
+      this._isLineCopyEditor(expectedTarget, copyResult.target)
+    ) {
       return { status: "none", target: copyResult.target };
     }
     return { status: "selected", text: copiedText, target: copyResult.target };
   }
 
-  _isLineCopyEditor(target) {
-    const signature = `${target?.exeName || ""} ${target?.windowClass || ""}`.toLowerCase();
+  // Windows and Linux name the app in the target captured before the copy;
+  // macOS learns it from the copy helper's own report, so both are checked.
+  _isLineCopyEditor(...targets) {
+    const signature = targets
+      .map((target) =>
+        `${target?.exeName || ""} ${target?.windowClass || ""} ${target?.appName || ""}`.trim()
+      )
+      .join(" ")
+      .toLowerCase();
     if (!signature.trim()) return false;
     return LINE_COPY_EDITOR_SIGNATURES.some((editor) => signature.includes(editor));
   }
