@@ -1445,6 +1445,11 @@
             "admin": "Workspace-Administrator"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise-Konsole",
+        "description": "SSO, Richtlinien und Mitglieder im Web verwalten",
+        "open": "Konsole öffnen"
       }
     },
     "unifiedBilling": {
@@ -1590,7 +1595,8 @@
             "SSO & Compliance",
             "Dedizierter Support"
           ],
-          "cta": "Vertrieb kontaktieren"
+          "cta": "Vertrieb kontaktieren",
+          "upgradeCta": "Auf Enterprise upgraden"
         },
         "currentPlan": "Aktueller Tarif",
         "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
@@ -2228,6 +2234,22 @@
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
       "apiKeyOptional": "API-Schlüssel (optional)"
+    },
+    "enterpriseCheckout": {
+      "title": "Auf Enterprise upgraden",
+      "description": "Workspace, Plätze und Abrechnungszeitraum wählen. Die Zahlung erfolgt im Stripe-Checkout.",
+      "allSubscribed": "Alle Workspaces, die dir gehören, haben bereits ein aktives Abonnement. Um den Plan eines bestehenden Workspace zu ändern, kontaktiere den Vertrieb.",
+      "workspaceLabel": "Workspace",
+      "seatsLabel": "Plätze",
+      "seatsHint_one": "{{count}} Platz derzeit belegt",
+      "seatsHint_other": "{{count}} Plätze derzeit belegt",
+      "intervalLabel": "Abrechnungszeitraum",
+      "interval": {
+        "monthly": "Monatlich",
+        "annual": "Jährlich"
+      },
+      "priceNote": "Der endgültige Preis wird beim Checkout angezeigt.",
+      "continueCta": "Weiter zum Checkout"
     }
   },
   "models": {

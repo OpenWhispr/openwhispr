@@ -1324,7 +1324,8 @@
             "SSO 與合規",
             "專屬支援"
           ],
-          "cta": "聯繫銷售"
+          "cta": "聯繫銷售",
+          "upgradeCta": "升級至 Enterprise"
         },
         "currentPlan": "目前方案",
         "coveredByWorkspace": "已包含在您的工作區方案中",
@@ -2139,7 +2140,27 @@
             "admin": "工作區管理員"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise 主控台",
+        "description": "在網頁上管理 SSO、政策與成員",
+        "open": "開啟主控台"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "升級至 Enterprise",
+      "description": "選擇工作區、席位數量與計費週期。付款將在 Stripe Checkout 中完成。",
+      "allSubscribed": "您擁有的所有工作區都已有有效的訂閱。如需變更現有工作區的方案，請聯絡銷售團隊。",
+      "workspaceLabel": "工作區",
+      "seatsLabel": "席位",
+      "seatsHint_other": "目前已使用 {{count}} 個席位",
+      "intervalLabel": "計費週期",
+      "interval": {
+        "monthly": "按月",
+        "annual": "按年"
+      },
+      "priceNote": "最終價格將在結帳時顯示。",
+      "continueCta": "繼續結帳"
     }
   },
   "models": {

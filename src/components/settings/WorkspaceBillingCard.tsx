@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, Loader2, Plus } from "lucide-react";
 import { Button } from "../ui/button";
+import EnterpriseConsoleRow from "./EnterpriseConsoleRow";
+import { useBillingRefreshOnReturn } from "../../hooks/useBillingRefreshOnReturn";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +29,10 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   const refresh = useWorkspaceStore((s) => s.refresh);
   const [busy, setBusy] = useState<"checkout" | "portal" | "preview" | "seats" | null>(null);
   const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
-  const focusCleanupRef = useRef<(() => void) | null>(null);
+  const refreshOnReturn = useBillingRefreshOnReturn(() => {
+    void refresh();
+    void onRefreshEntitlement?.();
+  });
   const isOwner = workspace.role === "owner";
   const hasSubscription = Boolean(workspace.stripe_subscription_id);
   const canAddSeats =
@@ -37,26 +42,6 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   const seatsUsed = workspace.seats_used ?? workspace.seats;
   const seatsTotal = Math.max(workspace.seats, seatsUsed);
   const pct = seatsTotal > 0 ? Math.min(100, (seatsUsed / seatsTotal) * 100) : 0;
-
-  useEffect(() => () => focusCleanupRef.current?.(), []);
-
-  function refreshOnReturn() {
-    focusCleanupRef.current?.();
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const poll = () => {
-      void refresh();
-      void onRefreshEntitlement?.();
-    };
-    const onFocus = () => {
-      poll();
-      for (const delayMs of [4000, 8000, 16000]) timers.push(setTimeout(poll, delayMs));
-    };
-    window.addEventListener("focus", onFocus, { once: true });
-    focusCleanupRef.current = () => {
-      window.removeEventListener("focus", onFocus);
-      timers.forEach(clearTimeout);
-    };
-  }
 
   async function openBilling(kind: "checkout" | "portal", getUrl: () => Promise<string>) {
     setBusy(kind);
@@ -236,6 +221,8 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
           )}
         </div>
       )}
+
+      <EnterpriseConsoleRow workspace={workspace} />
 
       <Dialog open={seatPreview !== null} onOpenChange={(open) => !open && setSeatPreview(null)}>
         <DialogContent className="sm:max-w-90">

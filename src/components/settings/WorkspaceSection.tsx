@@ -27,6 +27,7 @@ import { canManageWorkspace } from "../../lib/spacePermissions";
 import WorkspaceMembersTab from "./WorkspaceMembersTab";
 import WorkspaceTeamsTab from "./WorkspaceTeamsTab";
 import WorkspaceDeveloperTab from "./WorkspaceDeveloperTab";
+import EnterpriseConsoleRow from "./EnterpriseConsoleRow";
 import type { Workspace } from "../../types/electron";
 
 const SUB_TABS = ["general", "members", "teams", "developer"] as const;
@@ -375,6 +376,8 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
           </div>
         )}
       </div>
+
+      <EnterpriseConsoleRow workspace={workspace} />
 
       {isOwner ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/3 dark:bg-destructive/6 p-4 space-y-3">

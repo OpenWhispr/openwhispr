@@ -55,11 +55,16 @@ async function removeMember(workspaceId: string, userId: string): Promise<void> 
 
 async function billingCheckout(
   workspaceId: string,
-  interval: "monthly" | "annual" = "monthly"
+  interval: "monthly" | "annual" = "monthly",
+  options?: { tier?: "business" | "enterprise"; additionalSeats?: number }
 ): Promise<string> {
   const res = await cloudPost<DataWrap<{ url: string }>>(
     `/api/workspaces/${workspaceId}/billing/checkout`,
-    { interval }
+    {
+      interval,
+      ...(options?.tier ? { tier: options.tier } : {}),
+      ...(options?.additionalSeats ? { additional_seats: options.additionalSeats } : {}),
+    }
   );
   return res.data.url;
 }

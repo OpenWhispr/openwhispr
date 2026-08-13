@@ -1304,7 +1304,8 @@
             "SSO とコンプライアンス",
             "専任サポート"
           ],
-          "cta": "営業に問い合わせる"
+          "cta": "営業に問い合わせる",
+          "upgradeCta": "Enterpriseにアップグレード"
         },
         "currentPlan": "現在のプラン",
         "coveredByWorkspace": "ワークスペースのプランに含まれています",
@@ -2139,7 +2140,27 @@
             "admin": "ワークスペース管理者"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterpriseコンソール",
+        "description": "SSO、ポリシー、メンバーをウェブで管理",
+        "open": "コンソールを開く"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Enterpriseにアップグレード",
+      "description": "ワークスペース、シート数、請求サイクルを選択してください。支払いはStripe Checkoutで完了します。",
+      "allSubscribed": "所有しているすべてのワークスペースには既に有効なサブスクリプションがあります。既存のワークスペースのプランを変更するには、営業までお問い合わせください。",
+      "workspaceLabel": "ワークスペース",
+      "seatsLabel": "シート数",
+      "seatsHint_other": "現在{{count}}シート使用中",
+      "intervalLabel": "請求サイクル",
+      "interval": {
+        "monthly": "月払い",
+        "annual": "年払い"
+      },
+      "priceNote": "最終的な価格はチェックアウト時に表示されます。",
+      "continueCta": "チェックアウトへ進む"
     }
   },
   "models": {

@@ -1303,7 +1303,8 @@
             "SSO e conformidade",
             "Suporte dedicado"
           ],
-          "cta": "Falar com Vendas"
+          "cta": "Falar com Vendas",
+          "upgradeCta": "Fazer upgrade para Enterprise"
         },
         "currentPlan": "Plano atual",
         "coveredByWorkspace": "Incluído no plano do seu workspace",
@@ -2118,7 +2119,28 @@
             "admin": "Administrador do espaço de trabalho"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Console Enterprise",
+        "description": "Gerencie SSO, políticas e membros pela web",
+        "open": "Abrir console"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Fazer upgrade para Enterprise",
+      "description": "Escolha o workspace, os assentos e o ciclo de cobrança. O pagamento é concluído no Stripe Checkout.",
+      "allSubscribed": "Todos os workspaces que você possui já têm uma assinatura ativa. Para alterar o plano de um workspace existente, fale com vendas.",
+      "workspaceLabel": "Workspace",
+      "seatsLabel": "Assentos",
+      "seatsHint_one": "{{count}} assento em uso no momento",
+      "seatsHint_other": "{{count}} assentos em uso no momento",
+      "intervalLabel": "Ciclo de cobrança",
+      "interval": {
+        "monthly": "Mensal",
+        "annual": "Anual"
+      },
+      "priceNote": "O preço final é exibido no checkout.",
+      "continueCta": "Continuar para o checkout"
     }
   },
   "models": {
