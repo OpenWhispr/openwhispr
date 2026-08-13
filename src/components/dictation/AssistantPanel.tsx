@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { BrandMarkIcon } from "./BrandMarkIcon";
-import { LiveWaveform } from "./LiveWaveform";
+import { VoicePill, type VoicePillState } from "./VoicePill";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -32,7 +32,6 @@ interface AssistantPanelProps {
 }
 
 const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
-const RESTING_WAVE_HEIGHTS = [5, 10, 14, 8, 16, 11, 7, 13];
 
 export function AssistantPanel({
   pendingCommand,
@@ -123,6 +122,14 @@ export function AssistantPanel({
     .reverse()
     .find((message) => message.role === "assistant");
   const responseContent = latestAssistantMessage?.content ?? "";
+  const pillState: VoicePillState =
+    voiceState === "listening"
+      ? "recording"
+      : voiceState === "transcribing"
+        ? "processing"
+        : "idle";
+  const supportsViewTransitions =
+    typeof document !== "undefined" && "startViewTransition" in document;
 
   return (
     <div
@@ -132,8 +139,11 @@ export function AssistantPanel({
         "shadow-[var(--shadow-modal)]"
       )}
       style={{
-        animation: "assistant-panel-in 240ms cubic-bezier(0.2, 0, 0, 1)",
-        transformOrigin: "bottom center",
+        animation: supportsViewTransitions
+          ? undefined
+          : "assistant-panel-in 240ms cubic-bezier(0.2, 0, 0, 1)",
+        transformOrigin: "bottom right",
+        viewTransitionName: "assistant-panel",
       }}
     >
       <div
@@ -177,39 +187,12 @@ export function AssistantPanel({
       </div>
 
       <div className="flex shrink-0 justify-end px-4 py-4">
-        <div
-          className={cn(
-            "flex h-11 w-28 shrink-0 items-center rounded-full border border-border/50 bg-surface-1 px-2",
-            "text-muted-foreground shadow-[var(--shadow-card)]",
-            voiceState === "listening" && "border-border-hover text-foreground",
-            voiceState === "transcribing" && "border-border/60 text-foreground/70"
-          )}
+        <VoicePill
+          variant="panel"
+          state={pillState}
+          getAudioLevel={getAudioLevel}
           aria-label={t("settingsPage.agentConfig.title")}
-        >
-          <BrandMarkIcon size={20} className="shrink-0" />
-          <div className="mx-1.5 h-5 w-px bg-border/60" />
-          <div className="flex h-7 min-w-0 flex-1 items-center justify-center">
-            {voiceState === "listening" ? (
-              <LiveWaveform getLevel={getAudioLevel} active barCount={8} />
-            ) : (
-              <div
-                className={cn(
-                  "flex items-center gap-0.5",
-                  voiceState === "transcribing" && "animate-pulse"
-                )}
-                aria-hidden="true"
-              >
-                {RESTING_WAVE_HEIGHTS.map((height, index) => (
-                  <span
-                    key={`${height}-${index}`}
-                    className="w-0.5 rounded-full bg-current"
-                    style={{ height }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        />
       </div>
     </div>
   );

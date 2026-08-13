@@ -454,6 +454,55 @@ a:hover {
   }
 }
 
+@keyframes assistant-panel-out {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateY(12px) scale(0.98);
+    opacity: 0;
+  }
+}
+
+/* The floating and in-panel controls share this captured element. The native
+   window grows before the transition and shrinks after it, so the pill can
+   travel between layouts without being clipped by the BrowserWindow bounds. */
+html.assistant-view-transition::view-transition-old(root),
+html.assistant-view-transition::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html.assistant-view-transition::view-transition-group(assistant-voice-pill) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+html.assistant-view-transition::view-transition-old(assistant-voice-pill),
+html.assistant-view-transition::view-transition-new(assistant-voice-pill) {
+  height: 100%;
+  mix-blend-mode: normal;
+}
+
+html.assistant-view-transition::view-transition-new(assistant-panel) {
+  animation: assistant-panel-in 360ms cubic-bezier(0.2, 0, 0, 1) both;
+  transform-origin: bottom right;
+}
+
+html.assistant-view-transition::view-transition-old(assistant-panel) {
+  animation: assistant-panel-out 280ms cubic-bezier(0.4, 0, 1, 1) both;
+  transform-origin: bottom right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.assistant-view-transition::view-transition-group(assistant-voice-pill),
+  html.assistant-view-transition::view-transition-new(assistant-panel),
+  html.assistant-view-transition::view-transition-old(assistant-panel) {
+    animation-duration: 1ms;
+  }
+}
+
 @keyframes waveform-bar {
   0%,
   100% {

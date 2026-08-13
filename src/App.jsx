@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import "./index.css";
-import { X } from "lucide-react";
 import { useToast } from "./components/ui/useToast";
 import { useHotkey } from "./hooks/useHotkey";
 import { formatHotkeyListLabel } from "./utils/hotkeys";
@@ -10,14 +10,12 @@ import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useSettingsStore } from "./stores/settingsStore";
 import { isAgentAllowed } from "./stores/policyRules";
 import { usePolicyStore } from "./stores/policyStore";
-import { BrandMarkIcon } from "./components/dictation/BrandMarkIcon";
-import { LiveWaveform } from "./components/dictation/LiveWaveform";
+import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
 
-// Study motion tokens: layout growth is slow-eased, state changes are fast.
-const GROW_TRANSITION = "320ms cubic-bezier(0.2, 0, 0, 1)";
+const ASSISTANT_TRANSITION_MS = 420;
 
 // Tooltip Component
 const Tooltip = ({ children, content, emoji, align = "center" }) => {
@@ -162,12 +160,36 @@ export default function App() {
     assistantPanelOpenRef.current = assistantPanelOpen;
   }, [assistantPanelOpen]);
 
+  const runAssistantViewTransition = React.useCallback((update) => {
+    if (typeof document.startViewTransition !== "function") {
+      update();
+      return null;
+    }
+
+    document.documentElement.classList.add("assistant-view-transition");
+    try {
+      const transition = document.startViewTransition(() => {
+        flushSync(update);
+      });
+      const clearTransitionClass = () => {
+        document.documentElement.classList.remove("assistant-view-transition");
+      };
+      transition.finished.then(clearTransitionClass, clearTransitionClass);
+      return transition;
+    } catch {
+      document.documentElement.classList.remove("assistant-view-transition");
+      update();
+      return null;
+    }
+  }, []);
+
   const openAssistantPanel = React.useCallback(async () => {
+    if (assistantPanelOpenRef.current) return;
     // Grow the window before the panel mounts so its entrance never paints
     // clipped inside the smaller pill/capsule bounds.
     await window.electronAPI?.resizeMainWindow?.("ASSISTANT");
-    setAssistantPanelOpen(true);
-  }, []);
+    runAssistantViewTransition(() => setAssistantPanelOpen(true));
+  }, [runAssistantViewTransition]);
 
   const handleAssistantCommand = React.useCallback(
     (command) => {
@@ -229,9 +251,18 @@ export default function App() {
       if (isRecording) cancelRecording();
       else if (isProcessing) cancelProcessing();
     }
-    setAssistantPanelOpen(false);
-    setPendingCommand(null);
-  }, [isAssistantVoice, isRecording, isProcessing, cancelRecording, cancelProcessing]);
+    runAssistantViewTransition(() => {
+      setAssistantPanelOpen(false);
+      setPendingCommand(null);
+    });
+  }, [
+    isAssistantVoice,
+    isRecording,
+    isProcessing,
+    cancelRecording,
+    cancelProcessing,
+    runAssistantViewTransition,
+  ]);
 
   // Single owner of the window size: panel > menu > toast > capsule > base.
   // Grows apply immediately so content never clips; shrinks wait for the
@@ -251,7 +282,8 @@ export default function App() {
       window.electronAPI?.resizeMainWindow?.(target);
       return;
     }
-    const timeout = setTimeout(() => window.electronAPI?.resizeMainWindow?.(target), 340);
+    const shrinkDelay = prev === "ASSISTANT" ? ASSISTANT_TRANSITION_MS + 20 : 340;
+    const timeout = setTimeout(() => window.electronAPI?.resizeMainWindow?.(target), shrinkDelay);
     return () => clearTimeout(timeout);
   }, [assistantPanelOpen, isCommandMenuOpen, toastCount, isCapsule]);
 
@@ -353,37 +385,20 @@ export default function App() {
 
   const micState = getMicState();
 
-  const getMicButtonProps = () => {
+  const getMicTooltip = () => {
     switch (micState) {
       case "recording":
-        return {
-          appearance: "border-border-hover bg-surface-1 text-foreground",
-          tooltip: t("app.mic.recording"),
-        };
+        return t("app.mic.recording");
       case "unavailable":
-        return {
-          appearance: "border-border/60 bg-surface-1 text-muted-foreground",
-          tooltip: t("app.mic.waitingForMicrophone"),
-        };
+        return t("app.mic.waitingForMicrophone");
       case "processing":
-        return {
-          appearance: "border-border/60 bg-surface-1 text-foreground/70",
-          tooltip: t("app.mic.processing"),
-        };
-      case "hover":
-        return {
-          appearance: "border-border-hover bg-surface-2 text-foreground",
-          tooltip: formatHotkeyListLabel(hotkey),
-        };
+        return t("app.mic.processing");
       default:
-        return {
-          appearance: "border-border/50 bg-surface-1 text-muted-foreground",
-          tooltip: formatHotkeyListLabel(hotkey),
-        };
+        return formatHotkeyListLabel(hotkey);
     }
   };
 
-  const micProps = getMicButtonProps();
+  const micTooltip = getMicTooltip();
 
   if (assistantPanelOpen) {
     return (
@@ -433,7 +448,7 @@ export default function App() {
           }}
         >
           <Tooltip
-            content={micProps.tooltip}
+            content={micTooltip}
             align={
               panelStartPosition === "bottom-left"
                 ? "left"
@@ -442,10 +457,19 @@ export default function App() {
                   : "right"
             }
           >
-            <div
+            <VoicePill
               ref={buttonRef}
+              variant="floating"
+              state={micState}
+              expanded={isCapsule}
+              getAudioLevel={getAudioLevel}
+              isDragging={isDragging}
+              cancelLabel={
+                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
+              }
+              onCancel={() => (isRecording ? cancelRecording() : cancelProcessing())}
               role="button"
-              aria-label={micProps.tooltip}
+              aria-label={micTooltip}
               onMouseDown={(e) => {
                 setIsCommandMenuOpen(false);
                 setDragStartPos({ x: e.clientX, y: e.clientY });
@@ -482,75 +506,7 @@ export default function App() {
                   setIsCommandMenuOpen((prev) => !prev);
                 }
               }}
-              className={`relative flex items-center justify-center overflow-hidden rounded-full border shadow-[var(--shadow-card)] ${micProps.appearance}`}
-              style={{
-                // Constant height: the orb grows sideways into the capsule
-                // (toward the screen center from its anchored corner), never up.
-                width: isCapsule ? 264 : 40,
-                height: 40,
-                cursor:
-                  micState === "processing" ? "not-allowed" : isDragging ? "grabbing" : "pointer",
-                transform: micState === "hover" ? "scale(1.05)" : "scale(1)",
-                transition: `width ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
-              }}
-            >
-              <div
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-foreground/10 to-transparent transition-opacity duration-150"
-                style={{ opacity: micState === "hover" ? 0.8 : 0 }}
-              ></div>
-              <BrandMarkIcon
-                size={micState === "hover" ? 24 : 22}
-                className={`shrink-0 transition-[color,width,height] duration-200 ${
-                  micState === "unavailable" || micState === "processing" ? "animate-pulse" : ""
-                }`}
-              />
-              <div
-                className="h-8 shrink-0 overflow-hidden text-current"
-                style={{
-                  width: isCapsule ? 148 : 0,
-                  marginLeft: isCapsule ? 10 : 0,
-                  opacity: isCapsule ? 1 : 0,
-                  transition: `width ${GROW_TRANSITION}, margin-left ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
-                }}
-              >
-                <LiveWaveform
-                  getLevel={getAudioLevel}
-                  active={micState === "recording"}
-                  className={micState === "recording" ? "" : "opacity-60"}
-                />
-              </div>
-              <div
-                className="shrink-0 overflow-hidden"
-                style={{
-                  width: isCapsule ? 32 : 0,
-                  marginLeft: isCapsule ? 6 : 0,
-                  opacity: isCapsule ? 1 : 0,
-                  transition: `width ${GROW_TRANSITION}, margin-left ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
-                }}
-                // A near-miss on the cancel zone must be inert, not commit the
-                // recording via the capsule's own click handler.
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  aria-label={
-                    isRecording
-                      ? t("app.buttons.cancelRecording")
-                      : t("app.buttons.cancelProcessing")
-                  }
-                  tabIndex={isCapsule ? 0 : -1}
-                  onClick={() => (isRecording ? cancelRecording() : cancelProcessing())}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors duration-150 hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40"
-                >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground/10">
-                    <X size={12} strokeWidth={2.5} className="text-foreground/80" />
-                  </span>
-                </button>
-              </div>
-              {micState === "unavailable" && (
-                <div className="pointer-events-none absolute inset-0 rounded-full border-2 border-foreground/30 animate-pulse"></div>
-              )}
-            </div>
+            />
           </Tooltip>
           {isCommandMenuOpen && (
             <div
