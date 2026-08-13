@@ -117,6 +117,7 @@ class ClipboardManager {
     this.linuxFastPastePath = null;
     this.linuxFastPasteChecked = false;
     this.portalDenied = false;
+    this.portalTokenPasteFailed = false;
     this._kwinScriptPath = null;
     this.pasteQueue = Promise.resolve();
 
@@ -1662,6 +1663,18 @@ class ClipboardManager {
             debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
           }
         } else if (isGnome && linuxFastPaste) {
+          // GNOME: uinput first for the first-ever paste — the portal shows a
+          // permission dialog and can stall for 10s+ (issue #494). A valid
+          // restore token resumes without the dialog, so prefer it until a
+          // tokened attempt fails. This avoids the virtual keyboard hotplug
+          // churn that can hang gnome-shell under sustained dictation.
+          const shouldPreferPortal =
+            !this.portalDenied && !this.portalTokenPasteFailed && !!this._readPortalToken();
+          if (shouldPreferPortal) {
+            const portalPaste = await tryPortalPaste();
+            if (portalPaste) return { method: "portal", ...portalPaste };
+            this.portalTokenPasteFailed = true;
+          }
           try {
             const uinputPaste = await tryUinputPaste();
             return { method: "uinput", ...uinputPaste };
@@ -1672,7 +1685,7 @@ class ClipboardManager {
               "clipboard"
             );
           }
-          if (!this.portalDenied) {
+          if (!shouldPreferPortal && !this.portalDenied) {
             const portalPaste = await tryPortalPaste();
             if (portalPaste) return { method: "portal", ...portalPaste };
           }
