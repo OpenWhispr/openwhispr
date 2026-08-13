@@ -148,6 +148,7 @@
     "active": "Aktiv",
     "managedByOrg": "Von Ihrer Organisation verwaltet",
     "freeAccountRequired": "Kostenloses Konto erforderlich",
+    "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",
     "local": "Lokal",
     "apiKey": "API-Schlüssel",
@@ -2827,7 +2828,6 @@
     "meeting": {
       "title": "Besprechungsnotizen",
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
-      "comingSoon": "Demnächst verfügbar",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt."
     },
