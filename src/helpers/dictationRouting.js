@@ -141,6 +141,14 @@ export function resolveTranslationDisplayProvider({ translationMode, translation
   return resolveModeDisplayProvider(translationMode, translationProvider);
 }
 
+// Wake-word cues gate on the dictation language; with "auto" the UI language
+// is the best available hint for what the user actually speaks.
+export function resolveWakeWordLanguage({ preferredLanguage, uiLanguage }) {
+  const language = typeof preferredLanguage === "string" ? preferredLanguage.trim() : "";
+  if (language && language !== "auto") return language;
+  return typeof uiLanguage === "string" ? uiLanguage : undefined;
+}
+
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")
 // a finished dictation takes. A recording started via the voice agent hotkey
 // always takes the agent path — no wake word needed — and never falls back to

@@ -1,3 +1,5 @@
+import { getBaseLanguageCode } from "../utils/languageSupport";
+
 function levenshteinDistance(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
@@ -40,14 +42,14 @@ const LOCALIZED_VOCATIVE_CUES: Record<string, readonly string[]> = {
   zh: ["嘿", "你好", "喂"],
 };
 
-const ALL_LOCALIZED_CUES: ReadonlySet<string> = new Set(
-  Object.values(LOCALIZED_VOCATIVE_CUES).flat()
+const LOCALIZED_CUE_SETS: ReadonlyMap<string, ReadonlySet<string>> = new Map(
+  Object.entries(LOCALIZED_VOCATIVE_CUES).map(([lang, cues]) => [lang, new Set(cues)])
 );
 
 const EMPTY_CUES: ReadonlySet<string> = new Set();
 
-// CJK transcripts carry no spaces around punctuation ("ねぇ、Jarvis、メールを"),
-// so fullwidth marks become their ASCII equivalent plus a space before splitting.
+// CJK transcripts carry no spaces ("ねぇ、Jarvis、メールを"), so fullwidth marks
+// become their ASCII equivalent plus a space, and CJK/Latin transitions split.
 const CJK_PUNCTUATION_MAP: Record<string, string> = {
   "、": ", ",
   "。": ". ",
@@ -64,18 +66,23 @@ const CJK_PUNCTUATION_MAP: Record<string, string> = {
   "』": '" ',
 };
 
-function normalizeCjkPunctuation(transcript: string): string {
-  return transcript.replace(/[、。！？，；：（）「」『』]/g, (ch) => CJK_PUNCTUATION_MAP[ch] ?? ch);
+const CJK_PUNCTUATION_RE = new RegExp(`[${Object.keys(CJK_PUNCTUATION_MAP).join("")}]`, "g");
+const CJK_CHAR_RANGE = "\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff";
+const CJK_TO_LATIN_RE = new RegExp(`([${CJK_CHAR_RANGE}])(?=[A-Za-z0-9])`, "g");
+const LATIN_TO_CJK_RE = new RegExp(`([A-Za-z0-9])(?=[${CJK_CHAR_RANGE}])`, "g");
+
+function normalizeCjkTranscript(transcript: string): string {
+  return transcript
+    .replace(CJK_PUNCTUATION_RE, (ch) => CJK_PUNCTUATION_MAP[ch] ?? ch)
+    .replace(CJK_TO_LATIN_RE, "$1 ")
+    .replace(LATIN_TO_CJK_RE, "$1 ");
 }
 
-// "auto" (or an unset language) may be any supported language, so every
-// localized cue stays active; a known language narrows to its own cues.
-function localizedCuesFor(language?: string): ReadonlySet<string> {
-  if (typeof language !== "string") return ALL_LOCALIZED_CUES;
-  const base = language.trim().toLowerCase().split("-")[0];
-  if (!base || base === "auto") return ALL_LOCALIZED_CUES;
-  const cues = LOCALIZED_VOCATIVE_CUES[base];
-  return cues ? new Set(cues) : EMPTY_CUES;
+// Cues gate on a resolved language; "auto", unknown codes and junk fail closed
+// to English-only. The caller maps "auto" to its best hint (the UI language).
+function baseLanguageOf(language?: string): string | undefined {
+  if (typeof language !== "string") return undefined;
+  return getBaseLanguageCode(language.trim().toLowerCase());
 }
 
 // The name only counts as addressing the agent when it starts the dictation,
@@ -98,9 +105,13 @@ export function detectAgentName(transcript: string, agentName: string, language?
   const name = agentName.trim();
   if (!name || name.length < 2) return false;
 
-  const localizedCues = localizedCuesFor(language);
+  const base = baseLanguageOf(language);
+  const localizedCues = (base && LOCALIZED_CUE_SETS.get(base)) || EMPTY_CUES;
+  // Normalization is gated with the cues so non-CJK dictation stays untouched.
+  const source = base === "ja" || base === "zh" ? normalizeCjkTranscript(transcript) : transcript;
+
   const nameLower = name.toLowerCase().replace(/\s+/g, "");
-  const rawWords = normalizeCjkPunctuation(transcript).split(/\s+/).filter(Boolean);
+  const rawWords = source.split(/\s+/).filter(Boolean);
   const words = rawWords.map((w) => w.replace(/[.,!?;:'"()]/g, "").toLowerCase());
 
   const maxEdits = maxEditsForLength(nameLower.length);

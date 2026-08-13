@@ -65,17 +65,19 @@ test("rejects empty or single-character names", async () => {
 test("matches the Italian advertised wake phrase when dictating in Italian", async () => {
   const { detectAgentName } = await load();
 
-  // The it locale advertises "Ehi {{agentName}}"; this failed with the
-  // English-only cue set.
+  // The it locale advertises "Ehi {{agentName}}".
   assert.equal(detectAgentName("stavo pensando, Ehi Jarvis scrivi una mail", "Jarvis", "it"), true);
   assert.equal(detectAgentName("prendi nota di questo Ciao Jarvis riassumi", "Jarvis", "it"), true);
 });
 
-test("keeps localized cues active when the dictation language is auto or unset", async () => {
+test("fails closed to English-only cues when the language is auto or unset", async () => {
   const { detectAgentName } = await load();
 
-  assert.equal(detectAgentName("dunque vediamo ehi Jarvis prendi nota", "Jarvis", "auto"), true);
-  assert.equal(detectAgentName("dunque vediamo ehi Jarvis prendi nota", "Jarvis"), true);
+  // The caller resolves "auto" to the UI language before calling; an
+  // unresolved language must not activate any localized cue.
+  assert.equal(detectAgentName("dunque vediamo ehi Jarvis prendi nota", "Jarvis", "auto"), false);
+  assert.equal(detectAgentName("dunque vediamo ehi Jarvis prendi nota", "Jarvis"), false);
+  assert.equal(detectAgentName("dunque vediamo ehi Jarvis prendi nota", "Jarvis", "it"), true);
 });
 
 test("does not fire a foreign-language cue during English dictation", async () => {
@@ -129,6 +131,29 @@ test("normalizes fullwidth punctuation so CJK cues and sentence ends work", asyn
   assert.equal(detectAgentName("うーん ねぇ、Jarvis、メールを書いて", "Jarvis", "ja"), true);
 });
 
+test("splits unsegmented CJK-Latin transitions so cue and name separate", async () => {
+  const { detectAgentName } = await load();
+
+  // Fully unsegmented shapes: cue glued to the name, name glued to the text.
+  assert.equal(detectAgentName("えっと ねぇJarvis、メールを書いて", "Jarvis", "ja"), true);
+  assert.equal(detectAgentName("嘿Jarvis帮我写邮件", "Jarvis", "zh"), true);
+  assert.equal(detectAgentName("「ねぇJarvisを呼んで」", "Jarvis", "ja"), true);
+});
+
+test("leaves CJK punctuation untouched outside ja and zh dictation", async () => {
+  const { detectAgentName } = await load();
+
+  // A quoted CJK brand must not create a sentence boundary in English.
+  assert.equal(
+    detectAgentName("we compared prices to 小米。Jarvis pull up the page", "Jarvis", "en"),
+    false
+  );
+  assert.equal(
+    detectAgentName("we compared prices to 小米。Jarvis pull up the page", "Jarvis", "zh"),
+    true
+  );
+});
+
 test("maps regional language codes to their base cue set", async () => {
   const { detectAgentName } = await load();
 
@@ -141,4 +166,33 @@ test("keeps detection English-only for languages without a localized cue set", a
 
   assert.equal(detectAgentName("well then ehi Jarvis take a note", "Jarvis", "ko"), false);
   assert.equal(detectAgentName("well then hey Jarvis take a note", "Jarvis", "ko"), true);
+});
+
+test("every locale's advertised wake phrase triggers detection in its language", async () => {
+  const { detectAgentName } = await load();
+  const fs = require("node:fs");
+  const path = require("node:path");
+
+  const localesDir = path.join(__dirname, "..", "..", "src", "locales");
+  const locales = fs
+    .readdirSync(localesDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+  assert.equal(locales.length, 10);
+
+  for (const locale of locales) {
+    const translation = JSON.parse(
+      fs.readFileSync(path.join(localesDir, locale, "translation.json"), "utf8")
+    );
+    const advertised = translation.settingsPage.agentConfig.howItWorksDescription;
+    // The advertised wake word is the last letter run before {{agentName}}.
+    const match = advertised.match(/(\p{L}+)[^\p{L}]*\{\{agentName\}\}/u);
+    assert.ok(match, `${locale}: no wake phrase before {{agentName}}`);
+    const cue = match[1];
+    assert.equal(
+      detectAgentName(`one two ${cue} Jarvis three four`, "Jarvis", locale),
+      true,
+      `${locale}: advertised cue "${cue}" does not trigger`
+    );
+  }
 });
