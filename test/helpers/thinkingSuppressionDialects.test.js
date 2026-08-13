@@ -107,6 +107,30 @@ test("unlisted providers keep the legacy reasoning_effort none plus chat_templat
   });
 });
 
+test("generic-dialect providers send gpt-oss the low floor, not the rejected none", async () => {
+  const { suppressThinking } = await load();
+
+  const body = {};
+  suppressThinking(body, "tinfoil", "gpt-oss-120b");
+
+  assert.deepEqual(body, {
+    reasoning_effort: "low",
+    chat_template_kwargs: { enable_thinking: false },
+  });
+});
+
+test("the gpt-oss floor covers the whole family case-insensitively", async () => {
+  const { suppressThinking } = await load();
+
+  const safeguard = {};
+  suppressThinking(safeguard, "tinfoil", "gpt-oss-safeguard-120b");
+  assert.equal(safeguard.reasoning_effort, "low");
+
+  const mixedCase = {};
+  suppressThinking(mixedCase, "openai", "GPT-OSS-20B");
+  assert.equal(mixedCase.reasoning_effort, "low");
+});
+
 test("mistral gets reasoning_effort none and never chat_template_kwargs", async () => {
   const { suppressThinking } = await load();
 

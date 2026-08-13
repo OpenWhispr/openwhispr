@@ -32,6 +32,11 @@ export function suppressThinking(
   providerKey: string,
   model: string
 ): void {
+  const modelFamily = (model || "").toLowerCase();
+  // gpt-oss accepts low|medium|high only; it has no off switch. A property of the
+  // model family, not the provider — Tinfoil 400s on "none" just like Groq would.
+  const isGptOss = modelFamily.includes("gpt-oss");
+
   if (providerKey === "gemini") {
     requestBody.reasoning_effort = "minimal";
     return;
@@ -47,12 +52,10 @@ export function suppressThinking(
   // Groq rejects unknown fields outright and takes a different reasoning_effort
   // enum per model family, so send nothing unless the family is known.
   if (providerKey === "groq") {
-    const groqModel = (model || "").toLowerCase();
-    if (groqModel.includes("qwen")) {
+    if (modelFamily.includes("qwen")) {
       // qwen3 accepts none|default only.
       requestBody.reasoning_effort = "none";
-    } else if (groqModel.includes("gpt-oss")) {
-      // gpt-oss accepts low|medium|high only; it has no off switch.
+    } else if (isGptOss) {
       requestBody.reasoning_effort = "low";
     }
     return;
@@ -61,7 +64,7 @@ export function suppressThinking(
   // Mistral rejects unknown fields with a 422; reasoning_effort is its native switch.
   if (providerKey === "mistral") {
     // Legacy magistral models reason natively and may reject reasoning_effort.
-    if ((model || "").toLowerCase().includes("magistral")) return;
+    if (modelFamily.includes("magistral")) return;
     requestBody.reasoning_effort = "none";
     return;
   }
@@ -73,7 +76,7 @@ export function suppressThinking(
     // disables Ollama thinking; other backends drop it (flat reasoning_effort trips vLLM).
     requestBody.reasoning = { effort: "none" };
   } else {
-    requestBody.reasoning_effort = "none";
+    requestBody.reasoning_effort = isGptOss ? "low" : "none";
   }
   requestBody.chat_template_kwargs = { enable_thinking: false };
 }
