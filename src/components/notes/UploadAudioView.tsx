@@ -64,6 +64,7 @@ import { isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
+import { buildUploadNoteMetadata } from "../../helpers/uploadNoteMetadata";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -656,14 +657,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
+      const diarization: DiarizationSettings = {
+        enabled: diarizationEnabled,
+        localModelsReady: !!diarizationModelsReady,
+        numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
+      };
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
         buildTranscriptionConfig(),
-        {
-          enabled: diarizationEnabled,
-          localModelsReady: !!diarizationModelsReady,
-          numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
-        },
+        diarization,
         currentFile.durationSeconds,
         { requestId }
       ).finally(() => {
@@ -700,14 +702,24 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
 
         const folderId = selectedFolderId ? Number(selectedFolderId) : null;
+        const { audioDurationSeconds, noteUpdates } = buildUploadNoteMetadata(
+          diarization,
+          res.durationSeconds
+        );
         const noteRes = await window.electronAPI.saveNote(
           title,
           res.text,
           "upload",
           currentFile.name,
-          null,
+          audioDurationSeconds,
           folderId
         );
+        if (noteRes.success && noteRes.note) {
+          // Same columns the meeting path maintains, via the same updateNote
+          // route (they are not saveNote insert columns). Metadata is
+          // best-effort: a failed write must not error a saved note.
+          await window.electronAPI.updateNote(noteRes.note.id, noteUpdates).catch(() => {});
+        }
         if (runId !== runIdRef.current) return;
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
         if (currentTempPath) {

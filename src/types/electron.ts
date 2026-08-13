@@ -2384,6 +2384,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         segments?: Array<{ start: number; end: number; speaker: string }>;
+        durationSeconds?: number;
         error?: string;
       }>;
       onDiarizationDownloadProgress?: (callback: (data: any) => void) => () => void;

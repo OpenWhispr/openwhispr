@@ -3076,7 +3076,9 @@ class IPCHandlers {
             segments,
             numSpeakers > 0 ? numSpeakers : MAX_SPEAKER_COUNT
           );
-          return { success: true, segments };
+          // Callers persist this as audio_duration_seconds: for picked files
+          // the renderer has no other duration source.
+          return { success: true, segments, durationSeconds };
         } finally {
           try {
             fs.unlinkSync(wavPath);

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { transcribeFileWithSpeakers } from "../services/fileTranscription";
 import type { FileTranscriptionConfig, DiarizationSettings } from "../services/fileTranscription";
 import { DOWNLOAD_ERROR_KEYS, transcriptionErrorKey } from "../components/notes/shared";
+import { buildUploadNoteMetadata } from "../helpers/uploadNoteMetadata";
 import { getSettings } from "./settingsStore";
 import { isTranscriptionContextAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
@@ -229,16 +230,24 @@ export function processBatchQueue(
         if (run !== runId) return;
       }
 
+      const { audioDurationSeconds, noteUpdates } = buildUploadNoteMetadata(
+        diarization,
+        transcriptionResult.durationSeconds
+      );
       const noteRes = await window.electronAPI.saveNote(
         noteTitle,
         finalText,
         "upload",
         noteName,
-        null,
+        audioDurationSeconds,
         transcribeOpts.folderId
       );
 
       if (noteRes.success && noteRes.note) {
+        // Same columns the meeting path maintains, via the same updateNote
+        // route (they are not saveNote insert columns). Metadata is
+        // best-effort: a failed write must not error a saved transcription.
+        await window.electronAPI.updateNote(noteRes.note.id, noteUpdates).catch(() => {});
         updateItem(item.id, {
           status: "done",
           progress: 100,
