@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { BrandMarkIcon } from "./BrandMarkIcon";
-import { VoicePill, type VoicePillState } from "./VoicePill";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -27,7 +26,7 @@ interface AssistantPanelProps {
   onConversationIdChange: (id: number | null) => void;
   /** Live voice state while the user records a follow-up with the panel open. */
   voiceState: Extract<AgentState, "idle" | "listening" | "transcribing">;
-  getAudioLevel: () => number | null;
+  open: boolean;
   onClose: () => void;
 }
 
@@ -39,7 +38,7 @@ export function AssistantPanel({
   initialConversationId,
   onConversationIdChange,
   voiceState,
-  getAudioLevel,
+  open,
   onClose,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
@@ -122,29 +121,16 @@ export function AssistantPanel({
     .reverse()
     .find((message) => message.role === "assistant");
   const responseContent = latestAssistantMessage?.content ?? "";
-  const pillState: VoicePillState =
-    voiceState === "listening"
-      ? "recording"
-      : voiceState === "transcribing"
-        ? "processing"
-        : "idle";
-  const supportsViewTransitions =
-    typeof document !== "undefined" && "startViewTransition" in document;
 
   return (
     <div
       className={cn(
-        "absolute inset-3 flex flex-col overflow-hidden",
+        "assistant-panel-surface absolute inset-3 flex flex-col overflow-hidden",
         "rounded-3xl border border-border/50 bg-surface-0 backdrop-blur-xl",
-        "shadow-[var(--shadow-modal)]"
+        "shadow-[var(--shadow-modal)]",
+        open && "assistant-panel-surface-open"
       )}
-      style={{
-        animation: supportsViewTransitions
-          ? undefined
-          : "assistant-panel-in 240ms cubic-bezier(0.2, 0, 0, 1)",
-        transformOrigin: "bottom right",
-        viewTransitionName: "assistant-panel",
-      }}
+      aria-hidden={!open}
     >
       <div
         className="flex h-16 shrink-0 cursor-grab items-center gap-3 px-5 active:cursor-grabbing"
@@ -186,14 +172,8 @@ export function AssistantPanel({
         ) : null}
       </div>
 
-      <div className="flex shrink-0 justify-end px-4 py-4">
-        <VoicePill
-          variant="panel"
-          state={pillState}
-          getAudioLevel={getAudioLevel}
-          aria-label={t("settingsPage.agentConfig.title")}
-        />
-      </div>
+      {/* The persistent VoicePill in App occupies this footer space. */}
+      <div className="h-19 shrink-0" aria-hidden="true" />
     </div>
   );
 }
