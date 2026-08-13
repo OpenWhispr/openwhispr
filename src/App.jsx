@@ -150,7 +150,7 @@ export default function App() {
     };
   }, [toast, dismiss, t]);
 
-  // Assistant panel: voice commands stream into it; typed follow-ups continue it.
+  // Assistant panel: voice commands stream into the current conversation.
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
   const [pendingCommand, setPendingCommand] = useState(null);
@@ -165,7 +165,7 @@ export default function App() {
   const openAssistantPanel = React.useCallback(async () => {
     // Grow the window before the panel mounts so its entrance never paints
     // clipped inside the smaller pill/capsule bounds.
-    await window.electronAPI?.resizeMainWindow?.("EXPANDED");
+    await window.electronAPI?.resizeMainWindow?.("ASSISTANT");
     setAssistantPanelOpen(true);
   }, []);
 
@@ -213,7 +213,6 @@ export default function App() {
     isProcessing,
     isAssistantVoice,
     micCaptureStatus,
-    partialTranscript,
     toggleListening,
     cancelRecording,
     cancelProcessing,
@@ -357,13 +356,30 @@ export default function App() {
   const getMicButtonProps = () => {
     switch (micState) {
       case "recording":
-        return { background: "bg-primary", tooltip: t("app.mic.recording") };
+        return {
+          appearance: "border-border-hover bg-surface-1 text-foreground",
+          tooltip: t("app.mic.recording"),
+        };
       case "unavailable":
-        return { background: "bg-primary", tooltip: t("app.mic.waitingForMicrophone") };
+        return {
+          appearance: "border-border/60 bg-surface-1 text-muted-foreground",
+          tooltip: t("app.mic.waitingForMicrophone"),
+        };
       case "processing":
-        return { background: "bg-accent", tooltip: t("app.mic.processing") };
+        return {
+          appearance: "border-border/60 bg-surface-1 text-foreground/70",
+          tooltip: t("app.mic.processing"),
+        };
+      case "hover":
+        return {
+          appearance: "border-border-hover bg-surface-2 text-foreground",
+          tooltip: formatHotkeyListLabel(hotkey),
+        };
       default:
-        return { background: "bg-black/70", tooltip: formatHotkeyListLabel(hotkey) };
+        return {
+          appearance: "border-border/50 bg-surface-1 text-muted-foreground",
+          tooltip: formatHotkeyListLabel(hotkey),
+        };
     }
   };
 
@@ -384,7 +400,7 @@ export default function App() {
                 ? "transcribing"
                 : "idle"
           }
-          partialTranscript={isAssistantVoice ? partialTranscript : ""}
+          getAudioLevel={getAudioLevel}
           onClose={handleAssistantPanelClose}
         />
       </div>
@@ -466,7 +482,7 @@ export default function App() {
                   setIsCommandMenuOpen((prev) => !prev);
                 }
               }}
-              className={`relative flex items-center justify-center overflow-hidden rounded-full ${micProps.background}`}
+              className={`relative flex items-center justify-center overflow-hidden rounded-full border shadow-[var(--shadow-card)] ${micProps.appearance}`}
               style={{
                 // Constant height: the orb grows sideways into the capsule
                 // (toward the screen center from its anchored corner), never up.
@@ -479,21 +495,17 @@ export default function App() {
               }}
             >
               <div
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 to-transparent transition-opacity duration-150"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-foreground/10 to-transparent transition-opacity duration-150"
                 style={{ opacity: micState === "hover" ? 0.8 : 0 }}
               ></div>
               <BrandMarkIcon
                 size={micState === "hover" ? 24 : 22}
                 className={`shrink-0 transition-[color,width,height] duration-200 ${
-                  micState === "unavailable"
-                    ? "animate-pulse text-amber-300"
-                    : micState === "processing"
-                      ? "animate-pulse text-white"
-                      : "text-white"
+                  micState === "unavailable" || micState === "processing" ? "animate-pulse" : ""
                 }`}
               />
               <div
-                className="h-8 shrink-0 overflow-hidden text-white"
+                className="h-8 shrink-0 overflow-hidden text-current"
                 style={{
                   width: isCapsule ? 148 : 0,
                   marginLeft: isCapsule ? 10 : 0,
@@ -528,15 +540,15 @@ export default function App() {
                   }
                   tabIndex={isCapsule ? 0 : -1}
                   onClick={() => (isRecording ? cancelRecording() : cancelProcessing())}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors duration-150 hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors duration-150 hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40"
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
-                    <X size={12} strokeWidth={2.5} className="text-white" />
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground/10">
+                    <X size={12} strokeWidth={2.5} className="text-foreground/80" />
                   </span>
                 </button>
               </div>
               {micState === "unavailable" && (
-                <div className="pointer-events-none absolute inset-0 rounded-full border-2 border-amber-200/70 animate-pulse"></div>
+                <div className="pointer-events-none absolute inset-0 rounded-full border-2 border-foreground/30 animate-pulse"></div>
               )}
             </div>
           </Tooltip>

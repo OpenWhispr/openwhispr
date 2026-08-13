@@ -3044,15 +3044,7 @@
   },
   "assistant": {
     "panel": {
-      "close": "Chiudi",
-      "copyToClipboard": "Copia negli appunti",
-      "copied": "Copiato",
-      "askFollowUp": "Fai una domanda di follow-up",
-      "newChat": "Nuova chat",
-      "emptyHint": "Chiedi qualsiasi cosa — oppure premi la tua scorciatoia e parla",
-      "suggestionDraft": "Scrivi una breve email",
-      "suggestionSummarize": "Riassumi la mia ultima nota",
-      "suggestionCalendar": "Cosa c'è oggi nel mio calendario?"
+      "selectionHint": "Seleziona il testo da modificare con"
     }
   },
   "integrations": {

@@ -3044,15 +3044,7 @@
   },
   "assistant": {
     "panel": {
-      "close": "關閉",
-      "copyToClipboard": "複製到剪貼簿",
-      "copied": "已複製",
-      "askFollowUp": "繼續追問",
-      "newChat": "新對話",
-      "emptyHint": "想問什麼都可以——或按下快捷鍵直接說",
-      "suggestionDraft": "草擬一封簡短的郵件",
-      "suggestionSummarize": "總結我最新的筆記",
-      "suggestionCalendar": "我今天的行程有什麼？"
+      "selectionHint": "選取要編輯的文字，然後按"
     }
   },
   "integrations": {

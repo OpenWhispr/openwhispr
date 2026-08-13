@@ -3044,15 +3044,7 @@
   },
   "assistant": {
     "panel": {
-      "close": "閉じる",
-      "copyToClipboard": "クリップボードにコピー",
-      "copied": "コピーしました",
-      "askFollowUp": "続けて質問",
-      "newChat": "新しいチャット",
-      "emptyHint": "何でも聞いてください — またはホットキーを押して話すだけ",
-      "suggestionDraft": "簡単なメールを下書きして",
-      "suggestionSummarize": "最新のノートを要約して",
-      "suggestionCalendar": "今日の予定は？"
+      "selectionHint": "編集するテキストを選択"
     }
   },
   "integrations": {

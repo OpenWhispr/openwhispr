@@ -6,8 +6,8 @@ interface BrandMarkIconProps {
 }
 
 /**
- * Circled sound-bars brand mark. Draws in `currentColor` so state tinting
- * (white, amber for mic-unavailable) comes from the parent's text color.
+ * Circled sound-bars brand mark. Draws in `currentColor` so it follows the
+ * neutral foreground treatment of the surface that contains it.
  */
 export function BrandMarkIcon({ size = 24, className }: BrandMarkIconProps) {
   return (

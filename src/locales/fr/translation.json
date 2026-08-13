@@ -3209,15 +3209,7 @@
   },
   "assistant": {
     "panel": {
-      "close": "Fermer",
-      "copyToClipboard": "Copier dans le presse-papiers",
-      "copied": "Copié",
-      "askFollowUp": "Poser une question de suivi",
-      "newChat": "Nouvelle discussion",
-      "emptyHint": "Demandez ce que vous voulez — ou appuyez sur votre raccourci et parlez",
-      "suggestionDraft": "Rédige un e-mail rapide",
-      "suggestionSummarize": "Résume ma dernière note",
-      "suggestionCalendar": "Qu'y a-t-il dans mon calendrier aujourd'hui ?"
+      "selectionHint": "Sélectionnez du texte à modifier avec"
     }
   },
   "integrations": {

@@ -3209,15 +3209,7 @@
   },
   "assistant": {
     "panel": {
-      "close": "Close",
-      "copyToClipboard": "Copy to clipboard",
-      "copied": "Copied",
-      "askFollowUp": "Ask a follow up",
-      "newChat": "New chat",
-      "emptyHint": "Ask anything — or press your hotkey and just talk",
-      "suggestionDraft": "Draft a quick email",
-      "suggestionSummarize": "Summarize my latest note",
-      "suggestionCalendar": "What's on my calendar today?"
+      "selectionHint": "Select text to edit with"
     }
   },
   "integrations": {

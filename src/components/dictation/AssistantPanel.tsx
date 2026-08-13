@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, SquarePen, X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { BrandMarkIcon } from "./BrandMarkIcon";
-import { ChatMessages } from "../chat/ChatMessages";
-import { ChatInput } from "../chat/ChatInput";
+import { LiveWaveform } from "./LiveWaveform";
+import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
 import { useChatMessageSender } from "../chat/useChatMessageSender";
 import { useWindowDrag } from "../../hooks/useWindowDrag";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { formatHotkeyListLabel } from "../../utils/hotkeys";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 
 export interface AssistantCommand {
@@ -26,11 +27,12 @@ interface AssistantPanelProps {
   onConversationIdChange: (id: number | null) => void;
   /** Live voice state while the user records a follow-up with the panel open. */
   voiceState: Extract<AgentState, "idle" | "listening" | "transcribing">;
-  partialTranscript: string;
+  getAudioLevel: () => number | null;
   onClose: () => void;
 }
 
 const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
+const RESTING_WAVE_HEIGHTS = [5, 10, 14, 8, 16, 11, 7, 13];
 
 export function AssistantPanel({
   pendingCommand,
@@ -38,12 +40,13 @@ export function AssistantPanel({
   initialConversationId,
   onConversationIdChange,
   voiceState,
-  partialTranscript,
+  getAudioLevel,
   onClose,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
-  const [copied, setCopied] = useState(false);
+  const voiceAgentKey = useSettingsStore((state) => state.voiceAgentKey);
+  const readableVoiceHotkey = formatHotkeyListLabel(voiceAgentKey);
 
   const persistence = useChatPersistence({ conversationId: initialConversationId });
   const { messages, setMessages } = persistence;
@@ -116,57 +119,17 @@ export function AssistantPanel({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [voiceState, isBusy, streaming, onClose]);
 
-  const lastAssistantText = [...messages]
+  const latestAssistantMessage = [...messages]
     .reverse()
-    .find((m) => m.role === "assistant" && !m.isStreaming && m.content)?.content;
-
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    },
-    []
-  );
-
-  const handleCopy = useCallback(async () => {
-    if (!lastAssistantText) return;
-    try {
-      await navigator.clipboard.writeText(lastAssistantText);
-    } catch {
-      return; // clipboard write can fail when the window loses focus mid-click
-    }
-    setCopied(true);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
-  }, [lastAssistantText]);
-
-  const handleNewChat = useCallback(() => {
-    streaming.cancelStream();
-    persistence.handleNewChat();
-    onConversationIdChange(null);
-  }, [streaming, persistence, onConversationIdChange]);
-
-  const handleTextSubmit = useCallback(
-    (text: string) => {
-      if (text.trim()) sendMessage(text);
-    },
-    [sendMessage]
-  );
-
-  const agentState: AgentState = voiceState !== "idle" ? voiceState : streaming.agentState;
-
-  const suggestions = [
-    t("assistant.panel.suggestionDraft"),
-    t("assistant.panel.suggestionSummarize"),
-    t("assistant.panel.suggestionCalendar"),
-  ];
+    .find((message) => message.role === "assistant");
+  const responseContent = latestAssistantMessage?.content ?? "";
 
   return (
     <div
       className={cn(
-        "absolute inset-2 flex flex-col overflow-hidden",
-        "rounded-2xl border border-border/50 bg-surface-0",
-        "shadow-[var(--shadow-elevated)]"
+        "absolute inset-3 flex flex-col overflow-hidden",
+        "rounded-3xl border border-border/50 bg-surface-0 backdrop-blur-xl",
+        "shadow-[var(--shadow-modal)]"
       )}
       style={{
         animation: "assistant-panel-in 240ms cubic-bezier(0.2, 0, 0, 1)",
@@ -174,90 +137,78 @@ export function AssistantPanel({
       }}
     >
       <div
-        className="flex h-10 shrink-0 cursor-grab items-center justify-between px-3 active:cursor-grabbing"
+        className="flex h-16 shrink-0 cursor-grab items-center gap-3 px-5 active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
       >
-        <BrandMarkIcon size={18} className="text-foreground/70" />
-        <button
-          aria-label={t("assistant.panel.newChat")}
-          onClick={handleNewChat}
-          onMouseDown={(e) => e.stopPropagation()}
-          className={cn(
-            "rounded-sm p-1 text-muted-foreground/60 transition-colors duration-100",
-            "hover:bg-foreground/8 hover:text-foreground",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/50 bg-surface-1 text-muted-foreground shadow-[var(--shadow-card)]">
+          <BrandMarkIcon size={18} />
+        </div>
+
+        <div className="min-w-0 flex-1 text-right font-mono text-xs tracking-wide text-muted-foreground/70">
+          <span className="truncate">{t("assistant.panel.selectionHint")}</span>
+          {readableVoiceHotkey && (
+            <kbd className="ml-2 inline-flex rounded-md border border-border/40 bg-foreground/5 px-2 py-1 font-mono text-[11px] tracking-normal text-foreground/65 shadow-sm">
+              {readableVoiceHotkey}
+            </kbd>
           )}
-        >
-          <SquarePen size={14} />
-        </button>
+        </div>
       </div>
 
-      <ChatMessages
-        messages={messages}
-        emptyState={
-          // A pending voice command is about to land — don't flash suggestions.
-          pendingCommand ? null : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 select-none">
-              <p className="text-xs text-foreground/40">{t("assistant.panel.emptyHint")}</p>
-              <div className="flex flex-col items-center gap-1.5">
-                {suggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => sendMessage(suggestion)}
-                    className={cn(
-                      "rounded-full border border-border/50 px-3 py-1 text-[11px] text-foreground/70",
-                      "transition-colors duration-100 hover:bg-muted hover:text-foreground",
-                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                    )}
-                  >
-                    {suggestion}
-                  </button>
+      <div className="mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner agent-chat-scroll">
+        {responseContent ? (
+          <div style={{ animation: "agent-message-in 200ms ease-out both" }}>
+            <MarkdownRenderer
+              content={responseContent}
+              className="text-[15px] leading-relaxed text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
+            />
+            {latestAssistantMessage?.isStreaming && (
+              <span
+                className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
+                style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+              />
+            )}
+          </div>
+        ) : isBusy ? (
+          <span className="text-[15px] font-medium select-none thinking-shimmer-text">
+            {t("agentMode.input.thinking")}...
+          </span>
+        ) : null}
+      </div>
+
+      <div className="flex shrink-0 justify-end px-4 py-4">
+        <div
+          className={cn(
+            "flex h-11 w-28 shrink-0 items-center rounded-full border border-border/50 bg-surface-1 px-2",
+            "text-muted-foreground shadow-[var(--shadow-card)]",
+            voiceState === "listening" && "border-border-hover text-foreground",
+            voiceState === "transcribing" && "border-border/60 text-foreground/70"
+          )}
+          aria-label={t("settingsPage.agentConfig.title")}
+        >
+          <BrandMarkIcon size={20} className="shrink-0" />
+          <div className="mx-1.5 h-5 w-px bg-border/60" />
+          <div className="flex h-7 min-w-0 flex-1 items-center justify-center">
+            {voiceState === "listening" ? (
+              <LiveWaveform getLevel={getAudioLevel} active barCount={8} />
+            ) : (
+              <div
+                className={cn(
+                  "flex items-center gap-0.5",
+                  voiceState === "transcribing" && "animate-pulse"
+                )}
+                aria-hidden="true"
+              >
+                {RESTING_WAVE_HEIGHTS.map((height, index) => (
+                  <span
+                    key={`${height}-${index}`}
+                    className="w-0.5 rounded-full bg-current"
+                    style={{ height }}
+                  />
                 ))}
               </div>
-            </div>
-          )
-        }
-      />
-
-      <div className="shrink-0 px-3 pb-3 pt-1">
-        <ChatInput
-          agentState={agentState}
-          partialTranscript={partialTranscript}
-          onTextSubmit={handleTextSubmit}
-          onCancel={streaming.cancelStream}
-          autoFocus
-          placeholder={t("assistant.panel.askFollowUp")}
-          className="pb-2"
-        />
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={onClose}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium",
-              "bg-muted text-foreground/80 transition-colors duration-100",
-              "hover:bg-foreground/10 hover:text-foreground",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             )}
-          >
-            <X size={12} strokeWidth={2.5} />
-            {t("assistant.panel.close")}
-          </button>
-          <button
-            onClick={handleCopy}
-            disabled={!lastAssistantText}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium",
-              "transition-colors duration-100",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
-              lastAssistantText
-                ? "bg-foreground text-background hover:bg-foreground/85"
-                : "cursor-default bg-muted text-muted-foreground/40"
-            )}
-          >
-            {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} />}
-            {copied ? t("assistant.panel.copied") : t("assistant.panel.copyToClipboard")}
-          </button>
+          </div>
         </div>
       </div>
     </div>

@@ -47,11 +47,11 @@ test("the assistant panel wins over everything", async () => {
   const { resolveMainWindowSizeKey } = await load();
   assert.equal(
     resolveMainWindowSizeKey({ panelOpen: true, menuOpen: true, toastCount: 2, capsule: true }),
-    "EXPANDED"
+    "ASSISTANT"
   );
   assert.equal(
     resolveMainWindowSizeKey({ panelOpen: true, menuOpen: false, toastCount: 0, capsule: false }),
-    "EXPANDED"
+    "ASSISTANT"
   );
 });
 
@@ -74,6 +74,7 @@ test("size ranks order every key", async () => {
     SIZE_RANK.BASE < SIZE_RANK.RECORDING &&
       SIZE_RANK.RECORDING < SIZE_RANK.WITH_MENU &&
       SIZE_RANK.WITH_MENU < SIZE_RANK.WITH_TOAST &&
-      SIZE_RANK.WITH_TOAST < SIZE_RANK.EXPANDED
+      SIZE_RANK.WITH_TOAST < SIZE_RANK.EXPANDED &&
+      SIZE_RANK.EXPANDED < SIZE_RANK.ASSISTANT
   );
 });
