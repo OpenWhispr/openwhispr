@@ -75,24 +75,28 @@ export function AssistantPanel({
     onConversationIdChange(persistence.conversationId);
   }, [persistence.conversationId, onConversationIdChange]);
 
-  // Reopening the panel resumes the previous conversation.
-  const loadedRef = useRef(false);
+  // Reopening the panel resumes the previous conversation. Sends must wait
+  // for the load: a command sent against the still-empty message list would
+  // reach the model without the conversation's history, and the load's
+  // setMessages would then wipe the just-sent turn from the UI.
+  const [historyReady, setHistoryReady] = useState(initialConversationId == null);
   useEffect(() => {
-    if (!loadedRef.current && initialConversationId != null) {
-      persistence.loadConversation(initialConversationId);
+    if (initialConversationId != null) {
+      persistence.loadConversation(initialConversationId).finally(() => setHistoryReady(true));
     }
-    loadedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Voice commands arrive as pending commands: send each exactly once.
   const consumedCommandIdRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!pendingCommand || consumedCommandIdRef.current === pendingCommand.id) return;
+    if (!historyReady || !pendingCommand || consumedCommandIdRef.current === pendingCommand.id) {
+      return;
+    }
     consumedCommandIdRef.current = pendingCommand.id;
     onCommandConsumed(pendingCommand.id);
     sendMessage(pendingCommand.text, { attachment: pendingCommand.attachment ?? undefined });
-  }, [pendingCommand, onCommandConsumed, sendMessage]);
+  }, [historyReady, pendingCommand, onCommandConsumed, sendMessage]);
 
   const isBusy = BUSY_STATES.includes(streaming.agentState);
 
@@ -116,11 +120,24 @@ export function AssistantPanel({
     .reverse()
     .find((m) => m.role === "assistant" && !m.isStreaming && m.content)?.content;
 
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    },
+    []
+  );
+
   const handleCopy = useCallback(async () => {
     if (!lastAssistantText) return;
-    await navigator.clipboard.writeText(lastAssistantText);
+    try {
+      await navigator.clipboard.writeText(lastAssistantText);
+    } catch {
+      return; // clipboard write can fail when the window loses focus mid-click
+    }
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
   }, [lastAssistantText]);
 
   const handleNewChat = useCallback(() => {
@@ -169,7 +186,7 @@ export function AssistantPanel({
           className={cn(
             "rounded-sm p-1 text-muted-foreground/60 transition-colors duration-100",
             "hover:bg-foreground/8 hover:text-foreground",
-            "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
           )}
         >
           <SquarePen size={14} />
@@ -179,24 +196,27 @@ export function AssistantPanel({
       <ChatMessages
         messages={messages}
         emptyState={
-          <div className="flex h-full flex-col items-center justify-center gap-3 select-none">
-            <p className="text-xs text-foreground/40">{t("assistant.panel.emptyHint")}</p>
-            <div className="flex flex-col items-center gap-1.5">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => sendMessage(suggestion)}
-                  className={cn(
-                    "rounded-full border border-border/50 px-3 py-1 text-[11px] text-foreground/70",
-                    "transition-colors duration-100 hover:bg-muted hover:text-foreground",
-                    "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-                  )}
-                >
-                  {suggestion}
-                </button>
-              ))}
+          // A pending voice command is about to land — don't flash suggestions.
+          pendingCommand ? null : (
+            <div className="flex h-full flex-col items-center justify-center gap-3 select-none">
+              <p className="text-xs text-foreground/40">{t("assistant.panel.emptyHint")}</p>
+              <div className="flex flex-col items-center gap-1.5">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    onClick={() => sendMessage(suggestion)}
+                    className={cn(
+                      "rounded-full border border-border/50 px-3 py-1 text-[11px] text-foreground/70",
+                      "transition-colors duration-100 hover:bg-muted hover:text-foreground",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                    )}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )
         }
       />
 
@@ -217,7 +237,7 @@ export function AssistantPanel({
               "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium",
               "bg-muted text-foreground/80 transition-colors duration-100",
               "hover:bg-foreground/10 hover:text-foreground",
-              "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             )}
           >
             <X size={12} strokeWidth={2.5} />
@@ -229,7 +249,7 @@ export function AssistantPanel({
             className={cn(
               "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium",
               "transition-colors duration-100",
-              "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
               lastAssistantText
                 ? "bg-foreground text-background hover:bg-foreground/85"
                 : "cursor-default bg-muted text-muted-foreground/40"

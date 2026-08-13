@@ -3185,7 +3185,6 @@
       }
     },
     "chat": {
-      "emptyState": "Demandez-moi n'importe quoi",
       "errorPrefix": "Erreur"
     },
     "input": {

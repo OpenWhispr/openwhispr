@@ -9,7 +9,11 @@ import {
   isWebSearchAllowed,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
-import { appendDictionarySuffix, getAgentSystemPrompt } from "../../config/prompts";
+import {
+  appendDictionarySuffix,
+  appendScreenContextSuffix,
+  getAgentSystemPrompt,
+} from "../../config/prompts";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
@@ -76,14 +80,12 @@ export interface ChatStreaming {
 }
 
 // Providers whose AI-SDK clients accept image content parts on the streaming
-// path. The cloud agent drops attachments until the API grows vision routing.
-const IMAGE_CAPABLE_STREAM_PROVIDERS = new Set([
-  "openai",
-  "anthropic",
-  "gemini",
-  "openrouter",
-  "custom",
-]);
+// path AND whose model ids exist in the local registry, so supportsVision is
+// decidable — the same dual gate the single-shot dictation path applies.
+// OpenRouter/custom model ids never appear in the registry (vision would be a
+// guess that errors the whole command on a text-only backend), and the cloud
+// agent drops attachments until the API grows vision routing.
+const IMAGE_CAPABLE_STREAM_PROVIDERS = new Set(["openai", "anthropic", "gemini"]);
 
 export function useChatStreaming({
   messages,
@@ -198,7 +200,7 @@ export function useChatStreaming({
       const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
-      const systemPrompt = appendDictionarySuffix(
+      let systemPrompt = appendDictionarySuffix(
         getAgentSystemPrompt(
           registry?.getAll().map((t) => t.name),
           combinedContext || undefined
@@ -225,6 +227,9 @@ export function useChatStreaming({
           ? options.attachment
           : null;
       if (attachment) {
+        // The screenshot needs its grounding instruction, exactly like the
+        // dictation path pairs the suffix with an attached image.
+        systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
         for (let i = history.length - 1; i >= 0; i--) {
           if (history[i].role === "user") {
             history[i] = {

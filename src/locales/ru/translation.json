@@ -3048,7 +3048,6 @@
       }
     },
     "chat": {
-      "emptyState": "Спросите что угодно",
       "errorPrefix": "Ошибка"
     },
     "input": {

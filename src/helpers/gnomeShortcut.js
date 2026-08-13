@@ -121,6 +121,34 @@ class GnomeShortcutManager {
     debugLogger.log("[GnomeShortcut] Translation callback registered");
   }
 
+  // Older builds persisted a gsettings keybinding for the removed chat-agent
+  // slot; its dbus-send command targets a method this app no longer exports,
+  // so the entry errors silently forever and squats its key. Prune it once.
+  removeRetiredAgentKeybinding() {
+    const retiredPath =
+      "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-agent/";
+    try {
+      const existing = this.getExistingKeybindings();
+      if (!existing.includes(retiredPath)) return;
+      const remaining = existing.filter((p) => p !== retiredPath);
+      const bindingsStr = remaining.length ? "['" + remaining.join("', '") + "']" : "[]";
+      execFileSync(
+        "gsettings",
+        ["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", bindingsStr],
+        { stdio: "pipe" }
+      );
+      execFileSync("gsettings", ["reset-recursively", `${KEYBINDING_SCHEMA}:${retiredPath}`], {
+        stdio: "pipe",
+      });
+      debugLogger.log("[GnomeShortcut] Removed retired chat-agent keybinding");
+    } catch (err) {
+      debugLogger.log(
+        "[GnomeShortcut] Failed to remove retired chat-agent keybinding:",
+        err.message
+      );
+    }
+  }
+
   async initDBusService(dictationCallback) {
     this.dictationCallback = dictationCallback;
 
@@ -174,6 +202,7 @@ class GnomeShortcutManager {
       );
 
       debugLogger.log("[GnomeShortcut] D-Bus service initialized successfully");
+      this.removeRetiredAgentKeybinding();
       return true;
     } catch (err) {
       debugLogger.log("[GnomeShortcut] Failed to initialize D-Bus service:", err.message);

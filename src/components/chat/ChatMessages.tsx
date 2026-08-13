@@ -9,18 +9,34 @@ interface ChatMessagesProps {
   onOpenNote?: (noteId: number) => void;
 }
 
+const PIN_THRESHOLD_PX = 40;
+
 export function ChatMessages({ messages, emptyState, onOpenNote }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Follow the stream only while the user is at the bottom; scrolling up to
+  // re-read must not be yanked back down by the next token.
+  const pinnedRef = useRef(true);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (el) {
+      pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < PIN_THRESHOLD_PX;
+    }
+  };
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) {
+    if (el && pinnedRef.current) {
       el.scrollTop = el.scrollHeight;
     }
   }, [messages]);
 
   return (
-    <div ref={scrollRef} className={cn("flex-1 overflow-y-auto agent-chat-scroll", "px-3 py-2")}>
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className={cn("flex-1 overflow-y-auto agent-chat-scroll", "px-3 py-2")}
+    >
       {messages.length === 0 ? (
         (emptyState ?? null)
       ) : (

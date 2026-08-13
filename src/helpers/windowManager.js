@@ -131,9 +131,15 @@ class WindowManager {
   setAssistantPanelOpen(open) {
     this._assistantPanelOpen = Boolean(open);
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.setFocusable(this._assistantPanelOpen);
       if (this._assistantPanelOpen) {
+        this.mainWindow.setFocusable(true);
         this.mainWindow.focus();
+      } else {
+        // On Windows/Linux the pill is a normal/toolbar window, so focus()
+        // activated OpenWhispr — blur before dropping focusability to hand
+        // the foreground back to the app the user was in.
+        this.mainWindow.blur();
+        this.mainWindow.setFocusable(false);
       }
       this.enforceMainWindowOnTop();
     }
@@ -194,9 +200,13 @@ class WindowManager {
 
     // A window moved since the last resize (dragged) means the captured BASE
     // bounds no longer describe where the user wants the pill — drop them.
+    // Tolerate a couple of pixels: fractional DPI scaling can round setBounds
+    // values, and treating that as a drag would defeat the restore forever.
+    const MOVE_TOLERANCE_PX = 2;
     if (
       this._lastResizeBounds &&
-      (currentBounds.x !== this._lastResizeBounds.x || currentBounds.y !== this._lastResizeBounds.y)
+      (Math.abs(currentBounds.x - this._lastResizeBounds.x) > MOVE_TOLERANCE_PX ||
+        Math.abs(currentBounds.y - this._lastResizeBounds.y) > MOVE_TOLERANCE_PX)
     ) {
       this._baseBoundsBeforeResize = null;
     }

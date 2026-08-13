@@ -28,6 +28,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isAssistantVoice, setIsAssistantVoice] = useState(false);
   const [micCaptureStatus, setMicCaptureStatus] = useState("inactive");
   const [transcript, setTranscript] = useState("");
   const [partialTranscript, setPartialTranscript] = useState("");
@@ -197,6 +198,10 @@ export const useAudioRecording = (toast, options = {}) => {
         setIsRecording(isRecording);
         setIsProcessing(isProcessing);
         setIsStreaming(isStreaming ?? false);
+        // The panel only mirrors assistant-routed recordings; a plain
+        // dictation started while it is open must not masquerade as a
+        // follow-up (its transcript takes the paste route, not the panel).
+        setIsAssistantVoice(!!audioManagerRef.current?.voiceAgentRequested);
         if (micCaptureStatus) {
           setMicCaptureStatus(micCaptureStatus);
           const unavailable = micCaptureStatus === "unavailable";
@@ -277,10 +282,13 @@ export const useAudioRecording = (toast, options = {}) => {
           if (result.assistantConversation) {
             // Panel-first: the command streams into the assistant panel;
             // nothing types at the cursor and nothing lands in the clipboard.
+            // The directive's transcript is the command to send — it carries
+            // the quoted selection when the selection-without-editor fallback
+            // routed a highlighted passage here.
             window.electronAPI?.hideDictationPreview?.();
-            const { screenContext } = result.assistantConversation;
+            const { screenContext, transcript } = result.assistantConversation;
             onAssistantCommandRef.current?.({
-              text: result.text,
+              text: expandSnippets(transcript, getSettings().snippets),
               attachment: screenContext
                 ? { image: screenContext.data, mediaType: screenContext.mediaType }
                 : null,
@@ -539,6 +547,7 @@ export const useAudioRecording = (toast, options = {}) => {
     isRecording,
     isProcessing,
     isStreaming,
+    isAssistantVoice,
     micCaptureStatus,
     transcript,
     partialTranscript,

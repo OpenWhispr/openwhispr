@@ -28,8 +28,11 @@ export function LiveWaveform({ getLevel, active, barCount = 14, className }: Liv
   useEffect(() => {
     if (!active) return;
 
-    if (levelsRef.current.length !== barCount) {
-      levelsRef.current = new Array(barCount).fill(0);
+    // A new recording starts from silence — never replay the previous
+    // session's frozen wave.
+    levelsRef.current = new Array(barCount).fill(0);
+    for (const bar of barRefs.current) {
+      if (bar) bar.style.height = `${BAR_MIN_PX}px`;
     }
 
     let frame = 0;

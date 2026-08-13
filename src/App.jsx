@@ -162,27 +162,35 @@ export default function App() {
     assistantPanelOpenRef.current = assistantPanelOpen;
   }, [assistantPanelOpen]);
 
-  const handleAssistantCommand = React.useCallback((command) => {
-    commandIdRef.current += 1;
-    setPendingCommand({
-      id: commandIdRef.current,
-      text: command.text,
-      attachment: command.attachment ?? null,
-    });
+  const openAssistantPanel = React.useCallback(async () => {
+    // Grow the window before the panel mounts so its entrance never paints
+    // clipped inside the smaller pill/capsule bounds.
+    await window.electronAPI?.resizeMainWindow?.("EXPANDED");
     setAssistantPanelOpen(true);
   }, []);
+
+  const handleAssistantCommand = React.useCallback(
+    (command) => {
+      commandIdRef.current += 1;
+      setPendingCommand({
+        id: commandIdRef.current,
+        text: command.text,
+        attachment: command.attachment ?? null,
+      });
+      openAssistantPanel();
+    },
+    [openAssistantPanel]
+  );
 
   const handleCommandConsumed = React.useCallback((id) => {
     setPendingCommand((current) => (current?.id === id ? null : current));
   }, []);
 
-  const handleAssistantPanelClose = React.useCallback(() => {
-    setAssistantPanelOpen(false);
-    setPendingCommand(null);
-  }, []);
-
   useEffect(() => {
     window.electronAPI?.setAssistantPanelOpen?.(assistantPanelOpen);
+    // The pill unmounts when the panel opens, so its mouseleave never fires;
+    // clear the hover flag or window interactivity sticks on after close.
+    if (assistantPanelOpen) setIsHovered(false);
   }, [assistantPanelOpen]);
 
   useEffect(() => {
@@ -203,6 +211,7 @@ export default function App() {
   const {
     isRecording,
     isProcessing,
+    isAssistantVoice,
     micCaptureStatus,
     partialTranscript,
     toggleListening,
@@ -213,6 +222,17 @@ export default function App() {
     onToggle: handleDictationToggle,
     onAssistantCommand: handleAssistantCommand,
   });
+
+  const handleAssistantPanelClose = React.useCallback(() => {
+    // Dismissing the panel mid-command must also abandon the command, or its
+    // completion reopens the panel and answers a question the user withdrew.
+    if (isAssistantVoice) {
+      if (isRecording) cancelRecording();
+      else if (isProcessing) cancelProcessing();
+    }
+    setAssistantPanelOpen(false);
+    setPendingCommand(null);
+  }, [isAssistantVoice, isRecording, isProcessing, cancelRecording, cancelProcessing]);
 
   // Single owner of the window size: panel > menu > toast > capsule > base.
   // Grows apply immediately so content never clips; shrinks wait for the
@@ -357,8 +377,14 @@ export default function App() {
           onCommandConsumed={handleCommandConsumed}
           initialConversationId={panelConversationId}
           onConversationIdChange={setPanelConversationId}
-          voiceState={isRecording ? "listening" : isProcessing ? "transcribing" : "idle"}
-          partialTranscript={partialTranscript}
+          voiceState={
+            isRecording && isAssistantVoice
+              ? "listening"
+              : isProcessing && isAssistantVoice
+                ? "transcribing"
+                : "idle"
+          }
+          partialTranscript={isAssistantVoice ? partialTranscript : ""}
           onClose={handleAssistantPanelClose}
         />
       </div>
@@ -487,6 +513,10 @@ export default function App() {
                   opacity: isCapsule ? 1 : 0,
                   transition: `width ${GROW_TRANSITION}, margin-left ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
                 }}
+                // A near-miss on the cancel zone must be inert, not commit the
+                // recording via the capsule's own click handler.
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
               >
                 <button
                   aria-label={
@@ -495,14 +525,12 @@ export default function App() {
                       : t("app.buttons.cancelProcessing")
                   }
                   tabIndex={isCapsule ? 0 : -1}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    isRecording ? cancelRecording() : cancelProcessing();
-                  }}
-                  className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-white/15 transition-colors duration-150 hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                  onClick={() => (isRecording ? cancelRecording() : cancelProcessing())}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors duration-150 hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                 >
-                  <X size={12} strokeWidth={2.5} className="text-white" />
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
+                    <X size={12} strokeWidth={2.5} className="text-white" />
+                  </span>
                 </button>
               </div>
               {micState === "unavailable" && (
@@ -540,7 +568,7 @@ export default function App() {
                     className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
                     onClick={() => {
                       setIsCommandMenuOpen(false);
-                      setAssistantPanelOpen(true);
+                      openAssistantPanel();
                     }}
                   >
                     {t("app.commandMenu.askAssistant")}

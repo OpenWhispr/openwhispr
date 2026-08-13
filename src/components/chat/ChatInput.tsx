@@ -100,7 +100,11 @@ export function ChatInput({
           <>
             <RecordingIndicator />
             <span className="text-[12px] text-foreground/80 truncate flex-1">
-              {partialTranscript || t("agentMode.input.listening")}
+              {/* A live transcript's informative part is its tail — show the
+                  latest words once the line fills instead of a frozen start. */}
+              {partialTranscript.length > 60
+                ? `…${partialTranscript.slice(-60)}`
+                : partialTranscript || t("agentMode.input.listening")}
             </span>
           </>
         )}

@@ -3068,7 +3068,6 @@
       }
     },
     "chat": {
-      "emptyState": "Preguntame lo que sea",
       "errorPrefix": "Error"
     },
     "input": {

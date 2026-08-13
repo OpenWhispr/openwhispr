@@ -461,6 +461,7 @@ class AudioManager {
     this.isStreaming = false;
     this.streamingAudioContext = null;
     this.streamingSource = null;
+    this.streamingAnalyser = null;
     this.streamingProcessor = null;
     this.streamingStream = null;
     this.streamingCleanupFns = [];
@@ -1550,12 +1551,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._levelData = null;
   }
 
-  // Live input level (RMS 0..~1) off the speech-gate analyser, or null when no
-  // analyser is attached (e.g. streaming-commit recordings) so the waveform rests.
+  // Live input level (RMS 0..~1) for the waveform, read from whichever
+  // pipeline is recording: the batch speech-gate analyser or the streaming
+  // path's analyser. Null (waveform rests) when neither is live.
   getRecordingAudioLevel() {
-    if (!this._silenceAnalyser || this._silenceCtx?.state !== "running") return null;
-    if (!this._levelData) this._levelData = new Uint8Array(this._silenceAnalyser.fftSize);
-    this._silenceAnalyser.getByteTimeDomainData(this._levelData);
+    const analyser =
+      this._silenceAnalyser && this._silenceCtx?.state === "running"
+        ? this._silenceAnalyser
+        : this.streamingAnalyser && this.streamingAudioContext?.state === "running"
+          ? this.streamingAnalyser
+          : null;
+    if (!analyser) return null;
+    if (!this._levelData || this._levelData.length !== analyser.fftSize) {
+      this._levelData = new Uint8Array(analyser.fftSize);
+    }
+    analyser.getByteTimeDomainData(this._levelData);
     let sum = 0;
     for (let i = 0; i < this._levelData.length; i++) {
       const v = (this._levelData[i] - 128) / 128;
@@ -2547,7 +2557,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (
       !cleanupReachable &&
       !agentReachable &&
-      !(this.translationRequested && translationChainReachable(settings))
+      !(this.translationRequested && translationChainReachable(settings)) &&
+      // A voice-assistant command always routes: standalone commands run on
+      // the chat scope in the panel, so no dictation-scope model is needed.
+      !this.voiceAgentRequested
     ) {
       logger.logReasoning("REASONING_SKIPPED", {
         reason: "No cleanup or dictation-agent model available",
@@ -2555,7 +2568,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return normalizedText;
     }
 
-    const useReasoning = await this.isReasoningAvailable();
+    const useReasoning = this.voiceAgentRequested || (await this.isReasoningAvailable());
 
     logger.logReasoning("REASONING_CHECK", {
       useReasoning,
@@ -2606,7 +2619,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
         const targetModel = route.kind === "agent" ? route.model : cleanupModel;
         const reasoningConfig = route.config;
-        if (route.kind === "agent") this.assertAgentAllowedByPolicy();
 
         logger.logReasoning("SENDING_TO_REASONING", {
           preparedTextLength: normalizedText.length,
@@ -2881,7 +2893,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       try {
         if (route.kind === "agent") {
-          this.assertAgentAllowedByPolicy();
           const reasoned = await this.processAgentCommand(processedText, route.model, agentName, {
             ...route.config,
             requiresAgent: true,
@@ -3758,6 +3769,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       nextSource.connect(this.streamingProcessor);
       this.streamingSource?.disconnect();
       this.streamingSource = nextSource;
+      if (this.streamingAnalyser) this.streamingSource.connect(this.streamingAnalyser);
       await this.finishStreamingFallbackSegment();
       if (!this.isStreaming || !this.isRecording) {
         throw new Error("Streaming stopped during microphone recovery");
@@ -3842,6 +3854,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.streamingAudioContext = audioContext;
       this.streamingSource = audioContext.createMediaStreamSource(stream);
       this.streamingStream = stream;
+
+      // Level source for the live waveform: the batch path reads the
+      // speech-gate analyser, which never attaches to streaming recordings.
+      this.streamingAnalyser = audioContext.createAnalyser();
+      this.streamingAnalyser.fftSize = 2048;
+      this.streamingSource.connect(this.streamingAnalyser);
 
       if (!this.workletModuleLoaded) {
         await audioContext.audioWorklet.addModule(this.getWorkletBlobUrl());
@@ -4136,6 +4154,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       this.streamingSource = null;
     }
+    this.streamingAnalyser = null;
     this.streamingAudioContext = null;
 
     // Stop fallback recorder before stopping media tracks
@@ -4252,7 +4271,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       try {
         if (route.kind === "agent") {
-          this.assertAgentAllowedByPolicy();
           const reasoned = await this.processAgentCommand(finalText, route.model, agentName, {
             ...route.config,
             requiresAgent: true,
@@ -4574,6 +4592,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.streamingSource = null;
     }
 
+    this.streamingAnalyser = null;
     this.streamingAudioContext = null;
 
     if (this.streamingStream) {

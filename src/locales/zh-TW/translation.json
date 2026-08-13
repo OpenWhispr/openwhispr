@@ -3020,7 +3020,6 @@
       }
     },
     "chat": {
-      "emptyState": "隨便問我",
       "errorPrefix": "錯誤"
     },
     "input": {

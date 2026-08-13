@@ -3020,7 +3020,6 @@
       }
     },
     "chat": {
-      "emptyState": "Pergunte-me qualquer coisa",
       "errorPrefix": "Erro"
     },
     "input": {
