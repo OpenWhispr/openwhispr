@@ -47,6 +47,7 @@ GPU acceleration for local transcription gets an overhaul: the status you see is
 ### Voice agent
 
 - **Screen context, selection edits, and calendar answers are more reliable.** Screenshot capture failures retry text-only without losing the command, selection edits recover from a rejected screenshot, and the agent's calendar tool and accessibility reads are fixed. (#1566)
+- **Selection edits work in apps with dormant accessibility trees.** Commands dictated into Dia, Arc, Chrome, Claude Desktop, Slack, or VS Code no longer die before reaching the model when the selected text can't be read natively. (#1593)
 
 ### Meetings & speakers
 
@@ -78,6 +79,7 @@ GPU acceleration for local transcription gets an overhaul: the status you see is
 - **Meeting transcript timestamps export correctly to Markdown.** (#1560)
 - **Retired default prompts are cleared from persisted settings.** (#1561)
 - **Empty states close their layout gaps.** (#1565)
+- **The "Coming Soon" badge translates again.** A wrong-prefix key rendered raw text in every language; a new lint-style test guards all referenced keys. (#1592)
 - **Hotkey parsing handles left/right modifiers and trailing `+` correctly.** (#1437, #1433)
 - **Retention cleanup waits for the first renderer sync.** A fresh install can no longer sweep history before settings arrive. (#1558)
 
