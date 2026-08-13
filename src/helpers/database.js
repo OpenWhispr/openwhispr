@@ -5,6 +5,7 @@ const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
+const { EMBEDDING_VERSION } = require("../constants/speakerDetection.json");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -605,6 +606,7 @@ class DatabaseManager {
           display_name TEXT NOT NULL,
           email TEXT,
           embedding BLOB NOT NULL,
+          embedding_version INTEGER,
           sample_count INTEGER DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -628,6 +630,7 @@ class DatabaseManager {
           note_id INTEGER NOT NULL,
           speaker_id TEXT NOT NULL,
           embedding BLOB NOT NULL,
+          embedding_version INTEGER,
           PRIMARY KEY (note_id, speaker_id),
           FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
         )
@@ -1012,6 +1015,21 @@ class DatabaseManager {
       // permission checks; NULL until a cloud pull or push response fills it.
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN owner_user_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      // Speaker-embedding schema version. Rows written before this column existed
+      // predate the Kaldi/CMN fbank fix, so their embeddings live in an
+      // incompatible space; leaving the column NULL marks them stale so matching
+      // skips them until the speaker is re-enrolled (see EMBEDDING_VERSION).
+      try {
+        this.db.exec("ALTER TABLE speaker_profiles ADD COLUMN embedding_version INTEGER");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE note_speaker_embeddings ADD COLUMN embedding_version INTEGER");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -4044,27 +4062,39 @@ class DatabaseManager {
           .get(name);
       }
       if (existing) {
-        const stored = new Float32Array(
-          existing.embedding.buffer,
-          existing.embedding.byteOffset,
-          existing.embedding.byteLength / 4
-        );
         const incoming = new Float32Array(
           embeddingBuffer.buffer,
           embeddingBuffer.byteOffset,
           embeddingBuffer.byteLength / 4
         );
-        const updated = new Float32Array(stored.length);
-        for (let i = 0; i < stored.length; i++) {
-          updated[i] = 0.3 * incoming[i] + 0.7 * stored[i];
+        // A stored embedding from an older feature-extraction version lives in an
+        // incompatible space, so blending it with a current one is meaningless.
+        // Re-enroll by replacing it outright and restarting the running average.
+        const staleSpace = existing.embedding_version !== EMBEDDING_VERSION;
+        let updatedBuf;
+        let sampleCountExpr;
+        if (staleSpace) {
+          updatedBuf = Buffer.from(incoming.buffer, incoming.byteOffset, incoming.byteLength);
+          sampleCountExpr = "1";
+        } else {
+          const stored = new Float32Array(
+            existing.embedding.buffer,
+            existing.embedding.byteOffset,
+            existing.embedding.byteLength / 4
+          );
+          const updated = new Float32Array(stored.length);
+          for (let i = 0; i < stored.length; i++) {
+            updated[i] = 0.3 * incoming[i] + 0.7 * stored[i];
+          }
+          updatedBuf = Buffer.from(updated.buffer);
+          sampleCountExpr = "sample_count + 1";
         }
-        const updatedBuf = Buffer.from(updated.buffer);
         const finalEmail = normalizedEmail || existing.email || null;
         this.db
           .prepare(
-            "UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, sample_count = sample_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+            `UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, embedding_version = ?, sample_count = ${sampleCountExpr}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
           )
-          .run(name, finalEmail, updatedBuf, existing.id);
+          .run(name, finalEmail, updatedBuf, EMBEDDING_VERSION, existing.id);
         const resolved = this.db
           .prepare("SELECT * FROM speaker_profiles WHERE id = ?")
           .get(existing.id);
@@ -4079,8 +4109,10 @@ class DatabaseManager {
         return resolved;
       }
       const result = this.db
-        .prepare("INSERT INTO speaker_profiles (display_name, email, embedding) VALUES (?, ?, ?)")
-        .run(name, normalizedEmail, embeddingBuffer);
+        .prepare(
+          "INSERT INTO speaker_profiles (display_name, email, embedding, embedding_version) VALUES (?, ?, ?, ?)"
+        )
+        .run(name, normalizedEmail, embeddingBuffer, EMBEDDING_VERSION);
       return this.db
         .prepare("SELECT * FROM speaker_profiles WHERE id = ?")
         .get(result.lastInsertRowid);
@@ -4131,22 +4163,43 @@ class DatabaseManager {
     const winner = (a.sample_count || 0) >= (b.sample_count || 0) ? a : b;
     const loser = winner === a ? b : a;
 
-    const winnerEmb = new Float32Array(
-      winner.embedding.buffer,
-      winner.embedding.byteOffset,
-      winner.embedding.byteLength / 4
-    );
-    const loserEmb = new Float32Array(
-      loser.embedding.buffer,
-      loser.embedding.byteOffset,
-      loser.embedding.byteLength / 4
-    );
+    const toF32 = (p) =>
+      new Float32Array(p.embedding.buffer, p.embedding.byteOffset, p.embedding.byteLength / 4);
+    const f32ToBuf = (v) => Buffer.from(v.buffer, v.byteOffset, v.byteLength);
+
     const wSamples = winner.sample_count || 1;
     const lSamples = loser.sample_count || 1;
     const total = wSamples + lSamples;
-    const blended = new Float32Array(winnerEmb.length);
-    for (let i = 0; i < winnerEmb.length; i++) {
-      blended[i] = (winnerEmb[i] * wSamples + loserEmb[i] * lSamples) / total;
+
+    const winnerCurrent = winner.embedding_version === EMBEDDING_VERSION;
+    const loserCurrent = loser.embedding_version === EMBEDDING_VERSION;
+
+    // Identity (name/email/mappings) always merges; the embedding must never be
+    // blended across feature-extraction versions, so only combine same-space
+    // vectors and otherwise keep whichever one is current.
+    let finalEmbeddingBuf;
+    let finalVersion;
+    let finalSampleCount;
+    if (winnerCurrent && loserCurrent) {
+      const winnerEmb = toF32(winner);
+      const loserEmb = toF32(loser);
+      const blended = new Float32Array(winnerEmb.length);
+      for (let i = 0; i < winnerEmb.length; i++) {
+        blended[i] = (winnerEmb[i] * wSamples + loserEmb[i] * lSamples) / total;
+      }
+      finalEmbeddingBuf = Buffer.from(blended.buffer);
+      finalVersion = EMBEDDING_VERSION;
+      finalSampleCount = total;
+    } else if (winnerCurrent || loserCurrent) {
+      const keep = winnerCurrent ? winner : loser;
+      finalEmbeddingBuf = f32ToBuf(toF32(keep));
+      finalVersion = EMBEDDING_VERSION;
+      finalSampleCount = keep.sample_count || 1;
+    } else {
+      // Both stale: keep a valid blob but leave it marked stale for re-enrollment.
+      finalEmbeddingBuf = f32ToBuf(toF32(winner));
+      finalVersion = winner.embedding_version ?? null;
+      finalSampleCount = total;
     }
 
     const finalEmail = winner.email || loser.email || null;
@@ -4155,9 +4208,9 @@ class DatabaseManager {
     const tx = this.db.transaction(() => {
       this.db
         .prepare(
-          "UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, sample_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+          "UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, embedding_version = ?, sample_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
         )
-        .run(finalName, finalEmail, Buffer.from(blended.buffer), total, winner.id);
+        .run(finalName, finalEmail, finalEmbeddingBuf, finalVersion, finalSampleCount, winner.id);
       this.db
         .prepare(
           "UPDATE speaker_mappings SET profile_id = ?, display_name = ? WHERE profile_id = ?"
@@ -4173,11 +4226,16 @@ class DatabaseManager {
   getSpeakerProfiles(includeEmbedding = false) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Embeddings are only returned for auto-matching, so restrict them to the
+      // current feature-extraction version. Legacy-space embeddings would produce
+      // meaningless cosine scores; the profile survives (name/email) and is matched
+      // again once re-enrolled. The name-only listing keeps every profile.
       const query = includeEmbedding
-        ? "SELECT * FROM speaker_profiles"
+        ? "SELECT * FROM speaker_profiles WHERE embedding_version = ?"
         : `SELECT id, display_name, email, sample_count, created_at, updated_at
            FROM speaker_profiles`;
-      return this.db.prepare(query).all();
+      const stmt = this.db.prepare(query);
+      return includeEmbedding ? stmt.all(EMBEDDING_VERSION) : stmt.all();
     } catch (error) {
       debugLogger.error("Error getting speaker profiles", { error: error.message }, "database");
       throw error;
@@ -4214,10 +4272,10 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction((entries) => {
         const stmt = this.db.prepare(
-          "INSERT OR REPLACE INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)"
+          "INSERT OR REPLACE INTO note_speaker_embeddings (note_id, speaker_id, embedding, embedding_version) VALUES (?, ?, ?, ?)"
         );
         for (const [speakerId, buffer] of entries) {
-          stmt.run(noteId, speakerId, buffer);
+          stmt.run(noteId, speakerId, buffer, EMBEDDING_VERSION);
         }
       });
       transaction(Object.entries(embeddings));
@@ -4235,7 +4293,13 @@ class DatabaseManager {
   getNoteSpeakerEmbeddings(noteId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM note_speaker_embeddings WHERE note_id = ?").all(noteId);
+      // Only expose embeddings from the current feature-extraction version; older
+      // ones live in an incompatible space and must not seed profiles or matches.
+      return this.db
+        .prepare(
+          "SELECT * FROM note_speaker_embeddings WHERE note_id = ? AND embedding_version = ?"
+        )
+        .all(noteId, EMBEDDING_VERSION);
     } catch (error) {
       debugLogger.error(
         "Error getting note speaker embeddings",

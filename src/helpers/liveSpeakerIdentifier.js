@@ -45,7 +45,13 @@ const SPEECH_CHUNKS_MAX_SAMPLES = MAX_EMBEDDING_SAMPLES * 4;
 const SPEECH_THRESHOLD = 0.15;
 const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
-const MATCH_THRESHOLD = 0.65;
+// Minimum cosine to treat a live segment as an existing speaker. Aligned with the
+// offline sherpa-onnx cluster-threshold used for this same CAMPPlus model
+// (see DiarizationManager.diarize). The previous 0.65 was tuned to the pre-CMN
+// embeddings, which collapsed into a narrow ~0.92+ cone where nothing separated;
+// with the corrected fbank the distribution is much wider, so a lower, properly
+// calibrated boundary avoids splitting one speaker across volume/prosody swings.
+const MATCH_THRESHOLD = 0.55;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
