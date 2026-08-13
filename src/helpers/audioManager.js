@@ -478,7 +478,6 @@ class AudioManager {
     this.stopRequestedDuringStreamingStart = false;
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
-    this.skipReasoning = false;
     this.voiceAgentRequested = false;
     this.translationRequested = false;
     this.translationApplied = false;
@@ -486,7 +485,6 @@ class AudioManager {
     this.pendingAssistantConversation = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
-    this.context = "dictation";
     this.sttConfig = null;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
@@ -703,10 +701,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
   }
 
-  setSkipReasoning(skip) {
-    this.skipReasoning = skip;
-  }
-
   setVoiceAgentRequested(requested) {
     this.voiceAgentRequested = requested;
     this.pendingSelectionEdit = null;
@@ -794,15 +788,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
-  setContext(context) {
-    this.context = context;
-  }
-
   isRecordingAllowedByPolicy() {
     const policyState = usePolicyStore.getState();
     return (
       isTranscriptionContextAllowed(policyState, getSettings(), "dictation") &&
-      (this.context !== "agent" || isAgentAllowed(policyState)) &&
       (!this.voiceAgentRequested || isAgentAllowed(policyState))
     );
   }
@@ -820,8 +809,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProvider() {
-    const fallback = this.context === "notes" ? "deepgram" : "openai-realtime";
-    return STREAMING_PROVIDERS[this.getStreamingProviderName()] || STREAMING_PROVIDERS[fallback];
+    return (
+      STREAMING_PROVIDERS[this.getStreamingProviderName()] || STREAMING_PROVIDERS["openai-realtime"]
+    );
   }
 
   getStreamingProviderName() {
@@ -835,8 +825,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
       return "openai-realtime";
     }
-    const defaultProvider = this.context === "notes" ? "deepgram" : "openai-realtime";
-    return this.sttConfig?.streamingProvider || defaultProvider;
+    return this.sttConfig?.streamingProvider || "openai-realtime";
   }
 
   async getAudioConstraints(forceDefaultMic = false) {
@@ -1174,7 +1163,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._startInProgress = true;
     try {
       if (!this.isRecordingAllowedByPolicy()) {
-        logger.warn("Recording blocked by workspace policy", { context: this.context }, "audio");
+        logger.warn("Recording blocked by workspace policy", {}, "audio");
         return false;
       }
       if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") {
@@ -2538,14 +2527,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return normalizedText;
     }
 
-    if (this.skipReasoning) {
-      logger.logReasoning("REASONING_SKIPPED_AGENT_MODE", {
-        source,
-        reason: "skipReasoning is set (agent mode) — returning raw transcription",
-      });
-      return normalizedText;
-    }
-
     logger.logReasoning("TRANSCRIPTION_RECEIVED", {
       source,
       textLength: normalizedText.length,
@@ -2849,11 +2830,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (language) opts.language = language;
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     if (
-      (settings.useCleanupModel && !this.skipReasoning && cleanupCloudMode === "openwhispr") ||
-      (this.translationRequested &&
-        !this.skipReasoning &&
-        translationChainReachable(settings) &&
-        isCloudTranslationMode())
+      (settings.useCleanupModel && cleanupCloudMode === "openwhispr") ||
+      (this.translationRequested && translationChainReachable(settings) && isCloudTranslationMode())
     ) {
       opts.sendLogs = "false";
     }
@@ -2884,7 +2862,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw dictionaryEchoError();
     }
     let processedText = result.text;
-    if (processedText && !this.skipReasoning) {
+    if (processedText) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
@@ -3616,9 +3594,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return !!model?.streaming && !!s.tinfoilApiKey;
     }
 
-    // For dictation/agent: respect sttConfig mode from the API — this allows
-    // batch mode even for realtime-capable models (e.g. gpt-4o-mini-transcribe).
-    if (this.context !== "notes" && this.sttConfig?.dictation?.mode === "batch") {
+    // Respect sttConfig mode from the API — this allows batch mode even for
+    // realtime-capable models (e.g. gpt-4o-mini-transcribe).
+    if (this.sttConfig?.dictation?.mode === "batch") {
       return false;
     }
 
@@ -3632,9 +3610,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (s.cloudTranscriptionMode !== "openwhispr" || !(isSignedInOverride ?? s.isSignedIn)) {
       return false;
-    }
-    if (this.context === "notes") {
-      return localStorage.getItem("notesStreamingPreference") === "streaming";
     }
     if (!this.sttConfig) return false;
     return this.sttConfig.dictation?.mode === "streaming";
@@ -3807,11 +3782,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._startInProgress = true;
     try {
       if (!this.isRecordingAllowedByPolicy()) {
-        logger.warn(
-          "Streaming recording blocked by workspace policy",
-          { context: this.context },
-          "audio"
-        );
+        logger.warn("Streaming recording blocked by workspace policy", {}, "audio");
         return false;
       }
       if (this.streamingStartInProgress) {
@@ -4262,7 +4233,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const rawStreamingText = finalText;
 
     let usedCloudReasoning = false;
-    if (finalText && !this.skipReasoning) {
+    if (finalText) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
@@ -4529,10 +4500,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   shouldShowPreviewCleanupState() {
     const settings = getSettings();
     return (
-      (!!settings.useCleanupModel ||
-        !!settings.useDictationAgent ||
-        (this.translationRequested && !!settings.useDictationTranslation)) &&
-      !this.skipReasoning
+      !!settings.useCleanupModel ||
+      !!settings.useDictationAgent ||
+      (this.translationRequested && !!settings.useDictationTranslation)
     );
   }
 

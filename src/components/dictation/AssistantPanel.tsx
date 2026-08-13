@@ -151,6 +151,10 @@ export function AssistantPanel({
         "rounded-2xl border border-border/50 bg-surface-0",
         "shadow-[var(--shadow-elevated)]"
       )}
+      style={{
+        animation: "assistant-panel-in 240ms cubic-bezier(0.2, 0, 0, 1)",
+        transformOrigin: "bottom center",
+      }}
     >
       <div
         className="flex h-10 shrink-0 cursor-grab items-center justify-between px-3 active:cursor-grabbing"

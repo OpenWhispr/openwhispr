@@ -54,8 +54,7 @@
   },
   "window": {
     "voiceRecorderTitle": "ボイスレコーダー",
-    "controlPanelTitle": "コントロールパネル",
-    "agentChatTitle": "エージェントチャット"
+    "controlPanelTitle": "コントロールパネル"
   },
   "dialog": {
     "openLink": {
@@ -186,7 +185,7 @@
       "useCase": "あなたについて",
       "meeting": "会議",
       "finish": "完了",
-      "voiceAgent": "ボイスエージェント"
+      "voiceAgent": "音声アシスタント"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -233,14 +232,14 @@
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
     },
     "voiceAgent": {
-      "title": "ボイスエージェント設定",
-      "description": "ワンキーでAIエージェントに話しかけられます",
+      "title": "音声アシスタント設定",
+      "description": "ワンキーでAIアシスタントに話しかけられます",
       "hotkey": "ホットキー",
-      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}がその選択範囲を編集して置き換えます。選択がなければカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}がその選択範囲を編集して置き換えます。選択がなければ、答えはフローティングパネルに表示されます。「Hey {{agentName}}」と言う必要はありません。",
       "test": "試す",
-      "testInstruction": "下をクリックし、{{hotkey}} を押してコマンドを話してください",
+      "testInstruction": "下のサンプルテキストを選択して {{hotkey}} を押し、「短くして」と話してください。編集結果がそのままテキストボックスに反映されます",
       "testSetHotkey": "上でホットキーを設定すると試せます",
-      "testPlaceholder": "ここをクリックし、ホットキーを押して例の一つを話してください...",
+      "sampleText": "木曜のミーティングが移動になったので、来週の頭に集まってローンチ計画を確認し、残りのタスクを分担しましょう。",
       "examples": [
         "イタリア語に翻訳して:「私はタイプするより話す方が速い」",
         "上司に昇進したいと伝える短いメールを書いて、彼の名前はマークです",
@@ -605,7 +604,7 @@
         "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
-        "agentReasoningFailed": "ボイスエージェントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
+        "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
         "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
         "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。"
       },
@@ -1103,7 +1102,7 @@
       "translation": "翻訳",
       "translationDisabled": "このプロンプトをテストするには音声入力翻訳を有効にしてください",
       "noTargetLanguage": "先に翻訳先の言語を選択してください",
-      "agentDisabled": "このプロンプトをテストするには音声エージェントを有効にしてください"
+      "agentDisabled": "このプロンプトをテストするには音声アシスタントを有効にしてください"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
@@ -1412,12 +1411,12 @@
       },
       "examplesTitle": "例",
       "helper": "声に出して言いやすい短い名前を選びましょう",
-      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、AI がコマンドを実行します。テキストが選択されている場合、そのテキストは設定済みのボイスエージェントモデルに送信され、結果で安全に置き換えられます。",
+      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、AI がコマンドを実行します。テキストが選択されている場合、そのテキストは設定済みの音声アシスタントモデルに送信され、結果で安全に置き換えられます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
       "save": "保存",
-      "title": "音声エージェント",
+      "title": "音声アシスタント",
       "examples": {
         "formalEmail": "Hey {{agentName}}、予算についてフォーマルなメールを書いて",
         "professional": "テキストを選択してから話しかけます：Hey {{agentName}}、これをもっとプロフェッショナルにして",
@@ -1575,8 +1574,8 @@
         "layoutSidePanel": "サイドパネル"
       },
       "voiceAgentHotkey": {
-        "title": "ボイスエージェントホットキー",
-        "description": "話しかけるだけ — 選択中のテキストはその場で編集され、選択がなければエージェントがカーソル位置に入力します"
+        "title": "音声アシスタントホットキー",
+        "description": "コマンドを話すと、アシスタントがノート・カレンダー・ウェブツールを使ってフローティングパネルで答えます。テキストを選択してから話すと、その場で編集されます。"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -1826,7 +1825,7 @@
       "description": "クリーンアップ、ノートのフォーマット、チャット用のモデルを設定",
       "tabs": {
         "dictationCleanup": "ディクテーションのクリーンアップ",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "音声アシスタント",
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャット",
         "dictationTranslation": "翻訳"
@@ -2966,17 +2965,18 @@
     "commandMenu": {
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
-      "hideForNow": "一時的に非表示"
+      "hideForNow": "一時的に非表示",
+      "askAssistant": "アシスタントに質問"
     }
   },
   "dictationAgent": {
-    "enabled": "音声エージェントを有効にする",
+    "enabled": "音声アシスタントを有効にする",
     "enabledDescription": "エージェントに指示を口述できます。選択中のテキストは設定済みのモデルに送信され、その場で編集されます。「{{agentName}}」と話しかけて起動します。",
     "screenContext": {
       "title": "画面コンテキスト",
-      "description": "ボイスエージェントのコマンドに、作業中の画面のスクリーンショットを添付します。",
+      "description": "音声アシスタントのコマンドに、作業中の画面のスクリーンショットを添付します。",
       "enable": "画面コンテキストを共有",
-      "enableDescription": "ボイスエージェントの録音開始時に、カーソルのあるディスプレイをキャプチャします。保存やログ記録は一切されません。",
+      "enableDescription": "音声アシスタントの録音開始時に、カーソルのあるディスプレイをキャプチャします。保存やログ記録は一切されません。",
       "unsupported": "Linux Wayland では画面キャプチャを利用できません。",
       "visionModel": "専用のビジョンモデル",
       "visionModelDescription": "スクリーンショット付きのコマンドを、画像対応の別モデルに振り分けます。",
@@ -3003,10 +3003,6 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "チャットエージェントホットキー",
-      "hotkeyDescription": "チャットエージェントのオーバーレイを開閉します",
-      "model": "エージェントモデル",
-      "modelDescription": "エージェント会話に使用するAIモデル",
       "systemPrompt": "システムプロンプト",
       "systemPromptDescription": "エージェントへのカスタム指示",
       "systemPromptPlaceholder": "カスタムシステムプロンプトを入力...",
@@ -3021,36 +3017,17 @@
         "selfHostedDesc": "ネットワーク上の自分のサーバー。",
         "enterprise": "エンタープライズ",
         "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。"
-      },
-      "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "信頼できる精度。設定不要。",
-      "customSetup": "カスタム設定 (BYOK)",
-      "customSetupDescription": "自分のAPIキーを使用してお好みのモデルを選択する"
+      }
     },
     "chat": {
-      "placeholder": "{{hotkey}}を押して話す",
-      "thinking": "考え中...",
-      "transcribing": "文字起こし中...",
-      "listening": "聞いています...",
-      "newConversation": "新規",
-      "copyToClipboard": "クリップボードにコピー",
-      "copied": "コピーしました！",
       "emptyState": "なんでも聞いてください",
       "errorPrefix": "エラー"
     },
-    "titleBar": {
-      "label": "エージェント",
-      "newChat": "新しい会話",
-      "close": "閉じる"
-    },
     "input": {
-      "holdToSpeak": "長押しして話す",
-      "toClose": "閉じる",
       "listening": "聞いています...",
       "transcribing": "文字起こし中...",
       "thinking": "考え中...",
-      "typeMessage": "メッセージを入力...",
-      "send": "送信"
+      "typeMessage": "メッセージを入力..."
     },
     "tools": {
       "search_notesStatus": "ノートを検索中...",
@@ -3061,17 +3038,22 @@
       "create_noteStatus": "ノートを作成中...",
       "update_noteStatus": "ノートを更新中...",
       "copiedToClipboard": "クリップボードにコピーしました",
-      "foundNotes": "{{count}}件のノートが見つかりました",
-      "foundNotes_plural": "{{count}}件のノートが見つかりました",
-      "searchResults": "{{count}}件の結果が見つかりました",
-      "searchResults_plural": "{{count}}件の結果が見つかりました",
       "openNote": "ノートを開く",
-      "calendarEvents": "{{count}}件の予定が見つかりました",
-      "calendarEvents_plural": "{{count}}件の予定が見つかりました",
-      "noResults": "結果が見つかりません",
-      "error": "ツールエラー",
       "unknownTool": "不明なツール: {{name}}",
       "invalidArgs": "{{name}} のツール引数が無効です"
+    }
+  },
+  "assistant": {
+    "panel": {
+      "close": "閉じる",
+      "copyToClipboard": "クリップボードにコピー",
+      "copied": "コピーしました",
+      "askFollowUp": "続けて質問",
+      "newChat": "新しいチャット",
+      "emptyHint": "何でも聞いてください — またはホットキーを押して話すだけ",
+      "suggestionDraft": "簡単なメールを下書きして",
+      "suggestionSummarize": "最新のノートを要約して",
+      "suggestionCalendar": "今日の予定は？"
     }
   },
   "integrations": {

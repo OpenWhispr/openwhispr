@@ -880,8 +880,6 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
   } = useSettings();
 
-  const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
-  const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
@@ -1096,13 +1094,12 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, voiceAgentKey, translationKey, t]
+    [meetingKey, voiceAgentKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -1111,28 +1108,12 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, voiceAgentKey, translationKey, t]
-  );
-
-  const validateChatAgentHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, voiceAgentKey, translationKey, t]
+    [dictationKey, voiceAgentKey, translationKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1142,12 +1123,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, translationKey, t]
+    [dictationKey, meetingKey, translationKey, t]
   );
 
   const validateTranslationHotkey = useCallback(
@@ -1157,12 +1137,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, voiceAgentKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
@@ -3567,28 +3546,6 @@ EOF`,
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
-
-            {/* Chat Agent Hotkey */}
-            {agentAllowedByPolicy && (
-              <div>
-                <SectionHeader
-                  title={t("agentMode.settings.hotkey")}
-                  description={t("agentMode.settings.hotkeyDescription")}
-                />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <HotkeyListInput
-                      value={chatAgentKey}
-                      onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
-                      onClear={() => commitAgentHotkey(setChatAgentKey, "")}
-                      validate={validateChatAgentHotkey}
-                      disabled={isAgentHotkeyCommitting}
-                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                    />
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </div>
-            )}
           </div>
         );
 

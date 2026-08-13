@@ -887,25 +887,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),
 
   // Agent mode
-  updateAgentHotkey: (hotkey) => ipcRenderer.invoke("update-agent-hotkey", hotkey),
   updateVoiceAgentHotkey: (hotkey) => ipcRenderer.invoke("update-voice-agent-hotkey", hotkey),
   getVoiceAgentKey: () => ipcRenderer.invoke("get-voice-agent-key"),
   updateTranslationHotkey: (hotkey) => ipcRenderer.invoke("update-translation-hotkey", hotkey),
   getTranslationKey: () => ipcRenderer.invoke("get-translation-key"),
-  getAgentKey: () => ipcRenderer.invoke("get-agent-key"),
-  saveAgentKey: (key) => ipcRenderer.invoke("save-agent-key", key),
-  onAgentStartRecording: registerListener("agent-start-recording", (callback) => () => callback()),
-  onAgentStopRecording: registerListener("agent-stop-recording", (callback) => () => callback()),
-  onAgentToggleRecording: registerListener(
-    "agent-toggle-recording",
-    (callback) => () => callback()
-  ),
-  toggleAgentOverlay: () => ipcRenderer.invoke("toggle-agent-overlay"),
-  hideAgentOverlay: () => ipcRenderer.invoke("hide-agent-overlay"),
-  resizeAgentWindow: (width, height) => ipcRenderer.invoke("resize-agent-window", width, height),
-  getAgentWindowBounds: () => ipcRenderer.invoke("get-agent-window-bounds"),
-  setAgentWindowBounds: (x, y, width, height) =>
-    ipcRenderer.invoke("set-agent-window-bounds", x, y, width, height),
   onPreviewText: registerListener("preview-text", (callback) => (_event, text) => callback(text)),
   onPreviewAppend: registerListener(
     "preview-append",

@@ -2027,13 +2027,10 @@ declare global {
       }>;
 
       // Agent Mode
-      updateAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
       updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
       getVoiceAgentKey?: () => Promise<string>;
       updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
       getTranslationKey?: () => Promise<string>;
-      getAgentKey?: () => Promise<string>;
-      saveAgentKey?: (key: string) => Promise<void>;
       createAgentConversation?: (
         title: string,
         noteId?: number | null,
@@ -2204,20 +2201,6 @@ declare global {
       onCortiFinalTranscript?: (callback: (text: string) => void) => () => void;
       onCortiError?: (callback: (error: string) => void) => () => void;
       onCortiSessionEnd?: (callback: (data: { text?: string }) => void) => () => void;
-
-      // Agent overlay
-      resizeAgentWindow?: (width: number, height: number) => Promise<void>;
-      getAgentWindowBounds?: () => Promise<{
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-      } | null>;
-      setAgentWindowBounds?: (x: number, y: number, width: number, height: number) => Promise<void>;
-      hideAgentOverlay?: () => Promise<void>;
-      onAgentStartRecording?: (callback: () => void) => () => void;
-      onAgentStopRecording?: (callback: () => void) => () => void;
-      onAgentToggleRecording?: (callback: () => void) => () => void;
 
       // Agent cloud streaming (event-based)
       startAgentStream?: (

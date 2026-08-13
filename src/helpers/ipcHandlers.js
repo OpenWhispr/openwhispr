@@ -9347,37 +9347,6 @@ class IPCHandlers {
     });
 
     // Agent mode handlers
-    ipcMain.handle("update-agent-hotkey", async (_event, hotkey) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const agentCallback = this.windowManager._agentHotkeyCallback;
-      if (!agentCallback) {
-        return { success: false, message: "Agent hotkey callback not initialized" };
-      }
-
-      if (!hotkey) {
-        hotkeyManager.unregisterSlot("agent");
-        this.environmentManager.saveAgentKey?.("");
-        this.windowManager.reconcileNativeKeyListeners();
-        this._notifyHotkeyChanged("");
-        return { success: true, message: "Agent hotkey cleared" };
-      }
-
-      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback, {
-        atomic: true,
-      });
-      this.windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        this.environmentManager.saveAgentKey?.(hotkey);
-        this._notifyHotkeyChanged(hotkey);
-        return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
-      }
-
-      return {
-        success: false,
-        message: result.error || `Failed to update agent hotkey to: ${hotkey}`,
-      };
-    });
-
     ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
@@ -9446,38 +9415,6 @@ class IPCHandlers {
 
     ipcMain.handle("get-translation-key", async () => {
       return this.environmentManager.getTranslationKey?.() || "";
-    });
-
-    ipcMain.handle("get-agent-key", async () => {
-      return this.environmentManager.getAgentKey?.() || "";
-    });
-
-    ipcMain.handle("save-agent-key", async (_event, key) => {
-      return this.environmentManager.saveAgentKey?.(key) || { success: true };
-    });
-
-    ipcMain.handle("toggle-agent-overlay", async () => {
-      this.windowManager.toggleAgentOverlay();
-      return { success: true };
-    });
-
-    ipcMain.handle("hide-agent-overlay", async () => {
-      this.windowManager.hideAgentOverlay();
-      return { success: true };
-    });
-
-    ipcMain.handle("resize-agent-window", async (_event, width, height) => {
-      this.windowManager.resizeAgentWindow(width, height);
-      return { success: true };
-    });
-
-    ipcMain.handle("get-agent-window-bounds", async () => {
-      return this.windowManager.getAgentWindowBounds();
-    });
-
-    ipcMain.handle("set-agent-window-bounds", async (_event, x, y, width, height) => {
-      this.windowManager.setAgentWindowBounds(x, y, width, height);
-      return { success: true };
     });
 
     ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {

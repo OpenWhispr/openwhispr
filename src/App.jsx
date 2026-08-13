@@ -14,9 +14,10 @@ import { BrandMarkIcon } from "./components/dictation/BrandMarkIcon";
 import { LiveWaveform } from "./components/dictation/LiveWaveform";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 
+import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
+
 // Study motion tokens: layout growth is slow-eased, state changes are fast.
 const GROW_TRANSITION = "320ms cubic-bezier(0.2, 0, 0, 1)";
-const SIZE_RANK = { BASE: 0, RECORDING: 1, WITH_MENU: 2, WITH_TOAST: 3, EXPANDED: 4 };
 
 // Tooltip Component
 const Tooltip = ({ children, content, emoji, align = "center" }) => {
@@ -149,14 +150,6 @@ export default function App() {
     };
   }, [toast, dismiss, t]);
 
-  useEffect(() => {
-    if (isCommandMenuOpen || toastCount > 0 || assistantPanelOpen) {
-      setWindowInteractivity(true);
-    } else if (!isHovered) {
-      setWindowInteractivity(false);
-    }
-  }, [isCommandMenuOpen, isHovered, toastCount, assistantPanelOpen, setWindowInteractivity]);
-
   // Assistant panel: voice commands stream into it; typed follow-ups continue it.
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
@@ -192,6 +185,14 @@ export default function App() {
     window.electronAPI?.setAssistantPanelOpen?.(assistantPanelOpen);
   }, [assistantPanelOpen]);
 
+  useEffect(() => {
+    if (isCommandMenuOpen || toastCount > 0 || assistantPanelOpen) {
+      setWindowInteractivity(true);
+    } else if (!isHovered) {
+      setWindowInteractivity(false);
+    }
+  }, [isCommandMenuOpen, isHovered, toastCount, assistantPanelOpen, setWindowInteractivity]);
+
   const handleDictationToggle = React.useCallback(() => {
     setIsCommandMenuOpen(false);
     if (!assistantPanelOpenRef.current) {
@@ -219,17 +220,12 @@ export default function App() {
   const isCapsule = isRecording || isProcessing;
   const lastSizeKeyRef = useRef(null);
   useEffect(() => {
-    const target = assistantPanelOpen
-      ? "EXPANDED"
-      : isCommandMenuOpen && (toastCount > 0 || isCapsule)
-        ? "EXPANDED"
-        : isCommandMenuOpen
-          ? "WITH_MENU"
-          : toastCount > 0
-            ? "WITH_TOAST"
-            : isCapsule
-              ? "RECORDING"
-              : "BASE";
+    const target = resolveMainWindowSizeKey({
+      panelOpen: assistantPanelOpen,
+      menuOpen: isCommandMenuOpen,
+      toastCount,
+      capsule: isCapsule,
+    });
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
     if (!prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {

@@ -392,7 +392,6 @@ export const useAudioRecording = (toast, options = {}) => {
       },
     });
 
-    audioManagerRef.current.setContext("dictation");
     // Keep overlay content protection in sync with the screen-context setting
     // so the dictation pill stays out of captures (survives window recreation).
     window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);

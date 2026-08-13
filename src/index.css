@@ -442,6 +442,18 @@ a:hover {
   }
 }
 
+/* Assistant panel rising from the pill's growth anchor */
+@keyframes assistant-panel-in {
+  from {
+    transform: translateY(16px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 @keyframes waveform-bar {
   0%,
   100% {

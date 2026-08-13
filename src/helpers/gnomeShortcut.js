@@ -11,17 +11,13 @@ const SLOT_CONFIG = {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr/",
     name: "OpenWhispr Toggle",
   },
-  agent: {
-    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-agent/",
-    name: "OpenWhispr Agent",
-  },
   meeting: {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-meeting/",
     name: "OpenWhispr Meeting",
   },
   voiceAgent: {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-voice-agent/",
-    name: "OpenWhispr Voice Agent",
+    name: "OpenWhispr Voice Assistant",
   },
   translation: {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-translation/",
@@ -90,7 +86,6 @@ class GnomeShortcutManager {
   constructor() {
     this.bus = null;
     this.dictationCallback = null;
-    this.agentCallback = null;
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
     this.translationCallback = null;
@@ -109,16 +104,6 @@ class GnomeShortcutManager {
 
   static isWayland() {
     return process.env.XDG_SESSION_TYPE === "wayland";
-  }
-
-  /**
-   * Set or update the agent callback after initial D-Bus service initialisation.
-   * This supports the case where the dictation hotkey is set up first and the
-   * agent callback is only available later (after agent window creation).
-   */
-  setAgentCallback(callback) {
-    this.agentCallback = callback;
-    debugLogger.log("[GnomeShortcut] Agent callback registered");
   }
 
   setMeetingCallback(callback) {
@@ -160,11 +145,6 @@ class GnomeShortcutManager {
               this.dictationCallback();
             }
           },
-          ToggleAgent: () => {
-            if (this.agentCallback) {
-              this.agentCallback();
-            }
-          },
           ToggleMeeting: () => {
             if (this.meetingCallback) {
               this.meetingCallback();
@@ -186,7 +166,6 @@ class GnomeShortcutManager {
           name: DBUS_INTERFACE,
           methods: {
             Toggle: ["", ""],
-            ToggleAgent: ["", ""],
             ToggleMeeting: ["", ""],
             ToggleVoiceAgent: ["", ""],
             ToggleTranslation: ["", ""],
@@ -230,7 +209,6 @@ class GnomeShortcutManager {
 
     const SLOT_DBUS_METHOD = {
       dictation: "Toggle",
-      agent: "ToggleAgent",
       meeting: "ToggleMeeting",
       voiceAgent: "ToggleVoiceAgent",
       translation: "ToggleTranslation",

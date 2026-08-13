@@ -54,8 +54,7 @@
   },
   "window": {
     "voiceRecorderTitle": "Enregistreur vocal",
-    "controlPanelTitle": "Panneau de contrôle",
-    "agentChatTitle": "Chat de l'agent"
+    "controlPanelTitle": "Panneau de contrôle"
   },
   "dialog": {
     "openLink": {
@@ -186,7 +185,7 @@
       "useCase": "À propos de vous",
       "meeting": "Réunions",
       "finish": "Terminer",
-      "voiceAgent": "Agent vocal"
+      "voiceAgent": "Assistant vocal"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Impossible d'enregistrer ce raccourci",
@@ -233,14 +232,14 @@
       "textareaPlaceholder": "Cliquez ici puis utilisez votre raccourci pour dicter..."
     },
     "voiceAgent": {
-      "title": "Configuration de l'agent vocal",
-      "description": "Parlez à votre agent IA d'une simple touche",
+      "title": "Configuration de l'assistant vocal",
+      "description": "Parlez à votre assistant IA d'une simple touche",
       "hotkey": "Raccourci",
-      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} modifie et remplace cette sélection ; sinon, il écrit le résultat là où se trouve votre curseur. Pas besoin de dire « Hey {{agentName}} » d'abord.",
+      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} modifie et remplace cette sélection ; sinon, la réponse s'ouvre dans un panneau flottant. Pas besoin de dire « Hey {{agentName}} » d'abord.",
       "test": "Essayer",
-      "testInstruction": "Cliquez ci-dessous, appuyez sur {{hotkey}} et dites une commande",
+      "testInstruction": "Sélectionnez le texte d'exemple ci-dessous, appuyez sur {{hotkey}} et dites « raccourcis ce texte » — la modification apparaît directement dans la zone de texte",
       "testSetHotkey": "Définissez un raccourci ci-dessus pour l'essayer",
-      "testPlaceholder": "Cliquez ici, appuyez sur votre raccourci et dites l'un des exemples...",
+      "sampleText": "La réunion de jeudi a été déplacée, donc faisons un point en début de semaine prochaine pour revoir le plan de lancement et nous répartir les tâches restantes.",
       "examples": [
         "Traduis en italien : « Je parle plus vite que je ne tape »",
         "Écris un court e-mail à mon patron pour lui dire que je veux une promotion, il s'appelle Mark",
@@ -605,7 +604,7 @@
         "dailyLimitReached": "Vous avez atteint votre limite de transcription du jour. Réessayez demain ou améliorez votre forfait.",
         "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez.",
         "chunkLoss": "Un problème réseau a fait perdre une trop grande partie de l'enregistrement. Retranscrivez-le depuis l'historique.",
-        "agentReasoningFailed": "Votre agent vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place.",
+        "agentReasoningFailed": "Votre assistant vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place.",
         "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran.",
         "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte."
       },
@@ -1191,7 +1190,7 @@
       "translation": "Traduction",
       "translationDisabled": "Activez la traduction de dictée pour tester ce prompt",
       "noTargetLanguage": "Choisissez d’abord une langue cible",
-      "agentDisabled": "Activez l'agent vocal pour tester ce prompt"
+      "agentDisabled": "Activez l'assistant vocal pour tester ce prompt"
     },
     "view": {
       "customPrompt": "Prompt personnalisé",
@@ -1698,12 +1697,12 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, l'IA exécute votre commande. Si du texte est surligné, ce texte est envoyé au modèle d'agent vocal configuré et remplacé en toute sécurité par le résultat.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, l'IA exécute votre commande. Si du texte est surligné, ce texte est envoyé au modèle d'assistant vocal configuré et remplacé en toute sécurité par le résultat.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
       "save": "Enregistrer",
-      "title": "Agent vocal",
+      "title": "Assistant vocal",
       "examples": {
         "formalEmail": "Hey {{agentName}}, rédige un e-mail formel sur le budget",
         "professional": "Sélectionnez du texte, puis dites : Hey {{agentName}}, rends ça plus professionnel",
@@ -1861,8 +1860,8 @@
         "layoutSidePanel": "Panneau latéral"
       },
       "voiceAgentHotkey": {
-        "title": "Raccourci de l'agent vocal",
-        "description": "Dites ce que vous voulez — le texte surligné est modifié sur place ; sinon, votre agent écrit là où se trouve le curseur"
+        "title": "Raccourci de l'assistant vocal",
+        "description": "Dites une commande et l'assistant répond dans un panneau flottant avec vos notes, votre calendrier et des outils web. Sélectionnez d'abord du texte pour le modifier sur place."
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
@@ -2112,7 +2111,7 @@
       "description": "Configurez les modèles pour le nettoyage, la mise en forme des notes et le chat",
       "tabs": {
         "dictationCleanup": "Nettoyage de la dictée",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "Assistant vocal",
         "noteFormatting": "Mise en forme des notes",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Traduction"
@@ -3131,17 +3130,18 @@
     "commandMenu": {
       "stopListening": "Arrêter l’écoute",
       "startListening": "Commencer l’écoute",
-      "hideForNow": "Masquer pour l’instant"
+      "hideForNow": "Masquer pour l’instant",
+      "askAssistant": "Demander à l'assistant"
     }
   },
   "dictationAgent": {
-    "enabled": "Activer l'agent vocal",
+    "enabled": "Activer l'assistant vocal",
     "enabledDescription": "Dictez des instructions à votre agent. Le texte surligné est envoyé au modèle configuré et modifié sur place. Activez-le en disant « \"{{agentName}}\" ».",
     "screenContext": {
       "title": "Contexte d'écran",
-      "description": "Joint une capture de votre écran actif aux commandes de l'agent vocal.",
+      "description": "Joint une capture de votre écran actif aux commandes de l'assistant vocal.",
       "enable": "Partager le contexte d'écran",
-      "enableDescription": "Capture l'écran où se trouve le curseur au démarrage d'un enregistrement de l'agent vocal. Jamais enregistrée ni journalisée.",
+      "enableDescription": "Capture l'écran où se trouve le curseur au démarrage d'un enregistrement de l'assistant vocal. Jamais enregistrée ni journalisée.",
       "unsupported": "La capture d'écran n'est pas disponible sous Linux Wayland.",
       "visionModel": "Modèle de vision distinct",
       "visionModelDescription": "Envoie les commandes incluant une capture vers un autre modèle capable de vision.",
@@ -3168,10 +3168,6 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Raccourci de l'agent de chat",
-      "hotkeyDescription": "Affiche ou masque la fenêtre de l'agent de chat",
-      "model": "Modèle Agent",
-      "modelDescription": "Modèle IA utilisé pour les conversations agent",
       "systemPrompt": "Prompt système",
       "systemPromptDescription": "Instructions personnalisées pour l'agent",
       "systemPromptPlaceholder": "Entrez un prompt système personnalisé...",
@@ -3186,36 +3182,17 @@
         "localDesc": "Modèles sur l'appareil. Entièrement privé.",
         "selfHostedDesc": "Votre propre serveur sur votre réseau.",
         "enterpriseDesc": "Utilisez le compte cloud de votre organisation (AWS, Azure, GCP)."
-      },
-      "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
-      "customSetup": "Configuration personnalisée (BYOK)",
-      "customSetupDescription": "Utiliser vos propres clés API et choisir votre modèle préféré"
+      }
     },
     "chat": {
-      "placeholder": "Appuyez sur {{hotkey}} pour parler",
-      "thinking": "Réflexion...",
-      "transcribing": "Transcription...",
-      "listening": "Écoute...",
-      "newConversation": "Nouveau",
-      "copyToClipboard": "Copier dans le presse-papiers",
-      "copied": "Copié !",
       "emptyState": "Demandez-moi n'importe quoi",
       "errorPrefix": "Erreur"
     },
-    "titleBar": {
-      "label": "Agent",
-      "newChat": "Nouvelle conversation",
-      "close": "Fermer"
-    },
     "input": {
-      "holdToSpeak": "Maintenez pour parler",
-      "toClose": "fermer",
       "listening": "Écoute...",
       "transcribing": "Transcription...",
       "thinking": "Réflexion...",
-      "typeMessage": "Écrivez un message...",
-      "send": "Envoyer"
+      "typeMessage": "Écrivez un message..."
     },
     "tools": {
       "search_notesStatus": "Recherche de notes...",
@@ -3226,17 +3203,22 @@
       "create_noteStatus": "Création de la note...",
       "update_noteStatus": "Mise à jour de la note...",
       "copiedToClipboard": "Copié dans le presse-papiers",
-      "foundNotes": "{{count}} note trouvée",
-      "foundNotes_plural": "{{count}} notes trouvées",
-      "searchResults": "{{count}} résultat trouvé",
-      "searchResults_plural": "{{count}} résultats trouvés",
       "openNote": "Ouvrir la note",
-      "calendarEvents": "{{count}} événement trouvé",
-      "calendarEvents_plural": "{{count}} événements trouvés",
-      "noResults": "Aucun résultat",
-      "error": "Erreur d'outil",
       "unknownTool": "Outil inconnu : {{name}}",
       "invalidArgs": "Arguments d'outil invalides pour {{name}}"
+    }
+  },
+  "assistant": {
+    "panel": {
+      "close": "Fermer",
+      "copyToClipboard": "Copier dans le presse-papiers",
+      "copied": "Copié",
+      "askFollowUp": "Poser une question de suivi",
+      "newChat": "Nouvelle discussion",
+      "emptyHint": "Demandez ce que vous voulez — ou appuyez sur votre raccourci et parlez",
+      "suggestionDraft": "Rédige un e-mail rapide",
+      "suggestionSummarize": "Résume ma dernière note",
+      "suggestionCalendar": "Qu'y a-t-il dans mon calendrier aujourd'hui ?"
     }
   },
   "integrations": {

@@ -54,8 +54,7 @@
   },
   "window": {
     "voiceRecorderTitle": "錄音器",
-    "controlPanelTitle": "控制面板",
-    "agentChatTitle": "智能助手聊天"
+    "controlPanelTitle": "控制面板"
   },
   "dialog": {
     "openLink": {
@@ -186,7 +185,7 @@
       "useCase": "關於你",
       "meeting": "會議",
       "finish": "完成",
-      "voiceAgent": "語音助手"
+      "voiceAgent": "語音助理"
     },
     "hotkey": {
       "couldNotRegisterTitle": "無法註冊該快捷鍵",
@@ -233,14 +232,14 @@
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
     },
     "voiceAgent": {
-      "title": "語音助手設定",
-      "description": "一鍵喚起你的 AI 助手",
+      "title": "語音助理設定",
+      "description": "一鍵喚起你的 AI 助理",
       "hotkey": "快捷鍵",
-      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代所選內容；否則會把結果輸入到游標所在的位置。無需先說「Hey {{agentName}}」。",
+      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代所選內容；否則回答會在懸浮面板中開啟。無需先說「Hey {{agentName}}」。",
       "test": "試試看",
-      "testInstruction": "點擊下方，按下 {{hotkey}} 並說出指令",
+      "testInstruction": "選取下方的範例文字，按下 {{hotkey}} 並說「把它改短一點」——編輯結果會直接出現在文字框裡",
       "testSetHotkey": "在上方設定快捷鍵即可試用",
-      "testPlaceholder": "點擊這裡，按下快捷鍵並說出其中一個範例...",
+      "sampleText": "週四的會議改期了，我們下週初碰個面，過一遍上線計畫，並分配剩下的任務。",
       "examples": [
         "翻譯成義大利文:「我說話比打字快」",
         "給我的老闆寫一封簡短的郵件,告訴他我想要升職,他叫 Mark",
@@ -1412,7 +1411,7 @@
       },
       "examplesTitle": "範例",
       "helper": "選個簡短、自然、好說的名字",
-      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，AI 會執行你的命令。如果有選取的文字，該文字會傳送到你設定的語音代理模型，並安全地取代為結果。",
+      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，AI 會執行你的命令。如果有選取的文字，該文字會傳送到你設定的語音助理模型，並安全地取代為結果。",
       "howItWorksTitle": "運作方式",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1575,8 +1574,8 @@
         "layoutSidePanel": "側邊欄"
       },
       "voiceAgentHotkey": {
-        "title": "語音助手快捷鍵",
-        "description": "說出你的需求——選取的文字會就地編輯，否則代理會把結果輸入到游標位置"
+        "title": "語音助理快捷鍵",
+        "description": "說出指令，助理會在懸浮面板中回答，並可使用你的筆記、行事曆和網頁工具。先選取文字即可就地編輯。"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",
@@ -1826,7 +1825,7 @@
       "description": "設定用於聽寫清理、筆記格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "聽寫清理",
-        "dictationAgent": "語音助手",
+        "dictationAgent": "語音助理",
         "noteFormatting": "筆記格式化",
         "chatIntelligence": "聊天",
         "dictationTranslation": "翻譯"
@@ -2966,11 +2965,12 @@
     "commandMenu": {
       "stopListening": "停止錄音",
       "startListening": "開始錄音",
-      "hideForNow": "暫時隱藏"
+      "hideForNow": "暫時隱藏",
+      "askAssistant": "詢問助理"
     }
   },
   "dictationAgent": {
-    "enabled": "啟用語音代理",
+    "enabled": "啟用語音助理",
     "enabledDescription": "向你的代理口述指令。選取的文字會傳送到所設定的模型並就地編輯。說出 \"{{agentName}}\" 即可啟用。",
     "screenContext": {
       "title": "螢幕內容",
@@ -3003,10 +3003,6 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "聊天助手快捷鍵",
-      "hotkeyDescription": "開啟或關閉聊天助手視窗",
-      "model": "助手模型",
-      "modelDescription": "用於助手對話的AI模型",
       "systemPrompt": "系統提示詞",
       "systemPromptDescription": "助手的自訂指令",
       "systemPromptPlaceholder": "輸入自訂系統提示詞...",
@@ -3021,36 +3017,17 @@
         "selfHostedDesc": "你自己網路上的伺服器。",
         "enterprise": "企業級",
         "enterpriseDesc": "使用你組織的雲端帳號（AWS、Azure、GCP）。"
-      },
-      "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "準確可靠，無需設定。",
-      "customSetup": "自訂配置 (BYOK)",
-      "customSetupDescription": "使用自己的 API 金鑰並選擇偏好的模型"
+      }
     },
     "chat": {
-      "placeholder": "按 {{hotkey}} 開始說話",
-      "thinking": "思考中...",
-      "transcribing": "轉錄中...",
-      "listening": "正在聆聽...",
-      "newConversation": "新建",
-      "copyToClipboard": "複製到剪貼簿",
-      "copied": "已複製！",
       "emptyState": "隨便問我",
       "errorPrefix": "錯誤"
     },
-    "titleBar": {
-      "label": "助手",
-      "newChat": "新對話",
-      "close": "關閉"
-    },
     "input": {
-      "holdToSpeak": "按住說話",
-      "toClose": "關閉",
       "listening": "正在聆聽...",
       "transcribing": "正在轉錄...",
       "thinking": "正在思考...",
-      "typeMessage": "輸入訊息...",
-      "send": "傳送"
+      "typeMessage": "輸入訊息..."
     },
     "tools": {
       "search_notesStatus": "正在搜尋筆記...",
@@ -3061,17 +3038,22 @@
       "create_noteStatus": "正在建立筆記...",
       "update_noteStatus": "正在更新筆記...",
       "copiedToClipboard": "已複製到剪貼簿",
-      "foundNotes": "找到 {{count}} 則筆記",
-      "foundNotes_plural": "找到 {{count}} 則筆記",
-      "searchResults": "找到 {{count}} 項結果",
-      "searchResults_plural": "找到 {{count}} 項結果",
       "openNote": "開啟筆記",
-      "calendarEvents": "找到 {{count}} 個行程",
-      "calendarEvents_plural": "找到 {{count}} 個行程",
-      "noResults": "未找到結果",
-      "error": "工具錯誤",
       "unknownTool": "未知工具：{{name}}",
       "invalidArgs": "{{name}} 的工具參數無效"
+    }
+  },
+  "assistant": {
+    "panel": {
+      "close": "關閉",
+      "copyToClipboard": "複製到剪貼簿",
+      "copied": "已複製",
+      "askFollowUp": "繼續追問",
+      "newChat": "新對話",
+      "emptyHint": "想問什麼都可以——或按下快捷鍵直接說",
+      "suggestionDraft": "草擬一封簡短的郵件",
+      "suggestionSummarize": "總結我最新的筆記",
+      "suggestionCalendar": "我今天的行程有什麼？"
     }
   },
   "integrations": {

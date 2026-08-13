@@ -14,7 +14,6 @@ import { isControlPanelWindow } from "./utils/windowContext.ts";
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
-const AgentOverlay = React.lazy(() => import("./components/AgentOverlay.tsx"));
 
 export default function AppRouter() {
   useTheme();
@@ -51,14 +50,11 @@ function MainApp() {
   const [isLoading, setIsLoading] = useState(true);
   const [postOnboardingSettingsSection, setPostOnboardingSettingsSection] = useState(undefined);
 
-  const isAgentPanel = window.location.search.includes("agent=true");
-  const isControlPanel = !isAgentPanel && isControlPanelWindow();
-  const isDictationPanel = !isControlPanel && !isAgentPanel;
+  const isControlPanel = isControlPanelWindow();
+  const isDictationPanel = !isControlPanel;
 
   useEffect(() => {
-    if (isAgentPanel) {
-      import("./components/AgentOverlay.tsx").catch(() => {});
-    } else if (isControlPanel) {
+    if (isControlPanel) {
       import("./components/ControlPanel.tsx").catch(() => {});
 
       if (!localStorage.getItem("onboardingCompleted")) {
@@ -70,12 +66,12 @@ function MainApp() {
     // the previous account's rows while validation is still running. A failed
     // (guest/offline) resolution also counts as settled: canSync() then no-ops
     // because no validated auth context exists.
-    if (!isAgentPanel && autoSyncReady) {
+    if (autoSyncReady) {
       import("./services/SyncService.js")
         .then(({ syncService }) => syncService.startAutoSync())
         .catch(() => {});
     }
-  }, [autoSyncReady, isAgentPanel, isControlPanel]);
+  }, [autoSyncReady, isControlPanel]);
 
   useEffect(() => {
     if (!authLoaded) return;
@@ -118,17 +114,6 @@ function MainApp() {
     setShowOnboarding(false);
     localStorage.setItem("onboardingCompleted", "true");
   };
-
-  // The agent waits for auth resolution so account policy can fail closed;
-  // guests still render once the signed-out state resolves.
-  if (isAgentPanel) {
-    if (!authLoaded || isWaitingForPolicyStart) return <LoadingFallback />;
-    return (
-      <Suspense fallback={<LoadingFallback />}>
-        <AgentOverlay />
-      </Suspense>
-    );
-  }
 
   // isLoading clears once the onboarding effect has run, which itself waits
   // for authLoaded — and authLoaded terminates even when the session cannot
