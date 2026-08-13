@@ -11,22 +11,23 @@ function normalizeSpeakerCount(value) {
 }
 
 // What the upload and URL-ingest flows persist onto the note row about the
-// diarizer invocation. The meeting path writes the same columns with the same
-// semantics: diarization_enabled is 1|0 (null means unknown), and
-// expected_speaker_count is only ever a user-chosen total — auto detection
-// stays null so isExplicitSpeakerCount never mistakes it for an explicit
-// choice. A disabled run also stays null: numSpeakers lingers in localStorage
-// while its input is hidden, and only counts the diarizer was actually invoked
-// with are the user's choice for this note.
+// diarizer invocation, matching the meeting path's write semantics: the columns
+// are written only when diarization ran. A null diarization_enabled means "user
+// never chose" and consumers fall back to the global speaker setting — writing
+// 0 would force diarization off when recording into the note later. The
+// expected_speaker_count is only ever a count the diarizer was actually invoked
+// with (numSpeakers lingers in localStorage while its input is hidden); auto
+// detection stays null so isExplicitSpeakerCount never mistakes it for an
+// explicit choice.
 export function buildUploadNoteMetadata(diarization, durationSeconds) {
   return {
     audioDurationSeconds:
       Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : null,
-    noteUpdates: {
-      diarization_enabled: diarization?.enabled ? 1 : 0,
-      expected_speaker_count: diarization?.enabled
-        ? normalizeSpeakerCount(diarization.numSpeakers)
-        : null,
-    },
+    noteUpdates: diarization?.enabled
+      ? {
+          diarization_enabled: 1,
+          expected_speaker_count: normalizeSpeakerCount(diarization.numSpeakers),
+        }
+      : null,
   };
 }

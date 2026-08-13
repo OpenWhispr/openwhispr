@@ -30,20 +30,20 @@ test("auto speaker detection stores no explicit count", async () => {
   assert.equal(noteUpdates.diarization_enabled, 1);
 });
 
-test("disabled diarization is stored as 0, not left unknown", async () => {
+test("disabled diarization writes no columns at all", async () => {
   const { buildUploadNoteMetadata } = await load();
 
-  // numSpeakers lingers in localStorage from past sessions while its input is
-  // hidden whenever diarization is off, so a disabled run must not stamp that
-  // stale value onto the note as an explicit choice — isExplicitSpeakerCount
-  // would then block roster-derived speaker caps in later recordings.
-  const { noteUpdates } = buildUploadNoteMetadata(
+  // A null diarization_enabled defers to the global speaker setting when the
+  // user records into the note later (a 0 would force it off), and writing no
+  // count keeps the numSpeakers value lingering in localStorage while its
+  // input is hidden from being stamped onto the note as an explicit choice.
+  const { audioDurationSeconds, noteUpdates } = buildUploadNoteMetadata(
     { enabled: false, localModelsReady: false, numSpeakers: 3 },
-    null
+    120
   );
 
-  assert.equal(noteUpdates.diarization_enabled, 0);
-  assert.equal(noteUpdates.expected_speaker_count, null);
+  assert.equal(noteUpdates, null);
+  assert.equal(audioDurationSeconds, 120);
 });
 
 test("speaker counts reuse the stored-count clamp", async () => {

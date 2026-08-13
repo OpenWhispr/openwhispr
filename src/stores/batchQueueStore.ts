@@ -244,10 +244,10 @@ export function processBatchQueue(
       );
 
       if (noteRes.success && noteRes.note) {
-        // Same columns the meeting path maintains, via the same updateNote
-        // route (they are not saveNote insert columns). Metadata is
-        // best-effort: a failed write must not error a saved transcription.
-        await window.electronAPI.updateNote(noteRes.note.id, noteUpdates).catch(() => {});
+        if (noteUpdates) {
+          // Best-effort: a failed metadata write must not error a saved transcription.
+          await window.electronAPI.updateNote(noteRes.note.id, noteUpdates).catch(() => {});
+        }
         updateItem(item.id, {
           status: "done",
           progress: 100,

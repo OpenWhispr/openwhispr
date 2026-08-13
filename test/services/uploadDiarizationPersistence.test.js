@@ -144,3 +144,30 @@ test("a diarized URL ingest persists the diarization metadata", async (t) => {
   ]);
   assert.deepEqual(calls.deletedTempFiles, ["/tmp/ow-url-download.m4a"]);
 });
+
+test("an upload without diarization leaves the note columns untouched", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-diarization-off-test-",
+    mockModules: gateMocks,
+  });
+  const calls = installUploadElectronAPI(window, { diarizedDurationSeconds: 4359.87 });
+
+  const store = await vite.ssrLoadModule("/stores/batchQueueStore.ts");
+  store.addFiles([{ name: "memo.m4a", path: "/tmp/memo.m4a", sizeBytes: 2048 }]);
+  store.processBatchQueue(
+    { transcription, folderId: null },
+    { enabled: false, localModelsReady: true, numSpeakers: 2 }
+  );
+
+  const queue = await waitForQueueSettled(store.useBatchQueueStore);
+  assert.equal(queue[0].status, "done");
+
+  // diarization_enabled must stay null: consumers treat null as "use the
+  // global speaker setting" when recording into the note later, and a stored 0
+  // would force it off.
+  assert.equal(calls.diarize.length, 0);
+  assert.equal(calls.updateNote.length, 0);
+  assert.equal(calls.saveNote.length, 1);
+  assert.equal(calls.saveNote[0][4], null);
+});

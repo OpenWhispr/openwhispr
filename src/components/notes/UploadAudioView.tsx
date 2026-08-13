@@ -714,10 +714,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           audioDurationSeconds,
           folderId
         );
-        if (noteRes.success && noteRes.note) {
-          // Same columns the meeting path maintains, via the same updateNote
-          // route (they are not saveNote insert columns). Metadata is
-          // best-effort: a failed write must not error a saved note.
+        if (noteRes.success && noteRes.note && noteUpdates) {
+          // Best-effort: a failed metadata write must not error a saved note.
           await window.electronAPI.updateNote(noteRes.note.id, noteUpdates).catch(() => {});
         }
         if (runId !== runIdRef.current) return;
