@@ -88,6 +88,14 @@ export const useAudioRecording = (toast, options = {}) => {
           audioManagerRef.current.beginScreenContextCapture();
         }
 
+        // The selection to edit is whatever was highlighted when the hotkey was
+        // pressed, so read it now rather than after transcription: it resolves
+        // while the user is still speaking instead of adding its own round trip
+        // to the wait between speaking and pasting.
+        if (voiceAgentRequested) {
+          audioManagerRef.current.beginSelectionCapture();
+        }
+
         // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
         if (!audioManagerRef.current.sttConfig) {
           const config = await window.electronAPI.getSttConfig?.();

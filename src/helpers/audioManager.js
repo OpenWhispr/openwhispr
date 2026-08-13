@@ -477,6 +477,7 @@ class AudioManager {
     this.translationApplied = false;
     this.pendingSelectionEdit = null;
     this.screenContextPromise = null;
+    this.selectionCapturePromise = null;
     this.context = "dictation";
     this.sttConfig = null;
     this.lastAudioBlob = null;
@@ -705,6 +706,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // cancelled voice-agent recording, even after the setting was turned
     // off). A live voice-agent start re-captures right after this call.
     this.screenContextPromise = null;
+    // Same for a prefetched selection: bounding it to one recording keeps a read
+    // from an earlier app out of this command, whatever happened to that one.
+    this.selectionCapturePromise = null;
   }
 
   setTranslationRequested(requested) {
@@ -725,6 +729,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // invocation moment) and consumed after transcription by the reasoning route.
   beginScreenContextCapture() {
     this.screenContextPromise = window.electronAPI?.captureScreenContext?.() ?? null;
+  }
+
+  // Kicked off at voice-agent recording start, alongside the screenshot, so the
+  // read resolves while the user is still speaking. The rejection is handled
+  // twice over: once here, so a failure nobody is awaiting yet isn't an
+  // unhandled rejection, and again by the awaiting caller, which still sees the
+  // original error.
+  beginSelectionCapture() {
+    this.selectionCapturePromise = window.electronAPI?.captureSelectedText?.() ?? null;
+    this.selectionCapturePromise?.catch(() => {});
+  }
+
+  consumeSelectionCapture() {
+    const pending = this.selectionCapturePromise;
+    this.selectionCapturePromise = null;
+    return pending ?? window.electronAPI?.captureSelectedText?.();
   }
 
   async consumeScreenContext() {
@@ -2222,7 +2242,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async processAgentCommand(text, model, agentName, config) {
     let capture;
     try {
-      capture = await window.electronAPI?.captureSelectedText?.();
+      capture = await this.consumeSelectionCapture();
     } catch (cause) {
       const error = new Error(
         `Selection edit could not safely read the selection: ${cause.message}`
