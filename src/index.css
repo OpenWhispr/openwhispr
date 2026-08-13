@@ -328,13 +328,35 @@ a:hover {
    Atmosphere, not surface depth: a fixed brand gradient with a halftone dot
    screen over it. Identical in both themes; the brand does not invert. */
 .brand-hero {
+  position: relative;
+  /* Contains the ::before halftone so its negative z-index cannot escape
+     behind the card. */
+  isolation: isolate;
   background-color: #154bd4;
+  background-image: linear-gradient(205deg, #5b81e4 12%, #154bd4 45%, #163992 86%);
+}
+
+/* Halftone screen. Two dot grids offset by half a cell read as one fine
+   diagonal lattice, and the mask runs along the gradient so the screen builds
+   in the dark corner and clears where the blue is lightest — the same
+   luminance-modulated behaviour as a printed halftone. Negative z-index paints
+   it over the gradient but under the logo and headings. */
+.brand-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
-    radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1.5px),
-    linear-gradient(205deg, #5b81e4 12%, #154bd4 45%, #163992 86%);
+    radial-gradient(circle, rgba(255, 255, 255, 0.26) 0.5px, transparent 1px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.26) 0.5px, transparent 1px);
   background-size:
-    9px 9px,
-    auto;
+    4.5px 4.5px,
+    4.5px 4.5px;
+  background-position:
+    0 0,
+    2.25px 2.25px;
+  mask-image: linear-gradient(205deg, transparent 4%, rgba(0, 0, 0, 0.5) 38%, #000 85%);
 }
 
 /* Section panel — grouped settings container */
