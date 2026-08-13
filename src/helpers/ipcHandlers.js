@@ -852,7 +852,8 @@ class IPCHandlers {
     if (expectedCount == null || expectedCount <= config.expectedCount) return;
 
     this.activeMeetingSpeakerConfig = { ...config, expectedCount };
-    liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+    // expectedCount is now a display hint only; the live cap stays at
+    // MAX_SPEAKER_COUNT (auto-discovery), so there is no cap to raise here.
     broadcastToWindows("meeting-session-speaker-config-updated", {
       enabled: config.enabled,
       expectedCount,
@@ -6292,9 +6293,12 @@ class IPCHandlers {
       (this.activeMeetingSpeakerConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
     const resolveSessionMaxSpeakers = () => {
-      const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
-      return Math.max(1, total - 1);
+      // Auto-discover speakers: the expected count is a display hint, not a hard cap.
+      // Deriving the cap from expectedCount - 1 collapsed real speakers whenever the
+      // count was low or (for a mic that isn't captured separately) the local speaker
+      // shared the system-audio stream. Let the embeddings find the real count, bounded
+      // only by MAX_SPEAKER_COUNT.
+      return MAX_SPEAKER_COUNT;
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
@@ -9769,9 +9773,10 @@ class IPCHandlers {
           explicit: payload?.countIsExplicit === true,
         };
         liveSpeakerIdentifier.setEnabled(enabled);
-        // Live identification only labels other speakers (the mic track is "you"),
-        // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
-        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+        // expectedCount is a display hint, not a cap: keep the live identifier at
+        // MAX_SPEAKER_COUNT so speakers are auto-discovered (matches
+        // resolveSessionMaxSpeakers). A low/explicit count no longer merges speakers.
+        liveSpeakerIdentifier.setMaxSpeakers(MAX_SPEAKER_COUNT);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -10250,33 +10255,16 @@ class IPCHandlers {
     return reconciledSpeakers;
   }
 
-  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
-    // Only a count the user set explicitly outranks the note: participants added
-    // mid-meeting postdate the config snapshot taken at recording start.
-    let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
-
-    if (!expectedTotal && noteId != null) {
-      try {
-        expectedTotal = this._noteExpectedSpeakerCountOrNull(this.databaseManager.getNote(noteId));
-      } catch (_) {
-        expectedTotal = null;
-      }
-    }
-
-    if (expectedTotal) {
-      const total = Math.min(expectedTotal, MAX_SPEAKER_COUNT);
-      const numSpeakers = Math.max(1, total - 1);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    if (observedSpeakerIds.size >= 2) {
-      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    // Only system audio reaches the diarizer (the mic track is "you"), so the cap
-    // counts other speakers — same total - 1 basis as the branches above.
-    return { numSpeakers: -1, cap: Math.max(1, DEFAULT_EXPECTED_SPEAKER_COUNT - 1) };
+  _resolveSpeakerExpectation() {
+    // Auto-discover speakers up to MAX_SPEAKER_COUNT. numSpeakers = -1 lets sherpa's
+    // threshold clustering decide the real count from the (now Kaldi-accurate)
+    // embeddings, and the cap only guards against pathological over-splitting.
+    //
+    // The previous behaviour forced exactly expectedCount - 1 clusters: an
+    // expected count of 2 (or the default) forced a single cluster, collapsing every
+    // remote voice — and, when the local mic wasn't captured separately, the local
+    // speaker too — into one speaker. The expected count is now a display hint only.
+    return { numSpeakers: -1, cap: MAX_SPEAKER_COUNT };
   }
 
   _startOrSkipDiarization(
@@ -10328,11 +10316,7 @@ class IPCHandlers {
           });
         }
 
-        const { numSpeakers, cap } = this._resolveSpeakerExpectation({
-          sessionConfig,
-          noteId,
-          observedSpeakerIds,
-        });
+        const { numSpeakers, cap } = this._resolveSpeakerExpectation();
         let diarizationSegments = await this.diarizationManager.diarize(
           tmpWav,
           numSpeakers > 0 ? { numSpeakers } : {}
