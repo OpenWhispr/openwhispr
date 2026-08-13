@@ -113,6 +113,7 @@ class ClipboardManager {
     this.linuxFastPasteChecked = false;
     this.portalDenied = false;
     this.portalUnavailable = false;
+    this.portalTokenPasteFailed = false;
     this._kwinScriptPath = null;
     this.pasteQueue = Promise.resolve();
 
@@ -692,11 +693,16 @@ class ClipboardManager {
     }
   }
 
-  _runLinuxPasteCommand(command, args, label) {
+  _runLinuxPasteCommand(command, args, label, { expectedOutput } = {}) {
     return new Promise((resolve, reject) => {
       const proc = spawn(command, args);
+      let stdout = "";
       let stderr = "";
       let timedOut = false;
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
 
       proc.stderr?.on("data", (data) => {
         stderr += data.toString();
@@ -711,12 +717,14 @@ class ClipboardManager {
       proc.on("close", (code) => {
         if (timedOut) return;
         clearTimeout(timeoutId);
-        if (code === 0) {
+        const output = stdout.trim();
+        if (code === 0 && (expectedOutput === undefined || output === expectedOutput)) {
           resolve();
         } else {
+          const errorOutput = stderr.trim() || output;
           reject(
             new Error(
-              `${label} exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`
+              `${label} exited with code ${code}${errorOutput ? `: ${errorOutput}` : ""}`
             )
           );
         }
@@ -1553,10 +1561,10 @@ class ClipboardManager {
     const isTerminalTarget =
       windowSignals.length > 0 && LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term));
     const hyprlandShortcut = isTerminalTarget
-      ? "CTRL SHIFT, V, activewindow"
+      ? { modifiers: "CTRL SHIFT", key: "V" }
       : useShiftInsert
-        ? "SHIFT, Insert, activewindow"
-        : "CTRL, V, activewindow";
+        ? { modifiers: "SHIFT", key: "Insert" }
+        : { modifiers: "CTRL", key: "V" };
     const wtypeArgs = useShiftInsert
       ? ["-M", "shift", "-k", "Insert", "-m", "shift"]
       : isTerminalTarget
@@ -1575,22 +1583,42 @@ class ClipboardManager {
     };
 
     if (isWayland && isHyprland) {
-      try {
-        // Hyprland resolves the symbolic shortcut instead of receiving hardcoded evdev keycodes.
-        await this._runLinuxPasteCommand(
-          "hyprctl",
-          ["dispatch", "sendshortcut", hyprlandShortcut],
-          "hyprctl sendshortcut"
-        );
-        this.safeLog("✅ Paste shortcut dispatched by Hyprland", { shortcut: hyprlandShortcut });
-        return { method: "hyprland-sendshortcut", restoreComplete: restoreClipboard() };
-      } catch (error) {
-        debugLogger.warn(
-          "Hyprland sendshortcut paste failed, falling back",
-          { error: error?.message },
-          "clipboard"
-        );
+      const currentDispatcher = `hl.dsp.send_shortcut({ mods = "${hyprlandShortcut.modifiers}", key = "${hyprlandShortcut.key}", window = "activewindow" })`;
+      const legacyDispatcher = `${hyprlandShortcut.modifiers}, ${hyprlandShortcut.key}, activewindow`;
+      const dispatchers = [
+        { args: ["dispatch", currentDispatcher], label: "hyprctl send_shortcut" },
+        {
+          args: ["dispatch", "sendshortcut", legacyDispatcher],
+          label: "hyprctl legacy sendshortcut",
+        },
+      ];
+      let lastDispatcherError;
+
+      for (const dispatcher of dispatchers) {
+        try {
+          await this._runLinuxPasteCommand("hyprctl", dispatcher.args, dispatcher.label, {
+            expectedOutput: "ok",
+          });
+          this.safeLog("✅ Paste shortcut dispatched by Hyprland", {
+            dispatcher: dispatcher.label,
+            shortcut: dispatcher.args.at(-1),
+          });
+          return { method: "hyprland-sendshortcut", restoreComplete: restoreClipboard() };
+        } catch (error) {
+          lastDispatcherError = error;
+          debugLogger.debug(
+            "Hyprland symbolic dispatcher failed, trying compatible form",
+            { dispatcher: dispatcher.label, error: error?.message },
+            "clipboard"
+          );
+        }
       }
+
+      debugLogger.warn(
+        "Hyprland symbolic paste failed, falling back",
+        { error: lastDispatcherError?.message },
+        "clipboard"
+      );
     }
 
     if (isWayland && isWlroots && wtypeExists) {
@@ -1646,18 +1674,38 @@ class ClipboardManager {
           }
         };
 
-        if ((isGnome || isKde) && !this.portalDenied && !this.portalUnavailable) {
+        if (isKde && !this.portalDenied && !this.portalUnavailable) {
           const portalPaste = await tryPortalPaste();
           if (portalPaste) return { method: "portal", ...portalPaste };
         }
 
-        if (isWayland) {
-          try {
-            const uinputPaste = await tryUinputPaste();
-            return { method: "uinput", ...uinputPaste };
-          } catch (uinputError) {
-            debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
-          }
+        const shouldPreferGnomePortal =
+          isGnome &&
+          !this.portalDenied &&
+          !this.portalUnavailable &&
+          !this.portalTokenPasteFailed &&
+          !!this._readPortalToken();
+        if (shouldPreferGnomePortal) {
+          const portalPaste = await tryPortalPaste();
+          if (portalPaste) return { method: "portal", ...portalPaste };
+          this.portalTokenPasteFailed = true;
+        }
+
+        try {
+          const uinputPaste = await tryUinputPaste();
+          return { method: "uinput", ...uinputPaste };
+        } catch (uinputError) {
+          debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
+        }
+
+        if (
+          isGnome &&
+          !shouldPreferGnomePortal &&
+          !this.portalDenied &&
+          !this.portalUnavailable
+        ) {
+          const portalPaste = await tryPortalPaste();
+          if (portalPaste) return { method: "portal", ...portalPaste };
         }
 
         // XTest/XWayland fallback: works for XWayland apps on any Wayland compositor
