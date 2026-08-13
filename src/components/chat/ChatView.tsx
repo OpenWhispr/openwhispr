@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStreaming } from "./useChatStreaming";
+import { useChatMessageSender } from "./useChatMessageSender";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
 import { ChatEmptyIllustration } from "./ChatEmptyIllustration";
@@ -67,29 +68,21 @@ export default function ChatView() {
     persistence.handleNewChat();
   }, [persistence]);
 
-  const handleTextSubmit = useCallback(
+  const createConversation = useCallback(
     async (text: string) => {
-      setIsNewChat(false);
-      let convId = activeConversationId;
-      if (!convId) {
-        const title = text.length > 50 ? `${text.slice(0, 50)}...` : text;
-        convId = await persistence.createConversation(title);
-      }
-
-      const userMsg = {
-        id: crypto.randomUUID(),
-        role: "user" as const,
-        content: text,
-        isStreaming: false,
-      };
-      persistence.setMessages((prev) => [...prev, userMsg]);
-      await persistence.saveUserMessage(text);
-
-      const allMessages = [...persistence.messages, userMsg];
-      await streaming.sendToAI(text, allMessages);
+      const title = text.length > 50 ? `${text.slice(0, 50)}...` : text;
+      return persistence.createConversation(title);
     },
-    [activeConversationId, persistence, streaming]
+    [persistence]
   );
+  const markChatStarted = useCallback(() => setIsNewChat(false), []);
+  const handleTextSubmit = useChatMessageSender({
+    conversationId: activeConversationId,
+    persistence,
+    streaming,
+    createConversation,
+    onBeforeSend: markChatStarted,
+  });
 
   const handleArchive = useCallback(
     async (id: number) => {

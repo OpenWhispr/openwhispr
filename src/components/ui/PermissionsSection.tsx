@@ -12,9 +12,15 @@ interface PermissionsSectionProps {
   systemAudio: Pick<SystemAudioAccessResult, "granted" | "mode" | "supportsOnboardingGrant"> & {
     request: () => Promise<boolean>;
   };
+  /** Badge system audio as "Recommended" (e.g. when the user came for meeting notes). */
+  systemAudioRecommended?: boolean;
 }
 
-export default function PermissionsSection({ permissions, systemAudio }: PermissionsSectionProps) {
+export default function PermissionsSection({
+  permissions,
+  systemAudio,
+  systemAudioRecommended = false,
+}: PermissionsSectionProps) {
   const { t } = useTranslation();
   const platform = permissions.pasteToolsInfo?.platform;
   const isMacOS = platform === "darwin";
@@ -57,7 +63,11 @@ export default function PermissionsSection({ permissions, systemAudio }: Permiss
             granted={systemAudio.granted}
             onRequest={systemAudio.request}
             buttonText={t("onboarding.permissions.grantAccess")}
-            badge={t("onboarding.permissions.optional")}
+            badge={
+              systemAudioRecommended
+                ? t("onboarding.permissions.recommended")
+                : t("onboarding.permissions.optional")
+            }
           />
         )}
       </div>

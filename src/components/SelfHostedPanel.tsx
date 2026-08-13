@@ -5,9 +5,17 @@ interface SelfHostedPanelProps {
   service: "transcription" | "reasoning";
   url: string;
   onUrlChange: (url: string) => void;
+  model?: string;
+  onModelChange?: (model: string) => void;
 }
 
-export default function SelfHostedPanel({ service, url, onUrlChange }: SelfHostedPanelProps) {
+export default function SelfHostedPanel({
+  service,
+  url,
+  onUrlChange,
+  model,
+  onModelChange,
+}: SelfHostedPanelProps) {
   const { t } = useTranslation();
 
   const placeholderUrl =
@@ -26,6 +34,17 @@ export default function SelfHostedPanel({ service, url, onUrlChange }: SelfHoste
           className="h-8 text-sm"
         />
       </div>
+      {onModelChange && (
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-foreground">{t("common.model")}</label>
+          <Input
+            value={model ?? ""}
+            onChange={(e) => onModelChange(e.target.value)}
+            placeholder="Whisper-Large-v3-Turbo"
+            className="h-8 text-sm"
+          />
+        </div>
+      )}
     </div>
   );
 }

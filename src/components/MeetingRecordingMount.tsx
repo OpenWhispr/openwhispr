@@ -1,4 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { useToast } from "./ui/useToast";
 import {
   getMicAnalyser,
   primeMeetingWorklet,
@@ -8,12 +10,53 @@ import {
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
 
+// Sentinel errors set by meetingRecordingStore, translated at display time.
+const MEETING_ERROR_KEYS: Record<string, string> = {
+  policyRestricted: "notes.meeting.restrictedByOrg",
+};
+
 export default function MeetingRecordingMount(): null {
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
+  const error = useMeetingRecordingStore((s) => s.error);
+  const errorNonce = useMeetingRecordingStore((s) => s.errorNonce);
+  const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
+  const wasMicUnavailable = useRef(false);
 
   useEffect(() => {
     primeMeetingWorklet();
   }, []);
+
+  useEffect(() => {
+    if (!error) return;
+    toast({
+      title: t("notes.meeting.title"),
+      description: MEETING_ERROR_KEYS[error] ? t(MEETING_ERROR_KEYS[error]) : error,
+      variant: "destructive",
+    });
+    // errorNonce re-fires this toast when the same error repeats back-to-back.
+  }, [error, errorNonce, toast, t]);
+
+  useEffect(() => {
+    if (micCaptureStatus === "unavailable" && !wasMicUnavailable.current) {
+      wasMicUnavailable.current = true;
+      toast({
+        title: t("hooks.audioRecording.micDisconnected.title"),
+        description: t("hooks.audioRecording.micDisconnected.meetingDescription"),
+        variant: "default",
+      });
+    } else if (micCaptureStatus === "active" && wasMicUnavailable.current) {
+      wasMicUnavailable.current = false;
+      toast({
+        title: t("hooks.audioRecording.micRestored.title"),
+        description: t("hooks.audioRecording.micRestored.description"),
+        variant: "default",
+      });
+    } else if (micCaptureStatus === "inactive") {
+      wasMicUnavailable.current = false;
+    }
+  }, [micCaptureStatus, toast, t]);
 
   useEffect(() => {
     if (!isRecording) return;

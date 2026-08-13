@@ -18,12 +18,15 @@
     "node_modules/**/*",
     "src/dist/**/*",
     "src/helpers/**/*",
+    "src/workers/**/*",
     "src/config/**/*",
     "src/constants/**/*",
     "src/locales/**/*",
     "src/hooks/**/*",
     "src/models/**/*",
     "src/services/localReasoningBridge.js",
+    "src/services/transcriptionBaseUrl.ts",
+    "src/stores/policyRules.ts",
     "src/types/**/*",
     "src/utils.js",
     "src/utils/**/*",
@@ -86,9 +89,11 @@
   ],
   "asarUnpack": [
     "**/node_modules/ffmpeg-static/**/*",
+    "**/node_modules/ps-list/**/*",
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
-    "**/node_modules/@napi-rs/keyring/**/*"
+    "**/node_modules/@napi-rs/keyring/**/*",
+    "src/workers/**/*"
   ],
   "extraResources": [
     ".env",
@@ -101,13 +106,16 @@
         "whisper-server-*",
         "llama-server-*",
         "sherpa-onnx-*",
+        "yt-dlp-*",
         "qdrant-*",
         "macos-audio-tap",
         "macos-globe-listener",
         "macos-fast-paste",
         "macos-mic-listener",
+        "macos-calendar-listener",
         "macos-text-monitor",
         "macos-media-remote",
+        "MediaRemoteAdapter.framework/**",
         "linux-fast-paste",
         "linux-system-audio-helper",
         "linux-text-monitor",
@@ -115,14 +123,24 @@
         "meeting-aec-helper-*",
         "windows-key-listener*",
         "windows-mic-listener*",
+        "windows-system-audio-helper*",
         "windows-text-monitor*",
         "windows-fast-paste*",
         "all-MiniLM-L6-v2/**/*",
         "diarization-models/**/*",
+        "whisper-vad/**/*",
         "*.dylib",
         "*.dll",
         "*.so*"
       ]
+    },
+    {
+      "from": "resources/mediaremote-adapter/bin/mediaremote-adapter.pl",
+      "to": "bin/mediaremote-adapter.pl"
+    },
+    {
+      "from": "resources/mediaremote-adapter/LICENSE",
+      "to": "bin/mediaremote-adapter.LICENSE"
     }
   ],
   "mac": {
@@ -146,7 +164,9 @@
       "CFBundleIconName": "openwhispr",
       "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
       "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings.",
-      "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications."
+      "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications.",
+      "NSCalendarsUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events.",
+      "NSCalendarsFullAccessUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events."
     }
   },
   "win": {
@@ -193,7 +213,7 @@
   "deb": {
     "afterInstall": "resources/linux/after-install.sh",
     "afterRemove": "resources/linux/after-remove.sh",
-    "depends": ["ydotool"],
+    "depends": ["ydotool", "libpipewire-0.3-0"],
     "fpm": [
       "--deb-recommends",
       "ydotoold",
@@ -216,7 +236,9 @@
       "--rpm-rpmbuild-define",
       "_build_id_links none",
       "--rpm-tag",
-      "Requires: ydotool",
+      "Recommends: ydotool",
+      "--rpm-tag",
+      "Requires: libpipewire-0.3.so.0()(64bit)",
       "--rpm-tag",
       "Suggests: xdotool",
       "--rpm-tag",
@@ -234,7 +256,7 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "include": "resources/nsis/cleanup-models.nsh"
+    "include": "resources/nsis/installer.nsh"
   },
   "dmg": {
     "title": "OpenWhispr",

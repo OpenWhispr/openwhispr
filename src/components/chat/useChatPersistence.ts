@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Message, ToolCallInfo } from "./types";
+import type { ContainerScope } from "../../types/chat";
 
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
@@ -10,7 +11,11 @@ export interface ChatPersistence {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   conversationId: number | null;
-  createConversation: (title: string, noteId?: number | null) => Promise<number>;
+  createConversation: (
+    title: string,
+    noteId?: number | null,
+    scope?: ContainerScope
+  ) => Promise<number>;
   loadConversation: (id: number) => Promise<void>;
   saveUserMessage: (text: string) => Promise<void>;
   saveAssistantMessage: (content: string, toolCalls?: ToolCallInfo[]) => Promise<void>;
@@ -29,9 +34,17 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   }, [conversationId]);
 
   const createConversation = useCallback(
-    async (title: string, noteId?: number | null): Promise<number> => {
-      const conv = await window.electronAPI?.createAgentConversation?.(title, noteId ?? undefined);
-      const id = conv?.id ?? 0;
+    async (title: string, noteId?: number | null, scope?: ContainerScope): Promise<number> => {
+      const conv = await window.electronAPI?.createAgentConversation?.(
+        title,
+        noteId ?? undefined,
+        scope?.spaceId,
+        scope?.folderId ?? undefined
+      );
+      if (!conv) {
+        throw new Error("Conversation scope is no longer available");
+      }
+      const id = conv.id;
       conversationIdRef.current = id;
       setConversationId(id);
       options.onConversationCreated?.(id, title);

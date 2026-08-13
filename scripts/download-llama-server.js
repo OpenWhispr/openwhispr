@@ -11,13 +11,11 @@ const {
   cleanupFiles,
 } = require("./lib/download-utils");
 
-const LLAMA_CPP_REPO = "ggerganov/llama.cpp";
+const LLAMA_CPP_REPO = "ggml-org/llama.cpp";
 
-// Pinned: whisper-server.exe (built against OpenWhispr/whisper.cpp 0.0.6) loads
-// ggml-*.dll from this script's output dir on Windows. Newer llama.cpp builds
-// bumped ggml's ABI and crash whisper-server on load_backend. Bump only after
-// verifying local Whisper starts on Windows.
-const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b8857";
+// Pinned to a tested build that loads current GGUF models. whisper-server is
+// statically linked, so bumping this can't affect local Whisper.
+const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b9763";
 
 const BINARIES = {
   "darwin-arm64": {

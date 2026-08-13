@@ -1,8 +1,17 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
-import type { Workspace, WorkspaceMember } from "../types/electron";
+import { cloudGet, cloudPost, cloudPatch, cloudDelete, type DataWrap } from "./cloudApi.js";
+import type {
+  JoinableWorkspace,
+  Workspace,
+  WorkspaceJoinRequest,
+  WorkspaceMember,
+} from "../types/electron";
 
-interface DataWrap<T> {
-  data: T;
+export interface SeatPreview {
+  next_quantity: number;
+  current_quantity: number;
+  seats_used: number;
+  amount_due: number;
+  currency: string;
 }
 
 async function list(): Promise<Workspace[]> {
@@ -12,11 +21,6 @@ async function list(): Promise<Workspace[]> {
 
 async function create(name: string): Promise<Workspace> {
   const res = await cloudPost<DataWrap<Workspace>>("/api/workspaces", { name });
-  return res.data;
-}
-
-async function get(workspaceId: string): Promise<Workspace> {
-  const res = await cloudGet<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}`);
   return res.data;
 }
 
@@ -67,22 +71,69 @@ async function billingPortal(workspaceId: string): Promise<string> {
   return res.data.url;
 }
 
-async function previewSeats(
-  workspaceId: string,
-  additionalSeats: number
-): Promise<{ next_quantity: number; amount_due: number; currency: string }> {
-  const res = await cloudPost<
-    DataWrap<{ next_quantity: number; amount_due: number; currency: string }>
-  >(`/api/workspaces/${workspaceId}/billing/preview-seats`, {
-    additional_seats: additionalSeats,
-  });
+async function previewSeats(workspaceId: string, additionalSeats: number): Promise<SeatPreview> {
+  const res = await cloudPost<DataWrap<SeatPreview>>(
+    `/api/workspaces/${workspaceId}/billing/preview-seats`,
+    {
+      additional_seats: additionalSeats,
+    }
+  );
   return res.data;
 }
 
+async function updateSeats(
+  workspaceId: string,
+  quantity: number
+): Promise<{ quantity: number; seats_used: number }> {
+  const res = await cloudPost<DataWrap<{ quantity: number; seats_used: number }>>(
+    `/api/workspaces/${workspaceId}/billing/seats`,
+    { quantity }
+  );
+  return res.data;
+}
+
+/** Invitations the caller can accept and company-domain workspaces they can ask to join. */
+async function listJoinable(): Promise<JoinableWorkspace[]> {
+  const res = await cloudGet<DataWrap<JoinableWorkspace[]>>("/api/me/joinable");
+  return res.data;
+}
+
+async function join(workspaceId: string): Promise<{ workspace_id: string; role: string }> {
+  const res = await cloudPost<DataWrap<{ workspace_id: string; role: string }>>(
+    "/api/me/joinable",
+    { workspace_id: workspaceId }
+  );
+  return res.data;
+}
+
+/** Ask a workspace's admins for access. Grants nothing until one approves. */
+async function requestJoin(workspaceId: string): Promise<void> {
+  await cloudPost("/api/me/joinable/request", { workspace_id: workspaceId });
+}
+
+async function listJoinRequests(workspaceId: string): Promise<WorkspaceJoinRequest[]> {
+  const res = await cloudGet<DataWrap<WorkspaceJoinRequest[]>>(
+    `/api/workspaces/${workspaceId}/join-requests`
+  );
+  return res.data;
+}
+
+async function decideJoinRequest(
+  workspaceId: string,
+  requestId: string,
+  decision: "approve" | "deny"
+): Promise<void> {
+  await cloudPatch(`/api/workspaces/${workspaceId}/join-requests/${requestId}`, { decision });
+}
+
 export const WorkspacesService = {
+  listJoinable,
+  join,
+  requestJoin,
+  listJoinRequests,
+  decideJoinRequest,
   list,
   create,
-  get,
   update,
   remove,
   listMembers,
@@ -91,4 +142,5 @@ export const WorkspacesService = {
   billingCheckout,
   billingPortal,
   previewSeats,
+  updateSeats,
 };

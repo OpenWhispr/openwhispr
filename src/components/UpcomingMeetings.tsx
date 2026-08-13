@@ -8,26 +8,12 @@ import { formatUpcomingDateGroup } from "../utils/dateFormatting";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
+import { getMeetingJoinUrl } from "../helpers/meetingJoinUrl";
 
 interface UpcomingMeetingsProps {
   events: CalendarEvent[];
   isLoading: boolean;
 }
-
-const getJoinUrl = (event: CalendarEvent): string | null => {
-  if (event.hangout_link) return event.hangout_link;
-  if (!event.conference_data) return null;
-  try {
-    const data = JSON.parse(event.conference_data);
-    return (
-      data?.entryPoints?.find(
-        (ep: { entryPointType: string; uri?: string }) => ep.entryPointType === "video"
-      )?.uri || null
-    );
-  } catch {
-    return null;
-  }
-};
 
 const openJoinUrl = (url: string) => {
   if (window.electronAPI?.openExternal) {
@@ -42,6 +28,7 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
   const systemAudio = useSystemAudioPermission();
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const appleCalendarConnected = useSettingsStore((s) => s.appleCalendarConnected);
   const needsSystemAudioGrant = !systemAudio.granted && canManageSystemAudioInApp(systemAudio);
 
   const now = useMemo(() => new Date(), []);
@@ -123,7 +110,7 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
                   : t("onboarding.permissions.grantAccess")}
               </Button>
             </>
-          ) : !isSignedIn ? (
+          ) : !isSignedIn && !appleCalendarConnected ? (
             <>
               <LogIn size={24} className="text-muted-foreground/30 mb-2.5" />
               <p className="text-xs font-medium text-muted-foreground/70 text-center mb-1">
@@ -156,7 +143,7 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
               </div>
               <div className="space-y-1.5">
                 {group.items.map((event) => {
-                  const joinUrl = getJoinUrl(event);
+                  const joinUrl = getMeetingJoinUrl(event);
                   const isNow = isHappeningNow(event);
                   const isHovered = hoveredEventId === event.id;
 

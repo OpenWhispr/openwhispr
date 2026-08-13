@@ -2,7 +2,15 @@ import React, { createContext, useCallback, useContext, useEffect, useRef } from
 import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
-import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  LocalTranscriptionProvider,
+  InferenceMode,
+  SelfHostedType,
+} from "../types/electron";
+import type { Snippet } from "../utils/snippets";
+import { effectiveAudioRetentionDays } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -14,6 +22,8 @@ export interface TranscriptionSettings {
   allowLocalFallback: boolean;
   fallbackWhisperModel: string;
   preferredLanguage: string;
+  /** When transcription language is Auto, force Chinese output script. See #975. */
+  chineseScriptPreference: ChineseScriptPreference;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl?: string;
@@ -21,7 +31,9 @@ export interface TranscriptionSettings {
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
   customDictionary: string[];
+  snippets: Snippet[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }
@@ -41,14 +53,25 @@ export interface CleanupSettings {
 export interface HotkeySettings {
   dictationKey: string;
   pasteLastKey: string;
+  /** Hotkeys actually registered by the main process (may be a subset of
+   * dictationKey, e.g. primary-only on GNOME/KDE/Hyprland). Display-only. */
+  activeDictationKey: string | null;
   meetingKey: string;
+  voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
+}
+
+export interface OnboardingSettings {
+  onboardingUseCases: string[];
+  onboardingUseCaseNote: string;
 }
 
 export interface MicrophoneSettings {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
+  selectedMicDeviceLabel: string;
+  micWarmHoldSeconds: number;
 }
 
 export interface ApiKeySettings {
@@ -56,7 +79,13 @@ export interface ApiKeySettings {
   anthropicApiKey: string;
   geminiApiKey: string;
   groqApiKey: string;
+  xaiApiKey: string;
   mistralApiKey: string;
+  openrouterApiKey: string;
+  cortiClientId: string;
+  cortiClientSecret: string;
+  cortiApiKey: string;
+  tinfoilApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -65,7 +94,9 @@ export interface PrivacySettings {
   cloudBackupEnabled: boolean;
   telemetryEnabled: boolean;
   audioRetentionDays: number;
+  transcriptRetentionDays: number;
   dataRetentionEnabled: boolean;
+  saveDiscardedTranscriptions: boolean;
 }
 
 export interface ThemeSettings {
@@ -85,7 +116,7 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { setCustomDictionary } = store;
+  const { applyCustomDictionaryFromExternal, applySnippetsFromExternal } = store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -102,16 +133,28 @@ function useSettingsInternal() {
     });
   }, []);
 
-  // Listen for dictionary updates from main process (auto-learn corrections)
+  // Refresh the in-memory store from main-process broadcasts (auto-learn, sync
+  // pulls) without re-triggering a sync — that would loop, since pulls emit the
+  // broadcast. Writes that must sync go through setCustomDictionary instead.
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.onDictionaryUpdated) return;
     const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {
       if (Array.isArray(words)) {
-        setCustomDictionary(words);
+        applyCustomDictionaryFromExternal(words);
       }
     });
     return unsubscribe;
-  }, [setCustomDictionary]);
+  }, [applyCustomDictionaryFromExternal]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.electronAPI?.onSnippetsUpdated) return;
+    const unsubscribe = window.electronAPI.onSnippetsUpdated((snippets: Snippet[]) => {
+      if (Array.isArray(snippets)) {
+        applySnippetsFromExternal(snippets);
+      }
+    });
+    return unsubscribe;
+  }, [applySnippetsFromExternal]);
 
   // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
@@ -137,15 +180,29 @@ function useSettingsInternal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Retention periods are enforced by the main process cleanup sweep
+  const { audioRetentionDays, transcriptRetentionDays } = store;
+  const enforcedAudioRetentionDays = usePolicyStore((policyState) =>
+    effectiveAudioRetentionDays(policyState, audioRetentionDays)
+  );
+  useEffect(() => {
+    window.electronAPI?.syncRetentionSettings?.({
+      audioRetentionDays: enforcedAudioRetentionDays,
+      transcriptRetentionDays,
+    });
+  }, [enforcedAudioRetentionDays, transcriptRetentionDays]);
+
   // Sync startup pre-warming preferences to main process
   const {
     useLocalWhisper,
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
+    useCleanupModel,
+    cleanupMode,
     cleanupModel,
-    dictationAgentProvider,
+    useDictationAgent,
+    dictationAgentMode,
     dictationAgentModel,
   } = store;
 
@@ -158,10 +215,12 @@ function useSettingsInternal() {
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
-        cleanupProvider,
-        cleanupModel: cleanupProvider === "local" ? cleanupModel : undefined,
-        dictationAgentProvider,
-        dictationAgentModel: dictationAgentProvider === "local" ? dictationAgentModel : undefined,
+        useCleanupModel,
+        cleanupMode,
+        cleanupModel,
+        useDictationAgent,
+        dictationAgentMode,
+        dictationAgentModel,
       })
       .catch((err) =>
         logger.warn(
@@ -175,9 +234,11 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
+    useCleanupModel,
+    cleanupMode,
     cleanupModel,
-    dictationAgentProvider,
+    useDictationAgent,
+    dictationAgentMode,
     dictationAgentModel,
   ]);
 
@@ -191,6 +252,7 @@ function useSettingsInternal() {
     allowLocalFallback: store.allowLocalFallback,
     fallbackWhisperModel: store.fallbackWhisperModel,
     preferredLanguage: store.preferredLanguage,
+    chineseScriptPreference: store.chineseScriptPreference,
     cloudTranscriptionProvider: store.cloudTranscriptionProvider,
     cloudTranscriptionModel: store.cloudTranscriptionModel,
     cloudTranscriptionBaseUrl: store.cloudTranscriptionBaseUrl,
@@ -200,9 +262,12 @@ function useSettingsInternal() {
     transcriptionMode: store.transcriptionMode,
     remoteTranscriptionType: store.remoteTranscriptionType,
     remoteTranscriptionUrl: store.remoteTranscriptionUrl,
+    remoteTranscriptionModel: store.remoteTranscriptionModel,
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
+    snippets: store.snippets,
+    setSnippets: store.setSnippets,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
@@ -215,10 +280,14 @@ function useSettingsInternal() {
     anthropicApiKey: store.anthropicApiKey,
     geminiApiKey: store.geminiApiKey,
     groqApiKey: store.groqApiKey,
+    xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
+    openrouterApiKey: store.openrouterApiKey,
+    tinfoilApiKey: store.tinfoilApiKey,
     dictationKey: store.dictationKey,
     pasteLastKey: store.pasteLastKey,
     meetingKey: store.meetingKey,
+    voiceAgentKey: store.voiceAgentKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
     setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
     theme: store.theme,
@@ -231,6 +300,7 @@ function useSettingsInternal() {
     setAllowLocalFallback: store.setAllowLocalFallback,
     setFallbackWhisperModel: store.setFallbackWhisperModel,
     setPreferredLanguage: store.setPreferredLanguage,
+    setChineseScriptPreference: store.setChineseScriptPreference,
     setCloudTranscriptionProvider: store.setCloudTranscriptionProvider,
     setCloudTranscriptionModel: store.setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl: store.setCloudTranscriptionBaseUrl,
@@ -240,9 +310,11 @@ function useSettingsInternal() {
     setTranscriptionMode: store.setTranscriptionMode,
     setRemoteTranscriptionType: store.setRemoteTranscriptionType,
     setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
+    setRemoteTranscriptionModel: store.setRemoteTranscriptionModel,
     setCleanupMode: store.setCleanupMode,
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
+    updateCustomDictionary: store.updateCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,
     setUseDictationAgent: store.setUseDictationAgent,
     setCleanupModel: store.setCleanupModel,
@@ -259,6 +331,11 @@ function useSettingsInternal() {
     setDictationKey: store.setDictationKey,
     setPasteLastKey: store.setPasteLastKey,
     setMeetingKey: store.setMeetingKey,
+    setVoiceAgentKey: store.setVoiceAgentKey,
+    onboardingUseCases: store.onboardingUseCases,
+    setOnboardingUseCases: store.setOnboardingUseCases,
+    onboardingUseCaseNote: store.onboardingUseCaseNote,
+    setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
@@ -282,8 +359,11 @@ function useSettingsInternal() {
     setPanelStartPosition: store.setPanelStartPosition,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
+    selectedMicDeviceLabel: store.selectedMicDeviceLabel,
+    micWarmHoldSeconds: store.micWarmHoldSeconds,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
-    setSelectedMicDeviceId: store.setSelectedMicDeviceId,
+    setSelectedMicDevice: store.setSelectedMicDevice,
+    setMicWarmHoldSeconds: store.setMicWarmHoldSeconds,
     autoLearnCorrections,
     setAutoLearnCorrections,
     showTranscriptionPreview: store.showTranscriptionPreview,
@@ -320,8 +400,12 @@ function useSettingsInternal() {
     setTelemetryEnabled: store.setTelemetryEnabled,
     audioRetentionDays: store.audioRetentionDays,
     setAudioRetentionDays: store.setAudioRetentionDays,
+    transcriptRetentionDays: store.transcriptRetentionDays,
+    setTranscriptRetentionDays: store.setTranscriptRetentionDays,
     dataRetentionEnabled: store.dataRetentionEnabled,
     setDataRetentionEnabled: store.setDataRetentionEnabled,
+    saveDiscardedTranscriptions: store.saveDiscardedTranscriptions,
+    setSaveDiscardedTranscriptions: store.setSaveDiscardedTranscriptions,
     updateTranscriptionSettings: store.updateTranscriptionSettings,
     updateCleanupSettings: store.updateCleanupSettings,
     updateApiKeys: store.updateApiKeys,

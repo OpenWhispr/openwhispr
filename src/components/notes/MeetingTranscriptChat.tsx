@@ -8,6 +8,7 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
 import {
   isTranscriptSpeakerLocked,
+  resolveSegmentSpeakerName,
   type TranscriptSpeakerStatus,
 } from "../../utils/transcriptSpeakerState";
 
@@ -50,15 +51,12 @@ const SPEAKER_BORDER_COLORS = [
 
 const STICKY_SCROLL_THRESHOLD_PX = 80;
 
-const getSpeakerKey = (segment: TranscriptSegment) => segment.speaker || segment.source;
-
 const getEffectiveSpeakerKey = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string => {
-  const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
-  if (mapped) return `name:${mapped.toLowerCase()}`;
-  if (segment.speakerName) return `name:${segment.speakerName.toLowerCase()}`;
+  const name = resolveSegmentSpeakerName(segment, speakerMappings);
+  if (name) return `name:${name.toLowerCase()}`;
   if (segment.speaker) return `id:${segment.speaker}`;
   return `src:${segment.source}`;
 };
@@ -376,7 +374,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
 function SpeakerLabel({
   speakerId,
   segment,
-  mappedName,
+  resolvedName,
   speakerProfiles,
   participants,
   colorIdx,
@@ -388,7 +386,7 @@ function SpeakerLabel({
 }: {
   speakerId: string;
   segment: TranscriptSegment;
-  mappedName?: string;
+  resolvedName?: string;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   colorIdx: number;
@@ -403,15 +401,15 @@ function SpeakerLabel({
     segment.speakerLocked || isTranscriptSpeakerLocked(segment)
       ? "locked"
       : segment.speakerStatus ||
-        (segment.suggestedName && !mappedName
+        (segment.suggestedName && !resolvedName
           ? "suggested"
-          : segment.speakerName || mappedName
+          : segment.speakerName || resolvedName
             ? "confirmed"
             : segment.speakerIsPlaceholder
               ? "provisional"
               : undefined);
 
-  const hasSuggestion = !!segment.suggestedName && !mappedName;
+  const hasSuggestion = !!segment.suggestedName && !resolvedName;
 
   if (hasSuggestion) {
     return (
@@ -438,12 +436,12 @@ function SpeakerLabel({
   }
 
   const displayLabel =
-    mappedName ||
+    resolvedName ||
     segment.speakerName ||
     (isOriginallyYou
       ? t("notes.speaker.you")
       : t("notes.speaker.label", { n: getSpeakerNumber(speakerId) }));
-  const isUnmapped = !mappedName && !segment.speakerName;
+  const isUnmapped = !resolvedName && !segment.speakerName;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -757,7 +755,8 @@ export function MeetingTranscriptChat({
           const selfSide = isSelfSide(segment);
           const prevSegment = i > 0 ? segments[i - 1] : null;
           const sameSpeaker = prevSegment
-            ? getSpeakerKey(prevSegment) === getSpeakerKey(segment)
+            ? getEffectiveSpeakerKey(prevSegment, speakerMappings) ===
+              getEffectiveSpeakerKey(segment, speakerMappings)
             : false;
 
           const hasSpeaker = !!segment.speaker;
@@ -768,7 +767,7 @@ export function MeetingTranscriptChat({
           const isSelected = selectedSegmentIds?.has(segment.id) ?? false;
           const selectable = !!onToggleSelect;
 
-          const activeName = speakerMappings?.[segment.speaker!] || segment.speakerName;
+          const activeName = resolveSegmentSpeakerName(segment, speakerMappings);
           const matchedProfile =
             activeName && speakerProfiles
               ? speakerProfiles.find((p) => p.id != null && p.display_name === activeName)
@@ -784,7 +783,7 @@ export function MeetingTranscriptChat({
               <SpeakerLabel
                 speakerId={segment.speaker!}
                 segment={segment}
-                mappedName={speakerMappings?.[segment.speaker!]}
+                resolvedName={activeName}
                 speakerProfiles={speakerProfiles}
                 participants={participants}
                 colorIdx={colorIdx}

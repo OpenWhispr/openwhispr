@@ -32,8 +32,7 @@ const TARGETS = [
 const binaryName = ({ platform, arch }) =>
   `meeting-aec-helper-${platform}-${arch}${platform === "win32" ? ".exe" : ""}`;
 
-const archiveName = ({ platform, arch, ext }) =>
-  `meeting-aec-helper-${platform}-${arch}.${ext}`;
+const archiveName = ({ platform, arch, ext }) => `meeting-aec-helper-${platform}-${arch}.${ext}`;
 
 async function downloadTarget(target, release, force) {
   const binary = binaryName(target);
@@ -53,7 +52,10 @@ async function downloadTarget(target, release, force) {
 
   fs.mkdirSync(BIN_DIR, { recursive: true });
   const archivePath = path.join(BIN_DIR, archive);
-  const extractDir = path.join(BIN_DIR, `temp-meeting-aec-helper-${target.platform}-${target.arch}`);
+  const extractDir = path.join(
+    BIN_DIR,
+    `temp-meeting-aec-helper-${target.platform}-${target.arch}`
+  );
 
   try {
     console.log(`  Downloading ${archive}...`);

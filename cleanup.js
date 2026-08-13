@@ -23,8 +23,8 @@ try {
     process.platform === "darwin"
       ? path.join(os.homedir(), "Library", "Application Support", "open-whispr")
       : process.platform === "win32"
-      ? path.join(process.env.APPDATA || os.homedir(), "open-whispr")
-      : path.join(os.homedir(), ".config", "open-whispr");
+        ? path.join(process.env.APPDATA || os.homedir(), "open-whispr")
+        : path.join(os.homedir(), ".config", "open-whispr");
 
   const devDbPath = path.join(userDataPath, "transcriptions-dev.db");
 

@@ -6,7 +6,12 @@
       "uiLabel": "インターフェース言語",
       "uiDescription": "OpenWhispr のインターフェースで使用する言語を選択",
       "transcriptionLabel": "文字起こし言語",
-      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択"
+      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択",
+      "chineseScriptLabel": "中国語の字体（ディクテーション）",
+      "chineseScriptDescription": "中国語が検出されたとき、ディクテーションの文字起こしを簡体字または繁体字に変換します。話し言葉は同じでも、Whisperはどちらか一方の字体だけを返します。",
+      "chineseScriptAsTranscribed": "文字起こしのまま",
+      "chineseScriptSimplified": "簡体字 (简体)",
+      "chineseScriptTraditional": "繁体字 (繁體)"
     },
     "noteFiles": {
       "title": "ノートをファイルとして保存",
@@ -35,6 +40,7 @@
     "openControlPanel": "コントロールパネルを開く",
     "pasteLastTranscription": "最後の文字起こしを貼り付け",
     "pasteLastTranscriptionEmpty": "最後の文字起こしを貼り付け (まだありません)",
+    "hideControlPanel": "コントロールパネルを非表示",
     "quit": "OpenWhispr を終了",
     "tooltip": "OpenWhispr - 音声ディクテーション"
   },
@@ -93,6 +99,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
+      "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
       "slotConflict": "このホットキーは既に{{slot}}で使用されています。"
     }
@@ -101,14 +108,9 @@
     "microphone": "システム設定を開いてマイクの権限を設定してください。",
     "sound": "システムのサウンド設定を開いてください（例: pavucontrol）。",
     "accessibility": "このプラットフォームではアクセシビリティ設定を利用できません。",
-    "systemAudio": "システムオーディオの設定はこのプラットフォームでは利用できません。"
-  },
-  "titleBar": {
-    "quitTitle": "OpenWhispr を終了",
-    "quitConfirmTitle": "OpenWhispr を終了しますか？",
-    "quitConfirmDescription": "OpenWhispr を終了し、バックグラウンドプロセスを停止します。",
-    "quit": "終了",
-    "cancel": "キャンセル"
+    "systemAudio": "システムオーディオの設定はこのプラットフォームでは利用できません。",
+    "screenRecording": "このプラットフォームでは画面収録の設定を利用できません。",
+    "loginItems": "ログイン項目の設定はこのプラットフォームでは利用できません。"
   },
   "upgradePrompt": {
     "paymentFailed": "お支払いを処理できませんでした",
@@ -135,6 +137,8 @@
     "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
   },
   "common": {
+    "add": "追加",
+    "retry": "再試行",
     "back": "戻る",
     "next": "次へ",
     "complete": "完了",
@@ -144,7 +148,9 @@
     "cancel": "キャンセル",
     "recommended": "推奨",
     "active": "有効",
+    "managedByOrg": "組織によって管理されています",
     "freeAccountRequired": "無料アカウントが必要です",
+    "comingSoon": "近日公開",
     "cloud": "クラウド",
     "local": "ローカル",
     "apiKey": "API キー",
@@ -158,23 +164,31 @@
     "tap": "タップ",
     "close": "閉じる",
     "dismiss": "閉じる",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "create": "Crear",
-    "delete": "Eliminar",
-    "actions": "Acciones",
-    "error": "Algo salió mal",
-    "unknownError": "Ocurrió un error desconocido",
-    "copy": "Copiar",
-    "copied": "Copiado",
-    "done": "Listo"
+    "save": "保存",
+    "saving": "保存中…",
+    "create": "作成",
+    "delete": "削除",
+    "actions": "操作",
+    "error": "問題が発生しました",
+    "unknownError": "不明なエラーが発生しました",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "done": "完了",
+    "skip": "スキップ",
+    "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
+    "policyAgentRestricted": "AIエージェントの使用は組織によって制限されています。",
+    "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。"
   },
   "onboarding": {
     "steps": {
       "welcome": "ようこそ",
       "setup": "セットアップ",
       "permissions": "権限",
-      "activation": "アクティベーション"
+      "activation": "ディクテーション",
+      "useCase": "あなたについて",
+      "meeting": "会議",
+      "finish": "完了",
+      "voiceAgent": "ボイスエージェント"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -188,20 +202,20 @@
     "permissions": {
       "title": "権限",
       "microphoneTitle": "マイク",
-      "microphoneDescription": "文字起こしのためにあなたの声を録音します",
+      "microphoneDescription": "あなたの声をテキストに変換します。ホットキーを押すまで何も録音されません。",
       "grant": "許可",
       "grantAccess": "アクセスを許可",
       "accessibilityTitle": "アクセシビリティ",
-      "accessibilityDescription": "文字起こしテキストを任意のアプリに自動貼り付けします",
+      "accessibilityDescription": "完成したテキストを、今使っているアプリ（ドキュメント、メール、チャット）に直接入力します。",
       "testAndGrant": "テストして許可",
       "requiredForApp": "OpenWhispr の動作に必要です",
       "microphoneRequired": "マイクへのアクセスが必要です",
       "openSystemSettings": "システム設定を開く",
       "systemAudioTitle": "システムオーディオ",
-      "systemAudioDescription": "会議、通話、講義、ポッドキャストなど、システム音声を文字起こしします。",
+      "systemAudioDescription": "会議レコーダーが通話の相手側の音声（会議、講義、ポッドキャストなど）を聴けるようにします。後から設定で有効にできます。",
       "optional": "任意",
       "recommended": "推奨",
-      "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。それでもうまくいかない場合は、リストからOpenWhisprを削除して再度追加してみてください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
+      "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。OpenWhisprがリストに表示されていない場合は、+ をクリックしてアプリケーションフォルダから追加してください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
     },
     "transcription": {
       "title": "文字起こし設定",
@@ -209,7 +223,7 @@
       "preferredLanguage": "優先言語"
     },
     "activation": {
-      "title": "アクティベーション設定",
+      "title": "ディクテーション設定",
       "description": "ディクテーションの起動方法を設定",
       "hotkey": "ホットキー",
       "mode": "モード",
@@ -220,11 +234,88 @@
       "holdHotkey": "{{hotkey}} を押し続ける",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
     },
+    "voiceAgent": {
+      "title": "ボイスエージェント設定",
+      "description": "ワンキーでAIエージェントに話しかけられます",
+      "hotkey": "ホットキー",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}がその選択範囲を編集して置き換えます。選択がなければカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "test": "試す",
+      "testInstruction": "下をクリックし、{{hotkey}} を押してコマンドを話してください",
+      "testSetHotkey": "上でホットキーを設定すると試せます",
+      "testPlaceholder": "ここをクリックし、ホットキーを押して例の一つを話してください...",
+      "examples": [
+        "イタリア語に翻訳して:「私はタイプするより話す方が速い」",
+        "上司に昇進したいと伝える短いメールを書いて、彼の名前はマークです",
+        "5 × 5 はいくつ?"
+      ],
+      "optionalNote": "任意です。設定からいつでも追加・変更できます。"
+    },
     "connectivity": {
       "title": "このネットワークから OpenWhispr Cloud に接続できません",
       "body": "{{cause}} ローカルエンジンに切り替えるか、続行して後でもう一度お試しください。",
       "useLocal": "ローカルエンジンを使う",
       "continue": "そのまま続行"
+    },
+    "useCase": {
+      "title": "どんな目的でお使いですか？",
+      "description": "私たちは小さなチームで、毎週リリースしています。選んだ内容に合わせてアプリを設定し、次に何を作るかの参考にします。",
+      "noteLabel": "他に伝えておきたいことはありますか？",
+      "notePlaceholder": "任意",
+      "options": {
+        "dictation": {
+          "title": "より速く書く",
+          "description": "タイピングの代わりにどのアプリでも音声入力"
+        },
+        "meetings": {
+          "title": "会議のメモと要約",
+          "description": "会議を録音・文字起こし・要約"
+        },
+        "healthcare": {
+          "title": "医療・臨床・セラピーの文字起こし",
+          "description": "患者メモ、セッション記録、レポートを音声入力"
+        },
+        "translation": {
+          "title": "言語の翻訳",
+          "description": "話す言語とは別の言語で入力"
+        },
+        "ai": {
+          "title": "AI との対話",
+          "description": "ChatGPT、Claude などのエージェントを声で操作"
+        },
+        "upload": {
+          "title": "音声ファイルのアップロード",
+          "description": "MP3、OGG などをアップロードして文字起こし"
+        }
+      },
+      "selectHint": "当てはまるものをすべて選択してください"
+    },
+    "meeting": {
+      "title": "会議メモ",
+      "description": "会議を記録して要約します",
+      "autoDetect": "OpenWhispr は会議中であることを自動的に検出し、メモの開始を提案します。あなたの操作なしに録音されることはありません。",
+      "hotkeyLabel": "会議ホットキー",
+      "hotkeyHint": "任意 — 会議中に押すとすぐにメモを開始できます。"
+    },
+    "finish": {
+      "title": "準備完了",
+      "cloudDescription": "OpenWhispr Cloud をご利用中です — 高速・高精度、データ保持なし、毎週 2,000 ワード無料。すべてを端末内で処理したい場合は、設定からローカル処理に切り替えられます。",
+      "localDescription": "ローカル処理またはご自身の API キーで設定済みです。音声の処理方法はいつでも設定から変更できます。",
+      "cleanupNote": "AI によるテキスト整形は適切な初期設定で動作します。設定からいつでも調整できます。",
+      "openSettings": "設定を開く",
+      "skipForNow": "今はスキップ",
+      "corti": {
+        "title": "臨床文字起こしが目的とのことですね",
+        "description": "私たちは Corti と提携しています — 最高精度の臨床グレード音声認識で、HIPAA に準拠しています。",
+        "createAccount": "Corti アカウントを作成",
+        "creditBadge": "50ドルの無料クレジット",
+        "regionHint": "音声の処理場所を選べます — 米国または EU。",
+        "llmHint": "言語モデル機能も Corti モデルで実行されます。",
+        "useCorti": "Corti を使う",
+        "skip": "後で",
+        "step1": "corti.ai でアカウントを作成",
+        "step2": "Corti コンソールで API 認証情報を作成",
+        "step3": "Client ID と Secret を下に貼り付け"
+      }
     }
   },
   "streaming": {
@@ -241,6 +332,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "アップデートが必要です",
+      "description": "組織では OpenWhispr {{version}} 以降が必要です。アプリを更新してください。"
+    },
     "update": {
       "readyTitle": "アップデートの準備完了",
       "readyDescription": "「アップデートをインストール」をクリックして最新バージョンで再起動します。",
@@ -303,6 +398,7 @@
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
       "copyText": "テキストをコピー",
+      "copyRawTranscript": "生の文字起こしをコピー",
       "deleteItem": "削除",
       "viewRawTranscript": "生の文字起こしを表示",
       "showInFolder": "Finderで表示",
@@ -314,7 +410,17 @@
       "retryError": "再文字起こしに失敗しました",
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
-      "rawTranscript": "生の文字起こし"
+      "rawTranscript": "生の文字起こし",
+      "discarded": {
+        "show": "破棄したものを表示",
+        "hide": "破棄したものを非表示",
+        "badge": "破棄済み",
+        "recording": "破棄した録音",
+        "recordingWithDuration": "破棄した録音 · {{duration}}",
+        "recover": "復元",
+        "recovered": "復元しました"
+      },
+      "retryTranslationMode": "翻訳モード"
     },
     "cloudMigration": {
       "title": "OpenWhispr Cloud へようこそ",
@@ -347,6 +453,7 @@
     "custom": {
       "endpointWithProtocol": "プロトコルを含む完全なベース URL を入力してください（例: https://server/v1）。",
       "httpsRequired": "HTTPS が必要です（ローカルネットワークのみ HTTP を許可）。",
+      "endpointInvalid": "カスタムエンドポイントが無効か未設定です。設定 → AIモデルでエンドポイントURLを確認してください。",
       "endpointUnauthorized": "エンドポイントがリクエストを拒否しました（401/403）。API キーを追加するか、サーバーの認証設定を調整してください。",
       "endpointTitle": "エンドポイント URL",
       "endpointExamples": "例:",
@@ -363,7 +470,13 @@
       "noModels": "モデルが見つかりません。エンドポイント URL を確認してください。",
       "providerName": "カスタム",
       "ownerLabel": "提供元: {{owner}}",
-      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。"
+      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。",
+      "searchPlaceholder": "モデルを検索…",
+      "selectedGroup": "選択中",
+      "otherGroup": "その他",
+      "noSearchResults": "「{{query}}」に一致するモデルはありません",
+      "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
+      "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -400,6 +513,10 @@
       "customModelId": "カスタムモデル ID",
       "customModelPlaceholder": "モデル ID またはデプロイメント名を入力",
       "suggestedModels": "推奨モデル",
+      "browseModels": "すべてのモデルを表示",
+      "loadingModels": "モデルを取得中...",
+      "allModels": "{{region}} のすべてのモデル",
+      "modelListError": "モデルを読み込めませんでした。",
       "bedrock": {
         "ssoHelp": "AWS CLI の SSO 設定を使用します。'aws sso login' を実行済みであることを確認してください。",
         "keysHelp": "AWS IAM のアクセスキーを入力してください。"
@@ -412,6 +529,14 @@
         "adcHelp": "Application Default Credentials を使用します。次を実行してください: gcloud auth application-default login",
         "apikeyHelp": "Google AI Studio で取得した Vertex AI Express Mode の API キー。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "モデルが利用できません",
+      "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
+      "refreshingModels": "モデルを更新しています…"
+    },
+    "corti": {
+      "euOnly": "Corti のモデルは EU リージョンでのみ利用できます。"
     }
   },
   "transcription": {
@@ -426,19 +551,34 @@
     "apiKeyOptional": "API キー（任意）",
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",
+    "azureHint": "Azure AI Foundry: リソースのエンドポイント（例: https://your-resource.cognitiveservices.azure.com）を入力し、モデルにデプロイの正確な名前を設定してください。",
     "customProvider": "カスタム",
     "fallback": {
       "whisperModelDescription": "モデル",
       "parakeetModelDescription": "NVIDIA Parakeet モデル"
     },
-    "whisperModels": "Whisper モデル"
+    "whisperModels": "Whisper モデル",
+    "corti": {
+      "clientId": "クライアントID",
+      "clientSecret": "クライアントシークレット",
+      "apiKey": "API キー",
+      "environment": "データリージョン",
+      "tenant": "テナント"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
+      "docsLink": "ドキュメントを見る"
+    }
   },
   "hooks": {
     "audioRecording": {
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
-        "dailyLimitReached": "1 日の上限に達しました"
+        "agentUnavailable": "エージェントを利用できません",
+        "screenContextSkipped": "画面コンテキストをスキップしました",
+        "dailyLimitReached": "1 日の上限に達しました",
+        "providerRateLimited": "プロバイダーのレート制限"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -448,10 +588,43 @@
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
       },
+      "micDisconnected": {
+        "title": "マイクが切断されました",
+        "description": "録音は継続中です。マイクが利用可能になると自動的に再開されます。",
+        "meetingDescription": "ミーティングはシステム音声の録音を継続しており、マイクの録音は自動的に再開されます。"
+      },
+      "micRestored": {
+        "title": "マイクが復旧しました",
+        "description": "音声の録音を再開しました。"
+      },
+      "partialTranscription": {
+        "title": "部分的な文字起こし",
+        "description": "録音の一部を文字起こしできませんでした。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
-        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。"
+        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
+        "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+        "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
+        "agentReasoningFailed": "ボイスエージェントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
+        "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
+        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。"
+      },
+      "translationFallback": {
+        "unreachableTitle": "翻訳を利用できません",
+        "unreachableDescription": "口述内容は翻訳されずに貼り付けられました。翻訳設定を確認してください。",
+        "failedTitle": "翻訳に失敗しました",
+        "failedDescription": "元のテキストが貼り付けられました。履歴から再試行できます。"
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "選択範囲の編集を適用できませんでした",
+        "changed": "処理中に選択したテキストまたは対象アプリが変更されました。置換は行われていません。",
+        "expired": "選択範囲の編集が期限切れになりました。テキストを選択し直して再試行してください。",
+        "pasteFailed": "OpenWhispr は編集を生成しましたが、選択したテキストを置換できませんでした。",
+        "unavailable": "OpenWhispr は選択したテキストを安全に読み取れませんでした。アクセシビリティまたは入力自動化の権限を確認してください。",
+        "tooLarge": "選択範囲が大きすぎます。6,000文字以内を選択してください。",
+        "reasoningFailed": "AI は選択範囲の編集を完了できませんでした。元のテキストは変更されていません。"
       }
     },
     "clipboard": {
@@ -633,6 +806,15 @@
       "welcomeBack": "おかえりなさい",
       "welcomeBackName": "おかえりなさい、{{name}} さん"
     },
+    "sso": {
+      "continueWithSSO": "SSO でサインイン",
+      "emailRequired": "SSO を使用するには勤務先のメールアドレスを入力してください。",
+      "failed": "シングルサインオンに失敗しました。もう一度お試しください。",
+      "companySignInTitle": "会社のサインインを使用",
+      "requiredDescription": "{{domain}} では OpenWhispr に SSO が必須です。",
+      "availableDescription": "{{domain}} のアカウントは会社の SSO に対応しています。",
+      "useEmailInstead": "メールアドレスとパスワードを使用"
+    },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
       "continueWithApple": "Apple で続ける",
@@ -721,7 +903,8 @@
     "resendIn": "{{seconds}} 秒後に再送信可能",
     "verifiedDescription": "アカウントの設定が完了しました。",
     "verifiedTitle": "メール確認完了",
-    "waiting": "確認を待っています..."
+    "waiting": "確認を待っています...",
+    "backToSignIn": "サインインに戻る"
   },
   "errorBoundary": {
     "description": "予期しないエラーが発生しました。再読み込みしてもう一度お試しください。",
@@ -805,7 +988,10 @@
     "pressAnyKeyMac": "任意のキーまたは ⌘⇧K を押してください",
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
-    "tryShortcutMac": "⌘⇧K をお試しください"
+    "tryShortcutMac": "⌘⇧K をお試しください",
+    "remove": "ホットキーを削除",
+    "addAnother": "ホットキーをもう1つ追加",
+    "duplicate": "すでに追加されています"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
@@ -826,7 +1012,18 @@
     "selectPlaceholder": "マイクを選択",
     "systemDefault": "システムデフォルト",
     "unknownDevice": "不明なデバイス",
-    "using": "使用中: {{device}}"
+    "using": "使用中: {{device}}",
+    "warmHold": {
+      "label": "マイクをウォーム状態に保つ",
+      "description": "ディクテーション終了後もマイクを短時間開いたままにし、次回を冒頭の欠落なくすぐに開始できるようにします",
+      "privacyNote": "マイクを保持している間は、システムのマイク使用中インジケーターが点灯したままになります。ディクテーションの合間に録音は行われません。",
+      "options": {
+        "0": "オフ",
+        "10": "10秒",
+        "60": "1分",
+        "900": "15分"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "システム機能を確認中...",
@@ -902,15 +1099,23 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "プロバイダー",
       "run": "テスト実行",
-      "customEndpoint": "カスタムエンドポイント"
+      "customEndpoint": "カスタムエンドポイント",
+      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。",
+      "translateHint": "テキストは{{language}}に翻訳されます",
+      "translation": "翻訳",
+      "translationDisabled": "このプロンプトをテストするには音声入力翻訳を有効にしてください",
+      "noTargetLanguage": "先に翻訳先の言語を選択してください",
+      "agentDisabled": "このプロンプトをテストするには音声エージェントを有効にしてください"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
       "defaultPrompt": "デフォルトプロンプト",
       "modified": "変更済み"
-    }
+    },
+    "defaultTestInputTranslate": "今日はいい天気ですね、散歩に行きませんか？"
   },
   "settingsModal": {
+    "managedByOrg": "一部の設定は組織によって管理されています。",
     "groups": {
       "account": "アカウント",
       "app": "アプリ",
@@ -951,13 +1156,35 @@
         "label": "システム"
       },
       "workspace": {
-        "label": "Espacio de trabajo",
-        "description": "Miembros, equipos, facturación y claves API"
+        "description": "メンバー、チームスペース、API キー",
+        "label": "ワークスペース"
       }
     },
     "title": "設定"
   },
   "settingsPage": {
+    "unifiedBilling": {
+      "workspaceTitle": "ワークスペースの請求",
+      "workspaceDescription": "各ワークスペースには独自のプラン、シート、請求管理者があります。",
+      "billableSeat": "あなたのシートは課金対象です",
+      "nonBillableSeat": "管理者専用アクセス · 有料シートなし",
+      "managedBy": "請求は {{owner}} が管理しています。",
+      "addSeat": "シートを追加",
+      "seatUpdated_one": "ワークスペースの容量を {{count}} シートに更新しました",
+      "seatUpdated_other": "ワークスペースの容量を {{count}} シートに更新しました",
+      "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
+      "businessWorkspaceOnly": "ワークスペースで利用可能",
+      "personalPlanTitle": "個人プラン",
+      "providedBy": "個人プラン: Free · 有料アクセスは {{workspaces}} から提供",
+      "confirmSeats": {
+        "title": "ワークスペースのシートを追加しますか？",
+        "description_one": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
+        "description_other": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
+        "newCapacity": "新しい容量",
+        "chargeToday": "本日の請求額",
+        "confirm": "シートを追加"
+      }
+    },
     "account": {
       "badges": {
         "free": "無料",
@@ -972,7 +1199,9 @@
         "couldNotOpenTitle": "請求を開けませんでした",
         "manageBilling": "請求を管理",
         "opening": "開いています...",
-        "updatePaymentMethod": "お支払い方法を更新"
+        "updatePaymentMethod": "お支払い方法を更新",
+        "contactOwnerTitle": "ワークスペースのオーナーにご連絡ください",
+        "contactOwnerDescription": "このワークスペースの請求を更新できるのはオーナーのみです。"
       },
       "checkout": {
         "couldNotOpenDescription": "購入ページを開く際に問題が発生しました。もう一度お試しください。",
@@ -1004,7 +1233,6 @@
         "business": "Business",
         "trial": "トライアル"
       },
-      "planTitle": "プラン",
       "pricing": {
         "title": "プラン",
         "billedYearly": "年払い",
@@ -1037,6 +1265,7 @@
             "無制限のクラウド文字起こし",
             "月20時間の会議録音",
             "デバイス間の同期",
+            "公開リンクでノートを共有",
             "個人APIアクセス",
             "すべてのアプリでMCP統合",
             "モバイルアプリ（iOS 近日公開）",
@@ -1047,14 +1276,16 @@
         },
         "business": {
           "name": "Business",
-          "monthlyPrice": "$20",
+          "monthlyPrice": "$16",
           "monthlyPeriod": "/月",
-          "annualPrice": "$200",
+          "annualPrice": "$160",
           "annualPeriod": "/年",
-          "annualEquivalent": "$16.67",
+          "annualEquivalent": "$13.33",
           "includesPrefix": "Pro の全機能 +",
           "badge": "一番人気",
           "features": [
+            "共有ノートのためのチームスペース",
+            "ワークスペースのロールとメンバー管理",
             "無制限の会議録音",
             "エージェントモード",
             "データとチャット",
@@ -1078,6 +1309,7 @@
           "cta": "営業に問い合わせる"
         },
         "currentPlan": "現在のプラン",
+        "coveredByWorkspace": "ワークスペースのプランに含まれています",
         "upgrade": "アップグレード",
         "downgrade": "ダウングレード",
         "planSwitched": "プランが正常に更新されました",
@@ -1133,6 +1365,44 @@
         "successDescription": "アカウントとすべてのデータが削除されました。アプリが再読み込みされます。",
         "failedTitle": "削除に失敗しました",
         "failedDescription": "アカウントの削除中にエラーが発生しました。ローカルデータが部分的に削除された可能性があります。もう一度お試しください。"
+      },
+      "profile": {
+        "name": {
+          "label": "表示名",
+          "placeholder": "お名前",
+          "save": "保存",
+          "saving": "保存中...",
+          "saved": "表示名を更新しました",
+          "error": "名前を更新できませんでした"
+        },
+        "password": {
+          "label": "パスワード",
+          "description": "サインインに使用するパスワードを変更します。",
+          "change": "パスワードを変更",
+          "dialogTitle": "パスワードを変更",
+          "dialogDescription": "現在のパスワードを入力し、新しいパスワードを設定してください。",
+          "currentLabel": "現在のパスワード",
+          "newLabel": "新しいパスワード",
+          "confirmLabel": "新しいパスワード（確認）",
+          "minLength": "パスワードは 8 文字以上にしてください",
+          "mismatch": "パスワードが一致しません",
+          "revokeOthers": "他のデバイスでサインアウト",
+          "submit": "パスワードを更新",
+          "saving": "更新中...",
+          "cancel": "キャンセル",
+          "saved": "パスワードを更新しました"
+        },
+        "errors": {
+          "invalidPassword": "現在のパスワードが正しくありません。",
+          "passwordTooShort": "パスワードは 8 文字以上にしてください。",
+          "passwordTooLong": "パスワードが長すぎます。",
+          "noPassword": "このアカウントにはパスワードが設定されていません。",
+          "generic": "問題が発生しました。もう一度お試しください。"
+        }
+      },
+      "planUnavailable": {
+        "title": "プランを取得できません",
+        "description": "現在プランを読み込めませんでした。ご利用の権限は変わりません。"
       }
     },
     "agentConfig": {
@@ -1144,7 +1414,7 @@
       },
       "examplesTitle": "例",
       "helper": "声に出して言いやすい短い名前を選びましょう",
-      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、AI はそのまま書き起こすのではなく、コンテンツの作成、テキストの整形、質問への回答などのコマンドを実行します。",
+      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、AI がコマンドを実行します。テキストが選択されている場合、そのテキストは設定済みのボイスエージェントモデルに送信され、結果で安全に置き換えられます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
@@ -1152,7 +1422,7 @@
       "title": "音声エージェント",
       "examples": {
         "formalEmail": "Hey {{agentName}}、予算についてフォーマルなメールを書いて",
-        "professional": "Hey {{agentName}}、これをもっとプロフェッショナルにして",
+        "professional": "テキストを選択してから話しかけます：Hey {{agentName}}、これをもっとプロフェッショナルにして",
         "bulletPoints": "Hey {{agentName}}、これを箇条書きに変換して"
       }
     },
@@ -1202,6 +1472,15 @@
           "title": "エンタープライズ",
           "description": "組織のクラウドアカウントを使用しています。"
         }
+      },
+      "managedEnterprise": {
+        "errorTitle": "マネージド エンタープライズ AI に対応が必要です",
+        "title": "組織によって管理されています",
+        "description": "サインインすると短期間のアクセスが自動的に付与されます。クラウドキーや CLI の設定は不要です。",
+        "usePersonalSetup": "個人の設定を使用",
+        "availableTitle": "組織の設定が利用できます",
+        "availableDescription": "認証情報を管理せずに {{provider}} を使用できます。",
+        "useManaged": "マネージドを使用"
       }
     },
     "developer": {
@@ -1285,12 +1564,14 @@
         "linuxPttPermissionDescription": "次のコマンドを実行してログアウト/ログインしてください：sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "長押しして話すには設定が必要です",
         "linuxPttSetupDescription": "キーボード入力デバイスへのアクセス権が必要です。",
-        "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。"
+        "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。",
+        "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
+        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。"
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
         "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
-        "clear": "ホットキーを削除",
         "layoutLabel": "ホットキーで起動したときに開く:",
         "layoutFullWidth": "全幅",
         "layoutSidePanel": "サイドパネル"
@@ -1301,6 +1582,10 @@
         "resetToDefault": "{{hotkey}}にリセット",
         "emptyNotificationTitle": "貼り付ける内容がありません",
         "emptyNotificationBody": "まず文字起こしを録音してから、最後の文字起こしを貼り付けるショートカットを押してください。"
+      },
+      "voiceAgentHotkey": {
+        "title": "ボイスエージェントホットキー",
+        "description": "話しかけるだけ — 選択中のテキストはその場で編集され、選択がなければエージェントがカーソル位置に入力します"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -1334,11 +1619,16 @@
       },
       "startup": {
         "launchAtLogin": "ログイン時に起動",
-        "launchAtLoginDescription": "ログイン時に OpenWhispr を自動的に起動",
+        "launchAtLoginDescription": "ログイン時に OpenWhispr をバックグラウンドで起動します",
         "title": "起動設定",
         "description": "OpenWhispr の起動時の動作を制御",
         "startMinimized": "最小化で起動",
-        "startMinimizedDescription": "コントロールパネルウィンドウを表示せずに起動"
+        "startMinimizedDescription": "コントロールパネルウィンドウを表示せずに起動",
+        "needsApproval": {
+          "title": "システム設定での許可が必要です",
+          "description": "macOS は OpenWhispr をログイン項目として登録しましたが、「ログイン項目」での許可を待っています。",
+          "action": "ログイン項目を開く"
+        }
       },
       "waylandPaste": {
         "title": "Wayland 貼り付け設定",
@@ -1399,7 +1689,16 @@
             "step1Title": "xclipをインストール"
           }
         },
-        "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）"
+        "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）",
+        "nixos": {
+          "intro": "NixOSをお使いです。自動貼り付けにはydotoolと/dev/uinputへのアクセスが必要で、NixOSでは宣言的に設定できます。",
+          "detected": "検出済み",
+          "manualTitle": "設定に以下を追加してください",
+          "manualDesc": "ご自身で設定してからリビルドしてください。",
+          "flakeTitle": "flakeからインストールする場合",
+          "flakeDesc": "flakeからOpenWhisprをインストールする場合、programs.openwhispr.enableを有効にするとydotool、uinputモジュール、グループのメンバーシップが自動で設定されます。",
+          "rebuildNote": "sudo nixos-rebuild switchを実行し、グループの変更と/dev/uinputのルールを反映させるためにログアウト後に再ログインしてください。<you>はあなたのユーザー名に置き換えてください。"
+        }
       },
       "updates": {
         "badges": {
@@ -1456,6 +1755,10 @@
         "title": "アップデート",
         "versionPlaceholder": "—",
         "whatsNew": "v{{version}} の新機能"
+      },
+      "translationHotkey": {
+        "title": "翻訳ホットキー",
+        "description": "どの言語で話しても、貼り付けられるテキストは翻訳済みになります"
       }
     },
     "permissions": {
@@ -1483,6 +1786,7 @@
     "privacy": {
       "cloudBackup": "クラウドバックアップ",
       "cloudBackupDescription": "文字起こしとノートをクラウドにバックアップして、すべてのデバイスからシームレスにアクセスできます。",
+      "cloudBackupTeamCaveat": "チームスペース内のノートと共有したノートは、この設定に関係なく常に同期されます。",
       "cloudNotesMigration": "ノートをバックアップ中… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "すべてのノートがバックアップされました",
       "description": "デバイスからのデータ送信を管理します。初期設定ではすべてオフです。",
@@ -1491,6 +1795,9 @@
       "usageAnalyticsDescription": "匿名のパフォーマンスデータを共有して OpenWhispr の改善にご協力ください。文字起こしの内容は送信されません。タイミングとエラーデータのみです。",
       "dataRetention": "データ保持",
       "dataRetentionDescription": "文字起こしと音声を履歴にローカル保存します。無効にすると、文字起こしは貼り付けられますが保存されません。",
+      "transcriptRetention": "文字起こしの保持",
+      "transcriptRetentionDescription": "保存された文字起こしとその音声を、この期間の経過後に自動的に削除します。",
+      "transcriptRetentionForever": "無期限",
       "hoursAgo": "{{count}}時間前",
       "justNow": "たった今",
       "lastSynced": "最終同期 {{time}}",
@@ -1498,13 +1805,16 @@
       "audioRetention": "音声の保持",
       "audioRetentionDescription": "再文字起こしやダウンロードのために音声録音をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。",
       "audioRetentionDisabled": "無効",
-      "audioRetentionDays": "{{count}}日",
+      "retentionDays_one": "{{count}}日",
+      "retentionDays_other": "{{count}}日",
       "audioStorageUsage": "ストレージ使用量",
       "audioStorageUsageDescription": "このデバイスに保存された音声ファイル",
       "audioStorageFiles": "{{count}}ファイル、{{size}}",
       "audioStorageEmpty": "保存された音声ファイルはありません",
       "clearAllAudio": "すべての音声を削除",
-      "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。"
+      "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。",
+      "saveDiscarded": "破棄したディクテーションを保存",
+      "saveDiscardedDescription": "Escape でディクテーションをキャンセルしたとき、音声を履歴に残して後で復元できるようにします。データと音声の保持を有効にする必要があります。"
     },
     "prompts": {
       "description": "テキスト補正と指示検出を行う統合システムプロンプトの表示、カスタマイズ、テスト",
@@ -1515,7 +1825,8 @@
       "description": "ディクテーションとノート録音用のエンジンを選択",
       "tabs": {
         "dictation": "ディクテーション",
-        "noteRecording": "ノート録音"
+        "noteRecording": "ノート録音",
+        "upload": "音声のアップロード"
       },
       "selfHostedStreamingNote": "ストリーミング文字起こしに対応したサーバーが必要です。"
     },
@@ -1526,7 +1837,8 @@
         "dictationCleanup": "ディクテーションのクリーンアップ",
         "dictationAgent": "Voice Agent",
         "noteFormatting": "ノートのフォーマット",
-        "chatIntelligence": "チャット"
+        "chatIntelligence": "チャット",
+        "dictationTranslation": "翻訳"
       }
     },
     "noteFormatting": {
@@ -1641,97 +1953,213 @@
       "apiKeyOptional": "API キー（任意）"
     },
     "workspace": {
-      "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "title": "ワークスペース",
+      "description": "チームメイトとのコラボレーション、ノートの共有、ワークスペースへのアクセス管理を一括で行えます。",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
-        "create": "Crear espacio de trabajo"
+        "title": "最初のワークスペースを作成",
+        "description": "ワークスペースでは、チームメイトとのコラボレーションやノートの共有ができます。",
+        "create": "ワークスペースを作成"
+      },
+      "loadError": {
+        "title": "ワークスペースを読み込めませんでした",
+        "description": "接続を確認して、もう一度お試しください。",
+        "retry": "再試行"
       },
       "tab": {
-        "general": "General",
-        "members": "Miembros",
-        "teams": "Equipos",
-        "billing": "Facturación",
-        "developer": "Desarrollador"
+        "general": "一般",
+        "members": "メンバー",
+        "teams": "チーム",
+        "developer": "開発者"
       },
       "role": {
-        "owner": "Propietario",
-        "admin": "Administrador",
-        "member": "Miembro"
+        "owner": "オーナー",
+        "admin": "管理者",
+        "member": "メンバー"
       },
       "general": {
-        "nameLabel": "Nombre del espacio de trabajo",
-        "slugLabel": "Slug",
-        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
-        "saved": "Espacio de trabajo actualizado",
-        "dangerTitle": "Eliminar espacio de trabajo",
-        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
-        "delete": "Eliminar espacio de trabajo",
-        "confirmTitle": "¿Eliminar {{name}}?",
-        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+        "nameLabel": "ワークスペース名",
+        "slugLabel": "短縮名",
+        "slugHint": "URL や招待リンクに使用されます。小文字の英字、数字、ハイフンのみ使用できます。",
+        "slugInvalid": "小文字の英字、数字、ハイフンのみ使用できます。",
+        "saved": "ワークスペースを更新しました",
+        "dangerTitle": "ワークスペースを削除",
+        "dangerDescription": "共有されているノート、フォルダ、連携がすべて削除されます。この操作は取り消せません。",
+        "delete": "ワークスペースを削除",
+        "confirmTitle": "{{name}} を削除しますか？",
+        "confirmDescription": "サブスクリプションがキャンセルされ、ワークスペースのすべてのデータが完全に削除されます。",
+        "deleting": "削除中…",
+        "deleted": "ワークスペースを削除しました",
+        "leaveTitle": "ワークスペースから退出",
+        "leaveDescription": "このワークスペースと共有ノートにアクセスできなくなります。",
+        "leave": "ワークスペースから退出",
+        "leaving": "退出中…",
+        "leaveConfirm": {
+          "title": "{{name}} から退出しますか？",
+          "description": "すぐにアクセスできなくなります。管理者が再度招待できます。"
+        },
+        "left": "{{name}} から退出しました"
       },
       "members": {
-        "title": "Miembros",
-        "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
-        "roleUpdated": "Rol actualizado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
-        "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo"
+        "title": "メンバー",
+        "description": "{{seats}} シート中 {{count}} シートを使用中。",
+        "invite": "招待",
+        "empty": "まだメンバーがいません。",
+        "loadError": "メンバーを読み込めませんでした。",
+        "roleUpdated": "役割を更新しました",
+        "removed": "{{name}} を削除しました",
+        "promote": "管理者にする",
+        "demote": "メンバーにする",
+        "transferOwnership": "オーナー権限を譲渡",
+        "remove": "ワークスペースから削除",
+        "removeConfirm": {
+          "title": "このメンバーを削除しますか？",
+          "description": "{{name}} はすぐに {{workspace}} にアクセスできなくなります。"
+        },
+        "transferConfirm": {
+          "title": "オーナー権限を譲渡しますか？",
+          "description": "{{name}} が {{workspace}} のオーナーになります。あなたの役割は管理者に変わり、元に戻せるのは新しいオーナーのみです。"
+        }
       },
-      "invites": {
-        "title": "Invitaciones pendientes",
-        "resend": "Reenviar",
-        "revoke": "Revocar",
-        "resent": "Invitación reenviada"
+      "joinRequests": {
+        "title": "参加リクエスト",
+        "approve": "承認",
+        "deny": "却下",
+        "approved": "{{name}} がワークスペースに参加しました",
+        "denied": "リクエストを却下しました",
+        "errorTitle": "リクエストを更新できませんでした"
       },
       "teams": {
-        "title": "Equipos",
-        "description": "Agrupa miembros para compartir con alcance limitado.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
-        "descriptionLabel": "Descripción",
-        "memberCount": "{{count}} miembros"
+        "title": "チーム",
+        "description": "チームスペースへのアクセスを付与するワークスペースメンバーのグループ。",
+        "new": "新しいチーム",
+        "empty": "チームはまだありません。",
+        "createFirst": "最初のチームを作成",
+        "addMembersLabel": "メンバーを追加",
+        "createTitle": "チームを作成",
+        "nameLabel": "チーム名",
+        "memberCount_one": "{{count}}人のメンバー",
+        "memberCount_other": "{{count}}人のメンバー",
+        "membersButton": "メンバー",
+        "grantsAccessToSpaces_one": "{{count}} 件のスペースへのアクセスを付与しています",
+        "grantsAccessToSpaces_other": "{{count}} 件のスペースへのアクセスを付与しています",
+        "couldNotCreate": "チームを作成できませんでした",
+        "created": "{{team}} を作成しました",
+        "deleted": "{{team}} を削除しました",
+        "deleteConfirmTitle": "{{team}} を削除しますか？",
+        "deleteConfirmDescription": "チームをアーカイブします。このチームが付与していたアクセスは失われます。",
+        "deleteConfirmSpaceAccess_one": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmSpaceAccess_other": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "members": {
+          "title": "{{team}} のメンバー",
+          "removeConfirm": "{{name}} を {{team}} から外しますか？",
+          "leave": "チームから退出",
+          "leftTeam": "{{team}} から退出しました",
+          "leaveConfirm": "{{team}} から退出しますか？",
+          "leaveConfirmDescription": "他のチームに含まれていない限り、このチームが付与するスペースへのアクセスを失います。"
+        }
+      },
+      "invites": {
+        "title": "保留中の招待",
+        "expiresIn_one": "有効期限まであと{{count}}日",
+        "expiresIn_other": "有効期限まであと{{count}}日",
+        "expired": "期限切れ",
+        "loadError": "招待を読み込めませんでした。",
+        "resend": "再送信",
+        "resending": "再送信中…",
+        "revoke": "取り消す",
+        "resent": "招待を再送信しました",
+        "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。",
+        "revoked": "招待を取り消しました",
+        "revokeFailed": "招待を取り消せませんでした",
+        "revokeConfirm": {
+          "title": "この招待を取り消しますか？",
+          "description": "{{email}} への招待リンクが無効になります。"
+        }
       },
       "billing": {
-        "title": "Facturación",
-        "description": "Plan, asientos y pago.",
-        "plan": "Plan",
-        "seats": "Asientos",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción"
+        "plan": "プラン",
+        "seats": "シート",
+        "ownerOnly": "サブスクリプションを管理できるのはワークスペースのオーナーのみです。",
+        "nextInvoice": "次回の請求",
+        "manageStripe": "Stripe で管理",
+        "startSubscription": "サブスクリプションを開始",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "Free",
+          "enterprise": "Enterprise"
+        },
+        "status": {
+          "active": "有効",
+          "trialing": "トライアル中",
+          "past_due": "支払い期限超過",
+          "canceled": "キャンセル済み",
+          "incomplete": "未完了",
+          "unpaid": "未払い"
+        }
       },
       "developer": {
-        "title": "Claves API",
-        "description": "Acceso programático limitado a este espacio de trabajo.",
-        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
-        "new": "Nueva clave",
-        "create": "Crear clave",
-        "createTitle": "Crear clave API",
-        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
-        "nameLabel": "Nombre de la clave",
-        "namePlaceholder": "Integración de producción",
-        "revoke": "Revocar clave",
-        "lastUsed": "Último uso {{date}}",
-        "neverUsed": "Nunca utilizada",
-        "keyCreatedTitle": "Clave API creada",
-        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
+        "title": "API キー",
+        "description": "このワークスペースに限定されたプログラムからのアクセス。",
+        "empty": "まだ API キーがありません。このワークスペースと連携するには作成してください。",
+        "loadError": "APIキーを読み込めませんでした。",
+        "new": "新規キー",
+        "create": "キーを作成",
+        "createTitle": "API キーを作成",
+        "createDescription": "このキーに必要な権限を選択してください。いつでも取り消せます。",
+        "nameLabel": "キー名",
+        "namePlaceholder": "本番環境の連携",
+        "revoke": "キーを取り消す",
+        "revoked": "キー {{name}} を取り消しました",
+        "lastUsed": "最終使用: {{date}}",
+        "neverUsed": "未使用",
+        "keyCreatedTitle": "API キーを作成しました",
+        "keyCreatedDescription": "このキーを今すぐコピーしてください。後で再表示することはできません。",
+        "revokeConfirm": {
+          "title": "このキーを取り消しますか？",
+          "description": "{{name}} はすぐに使用できなくなります。このキーを使用している連携は失敗するようになります。"
+        },
+        "scopes": {
+          "notes": {
+            "title": "ノート",
+            "read": "ノートの読み取り",
+            "write": "ノートの書き込み"
+          },
+          "folders": {
+            "title": "フォルダ",
+            "read": "フォルダの読み取り",
+            "write": "フォルダの書き込み"
+          },
+          "transcriptions": {
+            "title": "文字起こし",
+            "read": "文字起こしの読み取り"
+          },
+          "members": {
+            "title": "メンバー",
+            "read": "メンバーの読み取り",
+            "write": "メンバーの管理"
+          },
+          "billing": {
+            "title": "請求",
+            "read": "請求の読み取り"
+          },
+          "full": {
+            "title": "フルアクセス",
+            "admin": "ワークスペース管理者"
+          }
+        }
       }
     }
   },
   "models": {
     "learnMore": "詳細を見る",
+    "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
-        "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）"
+        "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
+        "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron の英語ストリーミング ASR",
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron の多言語ストリーミング ASR、自動言語検出対応（15 言語）"
       },
       "whisper": {
         "tiny": "最速、品質は低め",
@@ -1747,7 +2175,10 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
-        "mistral_voxtral_mini_latest": "高速多言語文字起こし"
+        "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "corti_transcribe": "臨床グレードの医療文字起こし",
+        "xai_grok_stt": "xAIによる高精度音声認識",
+        "tinfoil_voxtral": "検証可能なプライベート文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -1756,30 +2187,52 @@
         "openai_gpt_4_1": "強力なベースライン、100 万トークンコンテキスト",
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "バランスの取れた性能",
+        "anthropic_claude_fable_5": "Anthropic の最も高性能なモデル、Mythos クラス",
+        "anthropic_claude_sonnet_5": "低コストで高速かつ高性能なエージェントモデル",
+        "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
+        "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "gemini_gemini_3_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
+        "gemini_gemini_3_5_flash": "最新の高速で高性能な Gemini モデル",
+        "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
+        "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
+        "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
         "groq_qwen_qwen3_32b": "強力な推論モデル、131K コンテキスト",
         "groq_openai_gpt_oss_120b": "OpenAI のオープンソースフラッグシップ、500 T/秒",
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
         "groq_llama_3_3_70b_versatile": "Meta の汎用モデル、280 T/秒",
         "groq_llama_3_1_8b_instant": "超高速 560 T/秒、131K コンテキスト",
-        "groq_llama_4_scout": "Meta の効率的マルチモーダル、750 T/秒",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト",
+        "openai_gpt_5_6_sol": "複雑なコーディングと研究のためのフラッグシップ GPT-5.6",
+        "openai_gpt_5_6_terra": "日常業務向けのバランス型 GPT-5.6",
+        "openai_gpt_5_6_luna": "最速かつ最も低コストの GPT-5.6",
         "openai_gpt_5_5": "複雑な推論のためのフロンティアモデル",
-        "anthropic_claude_opus_4_7": "最も高性能な Claude モデル",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_5": "最も高性能な Opus モデル、100 万トークンコンテキスト",
+        "anthropic_claude_opus_4_8": "誠実さと信頼性を重視した強力な Opus モデル",
+        "anthropic_claude_opus_4_7": "高性能な Opus モデル",
+        "anthropic_claude_opus_4_6": "前世代の Opus、100 万トークンコンテキスト",
+        "anthropic_claude_opus_4_5": "旧世代の Opus モデル",
+        "tinfoil_deepseek_v4_pro": "セキュアエンクレーブ内のプライベート長文脈推論、800K コンテキスト",
+        "tinfoil_glm_5_2": "セキュアエンクレーブ内のプライベート・エージェント型エンジニアリングモデル、384K コンテキスト",
+        "tinfoil_kimi_k2_6": "プライベートな長期コーディング・マルチモーダルモデル、256K コンテキスト",
+        "tinfoil_gemma4_31b": "ツール呼び出し対応のプライベート多言語推論モデル、256K コンテキスト",
+        "tinfoil_gpt_oss_120b": "ツール使用対応のプライベート・オープンウェイト推論モデル、131K コンテキスト",
+        "tinfoil_llama3_3_70b": "ツール呼び出し対応のプライベート会話モデル、128K コンテキスト",
+        "corti_corti_s1_instant": "高速なヘルスケアモデル、推論トレースなし",
+        "corti_corti_s1": "推論対応の最も高性能な臨床モデル",
+        "corti_corti_s1_mini_instant": "コンパクトなヘルスケアモデル、最速かつ最も低コスト",
+        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいエージェントモードのタスクに最適です。",
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
-        "bedrock_claude_sonnet_4_6": "バランス型。エージェントモードの既定モデルに最適です。",
-        "bedrock_claude_opus_4_7": "最高性能。複雑なエージェントモードのタスクに最適です。",
-        "bedrock_nova_lite": "最も安価。AWS ネイティブで大量処理に最適です。",
+        "bedrock_claude_sonnet_5": "バランス型。エージェントモードの既定モデルに最適です。",
+        "bedrock_claude_opus_4_8": "最高性能。複雑なエージェントモードのタスクに最適です。",
+        "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
+        "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。エージェントモードに最適。",
+        "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -1805,11 +2258,20 @@
         "openai_oss_gpt_oss_20b_mxfp4": "一般消費者向けハードウェア用 OpenAI オープンウェイトモデル",
         "gemma_gemma_3_4b_it_q4_k_m": "Google のオープンウェイトモデル、速度と品質の優れたバランス",
         "gemma_gemma_4_31b_it_q4_k_m": "Google 最大の Gemma 4、最高品質",
+        "gemma_gemma_4_31b_it_qat_q4_0": "Google 公式の QAT ビルド、品質を保ちながら軽量",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "Google の MoE Gemma 4、4B アクティブパラメータで高速",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "Google 公式の QAT MoE ビルド、品質を保ちながら軽量",
         "gemma_gemma_4_e4b_it_q4_k_m": "Google の最新マルチモーダルモデル、高度な推論",
+        "gemma_gemma_4_e4b_it_qat_q4_0": "Google 公式の QAT ビルド、高度な推論をより小さく",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google のコンパクトな Gemma 4、高速で効率的",
+        "gemma_gemma_4_e2b_it_qat_q4_0": "Google 公式のコンパクトな QAT ビルド、品質を維持",
         "gemma_gemma_3_12b_it_q4_k_m": "Google の中型モデル、強力な推論",
-        "gemma_gemma_3_1b_it_q4_k_m": "超高速 Google モデル、短い口述のクリーンアップに最適"
+        "gemma_gemma_3_1b_it_q4_k_m": "超高速 Google モデル、短い口述のクリーンアップに最適",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AIの高効率オンデバイスモデル、優れた指示追従性",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AIのMoE、わずか1.5Bのアクティブパラメータで高品質",
+        "liquidai_lfm2_2_6b_q4_k_m": "より高品質なクリーンアップ向けのバランス型LFM2",
+        "liquidai_lfm2_5_350m_q8_0": "高速な口述クリーンアップ向けの超軽量モデル",
+        "liquidai_lfm2_5_230m_q8_0": "小型モデル、控えめなハードウェアでも即座にクリーンアップ"
       },
       "diarization": {
         "segmentation": "話者分離のための発話区間検出",
@@ -1818,10 +2280,141 @@
     }
   },
   "notes": {
+    "mutationErrors": {
+      "folderNameRequired": "フォルダ名を入力してください。",
+      "folderAlreadyExists": "同じ名前のフォルダが既に存在します。",
+      "folderNotFound": "そのフォルダが見つかりませんでした。",
+      "defaultFolderImmutable": "デフォルトフォルダは変更できません。",
+      "spaceNameRequired": "スペース名を入力してください。",
+      "spaceNotFound": "そのスペースが見つかりませんでした。",
+      "privateSpaceImmutable": "個人用スペースは変更できません。",
+      "generic": "変更を完了できませんでした。もう一度お試しください。"
+    },
     "sidebar": {
       "newNote": "新しいノート",
       "searchNotes": "ノートを検索",
       "actions": "アクション"
+    },
+    "spaces": {
+      "privateSpaces": "プライベートスペース",
+      "teamSpaces": "チームスペース",
+      "personal": "個人",
+      "privateTooltip": "パーソナルスペースはあなただけが見られます",
+      "newSpace": "新しいチームスペース",
+      "newSpaceInWorkspace": "{{workspace}} に新しいチームスペース",
+      "createTitle": "チームスペースを作成",
+      "createDescription": "ワークスペース内の共有エリアで、1つ以上のチームがアクセスできます。",
+      "nameLabel": "名前",
+      "emojiLabel": "絵文字",
+      "create": "作成",
+      "couldNotCreate": "スペースを作成できませんでした",
+      "created": "{{space}} を作成しました",
+      "rename": "名前を変更",
+      "changeEmoji": "絵文字を変更",
+      "couldNotRename": "スペースの名前を変更できませんでした",
+      "renamed": "{{space}} の名前を変更しました",
+      "deleteSpace": "スペースを削除",
+      "deleteConfirmTitle": "スペースを削除しますか？",
+      "deleteConfirmDescription": "{{space}}とそのすべてのフォルダとノートがこのデバイスから完全に削除されます。",
+      "deleteConfirmTeamDescription": "{{space}} を全員に対して削除します。チームは残りますが、メンバーはすべてのフォルダーとノートへのアクセスを失います。",
+      "deleteTypeName": "確認のため {{space}} と入力してください",
+      "couldNotDelete": "スペースを削除できませんでした",
+      "deleted": "{{space}} を削除しました",
+      "moveTo": "移動",
+      "moveToSpace": "スペースに移動…",
+      "searchSpaces": "スペースを検索...",
+      "noSpacesFound": "スペースが見つかりません",
+      "spaceRoot": "スペースのルート",
+      "moveConfirm": "移動",
+      "confirmMoveInTitle": "{{space}}に移動しますか？",
+      "confirmMoveIn": "{{space}}の全員がこのノートを表示・編集できるようになります。ノートは後からチームスペースの外に移動できません。",
+      "confirmMoveInFolder": "{{space}}の全員がこのフォルダとそのノートを表示・編集できるようになります。フォルダとノートは後からチームスペースの外に移動できません。",
+      "cantMoveOut": "ノートはチームスペースの外に移動できません。",
+      "cantMoveTeammate": "ノートを別のスペースに移動できるのは、所有者またはワークスペースの管理者のみです。",
+      "moved": "「{{title}}」を{{target}}に移動しました",
+      "couldNotMove": "フォルダを移動できませんでした",
+      "couldNotMoveNote": "ノートを移動できませんでした",
+      "folderNameTaken": "「{{name}}」を移動できませんでした。同じ名前のフォルダが既に存在します",
+      "undo": "元に戻す",
+      "emptySpace": "まだノートがありません。ここのノートは{{space}}の全員に表示されます。",
+      "emptyTeamHint": "共有されたスペースはここに表示されます。",
+      "noteCount_one": "{{count}} 件のノート",
+      "noteCount_other": "{{count}} 件のノート",
+      "accessRevoked": "{{space}} へのアクセス権がなくなりました",
+      "accessRevokedActiveNote": "{{space}} へのアクセス権がなくなりました — 「{{title}}」はこのデバイスでは利用できなくなりました",
+      "movedToPersonal": "{{space}} へのアクセス権がなくなったため、「{{title}}」は個人スペースに移動されました",
+      "updateDeniedNote": "「{{title}}」を変更する権限がありません — 未同期の編集内容は個人スペースにコピーとして保存されました",
+      "deleteDeniedNote": "「{{title}}」は削除されませんでした — 削除できるのはノートの所有者または管理者のみです",
+      "updateDeniedFolder": "「{{name}}」を変更する権限がありません — 未同期の作業内容は個人スペースに保存されました",
+      "deleteDeniedFolder": "「{{name}}」は削除されませんでした — スペースのフォルダを削除できるのは管理者のみです",
+      "conflictBanner": "このノートには新しいバージョンがあります。",
+      "conflictRefresh": "更新",
+      "conflictKeep": "編集を続ける",
+      "editedBy": "{{name}} が編集 · {{time}}",
+      "members": {
+        "addPeopleToTeam": "{{team}} にメンバーを追加",
+        "addedToTeam": "{{name}} を {{team}} に追加しました",
+        "removedFromTeam": "{{name}} を {{team}} から削除しました",
+        "roleUpdated": "役割を更新しました",
+        "you": "自分",
+        "addFailed": "{{total}}人中{{failed}}人を追加できませんでした",
+        "searchPlaceholder": "メンバーを検索…",
+        "noResults": "メンバーが見つかりません",
+        "roleAdmin": "管理者",
+        "roleMember": "メンバー",
+        "remove": "削除",
+        "removeConfirm": "{{name}} を {{space}} から削除しますか？",
+        "removeConfirmDescription": "このスペースのすべてのノートにアクセスできなくなります。",
+        "inviteFooter": "{{email}} をワークスペースに招待…",
+        "empty": "まだ誰も追加されていません"
+      },
+      "invitedTo_one": "{{count}} 件のチームスペースに参加します",
+      "invitedTo_other": "{{count}} 件のチームスペースに参加します",
+      "teamsMembers": {
+        "menu": "チームとメンバー…",
+        "title": "{{space}} のチームとメンバー",
+        "noTeams": "このスペースにアクセスできるチームはまだありません。ワークスペース管理者のみが閲覧できます。",
+        "addTeamLabel": "このスペースにチームを追加",
+        "chooseTeam": "チームを選択…",
+        "teamAdded": "{{team}} を {{space}} に追加しました",
+        "teamRemoved": "{{team}} を {{space}} から削除しました",
+        "removeTeamFromSpace": "スペースから外す",
+        "removeTeamConfirm": "{{team}} を {{space}} から外しますか？",
+        "removeTeamConfirmDescription": "他の割り当て済みチームに含まれていない限り、そのメンバーはこのスペースへのアクセスを失います。",
+        "lastTeamWarning": "このスペースにアクセスできる唯一のチームです。外すと、ワークスペース管理者のみがアクセスを保持します。",
+        "affectsOtherSpaces_one": "{{team}} への変更は、このチームがアクセスできる他 {{count}} 件のスペースにも適用されます。",
+        "affectsOtherSpaces_other": "{{team}} への変更は、このチームがアクセスできる他 {{count}} 件のスペースにも適用されます。",
+        "accessLabel": "スペースへのアクセス",
+        "accessAdmin": "管理者",
+        "accessMember": "メンバー",
+        "accessChanged": "{{team}} のアクセスを更新しました",
+        "accessHint": "{{team}} の管理者は、アクセスが「管理者」に設定されている場合のみこのスペースを管理できます。"
+      },
+      "teams": {
+        "assignLabel": "チーム",
+        "newTeam": "新しいチーム",
+        "newTeamNameLabel": "チーム名",
+        "loadError": "チームを読み込めませんでした。"
+      }
+    },
+    "structureIntro": {
+      "title": "ノートの保存場所",
+      "description": "OpenWhispr は個人的な考えと共同作業を分け、適切な人だけがノートを見られるようにします。",
+      "personal": {
+        "title": "個人スペース",
+        "description": "ここのフォルダーとノートは自分だけが見ることができます。"
+      },
+      "workspace": {
+        "title": "ワークスペース",
+        "description": "ワークスペースのメンバー、役割、チームスペースをまとめて管理します。"
+      },
+      "teamSpace": {
+        "title": "チームスペース",
+        "description": "ワークスペース内の共有エリア。1つ以上のチームがアクセスを付与します。"
+      },
+      "contents": "各スペースにはフォルダーとノートを作成できます。",
+      "done": "了解",
+      "reopen": "スペースの構成を確認"
     },
     "editor": {
       "transcribe": "文字起こし",
@@ -1893,7 +2486,8 @@
       },
       "errors": {
         "noModel": "AIモデルが選択されていません。設定で構成してください。",
-        "actionFailed": "アクションに失敗しました"
+        "actionFailed": "アクションに失敗しました",
+        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。"
       }
     },
     "empty": {
@@ -1929,6 +2523,7 @@
       "newNote": "新規ノート",
       "untitled": "無題",
       "untitledNote": "無題のノート",
+      "shared": "共有中",
       "timeNow": "たった今",
       "minutesAgo": "{{count}}分前",
       "hoursAgo": "{{count}}時間前",
@@ -1938,25 +2533,25 @@
       "title": "音声をアップロード",
       "using": "{{model}} を使用中",
       "dropOrBrowse": "音声ファイルをドロップまたはクリックして選択",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "ドロップしてアップロード",
       "transcribe": "文字起こし",
       "cancel": "キャンセル",
       "transcribingCloud": "クラウドで文字起こし中...",
       "transcribingLocal": "ローカルで文字起こし中...",
       "transcribingProvider": "{{provider}} で文字起こし中...",
+      "cancelTranscription": "文字起こしをキャンセル",
       "transcriptionComplete": "文字起こし完了",
+      "partialWarning": "音声の一部を文字起こしできませんでした。",
+      "partialWarningCount": "{{total}}個の音声セクションのうち{{failed}}個を文字起こしできませんでした。",
+      "chunkLossExceeded": "ネットワークの問題で音声の大部分が失われました。接続を確認してもう一度お試しください。",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
       "retry": "再試行",
       "startOver": "やり直す",
-      "transcriptionSettings": "文字起こし設定",
       "newFolder": "新しいフォルダ",
       "folderName": "フォルダ名",
       "create": "作成",
-      "setupTitle": "文字起こしを設定",
-      "setupDescription": "音声の文字起こし方法を選択してください。ライブディクテーションにも適用されます。",
-      "continue": "続ける",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "カスタム",
       "selectFolder": "フォルダを選択",
@@ -1977,16 +2572,53 @@
       "switchToCloudForLargeFiles": "このファイルを文字起こしするには OpenWhispr Cloud に切り替えてください。",
       "createAccount": "アカウント作成",
       "upgrade": "アップグレード",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "または",
+      "urlPlaceholder": "YouTubeまたは音声URLを貼り付け",
+      "urlDownloading": "音声をダウンロード中...",
+      "urlResolving": "URLを解析中...",
+      "urlInvalid": "無効なURLです。YouTubeリンクまたは音声ファイルの直接URLを貼り付けてください。",
+      "urlVideoUnavailable": "この動画は利用できません。非公開、削除済み、または地域制限されている可能性があります。",
+      "urlPlaylistNotSupported": "プレイリストには対応していません。個別の動画URLを貼り付けてください。",
+      "urlContentTypeInvalid": "このURLは音声または動画ファイルを指していません。",
+      "urlDownloadFailed": "ダウンロードに失敗しました。URLを確認してもう一度お試しください。",
+      "urlCancelDownload": "ダウンロードをキャンセル",
+      "addToQueue": "キューに追加",
+      "queueProgress": "{{completed}}/{{total}} 完了",
+      "cancelAll": "すべてキャンセル",
+      "clearQueue": "クリア",
+      "pasteUrls": "URLを貼り付け（1行に1つ）",
+      "speakerDetection": "話者検出",
+      "speakerDetectionDescription": "音声内の異なる話者を識別",
+      "numSpeakersPlaceholder": "自動検出",
+      "numSpeakersLabel": "話者の人数",
+      "numSpeakersHint": "正確な人数を設定すると、特に長い録音で精度が向上します。",
+      "downloadingModels": "モデルをダウンロード中...",
+      "openaiDiarizeNote": "話者検出をサポートする唯一のOpenAIモデルであるgpt-4o-transcribe-diarizeに切り替わります。選択したモデルとコストが異なる場合があります。",
+      "mistralDiarizeNote": "Voxtralでの話者検出は追加料金なしで利用できます。",
+      "groqDiarizeNote": "Groqでは話者検出を利用できません。代わりにローカルダイアライゼーションが使用されます。",
+      "batchCancelled": "キャンセル済み",
+      "batchTranscriptionFailed": "文字起こしに失敗しました",
+      "batchSaveFailed": "ノートの保存に失敗しました",
+      "batchUnknownError": "不明なエラー",
+      "removeFromQueue": "キューから削除",
+      "diarizationRunsLocally": "話者検出はお使いのデバイス上でローカルに実行されます。",
+      "urlSubmit": "リンクを追加",
+      "urlsSkipped": "追加できなかったリンクがあります（{{n}}件）",
+      "queueFailed": "{{n}}件失敗",
+      "urlFileTooLarge": "ファイルが大きすぎてダウンロードできません。最大サイズは500 MBです。",
+      "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。",
+      "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か無効です。設定から更新してください。"
     },
     "meeting": {
       "title": "議事録",
       "description": "文字起こしと構造化されたサマリー",
-      "comingSoon": "近日公開",
-      "back": "戻る"
+      "back": "戻る",
+      "restrictedByOrg": "会議の文字起こしは組織によって制限されています。"
     },
     "meetingPill": {
-      "returnToNote": "録音に戻る"
+      "returnToNote": "録音に戻る",
+      "waitingForMicrophone": "マイクを待っています"
     },
     "onboarding": {
       "llm": {
@@ -2020,6 +2652,7 @@
     "speaker": {
       "you": "あなた",
       "them": "相手",
+      "unknown": "不明な話者",
       "label": "話者 {{n}}",
       "identifyingSpeakers": "話者を識別中...",
       "liveAccuracyHint": "話者を識別中です。通話終了後にラベルの精度が向上します。",
@@ -2058,21 +2691,100 @@
       "addContact": "連絡先を追加",
       "save": "保存",
       "cancel": "キャンセル"
+    },
+    "overview": {
+      "subtitle": {
+        "team": "このスペースの全員がノートを閲覧できます。",
+        "private": "このノートはあなただけが閲覧できます。"
+      },
+      "meta": {
+        "folders_one": "{{count}} 件のフォルダ",
+        "folders_other": "{{count}} 件のフォルダ",
+        "members_one": "{{count}} 人のメンバー",
+        "members_other": "{{count}} 人のメンバー"
+      },
+      "banner": {
+        "title": {
+          "team": "チームスペース",
+          "private": "プライベートスペース"
+        },
+        "body": {
+          "team": "会議のノートをチームと共有しましょう。ユーザーインタビュー、営業の通話、チームミーティングを追加して、全員が最新情報を把握できます。",
+          "private": "会議のノート、アイデア、下書きを一か所にまとめて、このスペースの内容について何でも質問できます。"
+        },
+        "dismiss": "閉じる"
+      },
+      "ask": {
+        "placeholder": "何でも質問",
+        "chips": {
+          "catchUp": "最新情報をまとめて",
+          "keyDecisions": "重要な決定事項を一覧に",
+          "inFlight": "進行中のプロジェクトを表示"
+        }
+      },
+      "invite": "招待",
+      "list": {
+        "empty": "まだノートがありません"
+      },
+      "author": {
+        "you": "自分"
+      }
     }
   },
   "dictionary": {
     "addWord": "単語を追加",
     "removeWord": "{{word}} を削除",
     "clearAll": "すべてクリア",
-    "howItWorks": "仕組み",
-    "howItWorksDetail": "追加した単語は AI プロンプトに含まれ、文字起こし時にこれらの用語を正確に認識・保持します。",
-    "autoManaged": "自動管理",
-    "inputHint": "Enter で追加",
-    "title": "カスタム辞書",
-    "description": "AIに語彙を学習させましょう — 名前、専門用語、見落とされがちな表現など",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
-    "addPlaceholder": "単語やフレーズを追加..."
+    "addPlaceholder": "カンマ区切りで単語を追加 — OpenWhispr、Supabase、ARR など",
+    "add": "追加",
+    "importWords": "単語をインポート",
+    "importPlaceholder": "カンマまたは改行区切りの単語を貼り付け...",
+    "separateWithCommas": "1行に1語、またはカンマ区切り",
+    "wordsReady_other": "{{count}} 個の単語が準備完了",
+    "import": "インポート",
+    "yourDictionary": "あなたの辞書",
+    "exportDictionary": "辞書をエクスポート",
+    "exportFailed": "エクスポートに失敗しました",
+    "editWord": "{{word}} を編集",
+    "wordsReady_one": "{{count}} 個の単語が準備完了",
+    "noMatches": "一致なし — Enter キーで「{{word}}」を追加",
+    "tabDictionary": "辞書",
+    "tabSnippets": "スニペット",
+    "snippets": {
+      "title": "スニペット",
+      "edit": "{{trigger}}を編集",
+      "remove": "{{trigger}}を削除",
+      "editTitle": "スニペットを編集",
+      "dialogDescription": "トリガーを話すと、保存したテキストに置き換わります。",
+      "triggerLabel": "トリガー",
+      "triggerPlaceholder": "例: カレンダーリンク",
+      "replacementLabel": "置換テキスト",
+      "replacementPlaceholder": "トリガーを話したときに挿入されるテキスト…",
+      "create": "スニペットを作成",
+      "duplicate": "このトリガーのスニペットは既に存在します",
+      "emptyTitle": "同じことを言うのは",
+      "emptyTitleAccent": "一度だけ",
+      "emptyDescription": "トリガーワードを話すと、OpenWhisprが保存した内容に置き換えます。URL、自己紹介、署名、プロンプトなど。",
+      "new": "新規スニペット",
+      "examples": {
+        "linkedinTrigger": "私のLinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "書き直しプロンプト",
+        "rewriteText": "これをより簡潔でプロフェッショナルに書き直して",
+        "introTrigger": "挨拶メール",
+        "introText": "こんにちは、今週どこかでお話しできれば嬉しいです…",
+        "signoffTrigger": "署名",
+        "signoffText": "よろしくお願いします。Alex · alex@example.com"
+      },
+      "addPlaceholder": "トリガーフレーズを追加 — 「カレンダーリンク」「署名」など"
+    },
+    "emptyTitle": "辞書は空です",
+    "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
+    "addFirstWord": "最初の単語を追加",
+    "importList": "リストをインポート",
+    "agentDefault": "デフォルトで追加済み"
   },
   "referral": {
     "title": "紹介して特典をゲット",
@@ -2164,8 +2876,8 @@
     "defaultUser": "ユーザー",
     "notSignedIn": "未サインイン",
     "chat": "チャット",
-    "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo"
+    "collapse": "サイドバーを折りたたむ",
+    "expand": "サイドバーを展開"
   },
   "chat": {
     "newChat": "新しいチャット",
@@ -2188,26 +2900,6 @@
     "searchTitle": "会話を検索",
     "searchDescription": "すべての会話を検索",
     "newChatEmpty": "ノートや文字起こし、その他なんでも聞いてください"
-  },
-  "usage": {
-    "approachingLimit": "週間制限に近づいています",
-    "approachingLimitDescription": "今週の無料枠 {{limit}} 語のうち {{wordsUsed}} 語を使用しました。",
-    "yourPlan": "現在のプラン",
-    "trial": "トライアル（残り{{days}}日）",
-    "trial_other": "トライアル（残り{{days}}日）",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "トライアル期間中は無制限で文字起こし可能",
-    "unlimited": "無制限の文字起こし",
-    "manageSubscription": "サブスクリプションを管理",
-    "weeklyUsage": "週間使用量",
-    "limitReached": "制限に達しました",
-    "free": "無料",
-    "wordsRemaining": "残り{{remaining}}語",
-    "rollingLimit": "週間制限（ローリング方式）",
-    "upgradeToPro": "Proにアップグレード",
-    "useYourOwnKey": "自分のAPIキーを使用",
-    "upgradeUnlimited": "Proにアップグレード — 無制限の文字起こし"
   },
   "support": {
     "documentation": "ドキュメント",
@@ -2259,13 +2951,26 @@
       "accessibilityMissing": {
         "title": "アクセシビリティの許可が必要です",
         "description": "OpenWhispr がホットキーの検出とテキストの貼り付けを行うには、アクセシビリティの許可が必要です。コントロールパネルで有効にしてください。"
+      },
+      "gpuFallback": {
+        "title": "GPU アクセラレーションを利用できません",
+        "description": "文字起こしは代わりに CPU を使用しています。設定で GPU アクセラレーションを無効にできます。"
+      },
+      "gpuPackMigration": {
+        "title": "GPU パックの再ダウンロードが必要です",
+        "description": "アップデートにより古い GPU パックのインストール（{{packs}}）が削除されました。設定から再ダウンロードすると GPU アクセラレーションが復元されます。"
+      },
+      "cleanupFailed": {
+        "title": "クリーンアップに失敗しました",
+        "description": "ディクテーションは AI クリーンアップなしで貼り付けられました。"
       }
     },
     "mic": {
       "hotkeyToSpeak": "{{hotkey}} で話す",
       "recording": "録音中...",
       "processing": "処理中...",
-      "clickToSpeak": "クリックして話す"
+      "clickToSpeak": "クリックして話す",
+      "waitingForMicrophone": "マイクを待っています…"
     },
     "buttons": {
       "cancelRecording": "録音をキャンセル",
@@ -2278,30 +2983,41 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "音声エージェントを有効にする",
+    "enabledDescription": "エージェントに指示を口述できます。選択中のテキストは設定済みのモデルに送信され、その場で編集されます。「{{agentName}}」と話しかけて起動します。",
+    "screenContext": {
+      "title": "画面コンテキスト",
+      "description": "ボイスエージェントのコマンドに、作業中の画面のスクリーンショットを添付します。",
+      "enable": "画面コンテキストを共有",
+      "enableDescription": "ボイスエージェントの録音開始時に、カーソルのあるディスプレイをキャプチャします。保存やログ記録は一切されません。",
+      "unsupported": "Linux Wayland では画面キャプチャを利用できません。",
+      "visionModel": "専用のビジョンモデル",
+      "visionModelDescription": "スクリーンショット付きのコマンドを、画像対応の別モデルに振り分けます。",
+      "permissionTitle": "画面収録",
+      "permissionDescription": "画面をキャプチャするには macOS の画面収録の許可が必要です。",
+      "relaunchHint": "画面収録の許可は OpenWhispr の実行中に付与されました。スクリーンショットのキャプチャを開始するには、OpenWhispr を終了して再度開いてください。"
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "openwhisprDesc": "OpenWhispr が管理するエージェントを使用。API キーは不要です。",
+      "providers": "自分の API キーを使用",
+      "providersDesc": "自分の API キーで OpenAI、Anthropic、Gemini、Groq に接続します。",
+      "local": "ローカル",
+      "localDesc": "端末上でローカル LLM を実行。完全プライベート。",
+      "selfHosted": "セルフホスト",
+      "selfHostedDesc": "セルフホストの OpenAI 互換エンドポイントを指定します。",
+      "enterprise": "エンタープライズ",
+      "enterpriseDesc": "AWS Bedrock、Azure OpenAI、Google Vertex を使用します。"
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "エージェントプロンプト",
+      "description": "ウェイクワードが検出されたときに使用するシステムプロンプト。未設定の場合は組み込みのデフォルトが使われます。"
     }
   },
   "agentMode": {
     "settings": {
-      "hotkey": "エージェントホットキー",
-      "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
-      "clearHotkey": "ホットキーを削除",
+      "hotkey": "チャットエージェントホットキー",
+      "hotkeyDescription": "チャットエージェントのオーバーレイを開閉します",
       "model": "エージェントモデル",
       "modelDescription": "エージェント会話に使用するAIモデル",
       "systemPrompt": "システムプロンプト",
@@ -2389,7 +3105,39 @@
       "disconnectDescription": "このカレンダーからの会議メモは記録されなくなります。",
       "systemAudioRequired": "システムオーディオの権限が必要です",
       "systemAudioDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
-      "openSettings": "システム設定を開く"
+      "openSettings": "システム設定を開く",
+      "connectFailed": "接続に失敗しました",
+      "connectFailedDescription": "Google Calendar への接続中にエラーが発生しました。もう一度お試しください。"
+    },
+    "microsoftCalendar": {
+      "title": "Microsoft カレンダー",
+      "optional": "任意",
+      "description": "Outlook または Microsoft 365 のカレンダーから会議を読み取ります。",
+      "connect": "Microsoft カレンダーを接続",
+      "connected": "接続済み",
+      "addAnother": "別のカレンダーを追加",
+      "primaryOnly": "メインカレンダーのみ同期",
+      "primaryOnlyDescription": "共有されたカレンダーの予定は無視します。",
+      "disconnect": "切断",
+      "disconnectConfirm": "{{email}} を切断しますか？",
+      "disconnectDescription": "このカレンダーからの会議メモは記録されなくなります。",
+      "connectFailed": "接続に失敗しました",
+      "connectFailedDescription": "Microsoft Calendar への接続中にエラーが発生しました。もう一度お試しください。"
+    },
+    "appleCalendar": {
+      "title": "Apple カレンダー",
+      "optional": "任意",
+      "description": "Calendar.app から会議を読み取ります — iCloud、Google、Exchange、Outlook をまとめて。",
+      "connect": "Apple カレンダーを接続",
+      "connected": "接続済み",
+      "disconnect": "切断",
+      "disconnectConfirm": "Apple カレンダーを切断しますか？",
+      "disconnectDescription": "Apple カレンダーからの会議メモは記録されなくなります。",
+      "permissionDenied": "カレンダーへのアクセスが必要です",
+      "permissionDeniedDescription": "会議を検出するには、OpenWhispr にカレンダーへのアクセスが必要です。システム設定の「プライバシーとセキュリティ」→「カレンダー」で OpenWhispr を有効にしてください。",
+      "openSettings": "システム設定を開く",
+      "connectFailed": "接続に失敗しました",
+      "connectFailedDescription": "Calendar.app への接続中にエラーが発生しました。OpenWhispr を再起動してもう一度お試しください。"
     },
     "sections": {
       "calendar": "カレンダー",
@@ -2473,15 +3221,7 @@
     "noUpcoming": "今後の予定はありません",
     "meetingStarting": "ミーティングが開始されます",
     "today": "今日",
-    "tomorrow": "明日",
-    "detection": {
-      "title": "ミーティング検出",
-      "description": "ミーティング中であることを自動的に検出する",
-      "processDetection": "アプリ検出",
-      "processDescription": "ミーティングが検出されたときに使用中のアプリを特定する",
-      "audioDetection": "オーディオ検出",
-      "audioDescription": "持続的なマイク使用が検出されたときに通知する"
-    }
+    "tomorrow": "明日"
   },
   "upcoming": {
     "title": "今後の会議",
@@ -2527,20 +3267,31 @@
       "button": "共有",
       "dialog": {
         "title": "ノートを共有",
-        "searchPlaceholder": "メールアドレスでメンバーを追加",
-        "emailLabel": "受信者のメールアドレス",
+        "description": "メールで招待するか、このノートへのリンクを共有します。",
+        "searchPlaceholder": "ユーザー、フォルダー、メールを検索",
+        "noResults": "一致する結果が見つかりません",
+        "emailLabel": "ユーザー、フォルダー、メール",
         "shareButton": "共有",
+        "createLink": "リンクを作成",
         "copyLink": "リンクをコピー",
         "copied": "コピーしました",
         "owner": "オーナー",
+        "editor": "編集可能",
+        "viewer": "閲覧可能",
+        "teamAudience": "このチームスペースの全員",
         "pending": "保留中",
         "accepted": "アクセス権あり",
         "resend": "招待を再送信",
         "revoke": "削除",
         "invitationActions": "招待の操作",
-        "permissionRequired": "共有設定を変更できるのはノートのオーナーのみです。",
+        "resendSent": "招待を送信しました",
+        "resendThrottled": "招待を送信したばかりです。1分ほど待ってからお試しください。",
+        "syncPrompt": "共有すると、このノートのコピーが OpenWhispr クラウドに保存されます。共有相手を選ぶまでは、あなた以外は閲覧できません。",
+        "syncAndShare": "ノートを同期",
         "visibility": {
           "label": "公開範囲",
+          "private": "非公開",
+          "privateOption": "非公開 — 自分のみ",
           "link": "リンクを持つ全員",
           "domain": "{{domain}} の全員（リンクを持つ人）",
           "invited": "招待された人のみ"
@@ -2549,19 +3300,27 @@
           "invalidEmail": "有効なメールアドレスを入力してください",
           "alreadyInvited": "{{email}} はすでに招待されています",
           "inviteFailed": "招待を送信できませんでした。もう一度お試しください。",
-          "linkUnavailable": "リンクをコピーするには生成またはローテーションしてください"
+          "visibilityFailed": "共有設定を更新できませんでした。もう一度お試しください。",
+          "copyFailed": "リンクをコピーできませんでした。もう一度お試しください。",
+          "revokeFailed": "招待を削除できませんでした。もう一度お試しください。",
+          "resendFailed": "招待を再送信できませんでした。もう一度お試しください。",
+          "syncFailed": "このノートを同期できませんでした。もう一度お試しください。",
+          "loadFailed": "共有設定を読み込めませんでした",
+          "retry": "再試行"
         }
       }
     }
   },
   "commandSearch": {
+    "allSpaces": "すべてのスペース",
     "title": "検索",
     "description": "ノートと文字起こしを検索",
     "shortPlaceholder": "検索",
     "placeholder": "ノートと文字起こしを検索…",
     "sections": {
       "notes": "ノート",
-      "transcripts": "文字起こし"
+      "transcripts": "文字起こし",
+      "jumpTo": "移動"
     },
     "noResults": "結果なし",
     "emptyState": "入力して検索",
@@ -2653,54 +3412,116 @@
     "speaker": {
       "you": "あなた",
       "others": "他の人"
-    }
+    },
+    "missingAudio": "[音声欠落 {{from}}-{{to}}]"
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
-      "workspaces": "Espacios de trabajo",
-      "empty": "Aún no hay espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "workspaces": "ワークスペース",
+      "create": "ワークスペースを作成…"
     },
     "create": {
-      "title": "Crear espacio de trabajo",
-      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
-      "nameLabel": "Nombre del espacio de trabajo",
+      "title": "ワークスペースを作成",
+      "description": "ワークスペースには組織のメンバーと請求がまとまります。その中に共有ノート用のチームスペースを作成できます。",
+      "nameLabel": "ワークスペース名",
       "namePlaceholder": "Acme Corp",
-      "submit": "Crear espacio de trabajo",
-      "submitting": "Creando…",
-      "errorTitle": "No se pudo crear el espacio de trabajo"
+      "freePlanNote": "新しいワークスペースは Free プランで始まります。チームスペースにはワークスペースのプランが必要です。",
+      "submit": "ワークスペースを作成",
+      "submitting": "作成中…",
+      "errorTitle": "ワークスペースを作成できませんでした"
     },
     "created": {
-      "title": "Espacio de trabajo creado",
-      "description": "Ahora eres el propietario de {{name}}."
+      "title": "ワークスペースを作成しました",
+      "description": "{{name}} のオーナーになりました。"
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "roleLabel": "Rol",
-      "teamsLabel": "Agregar a equipos",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "title": "{{workspace}} に招待",
+      "description": "メールアドレスでチームメイトを追加します。参加用のリンクが送信されます。",
+      "emailLabel": "メールアドレス",
+      "emailPlaceholder": "teammate@example.com",
+      "roleLabel": "役割",
+      "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
+      "seatCost": "承諾されるとプランに 1 席追加され、日割りの見積額 {{amount}} が請求されます。",
+      "submit": "招待を送信",
+      "submitting": "送信中…",
+      "sentTitle": "招待を送信しました",
+      "sentDescription": "{{email}} に招待を送信しました。",
+      "sentNoEmailTitle": "招待を作成しましたが、メールは送信されませんでした",
+      "sentNoEmailDescription": "{{email}} を招待しましたが、メールを配信できませんでした。後で再送信するか、別の方法で招待リンクを共有してください。",
+      "errorTitle": "招待を送信できませんでした",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "管理者",
+        "member": "メンバー"
+      },
+      "roleDescription": {
+        "admin": "メンバーと請求を管理できます",
+        "member": "ワークスペースを利用できます"
       }
     },
+    "join": {
+      "title": "チームに参加",
+      "domainTitle": "あなたのチームはすでに OpenWhispr にいます",
+      "description": "これらのワークスペースに、あなたと同じメールドメインのメンバーがいます。",
+      "invitedDescription": "ワークスペースに招待されています。",
+      "invitedBy": "{{inviter}} が {{role}} として招待しました",
+      "memberCount_one": "メンバー {{count}} 人",
+      "memberCount_other": "メンバー {{count}} 人",
+      "join": "参加",
+      "requestErrorTitle": "リクエストを送信できませんでした",
+      "requestedDescription": "{{workspace}} の管理者が確認します。",
+      "requestedTitle": "リクエストを送信しました",
+      "requested": "リクエスト済み",
+      "request": "参加をリクエスト",
+      "notNow": "後で",
+      "successTitle": "参加しました",
+      "successDescription": "{{workspace}} のメンバーになりました。",
+      "errorTitle": "参加できませんでした"
+    },
     "accept": {
-      "title": "Unirse al espacio de trabajo",
-      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
-      "loading": "Cargando invitación…",
-      "accept": "Aceptar invitación",
-      "accepting": "Aceptando…",
-      "signInToAccept": "Inicia sesión para aceptar",
-      "successTitle": "Te uniste",
-      "successDescription": "Bienvenido a {{name}}.",
-      "errorTitle": "No se pudo aceptar la invitación"
+      "title": "ワークスペースに参加",
+      "description": "{{inviter}} さんから、{{workspace}} に{{role}}として参加するよう招待されています。",
+      "loading": "招待を読み込み中…",
+      "accept": "招待を承諾",
+      "accepting": "承諾中…",
+      "signInToAccept": "サインインして承諾",
+      "switchAccount": "アカウントを切り替える",
+      "successTitle": "参加しました",
+      "successDescription": "{{name}} のメンバーになりました。設定 → ワークスペースで管理できます。",
+      "errorTitle": "招待を承諾できませんでした",
+      "sentTo": "{{email}} に送信された招待です",
+      "wrongAccount": "この招待は {{email}} 宛てに送信されました。現在 {{current}} でサインインしています。"
     }
+  },
+  "dictationTranslation": {
+    "title": "音声入力翻訳",
+    "description": "専用ホットキーで、音声入力を別の言語に翻訳して貼り付けます",
+    "enabled": "音声入力翻訳を有効にする",
+    "enabledDescription": "翻訳ホットキーで開始した音声入力は、整形されてから翻訳されて貼り付けられます",
+    "sourceLanguage": "話す言語",
+    "sourceLanguageDescription": "音声入力する言語。自動検出は複数言語が混在する場合にも対応します",
+    "targetLanguage": "翻訳先",
+    "targetLanguageDescription": "貼り付けられるテキストの言語",
+    "targetLanguageMissing": "翻訳ホットキーを有効にするには翻訳先の言語を選択してください",
+    "selectLanguage": "言語を選択…",
+    "prompt": {
+      "title": "翻訳プロンプト",
+      "description": "モデルによる音声入力の翻訳方法をカスタマイズします"
+    },
+    "hotkeyHint": "ホットキーは 設定 → ホットキー → 翻訳ホットキー で設定できます",
+    "targetsLabel": "翻訳先の言語",
+    "addTarget": "言語を追加…",
+    "activeTarget": "使用中の翻訳先言語",
+    "removeTarget": "{{language}}を削除",
+    "maxTargets": "最大{{max}}言語"
+  },
+  "meetingNotification": {
+    "title": "会議を検出しました",
+    "body": {
+      "detected": "会議中のようです。メモを取りますか？",
+      "starting": "まもなく会議が始まります。メモを取りますか？",
+      "underway": "会議はすでに進行中のようです。メモを取りますか？"
+    },
+    "start": "メモを取る",
+    "join": "参加して文字起こし"
   }
 }

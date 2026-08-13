@@ -33,13 +33,17 @@ import {
   MessageSquare,
   FileAudio,
   Wand2,
+  Upload,
+  Languages,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
+import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
 import PasteToolsInfo from "./ui/PasteToolsInfo";
+import NixOsPasteInfo from "./ui/NixOsPasteInfo";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 import SelfHostedPanel from "./SelfHostedPanel";
 import {
@@ -63,8 +67,9 @@ import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
-import { HotkeyInput } from "./ui/HotkeyInput";
+import { HotkeyListInput } from "./ui/HotkeyListInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
+import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
@@ -76,14 +81,21 @@ import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
+import DictationTranslationSettings from "./settings/DictationTranslationSettings";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
+import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import type { GpuDevice, LocalTranscriptionProvider, InferenceMode } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  GpuDevice,
+  LocalTranscriptionProvider,
+  InferenceMode,
+} from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
@@ -94,13 +106,30 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
-import { useSettingsStore } from "../stores/settingsStore";
+import {
+  clearMissingLocalModelSelections,
+  TRANSCRIPTION_POLICY_PROVIDER_IDS,
+  useSettingsStore,
+} from "../stores/settingsStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import { highestPlan } from "../lib/usageStore";
+import { decideProPlanCardCta } from "../lib/upsell";
+import {
+  canChangeCloudBackupPreference,
+  effectiveAudioRetentionDays,
+  effectiveLocalHistoryEnabled,
+  isAgentAllowed,
+  isCloudBackupAllowed,
+  lockedLocalHistoryValue,
+  maxAudioRetentionDays,
+} from "../stores/policyRules";
+import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
+import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
-import { WORKSPACES_ENABLED } from "../lib/features";
-
-const formatAmount = (cents: number, currency: string) =>
-  (cents / 100).toLocaleString(undefined, { style: "currency", currency });
+import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
+import ProfileSection from "./settings/ProfileSection";
+import { formatAmount } from "../utils/formatAmount";
 
 export type SettingsSectionType =
   | "account"
@@ -132,6 +161,11 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
   { value: "zh-CN", label: "简体中文", flag: "🇨🇳" },
   { value: "zh-TW", label: "繁體中文", flag: "🇹🇼" },
 ];
+
+const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
+
+const RETENTION_SELECT_CLASS =
+  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
 const noop = () => {};
 
@@ -165,13 +199,22 @@ function SettingsPanelRow({
   );
 }
 
-function SectionHeader({ title, description }: { title: string; description?: string }) {
+function SectionHeader({
+  title,
+  description,
+  note,
+}: {
+  title: string;
+  description?: string;
+  note?: string;
+}) {
   return (
     <div className="mb-3">
       <h3 className="text-xs font-semibold text-foreground tracking-tight">{title}</h3>
       {description && (
         <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
       )}
+      {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
     </div>
   );
 }
@@ -200,6 +243,8 @@ interface TranscriptionSectionProps {
   setTranscriptionMode: (mode: InferenceMode) => void;
   remoteTranscriptionUrl: string;
   setRemoteTranscriptionUrl: (url: string) => void;
+  remoteTranscriptionModel: string;
+  setRemoteTranscriptionModel: (model: string) => void;
   showTranscriptionPreview: boolean;
   setShowTranscriptionPreview: (value: boolean) => void;
   toast: (opts: {
@@ -234,47 +279,57 @@ function TranscriptionSection({
   setTranscriptionMode,
   remoteTranscriptionUrl,
   setRemoteTranscriptionUrl,
+  remoteTranscriptionModel,
+  setRemoteTranscriptionModel,
   showTranscriptionPreview,
   setShowTranscriptionPreview,
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
-
-  const transcriptionModes: InferenceModeOption[] = [
-    {
-      id: "openwhispr",
-      label: t("settingsPage.transcription.modes.openwhispr"),
-      description: t("settingsPage.transcription.modes.openwhisprDesc"),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
-    },
-    {
-      id: "providers",
-      label: t("settingsPage.transcription.modes.providers"),
-      description: t("settingsPage.transcription.modes.providersDesc"),
-      icon: <Key className="w-4 h-4" />,
-    },
-    {
-      id: "local",
-      label: t("settingsPage.transcription.modes.local"),
-      description: t("settingsPage.transcription.modes.localDesc"),
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
-      id: "self-hosted",
-      label: t("settingsPage.transcription.modes.selfHosted"),
-      description: t("settingsPage.transcription.modes.selfHostedDesc"),
-      icon: <Network className="w-4 h-4" />,
-    },
-  ];
-
+  const {
+    modes: transcriptionModes,
+    effectiveMode: effectiveTranscriptionMode,
+    isModeAllowed,
+  } = usePolicyModeOptions<InferenceModeOption>(
+    [
+      {
+        id: "openwhispr",
+        label: t("settingsPage.transcription.modes.openwhispr"),
+        description: t("settingsPage.transcription.modes.openwhisprDesc"),
+        icon: <Cloud className="w-4 h-4" />,
+        disabled: !isSignedIn,
+        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+      },
+      {
+        id: "providers",
+        label: t("settingsPage.transcription.modes.providers"),
+        description: t("settingsPage.transcription.modes.providersDesc"),
+        icon: <Key className="w-4 h-4" />,
+      },
+      {
+        id: "local",
+        label: t("settingsPage.transcription.modes.local"),
+        description: t("settingsPage.transcription.modes.localDesc"),
+        icon: <Cpu className="w-4 h-4" />,
+      },
+      {
+        id: "self-hosted",
+        label: t("settingsPage.transcription.modes.selfHosted"),
+        description: t("settingsPage.transcription.modes.selfHostedDesc"),
+        icon: <Network className="w-4 h-4" />,
+      },
+    ],
+    "transcription",
+    transcriptionMode,
+    { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
+  );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
+    if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
       return;
     }
-    if (mode === transcriptionMode) return;
+    if (mode === effectiveTranscriptionMode) return;
     setTranscriptionMode(mode);
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
@@ -349,23 +404,25 @@ function TranscriptionSection({
     <div className="space-y-4">
       <InferenceModeSelector
         modes={transcriptionModes}
-        activeMode={transcriptionMode}
+        activeMode={effectiveTranscriptionMode}
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {transcriptionMode === "local" && (
+      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {effectiveTranscriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}
           {renderPreviewToggle()}
         </>
       )}
 
-      {transcriptionMode === "self-hosted" && (
+      {effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel
           service="transcription"
           url={remoteTranscriptionUrl}
           onUrlChange={setRemoteTranscriptionUrl}
+          model={remoteTranscriptionModel}
+          onModelChange={setRemoteTranscriptionModel}
         />
       )}
 
@@ -451,16 +508,23 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
   );
 }
 
-type SpeechTab = "dictation" | "noteRecording";
-type LlmTab = "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
+type SpeechTab = "dictation" | "noteRecording" | "upload";
+type LlmTab =
+  | "dictationCleanup"
+  | "dictationAgent"
+  | "dictationTranslation"
+  | "noteFormatting"
+  | "chatIntelligence";
 
-const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording"];
+const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording", "upload"];
 const LLM_TABS: LlmTab[] = [
   "dictationCleanup",
   "dictationAgent",
+  "dictationTranslation",
   "noteFormatting",
   "chatIntelligence",
 ];
+const AGENT_LLM_TABS = new Set<LlmTab>(["dictationAgent", "chatIntelligence"]);
 
 function useSubTab<T extends string>(storageKey: string, options: readonly T[], initial?: T) {
   const [tab, setTab] = useLocalStorage<T>(storageKey, initial ?? options[0]);
@@ -498,14 +562,38 @@ function TabPanel({ active, children }: { active: boolean; children: React.React
   return <div className={active ? undefined : "hidden"}>{children}</div>;
 }
 
+function AccountAvatar({ image, name }: { image?: string | null; name: string }) {
+  // Same stale-URL fallback as MemberAvatar: OAuth-hosted images expire, and a
+  // bare <img> would render the broken-image glyph instead of the icon.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  return (
+    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
+      {image && image !== failedSrc ? (
+        <img
+          src={image}
+          alt={name}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedSrc(image)}
+          className="w-10 h-10 rounded-full object-cover"
+        />
+      ) : (
+        <UserCircle className="w-5 h-5 text-primary" />
+      )}
+    </div>
+  );
+}
+
 function SpeechToTextTabs({
   initialTab,
   renderDictation,
   renderNoteRecording,
+  renderUpload,
 }: {
   initialTab?: SpeechTab;
   renderDictation: () => React.ReactNode;
   renderNoteRecording: () => React.ReactNode;
+  renderUpload: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useSubTab<SpeechTab>("settings.speechToTextTab", SPEECH_TABS, initialTab);
@@ -513,6 +601,7 @@ function SpeechToTextTabs({
   const subTabs = [
     { id: "dictation", name: t("settingsPage.speechToText.tabs.dictation") },
     { id: "noteRecording", name: t("settingsPage.speechToText.tabs.noteRecording") },
+    { id: "upload", name: t("settingsPage.speechToText.tabs.upload") },
   ];
 
   return (
@@ -528,6 +617,8 @@ function SpeechToTextTabs({
         renderIcon={(id) =>
           id === "dictation" ? (
             <Mic className="w-3.5 h-3.5" />
+          ) : id === "upload" ? (
+            <Upload className="w-3.5 h-3.5" />
           ) : (
             <FileAudio className="w-3.5 h-3.5" />
           )
@@ -535,6 +626,7 @@ function SpeechToTextTabs({
       />
       <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
       <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
+      <TabPanel active={tab === "upload"}>{renderUpload()}</TabPanel>
     </div>
   );
 }
@@ -543,24 +635,31 @@ function LlmsTabs({
   initialTab,
   renderDictationCleanup,
   renderDictationAgent,
+  renderDictationTranslation,
   renderNoteFormatting,
   renderChatIntelligence,
 }: {
   initialTab?: LlmTab;
   renderDictationCleanup: () => React.ReactNode;
   renderDictationAgent: () => React.ReactNode;
+  renderDictationTranslation: () => React.ReactNode;
   renderNoteFormatting: () => React.ReactNode;
   renderChatIntelligence: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", LLM_TABS, initialTab);
+  const agentAllowed = usePolicyStore(isAgentAllowed);
+  const visibleTabIds = agentAllowed
+    ? LLM_TABS
+    : LLM_TABS.filter((tabId) => !AGENT_LLM_TABS.has(tabId));
+  const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", visibleTabIds, initialTab);
 
   const subTabs = [
     { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
     { id: "dictationAgent", name: t("settingsPage.llms.tabs.dictationAgent") },
+    { id: "dictationTranslation", name: t("settingsPage.llms.tabs.dictationTranslation") },
     { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
     { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
-  ];
+  ].filter((item) => visibleTabIds.includes(item.id as LlmTab));
 
   return (
     <div className="space-y-4">
@@ -575,14 +674,20 @@ function LlmsTabs({
         renderIcon={(id) => {
           if (id === "dictationCleanup") return <Wand2 className="w-3.5 h-3.5" />;
           if (id === "dictationAgent") return <Sparkles className="w-3.5 h-3.5" />;
+          if (id === "dictationTranslation") return <Languages className="w-3.5 h-3.5" />;
           if (id === "noteFormatting") return <BookOpen className="w-3.5 h-3.5" />;
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
       <TabPanel active={tab === "dictationCleanup"}>{renderDictationCleanup()}</TabPanel>
-      <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      {agentAllowed && (
+        <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      )}
+      <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
       <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
-      <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
+      {agentAllowed && (
+        <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
+      )}
     </div>
   );
 }
@@ -590,17 +695,17 @@ function LlmsTabs({
 function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligence" }) {
   const { t } = useTranslation();
   const [gpus, setGpus] = useState<GpuDevice[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState("0");
+  const [selectedUuid, setSelectedUuid] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     Promise.all([
       window.electronAPI?.listGpus?.() ?? Promise.resolve([]),
-      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve("0"),
+      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve(""),
     ])
-      .then(([gpuList, idx]) => {
+      .then(([gpuList, savedUuid]) => {
         setGpus(gpuList);
-        setSelectedIndex(idx);
+        setSelectedUuid(savedUuid || gpuList[0]?.uuid || "");
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -618,16 +723,16 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
         <SettingsPanelRow>
           <div className="relative w-full">
             <select
-              value={selectedIndex}
+              value={selectedUuid}
               onChange={async (e) => {
-                const idx = e.target.value;
-                setSelectedIndex(idx);
-                await window.electronAPI?.setGpuDeviceIndex?.(purpose, Number(idx));
+                const uuid = e.target.value;
+                setSelectedUuid(uuid);
+                await window.electronAPI?.setGpuDeviceIndex?.(purpose, uuid);
               }}
               className="w-full appearance-none rounded-md border border-border bg-background px-3 pr-10 py-2 text-sm"
             >
               {gpus.map((gpu) => (
-                <option key={gpu.index} value={String(gpu.index)}>
+                <option key={gpu.uuid} value={gpu.uuid}>
                   GPU {gpu.index}: {gpu.name} ({Math.round(gpu.vramMb / 1024)}GB)
                 </option>
               ))}
@@ -673,6 +778,7 @@ export default function SettingsPage({
     parakeetModel,
     uiLanguage,
     preferredLanguage,
+    chineseScriptPreference,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
@@ -683,8 +789,11 @@ export default function SettingsPage({
     setActivationMode,
     preferBuiltInMic,
     selectedMicDeviceId,
+    selectedMicDeviceLabel,
+    micWarmHoldSeconds,
     setPreferBuiltInMic,
-    setSelectedMicDeviceId,
+    setSelectedMicDevice,
+    setMicWarmHoldSeconds,
     setUseLocalWhisper,
     setUiLanguage,
     setWhisperModel,
@@ -710,6 +819,8 @@ export default function SettingsPage({
     setTranscriptionMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
+    remoteTranscriptionModel,
+    setRemoteTranscriptionModel,
     notificationsEnabled,
     setNotificationsEnabled,
     notifyMeetingDetection,
@@ -740,10 +851,13 @@ export default function SettingsPage({
     setTelemetryEnabled,
     audioRetentionDays,
     setAudioRetentionDays,
+    transcriptRetentionDays,
+    setTranscriptRetentionDays,
     dataRetentionEnabled,
     setDataRetentionEnabled,
+    saveDiscardedTranscriptions,
+    setSaveDiscardedTranscriptions,
     customDictionary,
-    setCustomDictionary,
     noteFilesEnabled,
     setNoteFilesEnabled,
     noteFilesPath,
@@ -770,8 +884,24 @@ export default function SettingsPage({
 
   const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
   const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
-  const meetingAudioDetection = useSettingsStore((s) => s.meetingAudioDetection);
-  const setMeetingAudioDetection = useSettingsStore((s) => s.setMeetingAudioDetection);
+  const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
+  const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
+  const translationKey = useSettingsStore((s) => s.translationKey);
+  const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
+
+  const settingsPolicyState = usePolicySnapshot();
+  const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
+  const historyLockedByPolicy = lockedLocalHistoryValue(settingsPolicyState) !== null;
+  const effectiveDataRetentionEnabled = effectiveLocalHistoryEnabled(
+    settingsPolicyState,
+    dataRetentionEnabled
+  );
+  const cloudBackupPolicyAllowed = isCloudBackupAllowed(settingsPolicyState);
+  const audioRetentionCap = maxAudioRetentionDays(settingsPolicyState);
+  const enforcedAudioRetentionDays = effectiveAudioRetentionDays(
+    settingsPolicyState,
+    audioRetentionDays
+  );
 
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -863,6 +993,7 @@ export default function SettingsPage({
     isKde?: boolean;
     hasXclip?: boolean;
     hasXsel?: boolean;
+    isNixOS?: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
 
@@ -879,6 +1010,24 @@ export default function SettingsPage({
 
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
+  const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
+  const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
+    usage?.entitledWorkspaceIds?.includes(workspace.id)
+  );
+  const coveringWorkspaceNames = coveringWorkspaces.map((workspace) => workspace.name);
+  // Reads the usage payload, not the workspace store, so the upgrade affordances
+  // stay hidden across the window where the store is still loading.
+  const isWorkspaceCovered =
+    !usage?.isPersonallySubscribed && (usage?.entitledWorkspaceIds?.length ?? 0) > 0;
+  // Null until the store resolves, so the label waits rather than guessing a tier.
+  const coveringPlanLabel =
+    isWorkspaceCovered && coveringWorkspaces.length
+      ? t(
+          `settingsPage.workspace.billing.planLabel.${highestPlan(
+            coveringWorkspaces.map((workspace) => workspace.plan)
+          )}`
+        )
+      : null;
   const hasShownApproachingToast = useRef(false);
   useEffect(() => {
     if (usage?.isApproachingLimit && !hasShownApproachingToast.current) {
@@ -937,6 +1086,28 @@ export default function SettingsPage({
       registerFn: meetingRegisterFn,
     });
 
+  // Agent hotkey setters resolve to false when main-process registration fails;
+  // surface it and return the result so HotkeyListInput rolls the row back.
+  const [isAgentHotkeyCommitting, setIsAgentHotkeyCommitting] = useState(false);
+  const commitAgentHotkey = useCallback(
+    async (setter: (key: string) => Promise<boolean>, key: string) => {
+      setIsAgentHotkeyCommitting(true);
+      try {
+        const ok = await setter(key);
+        if (!ok) {
+          showAlertDialog({
+            title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+            description: t("hooks.hotkeyRegistration.errors.failedToRegister"),
+          });
+        }
+        return ok;
+      } finally {
+        setIsAgentHotkeyCommitting(false);
+      }
+    },
+    [showAlertDialog, t]
+  );
+
   const validateDictationHotkey = useCallback(
     (hotkey: string) =>
       validateHotkeyForSlot(
@@ -945,10 +1116,12 @@ export default function SettingsPage({
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [meetingKey, pasteLastKey, chatAgentKey, t]
+    [meetingKey, pasteLastKey, chatAgentKey, voiceAgentKey, translationKey, t]
   );
 
   const validatePasteLastHotkey = useCallback(
@@ -959,10 +1132,12 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, t]
+    [dictationKey, meetingKey, chatAgentKey, voiceAgentKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -973,13 +1148,15 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, pasteLastKey, chatAgentKey, t]
+    [dictationKey, pasteLastKey, chatAgentKey, voiceAgentKey, translationKey, t]
   );
 
-  const validateAgentHotkey = useCallback(
+  const validateChatAgentHotkey = useCallback(
     (hotkey: string) =>
       validateHotkeyForSlot(
         hotkey,
@@ -987,39 +1164,71 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, pasteLastKey, t]
+    [dictationKey, meetingKey, pasteLastKey, voiceAgentKey, translationKey, t]
   );
 
-  const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
+  const validateVoiceAgentHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, chatAgentKey, pasteLastKey, translationKey, t]
+  );
+
+  const validateTranslationHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, chatAgentKey, pasteLastKey, voiceAgentKey, t]
+  );
+
+  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
+    useHotkeyModeInfo("settings");
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
+  const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
 
-  useEffect(() => {
-    if (platform === "linux") {
-      setAutoStartLoading(false);
-      return;
+  const readAutoStartState = useCallback(async () => {
+    if (!window.electronAPI?.getAutoStartEnabled) return;
+    try {
+      const state = await window.electronAPI.getAutoStartEnabled();
+      setAutoStartEnabled(state.enabled);
+      setAutoStartNeedsApproval(state.requiresApproval);
+    } catch (error) {
+      logger.error("Failed to get auto-start status", error, "settings");
     }
-    const loadAutoStart = async () => {
-      if (window.electronAPI?.getAutoStartEnabled) {
-        try {
-          const enabled = await window.electronAPI.getAutoStartEnabled();
-          setAutoStartEnabled(enabled);
-        } catch (error) {
-          logger.error("Failed to get auto-start status", error, "settings");
-        }
-      }
-      setAutoStartLoading(false);
-    };
-    loadAutoStart();
-  }, [platform]);
+  }, []);
+
+  useEffect(() => {
+    readAutoStartState().finally(() => setAutoStartLoading(false));
+  }, [readAutoStartState]);
 
   useEffect(() => {
     window.electronAPI?.syncNotificationPreferences?.({
@@ -1031,18 +1240,17 @@ export default function SettingsPage({
   }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders, notifyUpdates]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
-    if (window.electronAPI?.setAutoStartEnabled) {
-      try {
-        setAutoStartLoading(true);
-        const result = await window.electronAPI.setAutoStartEnabled(enabled);
-        if (result.success) {
-          setAutoStartEnabled(enabled);
-        }
-      } catch (error) {
-        logger.error("Failed to set auto-start", error, "settings");
-      } finally {
-        setAutoStartLoading(false);
-      }
+    if (!window.electronAPI?.setAutoStartEnabled) return;
+    try {
+      setAutoStartLoading(true);
+      const result = await window.electronAPI.setAutoStartEnabled(enabled);
+      // Read the state back rather than assuming: on Windows the OS can have the
+      // item disabled out from under us, and on macOS it can need approval first.
+      if (result.success) await readAutoStartState();
+    } catch (error) {
+      logger.error("Failed to set auto-start", error, "settings");
+    } finally {
+      setAutoStartLoading(false);
     }
   };
 
@@ -1108,18 +1316,13 @@ export default function SettingsPage({
   }, [checkWhisperInstallation, getAppVersion]);
 
   useEffect(() => {
-    const checkHotkeyMode = async () => {
-      try {
-        const info = await window.electronAPI?.getHotkeyModeInfo();
-        if (info?.isUsingNativeShortcut) {
-          setIsUsingNativeShortcut(true);
-          if (!info.supportsPushToTalk) {
-            setActivationMode("tap");
-          }
-        }
-      } catch (error) {
-        logger.error("Failed to check hotkey mode", error, "settings");
-      }
+    if (isUsingNativeShortcut && !supportsPushToTalk) {
+      setActivationMode("tap");
+    }
+  }, [isUsingNativeShortcut, supportsPushToTalk, setActivationMode]);
+
+  useEffect(() => {
+    const loadEffectiveDefaultHotkey = async () => {
       try {
         const key = await window.electronAPI?.getEffectiveDefaultHotkey?.();
         if (key) setEffectiveDefaultHotkey(key);
@@ -1127,8 +1330,8 @@ export default function SettingsPage({
         logger.error("Failed to get effective default hotkey", error, "settings");
       }
     };
-    checkHotkeyMode();
-  }, [setActivationMode]);
+    loadEffectiveDefaultHotkey();
+  }, []);
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onLinuxPttPermissionDenied?.(() => {
@@ -1218,6 +1421,8 @@ export default function SettingsPage({
               description: t("settingsPage.developer.removeModels.failedDescription"),
             });
           } else {
+            // Every local model is gone, so no local selection can still resolve.
+            clearMissingLocalModelSelections(() => false);
             window.dispatchEvent(new Event("openwhispr-models-cleared"));
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.successTitle"),
@@ -1236,10 +1441,21 @@ export default function SettingsPage({
     });
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
-  const { isSignedIn, isLoaded, user } = useAuth();
+  const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  // Signed out there is nothing to load and the plan grid is purely
+  // promotional; signed in, no card may claim a plan until usage confirms one.
+  const planStateKnown = !isSignedIn || usage?.status === "success";
+  const proCardCta = decideProPlanCardCta({
+    isSignedIn,
+    planStateKnown,
+    isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
+    plan: usage?.plan ?? "free",
+    isTrial: usage?.isTrial ?? false,
+    isWorkspaceCovered,
+  });
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [isOpeningBilling, setIsOpeningBilling] = useState(false);
+  const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [billingState, setBillingState] = useState<Record<string, boolean>>({
     pro: true,
     business: true,
@@ -1262,16 +1478,6 @@ export default function SettingsPage({
     localStorage.removeItem("onboardingCompleted");
     window.location.reload();
   }, []);
-
-  const handleBillingPortal = useCallback(async () => {
-    const result = await usage.openBillingPortal();
-    if (!result.success) {
-      toast({
-        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-        description: t("settingsPage.account.checkout.couldNotOpenDescription"),
-      });
-    }
-  }, [usage, toast, t]);
 
   const handleSwitchPlan = useCallback(
     async (plan: "monthly" | "annual", tier: "pro" | "business") => {
@@ -1339,6 +1545,9 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
+      // Team content is membership-scoped, not account data: drop it locally
+      // before the session ends (never blocks sign-out).
+      await syncService.purgeTeamSpacesForSignOut();
       await signOut();
       window.location.reload();
     } catch (error) {
@@ -1546,17 +1755,10 @@ export default function SettingsPage({
                 <SettingsPanel>
                   <SettingsPanelRow>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
-                        {user.image ? (
-                          <img
-                            src={user.image}
-                            alt={user.name || t("settingsPage.account.user")}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <UserCircle className="w-5 h-5 text-primary" />
-                        )}
-                      </div>
+                      <AccountAvatar
+                        image={user.image}
+                        name={user.name || t("settingsPage.account.user")}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-foreground truncate">
                           {user.name || t("settingsPage.account.user")}
@@ -1567,6 +1769,13 @@ export default function SettingsPage({
                     </div>
                   </SettingsPanelRow>
                 </SettingsPanel>
+
+                <ProfileSection
+                  name={user.name || ""}
+                  onSessionRefresh={() => {
+                    void refetch();
+                  }}
+                />
 
                 <SettingsPanel>
                   <SettingsPanelRow>
@@ -1681,409 +1890,33 @@ export default function SettingsPage({
               </>
             ) : isLoaded ? (
               <>
-                <SectionHeader title={t("settingsPage.account.pricing.title")} />
-                <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
-                  {/* Free */}
-                  <div
-                    className={cn(
-                      "rounded-md p-2.5 flex flex-col",
-                      !usage?.isSubscribed && !usage?.isTrial
-                        ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
-                        : "border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
-                    )}
-                  >
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("settingsPage.account.pricing.free.name")}
-                    </p>
-                    <div className="flex items-baseline gap-0.5 mt-0.5">
-                      <span className="text-lg font-bold text-foreground">
-                        {t("settingsPage.account.pricing.free.price")}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground">
-                        / {t("settingsPage.account.pricing.free.period")}
-                      </span>
-                    </div>
-                    <ul className="space-y-0.5 mt-2 flex-1">
-                      {(
-                        t("settingsPage.account.pricing.free.features", {
-                          returnObjects: true,
-                        }) as string[]
-                      ).map((feature, i) =>
-                        feature.startsWith("## ") ? (
-                          <li
-                            key={i}
-                            className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/60 ${i > 0 ? "pt-1.5" : ""}`}
-                          >
-                            {feature.slice(3)}
-                          </li>
-                        ) : (
-                          <li
-                            key={i}
-                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                          >
-                            <Check size={9} className="mt-[2px] text-primary/70 shrink-0" />
-                            {feature}
-                          </li>
-                        )
-                      )}
-                    </ul>
-                    {!isSignedIn ? (
-                      <Button
-                        onClick={startOnboarding}
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {t("settingsPage.account.signedOutPlans.button")}
-                      </Button>
-                    ) : usage?.isSubscribed && !usage?.isTrial ? (
-                      <Button
-                        onClick={handleBillingPortal}
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {t("settingsPage.account.pricing.downgrade")}
-                      </Button>
-                    ) : (
-                      <div className="mt-2 text-center">
-                        <span className="text-[9px] font-medium text-primary/70">
-                          {t("settingsPage.account.pricing.currentPlan")}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Pro */}
-                  <div
-                    className={cn(
-                      "rounded-md border-2 p-2.5 flex flex-col",
-                      usage?.isSubscribed && usage?.plan === "pro"
-                        ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                        : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
-                    )}
-                  >
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("settingsPage.account.pricing.pro.name")}
-                    </p>
-                    <button
-                      onClick={() => setBillingState((prev) => ({ ...prev, pro: !prev.pro }))}
-                      role="switch"
-                      aria-checked={billingState.pro}
-                      className="flex items-center gap-1.5 mt-1"
-                    >
-                      <div
-                        className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
-                      >
-                        <div
-                          className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3" : ""}`}
-                        />
-                      </div>
-                      <span className="text-[9px] text-muted-foreground">
-                        {t("settingsPage.account.pricing.billedYearly")}
-                      </span>
-                    </button>
-                    <div className="flex items-baseline gap-0.5 mt-1">
-                      <span className="text-lg font-bold text-foreground">
-                        {billingState.pro
-                          ? t("settingsPage.account.pricing.pro.annualEquivalent")
-                          : t("settingsPage.account.pricing.pro.monthlyPrice")}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground">
-                        {t("settingsPage.account.pricing.pro.monthlyPeriod")}
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                      {t("settingsPage.account.pricing.pro.includesPrefix")}
-                    </p>
-                    <ul className="space-y-0.5 mt-1 flex-1">
-                      {(
-                        t("settingsPage.account.pricing.pro.features", {
-                          returnObjects: true,
-                        }) as string[]
-                      ).map((feature, i) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                        >
-                          <Check size={9} className="mt-[2px] text-primary shrink-0" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    {(usage?.isSubscribed && usage?.plan === "pro" && !usage?.isTrial) ||
-                    usage?.isTrial ? (
-                      <div className="mt-2 text-center">
-                        <span className="text-[9px] font-medium text-primary">
-                          {t("settingsPage.account.pricing.currentPlan")}
-                        </span>
-                      </div>
-                    ) : usage?.isSubscribed && usage?.plan === "business" ? (
-                      <Button
-                        onClick={() =>
-                          handleSwitchPlan(billingState.pro ? "annual" : "monthly", "pro")
-                        }
-                        disabled={previewLoading || usage.checkoutLoading}
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {previewLoading ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.downgrade")
-                        )}
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() =>
-                          handleCheckout(billingState.pro ? "annual" : "monthly", "pro")
-                        }
-                        disabled={checkoutTier === "pro"}
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {checkoutTier === "pro" ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.pro.cta")
-                        )}
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Business */}
-                  <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
-                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
-                      {t("settingsPage.account.pricing.business.badge")}
-                    </span>
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("settingsPage.account.pricing.business.name")}
-                    </p>
-                    <button
-                      onClick={() =>
-                        setBillingState((prev) => ({ ...prev, business: !prev.business }))
-                      }
-                      role="switch"
-                      aria-checked={billingState.business}
-                      className="flex items-center gap-1.5 mt-1"
-                    >
-                      <div
-                        className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
-                      >
-                        <div
-                          className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3" : ""}`}
-                        />
-                      </div>
-                      <span className="text-[9px] text-muted-foreground">
-                        {t("settingsPage.account.pricing.billedYearly")}
-                      </span>
-                    </button>
-                    <div className="flex items-baseline gap-0.5 mt-1">
-                      <span className="text-lg font-bold text-foreground">
-                        {billingState.business
-                          ? t("settingsPage.account.pricing.business.annualEquivalent")
-                          : t("settingsPage.account.pricing.business.monthlyPrice")}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground">
-                        {t("settingsPage.account.pricing.business.monthlyPeriod")}
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                      {t("settingsPage.account.pricing.business.includesPrefix")}
-                    </p>
-                    <ul className="space-y-0.5 mt-1 flex-1">
-                      {(
-                        t("settingsPage.account.pricing.business.features", {
-                          returnObjects: true,
-                        }) as string[]
-                      ).map((feature, i) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                        >
-                          <Check size={9} className="mt-[2px] text-primary shrink-0" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    {usage?.isSubscribed && usage?.plan === "business" && !usage?.isTrial ? (
-                      <div className="mt-2 text-center">
-                        <span className="text-[9px] font-medium text-primary">
-                          {t("settingsPage.account.pricing.currentPlan")}
-                        </span>
-                      </div>
-                    ) : usage?.isSubscribed && usage?.plan === "pro" && !usage?.isTrial ? (
-                      <Button
-                        onClick={() =>
-                          handleSwitchPlan(billingState.business ? "annual" : "monthly", "business")
-                        }
-                        disabled={previewLoading || usage.checkoutLoading}
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {previewLoading ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.upgrade")
-                        )}
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() =>
-                          handleCheckout(billingState.business ? "annual" : "monthly", "business")
-                        }
-                        disabled={checkoutTier === "business"}
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                      >
-                        {checkoutTier === "business" ? (
-                          <Loader2 size={10} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.business.cta")
-                        )}
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Enterprise */}
-                  <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
-                    <p className="text-xs font-semibold text-foreground">
-                      {t("settingsPage.account.pricing.enterprise.name")}
-                    </p>
-                    <p className="text-[9px] text-muted-foreground mt-1">
-                      {t("settingsPage.account.pricing.enterprise.subtitle")}
-                    </p>
-                    <div className="flex items-baseline gap-0.5 mt-1">
-                      <span className="text-lg font-bold text-foreground">
-                        {t("settingsPage.account.pricing.enterprise.price")}
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                      {t("settingsPage.account.pricing.enterprise.includesPrefix")}
-                    </p>
-                    <ul className="space-y-0.5 mt-1 flex-1">
-                      {(
-                        t("settingsPage.account.pricing.enterprise.features", {
-                          returnObjects: true,
-                        }) as string[]
-                      ).map((feature, i) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                        >
-                          <Check
-                            size={9}
-                            className="mt-[2px] text-purple-500 dark:text-purple-400 shrink-0"
-                          />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 w-full h-6 text-[10px]"
-                      onClick={() =>
-                        window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
-                      }
-                    >
-                      <Mail size={10} />
-                      {t("settingsPage.account.pricing.enterprise.cta")}
-                    </Button>
-                  </div>
-                </div>
-
-                <Dialog
-                  open={!!switchPreview}
-                  onOpenChange={(open) => !open && setSwitchPreview(null)}
-                >
-                  <DialogContent className="sm:max-w-90">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {t("settingsPage.account.pricing.confirmSwitch.title")}
-                      </DialogTitle>
-                      <DialogDescription>
-                        {switchPreview &&
-                          t("settingsPage.account.pricing.confirmSwitch.description", {
-                            plan: switchPreview.tier === "pro" ? "Pro" : "Business",
-                            interval:
-                              switchPreview.plan === "annual"
-                                ? t("settingsPage.account.pricing.confirmSwitch.yearly")
-                                : t("settingsPage.account.pricing.confirmSwitch.monthly"),
-                          })}
-                      </DialogDescription>
-                    </DialogHeader>
-                    {switchPreview && (
-                      <div className="rounded-lg border border-border/50 dark:border-border-subtle/60 overflow-hidden">
-                        <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
-                          <span className="text-xs text-muted-foreground">
-                            {switchPreview.immediateAmount < 0
-                              ? t("settingsPage.account.pricing.confirmSwitch.accountCredit")
-                              : t("settingsPage.account.pricing.confirmSwitch.chargeToday")}
-                          </span>
-                          <span
-                            className={cn(
-                              "text-sm font-semibold",
-                              switchPreview.immediateAmount < 0
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-foreground"
-                            )}
-                          >
-                            {formatAmount(
-                              Math.abs(switchPreview.immediateAmount),
-                              switchPreview.currency
-                            )}
-                          </span>
-                        </div>
-                        <div className="divide-y divide-border/40">
-                          <div className="flex justify-between items-center px-3 py-2">
-                            <span className="text-xs text-muted-foreground">
-                              {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
-                            </span>
-                            <span className="text-xs font-medium text-foreground">
-                              {formatAmount(switchPreview.newPriceAmount, switchPreview.currency)}/
-                              {switchPreview.newInterval === "year"
-                                ? t("settingsPage.account.pricing.confirmSwitch.yr")
-                                : t("settingsPage.account.pricing.confirmSwitch.mo")}
-                            </span>
-                          </div>
-                          {switchPreview.nextBillingDate && (
-                            <div className="flex justify-between items-center px-3 py-2">
-                              <span className="text-xs text-muted-foreground">
-                                {t("settingsPage.account.pricing.confirmSwitch.nextBilling")}
-                              </span>
-                              <span className="text-xs font-medium text-foreground">
-                                {new Date(switchPreview.nextBillingDate).toLocaleDateString()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    <DialogFooter>
-                      <Button variant="outline" size="sm" onClick={() => setSwitchPreview(null)}>
-                        {t("settingsPage.account.pricing.confirmSwitch.cancel")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={confirmSwitchPlan}
-                        disabled={usage?.checkoutLoading}
-                      >
-                        {usage?.checkoutLoading ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          t("settingsPage.account.pricing.confirmSwitch.confirm")
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
+                {isSignedIn && <WorkspaceBillingOverview onRefreshEntitlement={usage?.refetch} />}
                 {isSignedIn ? (
-                  <>
-                    <SectionHeader title={t("settingsPage.account.planTitle")} />
-                    {!usage || !usage.hasLoaded ? (
+                  <div className="space-y-5">
+                    <SectionHeader title={t("settingsPage.unifiedBilling.personalPlanTitle")} />
+                    {usage?.status === "error" ? (
+                      <SettingsPanel>
+                        <SettingsPanelRow>
+                          <SettingsRow
+                            label={t("settingsPage.account.planUnavailable.title")}
+                            description={t("settingsPage.account.planUnavailable.description")}
+                          >
+                            <Button
+                              onClick={() => void usage.retry()}
+                              variant="outline"
+                              size="sm"
+                              disabled={usage.isRetrying}
+                            >
+                              {usage.isRetrying ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                t("common.retry")
+                              )}
+                            </Button>
+                          </SettingsRow>
+                        </SettingsPanelRow>
+                      </SettingsPanel>
+                    ) : usage?.status !== "success" ? (
                       <SettingsPanel>
                         <SettingsPanelRow>
                           <div className="flex items-center justify-between">
@@ -2122,11 +1955,12 @@ export default function SettingsPage({
                                 ? t("settingsPage.account.planLabels.trial")
                                 : usage.isPastDue
                                   ? t("settingsPage.account.planLabels.free")
-                                  : usage.isSubscribed
+                                  : usage.isPersonallySubscribed
                                     ? usage.plan === "business"
                                       ? t("settingsPage.account.planLabels.business")
                                       : t("settingsPage.account.planLabels.pro")
-                                    : t("settingsPage.account.planLabels.free")
+                                    : (coveringPlanLabel ??
+                                      t("settingsPage.account.planLabels.free"))
                             }
                             description={
                               usage.isTrial
@@ -2138,7 +1972,7 @@ export default function SettingsPage({
                                       used: usage.wordsUsed.toLocaleString(i18n.language),
                                       limit: usage.limit.toLocaleString(i18n.language),
                                     })
-                                  : usage.isSubscribed
+                                  : usage.isPersonallySubscribed
                                     ? usage.currentPeriodEnd
                                       ? t("settingsPage.account.planDescriptions.nextBilling", {
                                           date: new Date(usage.currentPeriodEnd).toLocaleDateString(
@@ -2147,10 +1981,18 @@ export default function SettingsPage({
                                           ),
                                         })
                                       : t("settingsPage.account.planDescriptions.unlimited")
-                                    : t("settingsPage.account.planDescriptions.freeUsage", {
-                                        used: usage.wordsUsed.toLocaleString(i18n.language),
-                                        limit: usage.limit.toLocaleString(i18n.language),
-                                      })
+                                    : coveringWorkspaceNames.length > 0
+                                      ? t("settingsPage.unifiedBilling.providedBy", {
+                                          workspaces: coveringWorkspaceNames.join(", "),
+                                        })
+                                      : // usage.limit is -1 once subscribed, which the
+                                        // free-usage copy would print as "-1 words".
+                                        isWorkspaceCovered
+                                        ? t("settingsPage.account.planDescriptions.unlimited")
+                                        : t("settingsPage.account.planDescriptions.freeUsage", {
+                                            used: usage.wordsUsed.toLocaleString(i18n.language),
+                                            limit: usage.limit.toLocaleString(i18n.language),
+                                          })
                             }
                           >
                             {usage.isTrial ? (
@@ -2159,12 +2001,14 @@ export default function SettingsPage({
                               <Badge variant="destructive">
                                 {t("settingsPage.account.badges.pastDue")}
                               </Badge>
-                            ) : usage.isSubscribed ? (
+                            ) : usage.isPersonallySubscribed ? (
                               <Badge variant="success">
                                 {usage.plan === "business"
                                   ? t("settingsPage.account.badges.business")
                                   : t("settingsPage.account.badges.pro")}
                               </Badge>
+                            ) : coveringPlanLabel ? (
+                              <Badge variant="success">{coveringPlanLabel}</Badge>
                             ) : usage.isOverLimit ? (
                               <Badge variant="warning">
                                 {t("settingsPage.account.badges.limitReached")}
@@ -2218,23 +2062,7 @@ export default function SettingsPage({
                         <SettingsPanelRow>
                           {usage.isPastDue ? (
                             <Button
-                              onClick={async () => {
-                                setIsOpeningBilling(true);
-                                try {
-                                  const result = await usage.openBillingPortal();
-                                  if (!result.success) {
-                                    toast({
-                                      title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                      description: t(
-                                        "settingsPage.account.billing.couldNotOpenDescription"
-                                      ),
-                                      variant: "destructive",
-                                    });
-                                  }
-                                } finally {
-                                  setIsOpeningBilling(false);
-                                }
-                              }}
+                              onClick={() => void openBillingPortal()}
                               disabled={isOpeningBilling}
                               size="sm"
                               className="w-full"
@@ -2248,30 +2076,19 @@ export default function SettingsPage({
                                 t("settingsPage.account.billing.updatePaymentMethod")
                               )}
                             </Button>
-                          ) : usage.isSubscribed && !usage.isTrial ? (
+                          ) : usage.isPersonallySubscribed && !usage.isTrial ? (
                             <Button
-                              onClick={async () => {
-                                const result = await usage.openBillingPortal();
-                                if (!result.success) {
-                                  toast({
-                                    title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                    description: t(
-                                      "settingsPage.account.billing.couldNotOpenDescription"
-                                    ),
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
+                              onClick={() => void openBillingPortal()}
                               variant="outline"
                               size="sm"
                               className="w-full"
-                              disabled={usage.checkoutLoading}
+                              disabled={isOpeningBilling}
                             >
-                              {usage.checkoutLoading
+                              {isOpeningBilling
                                 ? t("settingsPage.account.billing.opening")
                                 : t("settingsPage.account.billing.manageBilling")}
                             </Button>
-                          ) : (
+                          ) : isWorkspaceCovered ? null : (
                             <Button
                               onClick={async () => {
                                 setCheckoutTier("plan-upgrade");
@@ -2302,8 +2119,403 @@ export default function SettingsPage({
                         </SettingsPanelRow>
                       </SettingsPanel>
                     )}
-                  </>
+                  </div>
                 ) : null}
+
+                <div className="space-y-5">
+                  <SectionHeader title={t("settingsPage.account.pricing.title")} />
+                  <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
+                    <div
+                      className={cn(
+                        "rounded-md p-2.5 flex flex-col",
+                        planStateKnown &&
+                          !usage?.isPersonallySubscribed &&
+                          !usage?.isTrial &&
+                          !isWorkspaceCovered
+                          ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
+                          : "border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                      )}
+                    >
+                      <p className="text-xs font-semibold text-foreground">
+                        {t("settingsPage.account.pricing.free.name")}
+                      </p>
+                      <div className="flex items-baseline gap-0.5 mt-0.5">
+                        <span className="text-lg font-bold text-foreground">
+                          {t("settingsPage.account.pricing.free.price")}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">
+                          / {t("settingsPage.account.pricing.free.period")}
+                        </span>
+                      </div>
+                      <ul className="space-y-0.5 mt-2 flex-1">
+                        {(
+                          t("settingsPage.account.pricing.free.features", {
+                            returnObjects: true,
+                          }) as string[]
+                        ).map((feature, i) =>
+                          feature.startsWith("## ") ? (
+                            <li
+                              key={i}
+                              className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/60 ${i > 0 ? "pt-1.5" : ""}`}
+                            >
+                              {feature.slice(3)}
+                            </li>
+                          ) : (
+                            <li
+                              key={i}
+                              className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                            >
+                              <Check size={9} className="mt-[2px] text-primary/70 shrink-0" />
+                              {feature}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                      {!isSignedIn ? (
+                        <Button
+                          onClick={startOnboarding}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {t("settingsPage.account.signedOutPlans.button")}
+                        </Button>
+                      ) : usage?.isPersonallySubscribed && !usage?.isTrial ? (
+                        <Button
+                          onClick={() => void openBillingPortal()}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                          disabled={isOpeningBilling}
+                        >
+                          {isOpeningBilling
+                            ? t("settingsPage.account.billing.opening")
+                            : t("settingsPage.account.pricing.downgrade")}
+                        </Button>
+                      ) : planStateKnown && !isWorkspaceCovered ? (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary/70">
+                            {t("settingsPage.account.pricing.currentPlan")}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div
+                      className={cn(
+                        "rounded-md border-2 p-2.5 flex flex-col",
+                        usage?.isPersonallySubscribed && usage?.plan === "pro"
+                          ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                          : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
+                      )}
+                    >
+                      <p className="text-xs font-semibold text-foreground">
+                        {t("settingsPage.account.pricing.pro.name")}
+                      </p>
+                      <button
+                        onClick={() => setBillingState((prev) => ({ ...prev, pro: !prev.pro }))}
+                        role="switch"
+                        aria-checked={billingState.pro}
+                        className="flex items-center gap-1.5 mt-1"
+                      >
+                        <div
+                          className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
+                        >
+                          <div
+                            className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3" : ""}`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">
+                          {t("settingsPage.account.pricing.billedYearly")}
+                        </span>
+                      </button>
+                      <div className="flex items-baseline gap-0.5 mt-1">
+                        <span className="text-lg font-bold text-foreground">
+                          {billingState.pro
+                            ? t("settingsPage.account.pricing.pro.annualEquivalent")
+                            : t("settingsPage.account.pricing.pro.monthlyPrice")}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">
+                          {t("settingsPage.account.pricing.pro.monthlyPeriod")}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                        {t("settingsPage.account.pricing.pro.includesPrefix")}
+                      </p>
+                      <ul className="space-y-0.5 mt-1 flex-1">
+                        {(
+                          t("settingsPage.account.pricing.pro.features", {
+                            returnObjects: true,
+                          }) as string[]
+                        ).map((feature, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                          >
+                            <Check size={9} className="mt-[2px] text-primary shrink-0" />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      {proCardCta === "currentPlan" ? (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.currentPlan")}
+                          </span>
+                        </div>
+                      ) : proCardCta === "downgradeToPro" ? (
+                        <Button
+                          onClick={() =>
+                            handleSwitchPlan(billingState.pro ? "annual" : "monthly", "pro")
+                          }
+                          disabled={previewLoading || usage.checkoutLoading}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {previewLoading ? (
+                            <Loader2 size={10} className="animate-spin" />
+                          ) : (
+                            t("settingsPage.account.pricing.downgrade")
+                          )}
+                        </Button>
+                      ) : proCardCta === "signUp" ? (
+                        <Button
+                          onClick={startOnboarding}
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {t("settingsPage.account.pricing.pro.cta")}
+                        </Button>
+                      ) : proCardCta === "coveredByWorkspace" ? (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.coveredByWorkspace")}
+                          </span>
+                        </div>
+                      ) : proCardCta === "checkout" ? (
+                        <Button
+                          onClick={() =>
+                            handleCheckout(billingState.pro ? "annual" : "monthly", "pro")
+                          }
+                          disabled={checkoutTier === "pro"}
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {checkoutTier === "pro" ? (
+                            <Loader2 size={10} className="animate-spin" />
+                          ) : (
+                            t("settingsPage.account.pricing.pro.cta")
+                          )}
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+                        {t("settingsPage.account.pricing.business.badge")}
+                      </span>
+                      <p className="text-xs font-semibold text-foreground">
+                        {t("settingsPage.account.pricing.business.name")}
+                      </p>
+                      <button
+                        onClick={() =>
+                          setBillingState((prev) => ({ ...prev, business: !prev.business }))
+                        }
+                        role="switch"
+                        aria-checked={billingState.business}
+                        className="flex items-center gap-1.5 mt-1"
+                      >
+                        <div
+                          className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
+                        >
+                          <div
+                            className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3" : ""}`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">
+                          {t("settingsPage.account.pricing.billedYearly")}
+                        </span>
+                      </button>
+                      <div className="flex items-baseline gap-0.5 mt-1">
+                        <span className="text-lg font-bold text-foreground">
+                          {billingState.business
+                            ? t("settingsPage.account.pricing.business.annualEquivalent")
+                            : t("settingsPage.account.pricing.business.monthlyPrice")}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">
+                          {t("settingsPage.account.pricing.business.monthlyPeriod")}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                        {t("settingsPage.account.pricing.business.includesPrefix")}
+                      </p>
+                      <ul className="space-y-0.5 mt-1 flex-1">
+                        {(
+                          t("settingsPage.account.pricing.business.features", {
+                            returnObjects: true,
+                          }) as string[]
+                        ).map((feature, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                          >
+                            <Check size={9} className="mt-[2px] text-primary shrink-0" />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      {!isSignedIn ? (
+                        <Button
+                          onClick={startOnboarding}
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {t("settingsPage.account.pricing.business.cta")}
+                        </Button>
+                      ) : (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
+                      <p className="text-xs font-semibold text-foreground">
+                        {t("settingsPage.account.pricing.enterprise.name")}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground mt-1">
+                        {t("settingsPage.account.pricing.enterprise.subtitle")}
+                      </p>
+                      <div className="flex items-baseline gap-0.5 mt-1">
+                        <span className="text-lg font-bold text-foreground">
+                          {t("settingsPage.account.pricing.enterprise.price")}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                        {t("settingsPage.account.pricing.enterprise.includesPrefix")}
+                      </p>
+                      <ul className="space-y-0.5 mt-1 flex-1">
+                        {(
+                          t("settingsPage.account.pricing.enterprise.features", {
+                            returnObjects: true,
+                          }) as string[]
+                        ).map((feature, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                          >
+                            <Check
+                              size={9}
+                              className="mt-[2px] text-purple-500 dark:text-purple-400 shrink-0"
+                            />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full h-6 text-[10px]"
+                        onClick={() =>
+                          window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
+                        }
+                      >
+                        <Mail size={10} />
+                        {t("settingsPage.account.pricing.enterprise.cta")}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Dialog
+                    open={!!switchPreview}
+                    onOpenChange={(open) => !open && setSwitchPreview(null)}
+                  >
+                    <DialogContent className="sm:max-w-90">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {t("settingsPage.account.pricing.confirmSwitch.title")}
+                        </DialogTitle>
+                        <DialogDescription>
+                          {switchPreview &&
+                            t("settingsPage.account.pricing.confirmSwitch.description", {
+                              plan: switchPreview.tier === "pro" ? "Pro" : "Business",
+                              interval:
+                                switchPreview.plan === "annual"
+                                  ? t("settingsPage.account.pricing.confirmSwitch.yearly")
+                                  : t("settingsPage.account.pricing.confirmSwitch.monthly"),
+                            })}
+                        </DialogDescription>
+                      </DialogHeader>
+                      {switchPreview && (
+                        <div className="rounded-lg border border-border/50 dark:border-border-subtle/60 overflow-hidden">
+                          <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
+                            <span className="text-xs text-muted-foreground">
+                              {switchPreview.immediateAmount < 0
+                                ? t("settingsPage.account.pricing.confirmSwitch.accountCredit")
+                                : t("settingsPage.account.pricing.confirmSwitch.chargeToday")}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-sm font-semibold",
+                                switchPreview.immediateAmount < 0
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-foreground"
+                              )}
+                            >
+                              {formatAmount(
+                                Math.abs(switchPreview.immediateAmount),
+                                switchPreview.currency
+                              )}
+                            </span>
+                          </div>
+                          <div className="divide-y divide-border/40">
+                            <div className="flex justify-between items-center px-3 py-2">
+                              <span className="text-xs text-muted-foreground">
+                                {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
+                              </span>
+                              <span className="text-xs font-medium text-foreground">
+                                {formatAmount(switchPreview.newPriceAmount, switchPreview.currency)}
+                                /
+                                {switchPreview.newInterval === "year"
+                                  ? t("settingsPage.account.pricing.confirmSwitch.yr")
+                                  : t("settingsPage.account.pricing.confirmSwitch.mo")}
+                              </span>
+                            </div>
+                            {switchPreview.nextBillingDate && (
+                              <div className="flex justify-between items-center px-3 py-2">
+                                <span className="text-xs text-muted-foreground">
+                                  {t("settingsPage.account.pricing.confirmSwitch.nextBilling")}
+                                </span>
+                                <span className="text-xs font-medium text-foreground">
+                                  {new Date(switchPreview.nextBillingDate).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <DialogFooter>
+                        <Button variant="outline" size="sm" onClick={() => setSwitchPreview(null)}>
+                          {t("settingsPage.account.pricing.confirmSwitch.cancel")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={confirmSwitchPlan}
+                          disabled={usage?.checkoutLoading}
+                        >
+                          {usage?.checkoutLoading ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            t("settingsPage.account.pricing.confirmSwitch.confirm")
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </>
             ) : (
               <>
@@ -2322,7 +2534,7 @@ export default function SettingsPage({
         );
 
       case "workspace":
-        return WORKSPACES_ENABLED ? <WorkspaceSection initialSubTab={initialSubTab} /> : null;
+        return <WorkspaceSection initialSubTab={initialSubTab} />;
 
       case "general":
         return (
@@ -2464,32 +2676,6 @@ export default function SettingsPage({
                       checked={notifyUpdates}
                       onChange={setNotifyUpdates}
                       disabled={!notificationsEnabled}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
-
-            {/* Meeting Detection */}
-            <div>
-              <SectionHeader
-                title={t("calendar.detection.title")}
-                description={t("calendar.detection.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("calendar.detection.audioDetection")}
-                    description={t("calendar.detection.audioDescription")}
-                  >
-                    <Toggle
-                      checked={meetingAudioDetection}
-                      onChange={(value) => {
-                        setMeetingAudioDetection(value);
-                        window.electronAPI?.meetingDetectionSetPreferences?.({
-                          audioDetection: value,
-                        });
-                      }}
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
@@ -2653,6 +2839,36 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                {preferredLanguage === "auto" && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settings.language.chineseScriptLabel")}
+                      description={t("settings.language.chineseScriptDescription")}
+                    >
+                      <Select
+                        value={chineseScriptPreference}
+                        onValueChange={(value: ChineseScriptPreference) =>
+                          updateTranscriptionSettings({ chineseScriptPreference: value })
+                        }
+                      >
+                        <SelectTrigger className="h-7 w-44 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="as-transcribed">
+                            {t("settings.language.chineseScriptAsTranscribed")}
+                          </SelectItem>
+                          <SelectItem value="simplified">
+                            {t("settings.language.chineseScriptSimplified")}
+                          </SelectItem>
+                          <SelectItem value="traditional">
+                            {t("settings.language.chineseScriptTraditional")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 
@@ -2663,18 +2879,39 @@ export default function SettingsPage({
                 description={t("settingsPage.general.startup.description")}
               />
               <SettingsPanel>
-                {platform !== "linux" && (
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.startup.launchAtLogin")}
+                    description={t("settingsPage.general.startup.launchAtLoginDescription")}
+                  >
+                    <Toggle
+                      checked={autoStartEnabled}
+                      onChange={(checked: boolean) => handleAutoStartChange(checked)}
+                      disabled={autoStartLoading}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                {autoStartNeedsApproval && (
                   <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.general.startup.launchAtLogin")}
-                      description={t("settingsPage.general.startup.launchAtLoginDescription")}
+                    <Alert
+                      variant="warning"
+                      className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
                     >
-                      <Toggle
-                        checked={autoStartEnabled}
-                        onChange={(checked: boolean) => handleAutoStartChange(checked)}
-                        disabled={autoStartLoading}
-                      />
-                    </SettingsRow>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>
+                        {t("settingsPage.general.startup.needsApproval.title")}
+                      </AlertTitle>
+                      <AlertDescription className="space-y-2">
+                        <p>{t("settingsPage.general.startup.needsApproval.description")}</p>
+                        <Button
+                          onClick={() => void window.electronAPI?.openLoginItemsSettings?.()}
+                          variant="outline"
+                          size="sm"
+                        >
+                          {t("settingsPage.general.startup.needsApproval.action")}
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
                   </SettingsPanelRow>
                 )}
                 <SettingsPanelRow>
@@ -2699,8 +2936,11 @@ export default function SettingsPage({
                   <MicrophoneSettings
                     preferBuiltInMic={preferBuiltInMic}
                     selectedMicDeviceId={selectedMicDeviceId}
+                    selectedMicDeviceLabel={selectedMicDeviceLabel}
+                    micWarmHoldSeconds={micWarmHoldSeconds}
                     onPreferBuiltInChange={setPreferBuiltInMic}
-                    onDeviceSelect={setSelectedMicDeviceId}
+                    onDeviceSelect={setSelectedMicDevice}
+                    onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -2743,6 +2983,11 @@ export default function SettingsPage({
                   })}
                 />
                 {(() => {
+                  if (ydotoolStatus.isNixOS) {
+                    return (
+                      <NixOsPasteInfo status={ydotoolStatus} onRecheck={refreshYdotoolStatus} />
+                    );
+                  }
                   const checks = [
                     {
                       key: "hasYdotool",
@@ -3205,43 +3450,61 @@ EOF`,
       case "hotkeys":
         return (
           <div className="space-y-6">
+            {isUsingHyprland && hyprlandConfigStatus && !hyprlandConfigStatus.canWrite && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>
+                  {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningTitle")}
+                </AlertTitle>
+                <AlertDescription>
+                  {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
+                    path: hyprlandConfigStatus.path,
+                  })}
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Dictation Hotkey */}
             <div>
               <SectionHeader
                 title={t("settingsPage.general.hotkey.title")}
                 description={t("settingsPage.general.hotkey.description")}
+                note={isUsingHyprland && t("settingsPage.general.hotkey.hyprlandUnbindDescription")}
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={dictationKey}
-                    onChange={async (newHotkey) => {
-                      await registerHotkey(newHotkey);
-                    }}
-                    disabled={isHotkeyRegistering}
+                    onChange={(list) => registerHotkey(list)}
                     validate={validateDictationHotkey}
+                    disabled={isHotkeyRegistering}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    required
+                    footerEnd={
+                      effectiveDefaultHotkey &&
+                      dictationKey &&
+                      dictationKey !== effectiveDefaultHotkey ? (
+                        <button
+                          onClick={() => registerHotkey(effectiveDefaultHotkey)}
+                          disabled={isHotkeyRegistering}
+                          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                          {t("settingsPage.general.hotkey.resetToDefault", {
+                            hotkey: formatHotkeyLabel(effectiveDefaultHotkey),
+                          })}
+                        </button>
+                      ) : null
+                    }
                   />
-                  {effectiveDefaultHotkey &&
-                    dictationKey &&
-                    dictationKey !== effectiveDefaultHotkey && (
-                      <button
-                        onClick={() => registerHotkey(effectiveDefaultHotkey)}
-                        disabled={isHotkeyRegistering}
-                        className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                      >
-                        {t("settingsPage.general.hotkey.resetToDefault", {
-                          hotkey: formatHotkeyLabel(effectiveDefaultHotkey),
-                        })}
-                      </button>
-                    )}
                 </SettingsPanelRow>
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
-                    <p className="text-xs font-medium text-muted-foreground/80 mb-2">
-                      {t("settingsPage.general.hotkey.activationMode")}
-                    </p>
-                    <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted-foreground/80">
+                        {t("settingsPage.general.hotkey.activationMode")}
+                      </span>
+                      <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                    </div>
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                     )}
@@ -3258,25 +3521,68 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={pasteLastKey}
-                    onChange={async (newHotkey) => {
-                      await registerPasteLastHotkey(newHotkey);
-                    }}
-                    disabled={isPasteLastRegistering}
+                    onChange={(list) => registerPasteLastHotkey(list)}
                     validate={validatePasteLastHotkey}
+                    disabled={isPasteLastRegistering}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    footerEnd={
+                      pasteLastKey && pasteLastKey !== "Alt+Shift+Z" ? (
+                        <button
+                          onClick={() => registerPasteLastHotkey("Alt+Shift+Z")}
+                          disabled={isPasteLastRegistering}
+                          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                          {t("settingsPage.general.pasteLastHotkey.resetToDefault", {
+                            hotkey: formatHotkeyLabel("Alt+Shift+Z"),
+                          })}
+                        </button>
+                      ) : undefined
+                    }
                   />
-                  {pasteLastKey && pasteLastKey !== "Alt+Shift+Z" && (
-                    <button
-                      onClick={() => registerPasteLastHotkey("Alt+Shift+Z")}
-                      disabled={isPasteLastRegistering}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                    >
-                      {t("settingsPage.general.pasteLastHotkey.resetToDefault", {
-                        hotkey: formatHotkeyLabel("Alt+Shift+Z"),
-                      })}
-                    </button>
-                  )}
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Voice Agent Hotkey */}
+            {agentAllowedByPolicy && (
+              <div>
+                <SectionHeader
+                  title={t("settingsPage.general.voiceAgentHotkey.title")}
+                  description={t("settingsPage.general.voiceAgentHotkey.description")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={voiceAgentKey}
+                      onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
+                      onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
+                      validate={validateVoiceAgentHotkey}
+                      disabled={isAgentHotkeyCommitting}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
+
+            {/* Translation Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.translationHotkey.title")}
+                description={t("settingsPage.general.translationHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyListInput
+                    value={translationKey}
+                    onChange={(list) => commitAgentHotkey(setTranslationKey, list)}
+                    onClear={() => commitAgentHotkey(setTranslationKey, "")}
+                    validate={validateTranslationHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                  />
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
@@ -3289,26 +3595,17 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={meetingKey}
-                    onChange={async (newHotkey) => {
-                      await registerMeetingHotkey(newHotkey);
+                    onChange={(list) => registerMeetingHotkey(list)}
+                    onClear={async () => {
+                      await window.electronAPI?.registerMeetingHotkey?.("");
+                      setMeetingKey("");
                     }}
-                    disabled={isMeetingHotkeyRegistering}
                     validate={validateMeetingHotkey}
+                    disabled={isMeetingHotkeyRegistering}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
-                  {meetingKey && (
-                    <button
-                      onClick={async () => {
-                        await window.electronAPI?.registerMeetingHotkey?.("");
-                        setMeetingKey("");
-                      }}
-                      disabled={isMeetingHotkeyRegistering}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                    >
-                      {t("settingsPage.general.meetingHotkey.clear")}
-                    </button>
-                  )}
                 </SettingsPanelRow>
                 <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
                   <span className="text-xs text-muted-foreground/80">
@@ -3342,30 +3639,27 @@ EOF`,
               </SettingsPanel>
             </div>
 
-            {/* Agent Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("agentMode.settings.hotkey")}
-                description={t("agentMode.settings.hotkeyDescription")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyInput
-                    value={chatAgentKey}
-                    onChange={setChatAgentKey}
-                    validate={validateAgentHotkey}
-                  />
-                  {chatAgentKey && (
-                    <button
-                      onClick={() => setChatAgentKey("")}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
-                    >
-                      {t("agentMode.settings.clearHotkey")}
-                    </button>
-                  )}
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
+            {/* Chat Agent Hotkey */}
+            {agentAllowedByPolicy && (
+              <div>
+                <SectionHeader
+                  title={t("agentMode.settings.hotkey")}
+                  description={t("agentMode.settings.hotkeyDescription")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={chatAgentKey}
+                      onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
+                      onClear={() => commitAgentHotkey(setChatAgentKey, "")}
+                      validate={validateChatAgentHotkey}
+                      disabled={isAgentHotkeyCommitting}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
           </div>
         );
 
@@ -3389,21 +3683,34 @@ EOF`,
                     <SettingsPanelRow>
                       <SettingsRow
                         label={t("settingsPage.privacy.cloudBackup")}
-                        description={t("settingsPage.privacy.cloudBackupDescription")}
+                        description={
+                          cloudBackupPolicyAllowed
+                            ? t("settingsPage.privacy.cloudBackupDescription")
+                            : t("common.managedByOrg")
+                        }
                       >
                         <Toggle
                           checked={cloudBackupEnabled}
+                          disabled={
+                            !canChangeCloudBackupPreference(
+                              cloudBackupPolicyAllowed,
+                              cloudBackupEnabled
+                            )
+                          }
                           onChange={(v) => {
                             setCloudBackupEnabled(v);
                             if (v) {
                               startMigration().catch(console.error);
-                              syncService.syncAll().catch(console.error);
+                              syncService.requestSyncAll("manual");
                             }
                           }}
                         />
                       </SettingsRow>
                     </SettingsPanelRow>
                   </SettingsPanel>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("settingsPage.privacy.cloudBackupTeamCaveat")}
+                  </p>
                   {migration && (
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -3487,26 +3794,32 @@ EOF`,
                     description={t("settingsPage.privacy.audioRetentionDescription")}
                   >
                     <select
-                      value={audioRetentionDays}
-                      onChange={(e) => setAudioRetentionDays(parseInt(e.target.value, 10))}
-                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
+                      value={enforcedAudioRetentionDays}
+                      onChange={(e) => {
+                        const days = parseInt(e.target.value, 10);
+                        if (audioRetentionCap !== null && days > audioRetentionCap) return;
+                        setAudioRetentionDays(days);
+                      }}
+                      className={RETENTION_SELECT_CLASS}
                     >
                       <option value={0}>{t("settingsPage.privacy.audioRetentionDisabled")}</option>
-                      <option value={7}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 7 })}
-                      </option>
-                      <option value={14}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 14 })}
-                      </option>
-                      <option value={30}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 30 })}
-                      </option>
-                      <option value={60}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 60 })}
-                      </option>
-                      <option value={90}>
-                        {t("settingsPage.privacy.audioRetentionDays", { count: 90 })}
-                      </option>
+                      {enforcedAudioRetentionDays > 0 &&
+                        !RETENTION_DAY_OPTIONS.includes(enforcedAudioRetentionDays) && (
+                          <option value={enforcedAudioRetentionDays}>
+                            {t("settingsPage.privacy.retentionDays", {
+                              count: enforcedAudioRetentionDays,
+                            })}
+                          </option>
+                        )}
+                      {RETENTION_DAY_OPTIONS.map((days) => (
+                        <option
+                          key={days}
+                          value={days}
+                          disabled={audioRetentionCap !== null && days > audioRetentionCap}
+                        >
+                          {t("settingsPage.privacy.retentionDays", { count: days })}
+                        </option>
+                      ))}
                     </select>
                   </SettingsRow>
                 </SettingsPanelRow>
@@ -3542,9 +3855,51 @@ EOF`,
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.dataRetention")}
-                    description={t("settingsPage.privacy.dataRetentionDescription")}
+                    description={
+                      historyLockedByPolicy
+                        ? t("common.managedByOrg")
+                        : t("settingsPage.privacy.dataRetentionDescription")
+                    }
                   >
-                    <Toggle checked={dataRetentionEnabled} onChange={setDataRetentionEnabled} />
+                    <Toggle
+                      checked={effectiveDataRetentionEnabled}
+                      disabled={historyLockedByPolicy}
+                      onChange={setDataRetentionEnabled}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.transcriptRetention")}
+                    description={t("settingsPage.privacy.transcriptRetentionDescription")}
+                  >
+                    <select
+                      value={transcriptRetentionDays}
+                      disabled={!effectiveDataRetentionEnabled}
+                      onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
+                      className={RETENTION_SELECT_CLASS}
+                    >
+                      <option value={0}>
+                        {t("settingsPage.privacy.transcriptRetentionForever")}
+                      </option>
+                      {RETENTION_DAY_OPTIONS.map((days) => (
+                        <option key={days} value={days}>
+                          {t("settingsPage.privacy.retentionDays", { count: days })}
+                        </option>
+                      ))}
+                    </select>
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.saveDiscarded")}
+                    description={t("settingsPage.privacy.saveDiscardedDescription")}
+                  >
+                    <Toggle
+                      checked={saveDiscardedTranscriptions}
+                      disabled={!effectiveDataRetentionEnabled || enforcedAudioRetentionDays === 0}
+                      onChange={setSaveDiscardedTranscriptions}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3976,6 +4331,8 @@ EOF`,
                   setTranscriptionMode={setTranscriptionMode}
                   remoteTranscriptionUrl={remoteTranscriptionUrl}
                   setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  remoteTranscriptionModel={remoteTranscriptionModel}
+                  setRemoteTranscriptionModel={setRemoteTranscriptionModel}
                   showTranscriptionPreview={showTranscriptionPreview}
                   setShowTranscriptionPreview={setShowTranscriptionPreview}
                   toast={toast}
@@ -3991,6 +4348,11 @@ EOF`,
                 {transcriptionMode === "local" &&
                   localTranscriptionProvider !== "nvidia" &&
                   renderWhisperVadSettings()}
+              </div>
+            )}
+            renderUpload={() => (
+              <div className="space-y-6">
+                <UploadTranscriptionPanel />
               </div>
             )}
           />
@@ -4022,6 +4384,7 @@ EOF`,
               </div>
             )}
             renderDictationAgent={() => <DictationAgentSettings />}
+            renderDictationTranslation={() => <DictationTranslationSettings />}
             renderNoteFormatting={() => <NoteFormattingSettings />}
           />
         </TabPanel>

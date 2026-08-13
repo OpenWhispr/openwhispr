@@ -89,12 +89,7 @@ function moveChildrenUp(dirPath) {
   fs.rmSync(nestedDir, { recursive: true, force: true });
 }
 
-async function ensureSourceTree({
-  url,
-  archiveName,
-  outputDir,
-  flattenSingleRoot = false,
-}) {
+async function ensureSourceTree({ url, archiveName, outputDir, flattenSingleRoot = false }) {
   if (fs.existsSync(outputDir) && listEntries(outputDir).length > 0) {
     return outputDir;
   }

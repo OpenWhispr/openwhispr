@@ -1,4 +1,4 @@
-import { CACHE_CONFIG } from "../config/constants";
+import { CACHE_CONFIG } from "../config/constants.ts";
 
 interface CacheEntry<T> {
   value: T;

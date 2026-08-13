@@ -159,13 +159,50 @@ static int SendPasteTerminal(void) {
     return (sent == 6) ? 0 : 1;
 }
 
+static int SendCopyNormal(void) {
+    INPUT inputs[4];
+    ZeroMemory(inputs, sizeof(inputs));
+
+    SetKey(&inputs[0], VK_LCONTROL, 0);
+    SetKey(&inputs[1], 'C', 0);
+    SetKey(&inputs[2], 'C', KEYEVENTF_KEYUP);
+    SetKey(&inputs[3], VK_LCONTROL, KEYEVENTF_KEYUP);
+
+    return (SendInput(4, inputs, sizeof(INPUT)) == 4) ? 0 : 1;
+}
+
+static int SendCopyTerminal(void) {
+    INPUT inputs[6];
+    ZeroMemory(inputs, sizeof(inputs));
+
+    SetKey(&inputs[0], VK_LCONTROL, 0);
+    SetKey(&inputs[1], VK_LSHIFT, 0);
+    SetKey(&inputs[2], 'C', 0);
+    SetKey(&inputs[3], 'C', KEYEVENTF_KEYUP);
+    SetKey(&inputs[4], VK_LSHIFT, KEYEVENTF_KEYUP);
+    SetKey(&inputs[5], VK_LCONTROL, KEYEVENTF_KEYUP);
+
+    return (SendInput(6, inputs, sizeof(INPUT)) == 6) ? 0 : 1;
+}
+
 int main(int argc, char* argv[]) {
     BOOL detectOnly = FALSE;
+    BOOL copyMode = FALSE;
+    BOOL capabilitiesOnly = FALSE;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--detect-only") == 0) {
             detectOnly = TRUE;
+        } else if (strcmp(argv[i], "--copy") == 0) {
+            copyMode = TRUE;
+        } else if (strcmp(argv[i], "--capabilities") == 0) {
+            capabilitiesOnly = TRUE;
         }
+    }
+
+    if (capabilitiesOnly) {
+        printf("paste-v1 selection-copy-v1 target-identity-v1\n");
+        return 0;
     }
 
     HWND hwnd = GetForegroundWindow();
@@ -191,6 +228,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (detectOnly) {
+        printf("TARGET %p\n", (void*)hwnd);
         printf("WINDOW_CLASS %s\n", className);
         if (gotExeName) {
             printf("EXE_NAME %s\n", exeName);
@@ -210,7 +248,11 @@ int main(int argc, char* argv[]) {
     int releasedCount = ReleaseModifiers(releasedInputs, releasedVKs);
 
     int result;
-    if (isTerminal) {
+    if (copyMode && isTerminal) {
+        result = SendCopyTerminal();
+    } else if (copyMode) {
+        result = SendCopyNormal();
+    } else if (isTerminal) {
         result = SendPasteTerminal();
     } else {
         result = SendPasteNormal();
@@ -225,7 +267,12 @@ int main(int argc, char* argv[]) {
 
     Sleep(20);
 
-    printf("PASTE_OK %s %s\n", className, isTerminal ? "ctrl+shift+v" : "ctrl+v");
+    if (copyMode) {
+        printf("COPY_OK %p %s %s\n", (void*)hwnd, className,
+               isTerminal ? "ctrl+shift+c" : "ctrl+c");
+    } else {
+        printf("PASTE_OK %s %s\n", className, isTerminal ? "ctrl+shift+v" : "ctrl+v");
+    }
     fflush(stdout);
 
     return 0;

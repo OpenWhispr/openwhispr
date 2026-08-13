@@ -4,22 +4,122 @@ const EventEmitter = require("events");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 
+// Force a key-up if the native listener never reports one (e.g. a missed release
+// while another window had focus), so a held key can't get stuck recording.
+const WATCHDOG_MS = 30000;
+
 class LinuxKeyManager extends EventEmitter {
   constructor() {
     super();
-    this.process = null;
     this.isSupported = process.platform === "linux";
     this.hasReportedError = false;
-    this.currentKey = null;
-    this.isReady = false;
-    this.watchdogTimer = null;
+    this.hasReportedUnavailable = false;
+    this.listeners = new Map(); // key string -> { child, watchdog }
+  }
+
+  /**
+   * Reconcile the watched keys to exactly `keys`: spawn a listener for each new
+   * key, stop listeners no longer wanted. Idempotent — safe to call repeatedly.
+   */
+  setKeys(keys) {
+    if (!this.isSupported) return;
+    const desired = new Set(keys.filter(Boolean));
+
+    for (const key of [...this.listeners.keys()]) {
+      if (!desired.has(key)) this._stopKey(key);
+    }
+
+    if (desired.size === 0) return;
+
+    const listenerPath = this.resolveListenerBinary();
+    if (!listenerPath) {
+      if (!this.hasReportedUnavailable) {
+        this.hasReportedUnavailable = true;
+        this.emit("unavailable", new Error("Linux key listener binary not found"));
+      }
+      return;
+    }
+
+    for (const key of desired) {
+      if (!this.listeners.has(key)) this._startKey(key, listenerPath);
+    }
+  }
+
+  _startKey(key, listenerPath) {
+    let child;
+    try {
+      child = spawn(listenerPath, [key], { stdio: ["ignore", "pipe", "pipe"] });
+    } catch (error) {
+      debugLogger.error("[LinuxKeyManager] Failed to spawn process", { error: error.message });
+      this.reportError(error);
+      return;
+    }
+
+    this.hasReportedError = false;
+    const entry = { child, watchdog: null };
+    this.listeners.set(key, entry);
+    debugLogger.debug("[LinuxKeyManager] Starting key listener", { key, binaryPath: listenerPath });
+
+    let lineBuffer = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      lineBuffer += chunk;
+      const lines = lineBuffer.split(/\r?\n/);
+      lineBuffer = lines.pop();
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (line) this.handleOutputLine(line, key);
+      }
+    });
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (data) => {
+      const message = data.toString().trim();
+      if (message.length > 0) {
+        debugLogger.debug("[LinuxKeyManager] Native stderr", { key, message });
+      }
+    });
+
+    child.on("error", (error) => {
+      if (this.listeners.get(key) === entry) this._stopKey(key);
+      this.reportError(error);
+    });
+
+    child.on("exit", (code, signal) => {
+      const trailingLine = lineBuffer.trim();
+      if (trailingLine) this.handleOutputLine(trailingLine, key);
+
+      // wasTracked is false for intentional stops (_stopKey deletes first), so this
+      // reports only unexpected exits — including signal crashes, where code is null.
+      const wasTracked = this.listeners.get(key) === entry;
+      if (wasTracked) this._stopKey(key);
+      if (wasTracked && (code || signal)) {
+        this.reportError(
+          new Error(
+            `Linux key listener exited with code ${code ?? "null"} signal ${signal ?? "null"}`
+          )
+        );
+      }
+    });
+  }
+
+  _stopKey(key) {
+    const entry = this.listeners.get(key);
+    if (!entry) return;
+    this.listeners.delete(key);
+    if (entry.watchdog) clearTimeout(entry.watchdog);
+    debugLogger.debug("[LinuxKeyManager] Stopping key listener", { key });
+    try {
+      entry.child.kill();
+    } catch {
+      // Already gone
+    }
   }
 
   handleOutputLine(line, key) {
     if (line === "READY") {
       debugLogger.debug("[LinuxKeyManager] Listener ready", { key });
-      this.isReady = true;
-      this.emit("ready");
+      this.emit("ready", key);
       return;
     }
 
@@ -31,123 +131,37 @@ class LinuxKeyManager extends EventEmitter {
 
     if (line === "KEY_DOWN") {
       debugLogger.debug("[LinuxKeyManager] KEY_DOWN detected", { key });
-      if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
-      this.watchdogTimer = setTimeout(() => {
-        debugLogger.warn("[LinuxKeyManager] Watchdog: no KEY_UP within 30s, forcing release");
-        this.emit("key-up", this.currentKey);
-        this.watchdogTimer = null;
-      }, 30000);
+      const entry = this.listeners.get(key);
+      if (entry) {
+        if (entry.watchdog) clearTimeout(entry.watchdog);
+        entry.watchdog = setTimeout(() => {
+          debugLogger.warn("[LinuxKeyManager] Watchdog: no KEY_UP within 30s, forcing release", {
+            key,
+          });
+          entry.watchdog = null;
+          this.emit("key-up", key);
+        }, WATCHDOG_MS);
+      }
       this.emit("key-down", key);
       return;
     }
 
     if (line === "KEY_UP") {
       debugLogger.debug("[LinuxKeyManager] KEY_UP detected", { key });
-      if (this.watchdogTimer) {
-        clearTimeout(this.watchdogTimer);
-        this.watchdogTimer = null;
+      const entry = this.listeners.get(key);
+      if (entry?.watchdog) {
+        clearTimeout(entry.watchdog);
+        entry.watchdog = null;
       }
       this.emit("key-up", key);
       return;
     }
 
-    debugLogger.debug("[LinuxKeyManager] Unknown output", { line });
-  }
-
-  start(key = "`") {
-    if (!this.isSupported) return;
-    if (this.process && this.currentKey === key) return;
-
-    this.stop();
-
-    const listenerPath = this.resolveListenerBinary();
-    if (!listenerPath) {
-      this.emit("unavailable", new Error("Linux key listener binary not found"));
-      return;
-    }
-
-    this.hasReportedError = false;
-    this.isReady = false;
-    this.currentKey = key;
-
-    debugLogger.debug("[LinuxKeyManager] Starting key listener", {
-      key,
-      binaryPath: listenerPath,
-    });
-
-    try {
-      this.process = spawn(listenerPath, [key], {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-    } catch (error) {
-      debugLogger.error("[LinuxKeyManager] Failed to spawn process", { error: error.message });
-      this.reportError(error);
-      return;
-    }
-
-    let lineBuffer = "";
-    this.process.stdout.setEncoding("utf8");
-    this.process.stdout.on("data", (chunk) => {
-      lineBuffer += chunk;
-      const lines = lineBuffer.split(/\r?\n/);
-      lineBuffer = lines.pop();
-      for (const raw of lines) {
-        const line = raw.trim();
-        if (!line) continue;
-        this.handleOutputLine(line, key);
-      }
-    });
-
-    this.process.stderr.setEncoding("utf8");
-    this.process.stderr.on("data", (data) => {
-      const message = data.toString().trim();
-      if (message.length > 0) {
-        debugLogger.debug("[LinuxKeyManager] Native stderr", { message });
-      }
-    });
-
-    const proc = this.process;
-
-    proc.on("error", (error) => {
-      if (this.process === proc) this.process = null;
-      this.reportError(error);
-    });
-
-    proc.on("exit", (code, signal) => {
-      const trailingLine = lineBuffer.trim();
-      if (trailingLine) {
-        this.handleOutputLine(trailingLine, key);
-        lineBuffer = "";
-      }
-
-      if (this.process === proc) {
-        this.process = null;
-        this.isReady = false;
-      }
-      if (code !== 0) {
-        this.reportError(
-          new Error(
-            `Linux key listener exited with code ${code ?? "null"} signal ${signal ?? "null"}`
-          )
-        );
-      }
-    });
+    debugLogger.debug("[LinuxKeyManager] Unknown output", { key, line });
   }
 
   stop() {
-    if (this.watchdogTimer) {
-      clearTimeout(this.watchdogTimer);
-      this.watchdogTimer = null;
-    }
-    if (this.process) {
-      debugLogger.debug("[LinuxKeyManager] Stopping key listener");
-      try {
-        this.process.kill();
-      } catch {}
-      this.process = null;
-    }
-    this.isReady = false;
-    this.currentKey = null;
+    for (const key of [...this.listeners.keys()]) this._stopKey(key);
   }
 
   isAvailable() {
@@ -157,16 +171,6 @@ class LinuxKeyManager extends EventEmitter {
   reportError(error) {
     if (this.hasReportedError) return;
     this.hasReportedError = true;
-
-    if (this.process) {
-      try {
-        this.process.kill();
-      } catch {
-      } finally {
-        this.process = null;
-      }
-    }
-
     debugLogger.warn("[LinuxKeyManager] Error occurred", { error: error.message });
     this.emit("error", error);
   }

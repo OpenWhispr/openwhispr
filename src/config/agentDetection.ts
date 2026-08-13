@@ -25,42 +25,40 @@ function maxEditsForLength(len: number): number {
   return 2;
 }
 
+const VOCATIVE_CUES = new Set(["hey", "hi", "hello", "ok", "okay", "yo", "please"]);
+
+// The name only counts as addressing the agent when it starts the dictation,
+// follows a greeting cue ("hey Jarvis"), or opens a new sentence. A mere
+// mention elsewhere ("I showed OpenWhispr to a friend") is dictated content,
+// not a command.
+function isAddressedAt(index: number, words: string[], rawWords: string[]): boolean {
+  if (index === 0) return true;
+  if (VOCATIVE_CUES.has(words[index - 1])) return true;
+  return /[.!?…]["')\]]*$/.test(rawWords[index - 1]);
+}
+
 export function detectAgentName(transcript: string, agentName: string): boolean {
   const name = agentName.trim();
   if (!name || name.length < 2) return false;
 
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (new RegExp(`\\b${escaped}\\b`, "i").test(transcript)) return true;
-
   const nameLower = name.toLowerCase().replace(/\s+/g, "");
-  const words = transcript
-    .split(/\s+/)
-    .map((w) => w.replace(/[.,!?;:'"()]/g, "").toLowerCase())
-    .filter(Boolean);
-
-  for (let i = 0; i < words.length - 1; i++) {
-    if (words[i] + words[i + 1] === nameLower) return true;
-  }
+  const rawWords = transcript.split(/\s+/).filter(Boolean);
+  const words = rawWords.map((w) => w.replace(/[.,!?;:'"()]/g, "").toLowerCase());
 
   const maxEdits = maxEditsForLength(nameLower.length);
-  if (maxEdits === 0) return false;
+  // STT may split the name across tokens ("open whispr") or mishear it, so
+  // compare joined windows up to the name's own token count (minimum 2)
+  // against the name, allowing length-scaled edits.
+  const maxSpan = Math.max(2, name.split(/\s+/).length);
 
-  for (const word of words) {
-    if (
-      Math.abs(word.length - nameLower.length) <= maxEdits &&
-      levenshteinDistance(word, nameLower) <= maxEdits
-    ) {
-      return true;
-    }
-  }
-
-  for (let i = 0; i < words.length - 1; i++) {
-    const combined = words[i] + words[i + 1];
-    if (
-      Math.abs(combined.length - nameLower.length) <= maxEdits &&
-      levenshteinDistance(combined, nameLower) <= maxEdits
-    ) {
-      return true;
+  for (let i = 0; i < words.length; i++) {
+    let joined = "";
+    for (let span = 0; span < maxSpan && i + span < words.length; span++) {
+      joined += words[i + span];
+      if (Math.abs(joined.length - nameLower.length) > maxEdits) continue;
+      if (levenshteinDistance(joined, nameLower) <= maxEdits && isAddressedAt(i, words, rawWords)) {
+        return true;
+      }
     }
   }
 

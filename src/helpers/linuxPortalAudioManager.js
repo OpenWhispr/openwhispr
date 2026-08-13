@@ -1,13 +1,11 @@
-const { app } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const debugLogger = require("./debugLogger");
 
-const REQUEST_TIMEOUT_MS = 90000;
 const START_TIMEOUT_MS = 15000;
 const STOP_TIMEOUT_MS = 5000;
-const TOKEN_FILE_NAME = ".linux-system-audio-restore-token.json";
+const PROBE_TIMEOUT_MS = 5000;
 
 class LinuxPortalAudioManager {
   constructor() {
@@ -95,57 +93,10 @@ class LinuxPortalAudioManager {
     return promise;
   }
 
-  hasStoredRestoreToken() {
-    return !!this.getStoredRestoreToken();
-  }
-
-  getStoredRestoreToken() {
-    try {
-      const raw = fs.readFileSync(this._tokenFilePath(), "utf8");
-      const parsed = JSON.parse(raw);
-      return typeof parsed?.restoreToken === "string" && parsed.restoreToken.trim()
-        ? parsed.restoreToken.trim()
-        : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async requestAccess() {
-    const capability = await this.getCapability();
-    if (!capability.available || !capability.supportsPersistentGrant) {
-      return {
-        granted: false,
-        status: "unknown",
-        restoreTokenAvailable: false,
-        portalVersion: capability.portalVersion,
-        error: capability.error,
-      };
-    }
-
-    const result = await this._runJsonCommand(["grant"], REQUEST_TIMEOUT_MS);
-    const restoreToken =
-      typeof result?.restoreToken === "string" && result.restoreToken.trim()
-        ? result.restoreToken.trim()
-        : null;
-
-    if (restoreToken) {
-      this._writeTokenRecord({ restoreToken, portalVersion: capability.portalVersion });
-    }
-
-    return {
-      granted: !!result?.granted && !!restoreToken,
-      status: result?.granted && restoreToken ? "granted" : "unknown",
-      restoreTokenAvailable: !!restoreToken,
-      portalVersion: capability.portalVersion,
-      error: result?.error,
-    };
-  }
-
   async start({ onChunk, onError, onWarning } = {}) {
     const capability = await this.getCapability();
     if (!capability.available || !capability.supportsSystemAudio) {
-      throw new Error(capability.error || "Linux portal system audio helper is unavailable.");
+      throw new Error(capability.error || "Linux PipeWire system audio helper is unavailable.");
     }
 
     if (this.process) {
@@ -156,11 +107,7 @@ class LinuxPortalAudioManager {
     }
 
     const binaryPath = this._prepareBinary();
-    const restoreToken = this.getStoredRestoreToken();
     const args = ["start"];
-    if (restoreToken) {
-      args.push("--restore-token", restoreToken);
-    }
 
     const child = spawn(binaryPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -176,7 +123,7 @@ class LinuxPortalAudioManager {
     await new Promise((resolve, reject) => {
       let settled = false;
       const timeout = setTimeout(() => {
-        finish(reject, new Error("Timed out starting Linux portal system audio capture."), true);
+        finish(reject, new Error("Timed out starting Linux PipeWire system audio capture."), true);
       }, START_TIMEOUT_MS);
 
       const finish = (callback, value, shouldStop = false) => {
@@ -197,32 +144,16 @@ class LinuxPortalAudioManager {
       child.stderr.on("data", (chunk) => {
         this._consumeStderr(chunk, (message) => {
           if (message.type === "start") {
-            if (typeof message.restoreToken === "string" && message.restoreToken.trim()) {
-              this._writeTokenRecord({
-                restoreToken: message.restoreToken.trim(),
-                portalVersion: capability.portalVersion,
-              });
-            }
             finish(resolve);
             return;
           }
 
           if (message.type === "warning") {
-            if (message.code === "restore_failed") {
-              this.clearStoredRestoreToken();
-            }
             this.onWarning?.(message);
             return;
           }
 
           if (message.type === "error") {
-            if (
-              message.code === "restore_failed" ||
-              message.code === "permission_denied" ||
-              message.code === "portal_denied"
-            ) {
-              this.clearStoredRestoreToken();
-            }
             const error = this._buildProcessError(message);
             if (!settled) {
               finish(reject, error, true);
@@ -250,7 +181,7 @@ class LinuxPortalAudioManager {
           finish(
             reject,
             new Error(
-              `Linux portal audio helper exited before start (code ${code ?? "null"}, signal ${signal ?? "null"}).`
+              `Linux PipeWire audio helper exited before start (code ${code ?? "null"}, signal ${signal ?? "null"}).`
             )
           );
           return;
@@ -259,7 +190,7 @@ class LinuxPortalAudioManager {
         if (!wasStopping) {
           this.onError?.(
             new Error(
-              `Linux portal audio helper exited unexpectedly (code ${code ?? "null"}, signal ${signal ?? "null"}).`
+              `Linux PipeWire audio helper exited unexpectedly (code ${code ?? "null"}, signal ${signal ?? "null"}).`
             )
           );
         }
@@ -307,17 +238,11 @@ class LinuxPortalAudioManager {
     this.isStopping = false;
   }
 
-  clearStoredRestoreToken() {
-    try {
-      fs.unlinkSync(this._tokenFilePath());
-    } catch {}
-  }
-
   _prepareBinary() {
     const binaryPath = this.resolveBinary();
     if (!binaryPath) {
       throw new Error(
-        "Linux portal system audio helper not found. Run `npm run compile:linux-system-audio` before packaging."
+        "Linux PipeWire system audio helper not found. Run `npm run compile:linux-system-audio` before packaging."
       );
     }
 
@@ -334,11 +259,11 @@ class LinuxPortalAudioManager {
     if (!this.resolveBinary()) {
       return this._buildCapability({
         available: false,
-        error: "Linux portal system audio helper binary not found.",
+        error: "Linux PipeWire system audio helper binary not found.",
       });
     }
 
-    const result = await this._runJsonCommand(["probe"], REQUEST_TIMEOUT_MS);
+    const result = await this._runJsonCommand(["probe"], PROBE_TIMEOUT_MS);
     return this._buildCapability(result);
   }
 
@@ -348,19 +273,16 @@ class LinuxPortalAudioManager {
     const supportsRestoreToken = !!result?.supportsRestoreToken;
     const supportsSystemAudio = !!result?.supportsSystemAudio;
     const supportsNativeCapture = !!result?.supportsNativeCapture;
-    const available = !!result?.ok;
-    const supportsPersistentPortalGrant =
-      available && supportsPersistMode && supportsRestoreToken && supportsSystemAudio;
-    const supportsPersistentGrant = supportsPersistentPortalGrant && supportsNativeCapture;
+    const available = !!result?.ok && supportsSystemAudio && supportsNativeCapture;
 
     return {
       available,
       portalVersion,
       supportsPersistMode,
       supportsRestoreToken,
-      supportsPersistentPortalGrant,
+      supportsPersistentPortalGrant: false,
       supportsNativeCapture,
-      supportsPersistentGrant,
+      supportsPersistentGrant: false,
       supportsSystemAudio,
       error: typeof result?.error === "string" ? result.error : null,
       source: typeof result?.source === "string" ? result.source : null,
@@ -379,7 +301,7 @@ class LinuxPortalAudioManager {
     return new Promise((resolve, reject) => {
       let settled = false;
       const timeout = setTimeout(() => {
-        finish(reject, new Error(`Linux portal helper timed out running ${args[0]}.`), true);
+        finish(reject, new Error(`Linux PipeWire helper timed out running ${args[0]}.`), true);
       }, timeoutMs);
 
       const finish = (callback, value, shouldStop = false) => {
@@ -421,7 +343,7 @@ class LinuxPortalAudioManager {
           finish(
             reject,
             new Error(
-              `Linux portal helper returned invalid JSON for ${args[0]}: ${stdout.trim().slice(0, 200)}`
+              `Linux PipeWire helper returned invalid JSON for ${args[0]}: ${stdout.trim().slice(0, 200)}`
             )
           );
         }
@@ -450,40 +372,11 @@ class LinuxPortalAudioManager {
   }
 
   _buildProcessError(message) {
-    const error = new Error(message.message || "Linux portal system audio capture failed");
+    const error = new Error(message.message || "Linux PipeWire system audio capture failed");
     error.code = message.code;
     error.status = message.status;
     error.operation = message.operation;
     return error;
-  }
-
-  _tokenFilePath() {
-    return path.join(app.getPath("userData"), TOKEN_FILE_NAME);
-  }
-
-  _writeTokenRecord({ restoreToken, portalVersion }) {
-    if (!restoreToken) return;
-
-    try {
-      fs.writeFileSync(
-        this._tokenFilePath(),
-        JSON.stringify(
-          {
-            restoreToken,
-            portalVersion: portalVersion ?? null,
-            updatedAt: new Date().toISOString(),
-          },
-          null,
-          2
-        )
-      );
-    } catch (error) {
-      debugLogger.warn(
-        "[LinuxPortalAudioManager] Failed to persist restore token",
-        { error: error.message },
-        "meeting"
-      );
-    }
   }
 }
 

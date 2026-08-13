@@ -1,6 +1,17 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+test("fails open when no windows were recorded", async () => {
+  const { createLocalSpeechGateState, getLocalSpeechGateDecision } =
+    await import("../../src/helpers/localSpeechGate.js");
+
+  assert.deepEqual(getLocalSpeechGateDecision(createLocalSpeechGateState()), {
+    skip: false,
+    reason: "unavailable",
+  });
+  assert.deepEqual(getLocalSpeechGateDecision(null), { skip: false, reason: "unavailable" });
+});
+
 test("treats near silence as skippable", async () => {
   const { createLocalSpeechGateState, recordLocalSpeechWindow, getLocalSpeechGateDecision } =
     await import("../../src/helpers/localSpeechGate.js");

@@ -25,6 +25,13 @@ function createBedrockModel(model, enterprise) {
   const { createAmazonBedrock } = require("@ai-sdk/amazon-bedrock");
   const region = enterprise?.bedrockRegion || "us-east-1";
 
+  if (enterprise?.managedCredentialProvider) {
+    return createAmazonBedrock({
+      region,
+      credentialProvider: enterprise.managedCredentialProvider,
+    })(model);
+  }
+
   if (enterprise?.bedrockProfile) {
     const { fromNodeProviderChain } = require("@aws-sdk/credential-providers");
     return createAmazonBedrock({
@@ -47,11 +54,31 @@ function createBedrockModel(model, enterprise) {
 
 function createAzureModel(model, apiKey, enterprise) {
   const { createAzure } = require("@ai-sdk/azure");
+  const managed = Boolean(enterprise?.managedTokenProvider);
   return createAzure({
-    apiKey,
-    baseURL: enterprise?.azureEndpoint,
-    apiVersion: enterprise?.azureApiVersion || "2024-10-21",
+    ...(managed ? { tokenProvider: enterprise.managedTokenProvider } : { apiKey }),
+    baseURL: managed ? toAzureOpenAIBaseUrl(enterprise?.azureEndpoint) : enterprise?.azureEndpoint,
+    apiVersion: enterprise?.azureApiVersion || (managed ? "v1" : "2024-10-21"),
   })(model);
+}
+
+function toAzureOpenAIBaseUrl(endpoint) {
+  const url = new URL(endpoint);
+  const hostname = url.hostname.toLowerCase();
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    (url.port && url.port !== "443") ||
+    !hostname.endsWith(".openai.azure.com") ||
+    hostname.length <= ".openai.azure.com".length ||
+    (url.pathname !== "" && url.pathname !== "/") ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("Managed Azure OpenAI requires a public Azure resource origin");
+  }
+  return `${url.origin}/openai`;
 }
 
 function createVertexModel(model, apiKey, enterprise) {
@@ -65,4 +92,4 @@ function createVertexModel(model, apiKey, enterprise) {
   })(model);
 }
 
-module.exports = { getEnterpriseAIModel };
+module.exports = { getEnterpriseAIModel, toAzureOpenAIBaseUrl };

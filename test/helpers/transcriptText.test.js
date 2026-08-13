@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { transcriptsOverlap, transcriptsLooselyOverlap } = require("../../src/helpers/transcriptText");
+const {
+  transcriptsOverlap,
+  transcriptsLooselyOverlap,
+} = require("../../src/helpers/transcriptText");
 
 test("transcriptsOverlap matches near-duplicate meeting transcripts", () => {
   assert.equal(

@@ -173,6 +173,16 @@ async function ensureYdotool() {
   }
 }
 
+function isNixOS() {
+  try {
+    if (fs.existsSync("/etc/NIXOS")) return true;
+    const osRelease = fs.readFileSync("/etc/os-release", "utf8");
+    return /^ID=("?)nixos\1$/m.test(osRelease);
+  } catch {
+    return false;
+  }
+}
+
 function getYdotoolStatus() {
   const hasYdotool = commandExists("ydotool");
   const hasYdotoold = commandExists("ydotoold");
@@ -195,6 +205,7 @@ function getYdotoolStatus() {
     hasUinput,
     hasUdevRule,
     hasGroup,
+    isNixOS: isNixOS(),
     allGood: hasYdotool && hasYdotoold && daemonRunning && hasUinput && hasGroup,
   };
 }

@@ -41,14 +41,14 @@ The short version:
 
 ### Local setup
 
-| Requirement | Notes |
-|-------------|-------|
+| Requirement | Notes                                                                             |
+| ----------- | --------------------------------------------------------------------------------- |
 | Node.js     | Version pinned in [`.nvmrc`](../.nvmrc) (currently `24`). Use `nvm use` to match. |
-| Install     | `npm install` |
-| Run dev     | `npm run dev` |
-| Lint        | `npm run lint` |
-| Format      | `npm run format` |
-| Build       | `npm run build` (or `build:mac` / `build:win` / `build:linux`) |
+| Install     | `npm install`                                                                     |
+| Run dev     | `npm run dev`                                                                     |
+| Lint        | `npm run lint`                                                                    |
+| Format      | `npm run format`                                                                  |
+| Build       | `npm run build` (or `build:mac` / `build:win` / `build:linux`)                    |
 
 Platform-specific setup, local Whisper notes, and packaging details are
 in [`README.md`](../README.md) and

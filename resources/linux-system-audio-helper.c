@@ -1,48 +1,48 @@
 #define _GNU_SOURCE
 
-#include <gio/gio.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <glib.h>
+#include <limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#define PORTAL_BUS "org.freedesktop.portal.Desktop"
-#define PORTAL_PATH "/org/freedesktop/portal/desktop"
-#define SCREENCAST_IFACE "org.freedesktop.portal.ScreenCast"
-#define PROPERTIES_IFACE "org.freedesktop.DBus.Properties"
-#define REQUEST_IFACE "org.freedesktop.portal.Request"
+#ifdef HAVE_PIPEWIRE
+#include <glib-unix.h>
+#include <pipewire/pipewire.h>
+#include <pipewire/extensions/metadata.h>
+#include <spa/param/audio/format-utils.h>
+#include <spa/param/props.h>
+#endif
 
-#define SCREENCAST_SOURCE_MONITOR 1u
-#define SCREENCAST_PERSIST_PERMANENT 2u
-
-typedef enum {
-    MODE_PROBE = 0,
-    MODE_GRANT = 1,
-    MODE_START = 2,
-} HelperMode;
+#define TARGET_SAMPLE_RATE 24000
+#define TARGET_CHANNELS 1
+#define TARGET_SAMPLE_BYTES 2
+#define AUDIO_PIPE_READ 0
+#define AUDIO_PIPE_WRITE 1
+#define AUDIO_DRAIN_BUFFER_SIZE 16384
+#define AUDIO_FRAME_BYTES (TARGET_CHANNELS * TARGET_SAMPLE_BYTES)
+#define AUDIO_PIPE_CHUNK_SIZE ((uint32_t)((PIPE_BUF / AUDIO_FRAME_BYTES) * AUDIO_FRAME_BYTES))
+#define DEFAULT_METADATA_NAME "default"
+#define DEFAULT_AUDIO_SINK_KEY "default.audio.sink"
+#define DEFAULT_SINK_RESOLVE_TIMEOUT_NS (500 * SPA_NSEC_PER_MSEC)
 
 typedef struct {
-    GDBusConnection *conn;
     GMainLoop *loop;
-    HelperMode mode;
-    gchar *restore_token;
-    gchar *session_handle;
-    gchar *create_token;
-    gchar *select_token;
-    gchar *start_token;
-    gchar *create_request_path;
-    gchar *select_request_path;
-    gchar *start_request_path;
-    guint signal_id;
-    guint portal_version;
-    guint available_source_types;
-    gboolean supports_persist_mode;
-    gboolean supports_restore_token;
-    gboolean supports_system_audio;
-    gboolean probe_ok;
-    gboolean requested_restore_token;
-    gboolean result_printed;
     int exit_code;
+#ifdef HAVE_PIPEWIRE
+    struct pw_thread_loop *pw_loop;
+    struct pw_stream *pw_stream;
+    int audio_pipe_fds[2];
+    guint audio_source_id;
+    gint audio_dropped_bytes; /* atomic; RT thread increments, main loop reads */
+    gboolean drop_warning_emitted;
+    gboolean stream_format_ok;
+    gboolean start_event_emitted;
+#endif
 } Helper;
 
 static void json_print_escaped(FILE *stream, const char *value)
@@ -85,51 +85,89 @@ static void json_print_escaped(FILE *stream, const char *value)
     fputc('"', stream);
 }
 
-static void json_print_nullable_string(FILE *stream, const char *value)
+static void json_append_escaped(GString *string, const char *value)
 {
-    if (!value) {
-        fputs("null", stream);
-        return;
-    }
+    const unsigned char *ptr = (const unsigned char *)value;
 
-    json_print_escaped(stream, value);
+    g_string_append_c(string, '"');
+    for (; ptr && *ptr; ptr++) {
+        switch (*ptr) {
+            case '\\':
+                g_string_append(string, "\\\\");
+                break;
+            case '"':
+                g_string_append(string, "\\\"");
+                break;
+            case '\b':
+                g_string_append(string, "\\b");
+                break;
+            case '\f':
+                g_string_append(string, "\\f");
+                break;
+            case '\n':
+                g_string_append(string, "\\n");
+                break;
+            case '\r':
+                g_string_append(string, "\\r");
+                break;
+            case '\t':
+                g_string_append(string, "\\t");
+                break;
+            default:
+                if (*ptr < 0x20) {
+                    g_string_append_printf(string, "\\u%04x", *ptr);
+                } else {
+                    g_string_append_c(string, (gchar)*ptr);
+                }
+                break;
+        }
+    }
+    g_string_append_c(string, '"');
 }
 
-static void print_probe_json(const Helper *app)
+static void emit_event(const char *type, const char *code, const char *message)
+{
+    GString *line = g_string_new("{\"type\":");
+    json_append_escaped(line, type);
+
+    if (code) {
+        g_string_append(line, ",\"code\":");
+        json_append_escaped(line, code);
+    }
+
+    if (message) {
+        g_string_append(line, ",\"message\":");
+        json_append_escaped(line, message);
+    }
+
+    if (strcmp(type, "start") == 0) {
+        g_string_append(line, ",\"restoreToken\":null");
+    }
+
+    g_string_append(line, "}\n");
+
+    flockfile(stderr);
+    fputs(line->str, stderr);
+    fflush(stderr);
+    funlockfile(stderr);
+
+    g_string_free(line, TRUE);
+}
+
+static void print_probe_json(gboolean ok, gboolean native_capture, const char *error)
 {
     fputs("{\"ok\":", stdout);
-    fputs(app->probe_ok ? "true" : "false", stdout);
-    fprintf(stdout, ",\"portalVersion\":%u", app->portal_version);
-    fputs(",\"supportsPersistMode\":", stdout);
-    fputs(app->supports_persist_mode ? "true" : "false", stdout);
-    fputs(",\"supportsRestoreToken\":", stdout);
-    fputs(app->supports_restore_token ? "true" : "false", stdout);
+    fputs(ok ? "true" : "false", stdout);
+    fputs(",\"portalVersion\":null", stdout);
+    fputs(",\"supportsPersistMode\":false", stdout);
+    fputs(",\"supportsRestoreToken\":false", stdout);
     fputs(",\"supportsSystemAudio\":", stdout);
-    fputs(app->supports_system_audio ? "true" : "false", stdout);
-    fputs(",\"supportsNativeCapture\":false", stdout);
+    fputs(ok ? "true" : "false", stdout);
+    fputs(",\"supportsNativeCapture\":", stdout);
+    fputs(native_capture ? "true" : "false", stdout);
+    fputs(",\"source\":\"pipewire-loopback\"", stdout);
 
-    if (!app->probe_ok) {
-        const char *message = "portal_unavailable";
-        fputs(",\"error\":", stdout);
-        json_print_escaped(stdout, message);
-    }
-
-    fputs("}\n", stdout);
-    fflush(stdout);
-}
-
-static void print_grant_json(gboolean granted, const char *restore_token, guint portal_version,
-                             const char *source, const char *error)
-{
-    fputs("{\"granted\":", stdout);
-    fputs(granted ? "true" : "false", stdout);
-    fputs(",\"restoreToken\":", stdout);
-    json_print_nullable_string(stdout, restore_token);
-    fprintf(stdout, ",\"portalVersion\":%u", portal_version);
-    fputs(",\"source\":", stdout);
-    json_print_escaped(stdout, source);
-
-    if (error) {
+    if (!ok && error) {
         fputs(",\"error\":", stdout);
         json_print_escaped(stdout, error);
     }
@@ -138,132 +176,7 @@ static void print_grant_json(gboolean granted, const char *restore_token, guint 
     fflush(stdout);
 }
 
-static void emit_event(const char *type, const char *code, const char *message,
-                       const char *restore_token)
-{
-    fputs("{\"type\":", stderr);
-    json_print_escaped(stderr, type);
-
-    if (code) {
-        fputs(",\"code\":", stderr);
-        json_print_escaped(stderr, code);
-    }
-
-    if (message) {
-        fputs(",\"message\":", stderr);
-        json_print_escaped(stderr, message);
-    }
-
-    if (restore_token || strcmp(type, "start") == 0) {
-        fputs(",\"restoreToken\":", stderr);
-        json_print_nullable_string(stderr, restore_token);
-    }
-
-    fputs("}\n", stderr);
-    fflush(stderr);
-}
-
-static gchar *make_token(const char *suffix)
-{
-    return g_strdup_printf("ow_%d_%s", (int)getpid(), suffix);
-}
-
-static gchar *get_sender_path(GDBusConnection *conn)
-{
-    const char *name = g_dbus_connection_get_unique_name(conn);
-    gchar *path = g_strdup(name + 1);
-
-    for (char *ptr = path; ptr && *ptr; ptr++) {
-        if (*ptr == '.') {
-            *ptr = '_';
-        }
-    }
-
-    return path;
-}
-
-static gchar *make_request_path(GDBusConnection *conn, const char *token)
-{
-    gchar *sender_path = get_sender_path(conn);
-    gchar *request_path = g_strdup_printf(
-        "/org/freedesktop/portal/desktop/request/%s/%s", sender_path, token);
-    g_free(sender_path);
-    return request_path;
-}
-
-static guint subscribe_response(Helper *app, const char *request_path, GDBusSignalCallback callback)
-{
-    return g_dbus_connection_signal_subscribe(
-        app->conn, PORTAL_BUS, REQUEST_IFACE, "Response",
-        request_path, NULL, G_DBUS_SIGNAL_FLAGS_NO_MATCH_RULE, callback, app, NULL);
-}
-
-static gboolean get_portal_uint_property(GDBusConnection *conn, const char *property_name,
-                                         guint *value_out)
-{
-    GError *error = NULL;
-    GVariant *result = g_dbus_connection_call_sync(
-        conn, PORTAL_BUS, PORTAL_PATH, PROPERTIES_IFACE, "Get",
-        g_variant_new("(ss)", SCREENCAST_IFACE, property_name), G_VARIANT_TYPE("(v)"),
-        G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
-
-    if (!result) {
-        g_clear_error(&error);
-        return FALSE;
-    }
-
-    GVariant *value = NULL;
-    g_variant_get(result, "(@v)", &value);
-
-    if (!value || !g_variant_is_of_type(value, G_VARIANT_TYPE_UINT32)) {
-        if (value) {
-            g_variant_unref(value);
-        }
-        g_variant_unref(result);
-        return FALSE;
-    }
-
-    *value_out = g_variant_get_uint32(value);
-    g_variant_unref(value);
-    g_variant_unref(result);
-    return TRUE;
-}
-
-static gboolean load_portal_capabilities(Helper *app)
-{
-    GError *error = NULL;
-    app->conn = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
-    if (!app->conn) {
-        g_clear_error(&error);
-        return FALSE;
-    }
-
-    gboolean got_version = get_portal_uint_property(app->conn, "version", &app->portal_version);
-    gboolean got_sources = get_portal_uint_property(app->conn, "AvailableSourceTypes",
-                                                    &app->available_source_types);
-
-    app->supports_persist_mode = app->portal_version >= 4;
-    app->supports_restore_token = app->portal_version >= 4;
-    app->supports_system_audio = (app->available_source_types & SCREENCAST_SOURCE_MONITOR) != 0;
-    app->probe_ok = got_version && got_sources;
-
-    return app->probe_ok;
-}
-
-static void finish_grant(Helper *app, gboolean granted, const char *restore_token,
-                         const char *error)
-{
-    if (app->result_printed) {
-        return;
-    }
-
-    app->result_printed = TRUE;
-    print_grant_json(granted, restore_token, app->portal_version, "screen-cast", error);
-    if (app->loop) {
-        g_main_loop_quit(app->loop);
-    }
-}
-
+#ifdef HAVE_PIPEWIRE
 static void finish_start(Helper *app, int exit_code)
 {
     app->exit_code = exit_code;
@@ -272,327 +185,705 @@ static void finish_start(Helper *app, int exit_code)
     }
 }
 
-static void on_start_response(GDBusConnection *conn, const char *sender, const char *object_path,
-                              const char *interface_name, const char *signal_name,
-                              GVariant *parameters, gpointer user_data);
+typedef struct {
+    struct pw_thread_loop *loop;
+    struct pw_context *context;
+    struct pw_core *core;
+    struct pw_registry *registry;
+    struct pw_metadata *metadata;
+    struct spa_hook core_listener;
+    struct spa_hook registry_listener;
+    struct spa_hook metadata_listener;
+    gchar *sink_name;
+    int sync_seq;
+    gboolean done;
+    gboolean loop_started;
+} DefaultSinkResolver;
 
-static void on_select_sources_response(GDBusConnection *conn, const char *sender,
-                                       const char *object_path, const char *interface_name,
-                                       const char *signal_name, GVariant *parameters,
-                                       gpointer user_data)
+static void init_pipewire_state(Helper *app)
 {
-    Helper *app = user_data;
-    guint32 response = 0;
-    GVariant *results = NULL;
+    app->audio_pipe_fds[AUDIO_PIPE_READ] = -1;
+    app->audio_pipe_fds[AUDIO_PIPE_WRITE] = -1;
+}
 
-    g_variant_get(parameters, "(u@a{sv})", &response, &results);
-    g_dbus_connection_signal_unsubscribe(app->conn, app->signal_id);
+static gboolean check_pipewire_available(void)
+{
+    gboolean available = FALSE;
+    struct pw_thread_loop *loop = NULL;
+    struct pw_context *context = NULL;
+    struct pw_core *core = NULL;
 
-    if (response != 0) {
-        g_variant_unref(results);
-        if (app->mode == MODE_GRANT) {
-            finish_grant(app, FALSE, NULL, "permission_denied");
-        } else {
-            emit_event("error", "permission_denied", "Portal denied system audio capture", NULL);
-            finish_start(app, 2);
+    pw_init(NULL, NULL);
+
+    loop = pw_thread_loop_new("ow-probe", NULL);
+    if (!loop) {
+        goto out;
+    }
+
+    context = pw_context_new(pw_thread_loop_get_loop(loop), NULL, 0);
+    if (!context) {
+        goto out;
+    }
+
+    core = pw_context_connect(context, NULL, 0);
+    available = core != NULL;
+
+out:
+    if (core) {
+        pw_core_disconnect(core);
+    }
+    if (context) {
+        pw_context_destroy(context);
+    }
+    if (loop) {
+        pw_thread_loop_destroy(loop);
+    }
+    pw_deinit();
+
+    return available;
+}
+
+static gchar *extract_metadata_name_value(const char *value)
+{
+    const char *cursor;
+    const char *trimmed;
+    GString *name;
+
+    if (!value || !*value) {
+        return NULL;
+    }
+
+    trimmed = value;
+    while (g_ascii_isspace(*trimmed)) {
+        trimmed++;
+    }
+
+    cursor = strstr(value, "\"name\"");
+    if (!cursor) {
+        return *trimmed && *trimmed != '{' ? g_strdup(trimmed) : NULL;
+    }
+
+    cursor = strchr(cursor, ':');
+    if (!cursor) {
+        return NULL;
+    }
+
+    cursor = strchr(cursor, '"');
+    if (!cursor) {
+        return NULL;
+    }
+    cursor++;
+
+    name = g_string_new(NULL);
+    for (; *cursor; cursor++) {
+        if (*cursor == '"') {
+            break;
         }
+
+        if (*cursor == '\\' && cursor[1]) {
+            cursor++;
+            switch (*cursor) {
+                case '"':
+                case '\\':
+                case '/':
+                    g_string_append_c(name, *cursor);
+                    break;
+                case 'b':
+                    g_string_append_c(name, '\b');
+                    break;
+                case 'f':
+                    g_string_append_c(name, '\f');
+                    break;
+                case 'n':
+                    g_string_append_c(name, '\n');
+                    break;
+                case 'r':
+                    g_string_append_c(name, '\r');
+                    break;
+                case 't':
+                    g_string_append_c(name, '\t');
+                    break;
+                default:
+                    g_string_append_c(name, *cursor);
+                    break;
+            }
+            continue;
+        }
+
+        g_string_append_c(name, *cursor);
+    }
+
+    if (*cursor != '"' || name->len == 0) {
+        g_string_free(name, TRUE);
+        return NULL;
+    }
+
+    return g_string_free(name, FALSE);
+}
+
+static int on_default_metadata_property(void *data, uint32_t subject, const char *key,
+                                        const char *type, const char *value)
+{
+    (void)subject;
+    (void)type;
+    DefaultSinkResolver *resolver = data;
+
+    if (!key || strcmp(key, DEFAULT_AUDIO_SINK_KEY) != 0 || !value) {
+        return 0;
+    }
+
+    g_free(resolver->sink_name);
+    resolver->sink_name = extract_metadata_name_value(value);
+    if (resolver->sink_name) {
+        resolver->done = TRUE;
+        pw_thread_loop_signal(resolver->loop, FALSE);
+    }
+
+    return 0;
+}
+
+static const struct pw_metadata_events default_metadata_events = {
+    PW_VERSION_METADATA_EVENTS,
+    .property = on_default_metadata_property,
+};
+
+static void on_default_registry_global(void *data, uint32_t id, uint32_t permissions,
+                                       const char *type, uint32_t version,
+                                       const struct spa_dict *props)
+{
+    (void)permissions;
+    DefaultSinkResolver *resolver = data;
+    const char *metadata_name;
+
+    if (!type || strcmp(type, PW_TYPE_INTERFACE_Metadata) != 0 || !props ||
+        resolver->metadata) {
         return;
     }
 
-    g_variant_unref(results);
-
-    app->signal_id = subscribe_response(app, app->start_request_path, on_start_response);
-
-    GVariantBuilder opts;
-    g_variant_builder_init(&opts, G_VARIANT_TYPE("a{sv}"));
-    g_variant_builder_add(&opts, "{sv}", "handle_token", g_variant_new_string(app->start_token));
-
-    GError *error = NULL;
-    g_dbus_connection_call_sync(
-        app->conn, PORTAL_BUS, PORTAL_PATH, SCREENCAST_IFACE, "Start",
-        g_variant_new("(os@a{sv})", app->session_handle, "", g_variant_builder_end(&opts)),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
-
-    if (error) {
-        g_dbus_connection_signal_unsubscribe(app->conn, app->signal_id);
-        if (app->mode == MODE_GRANT) {
-            finish_grant(app, FALSE, NULL, error->message);
-        } else {
-            emit_event("error", "portal_error", error->message, NULL);
-            finish_start(app, 2);
-        }
-        g_error_free(error);
-    }
-}
-
-static void on_create_session_response(GDBusConnection *conn, const char *sender,
-                                       const char *object_path, const char *interface_name,
-                                       const char *signal_name, GVariant *parameters,
-                                       gpointer user_data)
-{
-    Helper *app = user_data;
-    guint32 response = 0;
-    GVariant *results = NULL;
-
-    g_variant_get(parameters, "(u@a{sv})", &response, &results);
-    g_dbus_connection_signal_unsubscribe(app->conn, app->signal_id);
-
-    if (response != 0) {
-        g_variant_unref(results);
-        if (app->mode == MODE_GRANT) {
-            finish_grant(app, FALSE, NULL, "permission_denied");
-        } else {
-            emit_event("error", "permission_denied", "Portal denied system audio capture", NULL);
-            finish_start(app, 2);
-        }
+    metadata_name = spa_dict_lookup(props, PW_KEY_METADATA_NAME);
+    if (!metadata_name || strcmp(metadata_name, DEFAULT_METADATA_NAME) != 0) {
         return;
     }
 
-    GVariant *handle_value = g_variant_lookup_value(results, "session_handle", G_VARIANT_TYPE_STRING);
-    if (!handle_value) {
-        g_variant_unref(results);
-        if (app->mode == MODE_GRANT) {
-            finish_grant(app, FALSE, NULL, "portal_error");
-        } else {
-            emit_event("error", "portal_error", "Missing session handle in portal response", NULL);
+    uint32_t metadata_version =
+        version < (uint32_t)PW_VERSION_METADATA ? version : (uint32_t)PW_VERSION_METADATA;
+    resolver->metadata = pw_registry_bind(resolver->registry, id, PW_TYPE_INTERFACE_Metadata,
+                                          metadata_version, 0);
+    if (resolver->metadata) {
+        pw_metadata_add_listener(resolver->metadata, &resolver->metadata_listener,
+                                 &default_metadata_events, resolver);
+    }
+}
+
+static const struct pw_registry_events default_registry_events = {
+    PW_VERSION_REGISTRY_EVENTS,
+    .global = on_default_registry_global,
+};
+
+static void on_default_core_done(void *data, uint32_t id, int seq)
+{
+    (void)id;
+    DefaultSinkResolver *resolver = data;
+
+    if (seq == resolver->sync_seq) {
+        resolver->done = TRUE;
+        pw_thread_loop_signal(resolver->loop, FALSE);
+    }
+}
+
+static const struct pw_core_events default_core_events = {
+    PW_VERSION_CORE_EVENTS,
+    .done = on_default_core_done,
+};
+
+static gchar *resolve_default_audio_sink_name(void)
+{
+    DefaultSinkResolver resolver = {0};
+    struct timespec timeout;
+    gchar *sink_name = NULL;
+
+    resolver.loop = pw_thread_loop_new("ow-default-sink", NULL);
+    if (!resolver.loop) {
+        goto out;
+    }
+
+    resolver.context = pw_context_new(pw_thread_loop_get_loop(resolver.loop), NULL, 0);
+    if (!resolver.context) {
+        goto out;
+    }
+
+    resolver.core = pw_context_connect(resolver.context, NULL, 0);
+    if (!resolver.core) {
+        goto out;
+    }
+
+    pw_core_add_listener(resolver.core, &resolver.core_listener, &default_core_events, &resolver);
+    resolver.registry = pw_core_get_registry(resolver.core, PW_VERSION_REGISTRY, 0);
+    if (!resolver.registry) {
+        goto out;
+    }
+    pw_registry_add_listener(resolver.registry, &resolver.registry_listener,
+                             &default_registry_events, &resolver);
+
+    if (pw_thread_loop_start(resolver.loop) < 0) {
+        goto out;
+    }
+    resolver.loop_started = TRUE;
+
+    pw_thread_loop_lock(resolver.loop);
+    resolver.sync_seq = pw_core_sync(resolver.core, PW_ID_CORE, 0);
+    if (resolver.sync_seq >= 0 &&
+        pw_thread_loop_get_time(resolver.loop, &timeout, DEFAULT_SINK_RESOLVE_TIMEOUT_NS) == 0) {
+        while (!resolver.done && !resolver.sink_name) {
+            if (pw_thread_loop_timed_wait_full(resolver.loop, &timeout) != 0) {
+                break;
+            }
+        }
+    }
+    pw_thread_loop_unlock(resolver.loop);
+
+    if (resolver.sink_name) {
+        sink_name = g_strdup(resolver.sink_name);
+    }
+
+out:
+    if (resolver.loop && resolver.loop_started) {
+        pw_thread_loop_lock(resolver.loop);
+    }
+    if (resolver.metadata) {
+        pw_proxy_destroy((struct pw_proxy *)resolver.metadata);
+        resolver.metadata = NULL;
+    }
+    if (resolver.registry) {
+        pw_proxy_destroy((struct pw_proxy *)resolver.registry);
+        resolver.registry = NULL;
+    }
+    if (resolver.loop && resolver.loop_started) {
+        pw_thread_loop_unlock(resolver.loop);
+        pw_thread_loop_stop(resolver.loop);
+    }
+    if (resolver.core) {
+        pw_core_disconnect(resolver.core);
+    }
+    if (resolver.context) {
+        pw_context_destroy(resolver.context);
+    }
+    if (resolver.loop) {
+        pw_thread_loop_destroy(resolver.loop);
+    }
+    g_free(resolver.sink_name);
+
+    return sink_name;
+}
+
+static void close_audio_pipe(Helper *app)
+{
+    if (app->audio_source_id) {
+        g_source_remove(app->audio_source_id);
+        app->audio_source_id = 0;
+    }
+
+    if (app->audio_pipe_fds[AUDIO_PIPE_READ] >= 0) {
+        close(app->audio_pipe_fds[AUDIO_PIPE_READ]);
+        app->audio_pipe_fds[AUDIO_PIPE_READ] = -1;
+    }
+
+    if (app->audio_pipe_fds[AUDIO_PIPE_WRITE] >= 0) {
+        close(app->audio_pipe_fds[AUDIO_PIPE_WRITE]);
+        app->audio_pipe_fds[AUDIO_PIPE_WRITE] = -1;
+    }
+}
+
+static gboolean write_all_stdout(Helper *app, const uint8_t *data, size_t size)
+{
+    size_t written_total = 0;
+
+    while (written_total < size) {
+        ssize_t written = write(STDOUT_FILENO, data + written_total, size - written_total);
+        if (written > 0) {
+            written_total += (size_t)written;
+            continue;
+        }
+
+        if (written == 0) {
+            emit_event("error", "stdout_write_failed",
+                       "System audio PCM output write returned zero bytes");
             finish_start(app, 2);
+            return FALSE;
         }
-        return;
-    }
 
-    g_free(app->session_handle);
-    app->session_handle = g_variant_dup_string(handle_value, NULL);
-    g_variant_unref(handle_value);
-    g_variant_unref(results);
+        if (written < 0 && errno == EINTR) {
+            continue;
+        }
 
-    app->select_request_path = make_request_path(app->conn, app->select_token);
-    app->signal_id = subscribe_response(app, app->select_request_path, on_select_sources_response);
-
-    GVariantBuilder opts;
-    g_variant_builder_init(&opts, G_VARIANT_TYPE("a{sv}"));
-    g_variant_builder_add(&opts, "{sv}", "handle_token", g_variant_new_string(app->select_token));
-    g_variant_builder_add(&opts, "{sv}", "types",
-                          g_variant_new_uint32(SCREENCAST_SOURCE_MONITOR));
-
-    if (app->supports_persist_mode) {
-        g_variant_builder_add(&opts, "{sv}", "persist_mode",
-                              g_variant_new_uint32(SCREENCAST_PERSIST_PERMANENT));
-    }
-
-    if (app->supports_restore_token && app->restore_token) {
-        g_variant_builder_add(&opts, "{sv}", "restore_token",
-                              g_variant_new_string(app->restore_token));
-    }
-
-    GError *error = NULL;
-    g_dbus_connection_call_sync(
-        app->conn, PORTAL_BUS, PORTAL_PATH, SCREENCAST_IFACE, "SelectSources",
-        g_variant_new("(o@a{sv})", app->session_handle, g_variant_builder_end(&opts)),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
-
-    if (error) {
-        g_dbus_connection_signal_unsubscribe(app->conn, app->signal_id);
-        if (app->mode == MODE_GRANT) {
-            finish_grant(app, FALSE, NULL, error->message);
-        } else {
-            emit_event("error", "portal_error", error->message, NULL);
+        if (written < 0 && errno == EPIPE) {
+            emit_event("error", "stdout_closed",
+                       "System audio consumer closed the PCM output pipe");
             finish_start(app, 2);
+            return FALSE;
         }
-        g_error_free(error);
-    }
-}
 
-static void on_start_response(GDBusConnection *conn, const char *sender, const char *object_path,
-                              const char *interface_name, const char *signal_name,
-                              GVariant *parameters, gpointer user_data)
-{
-    Helper *app = user_data;
-    guint32 response = 0;
-    GVariant *results = NULL;
-
-    g_variant_get(parameters, "(u@a{sv})", &response, &results);
-    g_dbus_connection_signal_unsubscribe(app->conn, app->signal_id);
-
-    if (response != 0) {
-        g_variant_unref(results);
-        if (app->mode == MODE_GRANT) {
-            finish_grant(app, FALSE, NULL, "permission_denied");
-        } else {
-            emit_event("error", "permission_denied", "Portal denied system audio capture", NULL);
-            finish_start(app, 2);
-        }
-        return;
-    }
-
-    const gchar *restore_token = NULL;
-    GVariant *restore_value = g_variant_lookup_value(results, "restore_token", G_VARIANT_TYPE_STRING);
-    if (restore_value) {
-        restore_token = g_variant_get_string(restore_value, NULL);
-    }
-
-    if (app->mode == MODE_GRANT) {
-        gchar *restore_copy = restore_token ? g_strdup(restore_token) : NULL;
-        if (restore_value) {
-            g_variant_unref(restore_value);
-        }
-        g_variant_unref(results);
-        finish_grant(app, TRUE, restore_copy, NULL);
-        g_free(restore_copy);
-        return;
-    }
-
-    emit_event("start", NULL, NULL, restore_token);
-
-    if (app->requested_restore_token && !restore_token) {
-        emit_event("warning", "restore_failed",
-                   "Restore token was supplied but the portal did not return a replacement token",
-                   NULL);
-    }
-
-    emit_event("warning", "capture_unimplemented",
-               "Native PipeWire PCM capture is not implemented in this helper yet", NULL);
-
-    if (restore_value) {
-        g_variant_unref(restore_value);
-    }
-    g_variant_unref(results);
-    finish_start(app, 2);
-}
-
-static gboolean run_probe(void)
-{
-    Helper app = {0};
-    app.mode = MODE_PROBE;
-    app.probe_ok = load_portal_capabilities(&app);
-    print_probe_json(&app);
-    g_clear_object(&app.conn);
-    return TRUE;
-}
-
-static gboolean run_grant(void)
-{
-    Helper app = {0};
-    app.mode = MODE_GRANT;
-    app.loop = g_main_loop_new(NULL, FALSE);
-
-    if (!load_portal_capabilities(&app) || !app.supports_system_audio) {
-        print_grant_json(FALSE, NULL, app.portal_version, "screen-cast",
-                         app.probe_ok ? "unsupported" : "portal_unavailable");
-        g_clear_object(&app.conn);
-        g_main_loop_unref(app.loop);
-        return TRUE;
-    }
-
-    app.create_token = make_token("create");
-    app.select_token = make_token("select");
-    app.start_token = make_token("start");
-    app.create_request_path = make_request_path(app.conn, app.create_token);
-    app.select_request_path = make_request_path(app.conn, app.select_token);
-    app.start_request_path = make_request_path(app.conn, app.start_token);
-
-    app.signal_id = subscribe_response(&app, app.create_request_path, on_create_session_response);
-
-    GVariantBuilder opts;
-    g_variant_builder_init(&opts, G_VARIANT_TYPE("a{sv}"));
-    g_variant_builder_add(&opts, "{sv}", "handle_token", g_variant_new_string(app.create_token));
-    g_variant_builder_add(&opts, "{sv}", "session_handle_token",
-                          g_variant_new_string(app.create_token));
-
-    GError *error = NULL;
-    g_dbus_connection_call_sync(
-        app.conn, PORTAL_BUS, PORTAL_PATH, SCREENCAST_IFACE, "CreateSession",
-        g_variant_new("(a{sv})", g_variant_builder_end(&opts)),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
-
-    if (error) {
-        g_dbus_connection_signal_unsubscribe(app.conn, app.signal_id);
-        print_grant_json(FALSE, NULL, app.portal_version, "screen-cast", error->message);
-        g_error_free(error);
-    } else {
-        g_main_loop_run(app.loop);
-    }
-
-    g_clear_object(&app.conn);
-    g_main_loop_unref(app.loop);
-    g_free(app.restore_token);
-    g_free(app.session_handle);
-    g_free(app.create_token);
-    g_free(app.select_token);
-    g_free(app.start_token);
-    g_free(app.create_request_path);
-    g_free(app.select_request_path);
-    g_free(app.start_request_path);
-    return TRUE;
-}
-
-static gboolean run_start(const char *restore_token)
-{
-    Helper app = {0};
-    app.mode = MODE_START;
-    app.loop = g_main_loop_new(NULL, FALSE);
-    app.restore_token = restore_token ? g_strdup(restore_token) : NULL;
-    app.requested_restore_token = restore_token != NULL;
-
-    if (!load_portal_capabilities(&app) || !app.supports_system_audio) {
-        emit_event("error", "unsupported",
-                   "Linux portal system audio capture is not available on this desktop", NULL);
-        g_clear_object(&app.conn);
-        g_main_loop_unref(app.loop);
-        g_free(app.restore_token);
+        emit_event("error", "stdout_write_failed", g_strerror(errno));
+        finish_start(app, 2);
         return FALSE;
     }
 
-    app.create_token = make_token("create");
-    app.select_token = make_token("select");
-    app.start_token = make_token("start");
-    app.create_request_path = make_request_path(app.conn, app.create_token);
-    app.select_request_path = make_request_path(app.conn, app.select_token);
-    app.start_request_path = make_request_path(app.conn, app.start_token);
+    return TRUE;
+}
 
-    app.signal_id = subscribe_response(&app, app.create_request_path, on_create_session_response);
+static void enqueue_audio_bytes(Helper *app, const uint8_t *data, uint32_t size)
+{
+    size -= size % AUDIO_FRAME_BYTES;
 
-    GVariantBuilder opts;
-    g_variant_builder_init(&opts, G_VARIANT_TYPE("a{sv}"));
-    g_variant_builder_add(&opts, "{sv}", "handle_token", g_variant_new_string(app.create_token));
-    g_variant_builder_add(&opts, "{sv}", "session_handle_token",
-                          g_variant_new_string(app.create_token));
+    /* Nonblocking pipe writes up to PIPE_BUF are atomic, so backpressure drops
+     * whole S16 frames instead of splitting samples. */
+    while (size > 0) {
+        uint32_t chunk_size = size < AUDIO_PIPE_CHUNK_SIZE ? size : AUDIO_PIPE_CHUNK_SIZE;
+        ssize_t written = write(app->audio_pipe_fds[AUDIO_PIPE_WRITE], data, chunk_size);
 
-    GError *error = NULL;
-    g_dbus_connection_call_sync(
-        app.conn, PORTAL_BUS, PORTAL_PATH, SCREENCAST_IFACE, "CreateSession",
-        g_variant_new("(a{sv})", g_variant_builder_end(&opts)),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
+        if (written != (ssize_t)chunk_size) {
+            uint32_t dropped = size;
 
-    if (error) {
-        g_dbus_connection_signal_unsubscribe(app.conn, app.signal_id);
-        emit_event("error", "portal_error", error->message, NULL);
-        g_error_free(error);
-        app.exit_code = 2;
-    } else {
-        g_main_loop_run(app.loop);
+            if (written > 0 && (uint32_t)written <= size) {
+                dropped -= (uint32_t)written;
+            }
+
+            g_atomic_int_add(&app->audio_dropped_bytes, (gint)dropped);
+            return;
+        }
+
+        data += chunk_size;
+        size -= chunk_size;
+    }
+}
+
+static void maybe_warn_dropped_audio(Helper *app)
+{
+    if (app->drop_warning_emitted) {
+        return;
     }
 
-    g_clear_object(&app.conn);
+    gint dropped_bytes = g_atomic_int_get(&app->audio_dropped_bytes);
+    if (dropped_bytes <= 0) {
+        return;
+    }
+
+    app->drop_warning_emitted = TRUE;
+    gchar *message = g_strdup_printf(
+        "System audio PCM frames dropped under backpressure (%d bytes so far); "
+        "expect gaps in captured audio",
+        dropped_bytes);
+
+    emit_event("warning", "audio_frames_dropped", message);
+    g_free(message);
+}
+
+static gboolean on_audio_pipe_readable(gint fd, GIOCondition condition, gpointer user_data)
+{
+    Helper *app = user_data;
+    uint8_t buffer[AUDIO_DRAIN_BUFFER_SIZE];
+
+    while (TRUE) {
+        ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
+        if (bytes_read > 0) {
+            if (!write_all_stdout(app, buffer, (size_t)bytes_read)) {
+                app->audio_source_id = 0;
+                return G_SOURCE_REMOVE;
+            }
+            continue;
+        }
+
+        if (bytes_read == 0) {
+            app->audio_source_id = 0;
+            return G_SOURCE_REMOVE;
+        }
+
+        if (errno == EINTR) {
+            continue;
+        }
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            break;
+        }
+
+        emit_event("error", "audio_pipe_read_failed", g_strerror(errno));
+        finish_start(app, 2);
+        app->audio_source_id = 0;
+        return G_SOURCE_REMOVE;
+    }
+
+    maybe_warn_dropped_audio(app);
+
+    if (condition & (G_IO_HUP | G_IO_ERR | G_IO_NVAL)) {
+        app->audio_source_id = 0;
+        return G_SOURCE_REMOVE;
+    }
+
+    return G_SOURCE_CONTINUE;
+}
+
+static void maybe_emit_start(Helper *app)
+{
+    if (!app->stream_format_ok || app->start_event_emitted) {
+        return;
+    }
+
+    app->start_event_emitted = TRUE;
+    emit_event("start", NULL, NULL);
+}
+
+static void fail_pipewire_format(Helper *app, const char *message)
+{
+    emit_event("error", "unsupported_pipewire_format", message);
+    finish_start(app, 2);
+}
+
+static void on_pw_process(void *userdata)
+{
+    Helper *app = userdata;
+    struct pw_buffer *b = pw_stream_dequeue_buffer(app->pw_stream);
+    if (!b) return;
+
+    struct spa_buffer *buf = b->buffer;
+    if (!app->stream_format_ok || buf->n_datas == 0 || !buf->datas[0].data ||
+        !buf->datas[0].chunk || app->audio_pipe_fds[AUDIO_PIPE_WRITE] < 0) {
+        pw_stream_queue_buffer(app->pw_stream, b);
+        return;
+    }
+
+    const void *src = buf->datas[0].data;
+    uint32_t offs = SPA_MIN(buf->datas[0].chunk->offset, buf->datas[0].maxsize);
+    uint32_t size = SPA_MIN(buf->datas[0].chunk->size, buf->datas[0].maxsize - offs);
+
+    if (size > 0) {
+        const uint8_t *ptr = (const uint8_t *)src + offs;
+        enqueue_audio_bytes(app, ptr, size);
+    }
+
+    pw_stream_queue_buffer(app->pw_stream, b);
+}
+
+static void on_pw_param_changed(void *userdata, uint32_t id, const struct spa_pod *param)
+{
+    Helper *app = userdata;
+
+    if (id != SPA_PARAM_Format || !param) {
+        return;
+    }
+
+    struct spa_audio_info_raw info;
+    if (spa_format_audio_raw_parse(param, &info) < 0) {
+        app->stream_format_ok = FALSE;
+        fail_pipewire_format(app, "Failed to parse negotiated PipeWire audio format");
+        return;
+    }
+
+    app->stream_format_ok =
+        info.format == SPA_AUDIO_FORMAT_S16_LE &&
+        info.rate == TARGET_SAMPLE_RATE &&
+        info.channels == TARGET_CHANNELS;
+
+    if (!app->stream_format_ok) {
+        gchar *message = g_strdup_printf(
+            "Unsupported PipeWire audio format: format=%u rate=%u channels=%u",
+            (unsigned int)info.format, info.rate, info.channels);
+        fail_pipewire_format(app, message);
+        g_free(message);
+        return;
+    }
+
+    maybe_emit_start(app);
+}
+
+static void on_pw_state_changed(void *userdata, enum pw_stream_state old,
+                                enum pw_stream_state state, const char *error)
+{
+    (void)old;
+    Helper *app = userdata;
+
+    if (state == PW_STREAM_STATE_ERROR) {
+        emit_event("error", "pipewire_error", error ? error : "PipeWire stream error");
+        finish_start(app, 2);
+    }
+}
+
+static const struct pw_stream_events pw_stream_events = {
+    PW_VERSION_STREAM_EVENTS,
+    .process = on_pw_process,
+    .param_changed = on_pw_param_changed,
+    .state_changed = on_pw_state_changed,
+};
+
+static gboolean on_unix_signal(gpointer user_data)
+{
+    Helper *app = user_data;
+    finish_start(app, 0);
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean run_pipewire_capture(Helper *app)
+{
+    init_pipewire_state(app);
+
+    signal(SIGPIPE, SIG_IGN);
+
+    pw_init(NULL, NULL);
+
+    app->pw_loop = pw_thread_loop_new("ow-capture", NULL);
+    if (!app->pw_loop) {
+        emit_event("error", "pipewire_error", "Failed to create PipeWire loop");
+        return FALSE;
+    }
+
+    if (pipe2(app->audio_pipe_fds, O_NONBLOCK | O_CLOEXEC) != 0) {
+        emit_event("error", "audio_pipe_error", "Failed to create PCM drain pipe");
+        pw_thread_loop_destroy(app->pw_loop);
+        app->pw_loop = NULL;
+        return FALSE;
+    }
+
+    app->audio_source_id = g_unix_fd_add(app->audio_pipe_fds[AUDIO_PIPE_READ],
+                                         G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL,
+                                         on_audio_pipe_readable, app);
+    if (!app->audio_source_id) {
+        emit_event("error", "audio_pipe_error", "Failed to register PCM drain source");
+        close_audio_pipe(app);
+        pw_thread_loop_destroy(app->pw_loop);
+        app->pw_loop = NULL;
+        return FALSE;
+    }
+
+    gchar *target_sink_name = resolve_default_audio_sink_name();
+    struct pw_properties *props = pw_properties_new(
+        PW_KEY_MEDIA_TYPE, "Audio",
+        PW_KEY_MEDIA_CATEGORY, "Capture",
+        PW_KEY_MEDIA_ROLE, "Communication",
+        PW_KEY_STREAM_CAPTURE_SINK, "true",
+        NULL);
+    if (props && target_sink_name) {
+        pw_properties_set(props, PW_KEY_TARGET_OBJECT, target_sink_name);
+    }
+    g_free(target_sink_name);
+
+    app->pw_stream = pw_stream_new_simple(
+        pw_thread_loop_get_loop(app->pw_loop),
+        "openwhispr-system-audio",
+        props,
+        &pw_stream_events,
+        app);
+
+    if (!app->pw_stream) {
+        emit_event("error", "pipewire_error", "Failed to create PipeWire stream");
+        pw_properties_free(props);
+        close_audio_pipe(app);
+        pw_thread_loop_destroy(app->pw_loop);
+        app->pw_loop = NULL;
+        return FALSE;
+    }
+
+    uint8_t params_buffer[1024];
+    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
+    const struct spa_pod *params[1];
+    params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat,
+        &SPA_AUDIO_INFO_RAW_INIT(
+            .format = SPA_AUDIO_FORMAT_S16_LE,
+            .channels = TARGET_CHANNELS,
+            .rate = TARGET_SAMPLE_RATE));
+
+    int res = pw_stream_connect(app->pw_stream,
+        PW_DIRECTION_INPUT,
+        PW_ID_ANY,
+        PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
+        params, 1);
+
+    if (res < 0) {
+        emit_event("error", "pipewire_error", "Failed to connect PipeWire stream");
+        pw_stream_destroy(app->pw_stream);
+        app->pw_stream = NULL;
+        close_audio_pipe(app);
+        pw_thread_loop_destroy(app->pw_loop);
+        app->pw_loop = NULL;
+        return FALSE;
+    }
+
+    if (pw_thread_loop_start(app->pw_loop) < 0) {
+        emit_event("error", "pipewire_error", "Failed to start PipeWire loop");
+        pw_stream_destroy(app->pw_stream);
+        app->pw_stream = NULL;
+        close_audio_pipe(app);
+        pw_thread_loop_destroy(app->pw_loop);
+        app->pw_loop = NULL;
+        return FALSE;
+    }
+
+    g_unix_signal_add(SIGTERM, on_unix_signal, app);
+    g_unix_signal_add(SIGINT, on_unix_signal, app);
+
+    return TRUE;
+}
+
+static void cleanup_pipewire(Helper *app)
+{
+    if (app->pw_stream) {
+        pw_thread_loop_lock(app->pw_loop);
+        pw_stream_destroy(app->pw_stream);
+        pw_thread_loop_unlock(app->pw_loop);
+        app->pw_stream = NULL;
+    }
+    if (app->pw_loop) {
+        pw_thread_loop_stop(app->pw_loop);
+        pw_thread_loop_destroy(app->pw_loop);
+        app->pw_loop = NULL;
+    }
+    close_audio_pipe(app);
+    pw_deinit();
+}
+#endif
+
+static gboolean run_probe(void)
+{
+#ifdef HAVE_PIPEWIRE
+    gboolean ok = check_pipewire_available();
+    print_probe_json(ok, TRUE, ok ? NULL : "pipewire_unavailable");
+#else
+    print_probe_json(FALSE, FALSE, "pipewire_not_compiled");
+#endif
+    return TRUE;
+}
+
+static gboolean run_start(void)
+{
+#ifdef HAVE_PIPEWIRE
+    Helper app = {0};
+    app.loop = g_main_loop_new(NULL, FALSE);
+    init_pipewire_state(&app);
+
+    if (!run_pipewire_capture(&app)) {
+        g_main_loop_unref(app.loop);
+        cleanup_pipewire(&app);
+        return FALSE;
+    }
+
+    g_main_loop_run(app.loop);
+
+    cleanup_pipewire(&app);
     g_main_loop_unref(app.loop);
-    g_free(app.restore_token);
-    g_free(app.session_handle);
-    g_free(app.create_token);
-    g_free(app.select_token);
-    g_free(app.start_token);
-    g_free(app.create_request_path);
-    g_free(app.select_request_path);
-    g_free(app.start_request_path);
     return app.exit_code == 0;
+#else
+    emit_event("error", "capture_unimplemented",
+               "Native PipeWire PCM capture is not compiled into this helper");
+    return FALSE;
+#endif
 }
 
 static void print_usage(void)
 {
-    fprintf(stderr, "Usage: linux-system-audio-helper <probe|grant|start> [--restore-token TOKEN]\n");
+    fprintf(stderr, "Usage: linux-system-audio-helper <probe|start>\n");
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2) {
+    if (argc != 2) {
         print_usage();
         return 1;
     }
@@ -602,23 +893,8 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    if (strcmp(argv[1], "grant") == 0) {
-        run_grant();
-        return 0;
-    }
-
     if (strcmp(argv[1], "start") == 0) {
-        const char *restore_token = NULL;
-        for (int i = 2; i < argc; i++) {
-            if (strcmp(argv[i], "--restore-token") == 0 && i + 1 < argc) {
-                restore_token = argv[++i];
-                continue;
-            }
-            print_usage();
-            return 1;
-        }
-
-        return run_start(restore_token) ? 0 : 2;
+        return run_start() ? 0 : 2;
     }
 
     print_usage();

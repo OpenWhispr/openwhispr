@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { useToast } from "./components/ui/useToast";
 import { LoadingDots } from "./components/ui/LoadingDots";
 import { useHotkey } from "./hooks/useHotkey";
-import { formatHotkeyLabel } from "./utils/hotkeys";
+import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useSettingsStore } from "./stores/settingsStore";
@@ -124,6 +124,18 @@ export default function App() {
       });
     });
 
+    const showGpuFallbackToast = () => {
+      toast({
+        title: t("app.toasts.gpuFallback.title"),
+        description: t("app.toasts.gpuFallback.description"),
+        duration: 10000,
+      });
+    };
+    const unsubscribeCudaFallback =
+      window.electronAPI?.onCudaFallbackNotification?.(showGpuFallbackToast);
+    const unsubscribeGpuFallback =
+      window.electronAPI?.onGpuFallbackNotification?.(showGpuFallbackToast);
+
     const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
       if (words && words.length > 0) {
         const wordList = words.map((w) => `\u201c${w}\u201d`).join(", ");
@@ -160,6 +172,8 @@ export default function App() {
     return () => {
       unsubscribeFallback?.();
       unsubscribeFailed?.();
+      unsubscribeCudaFallback?.();
+      unsubscribeGpuFallback?.();
       unsubscribeCorrections?.();
     };
   }, [toast, dismiss, t]);
@@ -192,10 +206,16 @@ export default function App() {
     setWindowInteractivity(false);
   }, [setWindowInteractivity]);
 
-  const { isRecording, isProcessing, toggleListening, cancelRecording, cancelProcessing } =
-    useAudioRecording(toast, {
-      onToggle: handleDictationToggle,
-    });
+  const {
+    isRecording,
+    isProcessing,
+    micCaptureStatus,
+    toggleListening,
+    cancelRecording,
+    cancelProcessing,
+  } = useAudioRecording(toast, {
+    onToggle: handleDictationToggle,
+  });
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -277,6 +297,8 @@ export default function App() {
 
   // Determine current mic state
   const getMicState = () => {
+    if (isRecording && (micCaptureStatus === "reconnecting" || micCaptureStatus === "unavailable"))
+      return "unavailable";
     if (isRecording) return "recording";
     if (isProcessing) return "processing";
     if (isHovered && !isRecording && !isProcessing) return "hover";
@@ -294,12 +316,17 @@ export default function App() {
       case "hover":
         return {
           className: `${baseClasses} bg-black/50 cursor-pointer`,
-          tooltip: formatHotkeyLabel(hotkey),
+          tooltip: formatHotkeyListLabel(hotkey),
         };
       case "recording":
         return {
           className: `${baseClasses} bg-primary cursor-pointer`,
           tooltip: t("app.mic.recording"),
+        };
+      case "unavailable":
+        return {
+          className: `${baseClasses} bg-amber-500 cursor-pointer`,
+          tooltip: t("app.mic.waitingForMicrophone"),
         };
       case "processing":
         return {
@@ -442,11 +469,16 @@ export default function App() {
                 <LoadingDots />
               ) : micState === "processing" ? (
                 <VoiceWaveIndicator isListening={true} />
+              ) : micState === "unavailable" ? (
+                <span className="text-white text-base font-bold">!</span>
               ) : null}
 
               {/* State indicator ring for recording */}
               {micState === "recording" && (
                 <div className="absolute inset-0 rounded-full border-2 border-primary/50 animate-pulse"></div>
+              )}
+              {micState === "unavailable" && (
+                <div className="absolute inset-0 rounded-full border-2 border-amber-200/70 animate-pulse"></div>
               )}
 
               {/* State indicator ring for processing */}

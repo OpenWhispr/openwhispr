@@ -4,8 +4,10 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
-import { buildApiUrl, normalizeBaseUrl } from "../config/constants";
-import { isSecureEndpoint } from "../utils/urlUtils";
+import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
+import { buildApiUrl, getModelListBaseCandidates, normalizeBaseUrl } from "../config/constants";
+import { isSecureHttpEndpoint } from "../utils/urlUtils";
+import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 
 interface ModelOption {
   value: string;
@@ -24,6 +26,11 @@ interface OpenAICompatiblePanelProps {
   defaultBaseUrl?: string;
   baseUrlPlaceholder?: string;
   helpExamples?: ReactNode;
+  // Hide the endpoint editor when the URL is fixed by the caller (e.g. OpenRouter).
+  lockedBaseUrl?: boolean;
+  // Providers whose /models is public but whose inference needs a key.
+  apiKeyRequired?: boolean;
+  getKeyUrl?: string;
 }
 
 export default function OpenAICompatiblePanel({
@@ -36,6 +43,9 @@ export default function OpenAICompatiblePanel({
   defaultBaseUrl,
   baseUrlPlaceholder = "https://api.openai.com/v1",
   helpExamples,
+  lockedBaseUrl = false,
+  apiKeyRequired = false,
+  getKeyUrl,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
   const [draftBase, setDraftBase] = useState(baseUrl);
@@ -92,14 +102,16 @@ export default function OpenAICompatiblePanel({
 
       pendingBaseRef.current = normalized;
 
+      // Keep the previous list visible while refreshing so the searchable list
+      // (and its query state) isn't unmounted mid-fetch.
       if (isMountedRef.current) {
         setModelsLoading(true);
         setModelsError(null);
-        setModelOptions([]);
       }
 
       const trimmedKey = apiKey?.trim();
       const effectiveKey = trimmedKey && trimmedKey.length > 0 ? trimmedKey : undefined;
+      let activeBase = normalized;
 
       try {
         if (!normalized.includes("://")) {
@@ -110,7 +122,7 @@ export default function OpenAICompatiblePanel({
           return;
         }
 
-        if (!isSecureEndpoint(normalized)) {
+        if (!isSecureHttpEndpoint(normalized)) {
           if (isMountedRef.current && latestBaseRef.current === normalized) {
             setModelsError(t("reasoning.custom.httpsRequired"));
             setModelsLoading(false);
@@ -123,47 +135,79 @@ export default function OpenAICompatiblePanel({
           headers.Authorization = `Bearer ${effectiveKey}`;
         }
 
-        const modelsUrl = buildApiUrl(normalized, "/models");
-        const response = await fetch(modelsUrl, { method: "GET", headers });
+        const fetchModelOptions = async (base: string): Promise<ModelOption[]> => {
+          const response = await fetch(buildApiUrl(base, "/models"), { method: "GET", headers });
 
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => "");
-          const summary = errorText
-            ? `${response.status} ${errorText.slice(0, 200)}`
-            : `${response.status} ${response.statusText}`;
-          throw new Error(summary.trim());
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => "");
+            const summary = errorText
+              ? `${response.status} ${errorText.slice(0, 200)}`
+              : `${response.status} ${response.statusText}`;
+            throw new Error(summary.trim());
+          }
+
+          const payload = await response.json().catch(() => ({}));
+          const rawModels = Array.isArray(payload?.data)
+            ? payload.data
+            : Array.isArray(payload?.models)
+              ? payload.models
+              : [];
+
+          // Coerce fields defensively: non-conformant endpoints may return
+          // numeric ids or object descriptions, which would crash the render.
+          return (rawModels as Array<Record<string, unknown>>)
+            .map((item) => {
+              const rawValue = item?.id ?? item?.name;
+              if (rawValue === undefined || rawValue === null || rawValue === "") return null;
+              const value = String(rawValue);
+              const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
+              const description =
+                typeof item?.description === "string" && item.description
+                  ? item.description
+                  : ownedBy
+                    ? t("reasoning.custom.ownerLabel", { owner: ownedBy })
+                    : undefined;
+              return { value, label: value, description, ownedBy } as ModelOption;
+            })
+            .filter(Boolean) as ModelOption[];
+        };
+
+        // When the entered base yields no models, fall back through sibling
+        // bases and adopt the working one so inference targets it too.
+        const candidates = lockedBaseUrl ? [normalized] : getModelListBaseCandidates(normalized);
+        let mapped: ModelOption[] = [];
+        let resolvedBase = normalized;
+        let primaryError: Error | null = null;
+
+        for (const candidate of candidates) {
+          try {
+            const options = await fetchModelOptions(candidate);
+            if (options.length > 0) {
+              mapped = options;
+              resolvedBase = candidate;
+              break;
+            }
+          } catch (error) {
+            if (candidate === normalized) primaryError = error as Error;
+          }
         }
 
-        const payload = await response.json().catch(() => ({}));
-        const rawModels = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload?.models)
-            ? payload.models
-            : [];
-
-        const mapped = (rawModels as Array<Record<string, unknown>>)
-          .map((item) => {
-            const value = (item?.id || item?.name) as string | undefined;
-            if (!value) return null;
-            const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
-            return {
-              value,
-              label: (item?.id || item?.name || value) as string,
-              description:
-                (item?.description as string) ||
-                (ownedBy ? t("reasoning.custom.ownerLabel", { owner: ownedBy }) : undefined),
-              ownedBy,
-            } as ModelOption;
-          })
-          .filter(Boolean) as ModelOption[];
+        if (mapped.length === 0 && primaryError) throw primaryError;
 
         if (isMountedRef.current && latestBaseRef.current === normalized) {
-          setModelOptions(mapped);
-          if (model && mapped.length > 0 && !mapped.some((m) => m.value === model)) {
-            setModel("");
+          if (resolvedBase !== normalized) {
+            activeBase = resolvedBase;
+            latestBaseRef.current = resolvedBase;
+            setDraftBase(resolvedBase);
+            setBaseUrl(resolvedBase);
           }
+          setModelOptions(mapped);
+          // `/models` is a discovery aid, not an allowlist — keep the user's
+          // chosen id even if it's absent (it may still be valid, or belong to
+          // a provider they're switching away from). Invalid ids surface a
+          // clear API error at request time instead of being silently wiped.
           setModelsError(null);
-          lastLoadedBaseRef.current = normalized;
+          lastLoadedBaseRef.current = resolvedBase;
         }
       } catch (error) {
         if (isMountedRef.current && latestBaseRef.current === normalized) {
@@ -180,12 +224,12 @@ export default function OpenAICompatiblePanel({
         if (pendingBaseRef.current === normalized) {
           pendingBaseRef.current = null;
         }
-        if (isMountedRef.current && latestBaseRef.current === normalized) {
+        if (isMountedRef.current && latestBaseRef.current === activeBase) {
           setModelsLoading(false);
         }
       }
     },
-    [baseUrl, apiKey, model, setModel, t]
+    [baseUrl, apiKey, lockedBaseUrl, setBaseUrl, t]
   );
 
   useEffect(() => {
@@ -235,36 +279,46 @@ export default function OpenAICompatiblePanel({
   }, [applyBase, isDraftDirty, trimmedDraft, loadRemoteModels]);
 
   const displayedModels = isDraftDirty ? [] : modelOptions;
-  const queryUrl = hasBase ? `${normalizedBase}/models` : `${baseUrlPlaceholder}/models`;
+  const queryUrl = buildApiUrl(hasBase ? normalizedBase : baseUrlPlaceholder, "/models");
 
   return (
     <>
-      <div className="space-y-2">
-        <h4 className="font-medium text-foreground">{t("reasoning.custom.endpointTitle")}</h4>
-        <Input
-          value={draftBase}
-          onChange={(event) => setDraftBase(event.target.value)}
-          onBlur={handleBlur}
-          placeholder={baseUrlPlaceholder}
-          className="text-sm"
-        />
-        {helpExamples ?? (
-          <p className="text-xs text-muted-foreground">
-            {t("reasoning.custom.endpointExamples")}{" "}
-            <code className="text-primary">https://openrouter.ai/api/v1</code> (OpenRouter),{" "}
-            <code className="text-primary">https://api.together.xyz/v1</code> (Together).
-          </p>
-        )}
-      </div>
+      {!lockedBaseUrl && (
+        <div className="space-y-2">
+          <h4 className="font-medium text-foreground">{t("reasoning.custom.endpointTitle")}</h4>
+          <Input
+            value={draftBase}
+            onChange={(event) => setDraftBase(event.target.value)}
+            onBlur={handleBlur}
+            placeholder={baseUrlPlaceholder}
+            className="text-sm"
+          />
+          {helpExamples ?? (
+            <p className="text-xs text-muted-foreground">
+              {t("reasoning.custom.endpointExamples")}{" "}
+              <code className="text-primary">https://openrouter.ai/api/v1</code> (OpenRouter),{" "}
+              <code className="text-primary">https://api.together.xyz/v1</code> (Together).
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2 pt-3">
-        <h4 className="font-medium text-foreground">{t("reasoning.custom.apiKeyOptional")}</h4>
+        <div className="flex items-baseline justify-between">
+          <h4 className="font-medium text-foreground">
+            {t(apiKeyRequired ? "common.apiKey" : "reasoning.custom.apiKeyOptional")}
+          </h4>
+          {getKeyUrl && <GetApiKeyLink url={getKeyUrl} />}
+        </div>
         <ApiKeyInput
           apiKey={apiKey}
           setApiKey={setApiKey}
           label=""
-          helpText={t("reasoning.custom.apiKeyHelp")}
+          helpText={apiKeyRequired ? "" : t("reasoning.custom.apiKeyHelp")}
         />
+        {apiKeyRequired && !apiKey?.trim() && (
+          <p className="text-xs text-warning">{t("reasoning.custom.keyRequiredHint")}</p>
+        )}
       </div>
 
       <div className="space-y-2 pt-3">
@@ -315,9 +369,25 @@ export default function OpenAICompatiblePanel({
             {!modelsLoading && !modelsError && modelOptions.length === 0 && (
               <p className="text-xs text-warning">{t("reasoning.custom.noModels")}</p>
             )}
+            {!modelsLoading && displayedModels.length > 0 && !model && (
+              <p className="text-xs text-warning">{t("reasoning.custom.selectModelHint")}</p>
+            )}
           </>
         )}
-        <ModelCardList models={displayedModels} selectedModel={model} onModelSelect={setModel} />
+        {displayedModels.length > MODEL_SEARCH_THRESHOLD ? (
+          <SearchableModelList
+            models={displayedModels}
+            selectedModel={model}
+            onModelSelect={setModel}
+          />
+        ) : (
+          <ModelCardList
+            models={displayedModels}
+            selectedModel={model}
+            onModelSelect={setModel}
+            truncateDescription
+          />
+        )}
       </div>
     </>
   );

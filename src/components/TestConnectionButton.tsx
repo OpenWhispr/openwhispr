@@ -5,7 +5,7 @@ import { CheckCircle, XCircle, Loader2, Copy } from "lucide-react";
 
 interface TestConnectionButtonProps {
   provider: string;
-  getConfig: () => Record<string, string>;
+  getConfig: () => Record<string, unknown>;
 }
 
 export default function TestConnectionButton({ provider, getConfig }: TestConnectionButtonProps) {

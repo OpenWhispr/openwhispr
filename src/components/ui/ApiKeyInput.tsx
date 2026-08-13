@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, X, KeyRound } from "lucide-react";
 import { Input } from "./input";
@@ -54,14 +54,14 @@ export default function ApiKeyInput({
     setIsEditing(true);
   };
 
-  const save = () => {
+  const save = useCallback(() => {
     try {
       setApiKey(draft.trim());
     } catch (err) {
       logger.warn("Failed to save API key", { error: (err as Error).message }, "settings");
     }
     setIsEditing(false);
-  };
+  }, [draft, setApiKey]);
 
   const cancel = () => {
     setDraft("");
@@ -79,15 +79,17 @@ export default function ApiKeyInput({
     }
   };
 
+  // Commit the draft instead of discarding it — users paste a key and click
+  // the next field expecting it to stick (Escape or ✕ still cancels).
   useEffect(() => {
     if (!isEditing) return;
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current?.contains(e.target as Node)) return;
-      cancel();
+      save();
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isEditing]);
+  }, [isEditing, save]);
 
   return (
     <div className={className}>

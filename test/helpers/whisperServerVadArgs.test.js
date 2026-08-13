@@ -29,6 +29,7 @@ test("buildWhisperServerArgs includes VAD flags when enabled and model path prov
     "8180",
     "--language",
     "auto",
+    "--no-timestamps",
     "--vad",
     "--vad-model",
     "/tmp/ggml-silero-v5.1.2.bin",
@@ -58,6 +59,116 @@ test("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () =
 
   assert.equal(args.includes("--vad"), false);
   assert.equal(args.includes("--vad-model"), false);
+});
+
+test("buildWhisperServerArgs disables timestamps so segments aren't wrapped mid-word", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+  });
+
+  assert.equal(args.includes("--no-timestamps"), true);
+});
+
+test("buildWhisperServerArgs includes thread count when provided", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+    threads: 10,
+  });
+
+  assert.deepEqual(args.slice(0, 8), [
+    "--model",
+    "/tmp/model.bin",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8180",
+    "--threads",
+    "10",
+  ]);
+});
+
+test("buildWhisperServerArgs pins the GPU device when an index is given", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+    gpuDeviceIndex: 1,
+  });
+
+  assert.deepEqual(args.slice(6, 8), ["--device", "1"]);
+});
+
+test("buildWhisperServerArgs omits --device by default and for unpinned sentinels", () => {
+  for (const gpuDeviceIndex of [undefined, null, -1]) {
+    const args = WhisperServerManager.buildWhisperServerArgs({
+      modelPath: "/tmp/model.bin",
+      port: 8180,
+      language: "auto",
+      gpuDeviceIndex,
+    });
+
+    assert.equal(args.includes("--device"), false);
+  }
+});
+
+test("resolveWhisperThreads keeps whisper.cpp default on small machines", () => {
+  const result = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 4, env: {} }
+  );
+
+  assert.equal(result.threads, null);
+  assert.equal(result.source, "default");
+  assert.equal(result.availableParallelism, 4);
+});
+
+test("resolveWhisperThreads auto-selects a conservative count", () => {
+  const result = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 14, env: {} }
+  );
+
+  assert.equal(result.threads, 10);
+  assert.equal(result.source, "auto");
+  assert.equal(result.availableParallelism, 14);
+});
+
+test("resolveWhisperThreads caps automatic and manual thread counts", () => {
+  const auto = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 64, env: {} }
+  );
+  const manual = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 64, env: { WHISPER_THREADS: "128" } }
+  );
+
+  assert.equal(auto.threads, 12);
+  assert.equal(manual.threads, 64);
+});
+
+test("resolveWhisperThreads lets explicit options override env and auto", () => {
+  const result = WhisperServerManager.resolveWhisperThreads(
+    { threads: "8" },
+    { availableParallelism: 14, env: { WHISPER_THREADS: "6" } }
+  );
+
+  assert.equal(result.threads, 8);
+  assert.equal(result.source, "options");
+});
+
+test("resolveWhisperThreads falls back safely when env override is invalid", () => {
+  const result = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 14, env: { WHISPER_THREADS: "fast" } }
+  );
+
+  assert.equal(result.threads, 10);
+  assert.equal(result.source, "invalid-env-auto");
 });
 
 test("getVadSignature changes when VAD settings or model path change", () => {

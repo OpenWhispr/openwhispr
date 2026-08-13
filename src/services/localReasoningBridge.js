@@ -37,8 +37,6 @@ class LocalReasoningService {
         topK: config.topK || 40,
         topP: config.topP || 0.9,
         repeatPenalty: config.repeatPenalty || 1.1,
-        contextSize: config.contextSize || 4096,
-        threads: config.threads || 4,
         systemPrompt: config.systemPrompt || "",
         disableThinking: config.disableThinking !== false,
       };

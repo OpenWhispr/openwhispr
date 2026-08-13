@@ -10,6 +10,7 @@ interface ChatInputProps {
   onTextSubmit?: (text: string) => void;
   onCancel?: () => void;
   autoFocus?: boolean;
+  placeholder?: string;
 }
 
 function RecordingIndicator() {
@@ -46,6 +47,7 @@ export function ChatInput({
   onTextSubmit,
   onCancel,
   autoFocus = false,
+  placeholder,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const [inputText, setInputText] = useState("");
@@ -119,7 +121,7 @@ export function ChatInput({
               onKeyDown={handleKeyDown}
               disabled={isBusy}
               autoFocus={autoFocus}
-              placeholder={t("agentMode.input.typeMessage")}
+              placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent",
                 "text-[13px] text-foreground placeholder:text-muted-foreground/40",

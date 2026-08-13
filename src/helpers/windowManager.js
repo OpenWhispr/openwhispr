@@ -5,7 +5,9 @@ const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
+const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
+const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
 const { DEV_SERVER_PORT } = DevServerManager;
 const {
   MAIN_WINDOW_CONFIG,
@@ -24,7 +26,12 @@ class WindowManager {
     this.controlPanelWindow = null;
     this.agentWindow = null;
     this.notificationWindow = null;
-    this._notificationTimeout = null;
+    this._notificationDismissTimer = new NotificationDismissTimer(() => {
+      if (this.meetingDetectionEngine) {
+        this.meetingDetectionEngine.handleNotificationTimeout();
+      }
+      this.dismissMeetingNotification();
+    });
     this.transcriptionPreviewWindow = null;
     this.updateNotificationWindow = null;
     this._updateNotificationDismissed = false;
@@ -47,6 +54,7 @@ class WindowManager {
     this._panelStartPosition = "bottom-right";
     this._isDictatingToggle = false;
     this._pendingMeetingNoteNavigation = null;
+    this._pendingNoteNavigation = null;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -125,14 +133,28 @@ class WindowManager {
     }
   }
 
-  setNotificationInteractivity(interactive) {
-    if (!this.notificationWindow || this.notificationWindow.isDestroyed()) {
+  // Only the meeting prompt owns this: another overlay reporting its own hover
+  // must not pause a countdown it cannot resume — it may be destroyed before
+  // its pointer ever leaves.
+  setNotificationInteractivity(sender, interactive) {
+    const win = this.notificationWindow;
+    if (!win || win.isDestroyed() || sender !== win.webContents) {
       return;
     }
+    // Linux ignores the `forward` option, so a card returned to click-through
+    // there never sees another mouseenter and Start/Dismiss stay unreachable
+    // for the rest of its life (#1456). It is only click-through on macOS to
+    // begin with, so on Linux leave the hit-testing alone and move the
+    // countdown alone.
+    const togglesClickThrough = process.platform !== "linux";
+    // Hovering means the user is reading or about to click — the auto-dismiss
+    // countdown must not close the card under their pointer.
     if (interactive) {
-      this.notificationWindow.setIgnoreMouseEvents(false);
+      if (togglesClickThrough) win.setIgnoreMouseEvents(false);
+      this._notificationDismissTimer.pause();
     } else {
-      this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });
+      if (togglesClickThrough) win.setIgnoreMouseEvents(true, { forward: true });
+      this._notificationDismissTimer.resume();
     }
   }
 
@@ -149,7 +171,6 @@ class WindowManager {
       x: currentBounds.x + currentBounds.width / 2,
       y: currentBounds.y + currentBounds.height,
     });
-    const workArea = display.workArea || display.bounds;
 
     let newX, newY;
 
@@ -169,18 +190,11 @@ class WindowManager {
       newY = currentBounds.y + currentBounds.height - newSize.height;
     }
 
-    // Clamp to work area
-    newX = Math.max(workArea.x, Math.min(newX, workArea.x + workArea.width - newSize.width));
-    newY = Math.max(workArea.y, Math.min(newY, workArea.y + workArea.height - newSize.height));
+    const clamped = WindowPositionUtil.clampToWorkArea({ x: newX, y: newY, ...newSize }, display);
 
-    this.mainWindow.setBounds({
-      x: newX,
-      y: newY,
-      width: newSize.width,
-      height: newSize.height,
-    });
+    this.mainWindow.setBounds({ ...clamped, ...newSize });
 
-    return { success: true, bounds: { x: newX, y: newY, ...newSize } };
+    return { success: true, bounds: { ...clamped, ...newSize } };
   }
 
   async loadWindowContent(window, isControlPanel = false, isAgent = false) {
@@ -218,13 +232,15 @@ class WindowManager {
     let lastToggleTime = 0;
     const DEBOUNCE_MS = 150;
 
-    return async () => {
+    // globalShortcut registrations pass the hotkey that fired; native-shortcut
+    // backends invoke the callback bare (their slot holds only the primary).
+    return async (triggeredHotkey) => {
       if (this.hotkeyManager.isInListeningMode()) {
         return;
       }
 
       const activationMode = this.getActivationMode();
-      const currentHotkey = this.hotkeyManager.getCurrentHotkey?.();
+      const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
 
       if (
         process.platform === "darwin" &&
@@ -274,6 +290,7 @@ class WindowManager {
 
     if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
     this.showDictationPanel();
+    this.sendPrepareDictation();
 
     const safetyTimeoutId = setTimeout(() => {
       if (this.macCompoundPushState?.active) {
@@ -321,6 +338,7 @@ class WindowManager {
     if (wasRecording) {
       this.sendStopDictation();
     } else {
+      this.sendCancelDictationPreparation();
       this.hideDictationPanel();
     }
   }
@@ -339,6 +357,8 @@ class WindowManager {
 
     if (wasRecording) {
       this.sendStopDictation();
+    } else {
+      this.sendCancelDictationPreparation();
     }
     this.hideDictationPanel();
 
@@ -389,7 +409,7 @@ class WindowManager {
     return required;
   }
 
-  startWindowsPushToTalk() {
+  startWindowsPushToTalk(key) {
     if (this.winPushState?.active) {
       return;
     }
@@ -398,9 +418,11 @@ class WindowManager {
     const downTime = Date.now();
 
     this.showDictationPanel();
+    this.sendPrepareDictation();
 
     this.winPushState = {
       active: true,
+      key,
       downTime,
       isRecording: false,
     };
@@ -417,8 +439,13 @@ class WindowManager {
     }, MIN_HOLD_DURATION_MS);
   }
 
-  handleWindowsPushKeyUp() {
+  // With several dictation hotkeys bound, only the key that started the push
+  // may stop it; called without a key to force-stop (resetWindowsPushState).
+  handleWindowsPushKeyUp(key) {
     if (!this.winPushState?.active) {
+      return;
+    }
+    if (key && this.winPushState.key && key !== this.winPushState.key) {
       return;
     }
 
@@ -428,6 +455,7 @@ class WindowManager {
     if (wasRecording) {
       this.sendStopDictation();
     } else {
+      this.sendCancelDictationPreparation();
       this.hideDictationPanel();
     }
   }
@@ -440,16 +468,45 @@ class WindowManager {
     this.handleWindowsPushKeyUp();
   }
 
-  sendToggleDictation() {
+  _sendDictationToggle(channel) {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      // Capture the paste target and any selection on every toggle press,
+      // before the overlay steals focus — the paste can't refocus the target
+      // otherwise (#668). The renderer owns the real recording state and may
+      // decline a toggle (mic error, silence gate, Esc cancel), so gating this
+      // on _isDictatingToggle desyncs and leaves a stale target from a
+      // previous app. Press-time capture matches the dictation hotkey call
+      // sites in main.js; a stop-press capture resolves the same frontmost
+      // app, since NSWorkspace ignores the overlay panel.
+      if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+      void this.selectionManager?.captureTarget?.();
       this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation");
+      // About-to-start guess: open the mic one IPC message ahead of the toggle.
+      // A wrong guess (renderer declines) is bounded by the prepared capture's
+      // max-age expiry, and the renderer dedups its own prepare call.
+      if (!this._isDictatingToggle) this.sendPrepareDictation();
+      this.mainWindow.webContents.send(channel);
       this._isDictatingToggle = !this._isDictatingToggle;
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
+  }
+
+  sendToggleDictation() {
+    this._sendDictationToggle("toggle-dictation");
+  }
+
+  sendToggleVoiceAgent() {
+    this._sendDictationToggle("toggle-voice-agent");
+  }
+
+  sendToggleTranslation() {
+    // Same PID-capture need as the voice agent: translation hotkeys don't
+    // capture the target at their call sites.
+    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+    this._sendDictationToggle("toggle-translation");
   }
 
   sendStartDictation() {
@@ -457,6 +514,8 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+      void this.selectionManager?.captureTarget?.();
       this.showDictationPanel();
       this.mainWindow.webContents.send("start-dictation");
       this.meetingDetectionEngine?.setUserRecording(true);
@@ -474,12 +533,59 @@ class WindowManager {
     }
   }
 
+  sendPrepareDictation() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("prepare-dictation");
+    }
+  }
+
+  sendCancelDictationPreparation() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-dictation-preparation");
+    }
+  }
+
+  sendCancelDictation() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-dictation-preparation");
+      this.mainWindow.webContents.send("cancel-hotkey-pressed");
+      this._isDictatingToggle = false;
+      this.meetingDetectionEngine?.setUserRecording(false);
+    }
+  }
+
   getActivationMode() {
     return this._cachedActivationMode;
   }
 
   setActivationModeCache(mode) {
     this._cachedActivationMode = mode === "push" ? "push" : "tap";
+  }
+
+  /**
+   * Sync the native low-level key listeners (Windows/Linux) so every hotkey slot
+   * that needs one is watched. Call after any change to a slot hotkey or the
+   * activation mode. No-op during hotkey capture (listeners are stopped then).
+   */
+  reconcileNativeKeyListeners() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    if (this.hotkeyManager.isInListeningMode()) return;
+    // GNOME/KDE/Hyprland deliver hotkeys via D-Bus native shortcuts; the low-level
+    // listener would be redundant there and could double-fire, so watch nothing.
+    const keys = this.hotkeyManager.isUsingNativeShortcut()
+      ? []
+      : this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+    if (process.platform === "win32" && this.windowsKeyManager) {
+      this.windowsKeyManager.setKeys(keys);
+    } else if (process.platform === "linux" && this.linuxKeyManager) {
+      this.linuxKeyManager.setKeys(keys);
+    }
   }
 
   setFloatingIconAutoHide(enabled) {
@@ -524,6 +630,10 @@ class WindowManager {
     return this.hotkeyManager.isUsingHyprland();
   }
 
+  getHyprlandConfigStatus() {
+    return this.hotkeyManager.getHyprlandConfigStatus();
+  }
+
   isUsingKDEHotkeys() {
     return this.hotkeyManager.isUsingKDE();
   }
@@ -560,6 +670,7 @@ class WindowManager {
         this.controlPanelWindow.show();
       }
       this.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
       return;
     }
 
@@ -600,6 +711,7 @@ class WindowManager {
       if (!this.controlPanelWindow.isVisible()) {
         this.controlPanelWindow.show();
         this.controlPanelWindow.focus();
+        dockManager.setControlPanelVisible(true);
       }
     }, 10000);
 
@@ -609,11 +721,9 @@ class WindowManager {
 
     this.controlPanelWindow.once("ready-to-show", () => {
       clearVisibilityTimer();
-      if (process.platform === "darwin" && app.dock) {
-        app.dock.show();
-      }
       this.controlPanelWindow.show();
       this.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
     });
 
     this.controlPanelWindow.on("close", (event) => {
@@ -626,6 +736,7 @@ class WindowManager {
     this.controlPanelWindow.on("closed", () => {
       clearVisibilityTimer();
       this.controlPanelWindow = null;
+      dockManager.setControlPanelVisible(false);
     });
 
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
@@ -648,6 +759,7 @@ class WindowManager {
         if (!this.controlPanelWindow.isVisible()) {
           this.controlPanelWindow.show();
           this.controlPanelWindow.focus();
+          dockManager.setControlPanelVisible(true);
         }
       }
     );
@@ -984,11 +1096,23 @@ class WindowManager {
     this.agentWindow.setBounds(bounds);
   }
 
-  _repositionToCursorDisplay() {
+  // The display the user is working on is the one showing the app being dictated
+  // into, which on a multi-monitor desk is often not the one the mouse rests on.
+  // Falls back to the cursor when the target has no readable window (non-macOS,
+  // no target captured yet, or an app with no ordinary window).
+  async _resolveActiveDisplay() {
+    const pid = this.textEditMonitor?.lastTargetPid;
+    const bounds = pid ? await this.textEditMonitor.getTargetWindowBounds(pid) : null;
+    return bounds
+      ? screen.getDisplayMatching(bounds)
+      : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  }
+
+  async _repositionToActiveDisplay() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
 
-    const cursorPos = screen.getCursorScreenPoint();
-    const cursorDisplay = screen.getDisplayNearestPoint(cursorPos);
+    const activeDisplay = await this._resolveActiveDisplay();
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
 
     const currentBounds = this.mainWindow.getBounds();
     const currentDisplay = screen.getDisplayNearestPoint({
@@ -996,12 +1120,27 @@ class WindowManager {
       y: currentBounds.y + currentBounds.height / 2,
     });
 
-    if (currentDisplay.id === cursorDisplay.id) return;
+    if (currentDisplay.id === activeDisplay.id) {
+      // Nearest-display math can't tell "on this display" from "just past its
+      // edge", so a rearranged monitor or a drag that ended over another
+      // display can leave the panel stranded in dead space, looking like the
+      // overlay vanished. Pull it back before showing it.
+      const clamped = WindowPositionUtil.clampToWorkArea(currentBounds, currentDisplay);
+      if (clamped.x !== currentBounds.x || clamped.y !== currentBounds.y) {
+        this.mainWindow.setBounds({ ...currentBounds, ...clamped });
+      }
+      return;
+    }
 
     const newPos = WindowPositionUtil.getMainWindowPosition(
-      cursorDisplay,
+      activeDisplay,
       { width: currentBounds.width, height: currentBounds.height },
       this._panelStartPosition
+    );
+    debugLogger.debug(
+      "[WindowManager] Moving dictation panel to the active display",
+      { from: currentBounds, to: newPos, displayId: activeDisplay.id },
+      "window"
     );
     this.mainWindow.setBounds(newPos);
   }
@@ -1009,11 +1148,10 @@ class WindowManager {
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      const wasHidden = !this.mainWindow.isVisible() || this.mainWindow.isMinimized();
-
-      if (wasHidden) {
-        this._repositionToCursorDisplay();
-      }
+      // Reading the target's window costs a helper spawn, so show now and move
+      // when the answer lands: a visible hop only happens when the panel was on
+      // the wrong display, which is the case being corrected.
+      void this._repositionToActiveDisplay();
 
       if (this.mainWindow.isMinimized()) {
         this.mainWindow.restore();
@@ -1037,10 +1175,7 @@ class WindowManager {
     }
 
     this.controlPanelWindow.hide();
-
-    if (process.platform === "darwin" && app.dock) {
-      app.dock.hide();
-    }
+    dockManager.setControlPanelVisible(false);
   }
 
   hideDictationPanel() {
@@ -1115,65 +1250,63 @@ class WindowManager {
       this.notificationWindow.close();
       this.notificationWindow = null;
     }
-    if (this._notificationTimeout) {
-      clearTimeout(this._notificationTimeout);
-      this._notificationTimeout = null;
-    }
+    this._notificationDismissTimer.cancel();
 
     const display = screen.getPrimaryDisplay();
     const position = WindowPositionUtil.getNotificationPosition(display);
 
-    this.notificationWindow = new BrowserWindow({
+    const win = new BrowserWindow({
       ...NOTIFICATION_WINDOW_CONFIG,
       ...position,
     });
+    this.notificationWindow = win;
+
+    // Keep the prompt visible to the user but out of screen shares and recordings.
+    win.setContentProtection(true);
 
     if (process.platform === "darwin") {
-      this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });
+      win.setIgnoreMouseEvents(true, { forward: true });
     }
 
-    WindowPositionUtil.setupAlwaysOnTop(this.notificationWindow);
+    WindowPositionUtil.setupAlwaysOnTop(win);
 
     this._pendingNotificationData = promptData;
 
+    // Everything past the load addresses `win` directly: a replacement taking
+    // over mid-load must not have this prompt's data, countdown or force-show
+    // applied to its window.
     if (process.env.NODE_ENV === "development") {
       await DevServerManager.waitForDevServer();
-      await this.notificationWindow.loadURL(
-        `${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`
-      );
+      await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`);
     } else {
       const fileInfo = DevServerManager.getAppFilePath(false);
-      await this.notificationWindow.loadFile(fileInfo.path, {
+      await win.loadFile(fileInfo.path, {
         query: { ...fileInfo.query, "meeting-notification": "true" },
       });
     }
+    if (this.notificationWindow !== win) return;
 
     this._notificationReadyFallback = setTimeout(() => {
       this._notificationReadyFallback = null;
-      if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      if (!win.isDestroyed()) {
         debugLogger.warn(
           "Notification renderer did not signal ready, force-showing",
           {},
           "meeting"
         );
-        this.notificationWindow.webContents.send("meeting-notification-data", promptData);
-        this.notificationWindow.showInactive();
+        win.webContents.send("meeting-notification-data", promptData);
+        win.showInactive();
       }
     }, 3000);
 
-    this._notificationTimeout = setTimeout(() => {
-      if (this.meetingDetectionEngine) {
-        this.meetingDetectionEngine.handleNotificationTimeout();
-      }
-      this.dismissMeetingNotification();
-    }, 30000);
+    this._notificationDismissTimer.start(getNotificationTimeoutMs(promptData.source));
 
-    this.notificationWindow.on("closed", () => {
+    // "closed" fires asynchronously, so a replaced prompt's window emits it
+    // after the replacement already took over the reference and the countdown.
+    win.on("closed", () => {
+      if (this.notificationWindow !== win) return;
       this.notificationWindow = null;
-      if (this._notificationTimeout) {
-        clearTimeout(this._notificationTimeout);
-        this._notificationTimeout = null;
-      }
+      this._notificationDismissTimer.cancel();
     });
   }
 
@@ -1193,10 +1326,7 @@ class WindowManager {
       clearTimeout(this._notificationReadyFallback);
       this._notificationReadyFallback = null;
     }
-    if (this._notificationTimeout) {
-      clearTimeout(this._notificationTimeout);
-      this._notificationTimeout = null;
-    }
+    this._notificationDismissTimer.cancel();
     if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
       this.notificationWindow.close();
     }
@@ -1217,10 +1347,11 @@ class WindowManager {
     const display = screen.getPrimaryDisplay();
     const position = WindowPositionUtil.getNotificationPosition(display);
 
-    this.updateNotificationWindow = new BrowserWindow({
+    const win = new BrowserWindow({
       ...NOTIFICATION_WINDOW_CONFIG,
       ...position,
     });
+    this.updateNotificationWindow = win;
 
     WindowPositionUtil.setupAlwaysOnTop(this.updateNotificationWindow);
 
@@ -1256,7 +1387,8 @@ class WindowManager {
       this.dismissUpdateNotification({ persistent: false });
     }, 5000);
 
-    this.updateNotificationWindow.on("closed", () => {
+    win.on("closed", () => {
+      if (this.updateNotificationWindow !== win) return;
       this.updateNotificationWindow = null;
       if (this._updateNotificationAutoDismiss) {
         clearTimeout(this._updateNotificationAutoDismiss);
@@ -1313,6 +1445,18 @@ class WindowManager {
   consumePendingMeetingNoteNavigation() {
     const payload = this._pendingMeetingNoteNavigation;
     this._pendingMeetingNoteNavigation = null;
+    return payload;
+  }
+
+  async queueNoteNavigation(payload) {
+    this._pendingNoteNavigation = payload;
+    await this.createControlPanelWindow();
+    this.sendToControlPanel("note-navigation-pending");
+  }
+
+  consumePendingNoteNavigation() {
+    const payload = this._pendingNoteNavigation;
+    this._pendingNoteNavigation = null;
     return payload;
   }
 

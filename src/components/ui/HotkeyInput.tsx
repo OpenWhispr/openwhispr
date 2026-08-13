@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
 import { getPlatform } from "../../utils/platform";
 
@@ -143,6 +143,8 @@ const MODIFIER_CODES = new Set([
 export interface HotkeyInputProps {
   value: string;
   onChange: (hotkey: string) => void;
+  /** When provided, a remove button is revealed on hover while a hotkey is set. */
+  onClear?: () => void;
   onBlur?: () => void;
   disabled?: boolean;
   autoFocus?: boolean;
@@ -183,6 +185,7 @@ export interface HotkeyInputVariant {
 export function HotkeyInput({
   value,
   onChange,
+  onClear,
   onBlur,
   disabled = false,
   autoFocus = false,
@@ -195,7 +198,6 @@ export function HotkeyInput({
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
   const [isFnHeld, setIsFnHeld] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const lastCapturedHotkeyRef = useRef<string | null>(null);
   const keyDownTimeRef = useRef<number>(0);
   const warningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fnHeldRef = useRef(false);
@@ -283,7 +285,6 @@ export function HotkeyInput({
       }
 
       setValidationWarning(null);
-      lastCapturedHotkeyRef.current = hotkey;
       onChange(hotkey);
       setIsCapturing(false);
       setActiveModifiers(new Set());
@@ -424,8 +425,7 @@ export function HotkeyInput({
     setActiveModifiers(new Set());
     setValidationWarning(null);
     clearFnHeld();
-    window.electronAPI?.setHotkeyListeningMode?.(false, lastCapturedHotkeyRef.current);
-    lastCapturedHotkeyRef.current = null;
+    window.electronAPI?.setHotkeyListeningMode?.(false);
     onBlur?.();
   }, [onBlur, clearFnHeld]);
 
@@ -437,7 +437,7 @@ export function HotkeyInput({
 
   useEffect(() => {
     return () => {
-      window.electronAPI?.setHotkeyListeningMode?.(false, null);
+      window.electronAPI?.setHotkeyListeningMode?.(false);
       if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
     };
   }, []);
@@ -471,6 +471,30 @@ export function HotkeyInput({
   const displayValue = formatHotkeyLabel(value);
   const isGlobe = isGlobeLikeHotkey(value);
   const hotkeyParts = value?.includes("+") ? displayValue.split("+") : [];
+
+  // mousedown is prevented so clicking never focuses the container and starts
+  // capture; focus/key events are stopped so keyboard use doesn't either.
+  const clearButton =
+    onClear && value && !isCapturing && !disabled ? (
+      <button
+        type="button"
+        aria-label={t("hotkeyInput.remove")}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onFocus={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        onKeyUp={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClear();
+        }}
+        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 transition-opacity duration-150 text-muted-foreground/50 hover:text-destructive cursor-pointer"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    ) : null;
 
   // Hero variant: large centered key display for onboarding
   if (variant === "hero") {
@@ -574,6 +598,7 @@ export function HotkeyInput({
             <span className="text-sm font-medium">{t("hotkeyInput.clickToSet")}</span>
           </div>
         )}
+        {clearButton && <span className="absolute top-2.5 right-2.5">{clearButton}</span>}
       </div>
     );
   }
@@ -592,7 +617,7 @@ export function HotkeyInput({
       onFocus={handleFocus}
       onBlur={handleBlur}
       className={`
-        relative overflow-hidden rounded-md border
+        relative group overflow-hidden rounded-md border
         transition-colors duration-150 cursor-pointer select-none focus:outline-none
         ${
           disabled
@@ -678,6 +703,7 @@ export function HotkeyInput({
               <span className="text-xs text-muted-foreground/50">
                 {t("hotkeyInput.clickToChangeLower")}
               </span>
+              {clearButton}
             </div>
           </div>
         ) : (

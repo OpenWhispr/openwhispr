@@ -2,6 +2,7 @@ import { Dialog, DialogContent } from "./ui/dialog";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useUsage } from "../hooks/useUsage";
+import { useBillingPortal } from "../hooks/useBillingPortal";
 import { useSettingsStore } from "../stores/settingsStore";
 
 interface UpgradePromptProps {
@@ -19,6 +20,7 @@ export default function UpgradePrompt({
 }: UpgradePromptProps) {
   const { t } = useTranslation();
   const usage = useUsage();
+  const { openBillingPortal } = useBillingPortal(usage);
   const isPastDue = usage?.isPastDue ?? false;
 
   return (
@@ -51,9 +53,7 @@ export default function UpgradePrompt({
             <OptionCard
               title={t("upgradePrompt.updatePayment")}
               description={t("upgradePrompt.updatePaymentDescription")}
-              onClick={() => {
-                usage?.openBillingPortal();
-              }}
+              onClick={() => void openBillingPortal()}
               highlighted
               disabled={usage?.checkoutLoading}
             />
@@ -72,7 +72,9 @@ export default function UpgradePrompt({
             title={t("upgradePrompt.useApiKey")}
             description={t("upgradePrompt.useApiKeyDescription")}
             onClick={() => {
-              useSettingsStore.getState().setCloudTranscriptionMode("byok");
+              const s = useSettingsStore.getState();
+              s.setTranscriptionMode("providers");
+              s.setCloudTranscriptionMode("byok");
               onOpenChange(false);
             }}
           />
@@ -80,7 +82,10 @@ export default function UpgradePrompt({
             title={t("upgradePrompt.switchToLocal")}
             description={t("upgradePrompt.switchToLocalDescription")}
             onClick={() => {
-              useSettingsStore.getState().setUseLocalWhisper(true);
+              const s = useSettingsStore.getState();
+              s.setTranscriptionMode("local");
+              s.setUseLocalWhisper(true);
+              s.setCloudTranscriptionMode("byok");
               onOpenChange(false);
             }}
           />

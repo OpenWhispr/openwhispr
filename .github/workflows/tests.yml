@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Build better-sqlite3 for the runner's node
+        # --ignore-scripts skips the native build, so every DB-backed test
+        # (snippetsDatabase, noteCloudUpsertGuard, …) silently skips without this.
+        run: npm rebuild better-sqlite3
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Run tests
+        run: npm test
+        env:
+          # keeps require("electron") from throwing when postinstall was skipped
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp
+          # a skipped DB test here means the rebuild step above is gone: fail instead
+          REQUIRE_DB_TESTS: "1"
