@@ -10,6 +10,13 @@ const EXPECTED_BINARY_FRAGMENTS = {
   diarization: ["sherpa-onnx-diarize"],
 };
 
+// A wedged sidecar can ignore SIGTERM entirely (observed with qdrant spinning
+// at full CPU), so reaping must verify death and escalate rather than
+// fire-and-forget.
+const SIGTERM_GRACE_MS = 5000;
+const SIGKILL_GRACE_MS = 1000;
+const EXIT_POLL_INTERVAL_MS = 200;
+
 function isProcessAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -39,25 +46,61 @@ function processCommand(pid) {
   }
 }
 
-function reapStaleSidecars() {
-  const entries = sidecarPidFile.readAll();
-  for (const { name, pid } of entries) {
-    const fragments = EXPECTED_BINARY_FRAGMENTS[name];
-    if (fragments && isProcessAlive(pid)) {
-      const command = processCommand(pid);
-      if (!fragments.some((fragment) => command.includes(fragment))) {
-        sidecarPidFile.clear(name);
-        continue;
-      }
-      debugLogger.warn("Reaping stale sidecar", { name, pid });
-      try {
-        process.kill(pid, "SIGTERM");
-      } catch {
-        // Already dead.
-      }
-    }
-    sidecarPidFile.clear(name);
+function signalProcess(pid, signal) {
+  try {
+    process.kill(pid, signal);
+  } catch {
+    // Already dead.
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForExit(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (isProcessAlive(pid)) {
+    if (Date.now() >= deadline) return false;
+    await sleep(EXIT_POLL_INTERVAL_MS);
+  }
+  return true;
+}
+
+async function killStaleSidecar(name, pid, { sigtermGraceMs, sigkillGraceMs }) {
+  debugLogger.warn("Reaping stale sidecar", { name, pid });
+  signalProcess(pid, "SIGTERM");
+  if (await waitForExit(pid, sigtermGraceMs)) return true;
+
+  debugLogger.warn("Stale sidecar ignored SIGTERM, escalating to SIGKILL", { name, pid });
+  signalProcess(pid, "SIGKILL");
+  if (await waitForExit(pid, sigkillGraceMs)) return true;
+
+  debugLogger.error("Stale sidecar survived SIGKILL, keeping PID entry for next launch", {
+    name,
+    pid,
+  });
+  return false;
+}
+
+async function reapStaleSidecars({
+  sigtermGraceMs = SIGTERM_GRACE_MS,
+  sigkillGraceMs = SIGKILL_GRACE_MS,
+} = {}) {
+  const entries = sidecarPidFile.readAll();
+  await Promise.all(
+    entries.map(async ({ name, pid }) => {
+      const fragments = EXPECTED_BINARY_FRAGMENTS[name];
+      if (fragments && isProcessAlive(pid)) {
+        const command = processCommand(pid);
+        if (fragments.some((fragment) => command.includes(fragment))) {
+          const dead = await killStaleSidecar(name, pid, { sigtermGraceMs, sigkillGraceMs });
+          if (!dead) return;
+        }
+      }
+      sidecarPidFile.clear(name);
+    })
+  );
 }
 
 module.exports = { reapStaleSidecars };
