@@ -148,6 +148,7 @@
     "active": "Active",
     "managedByOrg": "Managed by your organization",
     "freeAccountRequired": "Free account required",
+    "comingSoon": "Coming Soon",
     "cloud": "Cloud",
     "local": "Local",
     "apiKey": "API Key",
@@ -2827,7 +2828,6 @@
     "meeting": {
       "title": "Meeting Notes",
       "description": "Transcriptions & structured summaries",
-      "comingSoon": "Coming Soon",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization."
     },

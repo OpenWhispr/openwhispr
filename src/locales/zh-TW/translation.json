@@ -148,6 +148,7 @@
     "active": "使用中",
     "managedByOrg": "由您的組織管理",
     "freeAccountRequired": "需要免費帳戶",
+    "comingSoon": "即將推出",
     "cloud": "雲端",
     "local": "本機",
     "apiKey": "API Key",
@@ -2619,7 +2620,6 @@
     "meeting": {
       "title": "會議筆記",
       "description": "轉錄與結構化摘要",
-      "comingSoon": "即將推出",
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。"
     },

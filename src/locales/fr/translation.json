@@ -148,6 +148,7 @@
     "active": "Actif",
     "managedByOrg": "Géré par votre organisation",
     "freeAccountRequired": "Compte gratuit requis",
+    "comingSoon": "Bientôt disponible",
     "cloud": "Cloud",
     "local": "Local",
     "apiKey": "Clé API",
@@ -2827,7 +2828,6 @@
     "meeting": {
       "title": "Notes de réunion",
       "description": "Transcriptions et résumés structurés",
-      "comingSoon": "Bientôt disponible",
       "back": "Retour",
       "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation."
     },

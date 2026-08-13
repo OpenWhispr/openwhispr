@@ -87,7 +87,7 @@ export function MeetingTranscriptionPanel() {
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
         disabled: true,
-        badge: t("settings.meeting.comingSoon"),
+        badge: t("common.comingSoon"),
       },
     ],
     "transcription",

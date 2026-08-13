@@ -148,6 +148,7 @@
     "active": "已激活",
     "managedByOrg": "由您的组织管理",
     "freeAccountRequired": "需要免费账户",
+    "comingSoon": "即将推出",
     "cloud": "云端",
     "local": "本地",
     "apiKey": "API Key",
@@ -2619,7 +2620,6 @@
     "meeting": {
       "title": "会议笔记",
       "description": "转录与结构化摘要",
-      "comingSoon": "即将推出",
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。"
     },
