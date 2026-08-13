@@ -25,7 +25,12 @@ import {
   resolveConfiguredOpenAIBase,
   resolveSelfHostedOpenAIBase,
 } from "./ai/openaiBase";
-import { applyThinkingSuppression } from "./ai/thinkingSuppression";
+import {
+  applyChatCompletionsParams,
+  fetchWithParamFallback,
+  isTruncatedFinishReason,
+} from "./ai/chatRequestBody";
+import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
@@ -89,20 +94,9 @@ function assertAgentSessionAllowedByPolicy(provider: string, mode: InferenceMode
   assertReasoningAllowedByPolicy(provider, mode);
 }
 
-// Old Ollama/strict proxies reject the `reasoning` object; drop it and retry once.
-async function fetchWithReasoningFieldFallback(
-  doFetch: () => Promise<Response>,
-  requestBody: Record<string, unknown>,
-  logEvent: string
-): Promise<Response> {
-  let res = await doFetch();
-  if (!res.ok && (res.status === 400 || res.status === 422) && requestBody.reasoning) {
-    logger.logReasoning(logEvent, { status: res.status });
-    delete requestBody.reasoning;
-    void res.body?.cancel();
-    res = await doFetch();
-  }
-  return res;
+function logParamFallback(logEvent: string) {
+  return (details: { status: number; stripped: string[] }) =>
+    logger.logReasoning(logEvent, details);
 }
 
 class ReasoningService extends BaseReasoningService {
@@ -288,11 +282,13 @@ class ReasoningService extends BaseReasoningService {
       { role: "user", content: userPrompt },
     ];
 
-    const requestBody: any = {
+    const requestBody: any = { model, messages };
+    applyChatCompletionsParams(requestBody, {
       model,
-      messages,
-      temperature: config.temperature ?? (isCleanup ? 0 : 0.3),
-      max_tokens:
+      provider: providerName,
+      endpoint,
+      config,
+      maxTokens:
         config.maxTokens ||
         Math.max(
           4096,
@@ -303,19 +299,7 @@ class ReasoningService extends BaseReasoningService {
             TOKEN_LIMITS.TOKEN_MULTIPLIER
           )
         ),
-    };
-
-    // gpt-oss defaults to medium reasoning effort; low cuts hidden reasoning
-    // tokens (latency) and the tendency to answer the transcript instead of
-    // cleaning it. Selection edits need it too: at higher efforts Groq's
-    // gpt-oss can leave the whole reply in the reasoning channel and return
-    // whitespace content, failing the edit. applyThinkingSuppression still
-    // wins when thinking is disabled by the user.
-    if ((isCleanup || config.requireCompleteOutput) && model.includes("gpt-oss")) {
-      requestBody.reasoning_effort = "low";
-    }
-
-    applyThinkingSuppression(requestBody, model, providerName, config, endpoint);
+    });
 
     logger.logReasoning(`${providerName.toUpperCase()}_REQUEST`, {
       endpoint,
@@ -335,7 +319,7 @@ class ReasoningService extends BaseReasoningService {
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetchWithReasoningFieldFallback(
+        const res = await fetchWithParamFallback(
           () =>
             fetch(endpoint, {
               method: "POST",
@@ -344,7 +328,7 @@ class ReasoningService extends BaseReasoningService {
               signal: controller.signal,
             }),
           requestBody,
-          `${providerName.toUpperCase()}_REASONING_FIELD_RETRY`
+          logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`)
         );
 
         if (!res.ok) {
@@ -404,7 +388,7 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const choice = response.choices[0];
-    if (config.requireCompleteOutput && ["length", "max_tokens"].includes(choice?.finish_reason)) {
+    if (config.requireCompleteOutput && isTruncatedFinishReason(choice?.finish_reason)) {
       throw new Error("Model output was truncated before the selection edit completed");
     }
     // Reasoning models leak <think> blocks into non-streamed output; strip them
@@ -571,29 +555,19 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
-    // A known endpoint host knows its own request shape better than the model id does.
-    const apiConfig = detectEndpointDialect(endpoint) ?? getOpenAiApiConfig(model, provider);
-    const useOldTokenParam = isLocalProvider || isLanChat || provider === "groq";
-
     const requestBody: Record<string, unknown> = {
       model,
       messages,
       stream: true,
     };
 
-    const maxTokens = config.maxTokens || Math.max(4096, TOKEN_LIMITS.MAX_TOKENS);
-
-    if (useOldTokenParam) {
-      requestBody.temperature = config.temperature ?? 0.3;
-      requestBody.max_tokens = maxTokens;
-    } else {
-      requestBody[apiConfig.tokenParam] = maxTokens;
-      if (apiConfig.supportsTemperature) {
-        requestBody.temperature = config.temperature ?? 0.3;
-      }
-    }
-
-    applyThinkingSuppression(requestBody, model, isLanChat ? "lan" : provider, config, endpoint);
+    applyChatCompletionsParams(requestBody, {
+      model,
+      provider: isLanChat ? "lan" : isLocalProvider ? "local" : provider,
+      endpoint,
+      config,
+      maxTokens: config.maxTokens || Math.max(4096, TOKEN_LIMITS.MAX_TOKENS),
+    });
 
     logger.logReasoning("AGENT_STREAM_REQUEST", {
       endpoint,
@@ -617,7 +591,7 @@ class ReasoningService extends BaseReasoningService {
 
     let response: Response;
     try {
-      response = await fetchWithReasoningFieldFallback(
+      response = await fetchWithParamFallback(
         () =>
           fetch(endpoint, {
             method: "POST",
@@ -626,7 +600,7 @@ class ReasoningService extends BaseReasoningService {
             signal: controller.signal,
           }),
         requestBody,
-        "AGENT_STREAM_REASONING_FIELD_RETRY"
+        logParamFallback("AGENT_STREAM_PARAM_FALLBACK")
       );
     } catch (error) {
       clearTimeout(timeoutId);
@@ -794,7 +768,15 @@ class ReasoningService extends BaseReasoningService {
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
     const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
     const providerOptions = {
-      ...(needsGroqDisableThinking ? { groq: { reasoningEffort: "none" } } : {}),
+      // The effort value is a family fact: gpt-oss has no "none" (#1611).
+      ...(needsGroqDisableThinking
+        ? {
+            groq: {
+              reasoningEffort:
+                getModelFamilyConstraints(model)?.reasoningEffort?.suppressValue ?? "none",
+            },
+          }
+        : {}),
       ...(needsGeminiMinimalThinking
         ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
         : {}),
