@@ -120,6 +120,16 @@ function getThreadSignature(resolution) {
   return `threads:${resolution.threads || "default"}`;
 }
 
+function shouldSkipRestart({
+  ready,
+  isRemote,
+  modelPathMatches,
+  vadSignatureMatches,
+  threadSignatureMatches,
+}) {
+  return ready && !isRemote && modelPathMatches && vadSignatureMatches && threadSignatureMatches;
+}
+
 function resolveWhisperIdleTimeoutMs(env = process.env) {
   const parsed = parsePositiveInteger(env.WHISPER_IDLE_TIMEOUT_MS);
   return parsed || DEFAULT_WHISPER_IDLE_TIMEOUT_MS;
@@ -238,6 +248,7 @@ class WhisperServerManager extends EventEmitter {
     this.threadSignature = "threads:default";
     this.lastStartOptions = {};
     this.idleTimer = null;
+    this.stopPromise = null;
   }
 
   getFFmpegPath() {
@@ -444,11 +455,13 @@ class WhisperServerManager extends EventEmitter {
     const nextThreadSignature = getThreadSignature(threadResolution);
     const nextVadSignature = getVadSignature(options);
     if (
-      this.ready &&
-      this.modelPath === modelPath &&
-      !this.isRemote &&
-      this.vadSignature === nextVadSignature &&
-      this.threadSignature === nextThreadSignature
+      shouldSkipRestart({
+        ready: this.ready,
+        isRemote: this.isRemote,
+        modelPathMatches: this.modelPath === modelPath,
+        vadSignatureMatches: this.vadSignature === nextVadSignature,
+        threadSignatureMatches: this.threadSignature === nextThreadSignature,
+      })
     ) {
       return;
     }
@@ -987,23 +1000,32 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async stop() {
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = this._doStop();
+    try {
+      await this.stopPromise;
+    } finally {
+      this.stopPromise = null;
+    }
+  }
+
+  async _doStop() {
     this._stopRequested = true;
     this.clearIdleTimer();
     this.stopHealthCheck();
+    // Flip before the only await below — a start()/transcribe() call
+    // arriving mid-teardown must never see a server that still looks alive.
+    this.ready = false;
 
     if (this.isRemote) {
       debugLogger.debug("Disconnecting from remote whisper-server");
-      this.ready = false;
       this.isRemote = false;
       this.hostname = "127.0.0.1";
       this.port = null;
       return;
     }
 
-    if (!this.process) {
-      this.ready = false;
-      return;
-    }
+    if (!this.process) return;
 
     debugLogger.debug("Stopping whisper-server");
 
@@ -1033,7 +1055,6 @@ class WhisperServerManager extends EventEmitter {
     }
 
     this.process = null;
-    this.ready = false;
     this.port = null;
     this.modelPath = null;
   }
@@ -1053,7 +1074,7 @@ class WhisperServerManager extends EventEmitter {
       // infer this from "the GPU pack is downloaded" (see the CPU fallbacks)
       gpuBackend,
       gpuAccelerated: running && !this.isRemote && gpuBackend !== null,
-      idleTimeoutMs: resolveWhisperIdleTimeoutMs(),
+      idleTimeoutMs: this.isRemote ? 0 : resolveWhisperIdleTimeoutMs(),
     };
   }
 }
@@ -1065,3 +1086,4 @@ module.exports.resolveWhisperThreads = resolveWhisperThreads;
 module.exports.resolveWhisperIdleTimeoutMs = resolveWhisperIdleTimeoutMs;
 module.exports.shouldFallbackToCpuAfterRequestError = shouldFallbackToCpuAfterRequestError;
 module.exports.shouldRetryAfterServerReplaced = shouldRetryAfterServerReplaced;
+module.exports.shouldSkipRestart = shouldSkipRestart;
