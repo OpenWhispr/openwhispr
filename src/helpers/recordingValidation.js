@@ -12,3 +12,12 @@ export function evaluateFinishedRecording({ blobSize, receivedAudioData } = {}) 
   }
   return { usable: true, reason: null };
 }
+
+// A salvaged recording (segment merge failed, only the largest segment was
+// kept) yields a transcript missing the dropped segments' audio. Mark the
+// result so the renderer shows its partial-transcription warning; an existing
+// warning (e.g. a truncated decode) already does.
+export function withSalvageWarning(result, salvaged) {
+  if (!salvaged || !result?.success || result.warning) return result;
+  return { ...result, warning: "salvaged-recording" };
+}

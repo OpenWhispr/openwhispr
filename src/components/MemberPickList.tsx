@@ -87,7 +87,7 @@ export default function MemberPickList({
         })}
         {filteredMembers.length === 0 && !footer && (
           <p className="text-xs text-foreground/25 text-center py-2">
-            {t("notes.context.noResults")}
+            {t("notes.spaces.members.noResults")}
           </p>
         )}
         {filteredMembers.length === 0 && footer}

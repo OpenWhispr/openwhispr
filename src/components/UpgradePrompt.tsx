@@ -2,6 +2,7 @@ import { Dialog, DialogContent } from "./ui/dialog";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useUsage } from "../hooks/useUsage";
+import { useBillingPortal } from "../hooks/useBillingPortal";
 import { useSettingsStore } from "../stores/settingsStore";
 
 interface UpgradePromptProps {
@@ -19,6 +20,7 @@ export default function UpgradePrompt({
 }: UpgradePromptProps) {
   const { t } = useTranslation();
   const usage = useUsage();
+  const { openBillingPortal } = useBillingPortal(usage);
   const isPastDue = usage?.isPastDue ?? false;
 
   return (
@@ -51,9 +53,7 @@ export default function UpgradePrompt({
             <OptionCard
               title={t("upgradePrompt.updatePayment")}
               description={t("upgradePrompt.updatePaymentDescription")}
-              onClick={() => {
-                usage?.openBillingPortal();
-              }}
+              onClick={() => void openBillingPortal()}
               highlighted
               disabled={usage?.checkoutLoading}
             />

@@ -11,14 +11,14 @@ function resolveSpeaker(seg, speakerMappings) {
   if (ownName && isUserLocked(seg)) return ownName;
   if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
   if (ownName) return ownName;
-  if (seg.speaker === "you") return "You";
+  if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
-    if (!isNaN(num)) return `Speaker ${num + 1}`;
+    if (!isNaN(num)) return i18nMain.t("notes.speaker.label", { n: num + 1 });
   }
   if (seg.source === "mic") return i18nMain.t("transcript.speaker.you");
   if (seg.source === "system") return i18nMain.t("transcript.speaker.others");
-  return "Unknown Speaker";
+  return i18nMain.t("notes.speaker.unknown");
 }
 
 // Segments merge only when they resolve to the same display name, so the key has
@@ -27,6 +27,54 @@ function resolveSpeaker(seg, speakerMappings) {
 function speakerKey(seg) {
   const named = seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : "";
   return [seg.speaker || "", named, seg.speaker ? "" : seg.source || ""].join("\u0000");
+}
+
+function parseNoteDate(createdAt) {
+  if (createdAt == null || createdAt === "") {
+    return new Date(NaN);
+  }
+  if (typeof createdAt === "number") {
+    return new Date(createdAt);
+  }
+
+  const value = String(createdAt).trim();
+  if (/[zZ]|[+-]\d{2}:\d{2}$/.test(value)) {
+    return new Date(value);
+  }
+
+  // SQLite CURRENT_TIMESTAMP is UTC without a timezone suffix.
+  return new Date(value.includes("T") ? `${value}Z` : `${value.replace(" ", "T")}Z`);
+}
+
+function resolveRecordingStartMs(segments, note) {
+  const segmentTimestamps = segments
+    .map((seg) => seg.timestamp)
+    .filter((ts) => typeof ts === "number" && Number.isFinite(ts));
+
+  if (segmentTimestamps.length > 0) {
+    return Math.min(...segmentTimestamps);
+  }
+
+  const noteDate = parseNoteDate(note?.created_at);
+  return Number.isNaN(noteDate.getTime()) ? null : noteDate.getTime();
+}
+
+function normalizeSegmentTimestamps(segments, note) {
+  const startMs = resolveRecordingStartMs(segments, note);
+  if (startMs == null || startMs <= 1e9) {
+    return segments;
+  }
+
+  return segments.map((seg) => {
+    const normalized = { ...seg };
+    if (typeof seg.timestamp === "number" && Number.isFinite(seg.timestamp)) {
+      normalized.timestamp = (seg.timestamp - startMs) / 1000;
+    }
+    if (typeof seg.endTimestamp === "number" && Number.isFinite(seg.endTimestamp)) {
+      normalized.endTimestamp = (seg.endTimestamp - startMs) / 1000;
+    }
+    return normalized;
+  });
 }
 
 function mergeSegments(segments) {
@@ -67,7 +115,7 @@ function formatSrtTimestamp(seconds) {
 
 function extractMetadata(note) {
   const title = note.title || "Untitled";
-  const noteDate = new Date(note.created_at);
+  const noteDate = parseNoteDate(note.created_at);
   const dateStr =
     noteDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) +
     " " +
@@ -83,7 +131,7 @@ function extractMetadata(note) {
 }
 
 function formatTxt(note, segments, speakerMappings) {
-  const merged = mergeSegments(segments);
+  const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr, participants } = extractMetadata(note);
 
   const lines = [title, dateStr];
@@ -98,8 +146,8 @@ function formatTxt(note, segments, speakerMappings) {
   return lines.join("\n");
 }
 
-function formatSrt(segments, speakerMappings) {
-  const merged = mergeSegments(segments);
+function formatSrt(segments, speakerMappings, note = {}) {
+  const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const entries = [];
   for (let i = 0; i < merged.length; i++) {
     const seg = merged[i];
@@ -113,7 +161,7 @@ function formatSrt(segments, speakerMappings) {
 }
 
 function formatJson(note, segments, speakerMappings) {
-  const merged = mergeSegments(segments);
+  const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr } = extractMetadata(note);
 
   const speakersSet = new Set();
@@ -142,7 +190,7 @@ function formatJson(note, segments, speakerMappings) {
 }
 
 function formatMd(note, segments, speakerMappings) {
-  const merged = mergeSegments(segments);
+  const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr, participants } = extractMetadata(note);
 
   const lines = [`# ${title}`, "", `**Date:** ${dateStr}`];
@@ -156,4 +204,11 @@ function formatMd(note, segments, speakerMappings) {
   return lines.join("\n");
 }
 
-module.exports = { formatTxt, formatSrt, formatJson, formatMd };
+module.exports = {
+  formatTxt,
+  formatSrt,
+  formatJson,
+  formatMd,
+  parseNoteDate,
+  normalizeSegmentTimestamps,
+};

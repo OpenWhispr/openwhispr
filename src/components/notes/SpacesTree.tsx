@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -53,7 +53,6 @@ import {
 } from "../../lib/notePermissions";
 import { groupTeamSpacesByWorkspace } from "../../lib/workspaceSelection";
 import { localMutationErrorKey } from "../../lib/localMutationError";
-import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { deleteSpace, renameSpace } from "../../services/spaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
@@ -159,8 +158,6 @@ interface SpacesTreeProps {
   onCreateFolderAndMove: (noteId: number, folderName: string) => void;
   onNewNote: (spaceId: number, folderId: number | null) => void;
   onShowStructureIntro?: () => void;
-  onUpgrade?: () => void;
-  onOpenWorkspaceBilling?: (workspaceId: string) => void;
 }
 
 function spaceDisplayName(space: SpaceItem, t: TFn): string {
@@ -1112,8 +1109,6 @@ export default function SpacesTree({
   onCreateFolderAndMove,
   onNewNote,
   onShowStructureIntro,
-  onUpgrade,
-  onOpenWorkspaceBilling,
 }: SpacesTreeProps) {
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
@@ -1128,7 +1123,6 @@ export default function SpacesTree({
   const activeContext = useActiveContext();
   const activeNoteId = useActiveNoteId();
   const isTreeLoading = useIsTreeLoading();
-  const isSubscribed = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
   const { workspaces, loaded: workspacesLoaded } = useWorkspace();
@@ -2170,26 +2164,6 @@ export default function SpacesTree({
             )}
           </div>
         )}
-        {!teamCapability && isSignedIn && !isSubscribed && (
-          <div role="none">
-            <SectionHeader label={t("notes.spaces.teamSpaces")} className="mt-3" />
-            <p className="pl-[18px] pr-2 py-1 text-xs text-foreground/40 leading-relaxed">
-              {t("notes.spaces.lockedPitch")}
-            </p>
-            {onUpgrade && (
-              <div className="pl-[18px] pr-2 pb-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onUpgrade}
-                  className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
-                >
-                  {t("settingsPage.account.pricing.upgrade")}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <CreateSpaceDialog
@@ -2199,7 +2173,6 @@ export default function SpacesTree({
           if (!open) setCreateSpaceWorkspaceId(null);
         }}
         initialWorkspaceId={createSpaceWorkspaceId}
-        onOpenWorkspaceBilling={onOpenWorkspaceBilling}
       />
 
       {membersSpace && (

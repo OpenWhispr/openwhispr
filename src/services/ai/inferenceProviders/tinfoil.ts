@@ -63,6 +63,15 @@ export const tinfoilProvider: InferenceProvider = {
         .find((content: unknown) => typeof content === "string" && content.trim())
         ?.trim() || "";
 
+    if (
+      config.requireCompleteOutput &&
+      response.choices?.some((choice: any) =>
+        ["length", "max_tokens"].includes(choice?.finish_reason)
+      )
+    ) {
+      throw new Error("Model output was truncated before the selection edit completed");
+    }
+
     logger.logReasoning("TINFOIL_RESPONSE", {
       model,
       responseLength: responseText.length,
@@ -72,6 +81,9 @@ export const tinfoilProvider: InferenceProvider = {
     });
 
     if (!responseText) {
+      if (config.requireCompleteOutput) {
+        throw new Error("Model returned an empty selection edit");
+      }
       logger.logReasoning("TINFOIL_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

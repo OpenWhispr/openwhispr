@@ -17,13 +17,21 @@ import { stripThinkingTags } from "../helpers/stripThinking.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
+import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
+import type { InferenceScope } from "../config/inferenceScopes";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
-import { getConfiguredOpenAIBase } from "./ai/openaiBase";
+import {
+  canBorrowCleanupCustomKey,
+  resolveConfiguredOpenAIBase,
+  resolveSelfHostedOpenAIBase,
+} from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
+import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
+import type { InferenceMode } from "../types/electron";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
 
@@ -31,6 +39,26 @@ interface ToolExecutionResult {
   data: string;
   displayText: string;
   metadata?: ToolMetadata;
+}
+
+const BYOK_STREAM_PROVIDERS = [
+  "openai",
+  "groq",
+  "gemini",
+  "anthropic",
+  "tinfoil",
+  "custom",
+  "openrouter",
+  "corti",
+] as const;
+
+type ByokStreamProvider = (typeof BYOK_STREAM_PROVIDERS)[number];
+
+function toByokStreamProvider(provider: string): ByokStreamProvider {
+  if (!(BYOK_STREAM_PROVIDERS as readonly string[]).includes(provider)) {
+    throw new Error(`Unsupported reasoning provider: ${provider}`);
+  }
+  return provider as ByokStreamProvider;
 }
 
 export type AgentStreamChunk =
@@ -44,6 +72,22 @@ export type AgentStreamChunk =
       metadata?: ToolMetadata;
     }
   | { type: "done"; finishReason?: string };
+
+function resolveLlmDispatchMode(
+  provider: string,
+  config: Pick<ReasoningConfig, "lanUrl">
+): InferenceMode {
+  if (config.lanUrl || provider === "lan") return "self-hosted";
+  if (provider === "openwhispr") return "openwhispr";
+  if (provider === "local") return "local";
+  if (isEnterpriseProvider(provider)) return "enterprise";
+  return "providers";
+}
+
+function assertAgentSessionAllowedByPolicy(provider: string, mode: InferenceMode): void {
+  assertAgentAllowedByPolicy();
+  assertReasoningAllowedByPolicy(provider, mode);
+}
 
 // Old Ollama/strict proxies reject the `reasoning` object; drop it and retry once.
 async function fetchWithReasoningFieldFallback(
@@ -89,9 +133,38 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
-  private isLanCleanupMode(): boolean {
+  private hasLanCleanupConfiguration(): boolean {
     const settings = getSettings();
-    return settings.cleanupMode === "self-hosted" && !!settings.cleanupRemoteUrl;
+    return settings.cleanupMode === "self-hosted" && !!settings.cleanupRemoteUrl?.trim();
+  }
+
+  // Managed enterprise access owns the route. Manual self-hosted and BYOK overrides are
+  // dropped so a leftover endpoint or key can never outrank the administrator's provider.
+  private resolveManagedScope<T extends ReasoningConfig, P extends string | undefined>(
+    model: string,
+    provider: P,
+    config: T,
+    fallbackScope: InferenceScope
+  ): { model: string; provider: P; config: T; isManaged: boolean } {
+    const inferenceScope = config.inferenceScope || fallbackScope;
+    const managed = getManagedScopeResolution(inferenceScope, getSettings().enterpriseSetupMode);
+    if (managed.kind === "error") throw new Error(managed.message);
+    if (managed.kind !== "managed") {
+      return { model, provider, config: { ...config, inferenceScope }, isManaged: false };
+    }
+    return {
+      model: managed.model,
+      provider: managed.provider as P,
+      config: {
+        ...config,
+        inferenceScope,
+        provider: managed.provider,
+        lanUrl: undefined,
+        baseUrl: undefined,
+        customApiKey: undefined,
+      },
+      isManaged: true,
+    };
   }
 
   private async getApiKey(
@@ -174,6 +247,27 @@ class ReasoningService extends BaseReasoningService {
     return apiKey;
   }
 
+  // Single source for BYOK streaming credentials and endpoint overrides:
+  // rejects unknown providers instead of defaulting them to OpenAI, and only
+  // lets a custom scope borrow the shared cleanup key for the cleanup endpoint.
+  private async resolveByokAccess(
+    provider: string,
+    config: Pick<ReasoningConfig, "baseUrl" | "customApiKey">
+  ): Promise<{ apiKey: string; baseURL?: string }> {
+    const providerKey = toByokStreamProvider(provider);
+    const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() || "" : "";
+    const canFallBackToSharedKey =
+      providerKey !== "custom" || canBorrowCleanupCustomKey(config.baseUrl);
+    const apiKey = overrideKey || (canFallBackToSharedKey ? await this.getApiKey(providerKey) : "");
+    const baseURL =
+      providerKey === "openrouter"
+        ? API_ENDPOINTS.OPENROUTER_BASE
+        : providerKey === "custom"
+          ? resolveConfiguredOpenAIBase(providerKey, config.baseUrl)
+          : undefined;
+    return { apiKey, baseURL };
+  }
+
   private async callChatCompletionsApi(
     endpoint: string,
     apiKey: string,
@@ -213,9 +307,11 @@ class ReasoningService extends BaseReasoningService {
 
     // gpt-oss defaults to medium reasoning effort; low cuts hidden reasoning
     // tokens (latency) and the tendency to answer the transcript instead of
-    // cleaning it. applyThinkingSuppression still wins when thinking is
-    // disabled by the user.
-    if (isCleanup && model.includes("gpt-oss")) {
+    // cleaning it. Selection edits need it too: at higher efforts Groq's
+    // gpt-oss can leave the whole reply in the reasoning channel and return
+    // whitespace content, failing the edit. applyThinkingSuppression still
+    // wins when thinking is disabled by the user.
+    if ((isCleanup || config.requireCompleteOutput) && model.includes("gpt-oss")) {
       requestBody.reasoning_effort = "low";
     }
 
@@ -308,6 +404,9 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const choice = response.choices[0];
+    if (config.requireCompleteOutput && ["length", "max_tokens"].includes(choice?.finish_reason)) {
+      throw new Error("Model output was truncated before the selection edit completed");
+    }
     // Reasoning models leak <think> blocks into non-streamed output; strip them
     // unless the user explicitly enabled thinking (same default as streaming).
     const rawContent = choice.message?.content?.trim() || "";
@@ -340,11 +439,39 @@ class ReasoningService extends BaseReasoningService {
     agentName: string | null = null,
     config: ReasoningConfig = {}
   ): Promise<string> {
+    const managed = this.resolveManagedScope(model, config.provider, config, "dictationCleanup");
+    ({ model, config } = managed);
     const trimmedModel = model?.trim?.() || "";
-    const isLanCleanup = !!config.lanUrl || this.isLanCleanupMode();
+    const settings = getSettings();
+    const isImplicitCleanup =
+      config.provider === undefined && config.baseUrl === undefined && config.lanUrl === undefined;
+    const implicitProvider =
+      settings.cleanupMode === "openwhispr"
+        ? "openwhispr"
+        : settings.cleanupMode === "self-hosted"
+          ? "lan"
+          : settings.cleanupProvider || undefined;
+    const isImplicitCustomCleanup =
+      isImplicitCleanup && settings.cleanupMode === "providers" && implicitProvider === "custom";
+    const dispatchConfig: ReasoningConfig = isImplicitCleanup
+      ? {
+          ...config,
+          provider: implicitProvider,
+          baseUrl: isImplicitCustomCleanup ? settings.cleanupCloudBaseUrl : undefined,
+          customApiKey: isImplicitCustomCleanup
+            ? (config.customApiKey ?? settings.cleanupCustomApiKey)
+            : config.customApiKey,
+        }
+      : config;
+    const isLanCleanup = !!dispatchConfig.lanUrl || dispatchConfig.provider === "lan";
     const providerId = isLanCleanup
       ? "lan"
-      : resolveInferenceProvider(config.provider, trimmedModel);
+      : resolveInferenceProvider(dispatchConfig.provider, trimmedModel);
+    if (!providerId) {
+      throw new Error("No reasoning provider selected");
+    }
+    if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
+    assertReasoningAllowedByPolicy(providerId, resolveLlmDispatchMode(providerId, dispatchConfig));
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
@@ -369,7 +496,7 @@ class ReasoningService extends BaseReasoningService {
         text,
         model: trimmedModel,
         agentName,
-        config,
+        config: dispatchConfig,
         ctx: this.providerContext,
       });
 
@@ -402,6 +529,9 @@ class ReasoningService extends BaseReasoningService {
       lanUrl: config.lanUrl,
       customApiKey: config.customApiKey,
     });
+    const mode: InferenceMode =
+      route.kind === "self-hosted" ? "self-hosted" : route.kind === "local" ? "local" : "providers";
+    assertAgentSessionAllowedByPolicy(provider, mode);
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
 
@@ -409,7 +539,7 @@ class ReasoningService extends BaseReasoningService {
     let apiKey = "";
 
     if (isLanChat) {
-      const baseUrl = ensureV1Suffix(route.baseUrl);
+      const baseUrl = resolveSelfHostedOpenAIBase(route.baseUrl);
       endpoint = buildApiUrl(baseUrl, "/chat/completions");
       apiKey = route.apiKey;
     } else if (isLocalProvider) {
@@ -419,37 +549,26 @@ class ReasoningService extends BaseReasoningService {
       }
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
-      const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom" | "openrouter" | "corti";
-      const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
-      apiKey = overrideKey || (await this.getApiKey(providerKey));
-
-      switch (providerKey) {
-        case "groq":
-          endpoint = buildApiUrl(API_ENDPOINTS.GROQ_BASE, "/chat/completions");
-          break;
-        case "corti":
-          endpoint = buildApiUrl(API_ENDPOINTS.CORTI_MODELS_BASE, "/chat/completions");
-          break;
-        case "gemini":
-          endpoint = buildApiUrl(API_ENDPOINTS.GEMINI, "/openai/chat/completions");
-          break;
-        case "openrouter":
-          endpoint = buildApiUrl(API_ENDPOINTS.OPENROUTER_BASE, "/chat/completions");
-          break;
-        case "tinfoil":
-          throw new Error("Tinfoil streaming must use the verified SDK transport");
-        case "openai":
-        case "custom":
-          endpoint = buildApiUrl(
-            config.baseUrl?.trim() || getConfiguredOpenAIBase(),
-            "/chat/completions"
-          );
-          break;
-        default:
-          endpoint = buildApiUrl(API_ENDPOINTS.OPENAI_BASE, "/chat/completions");
-          break;
+      const access = await this.resolveByokAccess(provider, config);
+      apiKey = access.apiKey;
+      const chatBase =
+        access.baseURL ??
+        (
+          {
+            openai: API_ENDPOINTS.OPENAI_BASE,
+            groq: API_ENDPOINTS.GROQ_BASE,
+            corti: API_ENDPOINTS.CORTI_MODELS_BASE,
+            gemini: API_ENDPOINTS.GEMINI,
+          } as Partial<Record<string, string>>
+        )[provider];
+      // anthropic and tinfoil have no raw Chat Completions transport here.
+      if (!chatBase) {
+        throw new Error(`${provider} streaming must use the AI SDK transport`);
       }
+      endpoint = buildApiUrl(
+        chatBase,
+        provider === "gemini" ? "/openai/chat/completions" : "/chat/completions"
+      );
     }
 
     // A known endpoint host knows its own request shape better than the model id does.
@@ -605,12 +724,27 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    ({ model, provider, config } = this.resolveManagedScope(
+      model,
+      provider,
+      config,
+      "chatIntelligence"
+    ));
     const route = resolveChatRoute({
       provider,
       lanUrl: config.lanUrl,
       customApiKey: config.customApiKey,
       isEnterpriseProvider: isEnterpriseProvider(provider),
     });
+    const mode: InferenceMode =
+      route.kind === "self-hosted"
+        ? "self-hosted"
+        : route.kind === "enterprise"
+          ? "enterprise"
+          : route.kind === "local"
+            ? "local"
+            : "providers";
+    assertAgentSessionAllowedByPolicy(provider, mode);
     const isEnterprise = route.kind === "enterprise";
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
@@ -632,7 +766,7 @@ class ReasoningService extends BaseReasoningService {
       // doStream over IPC, so no key or base URL is resolved here.
     } else if (isLanChat) {
       apiKey = route.apiKey;
-      baseURL = ensureV1Suffix(route.baseUrl);
+      baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
     } else if (isLocalProvider) {
       const serverResult = await window.electronAPI.llamaServerStart(model);
       if (!serverResult.success || !serverResult.port) {
@@ -640,16 +774,7 @@ class ReasoningService extends BaseReasoningService {
       }
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
-      const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom" | "openrouter" | "corti";
-      const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
-      apiKey = overrideKey || (await this.getApiKey(providerKey));
-      baseURL =
-        provider === "openrouter"
-          ? API_ENDPOINTS.OPENROUTER_BASE
-          : provider === "custom"
-            ? config.baseUrl?.trim() || getConfiguredOpenAIBase()
-            : undefined;
+      ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config));
     }
     const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
     // OpenRouter ids are never in the local registry, so the supportsThinking
@@ -657,7 +782,7 @@ class ReasoningService extends BaseReasoningService {
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
     const aiModel = isEnterprise
-      ? createEnterpriseChatModel(provider as EnterpriseProvider, model)
+      ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
       : await getAIModel(aiProvider, model, apiKey, baseURL, {
           disableThinking: openrouterDisableThinking,
         });
@@ -835,6 +960,7 @@ class ReasoningService extends BaseReasoningService {
       executeToolCall?: (name: string, args: string) => Promise<ToolExecutionResult>;
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    assertAgentSessionAllowedByPolicy("openwhispr", "openwhispr");
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
     let currentMessages = [...messages];
 
@@ -914,17 +1040,26 @@ class ReasoningService extends BaseReasoningService {
 
   async isAvailable(): Promise<boolean> {
     try {
+      const settings = getSettings();
+      // Mirrors processText's precedence: managed access outranks every manual route.
+      if (
+        getManagedScopeResolution("dictationCleanup", settings.enterpriseSetupMode).kind ===
+        "managed"
+      ) {
+        logger.logReasoning("API_KEY_CHECK", { managedEnterprise: true });
+        return true;
+      }
+
       if (isCloudCleanupMode()) {
         logger.logReasoning("API_KEY_CHECK", { cloudCleanupMode: true });
         return true;
       }
 
-      if (this.isLanCleanupMode()) {
+      if (this.hasLanCleanupConfiguration()) {
         logger.logReasoning("API_KEY_CHECK", { lanCleanup: true });
         return true;
       }
 
-      const settings = getSettings();
       if (settings.cleanupProvider === "custom" && settings.cleanupCloudBaseUrl?.trim()) {
         logger.logReasoning("API_KEY_CHECK", {
           customProvider: true,

@@ -160,26 +160,50 @@ class WindowPositionUtil {
     let x, y;
     if (position === "bottom-left") {
       x = workArea.x + MARGIN;
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      y = workArea.y + workArea.height - height - MARGIN;
     } else if (position === "center") {
       x = Math.round(workArea.x + (workArea.width - width) / 2);
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      y = workArea.y + workArea.height - height - MARGIN;
     } else {
       // bottom-right (default)
-      x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
-      y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+      x = workArea.x + workArea.width - width - MARGIN;
+      y = workArea.y + workArea.height - height - MARGIN;
     }
 
-    return { x, y, width, height };
+    // Clamped to the display's own work area, never to zero: a monitor placed
+    // above or left of the primary one has a negative origin, so flooring at zero
+    // lands the window on a coordinate that display doesn't cover.
+    return {
+      ...WindowPositionUtil.clampToWorkArea({ x, y, width, height }, display),
+      width,
+      height,
+    };
+  }
+
+  // Keeps a window's whole frame inside one display's work area. Displays of
+  // different sizes leave dead space beside the smaller one, and a window parked
+  // there is invisible even though the window server still reports it on screen.
+  static clampToWorkArea(bounds, display) {
+    const workArea = display.workArea || display.bounds;
+    return {
+      x: Math.max(workArea.x, Math.min(bounds.x, workArea.x + workArea.width - bounds.width)),
+      y: Math.max(workArea.y, Math.min(bounds.y, workArea.y + workArea.height - bounds.height)),
+    };
   }
 
   static getNotificationPosition(display) {
     const { width, height } = NOTIFICATION_WINDOW_CONFIG;
     const MARGIN = 16;
     const workArea = display.workArea || display.bounds;
-    const x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
-    const y = Math.max(0, workArea.y + MARGIN);
-    return { x, y, width, height };
+    // Same negative-origin trap as getMainWindowPosition: clamp to the display,
+    // not to zero, or a monitor above the primary one puts the prompt nowhere.
+    const bounds = {
+      x: workArea.x + workArea.width - width - MARGIN,
+      y: workArea.y + MARGIN,
+      width,
+      height,
+    };
+    return { ...WindowPositionUtil.clampToWorkArea(bounds, display), width, height };
   }
 
   static getTranscriptionPreviewPosition(display, mainWindowBounds, size = {}) {

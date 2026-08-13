@@ -24,3 +24,5 @@ jobs:
         env:
           # keeps require("electron") from throwing when postinstall was skipped
           ELECTRON_OVERRIDE_DIST_PATH: /tmp
+          # a skipped DB test here means the rebuild step above is gone: fail instead
+          REQUIRE_DB_TESTS: "1"

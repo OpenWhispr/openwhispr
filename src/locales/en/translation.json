@@ -106,7 +106,9 @@
     "microphone": "Please open your system settings to configure microphone permissions.",
     "sound": "Please open your system sound settings (for example, pavucontrol).",
     "accessibility": "Accessibility settings are not available on this platform.",
-    "systemAudio": "System audio settings are not available on this platform."
+    "systemAudio": "System audio settings are not available on this platform.",
+    "screenRecording": "Screen recording settings are not available on this platform.",
+    "loginItems": "Login item settings are not available on this platform."
   },
   "upgradePrompt": {
     "paymentFailed": "We couldn't process your payment",
@@ -144,7 +146,9 @@
     "cancel": "Cancel",
     "recommended": "Recommended",
     "active": "Active",
+    "managedByOrg": "Managed by your organization",
     "freeAccountRequired": "Free account required",
+    "comingSoon": "Coming Soon",
     "cloud": "Cloud",
     "local": "Local",
     "apiKey": "API Key",
@@ -168,7 +172,10 @@
     "copy": "Copy",
     "copied": "Copied",
     "done": "Done",
-    "skip": "Skip"
+    "skip": "Skip",
+    "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
+    "policyAgentRestricted": "AI agent use is restricted by your organization.",
+    "policyTranscriptionRestricted": "Transcription is restricted by your organization."
   },
   "onboarding": {
     "steps": {
@@ -229,7 +236,7 @@
       "title": "Voice Agent Setup",
       "description": "Talk to your AI agent with a single keypress",
       "hotkey": "Hotkey",
-      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. {{agentName}} types the result wherever your cursor is. No need to say “Hey {{agentName}}” first.",
+      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces that selection; otherwise it types at your cursor. No need to say “Hey {{agentName}}” first.",
       "test": "Try it",
       "testInstruction": "Click below, press {{hotkey}} and say a command",
       "testSetHotkey": "Set a hotkey above to try it",
@@ -323,6 +330,10 @@
     }
   },
   "controlPanel": {
+    "updateRequiredByOrg": {
+      "title": "Update required",
+      "description": "Your organization requires OpenWhispr {{version}} or newer. Please update the app."
+    },
     "update": {
       "readyTitle": "Update ready to install",
       "readyDescription": "Click 'Install Update' to restart with the latest version.",
@@ -443,6 +454,7 @@
     "custom": {
       "endpointWithProtocol": "Enter a full base URL including protocol (for example, https://server/v1).",
       "httpsRequired": "HTTPS required (HTTP allowed for local network only).",
+      "endpointInvalid": "Custom endpoint is invalid or not configured. Check the endpoint URL in Settings → AI Models.",
       "endpointUnauthorized": "Endpoint rejected the request (401/403). Add an API key or adjust server auth settings.",
       "endpointTitle": "Endpoint URL",
       "endpointExamples": "Examples:",
@@ -564,6 +576,8 @@
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
+        "agentUnavailable": "Agent Unavailable",
+        "screenContextSkipped": "Screen Context Skipped",
         "dailyLimitReached": "Daily Limit Reached",
         "providerRateLimited": "Provider Rate Limited"
       },
@@ -592,13 +606,26 @@
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
-        "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again."
+        "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
+        "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
+        "agentReasoningFailed": "Your voice agent couldn't process the command — the raw transcript was inserted instead.",
+        "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
+        "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
         "unreachableDescription": "Your dictation was pasted untranslated. Check the translation settings.",
         "failedTitle": "Translation failed",
         "failedDescription": "The original text was pasted. You can retry it from History."
+      },
+      "selectionEditing": {
+        "notAppliedTitle": "Selection edit not applied",
+        "changed": "The selected text or target app changed while OpenWhispr was processing. Nothing was replaced.",
+        "expired": "The selection edit took too long and expired. Select the text and try again.",
+        "pasteFailed": "OpenWhispr generated the edit but could not replace the selected text.",
+        "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
+        "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
+        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
       }
     },
     "clipboard": {
@@ -782,7 +809,11 @@
     "sso": {
       "continueWithSSO": "Sign in with SSO",
       "emailRequired": "Enter your work email to use SSO.",
-      "failed": "Single sign-on failed. Please try again."
+      "failed": "Single sign-on failed. Please try again.",
+      "companySignInTitle": "Use your company sign-in",
+      "requiredDescription": "{{domain}} requires SSO for OpenWhispr.",
+      "availableDescription": "Your {{domain}} account is ready for company SSO.",
+      "useEmailInstead": "Use email and password instead"
     },
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
@@ -1070,7 +1101,18 @@
     "selectPlaceholder": "Select a microphone",
     "systemDefault": "System Default",
     "unknownDevice": "Unknown Device",
-    "using": "Using: {{device}}"
+    "using": "Using: {{device}}",
+    "warmHold": {
+      "label": "Keep Microphone Warm",
+      "description": "After a dictation ends, keep the microphone open briefly so the next one starts instantly with nothing clipped",
+      "privacyNote": "While the microphone is held, your system's mic-in-use indicator stays on. Nothing is recorded between dictations.",
+      "options": {
+        "0": "Off",
+        "10": "10 seconds",
+        "60": "1 minute",
+        "900": "15 minutes"
+      }
+    }
   },
   "pasteToolsInfo": {
     "checking": "Checking system capabilities...",
@@ -1162,6 +1204,7 @@
     "defaultTestInputTranslate": "The weather is beautiful today, want to go for a walk?"
   },
   "settingsModal": {
+    "managedByOrg": "Some settings are managed by your organization.",
     "groups": {
       "account": "Account",
       "app": "App",
@@ -1225,7 +1268,7 @@
       "tab": {
         "general": "General",
         "members": "Members",
-        "teams": "Team spaces",
+        "teams": "Teams",
         "developer": "Developer"
       },
       "role": {
@@ -1276,6 +1319,14 @@
           "title": "Transfer ownership?",
           "description": "{{name}} becomes the owner of {{workspace}}. Your role changes to admin and only the new owner can transfer it back."
         }
+      },
+      "joinRequests": {
+        "title": "Requests to join",
+        "approve": "Approve",
+        "deny": "Deny",
+        "approved": "{{name}} joined the workspace",
+        "denied": "Request denied",
+        "errorTitle": "Could not update the request"
       },
       "teams": {
         "title": "Teams",
@@ -1406,8 +1457,6 @@
       "nonBillableSeat": "Admin-only access · no paid seat",
       "managedBy": "Billing is managed by {{owner}}.",
       "addSeat": "Add seat",
-      "startWithSeats_one": "Start Business with {{count}} seat",
-      "startWithSeats_other": "Start Business with {{count}} seats",
       "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
       "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
       "seatUpdateFailed": "Couldn't update workspace seats",
@@ -1437,7 +1486,9 @@
         "couldNotOpenTitle": "Couldn't open billing",
         "manageBilling": "Manage Billing",
         "opening": "Opening...",
-        "updatePaymentMethod": "Update Payment Method"
+        "updatePaymentMethod": "Update Payment Method",
+        "contactOwnerTitle": "Contact your workspace owner",
+        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace."
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -1512,11 +1563,11 @@
         },
         "business": {
           "name": "Business",
-          "monthlyPrice": "$20",
+          "monthlyPrice": "$16",
           "monthlyPeriod": "/mo",
-          "annualPrice": "$200",
+          "annualPrice": "$160",
           "annualPeriod": "/yr",
-          "annualEquivalent": "$16.67",
+          "annualEquivalent": "$13.33",
           "includesPrefix": "All Pro features +",
           "badge": "Most Popular",
           "features": [
@@ -1545,6 +1596,7 @@
           "cta": "Contact Sales"
         },
         "currentPlan": "Current plan",
+        "coveredByWorkspace": "Included with your workspace plan",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
         "planSwitched": "Plan updated successfully",
@@ -1634,6 +1686,10 @@
           "noPassword": "No password is set for this account.",
           "generic": "Something went wrong. Please try again."
         }
+      },
+      "planUnavailable": {
+        "title": "Plan unavailable",
+        "description": "We couldn't load your plan right now. Your access is unchanged."
       }
     },
     "agentConfig": {
@@ -1645,7 +1701,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the AI executes your command — composing content, formatting text, or answering questions — instead of transcribing it verbatim.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the AI executes your command. If text is highlighted, that text is sent to your configured Voice Agent model and safely replaced with the result.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
@@ -1653,7 +1709,7 @@
       "title": "Voice Agent",
       "examples": {
         "formalEmail": "Hey {{agentName}}, write a formal email about the budget",
-        "professional": "Hey {{agentName}}, make this more professional",
+        "professional": "Select text, then say: Hey {{agentName}}, make this more professional",
         "bulletPoints": "Hey {{agentName}}, convert this to bullet points"
       }
     },
@@ -1703,6 +1759,15 @@
           "title": "Enterprise",
           "description": "Using your organization's cloud account."
         }
+      },
+      "managedEnterprise": {
+        "errorTitle": "Managed enterprise AI needs attention",
+        "title": "Managed by your organization",
+        "description": "Sign-in supplies short-lived access automatically. No cloud keys or CLI setup are required.",
+        "usePersonalSetup": "Use personal setup",
+        "availableTitle": "Organization setup available",
+        "availableDescription": "Use {{provider}} without managing credentials.",
+        "useManaged": "Use managed"
       }
     },
     "developer": {
@@ -1800,7 +1865,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Agent Hotkey",
-        "description": "Speak a request — your AI agent types the result, not your words"
+        "description": "Speak a request — highlighted text is edited in place; otherwise your agent types at the cursor"
       },
       "microphone": {
         "description": "Select which input device to use for dictation",
@@ -1834,11 +1899,16 @@
       },
       "startup": {
         "launchAtLogin": "Launch at login",
-        "launchAtLoginDescription": "Start OpenWhispr automatically when you log in",
+        "launchAtLoginDescription": "Start OpenWhispr in the background when you log in",
         "title": "Startup",
         "description": "Control how OpenWhispr behaves when it launches",
         "startMinimized": "Start minimized",
-        "startMinimizedDescription": "Launch without showing the control panel window"
+        "startMinimizedDescription": "Launch without showing the control panel window",
+        "needsApproval": {
+          "title": "Approval needed in System Settings",
+          "description": "macOS registered OpenWhispr as a login item but is waiting for you to allow it under Login Items.",
+          "action": "Open Login Items"
+        }
       },
       "waylandPaste": {
         "title": "Wayland Paste Setup",
@@ -2219,10 +2289,8 @@
         "groq_openai_gpt_oss_20b": "Fast open-source model, 1000 T/sec",
         "groq_llama_3_3_70b_versatile": "Meta's versatile model, 280 T/sec",
         "groq_llama_3_1_8b_instant": "Ultra-fast 560 T/sec, 131K context",
-        "groq_llama_4_scout": "Meta's efficient multimodal, 750 T/sec",
         "groq_compound": "Groq's compound system, 450 T/sec",
         "groq_compound_mini": "Fast compound system, 3x lower latency",
-        "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context",
         "openai_gpt_5_6_sol": "Flagship GPT-5.6 for complex coding and research",
         "openai_gpt_5_6_terra": "Balanced GPT-5.6 for everyday work",
         "openai_gpt_5_6_luna": "Fastest, lowest-cost GPT-5.6",
@@ -2340,9 +2408,7 @@
       "emailPlaceholder": "teammate@example.com",
       "roleLabel": "Role",
       "seatUsage": "Using {{used}} of {{seats}} seats",
-      "seatLimit": "All {{seats}} seats are in use.",
-      "askOwner": "All {{seats}} seats are in use. Ask the workspace owner to add seats.",
-      "manageSeats": "Manage seats",
+      "seatCost": "If accepted, adds a seat to your plan · estimated prorated charge {{amount}}.",
       "submit": "Send invite",
       "submitting": "Sending…",
       "sentTitle": "Invite sent",
@@ -2358,6 +2424,25 @@
         "admin": "Manages members and billing",
         "member": "Uses the workspace"
       }
+    },
+    "join": {
+      "title": "Join your team",
+      "domainTitle": "Your team is on OpenWhispr",
+      "description": "These workspaces have someone from your email domain.",
+      "invitedDescription": "You've been invited to a workspace.",
+      "invitedBy": "Invited by {{inviter}} as {{role}}",
+      "memberCount_one": "{{count}} member",
+      "memberCount_other": "{{count}} members",
+      "join": "Join",
+      "requestErrorTitle": "Could not send the request",
+      "requestedDescription": "An admin of {{workspace}} will review it.",
+      "requestedTitle": "Request sent",
+      "requested": "Requested",
+      "request": "Ask to join",
+      "notNow": "Not now",
+      "successTitle": "Joined",
+      "successDescription": "You're now a member of {{workspace}}.",
+      "errorTitle": "Could not join"
     },
     "accept": {
       "title": "Join workspace",
@@ -2468,26 +2553,6 @@
       "playSignal": "Play signal"
     }
   },
-  "usage": {
-    "approachingLimit": "Approaching Weekly Limit",
-    "approachingLimitDescription": "You've used {{wordsUsed}} of {{limit}} free words this week.",
-    "yourPlan": "Your Plan",
-    "trial": "Trial ({{days}} day left)",
-    "trial_other": "Trial ({{days}} days left)",
-    "pro": "Pro",
-    "business": "Business",
-    "unlimitedTrial": "Unlimited transcriptions during your trial",
-    "unlimited": "Unlimited transcriptions",
-    "manageSubscription": "Manage Subscription",
-    "weeklyUsage": "Weekly Usage",
-    "limitReached": "Limit reached",
-    "free": "Free",
-    "wordsRemaining": "{{remaining}} words remaining",
-    "rollingLimit": "Rolling weekly limit",
-    "upgradeToPro": "Upgrade to Pro",
-    "useYourOwnKey": "Use Your Own Key",
-    "upgradeUnlimited": "Upgrade to Pro — unlimited transcriptions"
-  },
   "notes": {
     "mutationErrors": {
       "folderNameRequired": "Enter a folder name.",
@@ -2547,12 +2612,6 @@
       "undo": "Undo",
       "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
       "emptyTeamHint": "Spaces shared with you will appear here.",
-      "lockedPitch": "Create shared spaces where your team's notes stay in sync.",
-      "planBlocked": {
-        "title": "{{workspace}} is on the Free plan",
-        "description": "Workspaces have their own subscription, separate from your personal plan. Team spaces need a paid workspace plan.",
-        "cta": "View workspace billing"
-      },
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
@@ -2574,6 +2633,7 @@
         "you": "You",
         "addFailed": "{{failed}} of {{total}} people couldn't be added",
         "searchPlaceholder": "Search people…",
+        "noResults": "No people found",
         "roleAdmin": "Admin",
         "roleMember": "Member",
         "remove": "Remove",
@@ -2701,6 +2761,8 @@
       "cancelTranscription": "Cancel transcription",
       "transcriptionComplete": "Transcription complete",
       "partialWarning": "Part of the audio couldn't be transcribed.",
+      "partialWarningCount": "{{failed}} of {{total}} audio sections couldn't be transcribed.",
+      "chunkLossExceeded": "Too much of the audio was lost to a network problem. Check your connection and try again.",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",
       "retry": "Retry",
@@ -2747,6 +2809,8 @@
       "speakerDetection": "Speaker detection",
       "speakerDetectionDescription": "Identify different speakers in the audio",
       "numSpeakersPlaceholder": "Auto-detect",
+      "numSpeakersLabel": "Number of speakers",
+      "numSpeakersHint": "Setting the exact count improves accuracy, especially on long recordings.",
       "downloadingModels": "Downloading models...",
       "openaiDiarizeNote": "Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.",
       "mistralDiarizeNote": "Speaker detection included at no extra cost with Voxtral.",
@@ -2761,13 +2825,14 @@
       "urlsSkipped": "Some links couldn't be added ({{n}})",
       "queueFailed": "{{n}} failed",
       "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
-      "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while."
+      "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while.",
+      "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings."
     },
     "meeting": {
       "title": "Meeting Notes",
       "description": "Transcriptions & structured summaries",
-      "comingSoon": "Coming Soon",
-      "back": "Back"
+      "back": "Back",
+      "restrictedByOrg": "Meeting transcription is restricted by your organization."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -2861,6 +2926,7 @@
     "speaker": {
       "you": "You",
       "them": "Them",
+      "unknown": "Unknown Speaker",
       "label": "Speaker {{n}}",
       "identifyingSpeakers": "Identifying speakers...",
       "liveAccuracyHint": "Still identifying speakers. Labeling accuracy will improve once the call ends.",
@@ -3073,7 +3139,19 @@
   },
   "dictationAgent": {
     "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabledDescription": "Dictate instructions to your agent. Highlighted text is sent to the configured model and edited in place. Activate by saying \"{{agentName}}\".",
+    "screenContext": {
+      "title": "Screen Context",
+      "description": "Attach a screenshot of your active screen to voice agent commands.",
+      "enable": "Share screen context",
+      "enableDescription": "Captures the display your cursor is on when a voice agent recording starts. Never saved or logged.",
+      "unsupported": "Screen capture isn't available on Linux Wayland.",
+      "visionModel": "Separate vision model",
+      "visionModelDescription": "Route commands that include a screenshot to a different, vision-capable model.",
+      "permissionTitle": "Screen Recording",
+      "permissionDescription": "macOS requires Screen Recording permission to capture your screen.",
+      "relaunchHint": "Screen Recording was granted while OpenWhispr was running. Quit and reopen OpenWhispr to start capturing screenshots."
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
@@ -3182,7 +3260,24 @@
       "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",
       "systemAudioRequired": "System Audio Permission Required",
       "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
-      "openSettings": "Open System Settings"
+      "openSettings": "Open System Settings",
+      "connectFailed": "Connection Failed",
+      "connectFailedDescription": "Something went wrong while connecting Google Calendar. Please try again."
+    },
+    "microsoftCalendar": {
+      "title": "Microsoft Calendar",
+      "optional": "Optional",
+      "description": "Read meetings from your Outlook or Microsoft 365 calendar.",
+      "connect": "Connect Microsoft Calendar",
+      "connected": "Connected",
+      "addAnother": "Add another calendar",
+      "primaryOnly": "Sync primary calendar only",
+      "primaryOnlyDescription": "Ignore events from calendars shared with you.",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect {{email}}?",
+      "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",
+      "connectFailed": "Connection Failed",
+      "connectFailedDescription": "Something went wrong while connecting Microsoft Calendar. Please try again."
     },
     "appleCalendar": {
       "title": "Apple Calendar",
@@ -3289,6 +3384,7 @@
         "title": "Share note",
         "description": "Invite people by email or share a link to this note.",
         "searchPlaceholder": "Search people, folders, or emails",
+        "noResults": "No matches found",
         "emailLabel": "People, folders, or email",
         "shareButton": "Share",
         "createLink": "Create link",
@@ -3320,7 +3416,6 @@
           "alreadyInvited": "{{email}} is already invited",
           "inviteFailed": "Couldn't send the invitation. Try again.",
           "visibilityFailed": "Couldn't update sharing. Try again.",
-          "upgradeRequired": "Sharing notes requires a paid plan.",
           "copyFailed": "Couldn't copy the link. Try again.",
           "revokeFailed": "Couldn't remove the invitation. Try again.",
           "resendFailed": "Couldn't resend the invitation. Try again.",
@@ -3384,7 +3479,8 @@
     "speaker": {
       "you": "You",
       "others": "Others"
-    }
+    },
+    "missingAudio": "[missing audio {{from}}-{{to}}]"
   },
   "dictationTranslation": {
     "title": "Dictation Translation",
@@ -3401,7 +3497,7 @@
       "title": "Translation Prompt",
       "description": "Customize how the model translates your dictation"
     },
-    "hotkeyHint": "Set the hotkey under Settings → General → Translation Hotkey",
+    "hotkeyHint": "Set the hotkey under Settings → Hotkeys → Translation Hotkey",
     "targetsLabel": "Target languages",
     "addTarget": "Add language…",
     "activeTarget": "Active target language",

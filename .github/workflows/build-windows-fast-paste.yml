@@ -3,16 +3,16 @@ name: Build Windows Fast Paste
 on:
   push:
     paths:
-      - 'resources/windows-fast-paste.c'
-      - '.github/workflows/build-windows-fast-paste.yml'
+      - "resources/windows-fast-paste.c"
+      - ".github/workflows/build-windows-fast-paste.yml"
     branches:
       - main
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., 1.0.0)'
+        description: "Version tag (e.g., 1.0.0)"
         required: false
-        default: '1.0.0'
+        default: "2.0.0"
         type: string
 
 permissions:
@@ -40,6 +40,11 @@ jobs:
           if (Test-Path "windows-fast-paste.exe") {
             Write-Host "Binary built successfully"
             Get-Item "windows-fast-paste.exe" | Select-Object Name, Length
+            $capabilities = & .\windows-fast-paste.exe --capabilities
+            if ($capabilities -notmatch "selection-copy-v1") {
+              Write-Error "Binary does not advertise selection-copy-v1"
+              exit 1
+            }
           } else {
             Write-Error "Binary not found"
             exit 1
@@ -60,13 +65,13 @@ jobs:
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: windows-fast-paste-v${{ inputs.version || '1.0.0' }}
-          name: Windows Fast Paste v${{ inputs.version || '1.0.0' }}
+          tag_name: windows-fast-paste-v${{ inputs.version || '2.0.0' }}
+          name: Windows Fast Paste v${{ inputs.version || '2.0.0' }}
           body: |
-            Prebuilt Windows fast-paste binary for clipboard paste operations.
+            Prebuilt Windows fast-paste binary for clipboard paste and selection-copy operations.
 
-            Uses Win32 SendInput API with automatic terminal detection
-            (Ctrl+V for normal apps, Ctrl+Shift+V for terminals).
+            Uses Win32 SendInput API with automatic terminal detection for
+            paste (Ctrl+V/Ctrl+Shift+V) and copy (Ctrl+C/Ctrl+Shift+C).
           files: windows-fast-paste-win32-x64.zip
           make_latest: false
         env:

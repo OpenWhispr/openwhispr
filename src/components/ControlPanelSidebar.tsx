@@ -18,6 +18,9 @@ import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
 import { getCachedPlatform } from "../utils/platform";
+import type { UpsellDecision } from "../lib/upsell";
+import { isAgentAllowed, isPolicyActionAllowed } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 
 const platform = getCachedPlatform();
 
@@ -44,8 +47,7 @@ interface ControlPanelSidebarProps {
   userImage?: string | null;
   isSignedIn?: boolean;
   authLoaded?: boolean;
-  isProUser?: boolean;
-  usageLoaded?: boolean;
+  upsell: UpsellDecision;
   updateAction?: React.ReactNode;
 }
 
@@ -62,8 +64,7 @@ export default function ControlPanelSidebar({
   userImage,
   isSignedIn,
   authLoaded,
-  isProUser,
-  usageLoaded,
+  upsell,
   updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
@@ -71,13 +72,11 @@ export default function ControlPanelSidebar({
     () => localStorage.getItem("upgradeProDismissed") === "true"
   );
 
-  const showLimitBanner = authLoaded && isSignedIn && !isProUser && isOverLimit;
-  const showUpgradeBanner =
-    !showLimitBanner &&
-    authLoaded &&
-    (!isSignedIn || usageLoaded !== false) &&
-    !isProUser &&
-    !upgradeDismissed;
+  const showLimitBanner = upsell === "show" && Boolean(isSignedIn) && Boolean(isOverLimit);
+  const showUpgradeBanner = upsell === "show" && !showLimitBanner && !upgradeDismissed;
+
+  const agentAllowed = usePolicyStore(isAgentAllowed);
+  const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
 
   const navItems: {
     id: ControlPanelView;
@@ -85,9 +84,13 @@ export default function ControlPanelSidebar({
     icon: React.ComponentType<{ size?: number; className?: string }>;
   }[] = [
     { id: "home", label: t("sidebar.home"), icon: Home },
-    { id: "chat", label: t("sidebar.chat"), icon: MessageSquare },
+    ...(agentAllowed
+      ? [{ id: "chat" as const, label: t("sidebar.chat"), icon: MessageSquare }]
+      : []),
     { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
-    { id: "upload", label: t("sidebar.upload"), icon: Upload },
+    ...(policyActionsAllowed
+      ? [{ id: "upload" as const, label: t("sidebar.upload"), icon: Upload }]
+      : []),
     { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
     { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
   ];

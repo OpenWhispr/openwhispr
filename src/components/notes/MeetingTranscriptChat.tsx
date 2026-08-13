@@ -54,8 +54,6 @@ const SPEAKER_BORDER_COLORS = [
 
 const STICKY_SCROLL_THRESHOLD_PX = 80;
 
-const getSpeakerKey = (segment: TranscriptSegment) => segment.speaker || segment.source;
-
 const getEffectiveSpeakerKey = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
@@ -762,7 +760,8 @@ export function MeetingTranscriptChat({
           const selfSide = isSelfSide(segment);
           const prevSegment = i > 0 ? segments[i - 1] : null;
           const sameSpeaker = prevSegment
-            ? getSpeakerKey(prevSegment) === getSpeakerKey(segment)
+            ? getEffectiveSpeakerKey(prevSegment, speakerMappings) ===
+              getEffectiveSpeakerKey(segment, speakerMappings)
             : false;
 
           const hasSpeaker = !!segment.speaker;

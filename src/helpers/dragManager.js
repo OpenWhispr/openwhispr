@@ -1,4 +1,5 @@
 const { screen } = require("electron");
+const { WindowPositionUtil } = require("./windowConfig");
 
 class DragManager {
   constructor() {
@@ -69,27 +70,20 @@ class DragManager {
   updateWindowPosition() {
     try {
       const cursorPos = screen.getCursorScreenPoint();
-      const newX = cursorPos.x - this.dragOffset.x;
-      const newY = cursorPos.y - this.dragOffset.y;
+      const { width, height } = this.targetWindow.getBounds();
+      const x = cursorPos.x - this.dragOffset.x;
+      const y = cursorPos.y - this.dragOffset.y;
 
-      // Get screen bounds to keep window visible
-      const display = screen.getDisplayNearestPoint(cursorPos);
-      const bounds = display.workArea;
+      // Constrain against the display the window lands on, not the one under the
+      // cursor: near a boundary between differently sized displays, the cursor's
+      // work area permits positions that leave the window in dead space.
+      const display = screen.getDisplayNearestPoint({
+        x: x + width / 2,
+        y: y + height / 2,
+      });
+      const clamped = WindowPositionUtil.clampToWorkArea({ x, y, width, height }, display);
 
-      // Get window size for boundary calculations
-      const windowBounds = this.targetWindow.getBounds();
-
-      // Constrain to screen bounds
-      const constrainedX = Math.max(
-        bounds.x,
-        Math.min(newX, bounds.x + bounds.width - windowBounds.width)
-      );
-      const constrainedY = Math.max(
-        bounds.y,
-        Math.min(newY, bounds.y + bounds.height - windowBounds.height)
-      );
-
-      this.targetWindow.setPosition(constrainedX, constrainedY);
+      this.targetWindow.setPosition(clamped.x, clamped.y);
     } catch (error) {
       console.error("Error updating window position:", error);
       this.stopWindowDrag();

@@ -259,3 +259,25 @@ test("pasteMacOSWithOsascript fallback uses the short macOS restore delay", asyn
     expectedText: "dictated text",
   });
 });
+
+// Terminal detection now serves two callers: the Linux paste path, which matches
+// window classes, and macOS selection capture, which matches localized app names.
+test("terminal detection matches window classes and macOS app names alike", () => {
+  const manager = new ClipboardManager();
+
+  for (const signature of ["konsole", "org.kde.konsole", "Ghostty", "kitty", "WezTerm"]) {
+    assert.equal(manager.isTerminalSignature(signature), true, signature);
+  }
+  // iTerm2 has no Linux window class, so it only appears in the macOS-facing list.
+  assert.equal(manager.isTerminalSignature("iTerm2"), true);
+  assert.equal(manager.isTerminalSignature("Terminal"), true);
+
+  for (const signature of ["Dia", "Google Chrome", "Mail", "", null, undefined]) {
+    assert.equal(manager.isTerminalSignature(signature), false, String(signature));
+  }
+
+  // The Linux window-class entry point keeps behaving exactly as before.
+  assert.equal(manager.isLinuxTerminalWindowClass("konsole"), true);
+  assert.equal(manager.isLinuxTerminalWindowClass("org.mozilla.firefox"), false);
+  assert.equal(manager.isLinuxTerminalWindowClass(null), false);
+});

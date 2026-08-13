@@ -296,7 +296,7 @@ class HotkeyManager extends EventEmitter {
 
   unregisterSlot(slotName) {
     const slot = this.slots.get(slotName);
-    if (!slot || !(slot.hotkeys && slot.hotkeys.length)) return;
+    if (!slot || !(slot.hotkeys?.length || slot.accelerators?.length)) return;
 
     // On KDE (X11 or Wayland), persistent slots are managed via KGlobalAccel
     if (this.useKDE && this.kdeManager && slotName !== "cancel") {
@@ -324,19 +324,13 @@ class HotkeyManager extends EventEmitter {
       return;
     }
 
-    for (const hk of slot.hotkeys || []) {
-      if (
-        !isGlobeLikeHotkey(hk) &&
-        !isMouseButtonHotkey(hk) &&
-        !isRightSideModifier(hk) &&
-        !isModifierOnlyHotkey(hk)
-      ) {
-        const accel = normalizeToAccelerator(hk);
-        try {
-          globalShortcut.unregister(accel);
-        } catch {
-          // already unregistered
-        }
+    // Release what was actually registered; native-listener entries are null.
+    for (const accel of slot.accelerators || []) {
+      if (!accel) continue;
+      try {
+        globalShortcut.unregister(accel);
+      } catch {
+        // already unregistered
       }
     }
     slot.hotkeys = [];
@@ -389,6 +383,26 @@ class HotkeyManager extends EventEmitter {
       }
     }
     return keys;
+  }
+
+  // Which mouse buttons the macOS listener must swallow for these slots, and
+  // whether OpenWhispr owns Globe — if it does, macOS's own standalone Globe
+  // action has to stand down.
+  getMacNativeListenerConfig(slotNames) {
+    const mouseButtons = new Set();
+    let suppressGlobeAction = false;
+
+    for (const slotName of slotNames) {
+      for (const hotkey of this.getSlotHotkeys(slotName)) {
+        if (isMouseButtonHotkey(hotkey)) {
+          mouseButtons.add(hotkey);
+        } else if (isGlobeLikeHotkey(hotkey)) {
+          suppressGlobeAction = true;
+        }
+      }
+    }
+
+    return { mouseButtons: [...mouseButtons], suppressGlobeAction };
   }
 
   // Register one hotkey without mutating any slot. `accelerator` is null for

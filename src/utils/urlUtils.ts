@@ -38,14 +38,20 @@ function isPrivateHost(hostname: string): boolean {
   const isIPv6 = h.includes(":");
   if (isIPv6 && (h.startsWith("fe80") || h.startsWith("fc") || h.startsWith("fd"))) return true;
   if (h.endsWith(".local")) return true;
+  // Tailscale MagicDNS — resolves to CGNAT (100.64/10) addresses reachable
+  // only inside the user's own tailnet.
+  if (h.endsWith(".ts.net")) return true;
 
   return false;
 }
 
-export function isSecureEndpoint(url: string): boolean {
+export function isSecureHttpEndpoint(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "https:" || isPrivateHost(parsed.hostname);
+    return (
+      parsed.protocol === "https:" ||
+      (parsed.protocol === "http:" && isPrivateHost(parsed.hostname))
+    );
   } catch {
     return false;
   }

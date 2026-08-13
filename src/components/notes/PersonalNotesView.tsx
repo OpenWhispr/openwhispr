@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Plus, SquarePen, Search, Sparkles } from "lucide-react";
 import { useToast } from "../ui/useToast";
 import NoteEditor from "./NoteEditor";
@@ -15,13 +16,14 @@ import type { NoteItem } from "../../types/electron";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
+  selectPolicyEffectiveSettings,
   selectResolvedNoteFormatting,
 } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
-import { resolveExpectedSpeakerCount } from "../../utils/participants";
+import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   useNotes,
   useSpaces,
@@ -53,10 +55,12 @@ import {
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
-import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
+import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
+import { notesEmptyTitleKey } from "./shared";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
+import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
 import {
   applyNoteDraftMutation,
@@ -197,8 +201,18 @@ export default function PersonalNotesView({
     [commitDraft, persistPendingWrites, takePendingSnapshots]
   );
   const { toast } = useToast();
-  const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
-  const effectiveModelId = useSettingsStore((s) => selectResolvedNoteFormatting(s).model);
+  const policyState = usePolicySnapshot();
+  const noteFormatting = useSettingsStore(
+    useShallow((settings) => {
+      const effectiveSettings = selectPolicyEffectiveSettings(settings, policyState);
+      return {
+        isCloudMode: selectIsCloudNoteFormattingMode(effectiveSettings),
+        modelId: selectResolvedNoteFormatting(effectiveSettings).model,
+      };
+    })
+  );
+  const isCloudMode = noteFormatting.isCloudMode;
+  const effectiveModelId = noteFormatting.modelId;
   const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
   const { isSignedIn } = useAuth();
   const teamSpacesAvailable = useTeamSpacesCapability(isSignedIn);
@@ -214,6 +228,7 @@ export default function PersonalNotesView({
   const sessionDiarizationEnabled = useMeetingRecordingStore((s) => s.sessionDiarizationEnabled);
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
+  const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
 
   const spaces = useSpaces();
   const folders = useFolders();
@@ -331,6 +346,7 @@ export default function PersonalNotesView({
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
       expectedCount: resolveExpectedSpeakerCount(note),
+      expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
     });
   }, [activeNote]);
 
@@ -616,15 +632,29 @@ export default function PersonalNotesView({
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
     const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    storeStartRecording({
-      noteId: meetingRecordingRequest.noteId,
-      noteTitle: note?.title ?? null,
-      folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
-      seedSegments,
-      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: resolveExpectedSpeakerCount(note),
+    void handleMeetingRecordingRequest({
+      args: {
+        noteId: meetingRecordingRequest.noteId,
+        noteTitle: note?.title ?? null,
+        folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
+        seedSegments,
+        diarizationEnabled:
+          note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+        expectedCount: resolveExpectedSpeakerCount(note),
+        expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
+      },
+      startRecording: storeStartRecording,
+      restoreFromMeetingMode: async () => {
+        await window.electronAPI?.restoreFromMeetingMode?.();
+      },
+      onHandled: () => onMeetingRecordingRequestHandled?.(),
+    }).catch((error) => {
+      logger.warn(
+        "Failed to handle automatic meeting recording request",
+        { error: (error as Error).message },
+        "meeting"
+      );
     });
-    onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
 
   const prevTranscribingRef = useRef(false);
@@ -728,13 +758,6 @@ export default function PersonalNotesView({
             onCreateFolderAndMove={handleCreateFolderAndMove}
             onNewNote={handleNewNoteIn}
             onShowStructureIntro={() => setShowStructureIntro(true)}
-            onUpgrade={() => onOpenSettings?.("plansBilling")}
-            onOpenWorkspaceBilling={(workspaceId) => {
-              // Settings' billing section shows the ACTIVE workspace, so point
-              // it at the one whose plan blocked the space create first.
-              useWorkspaceStore.getState().setActiveWorkspaceId(workspaceId);
-              onOpenSettings?.("plansBilling");
-            }}
           />
         </div>
       </div>
@@ -750,6 +773,7 @@ export default function PersonalNotesView({
               isSaving={isSaving}
               isRecording={isActiveNoteRecording}
               isProcessing={false}
+              recordingAllowed={meetingRecordingAllowed}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
               onExportNote={handleExportNote}
@@ -957,7 +981,7 @@ export default function PersonalNotesView({
             {notes.length === 0 ? (
               <>
                 <h3 className="text-xs font-semibold text-foreground/60 mb-1">
-                  {t("notes.empty.title")}
+                  {t(notesEmptyTitleKey(activeFolderId != null))}
                 </h3>
                 <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-55 mb-4">
                   {t("notes.empty.description")}

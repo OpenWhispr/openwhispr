@@ -1,6 +1,7 @@
 import modelDataRaw from "./modelRegistryData.json";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
+import type { InferenceMode } from "../types/electron";
 
 export interface ModelDefinition {
   id: string;
@@ -45,6 +46,7 @@ export interface CloudModelDefinition {
   descriptionKey?: string;
   disableThinking?: boolean;
   supportsThinking?: boolean;
+  supportsVision?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
 }
@@ -241,6 +243,10 @@ export function isEnterpriseProvider(value: unknown): value is EnterpriseProvide
   return typeof value === "string" && (ENTERPRISE_PROVIDERS as readonly string[]).includes(value);
 }
 
+export function enterpriseProviderName(provider: EnterpriseProvider): string {
+  return modelRegistry.getEnterpriseProviders().find((p) => p.id === provider)?.name ?? provider;
+}
+
 export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
   return {
     value: m.id,
@@ -248,6 +254,23 @@ export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
     description: m.description,
     descriptionKey: m.descriptionKey,
   };
+}
+
+export function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
+  switch (mode) {
+    case "providers":
+      return (
+        provider === "custom" ||
+        provider === "openrouter" ||
+        modelRegistry.getCloudProviders().some((p) => p.id === provider)
+      );
+    case "local":
+      return modelRegistry.getAllProviders().some((p) => p.id === provider);
+    case "enterprise":
+      return isEnterpriseProvider(provider);
+    default:
+      return true;
+  }
 }
 
 function buildReasoningProviders(): ReasoningProviders {
@@ -384,7 +407,9 @@ export function getModelProvider(modelId: string): string {
       return "local";
   }
 
-  return model?.provider || "openai";
+  // No default: an unrecognized model must fail closed at dispatch instead of
+  // being routed to OpenAI with whatever key that attaches.
+  return model?.provider || "";
 }
 
 // Local catalog IDs group models for selection and downloads, but all execute

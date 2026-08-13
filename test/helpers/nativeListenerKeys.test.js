@@ -78,6 +78,57 @@ test("membership and lookup helpers work across multi-hotkey slots", () => {
   assert.equal(mgr.getSlotHotkey("dictation"), "GLOBE");
 });
 
+// The macOS Globe listener config drives both mouse-button suppression and
+// whether macOS's own standalone Globe action has to stand down.
+const MAC_SLOTS = ["dictation", "agent", "voiceAgent", "translation"];
+
+test("Globe in any supported slot asks for system Globe suppression", () => {
+  for (const slot of MAC_SLOTS) {
+    const mgr = makeManager({ [slot]: "GLOBE" });
+    assert.equal(
+      mgr.getMacNativeListenerConfig(MAC_SLOTS).suppressGlobeAction,
+      true,
+      `slot "${slot}" should request suppression`
+    );
+  }
+});
+
+test("Fn is treated as Globe, including as a secondary hotkey", () => {
+  const mgr = makeManager({ voiceAgent: ["Control+Shift+R", "Fn"] });
+  assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
+    mouseButtons: [],
+    suppressGlobeAction: true,
+  });
+});
+
+test("mouse buttons are collected across slots and de-duplicated", () => {
+  const mgr = makeManager({
+    dictation: ["MouseButton4", "F8"],
+    agent: "MouseButton5",
+    voiceAgent: "MouseButton4",
+  });
+  const config = mgr.getMacNativeListenerConfig(MAC_SLOTS);
+  assert.deepEqual(config.mouseButtons.sort(), ["MouseButton4", "MouseButton5"]);
+  assert.equal(config.suppressGlobeAction, false);
+});
+
+test("slots outside the requested list are ignored", () => {
+  // meeting is not wired to the macOS native listener.
+  const mgr = makeManager({ dictation: "F8", meeting: "GLOBE" });
+  assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
+    mouseButtons: [],
+    suppressGlobeAction: false,
+  });
+});
+
+test("no native macOS hotkeys means nothing to configure", () => {
+  const mgr = makeManager({ dictation: "F8", agent: "Control+Shift+A", voiceAgent: "" });
+  assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
+    mouseButtons: [],
+    suppressGlobeAction: false,
+  });
+});
+
 test("_findSlotConflict detects a hotkey already bound to another slot's list", () => {
   const mgr = makeManager({
     dictation: ["GLOBE", "Control+Shift+R"],
