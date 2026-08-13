@@ -15,14 +15,18 @@ function normalizeSpeakerCount(value) {
 // semantics: diarization_enabled is 1|0 (null means unknown), and
 // expected_speaker_count is only ever a user-chosen total — auto detection
 // stays null so isExplicitSpeakerCount never mistakes it for an explicit
-// choice.
+// choice. A disabled run also stays null: numSpeakers lingers in localStorage
+// while its input is hidden, and only counts the diarizer was actually invoked
+// with are the user's choice for this note.
 export function buildUploadNoteMetadata(diarization, durationSeconds) {
   return {
     audioDurationSeconds:
       Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : null,
     noteUpdates: {
       diarization_enabled: diarization?.enabled ? 1 : 0,
-      expected_speaker_count: normalizeSpeakerCount(diarization?.numSpeakers),
+      expected_speaker_count: diarization?.enabled
+        ? normalizeSpeakerCount(diarization.numSpeakers)
+        : null,
     },
   };
 }
