@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = () => import("../../src/helpers/uploadNoteMetadata.js");
+const load = () => import("../../src/services/uploadNotes.ts");
 const { MAX_SPEAKER_COUNT } = require("../../src/constants/speakerDetection.json");
 
 test("maps the diarizer invocation onto the note columns", async () => {
@@ -75,7 +75,18 @@ test("unusable durations degrade to null", async () => {
   }
 });
 
-// uploadNoteMetadata.js carries a renderer twin of the main-process
+test("upload titles fall back to the transcript, then the file name", async () => {
+  const { uploadTitleFallback } = await load();
+
+  assert.equal(uploadTitleFallback("one two three", "board.m4a"), "one two three");
+  assert.equal(
+    uploadTitleFallback("one two three four five six seven", "board.m4a"),
+    "one two three four five six..."
+  );
+  assert.equal(uploadTitleFallback("   ", "board-meeting.m4a"), "board-meeting");
+});
+
+// uploadNotes.ts carries a renderer twin of the main-process
 // normalizeStoredSpeakerCount (CJS, unloadable from renderer source). Hold the
 // two implementations to identical outputs so they cannot drift apart.
 test("speaker-count normalization matches the main-process implementation", async () => {
