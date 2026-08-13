@@ -259,6 +259,7 @@ process.on("unhandledRejection", (reason, promise) => {
 // Import helper module classes (but don't instantiate yet - wait for app.whenReady())
 const EnvironmentManager = require("./src/helpers/environment");
 const WindowManager = require("./src/helpers/windowManager");
+const { linuxNotifier } = require("./src/helpers/linuxNotifier");
 const DatabaseManager = require("./src/helpers/database");
 const ClipboardManager = require("./src/helpers/clipboard");
 const WhisperManager = require("./src/helpers/whisper");
@@ -1895,4 +1896,5 @@ function performSyncTeardown() {
   if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
   if (textEditMonitor) textEditMonitor.stopMonitoring();
   if (updateManager) updateManager.cleanup();
+  linuxNotifier.stop();
 }

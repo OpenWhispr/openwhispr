@@ -89,9 +89,19 @@ class UpdateManager {
         this.notifyRenderers("update-available", info);
         const notifAllowed = appUpdatesEnabled(this.windowManager?.notificationPrefs);
         if (this.windowManager && info && !this._suppressNotification && notifAllowed) {
-          this.windowManager.showUpdateNotification(info).catch((err) => {
-            console.error("Failed to show update notification:", err);
-          });
+          this.windowManager
+            .showUpdateNotification(info, {
+              // Native Linux notifications act in the main process; the overlay
+              // routes the same action through update-notification-respond.
+              onUpdate: () => {
+                this.downloadUpdate().catch((err) => {
+                  console.error("Failed to start update download from notification:", err);
+                });
+              },
+            })
+            .catch((err) => {
+              console.error("Failed to show update notification:", err);
+            });
         }
         this._suppressNotification = false;
       },
