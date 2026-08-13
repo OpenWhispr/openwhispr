@@ -114,6 +114,8 @@ class ClipboardManager {
     this.portalDenied = false;
     this.portalUnavailable = false;
     this.portalTokenPasteFailed = false;
+    this.portalKeysymChecked = false;
+    this.portalKeysymAvailable = false;
     this._kwinScriptPath = null;
     this.pasteQueue = Promise.resolve();
 
@@ -695,6 +697,7 @@ class ClipboardManager {
 
   _runLinuxPasteCommand(command, args, label, { expectedOutput } = {}) {
     return new Promise((resolve, reject) => {
+      debugLogger.debug("Attempting Linux paste command", { command, args, label }, "clipboard");
       const proc = spawn(command, args);
       let stdout = "";
       let stderr = "";
@@ -723,9 +726,7 @@ class ClipboardManager {
         } else {
           const errorOutput = stderr.trim() || output;
           reject(
-            new Error(
-              `${label} exited with code ${code}${errorOutput ? `: ${errorOutput}` : ""}`
-            )
+            new Error(`${label} exited with code ${code}${errorOutput ? `: ${errorOutput}` : ""}`)
           );
         }
       });
@@ -1560,10 +1561,10 @@ class ClipboardManager {
       detectedIsKonsole || detectedIsElectron || (isWayland && windowSignals.length === 0);
     const isTerminalTarget =
       windowSignals.length > 0 && LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term));
-    const hyprlandShortcut = isTerminalTarget
-      ? { modifiers: "CTRL SHIFT", key: "V" }
-      : useShiftInsert
-        ? { modifiers: "SHIFT", key: "Insert" }
+    const hyprlandShortcut = useShiftInsert
+      ? { modifiers: "SHIFT", key: "Insert" }
+      : isTerminalTarget
+        ? { modifiers: "CTRL SHIFT", key: "V" }
         : { modifiers: "CTRL", key: "V" };
     const wtypeArgs = useShiftInsert
       ? ["-M", "shift", "-k", "Insert", "-m", "shift"]
@@ -1582,7 +1583,27 @@ class ClipboardManager {
       else if (isTerminalTarget) args.push("--terminal");
     };
 
-    if (isWayland && isHyprland) {
+    if (isWayland && isWlroots && wtypeExists) {
+      try {
+        await this._runLinuxPasteCommand("wtype", wtypeArgs, "wtype");
+        this.safeLog("✅ Paste successful using wtype");
+        return { method: "wtype", restoreComplete: restoreClipboard() };
+      } catch (error) {
+        debugLogger.warn(
+          "wtype paste failed, falling back",
+          { error: error?.message },
+          "clipboard"
+        );
+      }
+    }
+
+    // sendshortcut resolves keys through the compositor's keymap, so it is
+    // layout-independent — but it has a known stuck-modifier bug (synthetic
+    // modifiers stay latched in XKB: hyprwm/Hyprland#14099, unresolved as of
+    // 0.56). wtype above is equally layout-independent and unaffected, so
+    // sendshortcut is only the zero-dependency fallback. The explicit
+    // "activewindow" target is the community-reported mitigation for #14099.
+    if (isWayland && isHyprland && this.commandExists("hyprctl")) {
       const currentDispatcher = `hl.dsp.send_shortcut({ mods = "${hyprlandShortcut.modifiers}", key = "${hyprlandShortcut.key}", window = "activewindow" })`;
       const legacyDispatcher = `${hyprlandShortcut.modifiers}, ${hyprlandShortcut.key}, activewindow`;
       const dispatchers = [
@@ -1607,7 +1628,7 @@ class ClipboardManager {
         } catch (error) {
           lastDispatcherError = error;
           debugLogger.debug(
-            "Hyprland symbolic dispatcher failed, trying compatible form",
+            "Hyprland dispatcher failed",
             { dispatcher: dispatcher.label, error: error?.message },
             "clipboard"
           );
@@ -1619,16 +1640,6 @@ class ClipboardManager {
         { error: lastDispatcherError?.message },
         "clipboard"
       );
-    }
-
-    if (isWayland && isWlroots && wtypeExists) {
-      try {
-        await this._runLinuxPasteCommand("wtype", wtypeArgs, "wtype");
-        this.safeLog("✅ Paste successful using wtype");
-        return { method: "wtype", restoreComplete: restoreClipboard() };
-      } catch (error) {
-        debugLogger.warn("wtype paste failed, falling back", { error: error?.message }, "clipboard");
-      }
     }
 
     if (linuxFastPaste && !skipFastPasteForKonsole) {
@@ -1674,11 +1685,17 @@ class ClipboardManager {
           }
         };
 
+        // KDE with XWayland: portal first because clipboard and input are both
+        // on X11; uinput causes clipboard desync (X11 clipboard vs Wayland input).
         if (isKde && !this.portalDenied && !this.portalUnavailable) {
           const portalPaste = await tryPortalPaste();
           if (portalPaste) return { method: "portal", ...portalPaste };
         }
 
+        // GNOME: only lead with the portal when a saved token lets it run
+        // silently — a tokenless portal can stall 10s+ on a permission dialog
+        // (issue #494), so first-time pastes try uinput and only fall back to
+        // the portal (and its dialog) when uinput is unavailable.
         const shouldPreferGnomePortal =
           isGnome &&
           !this.portalDenied &&
@@ -1698,12 +1715,7 @@ class ClipboardManager {
           debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
         }
 
-        if (
-          isGnome &&
-          !shouldPreferGnomePortal &&
-          !this.portalDenied &&
-          !this.portalUnavailable
-        ) {
+        if (isGnome && !shouldPreferGnomePortal && !this.portalDenied && !this.portalUnavailable) {
           const portalPaste = await tryPortalPaste();
           if (portalPaste) return { method: "portal", ...portalPaste };
         }
@@ -1808,18 +1820,15 @@ class ClipboardManager {
     const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : [];
     const ydotoolEntry = canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : [];
 
-    // Compositor-aware priority ordering
-    let candidates;
-    if (!isWayland) {
-      // X11: xdotool is native and needs no daemon; ydotool as fallback
-      candidates = [...xdotoolEntry, ...ydotoolEntry];
-    } else if (isWlroots) {
-      // wtype was already attempted before physical input; retain XWayland and ydotool fallbacks.
-      candidates = [...xdotoolEntry, ...ydotoolEntry];
-    } else {
-      // GNOME, KDE, or unknown Wayland: xdotool for XWayland, then ydotool fallback.
-      candidates = [...xdotoolEntry, ...ydotoolEntry];
-    }
+    // Compositor-aware priority ordering. X11 and wlroots (where wtype already
+    // ran): xdotool first — native on X11, no daemon needed. GNOME, KDE, or
+    // unknown Wayland: ydotool (uinput) first because it reaches every window,
+    // while xdotool exits 0 even when the focused window is native Wayland and
+    // never receives the keystroke; its Wayland args are layout-safe Shift+Insert.
+    const candidates =
+      !isWayland || isWlroots
+        ? [...xdotoolEntry, ...ydotoolEntry]
+        : [...ydotoolEntry, ...xdotoolEntry];
 
     const available = candidates.filter((c) => this.commandExists(c.cmd));
 
@@ -2209,11 +2218,17 @@ Would you like to open System Settings now?`;
     const hasNativeBinary = !!linuxFastPaste;
     let portalKeysymAvailable = false;
     if (linuxFastPaste && isWayland && (isGnome || isKde)) {
-      try {
-        const result = spawnSync(linuxFastPaste, ["--capabilities"], { timeout: 1000 });
-        portalKeysymAvailable =
-          result.status === 0 && result.stdout.toString().split(/\s+/).includes("portal-keysym-v1");
-      } catch {}
+      // spawnSync blocks the main process, so probe the binary only once.
+      if (!this.portalKeysymChecked) {
+        this.portalKeysymChecked = true;
+        try {
+          const result = spawnSync(linuxFastPaste, ["--capabilities"], { timeout: 1000 });
+          this.portalKeysymAvailable =
+            result.status === 0 &&
+            result.stdout.toString().split(/\s+/).includes("portal-keysym-v1");
+        } catch {}
+      }
+      portalKeysymAvailable = this.portalKeysymAvailable;
     }
 
     const tools = [];
@@ -2222,14 +2237,12 @@ Would you like to open System Settings now?`;
     const canUseYdotool = this.commandExists("ydotool") && this._isYdotoolDaemonRunning();
     const canUseXdotool = !isWayland || xwaylandAvailable;
 
-    if (hasHyprlandShortcut) {
-      tools.push("hyprland-sendshortcut");
-    }
     if (!isWayland) {
       if (canUseXdotool && this.commandExists("xdotool")) tools.push("xdotool");
       if (canUseYdotool) tools.push("ydotool");
     } else if (isWlroots) {
       if (hasWtype) tools.push("wtype");
+      if (hasHyprlandShortcut) tools.push("hyprland-sendshortcut");
       if (canUseXdotool && this.commandExists("xdotool")) tools.push("xdotool");
       if (canUseYdotool) tools.push("ydotool");
     } else {
@@ -2257,10 +2270,10 @@ Would you like to open System Settings now?`;
     let method = null;
     if (!isWayland) {
       method = nativeBinaryUsable ? "xtest" : tools[0] || null;
-    } else if (hasHyprlandShortcut) {
-      method = "hyprland-sendshortcut";
     } else if (hasWtype) {
       method = "wtype";
+    } else if (hasHyprlandShortcut) {
+      method = "hyprland-sendshortcut";
     } else if ((isGnome || isKde) && portalKeysymAvailable) {
       method = "portal";
     } else if (nativeBinaryUsable) {

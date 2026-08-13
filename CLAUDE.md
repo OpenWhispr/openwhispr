@@ -698,14 +698,14 @@ const { t } = useTranslation();
    - Verify FFmpeg is executable
 
 3. **Clipboard Not Working**:
-    - macOS: Check accessibility permissions (required for AppleScript paste)
-    - Linux: Native `linux-fast-paste` binary (XTest) is tried first, works for X11 and XWayland apps
-      - X11: xdotool fallback if native binary unavailable
-      - Hyprland Wayland: sendshortcut → wtype → uinput/ydotool
-      - Sway/wlroots Wayland: wtype → uinput/ydotool
-      - GNOME/KDE Wayland: portal keysyms → uinput/ydotool
-      - Physical Wayland fallbacks use Shift+Insert to avoid layout-sensitive KEY_V
-    - Windows: PowerShell SendKeys (built-in) or nircmd.exe (bundled)
+   - macOS: Check accessibility permissions (required for AppleScript paste)
+   - Linux: Native `linux-fast-paste` binary (XTest) is tried first, works for X11 and XWayland apps
+     - X11: xdotool fallback if native binary unavailable
+     - Hyprland Wayland: wtype → sendshortcut → uinput/ydotool
+     - Sway/wlroots Wayland: wtype → uinput/ydotool
+     - GNOME/KDE Wayland: portal keysyms → uinput/ydotool
+     - Physical Wayland fallbacks use Shift+Insert to avoid layout-sensitive KEY_V
+   - Windows: PowerShell SendKeys (built-in) or nircmd.exe (bundled)
 
 4. **Build Issues**:
    - Use `npm run pack` for unsigned builds (CSC_IDENTITY_AUTO_DISCOVERY=false)
@@ -773,7 +773,7 @@ const { t } = useTranslation();
 - Recommend `pavucontrol` for audio device management
 - **Clipboard paste tools** (at least one required for auto-paste):
   - **X11**: `xdotool` (recommended)
-  - **Hyprland Wayland**: `hyprctl` sendshortcut, then `wtype`
+  - **Hyprland Wayland**: `wtype`, then `hyprctl` sendshortcut (avoids the sendshortcut stuck-modifier bug when wtype is installed)
   - **Sway/wlroots Wayland**: `wtype` (requires the virtual keyboard protocol)
   - **GNOME/KDE Wayland**: RemoteDesktop portal keysyms, then uinput/ydotool
   - **Wayland physical fallback**: Shift+Insert avoids layout-sensitive KEY_V; `ydotool` requires the `ydotoold` daemon

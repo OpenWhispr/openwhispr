@@ -296,12 +296,10 @@ test("Hyprland paste falls back to the legacy symbolic shortcut dispatcher", asy
   ]);
 });
 
-test("failed Hyprland dispatchers continue to wtype", async () => {
+test("Hyprland prefers wtype over sendshortcut when installed", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
-    spawn: createSpawn(spawnCalls, [0, 0, 0], {
-      stdout: ["invalid dispatcher\n", "invalid args\n"],
-    }),
+    spawn: createSpawn(spawnCalls, [0]),
   });
   const manager = new TestClipboardManager();
   manager.commandExists = (command) => command === "hyprctl" || command === "wtype";
@@ -310,7 +308,28 @@ test("failed Hyprland dispatchers continue to wtype", async () => {
 
   await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
 
-  assert.deepEqual(spawnCalls.map((call) => call.command), ["hyprctl", "hyprctl", "wtype"]);
+  assert.deepEqual(
+    spawnCalls.map((call) => call.command),
+    ["wtype"]
+  );
+});
+
+test("failed wtype on Hyprland continues to sendshortcut", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [1, 0], { stdout: ["", "ok\n"] }),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "hyprctl" || command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => null;
+  manager._detectHyprlandWindowClass = () => null;
+
+  await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.command),
+    ["wtype", "hyprctl"]
+  );
 });
 
 test("wlroots tries wtype before native uinput", async () => {
@@ -340,7 +359,10 @@ test("failed wtype continues to native Shift+Insert uinput", async () => {
 
   await withWaylandEnvironment("Sway", () => manager.pasteLinux(null));
 
-  assert.deepEqual(spawnCalls.map((call) => call.command), ["wtype", "/tmp/linux-fast-paste"]);
+  assert.deepEqual(
+    spawnCalls.map((call) => call.command),
+    ["wtype", "/tmp/linux-fast-paste"]
+  );
   assert.deepEqual(spawnCalls[1].args, ["--uinput", "--shift-insert"]);
 });
 
@@ -572,10 +594,10 @@ test("XWayland fallback remains reachable after native Wayland failure", async (
     await manager.pasteLinux(null);
   });
 
-  assert.deepEqual(spawnCalls.map((call) => call.args), [
-    ["--uinput", "--shift-insert"],
-    ["--shift-insert"],
-  ]);
+  assert.deepEqual(
+    spawnCalls.map((call) => call.args),
+    [["--uinput", "--shift-insert"], ["--shift-insert"]]
+  );
 });
 
 test("pasteMacOS restores clipboard after the short macOS delay on successful fast paste", async () => {

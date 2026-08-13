@@ -117,7 +117,7 @@
    - Fedora/RHEL: `sudo dnf install wl-clipboard`
    - Arch: `sudo pacman -S wl-clipboard`
 2. OpenWhispr chooses a compositor-specific paste method:
-   - Hyprland: `hyprctl dispatch sendshortcut`, then `wtype`
+   - Hyprland: `wtype`, then `hyprctl dispatch sendshortcut`
    - Sway and other wlroots compositors: `wtype`
    - GNOME and KDE Plasma: the RemoteDesktop keyboard portal
    - `ydotool` is a fallback and requires the `ydotoold` daemon
