@@ -152,10 +152,16 @@ function resolveReasoningRoute(
     isCloudTranslation: isCloudTranslationMode(),
   });
 
+  // Mirrors getEffectiveSttLanguage: while translating, the transcript is in
+  // the source language, not the dictation language.
+  const sttLanguage = translationRequested
+    ? settings.translationSourceLanguage || "auto"
+    : settings.preferredLanguage;
+
   const kind = resolveDictationRouteKind({
     cleanupReachable,
     agentReachable: agent.reachable,
-    agentInvoked: !!agentName && detectAgentName(text, agentName),
+    agentInvoked: !!agentName && detectAgentName(text, agentName, sttLanguage),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,

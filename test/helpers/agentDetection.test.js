@@ -61,3 +61,84 @@ test("rejects empty or single-character names", async () => {
   assert.equal(detectAgentName("hey there", ""), false);
   assert.equal(detectAgentName("a quick note", "a"), false);
 });
+
+test("matches the Italian advertised wake phrase when dictating in Italian", async () => {
+  const { detectAgentName } = await load();
+
+  // The it locale advertises "Ehi {{agentName}}"; this failed with the
+  // English-only cue set.
+  assert.equal(detectAgentName("stavo pensando, Ehi Jarvis scrivi una mail", "Jarvis", "it"), true);
+  assert.equal(detectAgentName("prendi nota di questo Ciao Jarvis riassumi", "Jarvis", "it"), true);
+});
+
+test("keeps localized cues active when the dictation language is auto or unset", async () => {
+  const { detectAgentName } = await load();
+
+  assert.equal(detectAgentName("dunque vediamo ehi Jarvis prendi nota", "Jarvis", "auto"), true);
+  assert.equal(detectAgentName("dunque vediamo ehi Jarvis prendi nota", "Jarvis"), true);
+});
+
+test("does not fire a foreign-language cue during English dictation", async () => {
+  const { detectAgentName } = await load();
+
+  assert.equal(detectAgentName("and then oye Jarvis said something", "Jarvis", "en"), false);
+  assert.equal(detectAgentName("and then ehi Jarvis said something", "Jarvis", "en"), false);
+  assert.equal(detectAgentName("bueno pues oye Jarvis apunta esto", "Jarvis", "es"), true);
+});
+
+test("keeps English cue behavior identical for every dictation language", async () => {
+  const { detectAgentName } = await load();
+
+  for (const language of [undefined, "auto", "en", "it", "ko"]) {
+    assert.equal(
+      detectAgentName("so anyway hey Jarvis make this formal", "Jarvis", language),
+      true,
+      `language=${language}`
+    );
+  }
+});
+
+test("ignores a localized cue word mid-sentence far from the name", async () => {
+  const { detectAgentName } = await load();
+
+  assert.equal(
+    detectAgentName("gli ho detto ciao mentre parlavamo del progetto di Jarvis", "Jarvis", "it"),
+    false
+  );
+  assert.equal(
+    detectAgentName("dile hola a todos antes de mencionar a Jarvis", "Jarvis", "es"),
+    false
+  );
+});
+
+test("matches the Russian advertised wake phrase including its comma", async () => {
+  const { detectAgentName } = await load();
+
+  assert.equal(
+    detectAgentName("так вот Привет, Джарвис напиши письмо о бюджете", "Джарвис", "ru"),
+    true
+  );
+});
+
+test("normalizes fullwidth punctuation so CJK cues and sentence ends work", async () => {
+  const { detectAgentName } = await load();
+
+  // No spaces around the fullwidth comma, the shape CJK STT actually emits.
+  assert.equal(detectAgentName("えっと ねぇ Jarvis、メールを書いて", "Jarvis", "ja"), true);
+  assert.equal(detectAgentName("以上です。 Jarvis、続けて", "Jarvis", "ja"), true);
+  assert.equal(detectAgentName("うーん ねぇ、Jarvis、メールを書いて", "Jarvis", "ja"), true);
+});
+
+test("maps regional language codes to their base cue set", async () => {
+  const { detectAgentName } = await load();
+
+  assert.equal(detectAgentName("我想了一下 嘿 Jarvis 帮我写邮件", "Jarvis", "zh-CN"), true);
+  assert.equal(detectAgentName("我想了一下 嘿 Jarvis 幫我寫郵件", "Jarvis", "zh-TW"), true);
+});
+
+test("keeps detection English-only for languages without a localized cue set", async () => {
+  const { detectAgentName } = await load();
+
+  assert.equal(detectAgentName("well then ehi Jarvis take a note", "Jarvis", "ko"), false);
+  assert.equal(detectAgentName("well then hey Jarvis take a note", "Jarvis", "ko"), true);
+});
