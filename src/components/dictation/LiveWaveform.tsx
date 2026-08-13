@@ -12,8 +12,10 @@ interface LiveWaveformProps {
 const BAR_MIN_PX = 3;
 const BAR_MAX_PX = 26;
 const SAMPLE_INTERVAL_MS = 60;
-// Speech RMS rarely exceeds ~0.35; scale so normal speech fills the range.
-const LEVEL_GAIN = 3;
+// Conversational speech RMS sits around 0.02–0.15; a square-root curve lifts
+// quiet speech into the visible range while loud peaks still cap out.
+const LEVEL_GAIN = 6;
+const toBarLevel = (rms: number) => Math.min(1, Math.sqrt(rms * LEVEL_GAIN));
 
 /**
  * Level-driven waveform: bars scroll right-to-left with the live input signal.
@@ -43,7 +45,7 @@ export function LiveWaveform({ getLevel, active, barCount = 14, className }: Liv
         const level = getLevel();
         const levels = levelsRef.current;
         levels.shift();
-        levels.push(level === null ? 0 : Math.min(1, level * LEVEL_GAIN));
+        levels.push(level === null ? 0 : toBarLevel(level));
         for (let i = 0; i < levels.length; i++) {
           const bar = barRefs.current[i];
           if (bar) {

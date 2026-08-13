@@ -7864,6 +7864,7 @@ class IPCHandlers {
             messages,
             systemPrompt: opts.systemPrompt,
             tools: opts.tools,
+            ...(opts.screenContext ? { screenContext: opts.screenContext } : {}),
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),

@@ -890,6 +890,8 @@ class ReasoningService extends BaseReasoningService {
     opts: {
       systemPrompt?: string;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+      // Press-time screenshot; the server routes to its vision chain when present.
+      screenContext?: { data: string; mediaType: string };
     }
   ): AsyncGenerator<
     {
@@ -966,6 +968,7 @@ class ReasoningService extends BaseReasoningService {
       systemPrompt: string;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
       executeToolCall?: (name: string, args: string) => Promise<ToolExecutionResult>;
+      screenContext?: { data: string; mediaType: string };
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     assertAgentSessionAllowedByPolicy("openwhispr", "openwhispr");
@@ -973,9 +976,12 @@ class ReasoningService extends BaseReasoningService {
     let currentMessages = [...messages];
 
     for (let step = 0; step < maxSteps; step++) {
+      // The screenshot rides every step of the tool loop so the model keeps
+      // its vision after tool results come back.
       const stream = this.streamFromIPC(currentMessages, {
         systemPrompt: config.systemPrompt,
         tools: config.tools,
+        screenContext: config.screenContext,
       });
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];

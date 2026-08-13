@@ -468,12 +468,14 @@ export default function App() {
               }}
               className={`relative flex items-center justify-center overflow-hidden rounded-full ${micProps.background}`}
               style={{
+                // Constant height: the orb grows sideways into the capsule
+                // (toward the screen center from its anchored corner), never up.
                 width: isCapsule ? 264 : 40,
-                height: isCapsule ? 48 : 40,
+                height: 40,
                 cursor:
                   micState === "processing" ? "not-allowed" : isDragging ? "grabbing" : "pointer",
                 transform: micState === "hover" ? "scale(1.05)" : "scale(1)",
-                transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
+                transition: `width ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
               }}
             >
               <div

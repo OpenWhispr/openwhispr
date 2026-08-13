@@ -1555,13 +1555,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // pipeline is recording: the batch speech-gate analyser or the streaming
   // path's analyser. Null (waveform rests) when neither is live.
   getRecordingAudioLevel() {
-    const analyser =
-      this._silenceAnalyser && this._silenceCtx?.state === "running"
-        ? this._silenceAnalyser
-        : this.streamingAnalyser && this.streamingAudioContext?.state === "running"
-          ? this.streamingAnalyser
-          : null;
-    if (!analyser) return null;
+    const pair = this._silenceAnalyser
+      ? { ctx: this._silenceCtx, analyser: this._silenceAnalyser }
+      : this.streamingAnalyser
+        ? { ctx: this.streamingAudioContext, analyser: this.streamingAnalyser }
+        : null;
+    if (!pair?.ctx) return null;
+    if (pair.ctx.state === "suspended") {
+      // A suspended context reads flat silence — nudge it awake (not awaited;
+      // resume() can hang when the output device is wedged).
+      pair.ctx.resume().catch(() => {});
+      return null;
+    }
+    if (pair.ctx.state !== "running") return null;
+    const analyser = pair.analyser;
     if (!this._levelData || this._levelData.length !== analyser.fftSize) {
       this._levelData = new Uint8Array(analyser.fftSize);
     }

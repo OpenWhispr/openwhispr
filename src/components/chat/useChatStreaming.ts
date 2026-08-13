@@ -214,9 +214,12 @@ export function useChatStreaming({
         content: string | Array<Record<string, unknown>>;
       }> = allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
 
-      // Attach the screenshot to the command it came with, but only when the
-      // resolved chat model can actually see it; otherwise drop it silently —
-      // an image problem must never cost the user their command.
+      // Attach the screenshot to the command it came with, but only where a
+      // model can actually see it; otherwise drop it silently — an image
+      // problem must never cost the user their command. BYOK models get it as
+      // an image part when the registry says they have vision; the cloud
+      // agent gets it as a dedicated field the server vision-routes (older
+      // servers strip the unknown field, which degrades to a plain command).
       const attachment =
         options?.attachment &&
         !isCloudAgent &&
@@ -226,10 +229,16 @@ export function useChatStreaming({
         getCloudModel(chatConfig.model)?.supportsVision
           ? options.attachment
           : null;
-      if (attachment) {
+      const cloudScreenContext =
+        options?.attachment && isCloudAgent
+          ? { data: options.attachment.image, mediaType: options.attachment.mediaType }
+          : null;
+      if (attachment || cloudScreenContext) {
         // The screenshot needs its grounding instruction, exactly like the
         // dictation path pairs the suffix with an attached image.
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
+      }
+      if (attachment) {
         for (let i = history.length - 1; i >= 0; i--) {
           if (history[i].role === "user") {
             history[i] = {
@@ -297,6 +306,7 @@ export function useChatStreaming({
               parameters: t.parameters,
             })),
             executeToolCall,
+            ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
           });
         } else {
           const aiTools = registry?.toAISDKFormat();
