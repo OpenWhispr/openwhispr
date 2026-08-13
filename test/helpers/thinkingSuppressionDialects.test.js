@@ -196,3 +196,29 @@ test("detectEndpointDialect returns null for unparseable or missing input", asyn
   assert.equal(detectEndpointDialect(undefined), null);
   assert.equal(detectEndpointDialect(null), null);
 });
+
+test("deepseek hosts get the native thinking switch, never reasoning_effort (#1260)", async () => {
+  const { suppressThinking, detectEndpointDialect } = await load();
+
+  const dialect = detectEndpointDialect("https://api.deepseek.com/v1");
+  assert.deepEqual(dialect, { key: "deepseek", tokenParam: "max_tokens", supportsTemperature: true });
+
+  const body = {};
+  suppressThinking(body, "deepseek", "deepseek-chat");
+  assert.deepEqual(body, { thinking: { type: "disabled" } });
+});
+
+test("cerebras hosts are strict like groq: family effort only, no chat_template_kwargs (#831)", async () => {
+  const { suppressThinking, detectEndpointDialect } = await load();
+
+  const dialect = detectEndpointDialect("https://api.cerebras.ai/v1");
+  assert.equal(dialect?.key, "cerebras");
+
+  const gptOss = {};
+  suppressThinking(gptOss, "cerebras", "gpt-oss-120b");
+  assert.deepEqual(gptOss, { reasoning_effort: "low" });
+
+  const unknown = {};
+  suppressThinking(unknown, "cerebras", "llama-4-maverick");
+  assert.deepEqual(unknown, {});
+});

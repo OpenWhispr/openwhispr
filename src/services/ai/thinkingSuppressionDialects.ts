@@ -1,9 +1,14 @@
+import { getModelFamilyConstraints } from "./modelFamilyConstraints";
+
 /**
- * Per-provider dialects for turning a model's thinking off. Kept free of runtime
- * imports so the dialect table stays unit-testable on its own.
+ * Per-provider dialects for turning a model's thinking off. Model-family
+ * constraints (which reasoning_effort values a family accepts) come from
+ * modelFamilyConstraints; this module only knows how each provider wants the
+ * suppression expressed. Kept free of heavier runtime imports so the dialect
+ * table stays unit-testable on its own.
  */
 export interface EndpointDialect {
-  key: "mistral";
+  key: "mistral" | "deepseek" | "cerebras";
   tokenParam: "max_tokens" | "max_completion_tokens";
   supportsTemperature: boolean;
 }
@@ -23,6 +28,12 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
   if (host === "mistral.ai" || host.endsWith(".mistral.ai")) {
     return { key: "mistral", tokenParam: "max_tokens", supportsTemperature: true };
   }
+  if (host === "deepseek.com" || host.endsWith(".deepseek.com")) {
+    return { key: "deepseek", tokenParam: "max_tokens", supportsTemperature: true };
+  }
+  if (host === "cerebras.ai" || host.endsWith(".cerebras.ai")) {
+    return { key: "cerebras", tokenParam: "max_tokens", supportsTemperature: true };
+  }
 
   return null;
 }
@@ -32,10 +43,7 @@ export function suppressThinking(
   providerKey: string,
   model: string
 ): void {
-  const modelFamily = (model || "").toLowerCase();
-  // gpt-oss accepts low|medium|high only; it has no off switch. A property of the
-  // model family, not the provider — Tinfoil 400s on "none" just like Groq would.
-  const isGptOss = modelFamily.includes("gpt-oss");
+  const family = getModelFamilyConstraints(model);
 
   if (providerKey === "gemini") {
     requestBody.reasoning_effort = "minimal";
@@ -49,22 +57,27 @@ export function suppressThinking(
     return;
   }
 
-  // Groq rejects unknown fields outright and takes a different reasoning_effort
-  // enum per model family, so send nothing unless the family is known.
-  if (providerKey === "groq") {
-    if (modelFamily.includes("qwen")) {
-      // qwen3 accepts none|default only.
-      requestBody.reasoning_effort = "none";
-    } else if (isGptOss) {
-      requestBody.reasoning_effort = "low";
+  // Groq and Cerebras reject unknown fields outright (Cerebras 400s on
+  // chat_template_kwargs, #831) and take a per-family reasoning_effort enum,
+  // so send nothing unless the family is known.
+  if (providerKey === "groq" || providerKey === "cerebras") {
+    if (family?.reasoningEffort) {
+      requestBody.reasoning_effort = family.reasoningEffort.suppressValue;
     }
+    return;
+  }
+
+  // DeepSeek's API rejects reasoning_effort "none" (its enum has no off value,
+  // #1260); thinking: {type} is its native switch. Family facts don't apply —
+  // deepseek models on other hosts (e.g. Tinfoil) accept the generic shape.
+  if (providerKey === "deepseek") {
+    requestBody.thinking = { type: "disabled" };
     return;
   }
 
   // Mistral rejects unknown fields with a 422; reasoning_effort is its native switch.
   if (providerKey === "mistral") {
-    // Legacy magistral models reason natively and may reject reasoning_effort.
-    if (modelFamily.includes("magistral")) return;
+    if (family?.omitReasoningParams) return;
     requestBody.reasoning_effort = "none";
     return;
   }
@@ -76,7 +89,7 @@ export function suppressThinking(
     // disables Ollama thinking; other backends drop it (flat reasoning_effort trips vLLM).
     requestBody.reasoning = { effort: "none" };
   } else {
-    requestBody.reasoning_effort = isGptOss ? "low" : "none";
+    requestBody.reasoning_effort = family?.reasoningEffort?.suppressValue ?? "none";
   }
   requestBody.chat_template_kwargs = { enable_thinking: false };
 }

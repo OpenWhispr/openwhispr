@@ -475,6 +475,7 @@
           "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
+          "supportsThinking": true,
           "supportsVision": true
         },
         {
@@ -482,6 +483,7 @@
           "name": "Gemini 3 Flash",
           "description": "Ultra-fast, high-capability next-gen model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
+          "supportsThinking": true,
           "supportsVision": true
         },
         {
