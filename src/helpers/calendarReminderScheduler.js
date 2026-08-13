@@ -1,9 +1,14 @@
 const debugLogger = require("./debugLogger");
+const { getMeetingJoinUrl } = require("./meetingJoinUrl");
 
 const MEETING_REMINDER_LEAD_MS = 60 * 1000;
 
 function notificationKey(event) {
   return `${event.provider || "google"}:${event.id}`;
+}
+
+function isReminderEligible(event) {
+  return event.provider !== "google" || event.attendees_count > 0 || getMeetingJoinUrl(event);
 }
 
 // Provider-agnostic meeting reminder scheduling. Reads only the shared
@@ -25,7 +30,9 @@ class CalendarReminderScheduler {
     }
 
     const upcoming = this.databaseManager.getUpcomingEvents(1440);
-    const next = upcoming.find((e) => !this.notifiedMeetings.has(notificationKey(e)));
+    const next = upcoming.find(
+      (event) => isReminderEligible(event) && !this.notifiedMeetings.has(notificationKey(event))
+    );
     if (!next) return;
 
     const delay = new Date(next.start_time).getTime() - MEETING_REMINDER_LEAD_MS - Date.now();
@@ -40,6 +47,11 @@ class CalendarReminderScheduler {
   }
 
   onMeetingStart(event) {
+    if (!isReminderEligible(event)) {
+      this.scheduleNextMeeting();
+      return;
+    }
+
     const events = this.databaseManager.getActiveEvents();
     const stillExists =
       events.some((e) => notificationKey(e) === notificationKey(event)) ||
