@@ -9824,11 +9824,7 @@ class IPCHandlers {
     ipcMain.handle("update-notification-respond", async (_event, action) => {
       this.windowManager?.dismissUpdateNotification();
       if (action === "update") {
-        try {
-          await this.updateManager?.downloadUpdate();
-        } catch (error) {
-          console.error("Failed to start update download from notification:", error);
-        }
+        await this.updateManager?.downloadUpdateFromNotification();
       }
       return { success: true };
     });

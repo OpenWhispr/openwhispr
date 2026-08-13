@@ -46,6 +46,8 @@ class WindowManager {
     this.updateNotificationWindow = null;
     this._nativeMeetingNotification = null;
     this._nativeUpdateNotification = null;
+    this._nativeMeetingShowSeq = 0;
+    this._nativeUpdateShowSeq = 0;
     this._updateNotificationDismissed = false;
     this.notificationPrefs = {
       notificationsEnabled: true,
@@ -1257,8 +1259,8 @@ class WindowManager {
     }
   }
 
-  // Delivers the prompt through the desktop's notification daemon instead of
-  // the overlay window, which Wayland compositors center and focus. See #1599.
+  // Deliver the prompt through the desktop notification daemon, falling back
+  // to the overlay when the caller gets false back.
   async _tryNativeMeetingNotification(promptData, { autoDismiss = true } = {}) {
     if (!linuxNotifier.isSupported()) return false;
     const detectionId = promptData?.detectionId;
@@ -1266,6 +1268,8 @@ class WindowManager {
 
     const previous = this._nativeMeetingNotification;
     this._nativeMeetingNotification = null;
+    // Staleness guard across the await, like the overlay's window identity check.
+    const seq = (this._nativeMeetingShowSeq = this._nativeMeetingShowSeq + 1);
     const timeoutMs = getNotificationTimeoutMs(promptData.source);
 
     const handle = await linuxNotifier.show({
@@ -1286,11 +1290,18 @@ class WindowManager {
         }
       },
     });
-    if (!handle) return false;
+    if (this._nativeMeetingShowSeq !== seq) {
+      // A newer prompt superseded this one mid-flight; it owns the surface now.
+      handle?.close();
+      return true;
+    }
+    if (!handle) {
+      previous?.close();
+      return false;
+    }
 
     this._nativeMeetingNotification = handle;
-    // Backstop for daemons that ignore expire_timeout (GNOME): keeps the
-    // active-detection lifecycle on the same clock as the overlay.
+    // Backstop expiry for daemons that ignore expire_timeout.
     if (autoDismiss) this._notificationDismissTimer.start(timeoutMs);
     return true;
   }
@@ -1482,6 +1493,7 @@ class WindowManager {
 
     const previous = this._nativeUpdateNotification;
     this._nativeUpdateNotification = null;
+    const seq = (this._nativeUpdateShowSeq = this._nativeUpdateShowSeq + 1);
 
     const handle = await linuxNotifier.show({
       ...buildUpdatePromptContent(info, (key, opts) => i18nMain.t(key, opts)),
@@ -1493,12 +1505,18 @@ class WindowManager {
       },
       onClose: (reason) => {
         if (this._nativeUpdateNotification?.id !== handle?.id) return;
-        // A user close is a decline for the session; expiry keeps the
-        // notification eligible for the next update check, like the overlay.
+        // User close declines for the session; expiry stays eligible, like the overlay.
         this.dismissUpdateNotification({ persistent: reason === CLOSE_REASON_DISMISSED });
       },
     });
-    if (!handle) return false;
+    if (this._nativeUpdateShowSeq !== seq) {
+      handle?.close();
+      return true;
+    }
+    if (!handle) {
+      previous?.close();
+      return false;
+    }
 
     this._nativeUpdateNotification = handle;
     this._updateNotificationAutoDismiss = setTimeout(() => {

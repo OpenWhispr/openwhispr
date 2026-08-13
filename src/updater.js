@@ -91,13 +91,7 @@ class UpdateManager {
         if (this.windowManager && info && !this._suppressNotification && notifAllowed) {
           this.windowManager
             .showUpdateNotification(info, {
-              // Native Linux notifications act in the main process; the overlay
-              // routes the same action through update-notification-respond.
-              onUpdate: () => {
-                this.downloadUpdate().catch((err) => {
-                  console.error("Failed to start update download from notification:", err);
-                });
-              },
+              onUpdate: () => this.downloadUpdateFromNotification(),
             })
             .catch((err) => {
               console.error("Failed to show update notification:", err);
@@ -203,6 +197,14 @@ class UpdateManager {
       console.error("❌ Update check error:", error);
       throw error;
     }
+  }
+
+  // Single entry point for the notification Update action, shared by the
+  // overlay's IPC respond handler and the native Linux notification.
+  downloadUpdateFromNotification() {
+    return this.downloadUpdate().catch((error) => {
+      console.error("Failed to start update download from notification:", error);
+    });
   }
 
   async downloadUpdate() {

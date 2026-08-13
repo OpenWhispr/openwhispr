@@ -1,4 +1,5 @@
 const debugLogger = require("./debugLogger");
+const { LINUX_APP_NAME } = require("./linuxAutostart");
 
 let dbus = null;
 try {
@@ -10,14 +11,13 @@ try {
 }
 
 const APP_NAME = "OpenWhispr";
-// Icon and desktop-entry match the executable name electron-builder packages
-// under (see linuxAutostart.js), so daemons resolve the installed icon and
-// apply the user's per-app notification settings.
-const LINUX_APP_ID = "open-whispr";
 const NOTIFICATIONS_SERVICE = "org.freedesktop.Notifications";
 const NOTIFICATIONS_PATH = "/org/freedesktop/Notifications";
 const DBUS_CALL_TIMEOUT_MS = 3000;
 const MAX_TEXT_LENGTH = 512;
+// Failure backoff, so a daemon that is slow at login gets retried later.
+const RETRY_BASE_MS = 30 * 1000;
+const RETRY_MAX_MS = 30 * 60 * 1000;
 
 const CLOSE_REASON_EXPIRED = 1;
 const CLOSE_REASON_DISMISSED = 2;
@@ -26,11 +26,14 @@ const PROMPT_VARIANTS = new Set(["detected", "starting", "underway"]);
 
 function truncate(value) {
   const text = typeof value === "string" ? value : "";
-  return text.length > MAX_TEXT_LENGTH ? text.slice(0, MAX_TEXT_LENGTH) : text;
+  if (text.length <= MAX_TEXT_LENGTH) return text;
+  const cut = text.slice(0, MAX_TEXT_LENGTH);
+  // Never end on a dangling high surrogate.
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }
 
-// Servers advertising body-markup parse the body as XML-ish markup, so literal
-// &, <, > must be entity-escaped to display as typed.
+// Escape &, <, > for servers that parse the notification body as markup.
 function escapeBodyMarkup(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -39,8 +42,7 @@ function buildMeetingPromptContent(promptData, t) {
   const variant = PROMPT_VARIANTS.has(promptData?.variant) ? promptData.variant : "detected";
   const eventSummary =
     typeof promptData?.event?.summary === "string" ? promptData.event.summary.trim() : "";
-  // Mirrors MeetingNotificationOverlay: calendar-backed prompts lead with the
-  // event name, mic-only detections with the generic title.
+  // Same rule as MeetingNotificationOverlay: event name only for calendar-backed variants.
   const title = truncate(
     (variant !== "detected" && eventSummary) || t("meetingNotification.title")
   );
@@ -61,38 +63,55 @@ function buildUpdatePromptContent(info, t) {
   };
 }
 
-// Native Linux notifications over the org.freedesktop.Notifications D-Bus
-// interface (the protocol behind notify-send/libnotify). See #1599.
+// Native Linux notifications over the org.freedesktop.Notifications session bus.
 class LinuxNotifier {
   constructor({
     platform = process.platform,
     dbusModule = dbus,
     callTimeoutMs = DBUS_CALL_TIMEOUT_MS,
+    now = Date.now,
   } = {}) {
     this._platform = platform;
     this._dbus = dbusModule;
     this._callTimeoutMs = callTimeoutMs;
-    this._broken = false;
+    this._now = now;
+    this._failureCount = 0;
+    this._retryAt = 0;
     this._bus = null;
+    this._iface = null;
     this._connectPromise = null;
     this._capabilities = null;
     this._active = new Map();
   }
 
   isSupported() {
-    return this._platform === "linux" && !!this._dbus && !this._broken;
+    return this._platform === "linux" && !!this._dbus && this._now() >= this._retryAt;
   }
 
-  // Wraps a callback-style D-Bus call with a deadline: a hung daemon must fail
-  // the native path so the caller can fall back to the overlay.
-  _call(fn, ...args) {
+  _withTimeout(promise, timeoutMs, label) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+      promise.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        }
+      );
+    });
+  }
+
+  _call(fn, args, timeoutMs) {
     return new Promise((resolve, reject) => {
       let settled = false;
       const timer = setTimeout(() => {
         if (settled) return;
         settled = true;
         reject(new Error("D-Bus call timed out"));
-      }, this._callTimeoutMs);
+      }, timeoutMs);
       try {
         fn(...args, (err, result) => {
           if (settled) return;
@@ -127,9 +146,9 @@ class LinuxNotifier {
         if (!bus) throw new Error("No session bus available");
         this._bus = bus;
 
-        // Without this handler a dropped connection raises an uncaught
-        // EventEmitter error and takes the whole main process down.
+        // A connection error with no handler is an uncaught EventEmitter error.
         bus.connection.on("error", (err) => {
+          if (this._bus !== bus) return;
           debugLogger.warn("Notification D-Bus connection error", { error: err.message });
           this._markBroken();
           if (!settled) {
@@ -151,6 +170,7 @@ class LinuxNotifier {
             }
             iface.on("ActionInvoked", (id, actionKey) => this._onActionInvoked(id, actionKey));
             iface.on("NotificationClosed", (id, reason) => this._onClosed(id, reason));
+            this._iface = iface;
             resolve(iface);
           });
       } catch (err) {
@@ -161,6 +181,8 @@ class LinuxNotifier {
         }
       }
     });
+    // A rejection may be observed only through _withTimeout races.
+    this._connectPromise.catch(() => {});
 
     return this._connectPromise;
   }
@@ -170,8 +192,7 @@ class LinuxNotifier {
     if (!entry) return;
     const action = actionKey === "default" ? entry.actionKey : actionKey;
     if (action !== entry.actionKey) return;
-    // Settle before invoking: the daemon follows up with NotificationClosed,
-    // which must not also fire the dismiss path.
+    // Settle before invoking, so the daemon's follow-up NotificationClosed is a no-op.
     this._active.delete(id);
     try {
       entry.onAction(action);
@@ -193,13 +214,36 @@ class LinuxNotifier {
   }
 
   _markBroken() {
-    this._broken = true;
+    const backoff = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** this._failureCount);
+    this._failureCount = Math.min(this._failureCount + 1, 16);
+    this._retryAt = this._now() + backoff;
+
+    // Owners of live notifications must not keep waiting on a dead connection.
+    const orphans = [...this._active.values()];
     this._active.clear();
+    for (const entry of orphans) {
+      try {
+        entry.onClose(CLOSE_REASON_EXPIRED);
+      } catch (err) {
+        debugLogger.error("Notification close handler failed", { error: err.message });
+      }
+    }
+
+    this._capabilities = null;
+    this._connectPromise = null;
+    this._iface = null;
+    if (this._bus) {
+      try {
+        this._bus.connection.end();
+      } catch {
+        // Connection may already be gone.
+      }
+      this._bus = null;
+    }
   }
 
-  // Shows a native notification with one primary action (also bound to the
-  // notification's default click). Returns { id, close } or null on any
-  // failure, after which the notifier stays unavailable for the session.
+  // Shows a notification with one primary action, also bound to the default click.
+  // Returns { id, close } or null; failures back off and retry later.
   async show({
     title,
     body,
@@ -212,11 +256,14 @@ class LinuxNotifier {
   }) {
     if (!this.isSupported()) return null;
 
+    const deadline = this._now() + this._callTimeoutMs;
+    const remaining = () => Math.max(1, deadline - this._now());
+
     try {
-      const iface = await this._connect();
+      const iface = await this._withTimeout(this._connect(), remaining(), "D-Bus connection");
 
       if (!this._capabilities) {
-        this._capabilities = await this._call(iface.GetCapabilities.bind(iface));
+        this._capabilities = await this._call(iface.GetCapabilities.bind(iface), [], remaining());
       }
       const caps = Array.isArray(this._capabilities) ? this._capabilities : [];
       if (!caps.includes("actions")) {
@@ -227,27 +274,30 @@ class LinuxNotifier {
 
       const id = await this._call(
         iface.Notify.bind(iface),
-        APP_NAME,
-        replacesId >>> 0,
-        LINUX_APP_ID,
-        title,
-        safeBody,
-        ["default", actionLabel, actionKey, actionLabel],
         [
-          ["urgency", ["y", 1]],
-          ["desktop-entry", ["s", LINUX_APP_ID]],
+          APP_NAME,
+          replacesId >>> 0,
+          LINUX_APP_NAME,
+          title,
+          safeBody,
+          ["default", actionLabel, actionKey, actionLabel],
+          [
+            ["urgency", ["y", 1]],
+            ["desktop-entry", ["s", LINUX_APP_NAME]],
+          ],
+          Math.max(0, Math.trunc(timeoutMs)),
         ],
-        Math.max(0, Math.trunc(timeoutMs))
+        remaining()
       );
 
-      const entry = { actionKey, onAction, onClose };
-      this._active.set(id, entry);
+      this._failureCount = 0;
+      this._retryAt = 0;
+      this._active.set(id, { actionKey, onAction, onClose });
 
       return {
         id,
         close: () => {
-          // Drop callbacks first so the reason-3 NotificationClosed that
-          // follows our CloseNotification is ignored.
+          // Drop callbacks first, so the reason-3 NotificationClosed that follows is ignored.
           this._active.delete(id);
           try {
             iface.CloseNotification(id, () => {});
@@ -266,9 +316,19 @@ class LinuxNotifier {
   }
 
   stop() {
+    if (this._iface) {
+      for (const id of this._active.keys()) {
+        try {
+          this._iface.CloseNotification(id, () => {});
+        } catch {
+          // Best effort during teardown.
+        }
+      }
+    }
     this._active.clear();
     this._capabilities = null;
     this._connectPromise = null;
+    this._iface = null;
     if (this._bus) {
       try {
         this._bus.connection.end();

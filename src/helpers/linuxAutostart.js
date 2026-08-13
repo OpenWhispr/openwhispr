@@ -207,6 +207,7 @@ function syncAutostartEntry() {
 }
 
 module.exports = {
+  LINUX_APP_NAME,
   getDesktopFilePath,
   resolveExecutablePath,
   buildDesktopFileContents,

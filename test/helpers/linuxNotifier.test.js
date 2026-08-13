@@ -30,11 +30,14 @@ function createFakeDbus({
   capabilities = ["actions", "body"],
   notifyId = 42,
   interfaceError = null,
+  failFirstInterface = false,
   hangNotify = false,
 } = {}) {
   const iface = new EventEmitter();
   const notifyCalls = [];
   const closeCalls = [];
+  const connections = [];
+  let interfaceRequests = 0;
 
   iface.GetCapabilities = (cb) => process.nextTick(cb, null, capabilities);
   iface.Notify = (...args) => {
@@ -47,17 +50,27 @@ function createFakeDbus({
     if (cb) process.nextTick(cb, null);
   };
 
-  const connection = new EventEmitter();
-  connection.end = () => {};
-  const bus = {
-    connection,
-    getService: () => ({
-      getInterface: (path, name, cb) =>
-        process.nextTick(() => (interfaceError ? cb(interfaceError) : cb(null, iface))),
-    }),
+  const module = {
+    sessionBus: () => {
+      const connection = new EventEmitter();
+      connection.end = () => {};
+      connections.push(connection);
+      return {
+        connection,
+        getService: () => ({
+          getInterface: (path, name, cb) => {
+            interfaceRequests += 1;
+            const failThis = interfaceError || (failFirstInterface && interfaceRequests === 1);
+            process.nextTick(() =>
+              failThis ? cb(interfaceError || new Error("first connect fails")) : cb(null, iface)
+            );
+          },
+        }),
+      };
+    },
   };
 
-  return { module: { sessionBus: () => bus }, iface, notifyCalls, closeCalls, connection };
+  return { module, iface, notifyCalls, closeCalls, connections };
 }
 
 function baseShowArgs(overrides = {}) {
@@ -95,20 +108,20 @@ test("a missing dbus module means unsupported instead of a crash", async () => {
   assert.equal(await notifier.show(baseShowArgs()), null);
 });
 
-test("a server without the actions capability falls back for the whole session", async () => {
+test("a server without the actions capability backs off to the overlay", async () => {
   const { LinuxNotifier } = loadModule();
   const fake = createFakeDbus({ capabilities: ["body"] });
-  const notifier = new LinuxNotifier({ platform: "linux", dbusModule: fake.module });
+  const notifier = new LinuxNotifier({ platform: "linux", dbusModule: fake.module, now: () => 0 });
 
   assert.equal(await notifier.show(baseShowArgs()), null);
   assert.equal(fake.notifyCalls.length, 0);
   assert.equal(notifier.isSupported(), false);
 });
 
-test("a connection failure falls back for the whole session", async () => {
+test("a connection failure backs off to the overlay", async () => {
   const { LinuxNotifier } = loadModule();
   const fake = createFakeDbus({ interfaceError: new Error("no notification service") });
-  const notifier = new LinuxNotifier({ platform: "linux", dbusModule: fake.module });
+  const notifier = new LinuxNotifier({ platform: "linux", dbusModule: fake.module, now: () => 0 });
 
   assert.equal(await notifier.show(baseShowArgs()), null);
   assert.equal(notifier.isSupported(), false);
@@ -117,14 +130,68 @@ test("a connection failure falls back for the whole session", async () => {
 test("a daemon that never answers Notify times out into fallback", async () => {
   const { LinuxNotifier } = loadModule();
   const fake = createFakeDbus({ hangNotify: true });
+  let clock = 0;
   const notifier = new LinuxNotifier({
     platform: "linux",
     dbusModule: fake.module,
     callTimeoutMs: 20,
+    now: () => clock,
   });
 
   assert.equal(await notifier.show(baseShowArgs()), null);
   assert.equal(notifier.isSupported(), false);
+});
+
+test("native delivery retries with a fresh connection after the backoff window", async () => {
+  const { LinuxNotifier } = loadModule();
+  const fake = createFakeDbus({ failFirstInterface: true });
+  let clock = 0;
+  const notifier = new LinuxNotifier({
+    platform: "linux",
+    dbusModule: fake.module,
+    now: () => clock,
+  });
+
+  assert.equal(await notifier.show(baseShowArgs()), null);
+  assert.equal(notifier.isSupported(), false);
+
+  clock = 31 * 1000;
+  assert.equal(notifier.isSupported(), true);
+  const handle = await notifier.show(baseShowArgs());
+  assert.equal(handle.id, 42);
+  assert.equal(fake.connections.length, 2);
+});
+
+test("a successful show resets the failure backoff", async () => {
+  const { LinuxNotifier } = loadModule();
+  const fake = createFakeDbus({ failFirstInterface: true });
+  let clock = 0;
+  const notifier = new LinuxNotifier({
+    platform: "linux",
+    dbusModule: fake.module,
+    now: () => clock,
+  });
+
+  await notifier.show(baseShowArgs());
+  clock = 31 * 1000;
+  await notifier.show(baseShowArgs());
+  assert.equal(notifier._failureCount, 0);
+  assert.equal(notifier.isSupported(), true);
+});
+
+test("the whole native attempt shares one deadline instead of stacking per-call timeouts", async () => {
+  const { LinuxNotifier } = loadModule();
+  const fake = createFakeDbus({ hangNotify: true });
+  const notifier = new LinuxNotifier({
+    platform: "linux",
+    dbusModule: fake.module,
+    callTimeoutMs: 60,
+  });
+
+  const started = Date.now();
+  assert.equal(await notifier.show(baseShowArgs()), null);
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 150, `expected a single ~60ms deadline, took ${elapsed}ms`);
 });
 
 test("Notify carries paired actions, byte urgency and the desktop-entry hint", async () => {
@@ -148,6 +215,12 @@ test("Notify carries paired actions, byte urgency and the desktop-entry hint", a
     ["desktop-entry", ["s", "open-whispr"]],
   ]);
   assert.equal(expireTimeout, 30000);
+});
+
+test("the app identifier is shared with linuxAutostart", async () => {
+  loadModule();
+  const { LINUX_APP_NAME } = require("../../src/helpers/linuxAutostart");
+  assert.equal(LINUX_APP_NAME, "open-whispr");
 });
 
 test("replacing a prompt forwards the previous notification id", async () => {
@@ -252,6 +325,29 @@ test("an invoked action settles the prompt before the daemon's close signal", as
   assert.deepEqual(closes, []);
 });
 
+test("a dead connection expires live prompts so their owners can recover", async () => {
+  const { LinuxNotifier } = loadModule();
+  const fake = createFakeDbus();
+  const notifier = new LinuxNotifier({ platform: "linux", dbusModule: fake.module, now: () => 0 });
+
+  const closes = [];
+  await notifier.show(baseShowArgs({ onClose: (r) => closes.push(r) }));
+  fake.connections[0].emit("error", new Error("daemon went away"));
+  assert.deepEqual(closes, [1]);
+  assert.equal(notifier._active.size, 0);
+  assert.equal(notifier.isSupported(), false);
+});
+
+test("stop() closes notifications still on screen", async () => {
+  const { LinuxNotifier } = loadModule();
+  const fake = createFakeDbus();
+  const notifier = new LinuxNotifier({ platform: "linux", dbusModule: fake.module });
+
+  await notifier.show(baseShowArgs());
+  notifier.stop();
+  assert.deepEqual(fake.closeCalls, [42]);
+});
+
 test("meeting prompt content mirrors the overlay copy", async () => {
   const { buildMeetingPromptContent } = loadModule();
   const { i18nMain } = require("../../src/helpers/i18nMain");
@@ -313,4 +409,15 @@ test("oversized calendar summaries are truncated before hitting the daemon", asy
     (key) => key
   );
   assert.equal(content.title.length, 512);
+});
+
+test("truncation never leaves a dangling surrogate at the cut point", async () => {
+  const { buildMeetingPromptContent } = loadModule();
+
+  const content = buildMeetingPromptContent(
+    { variant: "starting", event: { summary: "x".repeat(511) + "\u{1F600}".repeat(10) } },
+    (key) => key
+  );
+  assert.equal(content.title.length, 511);
+  assert.equal(content.title.at(-1), "x");
 });
