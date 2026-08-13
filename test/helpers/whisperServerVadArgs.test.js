@@ -91,6 +91,30 @@ test("buildWhisperServerArgs includes thread count when provided", () => {
   ]);
 });
 
+test("buildWhisperServerArgs pins the GPU device when an index is given", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+    gpuDeviceIndex: 1,
+  });
+
+  assert.deepEqual(args.slice(6, 8), ["--device", "1"]);
+});
+
+test("buildWhisperServerArgs omits --device by default and for unpinned sentinels", () => {
+  for (const gpuDeviceIndex of [undefined, null, -1]) {
+    const args = WhisperServerManager.buildWhisperServerArgs({
+      modelPath: "/tmp/model.bin",
+      port: 8180,
+      language: "auto",
+      gpuDeviceIndex,
+    });
+
+    assert.equal(args.includes("--device"), false);
+  }
+});
+
 test("resolveWhisperThreads keeps whisper.cpp default on small machines", () => {
   const result = WhisperServerManager.resolveWhisperThreads(
     {},
