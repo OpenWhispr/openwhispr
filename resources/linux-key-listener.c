@@ -35,6 +35,19 @@ static int require_super = 0;
 static int use_modifiers_only = 0;
 static int target_key = 0;
 
+// Side requirement for each required modifier: SIDE_EITHER (both sides), or
+// strictly the left or right key (e.g. "RightAlt" must only fire on the right
+// Alt). Lets right-side modifier hotkeys (RightAlt, RightControl, ...) work
+// both alone and in compound combos like "RightAlt+Space".
+#define SIDE_EITHER 0
+#define SIDE_LEFT   1
+#define SIDE_RIGHT  2
+
+static int ctrl_side = SIDE_EITHER;
+static int alt_side = SIDE_EITHER;
+static int shift_side = SIDE_EITHER;
+static int super_side = SIDE_EITHER;
+
 static unsigned char held_keys[KEY_BITS_SIZE];
 
 static int device_fds[MAX_DEVICES];
@@ -58,19 +71,34 @@ static void set_key(int code, int pressed) {
         held_keys[code / 8] &= ~(1 << (code % 8));
 }
 
+// True if `side` requires this exact key code (or either side when SIDE_EITHER).
+static int side_matches(int side, int code, int left_code, int right_code) {
+    if (side == SIDE_LEFT) return code == left_code;
+    if (side == SIDE_RIGHT) return code == right_code;
+    return code == left_code || code == right_code;
+}
+
 static int is_ctrl_held(void) {
+    if (ctrl_side == SIDE_LEFT) return is_key_held(KEY_LEFTCTRL);
+    if (ctrl_side == SIDE_RIGHT) return is_key_held(KEY_RIGHTCTRL);
     return is_key_held(KEY_LEFTCTRL) || is_key_held(KEY_RIGHTCTRL);
 }
 
 static int is_alt_held(void) {
+    if (alt_side == SIDE_LEFT) return is_key_held(KEY_LEFTALT);
+    if (alt_side == SIDE_RIGHT) return is_key_held(KEY_RIGHTALT);
     return is_key_held(KEY_LEFTALT) || is_key_held(KEY_RIGHTALT);
 }
 
 static int is_shift_held(void) {
+    if (shift_side == SIDE_LEFT) return is_key_held(KEY_LEFTSHIFT);
+    if (shift_side == SIDE_RIGHT) return is_key_held(KEY_RIGHTSHIFT);
     return is_key_held(KEY_LEFTSHIFT) || is_key_held(KEY_RIGHTSHIFT);
 }
 
 static int is_super_held(void) {
+    if (super_side == SIDE_LEFT) return is_key_held(KEY_LEFTMETA);
+    if (super_side == SIDE_RIGHT) return is_key_held(KEY_RIGHTMETA);
     return is_key_held(KEY_LEFTMETA) || is_key_held(KEY_RIGHTMETA);
 }
 
@@ -90,10 +118,10 @@ static int is_modifier_code(int code) {
 }
 
 static int is_required_modifier(int code) {
-    if (require_ctrl && (code == KEY_LEFTCTRL || code == KEY_RIGHTCTRL)) return 1;
-    if (require_alt && (code == KEY_LEFTALT || code == KEY_RIGHTALT)) return 1;
-    if (require_shift && (code == KEY_LEFTSHIFT || code == KEY_RIGHTSHIFT)) return 1;
-    if (require_super && (code == KEY_LEFTMETA || code == KEY_RIGHTMETA)) return 1;
+    if (require_ctrl && side_matches(ctrl_side, code, KEY_LEFTCTRL, KEY_RIGHTCTRL)) return 1;
+    if (require_alt && side_matches(alt_side, code, KEY_LEFTALT, KEY_RIGHTALT)) return 1;
+    if (require_shift && side_matches(shift_side, code, KEY_LEFTSHIFT, KEY_RIGHTSHIFT)) return 1;
+    if (require_super && side_matches(super_side, code, KEY_LEFTMETA, KEY_RIGHTMETA)) return 1;
     return 0;
 }
 
@@ -199,6 +227,10 @@ static void parse_hotkey(const char *hotkey) {
     require_super = 0;
     use_modifiers_only = 0;
     target_key = 0;
+    ctrl_side = SIDE_EITHER;
+    alt_side = SIDE_EITHER;
+    shift_side = SIDE_EITHER;
+    super_side = SIDE_EITHER;
 
     char *token = strtok(buf, "+");
     while (token) {
@@ -206,7 +238,43 @@ static void parse_hotkey(const char *hotkey) {
         char *end = token + strlen(token) - 1;
         while (end > token && *end == ' ') *end-- = '\0';
 
-        if (strcasecmp(token, "CommandOrControl") == 0 ||
+        if (strcasecmp(token, "RightAlt") == 0 ||
+            strcasecmp(token, "RightOption") == 0) {
+            require_alt = 1;
+            alt_side = SIDE_RIGHT;
+        } else if (strcasecmp(token, "LeftAlt") == 0 ||
+                   strcasecmp(token, "LeftOption") == 0) {
+            require_alt = 1;
+            alt_side = SIDE_LEFT;
+        } else if (strcasecmp(token, "RightControl") == 0 ||
+                   strcasecmp(token, "RightCtrl") == 0) {
+            require_ctrl = 1;
+            ctrl_side = SIDE_RIGHT;
+        } else if (strcasecmp(token, "LeftControl") == 0 ||
+                   strcasecmp(token, "LeftCtrl") == 0) {
+            require_ctrl = 1;
+            ctrl_side = SIDE_LEFT;
+        } else if (strcasecmp(token, "RightShift") == 0) {
+            require_shift = 1;
+            shift_side = SIDE_RIGHT;
+        } else if (strcasecmp(token, "LeftShift") == 0) {
+            require_shift = 1;
+            shift_side = SIDE_LEFT;
+        } else if (strcasecmp(token, "RightSuper") == 0 ||
+                   strcasecmp(token, "RightMeta") == 0 ||
+                   strcasecmp(token, "RightWin") == 0 ||
+                   strcasecmp(token, "RightCommand") == 0 ||
+                   strcasecmp(token, "RightCmd") == 0) {
+            require_super = 1;
+            super_side = SIDE_RIGHT;
+        } else if (strcasecmp(token, "LeftSuper") == 0 ||
+                   strcasecmp(token, "LeftMeta") == 0 ||
+                   strcasecmp(token, "LeftWin") == 0 ||
+                   strcasecmp(token, "LeftCommand") == 0 ||
+                   strcasecmp(token, "LeftCmd") == 0) {
+            require_super = 1;
+            super_side = SIDE_LEFT;
+        } else if (strcasecmp(token, "CommandOrControl") == 0 ||
             strcasecmp(token, "Control") == 0 ||
             strcasecmp(token, "Ctrl") == 0 ||
             strcasecmp(token, "CmdOrCtrl") == 0) {
@@ -385,8 +453,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    fprintf(stderr, "Listening for: %s (code=%d, ctrl=%d, alt=%d, shift=%d, super=%d, mod_only=%d)\n",
-            argv[1], target_key, require_ctrl, require_alt, require_shift, require_super, use_modifiers_only);
+    fprintf(stderr, "Listening for: %s (code=%d, ctrl=%d/%d, alt=%d/%d, shift=%d/%d, super=%d/%d, mod_only=%d)\n",
+            argv[1], target_key, require_ctrl, ctrl_side, require_alt, alt_side,
+            require_shift, shift_side, require_super, super_side, use_modifiers_only);
 
     struct sigaction sa = { .sa_handler = signal_handler, .sa_flags = 0 };
     sigemptyset(&sa.sa_mask);

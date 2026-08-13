@@ -462,6 +462,16 @@ class GnomeShortcutManager {
     }
 
     const key = parts.pop();
+    // A modifier key used as a bare trigger (RightAlt, LeftControl, ...) can't
+    // be bound by GNOME custom keybindings — refuse so the caller falls back to
+    // a safe hotkey instead of a silent no-op.
+    if (/^(Left|Right)?(Alt|Option|Control|Ctrl|Shift|Command|Cmd|Super|Meta|Win)$/i.test(key)) {
+      return "";
+    }
+    // Side-specific modifiers (RightAlt, LeftControl, ...) can't be expressed as
+    // a GNOME modifier mask — mapping them to "" would silently bind the bare
+    // key (e.g. "RightAlt+Space" → plain Space, toggling dictation on every
+    // space press). Refuse so the caller falls back to a safe hotkey instead.
     const modifiers = parts
       .map((mod) => {
         const m = mod.toLowerCase();
@@ -469,10 +479,15 @@ class GnomeShortcutManager {
         if (m === "alt") return "<Alt>";
         if (m === "shift") return "<Shift>";
         if (m === "super" || m === "meta") return "<Super>";
-        return "";
+        return null;
       })
-      .filter(Boolean)
+      .filter((mod) => mod !== null)
       .join("");
+    if (modifiers.length < parts.length) {
+      // One or more modifier tokens were unrecognized (right-side/left-side
+      // specific or unknown) — can't faithfully express this combo.
+      return "";
+    }
 
     const keyLower = key.toLowerCase();
 

@@ -213,6 +213,34 @@ class HyprlandShortcutManager {
       return null;
     }
 
+    // Side-specific modifier keys usable as the standalone trigger of a
+    // modifier-only bind. Hyprland binds keysyms (Alt_R, Control_R, ...), so a
+    // right-side modifier hotkey ("RightAlt") maps to one of these. In a
+    // compound combo ("RightAlt+Space") the side specificity can't be expressed
+    // through Hyprland's generic modifier mask, so those are refused below.
+    const ELECTRON_TO_XKB_SIDE_KEY = {
+      rightalt: "Alt_R",
+      rightoption: "Alt_R",
+      leftalt: "Alt_L",
+      leftoption: "Alt_L",
+      rightcontrol: "Control_R",
+      rightctrl: "Control_R",
+      leftcontrol: "Control_L",
+      leftctrl: "Control_L",
+      rightshift: "Shift_R",
+      leftshift: "Shift_L",
+      rightsuper: "Super_R",
+      rightmeta: "Super_R",
+      rightwin: "Super_R",
+      rightcommand: "Super_R",
+      rightcmd: "Super_R",
+      leftsuper: "Super_L",
+      leftmeta: "Super_L",
+      leftwin: "Super_L",
+      leftcommand: "Super_L",
+      leftcmd: "Super_L",
+    };
+
     // Separate modifiers from the key
     const modifiers = [];
     let key = null;
@@ -222,10 +250,26 @@ class HyprlandShortcutManager {
       const modName = ELECTRON_TO_HYPRLAND_MOD[part.toLowerCase()];
       if (modName) {
         modifiers.push(modName);
-      } else {
-        // This is the actual key (should be the last part)
-        key = part;
+        continue;
       }
+
+      const sideKey = ELECTRON_TO_XKB_SIDE_KEY[part.toLowerCase()];
+      if (sideKey) {
+        // Side-specific modifier can only be the sole trigger key (modifier-only
+        // hotkey like "RightAlt"). As an actual modifier of a compound combo it
+        // can't be expressed faithfully — return null so the caller falls back
+        // instead of silently binding the bare key ("RightAlt+Space" → space).
+        if (key !== null) return null;
+        key = sideKey;
+        continue;
+      }
+
+      if (key !== null) {
+        // Two key parts in one hotkey is malformed — refuse rather than guess.
+        return null;
+      }
+      // This is the actual key (should be the last part)
+      key = part;
     }
 
     // If no key was found (modifier-only combo like "Control+Super"),
@@ -240,7 +284,9 @@ class HyprlandShortcutManager {
       };
       key = modToXkbKey[triggerMod] || triggerMod;
     } else if (!key && modifiers.length === 1) {
-      // Single modifier -- can't create a useful bind
+      // Single generic modifier -- can't create a useful bind
+      return null;
+    } else if (!key) {
       return null;
     }
 
