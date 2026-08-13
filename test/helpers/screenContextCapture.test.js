@@ -33,6 +33,7 @@ function loadCapture(t, { image, platform = "darwin", accessStatus = "granted" }
   let currentAccessStatus = accessStatus;
   const calls = {
     thumbnailSizes: [],
+    matchedRects: [],
     warns: [],
     setAccessStatus: (status) => {
       currentAccessStatus = status;
@@ -55,6 +56,12 @@ function loadCapture(t, { image, platform = "darwin", accessStatus = "granted" }
         screen: {
           getCursorScreenPoint: () => ({ x: 0, y: 0 }),
           getDisplayNearestPoint: () => ({ id: 1, size: { width: 2560, height: 1440 } }),
+          // A different size from the cursor's display, so tests can tell which
+          // screen a capture was taken from.
+          getDisplayMatching: (rect) => {
+            calls.matchedRects.push(rect);
+            return { id: 2, size: { width: 1512, height: 982 } };
+          },
         },
         desktopCapturer: {
           getSources: async ({ thumbnailSize }) => {
@@ -85,7 +92,7 @@ function loadCapture(t, { image, platform = "darwin", accessStatus = "granted" }
 test("a typical screenshot is sent at the highest quality", async (t) => {
   const { capture } = loadCapture(t, { image: fakeImage(() => 300_000) });
 
-  const result = await capture.captureCursorDisplay();
+  const result = await capture.captureActiveDisplay();
 
   assert.equal(result.mediaType, "image/jpeg");
   assert.equal(Buffer.from(result.data, "base64").toString(), "jpeg-82");
@@ -97,7 +104,7 @@ test("an oversized screenshot steps down the quality ladder until it fits", asyn
     image: fakeImage((quality) => (quality === 55 ? 900_000 : 2_000_000)),
   });
 
-  const result = await capture.captureCursorDisplay();
+  const result = await capture.captureActiveDisplay();
 
   assert.equal(Buffer.from(result.data, "base64").toString(), "jpeg-55");
 });
@@ -109,7 +116,7 @@ test("a screenshot that no quality fits is resized before a final attempt", asyn
     image: fakeImage((_quality, edge) => (edge < 1568 ? 800_000 : 4_000_000), { resizes }),
   });
 
-  const result = await capture.captureCursorDisplay();
+  const result = await capture.captureActiveDisplay();
 
   assert.deepEqual(resizes, [1024]);
   assert.equal(Buffer.from(result.data, "base64").toString(), "jpeg-55");
@@ -118,7 +125,7 @@ test("a screenshot that no quality fits is resized before a final attempt", asyn
 test("a screenshot that still cannot fit is dropped rather than sent oversized", async (t) => {
   const { capture } = loadCapture(t, { image: fakeImage(() => 9_000_000) });
 
-  assert.equal(await capture.captureCursorDisplay(), null);
+  assert.equal(await capture.captureActiveDisplay(), null);
 });
 
 test("capture is skipped when screen recording access is not granted", async (t) => {
@@ -127,7 +134,7 @@ test("capture is skipped when screen recording access is not granted", async (t)
     accessStatus: "denied",
   });
 
-  assert.equal(await capture.captureCursorDisplay(), null);
+  assert.equal(await capture.captureActiveDisplay(), null);
   assert.equal(calls.thumbnailSizes.length, 0);
   // The skip must be diagnosable from the debug log, with the TCC status.
   assert.deepEqual(calls.warns, [
@@ -185,8 +192,32 @@ test("non-macOS platforms never need a relaunch", (t) => {
 test("the captured thumbnail is bounded to the vision-model edge", async (t) => {
   const { capture, calls } = loadCapture(t, { image: fakeImage(() => 300_000) });
 
-  await capture.captureCursorDisplay();
+  await capture.captureActiveDisplay();
 
   const [size] = calls.thumbnailSizes;
   assert.equal(Math.max(size.width, size.height), 1568);
+});
+
+// On a multi-monitor desk the cursor often rests on a different screen than the
+// app being dictated into, and photographing the cursor's screen sends the agent
+// a picture of the wrong monitor.
+test("a target window rect decides the screen, not the cursor", async (t) => {
+  const { capture, calls } = loadCapture(t, { image: fakeImage(() => 300_000) });
+  const targetBounds = { x: 0, y: 33, width: 1512, height: 949 };
+
+  await capture.captureActiveDisplay(targetBounds);
+
+  assert.deepEqual(calls.matchedRects, [targetBounds]);
+  // The matched display is 1512x982, already inside the edge budget; the
+  // cursor's 2560x1440 screen would have been scaled to 1568 wide instead.
+  assert.deepEqual(calls.thumbnailSizes, [{ width: 1512, height: 982 }]);
+});
+
+test("without a target rect the cursor's screen is still used", async (t) => {
+  const { capture, calls } = loadCapture(t, { image: fakeImage(() => 300_000) });
+
+  await capture.captureActiveDisplay();
+
+  assert.deepEqual(calls.matchedRects, []);
+  assert.equal(calls.thumbnailSizes[0].width, 1568);
 });

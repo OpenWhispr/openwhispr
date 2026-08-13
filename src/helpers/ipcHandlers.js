@@ -4557,7 +4557,14 @@ class IPCHandlers {
       // return it. A signed-out user has no workspace and no policy; managed
       // users are gated even if a stale renderer asks. null matches capture's
       // contract — a screenshot must never break the dictation it accompanies.
-      const capturePromise = screenContextCapture.captureCursorDisplay();
+      // Photographs the display the dictation target is on rather than the one
+      // under the cursor. The panel reposition asks for the same rect at press
+      // time, so this read is normally already cached.
+      const targetPid = this.textEditMonitor?.lastTargetPid;
+      const capturePromise = (async () =>
+        screenContextCapture.captureActiveDisplay(
+          targetPid ? await this.textEditMonitor.getTargetWindowBounds(targetPid) : null
+        ))();
       const authHeaders = await getAuthHeader(event);
       if (authHeaders.Authorization || authHeaders.Cookie) {
         // Bound the verdict wait: a lapsed policy TTL on a degraded network

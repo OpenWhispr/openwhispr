@@ -1096,11 +1096,23 @@ class WindowManager {
     this.agentWindow.setBounds(bounds);
   }
 
-  _repositionToCursorDisplay() {
+  // The display the user is working on is the one showing the app being dictated
+  // into, which on a multi-monitor desk is often not the one the mouse rests on.
+  // Falls back to the cursor when the target has no readable window (non-macOS,
+  // no target captured yet, or an app with no ordinary window).
+  async _resolveActiveDisplay() {
+    const pid = this.textEditMonitor?.lastTargetPid;
+    const bounds = pid ? await this.textEditMonitor.getTargetWindowBounds(pid) : null;
+    return bounds
+      ? screen.getDisplayMatching(bounds)
+      : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  }
+
+  async _repositionToActiveDisplay() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
 
-    const cursorPos = screen.getCursorScreenPoint();
-    const cursorDisplay = screen.getDisplayNearestPoint(cursorPos);
+    const activeDisplay = await this._resolveActiveDisplay();
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
 
     const currentBounds = this.mainWindow.getBounds();
     const currentDisplay = screen.getDisplayNearestPoint({
@@ -1108,7 +1120,7 @@ class WindowManager {
       y: currentBounds.y + currentBounds.height / 2,
     });
 
-    if (currentDisplay.id === cursorDisplay.id) {
+    if (currentDisplay.id === activeDisplay.id) {
       // Nearest-display math can't tell "on this display" from "just past its
       // edge", so a rearranged monitor or a drag that ended over another
       // display can leave the panel stranded in dead space, looking like the
@@ -1121,7 +1133,7 @@ class WindowManager {
     }
 
     const newPos = WindowPositionUtil.getMainWindowPosition(
-      cursorDisplay,
+      activeDisplay,
       { width: currentBounds.width, height: currentBounds.height },
       this._panelStartPosition
     );
@@ -1131,7 +1143,10 @@ class WindowManager {
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this._repositionToCursorDisplay();
+      // Reading the target's window costs a helper spawn, so the panel is shown
+      // now and moves when the answer lands — only ever a visible hop when it
+      // was on the wrong display, which is the case being corrected.
+      void this._repositionToActiveDisplay();
 
       if (this.mainWindow.isMinimized()) {
         this.mainWindow.restore();

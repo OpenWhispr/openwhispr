@@ -64,9 +64,12 @@ function encodeWithinBudget(image) {
   return smallest.length <= MAX_ENCODED_BYTES ? smallest : null;
 }
 
+// Photographs the display showing the app being dictated into, given that app's
+// window rect; without one it falls back to the display under the cursor, which
+// on a multi-monitor desk is often not the screen the user is working on.
 // Returns null on any failure — a screenshot must never break the dictation
 // it accompanies.
-async function captureCursorDisplay() {
+async function captureActiveDisplay(targetBounds = null) {
   const accessStatus = getAccessStatus();
   if (accessStatus !== "granted") {
     debugLogger.warn("Screen context capture skipped", { accessStatus }, "screenContext");
@@ -74,8 +77,9 @@ async function captureCursorDisplay() {
   }
 
   try {
-    const cursor = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(cursor);
+    const display = targetBounds
+      ? screen.getDisplayMatching(targetBounds)
+      : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const scale = Math.min(1, MAX_EDGE_PX / Math.max(display.size.width, display.size.height));
     const thumbnailSize = {
       width: Math.max(1, Math.round(display.size.width * scale)),
@@ -115,4 +119,4 @@ async function requestAccess() {
   return getAccessStatus();
 }
 
-module.exports = { getAccessStatus, getAccessResult, captureCursorDisplay, requestAccess };
+module.exports = { getAccessStatus, getAccessResult, captureActiveDisplay, requestAccess };

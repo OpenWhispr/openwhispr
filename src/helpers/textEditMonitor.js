@@ -124,6 +124,7 @@ class TextEditMonitor extends EventEmitter {
     this.lastTargetPid = null;
     this._captureTargetPromise = null;
     this._lastCaptureAt = 0;
+    this._windowBounds = null;
     // PIDs whose AX tree never yields a focused element (see
     // isPersistentAxNoValueFailure). A recycled PID only costs a detour via
     // AppleScript, which is still correct.
@@ -319,6 +320,47 @@ class TextEditMonitor extends EventEmitter {
         }
       }
     );
+  }
+
+  /**
+   * macOS: the target app's largest on-screen window rect, used to decide which
+   * display the user is actually working on. Resolves to null when the app has
+   * no ordinary window (or off macOS), leaving the caller to fall back to the
+   * cursor. Cached briefly so the dictation panel and the screen-context capture
+   * — which both ask at press time — share one spawn.
+   */
+  async getTargetWindowBounds(pid, timeoutMs = 700) {
+    if (process.platform !== "darwin" || !pid) return null;
+    if (this._windowBounds?.pid === pid && Date.now() - this._windowBounds.at < 250) {
+      return this._windowBounds.bounds;
+    }
+
+    const resolved = this.resolveBinary();
+    if (!resolved) return null;
+
+    const bounds = await new Promise((resolve) => {
+      execFile(
+        resolved.command,
+        [...resolved.args, "--window-bounds", String(pid)],
+        { timeout: timeoutMs },
+        (error, stdout) => {
+          const match = stdout?.match(/^BOUNDS:(-?\d+),(-?\d+),(\d+),(\d+)$/m);
+          if (!match) {
+            resolve(null);
+            return;
+          }
+          resolve({
+            x: Number(match[1]),
+            y: Number(match[2]),
+            width: Number(match[3]),
+            height: Number(match[4]),
+          });
+        }
+      );
+    });
+
+    this._windowBounds = { pid, bounds, at: Date.now() };
+    return bounds;
   }
 
   /**
