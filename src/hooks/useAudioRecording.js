@@ -88,10 +88,9 @@ export const useAudioRecording = (toast, options = {}) => {
           audioManagerRef.current.beginScreenContextCapture();
         }
 
-        // The selection to edit is whatever was highlighted when the hotkey was
-        // pressed, so read it now rather than after transcription: it resolves
-        // while the user is still speaking instead of adding its own round trip
-        // to the wait between speaking and pasting.
+        // The selection to edit is whatever was highlighted at press time, so
+        // read it now: it resolves while the user speaks instead of adding a
+        // round trip after transcription.
         if (voiceAgentRequested) {
           audioManagerRef.current.beginSelectionCapture();
         }

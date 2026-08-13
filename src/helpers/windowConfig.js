@@ -171,9 +171,8 @@ class WindowPositionUtil {
     }
 
     // Clamped to the display's own work area, never to zero: a monitor placed
-    // above or left of the primary one has a negative origin, and flooring at
-    // zero drops the window onto a coordinate that display doesn't cover — dead
-    // space next to the primary screen, where the overlay is simply invisible.
+    // above or left of the primary one has a negative origin, so flooring at zero
+    // lands the window on a coordinate that display doesn't cover.
     return {
       ...WindowPositionUtil.clampToWorkArea({ x, y, width, height }, display),
       width,
@@ -182,9 +181,8 @@ class WindowPositionUtil {
   }
 
   // Keeps a window's whole frame inside one display's work area. Displays of
-  // different sizes leave dead space beside the smaller one (a 1512px laptop
-  // screen under a wider external monitor), and a window parked there is
-  // invisible even though the window server still reports it on screen.
+  // different sizes leave dead space beside the smaller one, and a window parked
+  // there is invisible even though the window server still reports it on screen.
   static clampToWorkArea(bounds, display) {
     const workArea = display.workArea || display.bounds;
     return {

@@ -4,10 +4,9 @@ if !AXIsProcessTrusted() {
     exit(2)
 }
 
-// Selection capture sends ⌘C instead of ⌘V and reports which app received it,
-// so the caller can tell a copied selection from a target that changed
-// underneath it. With no arguments this stays exactly what the paste path
-// expects: ⌘V, no output.
+// Selection capture sends ⌘C and reports which app received it, so the caller
+// can tell a copied selection from a target that changed underneath it. With no
+// arguments this stays what the paste path expects: ⌘V, no output.
 let copyMode = CommandLine.arguments.contains("--copy")
 let virtualKey: CGKeyCode = copyMode ? 0x08 : 0x09  // kVK_ANSI_C : kVK_ANSI_V
 

@@ -15,10 +15,9 @@ const ACTIVATE_CONFIRM_DELAY_MS = 25;
 // across that burst. Kept short so back-to-back dictations in different apps
 // still get a fresh capture.
 const TARGET_CAPTURE_FRESHNESS_MS = 250;
-// The binary retries the focused-element read 5 times with 300ms between
-// attempts, so a run where every attempt fails takes just over 1.2s. A tighter
-// timeout kills it mid-ladder, and a killed run's verdict is discarded, so the
-// app would never be learned and every read would pay the full ladder.
+// Must outlast the binary's retry ladder (5 attempts, 300ms apart, ~1.25s): a
+// killed run's verdict is discarded, so a tighter timeout means the app below is
+// never learned and every read pays the full ladder.
 const SELECTED_TEXT_TIMEOUT_MS = 1600;
 // AXError -25212 (kAXErrorNoValue) on the focused-element read is how
 // Chromium/Electron apps respond while their AX tree is dormant, making the
@@ -324,14 +323,17 @@ class TextEditMonitor extends EventEmitter {
 
   /**
    * macOS: the target app's largest on-screen window rect, used to decide which
-   * display the user is actually working on. Resolves to null when the app has
-   * no ordinary window (or off macOS), leaving the caller to fall back to the
-   * cursor. Cached briefly so the dictation panel and the screen-context capture
-   * — which both ask at press time — share one spawn.
+   * display the user is working on. Resolves to null when the app has no
+   * ordinary window (or off macOS), leaving the caller to fall back to the
+   * cursor. Cached over the same press-time burst as captureTargetPid, so the
+   * dictation panel and the screen-context capture share one spawn.
    */
   async getTargetWindowBounds(pid, timeoutMs = 700) {
     if (process.platform !== "darwin" || !pid) return null;
-    if (this._windowBounds?.pid === pid && Date.now() - this._windowBounds.at < 250) {
+    if (
+      this._windowBounds?.pid === pid &&
+      Date.now() - this._windowBounds.at < TARGET_CAPTURE_FRESHNESS_MS
+    ) {
       return this._windowBounds.bounds;
     }
 

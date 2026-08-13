@@ -22,19 +22,17 @@ export function buildSelectionEditUserPrompt(spokenInstruction, selectedText) {
   });
 }
 
-// Capture codes that mean "this target can never report a selection", as
-// opposed to "a selection may exist and the read of it failed". They keep the
-// pre-selection-editing Voice Agent behavior — type at the cursor — because
-// aborting would make the agent unusable in the app instead of merely
-// unable to edit in place.
+// Codes meaning "this target can never report a selection", as opposed to "a
+// selection may exist and the read failed". They fall back to typing at the
+// cursor — the Voice Agent's behavior before selection editing existed — because
+// losing in-place editing is acceptable where losing the command is not.
 const STANDALONE_CAPTURE_CODES = new Set([
   "target_unavailable",
   "copy_helper_unavailable",
   "selection_manager_unavailable",
   "unsupported_platform",
-  // macOS reports this once neither the accessibility tree nor a synthetic copy
-  // could inspect the target, leaving a selection neither readable nor ruled
-  // out. Losing in-place editing there is acceptable; losing the command is not.
+  // macOS: neither the accessibility tree nor a synthetic copy could inspect the
+  // app, so a selection is neither readable nor ruled out.
   "accessibility_unavailable",
 ]);
 

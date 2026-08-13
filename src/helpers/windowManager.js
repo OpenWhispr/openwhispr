@@ -1148,9 +1148,9 @@ class WindowManager {
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      // Reading the target's window costs a helper spawn, so the panel is shown
-      // now and moves when the answer lands — only ever a visible hop when it
-      // was on the wrong display, which is the case being corrected.
+      // Reading the target's window costs a helper spawn, so show now and move
+      // when the answer lands: a visible hop only happens when the panel was on
+      // the wrong display, which is the case being corrected.
       void this._repositionToActiveDisplay();
 
       if (this.mainWindow.isMinimized()) {

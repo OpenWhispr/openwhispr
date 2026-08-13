@@ -69,11 +69,11 @@ guard CommandLine.arguments.count > pidArgumentIndex,
 
 monitoredPid = targetPid
 
-// Reports the target's frontmost window rect so the caller can tell which
-// display the user is actually working on. Deliberately asks the window server
-// rather than accessibility: AXFocusedWindow is unavailable in exactly the apps
-// whose accessibility tree stays dormant (Chromium), and window bounds need no
-// Screen Recording permission — only window *titles* do.
+// Reports the target's window rect so the caller can tell which display the user
+// is working on. Asks the window server rather than accessibility on purpose:
+// AXFocusedWindow is unavailable in exactly the apps whose accessibility tree
+// stays dormant (Chromium), and window bounds need no Screen Recording
+// permission — only window *titles* do.
 if windowBoundsMode {
     let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
     let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []

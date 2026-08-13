@@ -706,8 +706,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // cancelled voice-agent recording, even after the setting was turned
     // off). A live voice-agent start re-captures right after this call.
     this.screenContextPromise = null;
-    // Same for a prefetched selection: bounding it to one recording keeps a read
-    // from an earlier app out of this command, whatever happened to that one.
+    // Same for a prefetched selection: bounded to one recording, so a read taken
+    // in an earlier app can never be edited in place by this command.
     this.selectionCapturePromise = null;
   }
 
@@ -732,12 +732,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // Kicked off at voice-agent recording start, alongside the screenshot, so the
-  // read resolves while the user is still speaking. The rejection is handled
-  // twice over: once here, so a failure nobody is awaiting yet isn't an
-  // unhandled rejection, and again by the awaiting caller, which still sees the
-  // original error.
+  // read resolves while the user is still speaking.
   beginSelectionCapture() {
     this.selectionCapturePromise = window.electronAPI?.captureSelectedText?.() ?? null;
+    // Marks the stored promise handled without consuming it: a failure nobody is
+    // awaiting yet must not surface as an unhandled rejection, and the awaiting
+    // caller must still see the original error.
     this.selectionCapturePromise?.catch(() => {});
   }
 
@@ -2270,10 +2270,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const captureDisposition = getSelectionCaptureDisposition(capture);
 
     if (captureDisposition === "standalone") {
-      // No selection, or a target that can never report one (the user skipped
-      // macOS Accessibility, or neither accessibility nor a synthetic copy can
-      // inspect the app): preserve the Voice Agent behavior of typing at the
-      // cursor rather than losing the command.
+      // Nothing selected, or a target that can never report one: type at the
+      // cursor (see STANDALONE_CAPTURE_CODES).
       return this.processWithReasoningModel(text, model, agentName, config);
     }
 

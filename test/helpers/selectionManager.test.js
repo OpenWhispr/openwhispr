@@ -412,6 +412,30 @@ test("a missing copy helper stays non-fatal so the command still runs", async ()
   });
 });
 
+// The clipboard fallback is macOS-only; Windows and Linux keep their own capture
+// paths untouched.
+test("a win32 read never reaches the macOS clipboard fallback", async () => {
+  let macCalled = false;
+  const manager = new SelectionManager({
+    clipboardManager: {
+      runClipboardOperation: (operation) => operation(),
+      resolveWindowsFastPasteBinary: () => null,
+    },
+    textEditMonitor: { lastTargetPid: 42 },
+    platform: "win32",
+    now: () => 1000,
+  });
+  manager._readMacSelectionViaClipboard = async () => {
+    macCalled = true;
+    return { status: "selected", text: "wrong platform" };
+  };
+
+  const result = await manager._readCurrentSelection({ kind: "win-hwnd", id: "7" });
+
+  assert.equal(macCalled, false);
+  assert.deepEqual(result, { status: "unavailable", code: "copy_helper_unavailable" });
+});
+
 test("empty replacement output is rejected without consuming a paste", async () => {
   const { manager, pastes } = makeHarness({ selections: ["original"] });
   const capture = await manager.captureSelectedText();

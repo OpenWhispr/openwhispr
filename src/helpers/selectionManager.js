@@ -18,9 +18,9 @@ const ATSPI_TARGET_TIMEOUT_MS = 2000;
 // Editors that copy the whole current line when Ctrl+C (⌘C on macOS) lands with
 // an empty selection (VS Code's editor.emptySelectionClipboard, Scintilla,
 // JetBrains, Visual Studio), making a bare caret look like a selection to the
-// synthetic-copy capture. Matched against the target's exe name and window class
-// on Windows/Linux, and against the localized app name on macOS — which is why
-// the JetBrains IDEs need both their executable and app-name spellings.
+// synthetic-copy capture. Matched against exe name and window class on
+// Windows/Linux and against the localized app name on macOS, so the JetBrains
+// IDEs need both spellings.
 const LINE_COPY_EDITOR_SIGNATURES = [
   "code", // VS Code and forks (VSCodium, code-oss)
   "cursor",
@@ -277,9 +277,6 @@ class SelectionManager {
 
   async _readMacSelectionViaClipboard(pid, expectedTarget) {
     const binary = this.clipboardManager.resolveFastPasteBinary?.();
-    // Without the CGEvent helper nothing is left that can inspect this app, and
-    // an unreadable target must cost the user in-place editing, not the command
-    // itself — accessibility_unavailable falls back to standalone dictation.
     if (!binary) return { status: "unavailable", code: "accessibility_unavailable" };
 
     const capture = await this._captureViaClipboard(
@@ -295,15 +292,15 @@ class SelectionManager {
       expectedTarget || { kind: "mac-pid", pid }
     );
 
-    // A copy that never landed leaves the selection exactly as unknown as the
+    // A copy that never landed leaves the selection as unknown as the
     // accessibility read did, so it gets the same non-fatal treatment.
     if (capture.status === "unavailable" && capture.code === "copy_failed") {
       return { status: "unavailable", code: "accessibility_unavailable" };
     }
-    // GPU-rendered terminals (Ghostty, Alacritty, kitty) expose no accessibility
-    // tree but do honor ⌘C, so they only reach selection editing through this
-    // path. Replacement text typed back into a shell executes on its embedded
-    // newlines, so their selections are declined here exactly as on Linux.
+    // Replacement text typed into a shell executes on its embedded newlines, so
+    // terminal selections are declined exactly as on Linux. GPU-rendered
+    // terminals (Ghostty, Alacritty, kitty) have no accessibility tree, so this
+    // path is the only way they reach selection editing at all.
     if (
       capture.status === "selected" &&
       this.clipboardManager.isTerminalSignature?.(capture.target?.appName)
