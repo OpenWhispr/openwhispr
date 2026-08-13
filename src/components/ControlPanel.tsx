@@ -53,6 +53,7 @@ import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { eligibleGpuOffers } from "../utils/gpuBannerPolicy";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -164,6 +165,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     useLocalWhisper,
     localTranscriptionProvider,
     useCleanupModel,
+    cleanupMode,
     setUseLocalWhisper,
     setCloudTranscriptionMode,
   } = useSettings();
@@ -389,9 +391,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   useEffect(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
+    const offers = eligibleGpuOffers({
+      useLocalWhisper,
+      localTranscriptionProvider,
+      useCleanupModel,
+      cleanupMode,
+    });
     const detect = async () => {
       const results = { transcription: false, intelligence: false };
-      if (useLocalWhisper && localTranscriptionProvider === "whisper") {
+      if (offers.transcription) {
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
           if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
@@ -402,7 +410,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           }
         } catch {}
       }
-      if (useCleanupModel) {
+      if (offers.intelligence) {
         try {
           const [gpu, vulkan] = await Promise.all([
             window.electronAPI?.detectVulkanGpu?.(),
@@ -414,7 +422,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       setGpuAccelAvailable(results);
     };
     detect();
-  }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, gpuBannerDismissed]);
+  }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, cleanupMode, gpuBannerDismissed]);
 
   useEffect(() => {
     const drain = async () => {
