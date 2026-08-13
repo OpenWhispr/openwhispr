@@ -28,6 +28,7 @@ const PERSISTED_KEYS = [
   ...SECRET_KEYS,
   "LOCAL_TRANSCRIPTION_PROVIDER",
   "PARAKEET_MODEL",
+  "PARAKEET_IDLE_TIMEOUT_MS",
   "LOCAL_WHISPER_MODEL",
   "CLEANUP_PROVIDER",
   "LOCAL_CLEANUP_MODEL",
@@ -498,6 +499,19 @@ class EnvironmentManager {
     const parsed = Number(ms);
     const value = Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
     const result = this._saveKey("WHISPER_IDLE_TIMEOUT_MS", String(value));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return { ...result, idleTimeoutMs: value };
+  }
+
+  getParakeetIdleTimeoutMs() {
+    const parsed = parseInt(this._getKey("PARAKEET_IDLE_TIMEOUT_MS"), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  }
+
+  saveParakeetIdleTimeoutMs(ms) {
+    const parsed = Number(ms);
+    const value = Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+    const result = this._saveKey("PARAKEET_IDLE_TIMEOUT_MS", String(value));
     this.saveAllKeysToEnvFile().catch(() => {});
     return { ...result, idleTimeoutMs: value };
   }

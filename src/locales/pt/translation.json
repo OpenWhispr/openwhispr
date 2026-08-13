@@ -1921,6 +1921,18 @@
           "1800000": "30 minutos",
           "3600000": "60 minutos"
         }
+      },
+      "idleUnloadParakeet": {
+        "title": "Desligamento por inatividade",
+        "description": "Desliga automaticamente o servidor Parakeet local após um período de inatividade para liberar RAM e VRAM",
+        "label": "Desligar após",
+        "options": {
+          "0": "Nunca",
+          "300000": "5 minutos",
+          "900000": "15 minutos",
+          "1800000": "30 minutos",
+          "3600000": "60 minutos"
+        }
       }
     },
     "intelligence": {

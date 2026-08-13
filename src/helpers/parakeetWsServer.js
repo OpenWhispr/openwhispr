@@ -31,6 +31,24 @@ const ONLINE_TIMEOUT_PER_AUDIO_SECOND_MS = 2000;
 const ONLINE_FINISH_IDLE_TIMEOUT_MS = 10000;
 // Must cover the model's 560ms chunk so the flush decodes the final words.
 const ONLINE_END_TAIL_PADDING_S = 0.6;
+// 0 = never unload; opt-in only, so existing always-on behavior is unchanged by default.
+const DEFAULT_PARAKEET_IDLE_TIMEOUT_MS = 0;
+
+function parsePositiveInteger(value) {
+  const normalized = String(value ?? "").trim();
+  if (!/^\d+$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return parsed > 0 ? parsed : null;
+}
+
+function resolveParakeetIdleTimeoutMs(env = process.env) {
+  const parsed = parsePositiveInteger(env.PARAKEET_IDLE_TIMEOUT_MS);
+  return parsed || DEFAULT_PARAKEET_IDLE_TIMEOUT_MS;
+}
+
+function shouldSkipParakeetRestart({ ready, modelNameMatches }) {
+  return ready && modelNameMatches;
+}
 
 class ParakeetWsServer {
   constructor() {
@@ -44,6 +62,11 @@ class ParakeetWsServer {
     this.startingModelName = null;
     this.healthCheckInterval = null;
     this.cachedBinaryPaths = {};
+    this.idleTimer = null;
+    this.stopPromise = null;
+    // Online streaming (createOnlineStream) can outlive a single transcribe()
+    // call; the idle timer must stay disarmed for as long as any stream is open.
+    this.activeStreamCount = 0;
   }
 
   getWsBinaryPath(runtime = "offline") {
@@ -73,7 +96,14 @@ class ParakeetWsServer {
       if (this.startingModelName === modelName) return this.startupPromise;
       await this.startupPromise.catch(() => {});
     }
-    if (this.ready && this.modelName === modelName) return;
+    if (
+      shouldSkipParakeetRestart({
+        ready: this.ready,
+        modelNameMatches: this.modelName === modelName,
+      })
+    ) {
+      return;
+    }
 
     this.startingModelName = modelName;
     // Assigned before any await so concurrent callers can never double-spawn.
@@ -173,6 +203,7 @@ class ParakeetWsServer {
 
     await this._waitForReady(readyFromStderr, () => ({ stderr: stderrBuffer, exitCode }));
     this._startHealthCheck();
+    this.resetIdleTimer();
 
     debugLogger.info("parakeet-ws server started successfully", {
       port: this.port,
@@ -253,16 +284,40 @@ class ParakeetWsServer {
     }
   }
 
+  resetIdleTimer() {
+    this.clearIdleTimer();
+    if (this.activeStreamCount > 0) return;
+
+    const timeoutMs = resolveParakeetIdleTimeoutMs();
+    if (!timeoutMs) return;
+
+    this.idleTimer = setTimeout(() => {
+      debugLogger.info("parakeet-ws server idle timeout reached, stopping to free RAM/VRAM", {
+        timeoutMs,
+        model: this.modelName,
+      });
+      this.stop();
+    }, timeoutMs);
+  }
+
+  clearIdleTimer() {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
   transcribe(samplesBuffer, sampleRate) {
     if (!this.ready || !this.process) {
       throw new Error("parakeet-ws server is not running");
     }
 
-    if (this.modelRuntime === "online") {
-      return this._transcribeOnline(samplesBuffer);
-    }
-
-    return this._transcribeOffline(samplesBuffer, sampleRate);
+    this.clearIdleTimer();
+    const result =
+      this.modelRuntime === "online"
+        ? this._transcribeOnline(samplesBuffer)
+        : this._transcribeOffline(samplesBuffer, sampleRate);
+    return result.finally(() => this.resetIdleTimer());
   }
 
   _transcribeOffline(samplesBuffer, sampleRate) {
@@ -394,6 +449,11 @@ class ParakeetWsServer {
       throw new Error("createOnlineStream requires an online-runtime model");
     }
 
+    // Server-level idle-unload timer (this.idleTimer) — distinct from the
+    // per-stream stall backstop below (the local idleTimer/armIdleTimer pair).
+    this.clearIdleTimer();
+    this.activeStreamCount += 1;
+
     const results = createOnlineAccumulator();
     const pendingChunks = [];
     let finishResolve = null;
@@ -419,6 +479,8 @@ class ParakeetWsServer {
       if (closed) return;
       closed = true;
       clearIdleTimer();
+      this.activeStreamCount = Math.max(0, this.activeStreamCount - 1);
+      if (this.activeStreamCount === 0) this.resetIdleTimer();
       if (finishResolve) finishResolve({ text: results.text(), truncated });
     };
 
@@ -529,12 +591,23 @@ class ParakeetWsServer {
   }
 
   async stop() {
-    this.stopHealthCheck();
-
-    if (!this.process) {
-      this.ready = false;
-      return;
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = this._doStop();
+    try {
+      await this.stopPromise;
+    } finally {
+      this.stopPromise = null;
     }
+  }
+
+  async _doStop() {
+    this.clearIdleTimer();
+    this.stopHealthCheck();
+    // Flip before the only await below — a start()/transcribe() call
+    // arriving mid-teardown must never see a server that still looks alive.
+    this.ready = false;
+
+    if (!this.process) return;
 
     debugLogger.debug("Stopping parakeet-ws server");
 
@@ -545,7 +618,6 @@ class ParakeetWsServer {
     }
 
     this.process = null;
-    this.ready = false;
     this.port = null;
     this.modelName = null;
     this.modelDir = null;
@@ -559,8 +631,11 @@ class ParakeetWsServer {
       starting: this.startupPromise !== null,
       port: this.port,
       modelName: this.modelName || this.startingModelName,
+      idleTimeoutMs: resolveParakeetIdleTimeoutMs(),
     };
   }
 }
 
 module.exports = ParakeetWsServer;
+module.exports.resolveParakeetIdleTimeoutMs = resolveParakeetIdleTimeoutMs;
+module.exports.shouldSkipParakeetRestart = shouldSkipParakeetRestart;

@@ -393,6 +393,8 @@ function useSettingsInternal() {
     setWhisperVadSamplesOverlap: store.setWhisperVadSamplesOverlap,
     whisperIdleTimeoutMs: store.whisperIdleTimeoutMs,
     setWhisperIdleTimeoutMs: store.setWhisperIdleTimeoutMs,
+    parakeetIdleTimeoutMs: store.parakeetIdleTimeoutMs,
+    setParakeetIdleTimeoutMs: store.setParakeetIdleTimeoutMs,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,

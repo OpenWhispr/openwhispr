@@ -4106,6 +4106,14 @@ class IPCHandlers {
       return this.environmentManager.saveWhisperIdleTimeoutMs(ms);
     });
 
+    ipcMain.handle("get-parakeet-idle-timeout", async () => {
+      return this.environmentManager.getParakeetIdleTimeoutMs();
+    });
+
+    ipcMain.handle("save-parakeet-idle-timeout", async (event, ms) => {
+      return this.environmentManager.saveParakeetIdleTimeoutMs(ms);
+    });
+
     ipcMain.handle("get-ui-language", async () => {
       return this.environmentManager.getUiLanguage();
     });

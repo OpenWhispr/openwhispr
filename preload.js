@@ -539,6 +539,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getWhisperIdleTimeoutMs: () => ipcRenderer.invoke("get-whisper-idle-timeout"),
   saveWhisperIdleTimeoutMs: (ms) => ipcRenderer.invoke("save-whisper-idle-timeout", ms),
 
+  // Parakeet server idle-unload timeout persistence, same pattern as whisper's above
+  getParakeetIdleTimeoutMs: () => ipcRenderer.invoke("get-parakeet-idle-timeout"),
+  saveParakeetIdleTimeoutMs: (ms) => ipcRenderer.invoke("save-parakeet-idle-timeout", ms),
+
   saveAllKeysToEnv: () => ipcRenderer.invoke("save-all-keys-to-env"),
   syncStartupPreferences: (prefs) => ipcRenderer.invoke("sync-startup-preferences", prefs),
 

@@ -2228,6 +2228,18 @@
           "1800000": "30 minutes",
           "3600000": "60 minutes"
         }
+      },
+      "idleUnloadParakeet": {
+        "title": "Idle Unload",
+        "description": "Automatically stop the local Parakeet server after a period of inactivity to free up RAM and VRAM",
+        "label": "Unload after",
+        "options": {
+          "0": "Never",
+          "300000": "5 minutes",
+          "900000": "15 minutes",
+          "1800000": "30 minutes",
+          "3600000": "60 minutes"
+        }
       }
     },
     "intelligence": {

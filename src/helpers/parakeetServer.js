@@ -146,6 +146,9 @@ class ParakeetServerManager {
       for (let offset = 0; offset < samples.length; offset += maxSegmentBytes) {
         const end = Math.min(offset + maxSegmentBytes, samples.length);
         const segment = samples.subarray(offset, end);
+        // A long enough recording can cross an idle-unload timeout between segments;
+        // start() is a no-op when already running, so this is cheap the common case.
+        await this.wsServer.start(modelName, modelDir, runtime);
         let result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
         totalElapsed += result.elapsed || 0;
         if (!result.text && computeFloat32RMS(segment) >= SILENCE_RMS_THRESHOLD) {

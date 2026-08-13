@@ -108,6 +108,7 @@ import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
+  PARAKEET_IDLE_TIMEOUT_CHOICES,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
   WHISPER_IDLE_TIMEOUT_CHOICES,
@@ -881,6 +882,8 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
     whisperIdleTimeoutMs,
     setWhisperIdleTimeoutMs,
+    parakeetIdleTimeoutMs,
+    setParakeetIdleTimeoutMs,
   } = useSettings();
 
   const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
@@ -1713,6 +1716,36 @@ export default function SettingsPage({
                 {WHISPER_IDLE_TIMEOUT_CHOICES.map((ms) => (
                   <SelectItem key={ms} value={String(ms)}>
                     {t(`settingsPage.transcription.idleUnload.options.${ms}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+    </div>
+  );
+
+  const renderParakeetIdleTimeoutSettings = () => (
+    <div>
+      <SectionHeader
+        title={t("settingsPage.transcription.idleUnloadParakeet.title")}
+        description={t("settingsPage.transcription.idleUnloadParakeet.description")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow label={t("settingsPage.transcription.idleUnloadParakeet.label")}>
+            <Select
+              value={String(parakeetIdleTimeoutMs)}
+              onValueChange={(value) => setParakeetIdleTimeoutMs(Number(value))}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PARAKEET_IDLE_TIMEOUT_CHOICES.map((ms) => (
+                  <SelectItem key={ms} value={String(ms)}>
+                    {t(`settingsPage.transcription.idleUnloadParakeet.options.${ms}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -4307,6 +4340,9 @@ EOF`,
                 {transcriptionMode === "local" &&
                   localTranscriptionProvider !== "nvidia" &&
                   renderWhisperIdleTimeoutSettings()}
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider === "nvidia" &&
+                  renderParakeetIdleTimeoutSettings()}
               </div>
             )}
             renderNoteRecording={() => (
@@ -4318,6 +4354,9 @@ EOF`,
                 {transcriptionMode === "local" &&
                   localTranscriptionProvider !== "nvidia" &&
                   renderWhisperIdleTimeoutSettings()}
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider === "nvidia" &&
+                  renderParakeetIdleTimeoutSettings()}
               </div>
             )}
             renderUpload={() => (
