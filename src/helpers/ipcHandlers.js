@@ -1134,6 +1134,10 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("control-panel-set-compact", (_event, compact) =>
+      this.windowManager.setControlPanelCompact(Boolean(compact))
+    );
+
     ipcMain.handle("window-close", () => {
       if (this.windowManager.controlPanelWindow) {
         this.windowManager.controlPanelWindow.close();

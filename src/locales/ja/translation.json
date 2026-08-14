@@ -1113,7 +1113,6 @@
     "defaultTestInputTranslate": "今日はいい天気ですね、散歩に行きませんか？"
   },
   "settingsModal": {
-    "managedByOrg": "一部の設定は組織によって管理されています。",
     "groups": {
       "account": "アカウント",
       "app": "アプリ",

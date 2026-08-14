@@ -1896,10 +1896,7 @@ export default function SettingsPage({
                       <SettingsPanel>
                         {usage.isPastDue && (
                           <SettingsPanelRow>
-                            <Alert
-                              variant="warning"
-                              className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
-                            >
+                            <Alert variant="warning">
                               <AlertTriangle className="h-4 w-4" />
                               <AlertTitle>{t("settingsPage.account.pastDue.title")}</AlertTitle>
                               <AlertDescription>
@@ -2854,10 +2851,7 @@ export default function SettingsPage({
                 </SettingsPanelRow>
                 {autoStartNeedsApproval && (
                   <SettingsPanelRow>
-                    <Alert
-                      variant="warning"
-                      className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
-                    >
+                    <Alert variant="warning">
                       <AlertTriangle className="h-4 w-4" />
                       <AlertTitle>
                         {t("settingsPage.general.startup.needsApproval.title")}
@@ -3299,7 +3293,7 @@ EOF`,
                                         {item.desc}
                                       </span>
                                       {item.note && (
-                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                                        <p className="text-[11px] text-warning mt-0.5">
                                           {item.note}
                                         </p>
                                       )}

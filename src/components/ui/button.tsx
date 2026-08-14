@@ -4,115 +4,97 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
 
+/* Design language v2 — every action is a small, dense, monochrome capsule.
+   Emphasis levels: inverse fill (primary) > hairline outline > sunken fill (quiet) > ghost.
+   No shadows, no glassmorphism; hover/active step the fill, disabled drops contrast. */
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
-    "rounded text-sm font-medium cursor-pointer select-none",
+    "rounded-full text-sm font-medium cursor-pointer select-none",
     "transition-[background-color,border-color,color,transform] duration-200 ease-out",
-    "outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-    "disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed",
+    "outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+    "disabled:pointer-events-none disabled:cursor-not-allowed",
+    "disabled:bg-muted disabled:text-muted-foreground disabled:border-transparent",
     "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 shrink-0",
   ].join(" "),
   {
     variants: {
       variant: {
-        // Primary CTA — ultra-premium with subtle depth
+        // Primary — brand blue capsule
         default: [
-          "relative text-primary-foreground font-semibold tracking-[0.005em]",
-          "bg-primary",
-          "border border-primary/60",
-          "shadow-sm",
-          "hover:bg-primary/95 hover:shadow",
-          "active:bg-primary/85 active:scale-[0.985]",
-          "transition-[background-color,border-color,color,transform] duration-200 ease-out",
+          "text-primary-foreground bg-primary",
+          "hover:bg-primary/90",
+          "active:bg-primary/85 active:scale-[0.98]",
         ].join(" "),
 
-        // Success — uses design tokens
+        // Success — solid state color, flat
         success: [
-          "relative text-success-foreground font-semibold tracking-[0.01em]",
-          "bg-success",
-          "border border-success/70",
-          "shadow-sm",
+          "text-success-foreground bg-success",
           "hover:bg-success/90",
-          "active:bg-success/80 active:scale-[0.98]",
+          "active:bg-success/85 active:scale-[0.98]",
         ].join(" "),
 
-        // Destructive — uses design tokens
+        // Destructive — solid state color, flat
         destructive: [
-          "relative text-destructive-foreground font-semibold tracking-[0.01em]",
-          "bg-destructive",
-          "border border-destructive/70",
-          "shadow-sm",
+          "text-destructive-foreground bg-destructive",
           "hover:bg-destructive/90",
-          "active:bg-destructive/80 active:scale-[0.98]",
+          "active:bg-destructive/85 active:scale-[0.98]",
         ].join(" "),
 
-        // Outline — refined with subtle glassmorphism
+        // Outline — hairline capsule
         outline: [
-          "relative font-medium",
-          "text-foreground bg-muted/70 backdrop-blur-sm",
-          "border border-border/70",
-          "shadow-sm",
+          "text-foreground bg-transparent",
+          "border border-border",
           "hover:bg-muted hover:border-border-hover",
-          "active:scale-[0.985]",
-          "dark:bg-surface-raised/90 dark:border-border-hover dark:hover:bg-surface-raised",
-          "transition-[background-color,border-color,color,transform] duration-200 ease-out",
+          "active:scale-[0.98]",
         ].join(" "),
 
-        // Outline flat — transparent with thin border, no fill or shadow
+        // Outline flat — quieter hairline capsule
         "outline-flat": [
-          "font-medium",
-          "text-muted-foreground/70 bg-transparent",
-          "border border-border/50",
-          "hover:text-foreground/80 hover:border-border hover:bg-foreground/3",
+          "text-muted-foreground bg-transparent",
+          "border border-border-subtle",
+          "hover:text-foreground hover:border-border hover:bg-muted/60",
           "active:scale-[0.98]",
-          "dark:border-white/10 dark:hover:bg-white/5 dark:hover:border-white/15",
         ].join(" "),
 
-        // Secondary — uses design tokens
+        // Secondary — sunken capsule
         secondary: [
-          "relative font-medium",
           "text-foreground bg-secondary",
-          "border border-border/50",
-          "hover:bg-muted",
+          "hover:bg-surface-raised",
           "active:scale-[0.98]",
-          "dark:text-foreground/90 dark:bg-white/8 dark:border-white/5 dark:hover:bg-white/12",
         ].join(" "),
 
-        // Ghost — uses design tokens
+        // Ghost — text only, fill appears on hover
         ghost: [
-          "font-medium",
           "text-foreground",
           "hover:bg-muted",
           "active:scale-[0.98]",
-          "dark:text-foreground/90 dark:hover:bg-white/8",
+          "disabled:bg-transparent",
         ].join(" "),
 
-        // Link — uses design tokens
+        // Link — accent is reserved for links and selection
         link: [
-          "font-medium",
-          "text-primary",
-          "hover:text-primary/80 hover:underline",
+          "text-link",
+          "hover:text-link/80 hover:underline",
           "underline-offset-4",
+          "disabled:bg-transparent",
         ].join(" "),
 
-        // Social button for auth flows - ultra-premium glassmorphism
+        // Social (auth flows) — raised capsule with hairline
         social: [
-          "relative font-medium",
-          "text-foreground bg-surface-1/80 backdrop-blur-xl",
-          "border border-border/60",
-          "shadow-sm gap-2",
-          "hover:bg-surface-2/90 hover:border-border-hover hover:shadow",
-          "active:scale-[0.985] active:shadow-sm",
-          "dark:bg-surface-raised/80 dark:border-border-hover dark:hover:bg-surface-raised/95",
-          "transition-[background-color,border-color,color,transform] duration-200 ease-out",
+          "text-foreground bg-surface-2",
+          "border border-border",
+          "hover:bg-surface-1 hover:border-border-hover",
+          "active:scale-[0.98]",
+          "dark:bg-surface-raised dark:hover:bg-surface-3",
         ].join(" "),
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-8 px-3 text-xs gap-1.5",
-        lg: "h-12 px-6 text-sm",
-        icon: "size-10",
+        default: "h-9 px-5 py-2",
+        xs: "h-7 px-3.5 text-xs gap-1.5",
+        sm: "h-8 px-3.5 text-xs gap-1.5",
+        lg: "h-10 px-6 text-sm",
+        icon: "size-9",
       },
     },
     defaultVariants: {

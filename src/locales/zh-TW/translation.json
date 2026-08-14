@@ -1113,7 +1113,6 @@
     "defaultTestInputTranslate": "今天天氣真好，要不要出去走走？"
   },
   "settingsModal": {
-    "managedByOrg": "部分設定由您的組織管理。",
     "groups": {
       "account": "帳戶",
       "app": "應用程式",

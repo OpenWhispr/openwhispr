@@ -1201,7 +1201,6 @@
     "defaultTestInputTranslate": "Das Wetter ist heute wunderschön, hast du Lust auf einen Spaziergang?"
   },
   "settingsModal": {
-    "managedByOrg": "Einige Einstellungen werden von Ihrer Organisation verwaltet.",
     "groups": {
       "account": "Konto",
       "app": "App",

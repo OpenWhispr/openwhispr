@@ -60,10 +60,17 @@ const MAIN_WINDOW_CONFIG = {
   type: MAIN_OVERLAY_TYPE,
 };
 
+// Control panel sizes. The onboarding auth card is designed as a small floating
+// window (Figma 1133:84); the panel grows to full size once the user is past it.
+const CONTROL_PANEL_SIZES = {
+  COMPACT: { width: 546, height: 600 },
+  FULL: { width: 1200, height: 800 },
+};
+
 // Control panel window configuration
 const CONTROL_PANEL_CONFIG = {
-  width: 1200,
-  height: 800,
+  width: CONTROL_PANEL_SIZES.FULL.width,
+  height: CONTROL_PANEL_SIZES.FULL.height,
   backgroundColor: "#1c1c2e",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
@@ -285,6 +292,7 @@ const AGENT_OVERLAY_CONFIG = {
 module.exports = {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  CONTROL_PANEL_SIZES,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
   TRANSCRIPTION_PREVIEW_CONFIG,
