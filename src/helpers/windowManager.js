@@ -196,30 +196,16 @@ class WindowManager {
       return { success: false, message: "Window not available" };
     }
 
-    const newSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
+    let newSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
+    if (sizeKey === "ASSISTANT") {
+      const currentBounds = this.mainWindow.getBounds();
+      const display = screen.getDisplayNearestPoint({
+        x: currentBounds.x + currentBounds.width / 2,
+        y: currentBounds.y + currentBounds.height,
+      });
+      newSize = fitAssistantWindowToWorkArea(newSize, display.workArea || display.bounds);
+    }
     return this._resizeMainWindowTo(newSize, sizeKey);
-  }
-
-  resizeAssistantWindow(width, height) {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      return { success: false, message: "Window not available" };
-    }
-    if (!Number.isFinite(width) || !Number.isFinite(height)) {
-      return { success: false, message: "Invalid assistant window size" };
-    }
-
-    const currentBounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height,
-    });
-    const workArea = display.workArea || display.bounds;
-    const fittedSize = fitAssistantWindowToWorkArea(
-      { width: Math.round(width), height: Math.round(height) },
-      workArea
-    );
-
-    return this._resizeMainWindowTo(fittedSize, "ASSISTANT");
   }
 
   _resizeMainWindowTo(newSize, sizeKey) {

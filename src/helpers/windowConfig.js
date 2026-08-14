@@ -36,6 +36,11 @@ const ASSISTANT_PANEL_SIZE_LIMITS = {
   maxSurfaceWidth: 600,
 };
 
+const ASSISTANT_WINDOW_SIZE = {
+  width: ASSISTANT_PANEL_SIZE_LIMITS.ratioWidth + ASSISTANT_PANEL_SIZE_LIMITS.gutter,
+  height: ASSISTANT_PANEL_SIZE_LIMITS.ratioHeight + ASSISTANT_PANEL_SIZE_LIMITS.gutter,
+};
+
 function fitAssistantWindowToWorkArea(requestedSize, workArea) {
   const limits = ASSISTANT_PANEL_SIZE_LIMITS;
   const ratio = limits.ratioWidth / limits.ratioHeight;
@@ -69,7 +74,7 @@ const WINDOW_SIZES = {
   WITH_MENU: { width: 240, height: 280 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },
-  ASSISTANT: { width: 384, height: 462 },
+  ASSISTANT: ASSISTANT_WINDOW_SIZE,
 };
 
 // Main dictation window configuration

@@ -8,6 +8,11 @@ test("recording window only grows enough for the compact listening pill", () => 
   assert.deepEqual(WINDOW_SIZES.RECORDING, { width: 128, height: 96 });
 });
 
+test("assistant edit and normal responses share one fixed modal size", () => {
+  const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
+  assert.deepEqual(WINDOW_SIZES.ASSISTANT, { width: 466, height: 562 });
+});
+
 test("base state with nothing active", async () => {
   const { resolveMainWindowSizeKey } = await load();
   assert.equal(

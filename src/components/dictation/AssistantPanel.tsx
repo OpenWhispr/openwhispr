@@ -11,10 +11,6 @@ import { useChatMessageSender } from "../chat/useChatMessageSender";
 import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
-import {
-  ASSISTANT_PANEL_MIN_HEIGHT,
-  calculateAssistantPanelSize,
-} from "../../helpers/assistantPanelSizing";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 
 export interface AssistantCommand {
@@ -39,10 +35,6 @@ interface AssistantPanelProps {
 }
 
 const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
-const PANEL_HEADER_HEIGHT = 64;
-const PANEL_FOOTER_HEIGHT = 64;
-const OUTPUT_VERTICAL_CHROME = 34;
-const RESIZE_DEBOUNCE_MS = 80;
 
 export function AssistantPanel({
   pendingCommand,
@@ -125,11 +117,6 @@ export function AssistantPanel({
   );
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const outputContentRef = useRef<HTMLDivElement>(null);
-  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const naturalHeightHighWaterRef = useRef(ASSISTANT_PANEL_MIN_HEIGHT);
-  const measuredMessageIdRef = useRef<string | number | null>(null);
-  const lastRequestedSizeRef = useRef("");
 
   useEffect(() => {
     onResponseReadyChange(isResponseReady);
@@ -202,57 +189,6 @@ export function AssistantPanel({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, handleCopy]);
 
-  // Grow with the rendered response while preserving the reference ratio.
-  // A per-message high-water mark prevents token-by-token reflow from making
-  // the Electron window pulse between nearby sizes during streaming.
-  useEffect(() => {
-    if (!open || !outputContentRef.current) return;
-
-    const messageId = latestAssistantMessage?.id ?? null;
-    if (measuredMessageIdRef.current !== messageId) {
-      measuredMessageIdRef.current = messageId;
-      naturalHeightHighWaterRef.current = ASSISTANT_PANEL_MIN_HEIGHT;
-      lastRequestedSizeRef.current = "";
-    }
-
-    const resizeToContent = () => {
-      const contentHeight = Math.ceil(
-        outputContentRef.current?.getBoundingClientRect().height ?? 0
-      );
-      const naturalHeight =
-        PANEL_HEADER_HEIGHT + PANEL_FOOTER_HEIGHT + OUTPUT_VERTICAL_CHROME + contentHeight;
-      naturalHeightHighWaterRef.current = Math.max(
-        naturalHeightHighWaterRef.current,
-        naturalHeight
-      );
-
-      const size = calculateAssistantPanelSize(naturalHeightHighWaterRef.current);
-      const sizeKey = `${size.windowWidth}x${size.windowHeight}`;
-      if (lastRequestedSizeRef.current === sizeKey) return;
-      lastRequestedSizeRef.current = sizeKey;
-
-      if (window.electronAPI?.resizeAssistantWindow) {
-        void window.electronAPI.resizeAssistantWindow(size.windowWidth, size.windowHeight);
-      } else {
-        void window.electronAPI?.resizeMainWindow?.("ASSISTANT");
-      }
-    };
-
-    const scheduleResize = () => {
-      if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
-      resizeTimerRef.current = setTimeout(resizeToContent, RESIZE_DEBOUNCE_MS);
-    };
-
-    const observer = new ResizeObserver(scheduleResize);
-    observer.observe(outputContentRef.current);
-    scheduleResize();
-
-    return () => {
-      observer.disconnect();
-      if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
-    };
-  }, [open, latestAssistantMessage?.id]);
-
   return (
     <div
       className={cn(
@@ -283,7 +219,7 @@ export function AssistantPanel({
       </header>
 
       <main className="mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner agent-chat-scroll">
-        <div ref={outputContentRef}>
+        <div>
           {responseContent ? (
             <div style={{ animation: "agent-message-in 200ms ease-out both" }}>
               <MarkdownRenderer
