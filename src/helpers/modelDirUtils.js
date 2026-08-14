@@ -17,9 +17,7 @@ function ensureDir(dir) {
 function getAsciiSafeCacheRoot() {
   const envOverride =
     process.env.OPENWHISPR_CACHE_ROOT ||
-    (process.env.XDG_CACHE_HOME
-      ? path.join(process.env.XDG_CACHE_HOME, "openwhispr")
-      : null);
+    (process.env.XDG_CACHE_HOME ? path.join(process.env.XDG_CACHE_HOME, "openwhispr") : null);
   if (envOverride && !pathHasProblematicChars(envOverride)) {
     try {
       return ensureDir(envOverride);
