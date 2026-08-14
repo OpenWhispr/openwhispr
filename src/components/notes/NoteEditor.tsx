@@ -534,12 +534,16 @@ export default function NoteEditor({
 
       if (!data?.segments?.length) return;
 
-      // Store segments outlive their recording — only use them for the note they belong to.
+      // Persistence is session-scoped in meetingRecordingStore — the recording
+      // may have ended while another note was open. This handler only refreshes
+      // the editor, and only when it is showing the note that was recorded.
       const { recordingNoteId, segments: liveSegments } = useMeetingRecordingStore.getState();
+      if (recordingNoteId !== note.id) return;
+
       const persisted = await window.electronAPI?.getNote?.(note.id);
       const existing = persisted?.transcript
         ? parseTranscriptSegments(persisted.transcript)
-        : recordingNoteId === note.id && liveSegments.length > 0
+        : liveSegments.length > 0
           ? liveSegments
           : displaySegmentsRef.current;
 
@@ -551,12 +555,6 @@ export default function NoteEditor({
         }))
       );
       setDiarizedSegments(enriched);
-
-      window.electronAPI.updateNote(note.id, { transcript: serializeTranscriptSegments(enriched) });
-
-      if (data.speakerEmbeddings) {
-        window.electronAPI?.saveNoteSpeakerEmbeddings?.(note.id, data.speakerEmbeddings);
-      }
 
       const autoMappings: Record<string, string> = {};
       for (const s of enriched) {

@@ -2541,7 +2541,8 @@
       "title": "議事録",
       "description": "文字起こしと構造化されたサマリー",
       "comingSoon": "近日公開",
-      "back": "戻る"
+      "back": "戻る",
+      "autoEnded": "会議の終了後、録音は自動的に停止しました。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",

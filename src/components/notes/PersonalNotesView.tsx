@@ -20,7 +20,6 @@ import {
 import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
-import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
 import { resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   useNotes,
@@ -629,39 +628,8 @@ export default function PersonalNotesView({
     onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
 
-  const prevTranscribingRef = useRef(false);
-
-  useEffect(() => {
-    if (prevTranscribingRef.current && !isTranscribing) {
-      const { transcript: realtimeTranscript, segments: realtimeSegments } =
-        useMeetingRecordingStore.getState();
-      const transcript =
-        realtimeSegments.length > 0
-          ? serializeTranscriptSegments(realtimeSegments)
-          : realtimeTranscript;
-
-      if (recordingNoteId && transcript) {
-        window.electronAPI.updateNote(recordingNoteId, { transcript });
-      }
-    }
-    prevTranscribingRef.current = isTranscribing;
-  }, [isTranscribing, recordingNoteId]);
-
-  useEffect(() => {
-    if (!isTranscribing) return;
-
-    const interval = setInterval(() => {
-      const { recordingNoteId: currentRecordingNoteId, segments: realtimeSegments } =
-        useMeetingRecordingStore.getState();
-      if (!currentRecordingNoteId || realtimeSegments.length === 0) return;
-      window.electronAPI.updateNote(currentRecordingNoteId, {
-        transcript: serializeTranscriptSegments(realtimeSegments),
-      });
-    }, 30_000);
-
-    return () => clearInterval(interval);
-  }, [isTranscribing]);
-
+  // Final and periodic transcript persistence live in MeetingRecordingMount /
+  // the store — this view can be unmounted when an auto-end stop fires.
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
   if (!isOnboardingComplete) {

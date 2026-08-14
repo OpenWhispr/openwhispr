@@ -2557,7 +2557,8 @@
       "title": "會議筆記",
       "description": "轉錄與結構化摘要",
       "comingSoon": "即將推出",
-      "back": "返回"
+      "back": "返回",
+      "autoEnded": "會議結束後，錄音已自動停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",

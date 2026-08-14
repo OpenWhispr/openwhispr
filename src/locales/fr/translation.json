@@ -2748,7 +2748,8 @@
       "title": "Notes de réunion",
       "description": "Transcriptions et résumés structurés",
       "comingSoon": "Bientôt disponible",
-      "back": "Retour"
+      "back": "Retour",
+      "autoEnded": "L'enregistrement s'est arrêté automatiquement à la fin de votre réunion."
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",

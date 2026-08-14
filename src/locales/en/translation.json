@@ -2748,7 +2748,8 @@
       "title": "Meeting Notes",
       "description": "Transcriptions & structured summaries",
       "comingSoon": "Coming Soon",
-      "back": "Back"
+      "back": "Back",
+      "autoEnded": "Recording stopped automatically after your meeting ended."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",

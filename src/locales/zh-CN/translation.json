@@ -2557,7 +2557,8 @@
       "title": "会议笔记",
       "description": "转录与结构化摘要",
       "comingSoon": "即将推出",
-      "back": "返回"
+      "back": "返回",
+      "autoEnded": "会议结束后，录音已自动停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",

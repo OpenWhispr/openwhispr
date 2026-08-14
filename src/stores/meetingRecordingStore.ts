@@ -22,10 +22,13 @@ import {
 import logger from "../utils/logger";
 import {
   lockTranscriptSpeaker,
+  mergeTranscriptSegments,
   normalizeTranscriptSegment,
+  serializeTranscriptSegments,
   type TranscriptSpeakerLockSource,
   type TranscriptSpeakerStatus,
 } from "../utils/transcriptSpeakerState";
+import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
 import {
   canStopMeetingRecordingSession,
   createMeetingRecordingStartCoordinator,
@@ -33,6 +36,11 @@ import {
   createMeetingRecordingSessionId,
   teardownFailedMeetingRecordingSetup,
 } from "../helpers/meetingRecordingSession";
+import {
+  buildFinalMeetingTranscript,
+  persistDiarizedMeetingTranscript,
+  type PendingMeetingDiarizationPersistence,
+} from "../helpers/meetingTranscriptPersistence";
 
 export interface TranscriptSegment {
   id: string;
@@ -439,6 +447,7 @@ let systemStream: MediaStream | null = null;
 let isRecordingFlag = false;
 let isStartingFlag = false;
 let activeRecordingSessionId: string | null = null;
+let pendingDiarizationPersistence: PendingMeetingDiarizationPersistence | null = null;
 const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator();
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
@@ -476,6 +485,8 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
 }));
 
 export const getMicAnalyser = (): AnalyserNode | null => micAnalyser;
+
+export const getActiveRecordingSessionId = (): string | null => activeRecordingSessionId;
 
 function pushConfig(enabled: boolean, expectedCount: number) {
   if (pushConfigTimeout) clearTimeout(pushConfigTimeout);
@@ -1424,6 +1435,29 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       );
     }
 
+    // Persist here, not in a notes-view effect: an auto-end stop can fire while
+    // that view is unmounted, and any view-scoped saver dies with it.
+    const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
+    const finalTranscript = buildFinalMeetingTranscript(
+      finalSegments,
+      useMeetingRecordingStore.getState().transcript,
+      serializeTranscriptSegments
+    );
+    if (recordingNoteId != null && finalTranscript) {
+      try {
+        await window.electronAPI?.updateNote?.(recordingNoteId, { transcript: finalTranscript });
+      } catch (err) {
+        logger.error(
+          "Failed to persist final meeting transcript",
+          { error: (err as Error).message, noteId: recordingNoteId },
+          "meeting"
+        );
+      }
+    }
+    if (diarizationSessionId && recordingNoteId != null) {
+      pendingDiarizationPersistence = { sessionId: diarizationSessionId, noteId: recordingNoteId };
+    }
+
     useMeetingRecordingStore.setState({
       micPartial: "",
       systemPartial: "",
@@ -1466,6 +1500,43 @@ export function lockSpeaker(speakerId: string, displayName: string): void {
 
 export function cancelPreparedTranscription(): void {
   window.electronAPI?.meetingTranscriptionCancel?.();
+}
+
+// Diarization results are persisted session-scoped, keyed to the note that was
+// recorded — never to whichever editor happens to be open when they arrive.
+// Registered once at module load; the store outlives any view.
+if (typeof window !== "undefined") {
+  window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
+    const pending = pendingDiarizationPersistence;
+    if (!pending || data?.sessionId !== pending.sessionId) return;
+    pendingDiarizationPersistence = null;
+    if (!data?.segments?.length) return;
+
+    void persistDiarizedMeetingTranscript({
+      noteId: pending.noteId,
+      diarizedSegments: data.segments,
+      speakerEmbeddings: data.speakerEmbeddings ?? null,
+      liveSegments:
+        useMeetingRecordingStore.getState().recordingNoteId === pending.noteId
+          ? segmentsRefValue
+          : [],
+      io: {
+        getNote: (noteId) => window.electronAPI?.getNote?.(noteId) ?? Promise.resolve(null),
+        updateNote: (noteId, updates) => window.electronAPI?.updateNote?.(noteId, updates),
+        saveNoteSpeakerEmbeddings: (noteId, embeddings) =>
+          window.electronAPI?.saveNoteSpeakerEmbeddings?.(noteId, embeddings),
+        parseSegments: parseTranscriptSegments,
+        mergeSegments: mergeTranscriptSegments,
+        serializeSegments: serializeTranscriptSegments,
+      },
+    }).catch((err) => {
+      logger.error(
+        "Failed to persist diarized meeting transcript",
+        { error: (err as Error).message, noteId: pending.noteId },
+        "meeting"
+      );
+    });
+  });
 }
 
 // Throttled resize listener — keeps layout reflows during drag from thrashing

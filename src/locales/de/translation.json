@@ -2748,7 +2748,8 @@
       "title": "Besprechungsnotizen",
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "comingSoon": "Demnächst verfügbar",
-      "back": "Zurück"
+      "back": "Zurück",
+      "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet."
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",

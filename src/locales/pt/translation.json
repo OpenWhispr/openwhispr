@@ -2557,7 +2557,8 @@
       "title": "Notas de reunião",
       "description": "Transcrições e resumos estruturados",
       "comingSoon": "Em breve",
-      "back": "Voltar"
+      "back": "Voltar",
+      "autoEnded": "A gravação parou automaticamente após o fim da reunião."
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",

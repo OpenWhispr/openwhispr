@@ -2557,7 +2557,8 @@
       "title": "Note delle riunioni",
       "description": "Trascrizioni e riassunti strutturati",
       "comingSoon": "Prossimamente",
-      "back": "Indietro"
+      "back": "Indietro",
+      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione."
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
