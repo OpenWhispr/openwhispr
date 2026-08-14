@@ -68,7 +68,11 @@ import {
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
-import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
+import {
+  executeTranslationChain,
+  hasTextContent,
+  shouldRunTranslateStep,
+} from "../helpers/translationChain";
 import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
@@ -740,7 +744,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
                 });
-                if (reasonedText && reasonedText !== rawText) {
+                if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
                     reasonedText,
