@@ -580,6 +580,7 @@ function FolderRow({
   canManageDestructive,
   onActivate,
   onToggle,
+  onNewNote,
   onRename,
   onMoveToSpace,
   onDelete,
@@ -600,6 +601,7 @@ function FolderRow({
   canManageDestructive: boolean;
   onActivate: () => void;
   onToggle: () => void;
+  onNewNote: () => void;
   onRename: () => void;
   onMoveToSpace: (space: SpaceItem) => void;
   onDelete: () => void;
@@ -666,102 +668,116 @@ function FolderRow({
         {folder.name}
       </span>
       <ContainerRowTrailing count={count} isActive={isActive} isDropSuccess={isDropSuccess} />
-      {(!folder.is_default || noteFilesEnabled) && (
-        <DropdownMenu onOpenChange={(open) => !open && setSpaceSearch("")}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={t("common.actions")}
-              onClick={(e) => e.stopPropagation()}
-              className={KEBAB_TRIGGER_CLASS}
-            >
-              <MoreHorizontal size={12} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={4} className="min-w-32">
-            {noteFilesEnabled && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.electronAPI?.showFolderInExplorer?.(folder.name);
-                }}
-                className={MENU_ITEM_CLASS}
+      <span className="absolute right-1.5 flex items-center gap-px">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("notes.list.newNote")}
+          onClick={(e) => {
+            e.stopPropagation();
+            onNewNote();
+          }}
+          className={KEBAB_BUTTON_CLASS}
+        >
+          <Plus size={12} />
+        </Button>
+        {(!folder.is_default || noteFilesEnabled) && (
+          <DropdownMenu onOpenChange={(open) => !open && setSpaceSearch("")}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t("common.actions")}
+                onClick={(e) => e.stopPropagation()}
+                className={KEBAB_BUTTON_CLASS}
               >
-                <ExternalLink size={11} className="text-muted-foreground/60" />
-                {t("notes.context.showInFileManager", { manager: fileManagerName })}
-              </DropdownMenuItem>
-            )}
-            {!folder.is_default && (
-              <>
-                {noteFilesEnabled && <DropdownMenuSeparator />}
+                <MoreHorizontal size={12} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={4} className="min-w-32">
+              {noteFilesEnabled && (
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRename();
+                    window.electronAPI?.showFolderInExplorer?.(folder.name);
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <Pencil size={11} className="text-muted-foreground/60" />
-                  {t("notes.context.rename")}
+                  <ExternalLink size={11} className="text-muted-foreground/60" />
+                  {t("notes.context.showInFileManager", { manager: fileManagerName })}
                 </DropdownMenuItem>
-                {canMoveToSpace && (
-                  <SearchableMoveSubmenu
-                    icon={<Users size={11} className="text-muted-foreground/60" />}
-                    label={t("notes.spaces.moveToSpace")}
-                    itemCount={spaces.length}
-                    search={spaceSearch}
-                    onSearchChange={setSpaceSearch}
-                    searchPlaceholder={t("notes.spaces.searchSpaces")}
+              )}
+              {!folder.is_default && (
+                <>
+                  {noteFilesEnabled && <DropdownMenuSeparator />}
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRename();
+                    }}
+                    className={MENU_ITEM_CLASS}
                   >
-                    {filteredSpaces.map((space) => {
-                      const isCurrent = space.id === folder.space_id;
-                      return (
-                        <DropdownMenuItem
-                          key={space.id}
-                          disabled={isCurrent}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onMoveToSpace(space);
-                          }}
-                          className={MENU_ITEM_CLASS}
-                        >
-                          <SpaceMenuIcon space={space} />
-                          <span className="truncate flex-1">{spaceDisplayName(space, t)}</span>
-                          {isCurrent && <Check size={9} className="text-primary shrink-0" />}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                    {spaceSearch && filteredSpaces.length === 0 && (
-                      <p className="text-xs text-foreground/20 text-center py-1.5">
-                        {t("notes.spaces.noSpacesFound")}
-                      </p>
-                    )}
-                  </SearchableMoveSubmenu>
-                )}
-                {canManageDestructive && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete();
-                      }}
-                      className={cn(
-                        MENU_ITEM_CLASS,
-                        "text-destructive focus:text-destructive focus:bg-destructive/10"
-                      )}
+                    <Pencil size={11} className="text-muted-foreground/60" />
+                    {t("notes.context.rename")}
+                  </DropdownMenuItem>
+                  {canMoveToSpace && (
+                    <SearchableMoveSubmenu
+                      icon={<Users size={11} className="text-muted-foreground/60" />}
+                      label={t("notes.spaces.moveToSpace")}
+                      itemCount={spaces.length}
+                      search={spaceSearch}
+                      onSearchChange={setSpaceSearch}
+                      searchPlaceholder={t("notes.spaces.searchSpaces")}
                     >
-                      <Trash2 size={11} />
-                      {t("notes.context.delete")}
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+                      {filteredSpaces.map((space) => {
+                        const isCurrent = space.id === folder.space_id;
+                        return (
+                          <DropdownMenuItem
+                            key={space.id}
+                            disabled={isCurrent}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMoveToSpace(space);
+                            }}
+                            className={MENU_ITEM_CLASS}
+                          >
+                            <SpaceMenuIcon space={space} />
+                            <span className="truncate flex-1">{spaceDisplayName(space, t)}</span>
+                            {isCurrent && <Check size={9} className="text-primary shrink-0" />}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                      {spaceSearch && filteredSpaces.length === 0 && (
+                        <p className="text-xs text-foreground/20 text-center py-1.5">
+                          {t("notes.spaces.noSpacesFound")}
+                        </p>
+                      )}
+                    </SearchableMoveSubmenu>
+                  )}
+                  {canManageDestructive && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete();
+                        }}
+                        className={cn(
+                          MENU_ITEM_CLASS,
+                          "text-destructive focus:text-destructive focus:bg-destructive/10"
+                        )}
+                      >
+                        <Trash2 size={11} />
+                        {t("notes.context.delete")}
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </span>
     </div>
   );
 }
@@ -1832,6 +1848,7 @@ export default function SpacesTree({
             activateRow({ type: "folder", key: folderKey, folder, parentKey, level })
           }
           onToggle={() => toggleContainerExpanded(folderKey)}
+          onNewNote={() => onNewNote(folder.space_id, folder.id)}
           onRename={() => startRenameFolder(folder)}
           onMoveToSpace={(space) => requestMoveFolder(folder, space)}
           onDelete={() => requestDeleteFolder(folder)}
