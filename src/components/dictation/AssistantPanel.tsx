@@ -28,6 +28,8 @@ interface AssistantPanelProps {
   onConversationIdChange: (id: number | null) => void;
   /** Live voice state while the user records a follow-up with the panel open. */
   voiceState: Extract<AgentState, "idle" | "listening" | "transcribing">;
+  /** Keeps follow-up thinking feedback inside an already-open panel. */
+  thinking: boolean;
   open: boolean;
   onClose: () => void;
   onResponseReadyChange: (ready: boolean) => void;
@@ -42,6 +44,7 @@ export function AssistantPanel({
   initialConversationId,
   onConversationIdChange,
   voiceState,
+  thinking,
   open,
   onClose,
   onResponseReadyChange,
@@ -218,7 +221,13 @@ export function AssistantPanel({
         </div>
       </header>
 
-      <main className="mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner agent-chat-scroll">
+      <main
+        className={cn(
+          "mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner agent-chat-scroll",
+          thinking && "agent-thinking-text-window"
+        )}
+        aria-busy={thinking}
+      >
         <div>
           {responseContent ? (
             <div style={{ animation: "agent-message-in 200ms ease-out both" }}>

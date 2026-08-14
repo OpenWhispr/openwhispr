@@ -13,7 +13,10 @@ import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
-import { resolveVoiceActivityPresentation } from "./helpers/voicePillPresentation";
+import {
+  resolveAssistantThinkingTransition,
+  resolveVoiceActivityPresentation,
+} from "./helpers/voicePillPresentation";
 
 const ASSISTANT_TRANSITION_MS = 360;
 
@@ -192,13 +195,12 @@ export default function App() {
   const beginAssistantThinking = React.useCallback(() => {
     clearTimeout(assistantCloseTimerRef.current);
     cancelAnimationFrame(assistantOpenFrameRef.current);
-    assistantPanelOpenRef.current = false;
-    setAssistantPanelOpen(false);
-    setAssistantResponseReady(false);
-    setAssistantThinking(true);
-    // Keep the conversation logic mounted while the visible window contracts
-    // back to the Beam-wrapped logo circle.
-    setAssistantPanelMounted(true);
+    const transition = resolveAssistantThinkingTransition(assistantPanelOpenRef.current);
+    assistantPanelOpenRef.current = transition.panelOpen;
+    setAssistantPanelOpen(transition.panelOpen);
+    setAssistantResponseReady(transition.responseReady);
+    setAssistantThinking(transition.thinking);
+    setAssistantPanelMounted(transition.panelMounted);
   }, []);
 
   const handleAssistantCommand = React.useCallback(
@@ -600,6 +602,7 @@ export default function App() {
           initialConversationId={panelConversationId}
           onConversationIdChange={setPanelConversationId}
           voiceState={assistantVoiceState}
+          thinking={assistantThinking && assistantPanelOpen}
           open={assistantPanelOpen}
           onClose={handleAssistantPanelClose}
           onResponseReadyChange={setAssistantResponseReady}

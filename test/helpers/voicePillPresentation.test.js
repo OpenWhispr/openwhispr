@@ -42,7 +42,7 @@ test("model thinking stays in the rotating circle after transcription ends", asy
   );
 });
 
-test("regular dictation processing keeps its current compact pill", async () => {
+test("regular dictation transcription contracts to the rotating thinking circle", async () => {
   const { resolveVoiceActivityPresentation } = await load();
   assert.deepEqual(
     resolveVoiceActivityPresentation({
@@ -51,6 +51,26 @@ test("regular dictation processing keeps its current compact pill", async () => 
       isAssistantVoice: false,
       assistantThinking: false,
     }),
-    { activeState: "processing", compactPill: true, isAgentThinking: false }
+    { activeState: "thinking", compactPill: false, isAgentThinking: false }
   );
+});
+
+test("a fresh Agent request thinks in the floating logo circle", async () => {
+  const { resolveAssistantThinkingTransition } = await load();
+  assert.deepEqual(resolveAssistantThinkingTransition(false), {
+    panelOpen: false,
+    panelMounted: true,
+    responseReady: false,
+    thinking: true,
+  });
+});
+
+test("an Agent follow-up keeps the existing response modal open while thinking", async () => {
+  const { resolveAssistantThinkingTransition } = await load();
+  assert.deepEqual(resolveAssistantThinkingTransition(true), {
+    panelOpen: true,
+    panelMounted: true,
+    responseReady: false,
+    thinking: true,
+  });
 });

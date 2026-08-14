@@ -46,7 +46,10 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isThinking = state === "thinking";
   const isUnavailable = state === "unavailable";
   const isPanel = variant === "panel";
-  const showCompactPill = (isPanel && !isThinking) || expanded;
+  const isPanelThinking = isPanel && isThinking;
+  const showCompactPill = isPanel || expanded;
+  const showDivider = showCompactPill && !isRecording;
+  const dividerMargin = showCompactPill ? (isRecording ? 3 : isPanel ? 4 : 6) : 0;
   const restingWaveHeights = isPanel ? RESTING_WAVE_HEIGHTS.slice(0, 6) : RESTING_WAVE_HEIGHTS;
 
   const pill = (
@@ -62,8 +65,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         // Listening uses the same compact pill as the assistant panel. The
         // previous wide recording bar made the control feel like a different
         // surface and forced an unnecessary large window resize.
-        width: isThinking ? 40 : isPanel ? 92 : showCompactPill ? 112 : 40,
-        height: isThinking ? 40 : isPanel ? 36 : showCompactPill ? 44 : 40,
+        width: isThinking && !isPanel ? 40 : isPanel ? 92 : showCompactPill ? 112 : 40,
+        height: isPanel ? 36 : 40,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
         transform: !isPanel && state === "hover" ? "scale(1.05)" : "scale(1)",
         transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
@@ -77,7 +80,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <BrandMarkIcon
-        size={isThinking ? 22 : isPanel ? 16 : showCompactPill ? 20 : state === "hover" ? 24 : 22}
+        size={isThinking && !isPanel ? 22 : isPanel ? 16 : showCompactPill ? 20 : state === "hover" ? 24 : 22}
         className={cn(
           "shrink-0 transition-[color,width,height] duration-200",
           (isUnavailable || isProcessing) && "animate-pulse"
@@ -88,10 +91,10 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         className="shrink-0 overflow-hidden bg-border/60"
         style={{
           height: isPanel ? 16 : 20,
-          width: showCompactPill ? 1 : 0,
-          marginLeft: showCompactPill ? (isPanel ? 4 : 6) : 0,
-          marginRight: showCompactPill ? (isPanel ? 4 : 6) : 0,
-          opacity: showCompactPill ? 1 : 0,
+          width: showDivider ? 1 : 0,
+          marginLeft: dividerMargin,
+          marginRight: dividerMargin,
+          opacity: showDivider ? 1 : 0,
           transition: `width ${GROW_TRANSITION}, margin ${GROW_TRANSITION}, opacity 180ms ease-out`,
         }}
       />
@@ -146,7 +149,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       theme="auto"
       duration={1.6}
       strength={0.85}
-      borderRadius={20}
+      borderRadius={isPanelThinking ? 18 : 20}
       className="agent-thinking-beam inline-flex rounded-full"
     >
       {pill}
