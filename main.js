@@ -1641,6 +1641,21 @@ async function startApp() {
           reason: "binary_not_found",
           message: i18nMain.t("windows.pttUnavailable"),
         });
+      } else if (!isWindows) {
+        // Push-to-talk keys still work as tap via globalShortcut, but a
+        // right-side modifier hotkey has no fallback — without the native
+        // listener it is dead, so tell the user instead of failing silently.
+        const { isRightSideModifier } = require("./src/helpers/hotkeyManager");
+        const deadKeys = hotkeyManager
+          .getNativeListenerKeys(windowManager.getActivationMode())
+          .filter(isRightSideModifier);
+        if (deadKeys.length > 0) {
+          hotkeyManager.notifyHotkeyFailure(deadKeys.join(", "), {
+            error: i18nMain.t("hotkey.errors.registrationFailed", {
+              hotkey: deadKeys.join(", "),
+            }),
+          });
+        }
       }
     });
 
@@ -1653,8 +1668,13 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        if (isLiveWindow(windowManager.mainWindow)) {
-          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
+        // Broadcast to every window: the dictation overlay shows the toast,
+        // and the control panel (when its Settings modal is open) also flips
+        // push-to-talk back to tap mode.
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) {
+            win.webContents.send("linux-ptt-permission-denied");
+          }
         }
       });
     }

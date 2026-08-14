@@ -2937,6 +2937,10 @@
         "title": "快捷鍵無法使用",
         "description": "無法註冊所選快捷鍵。請在設定中選擇其他快捷鍵。"
       },
+      "linuxInputPermission": {
+        "title": "需要鍵盤存取權限",
+        "description": "沒有輸入裝置存取權限，OpenWhispr 無法偵測此快捷鍵。請執行 sudo usermod -aG input $USER，然後登出並重新登入。"
+      },
       "addedToDict": "已將 {{words}} 加入到你的詞典",
       "undo": "復原",
       "accessibilityMissing": {

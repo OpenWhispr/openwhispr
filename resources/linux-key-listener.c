@@ -181,12 +181,8 @@ static int map_key_name(const char *name) {
 
     if (strcmp(name, "`") == 0 || strcasecmp(name, "Backquote") == 0) return KEY_GRAVE;
 
-    if (strcasecmp(name, "RightAlt") == 0 || strcasecmp(name, "RightOption") == 0) return KEY_RIGHTALT;
-    if (strcasecmp(name, "RightControl") == 0 || strcasecmp(name, "RightCtrl") == 0) return KEY_RIGHTCTRL;
-    if (strcasecmp(name, "RightShift") == 0) return KEY_RIGHTSHIFT;
-    if (strcasecmp(name, "RightSuper") == 0 || strcasecmp(name, "RightWin") == 0 ||
-        strcasecmp(name, "RightMeta") == 0 || strcasecmp(name, "RightCommand") == 0 ||
-        strcasecmp(name, "RightCmd") == 0) return KEY_RIGHTMETA;
+    // Right*/Left* modifier names never reach here — parse_hotkey consumes
+    // them as side-specific modifier requirements before key lookup.
 
     if (strlen(name) == 1) {
         char c = name[0];

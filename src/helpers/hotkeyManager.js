@@ -839,7 +839,11 @@ class HotkeyManager extends EventEmitter {
               this.currentHotkey = hotkey;
               this.notifyActiveHotkey(hotkey);
               debugLogger.log(`[HotkeyManager] KDE hotkey "${hotkey}" registered successfully`);
-            } else if (result === "conflict" || result === "modifier-only") {
+            } else if (
+              result === "conflict" ||
+              result === "modifier-only" ||
+              result === "unsupported-key"
+            ) {
               const ok = await this.tryNativeFallbacks(hotkey, "KDE", (fb) =>
                 this.kdeManager
                   .registerKeybinding(fb, "dictation", callback)

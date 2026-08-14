@@ -13,7 +13,6 @@ class LinuxKeyManager extends EventEmitter {
     super();
     this.isSupported = process.platform === "linux";
     this.hasReportedError = false;
-    this.hasReportedUnavailable = false;
     this.listeners = new Map(); // key string -> { child, watchdog }
   }
 
@@ -33,10 +32,10 @@ class LinuxKeyManager extends EventEmitter {
 
     const listenerPath = this.resolveListenerBinary();
     if (!listenerPath) {
-      if (!this.hasReportedUnavailable) {
-        this.hasReportedUnavailable = true;
-        this.emit("unavailable", new Error("Linux key listener binary not found"));
-      }
+      // Emit on every arming attempt (not once per session): a right-side
+      // modifier hotkey set later in Settings has no globalShortcut fallback,
+      // so its failure must be reported even if an earlier attempt already was.
+      this.emit("unavailable", new Error("Linux key listener binary not found"));
       return;
     }
 

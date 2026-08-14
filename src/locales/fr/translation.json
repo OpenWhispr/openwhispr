@@ -3102,6 +3102,10 @@
         "title": "Raccourci indisponible",
         "description": "Le raccourci sélectionné n’a pas pu être enregistré. Veuillez en choisir un autre dans les paramètres."
       },
+      "linuxInputPermission": {
+        "title": "Accès au clavier requis",
+        "description": "OpenWhispr ne peut pas détecter ce raccourci sans accès aux périphériques d’entrée. Exécutez : sudo usermod -aG input $USER puis déconnectez-vous et reconnectez-vous."
+      },
       "addedToDict": "{{words}} ajouté à votre dictionnaire",
       "undo": "Annuler",
       "accessibilityMissing": {

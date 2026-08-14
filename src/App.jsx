@@ -94,6 +94,7 @@ export default function App() {
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
+  const linuxPermissionToastShownRef = useRef(false);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
     window.electronAPI?.setMainWindowInteractivity?.(shouldCapture);
@@ -121,6 +122,19 @@ export default function App() {
         title: t("app.toasts.hotkeyUnavailable.title"),
         description: t("app.toasts.hotkeyUnavailable.description"),
         duration: 10000,
+      });
+    });
+
+    // One listener process spawns per watched key and each reports the
+    // permission problem, so guard against a burst of identical toasts.
+    const unsubscribePermission = window.electronAPI?.onLinuxPttPermissionDenied?.(() => {
+      if (linuxPermissionToastShownRef.current) return;
+      linuxPermissionToastShownRef.current = true;
+      toast({
+        title: t("app.toasts.linuxInputPermission.title"),
+        description: t("app.toasts.linuxInputPermission.description"),
+        variant: "destructive",
+        duration: 15000,
       });
     });
 
@@ -172,6 +186,7 @@ export default function App() {
     return () => {
       unsubscribeFallback?.();
       unsubscribeFailed?.();
+      unsubscribePermission?.();
       unsubscribeCudaFallback?.();
       unsubscribeGpuFallback?.();
       unsubscribeCorrections?.();

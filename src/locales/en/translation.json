@@ -3102,6 +3102,10 @@
         "title": "Hotkey unavailable",
         "description": "The selected hotkey could not be registered. Please choose a different one in settings."
       },
+      "linuxInputPermission": {
+        "title": "Keyboard access needed",
+        "description": "OpenWhispr can't detect this hotkey without input-device access. Run: sudo usermod -aG input $USER — then log out and back in."
+      },
       "addedToDict": "Added {{words}} to your dictionary",
       "undo": "Undo",
       "accessibilityMissing": {

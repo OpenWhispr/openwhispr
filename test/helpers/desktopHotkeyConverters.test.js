@@ -21,6 +21,12 @@ test("GNOME refuses side-specific modifier combos instead of binding the bare ke
   // Left-side specific tokens are refused the same way.
   assert.equal(GnomeShortcutManager.convertToGnomeFormat("LeftControl+K"), "");
 
+  // A side-specific modifier mixed with mappable ones must refuse the whole
+  // combo, not drop the unmappable token ("Control+RightAlt+Space" must never
+  // degrade to <Control>space, which would fire without the right Alt).
+  assert.equal(GnomeShortcutManager.convertToGnomeFormat("Control+RightAlt+Space"), "");
+  assert.equal(GnomeShortcutManager.convertToGnomeFormat("Shift+LeftControl+Space"), "");
+
   // Ordinary combos keep working unchanged.
   assert.equal(GnomeShortcutManager.convertToGnomeFormat("Alt+Space"), "<Alt>space");
   assert.equal(GnomeShortcutManager.convertToGnomeFormat("Control+Shift+K"), "<Control><Shift>k");
@@ -49,6 +55,22 @@ test("Hyprland maps right-side modifiers to XKB side keys, refusing ambiguous co
   );
 });
 
+test("Hyprland validity gate admits side-specific triggers so the converter is reachable", () => {
+  // registerKeybinding() checks isValidHotkey() before converting — the side-key
+  // mapping is dead code unless the gate accepts these forms.
+  assert.equal(HyprlandShortcutManager.isValidHotkey("RightAlt"), true);
+  assert.equal(HyprlandShortcutManager.isValidHotkey("RightControl"), true);
+  assert.equal(HyprlandShortcutManager.isValidHotkey("Control+RightAlt"), true);
+
+  // Combos the converter refuses stay invalid at the gate too.
+  assert.equal(HyprlandShortcutManager.isValidHotkey("RightAlt+Space"), false);
+
+  // Ordinary hotkeys are unaffected.
+  assert.equal(HyprlandShortcutManager.isValidHotkey("Alt+Space"), true);
+  assert.equal(HyprlandShortcutManager.isValidHotkey("Control+Super"), true);
+  assert.equal(HyprlandShortcutManager.isValidHotkey("F8"), true);
+});
+
 test("KDE refuses side-specific modifier tokens cleanly (Qt key codes are side-agnostic)", () => {
   // "RightAlt" isn't a Qt modifier or Qt key → conversion fails cleanly.
   assert.equal(KDEShortcutManager.convertToQtKeyCode("RightAlt"), null);
@@ -56,4 +78,13 @@ test("KDE refuses side-specific modifier tokens cleanly (Qt key codes are side-a
 
   // Ordinary combos still convert.
   assert.equal(typeof KDEShortcutManager.convertToQtKeyCode("Control+Shift+K"), "number");
+});
+
+test("KDE reports an unconvertible hotkey as unsupported-key, not a backend failure", async () => {
+  // false would make hotkeyManager tear down the whole KDE backend
+  // (useKDE = false), breaking every other slot on KDE Wayland;
+  // "unsupported-key" routes to the F8 fallback via KGlobalAccel instead.
+  const manager = new KDEShortcutManager();
+  manager.kglobalaccel = {}; // conversion is checked before any D-Bus call
+  assert.equal(await manager.registerKeybinding("RightAlt", "dictation"), "unsupported-key");
 });
