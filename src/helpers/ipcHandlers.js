@@ -66,6 +66,7 @@ const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
+const MeetingAutoStopController = require("./meetingAutoStopController");
 const { partitionPendingMicFinals, isWithinRetractWindow } = require("./meetingMicHoldback");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
@@ -542,6 +543,15 @@ class IPCHandlers {
     this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
+    this.meetingAutoStopController = new MeetingAutoStopController({
+      windowManager: this.windowManager,
+      processDetector: this.meetingDetectionEngine?.meetingProcessDetector ?? null,
+    });
+    // The overlay countdown expires inside windowManager's dismiss timer;
+    // give it the route back (mirrors windowManager.meetingDetectionEngine).
+    if (this.windowManager) {
+      this.windowManager.meetingAutoStopController = this.meetingAutoStopController;
+    }
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.windowsLoopbackAudioManager = managers.windowsLoopbackAudioManager;
@@ -7190,6 +7200,7 @@ class IPCHandlers {
       meetingReconnectCount = 0;
       meetingFatalErrorSent = false;
       this.meetingDetectionEngine?.setUserRecording(true);
+      this.meetingAutoStopController?.onRecordingStarted(meetingConnectionWin);
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan();
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
@@ -7299,6 +7310,7 @@ class IPCHandlers {
       } catch (error) {
         await rollbackMeetingTranscriptionStart();
         this.meetingDetectionEngine?.setUserRecording(false);
+        this.meetingAutoStopController?.onRecordingStopped();
         debugLogger.error("Meeting transcription start error", { error: error.message });
         return toPolicyFailure(error);
       } finally {
@@ -7311,6 +7323,7 @@ class IPCHandlers {
 
       if (source === "system") {
         const receivedAt = Date.now();
+        this.meetingAutoStopController?.recordChunk("system", outboundBuffer);
         meetingEchoLeakDetector.recordSystemChunk(outboundBuffer, receivedAt);
         if (meetingAecEnabled && !this.meetingAecManager?.processSystemBuffer(outboundBuffer)) {
           meetingAecEnabled = false;
@@ -7340,6 +7353,9 @@ class IPCHandlers {
       }
 
       if (source === "mic") {
+        // Before the AEC/echo-mute branches: chunks they swallow still carry
+        // real acoustic energy, which is presence for auto-stop purposes.
+        this.meetingAutoStopController?.recordChunk("mic", outboundBuffer);
         if (processMeetingMicWithAec(outboundBuffer)) {
           return;
         }
@@ -7474,6 +7490,7 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-transcription-stop", async () => {
       this.meetingDetectionEngine?.setUserRecording(false);
+      this.meetingAutoStopController?.onRecordingStopped();
       try {
         if (this.audioTapManager) {
           await this.audioTapManager.stop();
@@ -9753,6 +9770,15 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("meeting-set-auto-stop-enabled", async (_event, payload) => {
+      try {
+        this.meetingAutoStopController?.setEnabled(payload?.enabled !== false);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("whisper-vad-get-config", async () => {
       try {
         return { success: true, config: this._getWhisperVadSettings() };
@@ -9799,6 +9825,10 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-notification-respond", async (_event, detectionId, action) => {
       try {
+        if (typeof detectionId === "string" && detectionId.startsWith("auto-stop:")) {
+          this.meetingAutoStopController?.handleResponse(detectionId, action);
+          return { success: true };
+        }
         await this.meetingDetectionEngine.handleNotificationResponse(detectionId, action);
         return { success: true };
       } catch (error) {

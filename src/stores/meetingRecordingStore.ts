@@ -93,6 +93,10 @@ interface MeetingRecordingState {
   error: string | null;
   /** Bumped on every error report so identical repeated errors still re-notify. */
   errorNonce: number;
+  /** Why the last recording was auto-stopped; drives the info toast in MeetingRecordingMount. */
+  autoStopNotice: "silence" | "process-exit" | null;
+  /** Bumped on every auto-stop so repeated identical reasons still re-notify. */
+  autoStopNonce: number;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
@@ -448,6 +452,8 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   userTouchedStepper: false,
   error: null,
   errorNonce: 0,
+  autoStopNotice: null,
+  autoStopNonce: 0,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
@@ -1104,6 +1110,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       if (isRecordingFlag) void stopRecording();
     });
     if (fatalErrorCleanup) ipcCleanups.push(fatalErrorCleanup);
+
+    const autoStopCleanup = window.electronAPI?.onMeetingAutoStop?.((data) => {
+      const reason = data?.reason === "process-exit" ? "process-exit" : "silence";
+      logger.info("Meeting recording auto-stopped", { reason }, "meeting");
+      useMeetingRecordingStore.setState((state) => ({
+        autoStopNotice: reason,
+        autoStopNonce: state.autoStopNonce + 1,
+      }));
+      if (isRecordingFlag) void stopRecording();
+    });
+    if (autoStopCleanup) ipcCleanups.push(autoStopCleanup);
 
     // Main re-derives the expected count when participants are added mid-meeting
     // (never for a count set explicitly via the stepper — main skips those).

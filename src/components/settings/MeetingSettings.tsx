@@ -30,6 +30,21 @@ export function MeetingSpeakerDetectionRow() {
   );
 }
 
+export function MeetingAutoStopRow() {
+  const { t } = useTranslation();
+  const meetingAutoStopEnabled = useSettingsStore((s) => s.meetingAutoStopEnabled);
+  const setMeetingAutoStopEnabled = useSettingsStore((s) => s.setMeetingAutoStopEnabled);
+
+  return (
+    <SettingsRow
+      label={t("settings.meeting.autoStop.title")}
+      description={t("settings.meeting.autoStop.description")}
+    >
+      <Toggle checked={meetingAutoStopEnabled} onChange={setMeetingAutoStopEnabled} />
+    </SettingsRow>
+  );
+}
+
 const noop = () => {};
 
 export function MeetingTranscriptionPanel() {
@@ -152,6 +167,7 @@ export function MeetingTranscriptionPanel() {
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       <MeetingSpeakerDetectionRow />
+      <MeetingAutoStopRow />
     </div>
   );
 }

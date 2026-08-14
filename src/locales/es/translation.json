@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identificar y etiquetar participantes",
         "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
+      },
+      "autoStop": {
+        "title": "Detener grabaciones automáticamente",
+        "description": "Avisa y detiene la grabación de una reunión tras aproximadamente un minuto de silencio o cuando se cierra la aplicación de reuniones."
       }
     }
   },
@@ -2669,7 +2673,9 @@
       "title": "Notas de reunión",
       "description": "Transcripciones y resúmenes estructurados",
       "back": "Atrás",
-      "restrictedByOrg": "La transcripción de reuniones está restringida por tu organización."
+      "restrictedByOrg": "La transcripción de reuniones está restringida por tu organización.",
+      "autoStopped": "Grabación detenida: no se detectó audio durante un tiempo.",
+      "autoStoppedProcessExit": "Grabación detenida: tu aplicación de reuniones se cerró."
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",
@@ -3513,6 +3519,13 @@
       "underway": "Parece que tu reunión ya está en curso. ¿Quieres tomar notas?"
     },
     "start": "Tomar notas",
-    "join": "Unirse y transcribir"
+    "join": "Unirse y transcribir",
+    "autoStop": {
+      "titleSilence": "No se detecta audio",
+      "titleProcessExit": "{{appName}} se ha cerrado",
+      "body": "La grabación se detendrá en {{seconds}} s",
+      "keep": "Seguir grabando",
+      "stopNow": "Detener ahora"
+    }
   }
 }

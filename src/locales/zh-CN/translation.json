@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
+      },
+      "autoStop": {
+        "title": "自动停止录制",
+        "description": "在大约一分钟无声或会议应用关闭时，先发出提醒再停止会议录制。"
       }
     }
   },
@@ -2621,7 +2625,9 @@
       "title": "会议笔记",
       "description": "转录与结构化摘要",
       "back": "返回",
-      "restrictedByOrg": "会议转录已被您的组织限制。"
+      "restrictedByOrg": "会议转录已被您的组织限制。",
+      "autoStopped": "录制已停止——一段时间内未检测到音频。",
+      "autoStoppedProcessExit": "录制已停止——会议应用已关闭。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -3513,6 +3519,13 @@
       "underway": "你的会议似乎已在进行中。要开始记录吗？"
     },
     "start": "开始记录",
-    "join": "加入并转录"
+    "join": "加入并转录",
+    "autoStop": {
+      "titleSilence": "未检测到音频",
+      "titleProcessExit": "{{appName}}已关闭",
+      "body": "录制将在 {{seconds}} 秒后停止",
+      "keep": "继续录制",
+      "stopNow": "立即停止"
+    }
   }
 }

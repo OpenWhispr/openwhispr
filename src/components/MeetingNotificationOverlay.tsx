@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { MeetingNotificationCard } from "./MeetingNotificationCard";
 
-type PromptVariant = "detected" | "starting" | "underway";
+type PromptVariant = "detected" | "starting" | "underway" | "ending";
 
 interface NotificationData {
   detectionId: string;
@@ -11,13 +11,20 @@ interface NotificationData {
   event: { summary?: string | null } | null;
   variant: PromptVariant;
   joinUrl: string | null;
+  appName?: string | null;
+  countdownMs?: number;
 }
+
+// Mirrors MIN_RESUME_MS in notificationTimer.js: main re-arms a resumed
+// countdown with at least this much runway, so the displayed number must too.
+const MIN_RESUME_SECONDS = 5;
 
 export default function MeetingNotificationOverlay() {
   const { t } = useTranslation();
   const [data, setData] = useState<NotificationData | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
 
   useEffect(() => {
     let shown = false;
@@ -26,6 +33,9 @@ export default function MeetingNotificationOverlay() {
       if (shown) return;
       shown = true;
       setData(d);
+      if (d.variant === "ending" && typeof d.countdownMs === "number") {
+        setCountdownSeconds(Math.round(d.countdownMs / 1000));
+      }
       setTimeout(() => {
         setIsVisible(true);
         window.electronAPI?.meetingNotificationReady?.();
@@ -42,6 +52,17 @@ export default function MeetingNotificationOverlay() {
 
     return () => cleanup?.();
   }, []);
+
+  // Cosmetic 1Hz countdown for the auto-stop card; the authoritative timer
+  // lives in main's NotificationDismissTimer, which pauses while hovered.
+  const countdownActive = countdownSeconds !== null;
+  useEffect(() => {
+    if (!countdownActive || isHovered || !isVisible) return;
+    const timer = setInterval(() => {
+      setCountdownSeconds((s) => (s === null ? null : Math.max(0, s - 1)));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdownActive, isHovered, isVisible]);
 
   const respond = useCallback(
     async (action: string) => {
@@ -60,19 +81,36 @@ export default function MeetingNotificationOverlay() {
 
   const handleMouseLeave = useCallback(() => {
     setIsHovered(false);
+    // Main resumes with at least MIN_RESUME_MS on the clock.
+    setCountdownSeconds((s) => (s === null ? null : Math.max(s, MIN_RESUME_SECONDS)));
     window.electronAPI?.setNotificationInteractivity?.(false);
   }, []);
 
   const variant: PromptVariant = data?.variant ?? "detected";
-  const title = (variant !== "detected" && data?.event?.summary) || t("meetingNotification.title");
+  const isEnding = variant === "ending";
+  const title = isEnding
+    ? data?.appName
+      ? t("meetingNotification.autoStop.titleProcessExit", { appName: data.appName })
+      : t("meetingNotification.autoStop.titleSilence")
+    : (variant !== "detected" && data?.event?.summary) || t("meetingNotification.title");
+  const body = isEnding
+    ? t("meetingNotification.autoStop.body", { seconds: countdownSeconds ?? 0 })
+    : t(`meetingNotification.body.${variant}`);
+  const startLabel = isEnding
+    ? t("meetingNotification.autoStop.keep")
+    : data?.joinUrl
+      ? t("meetingNotification.join")
+      : t("meetingNotification.start");
 
   return (
     <div className="meeting-notification-window w-full h-full bg-transparent p-3">
       <MeetingNotificationCard
         title={title}
-        body={t(`meetingNotification.body.${variant}`)}
-        startLabel={data?.joinUrl ? t("meetingNotification.join") : t("meetingNotification.start")}
-        onStart={() => respond(data?.joinUrl ? "join" : "start")}
+        body={body}
+        startLabel={startLabel}
+        onStart={() => respond(isEnding ? "keep" : data?.joinUrl ? "join" : "start")}
+        secondaryLabel={isEnding ? t("meetingNotification.autoStop.stopNow") : undefined}
+        onSecondary={isEnding ? () => respond("stop") : undefined}
         onDismiss={() => respond("dismiss")}
         closeVisible={isHovered}
         onMouseEnter={handleMouseEnter}
