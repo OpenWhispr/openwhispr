@@ -106,12 +106,12 @@ class MeetingDetectionEngine {
     if (this._userRecording || this._postRecordingCooldown) {
       debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
       this._notificationQueue.push({ source, key, data });
-      this.activeDetections.set(detectionId, { source, key, data, dismissed: false });
+      this.activeDetections.set(detectionId, { source, key, data });
       return;
     }
 
     debugLogger.info("Meeting detection triggered", { detectionId, source }, "meeting");
-    this.activeDetections.set(detectionId, { source, key, data, dismissed: false });
+    this.activeDetections.set(detectionId, { source, key, data });
     this._showPrompt(detectionId, source, key, data);
   }
 
@@ -335,21 +335,13 @@ class MeetingDetectionEngine {
   }
 
   handleNotificationTimeout() {
-    // Expiring unanswered is not a decline: only an audio prompt's timeout cools
-    // down the mic detector, so an ignored calendar reminder leaves mic detection
-    // armed and joining the call late still prompts.
-    const audioTimedOut = [...this.activeDetections.values()].some(
-      (d) => !d.dismissed && d.source === "audio"
-    );
-    if (audioTimedOut) {
-      this._dismiss();
-    }
+    // Expiring unanswered is not a decline, so no dismissal cooldown starts:
+    // the detector's hasPrompted flag already keeps the ongoing call from
+    // re-prompting, while a call starting right after the timeout still
+    // prompts. Only an explicit dismissal (handleNotificationResponse) cools
+    // the mic detector down.
     this.activeDetections.clear();
-    debugLogger.info(
-      "Notification auto-dismissed, detections cleared",
-      { audioTimedOut },
-      "meeting"
-    );
+    debugLogger.info("Notification auto-dismissed, detections cleared", {}, "meeting");
   }
 
   _flushNotificationQueue() {
@@ -374,7 +366,7 @@ class MeetingDetectionEngine {
     const detectionId = `${best.source}:${best.key}`;
 
     const detection = this.activeDetections.get(detectionId);
-    if (detection && !detection.dismissed) {
+    if (detection) {
       this._showPrompt(detectionId, best.source, best.key, best.data);
     }
 

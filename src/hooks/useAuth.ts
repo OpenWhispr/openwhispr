@@ -28,6 +28,7 @@ import {
 import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
+import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
 
 const useStaticSession = () => ({
   data: null,
@@ -55,6 +56,16 @@ async function loadAccountDependencies() {
     useWorkspaceStore.getState().resetForAccountChange();
   };
   return { syncService, resetRendererCaches };
+}
+
+async function refreshManagedEnterpriseIdentity(accountId: string, authGeneration: number) {
+  const { refreshManagedEnterpriseIdentity: refresh, useWorkspaceStore } =
+    await import("../stores/workspaceStore");
+  // A newly authenticated employee has no active workspace cached yet. Load
+  // memberships first so a single SCIM-provisioned Enterprise workspace is
+  // selected and its managed provider config resolves without opening Settings.
+  await useWorkspaceStore.getState().refresh();
+  refresh(accountId, authGeneration);
 }
 
 export function useAuth() {
@@ -129,6 +140,7 @@ export function useAuth() {
   useEffect(() => {
     if (!sessionResolutionFailed || !resolvedUserId || boundGeneration == null) return;
     void usePolicyStore.getState().fetchPolicy(resolvedUserId, boundGeneration);
+    void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);
   }, [boundGeneration, resolvedUserId, sessionResolutionFailed]);
 
   useEffect(() => {
@@ -199,12 +211,14 @@ export function useAuth() {
           logger.debug("Auth state sync", { isSignedIn: true, userId: resolvedUserId }, "auth");
           useSettingsStore.getState().setIsSignedIn(true);
           void usePolicyStore.getState().fetchPolicy(resolvedUserId, boundGeneration);
+          void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);
         }
       } else {
         invalidateValidatedAuthContext();
         if (!cancelled) {
           useSettingsStore.getState().setIsSignedIn(false);
           usePolicyStore.getState().clearPolicy();
+          useEnterpriseIdentityStore.getState().clear();
         }
       }
       resetAccountScopeRetry();

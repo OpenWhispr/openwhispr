@@ -91,6 +91,11 @@ const LINUX_TERMINAL_CLASSES = [
   "waveterm",
 ];
 
+// macOS reports localized app names rather than window classes, and iTerm2 has
+// no entry above because it has no Linux window class. Matching it on Linux too
+// is harmless — no such window class exists there.
+const TERMINAL_SIGNATURES = [...LINUX_TERMINAL_CLASSES, "iterm"];
+
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
     return Promise.reject(new Error("Invalid webContents for clipboard write"));
@@ -116,6 +121,9 @@ class ClipboardManager {
     this.portalTokenPasteFailed = false;
     this.portalKeysymChecked = false;
     this.portalKeysymAvailable = false;
+    this.portalFailed = false;
+    this.uinputTimedOut = false;
+    this.xtestTimedOut = false;
     this._kwinScriptPath = null;
     this.pasteQueue = Promise.resolve();
 
@@ -260,10 +268,15 @@ class ClipboardManager {
     return null;
   }
 
+  // Accepts a Linux window class or a macOS app name.
+  isTerminalSignature(signature) {
+    if (!signature) return false;
+    const normalized = String(signature).toLowerCase();
+    return TERMINAL_SIGNATURES.some((term) => normalized.includes(term));
+  }
+
   isLinuxTerminalWindowClass(windowClass) {
-    if (!windowClass) return false;
-    const normalized = String(windowClass).toLowerCase();
-    return LINUX_TERMINAL_CLASSES.some((term) => normalized.includes(term));
+    return this.isTerminalSignature(windowClass);
   }
 
   // Selection capture (SelectionManager) seeds a sentinel and polls until a
@@ -547,10 +560,14 @@ class ClipboardManager {
       });
 
       let timedOut = false;
+      // 15s only for the first grant (no token yet) so the permission dialog has
+      // time. With a saved token the session is pre-approved, so fail fast instead
+      // of hanging on a stale RemoteDesktop session that no longer responds (#1614).
+      const timeoutMs = restoreToken ? 2500 : 15000;
       const timeoutId = setTimeout(() => {
         timedOut = true;
         killProcess(proc, "SIGKILL");
-      }, 15000); // Portal may show a user dialog, allow more time
+      }, timeoutMs);
 
       proc.on("close", (code) => {
         if (timedOut) return reject(new Error("linux-fast-paste --portal timed out"));
@@ -1648,8 +1665,20 @@ class ClipboardManager {
 
       if (isWayland) {
         const tryUinputPaste = async () => {
+          if (this.uinputTimedOut) {
+            throw new Error("uinput timed out earlier this session, skipping");
+          }
           const args = ["--uinput", "--shift-insert"];
-          await spawnFastPaste(args, "uinput");
+          try {
+            await spawnFastPaste(args, "uinput");
+          } catch (error) {
+            // A timeout means uinput hangs in this environment (unlike a fast
+            // error, which can be transient) — don't re-pay 2s on every paste.
+            if (error?.message?.endsWith(" timed out")) {
+              this.uinputTimedOut = true;
+            }
+            throw error;
+          }
           this.safeLog("✅ Paste successful using native linux-fast-paste (uinput)");
           debugLogger.info(
             "Paste successful",
@@ -1675,6 +1704,10 @@ class ClipboardManager {
               portalError?.message === "portal symbolic keyboard input unavailable"
             ) {
               this.portalUnavailable = true;
+            } else {
+              // Timeout or service error: the session stays broken until app
+              // restart, so skip the portal from now on (#1614).
+              this.portalFailed = true;
             }
             debugLogger.warn(
               "linux-fast-paste --portal failed, falling back",
@@ -1687,7 +1720,7 @@ class ClipboardManager {
 
         // KDE with XWayland: portal first because clipboard and input are both
         // on X11; uinput causes clipboard desync (X11 clipboard vs Wayland input).
-        if (isKde && !this.portalDenied && !this.portalUnavailable) {
+        if (isKde && !this.portalDenied && !this.portalUnavailable && !this.portalFailed) {
           const portalPaste = await tryPortalPaste();
           if (portalPaste) return { method: "portal", ...portalPaste };
         }
@@ -1700,6 +1733,7 @@ class ClipboardManager {
           isGnome &&
           !this.portalDenied &&
           !this.portalUnavailable &&
+          !this.portalFailed &&
           !this.portalTokenPasteFailed &&
           !!this._readPortalToken();
         if (shouldPreferGnomePortal) {
@@ -1715,13 +1749,19 @@ class ClipboardManager {
           debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
         }
 
-        if (isGnome && !shouldPreferGnomePortal && !this.portalDenied && !this.portalUnavailable) {
+        if (
+          isGnome &&
+          !shouldPreferGnomePortal &&
+          !this.portalDenied &&
+          !this.portalUnavailable &&
+          !this.portalFailed
+        ) {
           const portalPaste = await tryPortalPaste();
           if (portalPaste) return { method: "portal", ...portalPaste };
         }
 
         // XTest/XWayland fallback: works for XWayland apps on any Wayland compositor
-        if (xwaylandAvailable) {
+        if (xwaylandAvailable && !this.xtestTimedOut) {
           const xtestArgs = [];
           if (targetWindowId) xtestArgs.push("--window", targetWindowId);
           appendModeFlag(xtestArgs);
@@ -1739,6 +1779,9 @@ class ClipboardManager {
               restoreComplete: restoreClipboard(),
             };
           } catch (xtestError) {
+            if (xtestError?.message?.endsWith(" timed out")) {
+              this.xtestTimedOut = true;
+            }
             debugLogger.warn(
               "XTest/XWayland fallback also failed",
               { error: xtestError?.message },

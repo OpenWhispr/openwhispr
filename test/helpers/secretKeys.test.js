@@ -71,7 +71,7 @@ test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
   assert.ok(block, "BYOK_KEY_BRIDGES declared in preload.js");
   for (const k of BYOK_API_KEYS) {
     const entry = new RegExp(
-      `\\{\\s*base:\\s*"${k.base}",\\s*get:\\s*"${k.get}",\\s*save:\\s*"${k.save}"\\s*\\}`
+      `\\{\\s*base:\\s*"${k.base}",\\s*get:\\s*"${k.get}",\\s*save:\\s*"${k.save}",?\\s*\\}`
     );
     assert.match(block[1], entry, `preload mirrors ${k.base}`);
   }

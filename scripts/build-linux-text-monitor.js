@@ -119,7 +119,12 @@ function getPkgConfigFlags() {
     });
     if (result.status !== 0) return null;
 
-    return result.stdout.toString().trim().split(/\s+/).filter(Boolean);
+    // atspi-2.pc lists gobject-2.0 under Requires.private, so plain --libs
+    // omits -lgobject-2.0; add it explicitly for --as-needed linkers.
+    return [
+      ...result.stdout.toString().trim().split(/\s+/).filter(Boolean),
+      "-lgobject-2.0",
+    ];
   } catch {
     return null;
   }

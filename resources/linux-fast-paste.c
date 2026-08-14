@@ -39,6 +39,12 @@ typedef enum {
 #define PORTAL_IFACE "org.freedesktop.portal.RemoteDesktop"
 #define REQUEST_IFACE "org.freedesktop.portal.Request"
 
+/* Method replies are immediate on a healthy portal (user interaction arrives via
+ * Response signals, not the call reply). A stale RemoteDesktop session can leave
+ * a sync call hanging inside a signal callback, which blocks the main loop and
+ * defeats the 10s watchdog below — so bound every call instead of using the
+ * default (25s) D-Bus timeout. */
+#define PORTAL_CALL_TIMEOUT_MS 3000
 static int portal_exit_code = 0;
 
 typedef struct {
@@ -78,7 +84,7 @@ static int portal_emit_keysym(PortalData *app, gint32 keysym, guint32 pressed,
     GVariant *result = g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
         PORTAL_IFACE, "NotifyKeyboardKeysym",
         g_variant_new("(o@a{sv}iu)", app->session_handle, opts, keysym, pressed),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+        NULL, G_DBUS_CALL_FLAGS_NONE, PORTAL_CALL_TIMEOUT_MS, NULL, &err);
     if (err) {
         fprintf(stderr, "%s: %s\n", label, err->message);
         g_clear_error(&err);
@@ -197,7 +203,7 @@ static void on_select_devices_response(GDBusConnection *conn, const char *sender
         PORTAL_IFACE, "Start",
         g_variant_new("(os@a{sv})", app->session_handle, "",
                        g_variant_builder_end(&opts)),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+        NULL, G_DBUS_CALL_FLAGS_NONE, PORTAL_CALL_TIMEOUT_MS, NULL, &err);
 
     g_free(request_path);
     if (err) {
@@ -261,7 +267,7 @@ static void on_create_session_response(GDBusConnection *conn, const char *sender
         PORTAL_IFACE, "SelectDevices",
         g_variant_new("(o@a{sv})", app->session_handle,
                        g_variant_builder_end(&opts)),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+        NULL, G_DBUS_CALL_FLAGS_NONE, PORTAL_CALL_TIMEOUT_MS, NULL, &err);
 
     g_free(request_path);
     if (err) {
@@ -319,7 +325,7 @@ static int paste_via_portal(paste_mode_t mode, const char *restore_token, int co
     g_dbus_connection_call_sync(app.conn, PORTAL_BUS, PORTAL_PATH,
         PORTAL_IFACE, "CreateSession",
         g_variant_new("(@a{sv})", g_variant_builder_end(&opts)),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+        NULL, G_DBUS_CALL_FLAGS_NONE, PORTAL_CALL_TIMEOUT_MS, NULL, &err);
 
     g_free(request_path);
     if (err) {

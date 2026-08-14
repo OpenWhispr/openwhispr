@@ -25,6 +25,8 @@ export interface OrgPolicy {
   features: {
     agentEnabled: boolean;
     webSearchEnabled: boolean;
+    /** Absent on servers that predate the field; absent means allowed. */
+    screenContextEnabled?: boolean;
   };
   sharing: {
     externalLinkSharing: ExternalSharingMode;

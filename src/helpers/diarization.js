@@ -471,7 +471,8 @@ class DiarizationManager {
         const segStart = seg.timestamp;
         const segEnd = nextSystemTimestampAt(index) ?? segStart + 2.5;
         const midpoint = segStart + (segEnd - segStart) / 2;
-        let bestSpeaker = null;
+        let overlapSpeaker = null;
+        let nearestSpeaker = null;
         let bestOverlap = 0;
         let bestDistance = Number.POSITIVE_INFINITY;
 
@@ -479,7 +480,7 @@ class DiarizationManager {
           const overlap = Math.min(segEnd, dSeg.end) - Math.max(segStart, dSeg.start);
           if (overlap > bestOverlap) {
             bestOverlap = overlap;
-            bestSpeaker = dSeg.speaker;
+            overlapSpeaker = dSeg.speaker;
           }
 
           const distance =
@@ -489,11 +490,15 @@ class DiarizationManager {
                 ? midpoint - dSeg.end
                 : 0;
 
-          if (!bestSpeaker && distance < bestDistance) {
+          if (distance < bestDistance) {
             bestDistance = distance;
-            bestSpeaker = dSeg.speaker;
+            nearestSpeaker = dSeg.speaker;
           }
         }
+
+        // Tracked separately so the between-clusters fallback compares every
+        // distance instead of latching onto the first cluster it sees.
+        const bestSpeaker = overlapSpeaker ?? nearestSpeaker;
 
         if (bestSpeaker) {
           applyConfirmedSpeaker(enriched, {

@@ -7,9 +7,13 @@ import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
-import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
+import { getStreamingTranscriptionProviders } from "../../models/ModelRegistry";
+
+const MEETING_BYOK_PROVIDER_IDS = getStreamingTranscriptionProviders().map(
+  (provider) => provider.id
+);
 
 export function MeetingSpeakerDetectionRow() {
   const { t } = useTranslation();
@@ -50,10 +54,12 @@ export function MeetingTranscriptionPanel() {
     meetingCloudTranscriptionBaseUrl,
     setMeetingCloudTranscriptionBaseUrl,
     setMeetingCloudTranscriptionMode,
-    meetingRemoteTranscriptionUrl,
-    setMeetingRemoteTranscriptionUrl,
   } = useSettingsStore();
-  const { modes: transcriptionModes, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
+  const {
+    modes: transcriptionModes,
+    effectiveMode: effectiveTranscriptionMode,
+    isModeAllowed,
+  } = usePolicyModeOptions<InferenceModeOption>(
     [
       {
         id: "openwhispr",
@@ -80,18 +86,22 @@ export function MeetingTranscriptionPanel() {
         label: t("settingsPage.transcription.modes.selfHosted"),
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
+        disabled: true,
+        badge: t("common.comingSoon"),
       },
     ],
-    "transcription"
+    "transcription",
+    meetingTranscriptionMode,
+    { byokProviders: MEETING_BYOK_PROVIDER_IDS }
   );
-
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
+    if (mode === "self-hosted") return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
       return;
     }
-    if (mode === meetingTranscriptionMode) return;
+    if (mode === effectiveTranscriptionMode) return;
     setMeetingTranscriptionMode(mode);
     setMeetingUseLocalWhisper(mode === "local");
     setMeetingCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
@@ -111,6 +121,7 @@ export function MeetingTranscriptionPanel() {
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
     <TranscriptionModelPicker
       streamingOnly
+      transcriptionContext="meeting"
       selectedCloudProvider={meetingCloudTranscriptionProvider}
       onCloudProviderSelect={setMeetingCloudTranscriptionProvider}
       selectedCloudModel={meetingCloudTranscriptionModel}
@@ -134,24 +145,12 @@ export function MeetingTranscriptionPanel() {
     <div className="space-y-3">
       <InferenceModeSelector
         modes={transcriptionModes}
-        activeMode={meetingTranscriptionMode}
+        activeMode={effectiveTranscriptionMode}
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {meetingTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {meetingTranscriptionMode === "local" && renderTranscriptionPicker("local")}
-      {meetingTranscriptionMode === "self-hosted" && (
-        <>
-          <SelfHostedPanel
-            service="transcription"
-            url={meetingRemoteTranscriptionUrl}
-            onUrlChange={setMeetingRemoteTranscriptionUrl}
-          />
-          <p className="text-xs text-muted-foreground/80 px-1">
-            {t("settingsPage.speechToText.selfHostedStreamingNote")}
-          </p>
-        </>
-      )}
+      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       <MeetingSpeakerDetectionRow />
     </div>
   );

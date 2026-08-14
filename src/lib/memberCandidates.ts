@@ -11,7 +11,7 @@ export function orderMemberCandidates<M extends { user_id: string }>(
   return [...self, ...members.filter((m) => m.user_id !== currentUserId)];
 }
 
-export function filterMemberCandidates<M extends { name?: string | null; email: string }>(
+export function filterMemberCandidates<M extends { name?: string | null; email?: string | null }>(
   members: M[],
   search: string
 ): M[] {
@@ -20,6 +20,6 @@ export function filterMemberCandidates<M extends { name?: string | null; email: 
   return members.filter(
     (member) =>
       (member.name ?? "").toLowerCase().includes(query) ||
-      member.email.toLowerCase().includes(query)
+      (member.email ?? "").toLowerCase().includes(query)
   );
 }

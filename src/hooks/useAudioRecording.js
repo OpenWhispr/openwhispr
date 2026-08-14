@@ -7,7 +7,11 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
-import { isAgentAllowed, isTranscriptionContextAllowed } from "../stores/policyRules";
+import {
+  isAgentAllowed,
+  isScreenContextAllowed,
+  isTranscriptionContextAllowed,
+} from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
@@ -66,6 +70,30 @@ export const useAudioRecording = (toast, options = {}) => {
 
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
         audioManagerRef.current.setTranslationRequested(translationRequested);
+        if (voiceAgentRequested) {
+          logger.info(
+            "Voice agent recording start",
+            { screenContextEnabled: !!getSettings().voiceAgentScreenContext },
+            "reasoning"
+          );
+        }
+        // getSettings() already reflects a managed policy that forces the
+        // setting off; the predicate additionally fails closed while the
+        // policy is still loading or errored.
+        if (
+          voiceAgentRequested &&
+          getSettings().voiceAgentScreenContext &&
+          isScreenContextAllowed(policyState)
+        ) {
+          audioManagerRef.current.beginScreenContextCapture();
+        }
+
+        // The selection to edit is whatever was highlighted at press time, so
+        // read it now: it resolves while the user speaks instead of adding a
+        // round trip after transcription.
+        if (voiceAgentRequested) {
+          audioManagerRef.current.beginSelectionCapture();
+        }
 
         // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
         if (!audioManagerRef.current.sttConfig) {
@@ -196,12 +224,23 @@ export const useAudioRecording = (toast, options = {}) => {
         toast({
           title,
           description,
-          variant: "destructive",
+          variant: error.variant || "destructive",
           duration: error.code === "AUTH_EXPIRED" ? 8000 : undefined,
         });
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
+      },
+      onNoAudio: () => {
+        window.electronAPI?.hideDictationPreview?.();
+        if (getSettings().pauseMediaOnDictation) {
+          window.electronAPI?.resumeMediaPlayback?.();
+        }
+        toast({
+          title: t("hooks.audioRecording.noAudio.title"),
+          description: t("hooks.audioRecording.noAudio.description"),
+          variant: "default",
+        });
       },
       onPartialTranscript: (text) => {
         setPartialTranscript(text);
@@ -334,6 +373,14 @@ export const useAudioRecording = (toast, options = {}) => {
     });
 
     audioManagerRef.current.setContext("dictation");
+    // Keep overlay content protection in sync with the screen-context setting
+    // so the dictation pill stays out of captures (survives window recreation).
+    window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
+    // A policy refresh can flip the effective screen-context value mid-session;
+    // re-sync overlay content protection when it does.
+    const unsubscribePolicy = usePolicyStore.subscribe(() => {
+      window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
+    });
     window.electronAPI.getSttConfig?.().then((config) => {
       if (config?.success && audioManagerRef.current) {
         audioManagerRef.current.setSttConfig(config);
@@ -419,6 +466,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Cleanup
     return () => {
+      unsubscribePolicy();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();

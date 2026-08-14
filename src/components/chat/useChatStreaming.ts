@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
 import { isEnterpriseProvider } from "../../models/ModelRegistry";
-import { getSettings } from "../../stores/settingsStore";
+import { getSettings, selectResolvedLLMConfig } from "../../stores/settingsStore";
 import {
   isAgentAllowed,
   isLlmSelectionAllowed,
@@ -110,14 +110,15 @@ export function useChatStreaming({
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[]) => {
       const settings = getSettings();
-      const chatAgentMode = settings.chatAgentMode || "openwhispr";
+      const chatConfig = selectResolvedLLMConfig(settings, "chatIntelligence");
+      const chatAgentMode = chatConfig.mode || "openwhispr";
       const policyState = usePolicyStore.getState();
       const policyProvider =
         chatAgentMode === "openwhispr"
           ? "openwhispr"
           : chatAgentMode === "local"
             ? "local"
-            : settings.chatAgentProvider;
+            : chatConfig.provider;
       if (
         !isAgentAllowed(policyState) ||
         !isLlmSelectionAllowed(policyState, { mode: chatAgentMode, provider: policyProvider })
@@ -135,11 +136,10 @@ export function useChatStreaming({
 
       setAgentState("thinking");
       const isCloudAgent = chatAgentMode === "openwhispr" && settings.isSignedIn;
-      const isLanAgent = chatAgentMode === "self-hosted" && !!settings.chatAgentRemoteUrl;
-      const isCustomAgent =
-        chatAgentMode === "providers" && settings.chatAgentProvider === "custom";
+      const isLanAgent = chatAgentMode === "self-hosted" && !!chatConfig.remoteUrl;
+      const isCustomAgent = chatAgentMode === "providers" && chatConfig.provider === "custom";
       const isLocalProvider =
-        !isEnterpriseProvider(settings.chatAgentProvider) &&
+        !isEnterpriseProvider(chatConfig.provider) &&
         ![
           "openai",
           "groq",
@@ -149,23 +149,27 @@ export function useChatStreaming({
           "tinfoil",
           "openrouter",
           "corti",
-        ].includes(settings.chatAgentProvider);
+        ].includes(chatConfig.provider);
       const localModelCanUseTool =
-        isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;
+        isLocalProvider && estimateModelSizeB(chatConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
 
       const scope = searchScopeRef.current;
       let registry: ToolRegistry | null = null;
       if (supportsTools) {
         const scopeKey = scope ? `${scope.spaceId}:${scope.folderId ?? ""}` : "";
+        // The calendar tool reads the shared provider-deduped events table,
+        // so any connected provider enables it.
+        const calendarConnected =
+          settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
         const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
-        const cacheKey = `${settings.isSignedIn}-${settings.gcalConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}`;
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
           registry = createToolRegistry({
             isSignedIn: settings.isSignedIn,
-            gcalConnected: settings.gcalConnected,
+            calendarConnected,
             cloudBackupEnabled: settings.cloudBackupEnabled,
             searchScope: scope,
             webSearchEnabled,
@@ -242,17 +246,16 @@ export function useChatStreaming({
           const aiTools = registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
-            settings.chatAgentModel,
-            settings.chatAgentProvider,
+            chatConfig.model,
+            chatConfig.provider,
             {
               systemPrompt,
-              lanUrl: isLanAgent ? settings.chatAgentRemoteUrl : undefined,
-              baseUrl: isCustomAgent ? settings.chatAgentCloudBaseUrl || undefined : undefined,
+              inferenceScope: "chatIntelligence",
+              lanUrl: isLanAgent ? chatConfig.remoteUrl : undefined,
+              baseUrl: isCustomAgent ? chatConfig.cloudBaseUrl || undefined : undefined,
               customApiKey:
-                isCustomAgent || isLanAgent
-                  ? settings.chatAgentCustomApiKey || undefined
-                  : undefined,
-              disableThinking: settings.chatAgentDisableThinking,
+                isCustomAgent || isLanAgent ? chatConfig.customApiKey || undefined : undefined,
+              disableThinking: chatConfig.disableThinking,
             },
             aiTools
           );

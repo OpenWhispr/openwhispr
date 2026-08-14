@@ -18,17 +18,10 @@ import type { Workspace } from "../../types/electron";
 
 interface Props {
   workspace: Workspace;
-  requestedAdditionalSeats?: number;
-  onSeatIntentConsumed?: () => void;
   onRefreshEntitlement?: () => Promise<void>;
 }
 
-export default function WorkspaceBillingCard({
-  workspace,
-  requestedAdditionalSeats = 0,
-  onSeatIntentConsumed,
-  onRefreshEntitlement,
-}: Props) {
+export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const refresh = useWorkspaceStore((s) => s.refresh);
@@ -71,7 +64,6 @@ export default function WorkspaceBillingCard({
       const url = await getUrl();
       if (window.electronAPI?.openExternal) await window.electronAPI.openExternal(url);
       else window.open(url, "_blank");
-      onSeatIntentConsumed?.();
       refreshOnReturn();
     } catch (error) {
       toast({
@@ -105,7 +97,6 @@ export default function WorkspaceBillingCard({
     try {
       await WorkspacesService.updateSeats(workspace.id, seatPreview.next_quantity);
       setSeatPreview(null);
-      onSeatIntentConsumed?.();
       await refresh();
       toast({
         title: t("settingsPage.unifiedBilling.seatUpdated", {
@@ -233,22 +224,14 @@ export default function WorkspaceBillingCard({
             <Button
               onClick={() =>
                 void openBilling("checkout", () =>
-                  WorkspacesService.billingCheckout(
-                    workspace.id,
-                    "monthly",
-                    requestedAdditionalSeats
-                  )
+                  WorkspacesService.billingCheckout(workspace.id, "monthly")
                 )
               }
               disabled={busy !== null}
               size="sm"
             >
               {busy === "checkout" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {requestedAdditionalSeats > 0
-                ? t("settingsPage.unifiedBilling.startWithSeats", {
-                    count: seatsUsed + requestedAdditionalSeats,
-                  })
-                : t("settingsPage.workspace.billing.startSubscription")}
+              {t("settingsPage.workspace.billing.startSubscription")}
             </Button>
           )}
         </div>

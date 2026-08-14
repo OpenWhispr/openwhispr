@@ -20,6 +20,7 @@ import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
+import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useUsage } from "../hooks/useUsage";
 import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
@@ -31,7 +32,7 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import { useSettingsStore } from "../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
 import {
   isAgentAllowed,
@@ -68,6 +69,7 @@ import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
+import JoinYourTeamModal from "./JoinYourTeamModal";
 import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
@@ -166,6 +168,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setCloudTranscriptionMode,
   } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  // Suppressed while a deep-linked invitation is open so the two never stack.
+  const {
+    joinable,
+    dismiss: dismissJoinable,
+    markRequested,
+  } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
   const usage = useUsage();
   const upsell = decideUpsell({
     authLoaded,
@@ -386,7 +394,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       if (useLocalWhisper && localTranscriptionProvider === "whisper") {
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu) {
+          if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
             if (!status.downloaded) results.transcription = true;
           } else {
             const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
@@ -592,7 +600,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const retryTranscription = useCallback(
     async (id: number, options?: { isRecover?: boolean }) => {
       try {
-        const s = useSettingsStore.getState();
+        const s = getSettings();
         if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return;
@@ -604,6 +612,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cloudTranscriptionProvider: s.cloudTranscriptionProvider,
           cloudTranscriptionModel: s.cloudTranscriptionModel,
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
+          cortiEnvironment: s.cortiEnvironment,
+          cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
@@ -625,13 +635,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const [
                 { default: ReasoningService },
                 { resolveReasoningRoute },
-                { getEffectiveCleanupModel },
+                { getEffectiveCleanupModel, getSettings: getEffectiveSettings },
               ] = await Promise.all([
                 import("../services/ReasoningService"),
                 import("../helpers/audioManager"),
                 import("../stores/settingsStore"),
               ]);
-              const settings = useSettingsStore.getState();
+              const settings = getEffectiveSettings();
               const agentName = localStorage.getItem("agentName") || null;
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
@@ -920,6 +930,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           setInvitationNotesEntry(entry);
           setActiveView("personal-notes");
         }}
+      />
+
+      <JoinYourTeamModal
+        joinable={joinable}
+        domain={user?.email?.split("@")[1] ?? null}
+        onDismiss={dismissJoinable}
+        onRequested={markRequested}
+        onJoined={() => setActiveView("personal-notes")}
       />
 
       {showSearch && (

@@ -106,7 +106,9 @@
     "microphone": "Abra as configurações do sistema para configurar as permissões de microfone.",
     "sound": "Abra as configurações de som do sistema (por exemplo, pavucontrol).",
     "accessibility": "As configurações de acessibilidade não estão disponíveis nesta plataforma.",
-    "systemAudio": "As configurações de áudio do sistema não estão disponíveis nesta plataforma."
+    "systemAudio": "As configurações de áudio do sistema não estão disponíveis nesta plataforma.",
+    "screenRecording": "As configurações de gravação de tela não estão disponíveis nesta plataforma.",
+    "loginItems": "As configurações de itens de início não estão disponíveis nesta plataforma."
   },
   "windows": {
     "pttUnavailable": "O listener nativo de Push-to-Talk não está disponível"
@@ -125,6 +127,7 @@
     "active": "Ativo",
     "managedByOrg": "Gerenciado pela sua organização",
     "freeAccountRequired": "Conta gratuita necessária",
+    "comingSoon": "Em breve",
     "cloud": "Nuvem",
     "local": "Local",
     "apiKey": "Chave API",
@@ -427,6 +430,7 @@
     "custom": {
       "endpointWithProtocol": "Informe uma URL base completa com protocolo (por exemplo, https://server/v1).",
       "httpsRequired": "HTTPS obrigatório (HTTP permitido apenas em rede local).",
+      "endpointInvalid": "O endpoint personalizado é inválido ou não está configurado. Verifique o URL do endpoint em Configurações → Modelos de IA.",
       "endpointUnauthorized": "O endpoint rejeitou a requisição (401/403). Adicione uma chave API ou ajuste a autenticação do servidor.",
       "endpointTitle": "URL do endpoint",
       "endpointExamples": "Exemplos:",
@@ -548,6 +552,8 @@
       "errorTitles": {
         "sessionExpired": "Sessão expirada",
         "offline": "Sem conexão",
+        "agentUnavailable": "Agente indisponível",
+        "screenContextSkipped": "Contexto de tela ignorado",
         "dailyLimitReached": "Limite diário atingido",
         "providerRateLimited": "Limite de taxa do provedor"
       },
@@ -576,7 +582,11 @@
         "sessionExpired": "Sua sessão do OpenWhispr Cloud está indisponível. Entre novamente nas Configurações.",
         "offline": "Você está offline. A transcrição na nuvem exige conexão com a internet.",
         "dailyLimitReached": "Você atingiu o limite de transcrições de hoje. Tente novamente amanhã ou faça upgrade do seu plano.",
-        "providerRateLimited": "Seu provedor de transcrição limitou a solicitação. Aguarde um momento e tente novamente."
+        "providerRateLimited": "Seu provedor de transcrição limitou a solicitação. Aguarde um momento e tente novamente.",
+        "chunkLoss": "Um problema de rede fez perder grande parte da gravação. Retranscreva-a a partir do histórico.",
+        "agentReasoningFailed": "Seu agente de voz não conseguiu processar o comando; a transcrição bruta foi inserida no lugar.",
+        "screenContextSkipped": "Não foi possível enviar a captura, então seu comando foi executado sem contexto de tela.",
+        "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Fala para texto."
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",
@@ -776,7 +786,11 @@
     "sso": {
       "continueWithSSO": "Entrar com SSO",
       "emailRequired": "Insira seu e-mail corporativo para usar o SSO.",
-      "failed": "Falha no logon único. Tente novamente."
+      "failed": "Falha no logon único. Tente novamente.",
+      "companySignInTitle": "Usar o login da sua empresa",
+      "requiredDescription": "{{domain}} exige SSO para o OpenWhispr.",
+      "availableDescription": "A sua conta {{domain}} está pronta para o SSO da empresa.",
+      "useEmailInstead": "Usar e-mail e senha em vez disso"
     },
     "social": {
       "completeInBrowser": "Conclua o login no navegador",
@@ -1133,8 +1147,6 @@
       "nonBillableSeat": "Acesso somente de administrador · sem assento pago",
       "managedBy": "A cobrança é gerenciada por {{owner}}.",
       "addSeat": "Adicionar assento",
-      "startWithSeats_one": "Iniciar o Business com {{count}} assento",
-      "startWithSeats_other": "Iniciar o Business com {{count}} assentos",
       "seatUpdated_one": "Capacidade do workspace atualizada para {{count}} assento",
       "seatUpdated_other": "Capacidade do workspace atualizada para {{count}} assentos",
       "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace",
@@ -1261,11 +1273,11 @@
         },
         "business": {
           "name": "Business",
-          "monthlyPrice": "$20",
+          "monthlyPrice": "$16",
           "monthlyPeriod": "/mês",
-          "annualPrice": "$200",
+          "annualPrice": "$160",
           "annualPeriod": "/ano",
-          "annualEquivalent": "$16.67",
+          "annualEquivalent": "$13.33",
           "includesPrefix": "Todos os recursos do Pro +",
           "badge": "Mais popular",
           "features": [
@@ -1294,6 +1306,7 @@
           "cta": "Falar com Vendas"
         },
         "currentPlan": "Plano atual",
+        "coveredByWorkspace": "Incluído no plano do seu workspace",
         "upgrade": "Fazer upgrade",
         "downgrade": "Fazer downgrade",
         "planSwitched": "Plano atualizado com sucesso",
@@ -1436,6 +1449,15 @@
           "title": "Corporativo",
           "description": "Usando a conta de nuvem da sua organização."
         }
+      },
+      "managedEnterprise": {
+        "errorTitle": "A IA empresarial gerenciada precisa de atenção",
+        "title": "Gerenciado pela sua organização",
+        "description": "O login fornece acesso de curta duração automaticamente. Não são necessárias chaves de nuvem nem configuração da CLI.",
+        "usePersonalSetup": "Usar configuração pessoal",
+        "availableTitle": "Configuração da organização disponível",
+        "availableDescription": "Use {{provider}} sem gerenciar credenciais.",
+        "useManaged": "Usar gerenciado"
       }
     },
     "developer": {
@@ -1567,11 +1589,16 @@
       },
       "startup": {
         "launchAtLogin": "Iniciar ao fazer login",
-        "launchAtLoginDescription": "Iniciar o OpenWhispr automaticamente ao fazer login",
+        "launchAtLoginDescription": "Iniciar o OpenWhispr em segundo plano ao fazer login",
         "title": "Inicialização",
         "description": "Controle o comportamento do OpenWhispr ao iniciar",
         "startMinimized": "Iniciar minimizado",
-        "startMinimizedDescription": "Iniciar sem mostrar a janela do painel de controle"
+        "startMinimizedDescription": "Iniciar sem mostrar a janela do painel de controle",
+        "needsApproval": {
+          "title": "Aprovação necessária nas Configurações do Sistema",
+          "description": "O macOS registrou o OpenWhispr como item de início, mas está aguardando que você o permita em Itens de Início.",
+          "action": "Abrir Itens de Início"
+        }
       },
       "waylandPaste": {
         "title": "Configuração de colagem no Wayland",
@@ -1962,6 +1989,14 @@
           "title": "Transferir a propriedade?",
           "description": "{{name}} se torna o proprietário de {{workspace}}. Sua função muda para administrador e apenas o novo proprietário pode transferi-la de volta."
         }
+      },
+      "joinRequests": {
+        "title": "Pedidos de acesso",
+        "approve": "Aprovar",
+        "deny": "Recusar",
+        "approved": "{{name}} entrou no workspace",
+        "denied": "Pedido recusado",
+        "errorTitle": "Não foi possível atualizar o pedido"
       },
       "teams": {
         "title": "Equipes",
@@ -2366,12 +2401,6 @@
       "undo": "Desfazer",
       "emptySpace": "Nenhuma nota ainda. As notas aqui são visíveis para todos em {{space}}.",
       "emptyTeamHint": "Os espaços compartilhados com você aparecerão aqui.",
-      "lockedPitch": "Crie espaços compartilhados onde as notas da sua equipe ficam sincronizadas.",
-      "planBlocked": {
-        "title": "{{workspace}} está no plano Free",
-        "description": "Os espaços de trabalho têm sua própria assinatura, separada do seu plano pessoal. Os espaços de equipe exigem um plano pago do espaço de trabalho.",
-        "cta": "Ver cobrança do espaço de trabalho"
-      },
       "noteCount_one": "{{count}} nota",
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Você não tem mais acesso a {{space}}",
@@ -2393,6 +2422,7 @@
         "you": "Você",
         "addFailed": "Não foi possível adicionar {{failed}} de {{total}} pessoas",
         "searchPlaceholder": "Pesquisar pessoas…",
+        "noResults": "Nenhuma pessoa encontrada",
         "roleAdmin": "Administrador",
         "roleMember": "Membro",
         "remove": "Remover",
@@ -2520,6 +2550,8 @@
       "cancelTranscription": "Cancelar transcrição",
       "transcriptionComplete": "Transcrição concluída",
       "partialWarning": "Não foi possível transcrever parte do áudio.",
+      "partialWarningCount": "Não foi possível transcrever {{failed}} de {{total}} seções do áudio.",
+      "chunkLossExceeded": "Muito áudio foi perdido devido a um problema de rede. Verifique sua conexão e tente novamente.",
       "openNote": "Abrir nota",
       "uploadAnother": "Enviar outro",
       "retry": "Tentar novamente",
@@ -2566,6 +2598,8 @@
       "speakerDetection": "Detecção de locutores",
       "speakerDetectionDescription": "Identificar diferentes locutores no áudio",
       "numSpeakersPlaceholder": "Detecção automática",
+      "numSpeakersLabel": "Número de falantes",
+      "numSpeakersHint": "Definir o número exato melhora a precisão, principalmente em gravações longas.",
       "downloadingModels": "Baixando modelos...",
       "openaiDiarizeNote": "Substitui seu modelo de transcrição por gpt-4o-transcribe-diarize, o único modelo OpenAI com detecção de falantes. Os custos podem diferir do modelo selecionado.",
       "mistralDiarizeNote": "Detecção de falantes incluída sem custo adicional com Voxtral.",
@@ -2580,12 +2614,12 @@
       "urlsSkipped": "Alguns links não puderam ser adicionados ({{n}})",
       "queueFailed": "{{n}} com falha",
       "urlFileTooLarge": "O arquivo é grande demais para baixar. O tamanho máximo é 500 MB.",
-      "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes."
+      "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes.",
+      "customEndpointInvalid": "O endpoint de transcrição personalizado não está configurado ou é inválido. Atualize-o nas Configurações."
     },
     "meeting": {
       "title": "Notas de reunião",
       "description": "Transcrições e resumos estruturados",
-      "comingSoon": "Em breve",
       "back": "Voltar",
       "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização."
     },
@@ -2913,6 +2947,10 @@
         "title": "Aceleração GPU indisponível",
         "description": "A transcrição está usando a CPU. Você pode desativar a aceleração GPU nas Configurações."
       },
+      "gpuPackMigration": {
+        "title": "O pacote GPU precisa ser baixado novamente",
+        "description": "Uma atualização removeu uma instalação desatualizada do pacote GPU ({{packs}}). Baixe-o novamente nas Configurações para restaurar a aceleração GPU."
+      },
       "cleanupFailed": {
         "title": "Falha na limpeza",
         "description": "Seu ditado foi colado sem limpeza por IA."
@@ -2938,6 +2976,18 @@
   "dictationAgent": {
     "enabled": "Ativar agente de voz",
     "enabledDescription": "Dite instruções para o seu agente. O texto destacado é enviado ao modelo configurado e editado no lugar. Ative dizendo \"{{agentName}}\".",
+    "screenContext": {
+      "title": "Contexto de tela",
+      "description": "Anexa uma captura da tela ativa aos comandos do agente de voz.",
+      "enable": "Compartilhar contexto de tela",
+      "enableDescription": "Captura a tela onde o cursor está ao iniciar uma gravação do agente de voz. Nunca é salva nem registrada.",
+      "unsupported": "A captura de tela não está disponível no Linux Wayland.",
+      "visionModel": "Modelo de visão separado",
+      "visionModelDescription": "Encaminha comandos que incluem captura de tela para outro modelo com visão.",
+      "permissionTitle": "Gravação de tela",
+      "permissionDescription": "O macOS exige permissão de gravação de tela para capturar sua tela.",
+      "relaunchHint": "A permissão de gravação de tela foi concedida enquanto o OpenWhispr estava em execução. Feche e reabra o OpenWhispr para começar a capturar a tela."
+    },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Use o agente gerenciado pelo OpenWhispr, sem precisar de chave API.",
@@ -3046,7 +3096,24 @@
       "disconnectDescription": "As notas de reunião não serão mais gravadas deste calendário.",
       "systemAudioRequired": "Permissão de Áudio do Sistema Necessária",
       "systemAudioDescription": "Para transcrever reuniões, o OpenWhispr precisa da permissão de Áudio do Sistema para capturar o áudio dos outros participantes. Nunca gravamos a sua tela. Você será levado às Configurações do Sistema para ativá-la.",
-      "openSettings": "Abrir Configurações do Sistema"
+      "openSettings": "Abrir Configurações do Sistema",
+      "connectFailed": "Falha na conexão",
+      "connectFailedDescription": "Ocorreu um erro ao conectar ao Google Calendar. Tente novamente."
+    },
+    "microsoftCalendar": {
+      "title": "Microsoft Calendar",
+      "optional": "Opcional",
+      "description": "Leia reuniões do seu calendário do Outlook ou Microsoft 365.",
+      "connect": "Conectar Microsoft Calendar",
+      "connected": "Conectado",
+      "addAnother": "Adicionar outro calendário",
+      "primaryOnly": "Sincronizar apenas o calendário principal",
+      "primaryOnlyDescription": "Ignorar eventos de calendários compartilhados com você.",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "Desconectar {{email}}?",
+      "disconnectDescription": "As notas de reunião não serão mais gravadas deste calendário.",
+      "connectFailed": "Falha na conexão",
+      "connectFailedDescription": "Ocorreu um erro ao conectar ao Microsoft Calendar. Tente novamente."
     },
     "appleCalendar": {
       "title": "Calendário da Apple",
@@ -3193,6 +3260,7 @@
         "title": "Compartilhar nota",
         "description": "Convide pessoas por e-mail ou compartilhe um link para esta nota.",
         "searchPlaceholder": "Buscar pessoas, pastas ou emails",
+        "noResults": "Nenhum resultado encontrado",
         "emailLabel": "Pessoas, pastas ou email",
         "shareButton": "Compartilhar",
         "createLink": "Criar link",
@@ -3224,7 +3292,6 @@
           "alreadyInvited": "{{email}} já foi convidado",
           "inviteFailed": "Não foi possível enviar o convite. Tente novamente.",
           "visibilityFailed": "Não foi possível atualizar o compartilhamento. Tente novamente.",
-          "upgradeRequired": "Compartilhar notas exige um plano pago.",
           "copyFailed": "Não foi possível copiar o link. Tente novamente.",
           "revokeFailed": "Não foi possível remover o convite. Tente novamente.",
           "resendFailed": "Não foi possível reenviar o convite. Tente novamente.",
@@ -3336,7 +3403,8 @@
     "speaker": {
       "you": "Você",
       "others": "Outros"
-    }
+    },
+    "missingAudio": "[áudio ausente {{from}}-{{to}}]"
   },
   "workspaces": {
     "switcher": {
@@ -3364,9 +3432,7 @@
       "emailPlaceholder": "colega@exemplo.com",
       "roleLabel": "Função",
       "seatUsage": "Usando {{used}} de {{seats}} assentos",
-      "seatLimit": "Todos os {{seats}} assentos estão em uso.",
-      "askOwner": "Todos os {{seats}} assentos estão em uso. Peça ao proprietário do espaço de trabalho para adicionar assentos.",
-      "manageSeats": "Gerenciar assentos",
+      "seatCost": "Se a pessoa aceitar, será adicionado um assento ao plano · cobrança proporcional estimada de {{amount}}.",
       "submit": "Enviar convite",
       "submitting": "Enviando…",
       "sentTitle": "Convite enviado",
@@ -3382,6 +3448,25 @@
         "admin": "Gerencia membros e cobrança",
         "member": "Usa o espaço de trabalho"
       }
+    },
+    "join": {
+      "title": "Entre na sua equipe",
+      "domainTitle": "Sua equipe já está no OpenWhispr",
+      "description": "Estes workspaces têm alguém do domínio do seu e-mail.",
+      "invitedDescription": "Você foi convidado para um workspace.",
+      "invitedBy": "Convidado por {{inviter}} como {{role}}",
+      "memberCount_one": "{{count}} membro",
+      "memberCount_other": "{{count}} membros",
+      "join": "Entrar",
+      "requestErrorTitle": "Não foi possível enviar o pedido",
+      "requestedDescription": "Um administrador de {{workspace}} vai analisar.",
+      "requestedTitle": "Pedido enviado",
+      "requested": "Solicitado",
+      "request": "Pedir acesso",
+      "notNow": "Agora não",
+      "successTitle": "Você entrou",
+      "successDescription": "Agora você é membro de {{workspace}}.",
+      "errorTitle": "Não foi possível entrar"
     },
     "accept": {
       "title": "Entrar no espaço de trabalho",
@@ -3413,7 +3498,7 @@
       "title": "Prompt de Tradução",
       "description": "Personalize como o modelo traduz seu ditado"
     },
-    "hotkeyHint": "Defina o atalho em Configurações → Geral → Atalho de Tradução",
+    "hotkeyHint": "Defina o atalho em Configurações → Atalhos → Atalho de Tradução",
     "targetsLabel": "Idiomas de destino",
     "addTarget": "Adicionar idioma…",
     "activeTarget": "Idioma de destino ativo",

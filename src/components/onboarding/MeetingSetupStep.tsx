@@ -94,7 +94,7 @@ export default function MeetingSetupStep({
             disabled={isRegistering}
             className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
           >
-            {t("settingsPage.general.meetingHotkey.clear")}
+            {t("hotkeyInput.remove")}
           </button>
         )}
       </div>

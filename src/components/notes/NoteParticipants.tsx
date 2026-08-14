@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Users, X } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import type { CalendarAttendee } from "../../types/calendar";
+import { syncSessionExpectedCountFromParticipants } from "../../stores/meetingRecordingStore";
 
 function getInitials(displayName: string | null, email: string): string {
   if (displayName) return displayName.charAt(0).toUpperCase();
@@ -106,6 +107,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
 
   const saveParticipants = useCallback(
     (updated: CalendarAttendee[]) => {
+      syncSessionExpectedCountFromParticipants(noteId, updated);
       window.electronAPI.updateNote(noteId, {
         participants: JSON.stringify(updated),
       });

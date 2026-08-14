@@ -253,3 +253,26 @@ test("an explicit speaker mapping still overrides the own-voice label", () => {
 
   assert.ok(txtOutput.includes("[00:00:00] Ada:\nMorning."));
 });
+
+test("epoch-millisecond segment timestamps export relative to the recording start", () => {
+  const recordingStartMs = 1_754_310_000_000;
+  const segments = [
+    { speaker: "speaker_0", timestamp: recordingStartMs, text: "Opening." },
+    { speaker: "speaker_1", timestamp: recordingStartMs + 477_000, text: "Closing." },
+  ];
+  const note = {
+    title: "Meeting",
+    created_at: "2026-08-04 13:02:00",
+  };
+
+  const mdOutput = formatMd(note, segments, {});
+  assert.match(mdOutput, /`00:00:00`/);
+  assert.match(mdOutput, /`00:07:57`/);
+});
+
+test("SQLite UTC note timestamps are parsed as UTC before local formatting", () => {
+  const { parseNoteDate } = require("../../src/helpers/transcriptFormatter");
+  const parsed = parseNoteDate("2026-08-04 13:02:00");
+
+  assert.equal(parsed.toISOString(), "2026-08-04T13:02:00.000Z");
+});

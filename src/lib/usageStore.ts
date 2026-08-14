@@ -6,6 +6,16 @@ const USAGE_CACHE_TTL = CACHE_CONFIG.API_KEY_TTL;
 const RETRY_DELAYS_MS = [2000, 4000, 8000];
 const PAID_PLANS = new Set(["pro", "business", "enterprise"]);
 
+// Unknown tiers rank as free so a plan this build predates can't out-rank a paid one.
+const PLAN_ORDER: Record<string, number> = { free: 0, pro: 1, business: 2, enterprise: 3 };
+
+export function highestPlan(plans: string[]): string {
+  return plans.reduce(
+    (best, plan) => ((PLAN_ORDER[plan] ?? 0) > (PLAN_ORDER[best] ?? 0) ? plan : best),
+    "free"
+  );
+}
+
 export interface UsageData {
   wordsUsed: number;
   wordsRemaining: number;

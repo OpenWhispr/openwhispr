@@ -18,7 +18,7 @@ const RESTART_DELAY_MS = 1000;
 const RESTART_RESET_MS = 10000;
 
 class GlobeKeyManager extends EventEmitter {
-  constructor() {
+  constructor({ preferenceStatePath = null } = {}) {
     super();
     this.process = null;
     this.isSupported = process.platform === "darwin";
@@ -26,25 +26,64 @@ class GlobeKeyManager extends EventEmitter {
     this._isStopping = false;
     this._restartCount = 0;
     this._restartResetTimer = null;
-    this.suppressedMouseButtons = [];
+    this.preferenceStatePath = preferenceStatePath;
+    this.config = { mouseButtons: [], suppressGlobeAction: false };
   }
 
-  setSuppressedMouseButtons(buttons = []) {
-    const normalized = [...new Set(buttons.filter((button) => /^MouseButton[45]$/i.test(button)))];
-    const unchanged =
-      normalized.length === this.suppressedMouseButtons.length &&
-      normalized.every((button, index) => button === this.suppressedMouseButtons[index]);
+  // Replaces the listener's whole state, so every call has to pass all of it.
+  setConfiguration({ mouseButtons = [], suppressGlobeAction = false } = {}) {
+    const next = {
+      mouseButtons: [
+        ...new Set(mouseButtons.filter((button) => /^MouseButton[45]$/i.test(button))),
+      ].sort(),
+      suppressGlobeAction: Boolean(suppressGlobeAction),
+    };
 
-    if (unchanged) {
+    if (JSON.stringify(next) === JSON.stringify(this.config)) {
       return;
     }
 
-    this.suppressedMouseButtons = normalized;
+    this.config = next;
 
-    if (this.process) {
+    if (!this.process) {
+      return;
+    }
+
+    // Reconfigure the running listener rather than restarting it: a restart
+    // drops events and briefly hands the Globe key back to macOS.
+    if (!this._sendConfiguration()) {
       this.stop();
       this.start();
     }
+  }
+
+  _sendConfiguration() {
+    const child = this.process;
+    if (!child?.stdin?.writable) {
+      return false;
+    }
+    try {
+      // write() returning false is backpressure, not failure.
+      child.stdin.write(`${JSON.stringify(this.config)}\n`);
+      return true;
+    } catch (error) {
+      debugLogger.warn("[GlobeKeyManager] Failed to send configuration", { error: error.message });
+      return false;
+    }
+  }
+
+  _listenerArgs() {
+    const args = [];
+    if (this.config.mouseButtons.length > 0) {
+      args.push(this.config.mouseButtons.join(","));
+    }
+    if (this.preferenceStatePath) {
+      args.push("--globe-preference-state", this.preferenceStatePath);
+    }
+    if (this.config.suppressGlobeAction) {
+      args.push("--suppress-system-globe-action");
+    }
+    return args;
   }
 
   start() {
@@ -94,11 +133,17 @@ class GlobeKeyManager extends EventEmitter {
     }
 
     this.hasReportedError = false;
-    const child = spawn(listenerPath, this.suppressedMouseButtons);
+    const child = spawn(listenerPath, this._listenerArgs());
     this.process = child;
     debugLogger.info("[GlobeKeyManager] Process spawned", {
       pid: child.pid,
-      suppressedMouseButtons: this.suppressedMouseButtons,
+      config: this.config,
+    });
+
+    // A write racing the listener's shutdown can raise EPIPE, and an unhandled
+    // stream "error" event throws.
+    child.stdin.on("error", (error) => {
+      debugLogger.warn("[GlobeKeyManager] Listener stdin error", { error: error.message });
     });
 
     // After sustained uptime, reset the restart counter so future sleep/wake
@@ -175,7 +220,7 @@ class GlobeKeyManager extends EventEmitter {
     child.on("exit", (code, signal) => {
       debugLogger.info("[GlobeKeyManager] Process exited", { code, signal });
       // Only clear instance state if this is still the current process — a prior
-      // stop()+start() (e.g. setSuppressedMouseButtons) may have already replaced it.
+      // stop()+start() (e.g. a setConfiguration fallback) may have already replaced it.
       if (this.process !== child) {
         return;
       }

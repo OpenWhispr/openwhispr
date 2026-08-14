@@ -318,6 +318,124 @@ test("a terminal target reads as no selection", async () => {
   assert.deepEqual(result.target, terminalTarget);
 });
 
+// macOS accessibility never resolves a focused element in Chromium browsers, so
+// a synthetic ⌘C is the only way to tell a real selection from an empty field.
+function makeMacClipboardHarness({ copyOutput = "COPY_OK 42 Dia", copied = null } = {}) {
+  const writes = [];
+  // The copied text only becomes visible after the helper runs; anything on the
+  // clipboard beforehand is baselined as stale.
+  let copySent = false;
+  const clipboardManager = {
+    runClipboardOperation: (operation) => operation(),
+    resolveFastPasteBinary: () => "/bin/macos-fast-paste",
+    isTerminalSignature: (signature) => /ghostty|iterm|terminal/i.test(signature || ""),
+    _saveClipboard: () => ({ type: "text", data: "user clipboard" }),
+    _restoreClipboard: () => {},
+    _writeClipboardTextAll: (text) => writes.push(text),
+    _readClipboardTextAll: () => {
+      if (writes.length === 0) return ["user clipboard"];
+      return copySent && copied !== null ? [copied, writes[0]] : [writes[0]];
+    },
+  };
+  const manager = new SelectionManager({
+    clipboardManager,
+    textEditMonitor: { lastTargetPid: 42, getSelectedText: async () => ({ state: "unavailable" }) },
+    platform: "darwin",
+    now: () => 1000,
+  });
+  manager._runCopyHelper = async () => {
+    copySent = true;
+    return { success: true, stdout: copyOutput, stderr: "" };
+  };
+  return { manager, writes };
+}
+
+test("an inaccessible macOS target falls back to a synthetic copy", async () => {
+  const { manager, writes } = makeMacClipboardHarness({ copied: "the selected paragraph" });
+  const result = await manager.captureSelectedText();
+
+  assert.equal(result.status, "selected");
+  assert.equal(result.text, "the selected paragraph");
+  assert.equal(writes.at(-1), "user clipboard");
+});
+
+test("nothing selected in an inaccessible macOS target reads as no selection", async () => {
+  const { manager } = makeMacClipboardHarness({ copied: null });
+  assert.equal((await manager.captureSelectedText()).status, "none");
+});
+
+test("a copy landing in a different app than expected reports the target changed", async () => {
+  const { manager } = makeMacClipboardHarness({
+    copyOutput: "COPY_OK 99 Some Other App",
+    copied: "text from the wrong app",
+  });
+  assert.equal((await manager.captureSelectedText()).status, "target_changed");
+});
+
+// Replacement text typed into a shell executes on its embedded newlines, and
+// terminals without an accessibility tree reach editing only via this path.
+test("a macOS terminal selection reads as no selection", async () => {
+  const { manager } = makeMacClipboardHarness({
+    copyOutput: "COPY_OK 42 Ghostty",
+    copied: "rm -rf important",
+  });
+  assert.equal((await manager.captureSelectedText()).status, "none");
+});
+
+// A bare caret in VS Code copies the whole line, which must never be mistaken
+// for a selection and silently rewritten.
+test("a macOS line copy in a line-copy editor reads as no selection", async () => {
+  const { manager } = makeMacClipboardHarness({
+    copyOutput: "COPY_OK 42 Code",
+    copied: "const x = 1;\n",
+  });
+  assert.equal((await manager.captureSelectedText()).status, "none");
+});
+
+test("a failed macOS copy stays non-fatal so the command still runs", async () => {
+  const { manager } = makeMacClipboardHarness({ copied: null });
+  manager._runCopyHelper = async () => ({ success: false, stdout: "", stderr: "" });
+
+  assert.deepEqual(await manager.captureSelectedText(), {
+    status: "unavailable",
+    code: "accessibility_unavailable",
+  });
+});
+
+test("a missing copy helper stays non-fatal so the command still runs", async () => {
+  const { manager } = makeMacClipboardHarness();
+  manager.clipboardManager.resolveFastPasteBinary = () => null;
+
+  assert.deepEqual(await manager.captureSelectedText(), {
+    status: "unavailable",
+    code: "accessibility_unavailable",
+  });
+});
+
+// The clipboard fallback is macOS-only; Windows and Linux keep their own capture
+// paths untouched.
+test("a win32 read never reaches the macOS clipboard fallback", async () => {
+  let macCalled = false;
+  const manager = new SelectionManager({
+    clipboardManager: {
+      runClipboardOperation: (operation) => operation(),
+      resolveWindowsFastPasteBinary: () => null,
+    },
+    textEditMonitor: { lastTargetPid: 42 },
+    platform: "win32",
+    now: () => 1000,
+  });
+  manager._readMacSelectionViaClipboard = async () => {
+    macCalled = true;
+    return { status: "selected", text: "wrong platform" };
+  };
+
+  const result = await manager._readCurrentSelection({ kind: "win-hwnd", id: "7" });
+
+  assert.equal(macCalled, false);
+  assert.deepEqual(result, { status: "unavailable", code: "copy_helper_unavailable" });
+});
+
 test("empty replacement output is rejected without consuming a paste", async () => {
   const { manager, pastes } = makeHarness({ selections: ["original"] });
   const capture = await manager.captureSelectedText();

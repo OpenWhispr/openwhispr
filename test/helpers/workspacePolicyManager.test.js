@@ -4,7 +4,10 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { createWorkspacePolicyManager } = require("../../src/helpers/workspacePolicyManager");
+const {
+  createWorkspacePolicyManager,
+  isScreenContextBlocked,
+} = require("../../src/helpers/workspacePolicyManager");
 
 const validPolicy = (updatedAt = "2026-08-05T00:00:00.000Z") => ({
   data: {
@@ -813,4 +816,51 @@ test("throttled errors carry the snapshot identity fields", async (t) => {
   assert.equal(throttled.code, "POLICY_RETRY_THROTTLED");
   assert.equal(throttled.accountId, "account-a");
   assert.equal(throttled.authGeneration, 1);
+});
+
+test("screen-context capture blocks on managed denial or an unresolved managed policy", async (t) => {
+  const denyingPolicy = () => {
+    const body = validPolicy();
+    body.data.policy.features.screenContextEnabled = false;
+    return body;
+  };
+  let body = denyingPolicy();
+  const context = setup(async () => response(200, body));
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  assert.equal(isScreenContextBlocked(await context.manager.getPolicy(request)), true);
+
+  // Explicitly enabled, and absent (a server that predates the field): allowed.
+  body = validPolicy();
+  body.data.policy.features.screenContextEnabled = true;
+  assert.equal(isScreenContextBlocked(await context.manager.getPolicy(request)), false);
+  body = validPolicy();
+  assert.equal(isScreenContextBlocked(await context.manager.getPolicy(request)), false);
+});
+
+test("screen-context capture stays available to unmanaged users and plain outages", async (t) => {
+  let online = true;
+  const context = setup(async () => {
+    if (!online) throw new Error("offline");
+    return response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } });
+  });
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  assert.equal(isScreenContextBlocked(await context.manager.getPolicy(request)), false);
+
+  // A transient failure with an unmanaged cache is not a managed denial.
+  online = false;
+  assert.equal(isScreenContextBlocked(await context.manager.getPolicy(request)), false);
+});
+
+test("screen-context capture fails closed while a managed policy is unresolvable", async (t) => {
+  const context = setup(async () => response(503, { code: "POLICY_UNRESOLVABLE" }));
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  const snapshot = await context.manager.getPolicy(request);
+  assert.equal(snapshot.code, "POLICY_UNRESOLVABLE");
+  assert.equal(isScreenContextBlocked(snapshot), true);
 });

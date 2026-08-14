@@ -41,6 +41,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
             "react/jsx-dev-runtime": "jsx-runtime",
             "react/jsx-runtime": "jsx-runtime",
             "react-i18next": "i18n",
+            "zustand/react/shallow": "zustand-shallow",
             "./button": "button",
             "./textarea": "textarea",
             "lucide-react": "icons",
@@ -48,6 +49,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
           };
           if (modules[source]) return `\0prompt-studio-${modules[source]}`;
           if (source.endsWith("/hooks/useDialogs")) return "\0prompt-studio-dialogs";
+          if (source.endsWith("/hooks/usePolicy")) return "\0prompt-studio-policy";
           if (source.endsWith("/utils/agentName")) return "\0prompt-studio-agent-name";
           if (source.endsWith("/services/ReasoningService")) return "\0prompt-studio-reasoning";
           if (source.endsWith("/models/ModelRegistry")) return "\0prompt-studio-models";
@@ -58,6 +60,9 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
           if (source.endsWith("/utils/snippets")) return "\0prompt-studio-snippets";
           if (source.endsWith("/helpers/dictationAgentInference")) {
             return "\0prompt-studio-agent-inference";
+          }
+          if (source.endsWith("/helpers/dictationTranslationInference")) {
+            return "\0prompt-studio-translation-inference";
           }
           return null;
         },
@@ -83,6 +88,9 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
           if (id === "\0prompt-studio-i18n") {
             return `export function useTranslation() { return { t: (key) => key }; }`;
           }
+          if (id === "\0prompt-studio-zustand-shallow") {
+            return `export function useShallow(selector) { return selector; }`;
+          }
           if (id === "\0prompt-studio-button") return "export function Button() {}";
           if (id === "\0prompt-studio-textarea") return "export function Textarea() {}";
           if (id === "\0prompt-studio-icons") {
@@ -107,6 +115,13 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
                   showAlertDialog() {},
                   hideAlertDialog() {},
                 };
+              }
+            `;
+          }
+          if (id === "\0prompt-studio-policy") {
+            return `
+              export function usePolicySnapshot() {
+                return { status: "unmanaged", policy: null, appVersion: "1.8.1" };
               }
             `;
           }
@@ -142,6 +157,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
                 useCleanupModel: true,
                 cleanupModel: "",
                 useDictationAgent: true,
+                dictationAgentMode: "openwhispr",
                 dictationAgentProvider: "openwhispr",
                 dictationAgentModel: "auto",
                 useDictationTranslation: true,
@@ -160,6 +176,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
               };
               export function useSettingsStore(selector) { return selector(state); }
               useSettingsStore.getState = () => state;
+              export function selectPolicyEffectiveSettings(settings) { return settings; }
               export const selectIsCloudCleanupMode = () => true;
               export const selectIsCloudDictationAgentMode = () => true;
               export const selectIsCloudTranslationMode = () => true;
@@ -174,7 +191,24 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
           if (id === "\0prompt-studio-agent-inference") {
             return `
               export function resolveDictationAgentInference() {
-                return { reachable: true, model: "auto", config: { provider: "openwhispr" } };
+                return {
+                  reachable: true,
+                  model: "auto",
+                  displayProvider: "openwhispr",
+                  config: { provider: "openwhispr" },
+                };
+              }
+            `;
+          }
+          if (id === "\0prompt-studio-translation-inference") {
+            return `
+              export function resolveDictationTranslationInference() {
+                return {
+                  reachable: true,
+                  model: "auto",
+                  displayProvider: "openwhispr",
+                  config: { provider: "openwhispr" },
+                };
               }
             `;
           }

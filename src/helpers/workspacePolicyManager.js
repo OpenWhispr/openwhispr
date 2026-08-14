@@ -390,4 +390,17 @@ function createWorkspacePolicyManager({
   return { getPolicy };
 }
 
-module.exports = { createWorkspacePolicyManager };
+// Main-process capture gate: block an explicit managed denial or an
+// unresolved managed policy; guests and unmanaged users keep the feature.
+function isScreenContextBlocked(snapshot) {
+  return (
+    snapshot.code === "POLICY_UNRESOLVABLE" ||
+    Boolean(
+      snapshot.success &&
+      snapshot.managed &&
+      snapshot.policy?.features?.screenContextEnabled === false
+    )
+  );
+}
+
+module.exports = { createWorkspacePolicyManager, isScreenContextBlocked };

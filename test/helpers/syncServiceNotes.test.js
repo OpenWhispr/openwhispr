@@ -457,31 +457,42 @@ test("a mid-pagination failure leaves the pull cursor unstamped", async (t) => {
   );
 });
 
-test("canSync gating: sign-in and subscription block every call, backup off blocks personal pushes", async (t) => {
+test("canSync gating: sign-out blocks every call; plan and backup gates protect personal notes", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud } = ctx;
   const note = db.saveNote("Pending note", "body", "personal").note;
 
-  for (const key of ["isSignedIn", "isSubscribed"]) {
-    enableSync();
-    localStorageStub.removeItem(key);
-    const service = new SyncService();
-    await service.syncAll(true);
-    stopSyncTimers(service);
-    assert.equal(cloud.log.length, 0, `sync ran with ${key} unset`);
-    assert.equal(localStorageStub.getItem("lastSyncedAt"), null);
-  }
+  enableSync();
+  localStorageStub.removeItem("isSignedIn");
+  const signedOutService = new SyncService();
+  await signedOutService.syncAll(true);
+  stopSyncTimers(signedOutService);
+  assert.equal(cloud.log.length, 0, "sync ran while signed out");
+  assert.equal(localStorageStub.getItem("lastSyncedAt"), null);
+
+  // Collaboration is free, so an unsubscribed account still checks shared
+  // notes and team spaces. Private backup remains paid and must not run.
+  enableSync();
+  localStorageStub.removeItem("isSubscribed");
+  const freeService = new SyncService();
+  await freeService.syncAll(true);
+  stopSyncTimers(freeService);
+  assert.ok(cloud.log.length > 0, "a free signed-in account must still sync collaboration");
+  assert.equal(cloud.logFor("/api/notes/batch-create").length, 0);
+  assert.equal(db.getNote(note.id).sync_status, "pending");
 
   // Backup off is not sign-out: team-space membership still syncs, but nothing
   // personal may leave the machine.
   enableSync();
   localStorageStub.removeItem("cloudBackupEnabled");
+  const markBeforeBackupOff = cloud.log.length;
   const teamOnlyService = new SyncService();
   await teamOnlyService.syncAll(true);
   stopSyncTimers(teamOnlyService);
   assert.equal(
-    cloud.logFor("/api/notes/batch-create").length,
+    cloud.log.slice(markBeforeBackupOff).filter((call) => call.path === "/api/notes/batch-create")
+      .length,
     0,
     "a personal note must not push while backup is off"
   );

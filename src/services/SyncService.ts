@@ -45,11 +45,14 @@ import {
   recordUpdate404,
   resolvePulledNoteFolderId,
   resolvePullCursorAdvance,
+  resolveSyncConsent,
+  shouldRunAmbientTeamOnlyPass,
   revokedNoteForkUpdate,
   shouldSetOwnerFromCloud,
   UPDATE_404_FORK_THRESHOLD,
   type PurgedSpaceEntry,
   type PurgedSpaceReason,
+  type SyncConsent,
 } from "./syncPassPolicy";
 
 function isHttpStatus(err: unknown, status: number): boolean {
@@ -218,37 +221,57 @@ export class SyncService {
   private teamSpacesRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private teamSpacesRetryAttempt = 0;
   private openNoteSyncTimer: ReturnType<typeof setInterval> | null = null;
+  // Set by any pass that actually moves team or shared content; drives the
+  // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
+  private teamPassMovedWork = false;
+
+  private consent(): SyncConsent {
+    return resolveSyncConsent({
+      authValidated: hasValidatedAuthContext(),
+      signedIn: localStorage.getItem("isSignedIn") === "true",
+      backupEnabled: localStorage.getItem("cloudBackupEnabled") === "true",
+      subscribed: readIsSubscribed(),
+      backupAllowedByPolicy: isCloudBackupAllowed(usePolicyStore.getState()),
+    });
+  }
 
   canSync(): boolean {
-    return (
-      hasValidatedAuthContext() &&
-      localStorage.getItem("isSignedIn") === "true" &&
-      localStorage.getItem("cloudBackupEnabled") === "true" &&
-      readIsSubscribed() &&
-      isCloudBackupAllowed(usePolicyStore.getState())
-    );
+    return this.consent().backup;
   }
 
-  // Sharing a note is per-note consent: shared notes keep syncing even when
-  // the global cloud-backup toggle is off, as long as the account can sync.
   private canSyncSharedNotes(): boolean {
-    return (
-      hasValidatedAuthContext() &&
-      localStorage.getItem("isSignedIn") === "true" &&
-      readIsSubscribed()
-    );
+    return this.consent().shared;
   }
 
-  // Team-space membership, like sharing, is per-space consent: team content
-  // syncs while signed in + subscribed even when cloud backup is off (D7).
+  // Team-space membership is per-space consent on the same terms as sharing.
   private canSyncTeamSpaces(): boolean {
-    return this.canSyncSharedNotes();
+    return this.consent().shared;
   }
 
   // Whether the API supports team scope (GET /api/me/teams deployed); probed
   // by syncSpaces and cached for the UI gate (useTeamSpacesCapability).
   private hasTeamSpacesCapability(): boolean {
     return readTeamSpacesCapability();
+  }
+
+  private ambientTeamPassDue(): boolean {
+    return shouldRunAmbientTeamOnlyPass({
+      emptyStreak: Number(localStorage.getItem("teamOnlyPass.emptyStreak") ?? 0),
+      lastPassAt: Number(localStorage.getItem("teamOnlyPass.lastAt")) || null,
+      now: Date.now(),
+    });
+  }
+
+  // Recorded only for team-only passes: a full pass runs on the backup
+  // schedule regardless, and letting it clear the streak would restart the
+  // 5-minute cadence the moment backup was switched off.
+  private recordTeamOnlyPass(): void {
+    const streak = Number(localStorage.getItem("teamOnlyPass.emptyStreak") ?? 0);
+    localStorage.setItem(
+      "teamOnlyPass.emptyStreak",
+      String(this.teamPassMovedWork ? 0 : streak + 1)
+    );
+    localStorage.setItem("teamOnlyPass.lastAt", String(Date.now()));
   }
 
   private cacheTeamSpacesCapability(available: boolean): void {
@@ -441,6 +464,7 @@ export class SyncService {
       return;
     }
     this.syncing = true;
+    this.teamPassMovedWork = false;
     let teamSpacesReady = false;
     try {
       // Ambient passes skip when another window holds the lock — that pass
@@ -476,6 +500,7 @@ export class SyncService {
           await this.syncFolders(true);
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes(true);
+          this.recordTeamOnlyPass();
         }
         if (!hasValidatedAuthContext()) return;
         if (teamSpacesReady) {
@@ -524,6 +549,16 @@ export class SyncService {
     if (
       !bypassThrottle &&
       (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
+    ) {
+      return;
+    }
+    // A team-only pass with nothing to move backs off; a local push
+    // ("team-push") and anything the user asked for are never held back.
+    if (
+      !bypassThrottle &&
+      reason !== "team-push" &&
+      !this.canSync() &&
+      !this.ambientTeamPassDue()
     ) {
       return;
     }
@@ -913,6 +948,7 @@ export class SyncService {
       return false;
     }
     this.cacheTeamSpacesCapability(true);
+    if (cloudSpaces.length > 0) this.teamPassMovedWork = true;
 
     const cloudIds = new Set(cloudSpaces.map((s) => s.id));
     // Spaces confirmed gone can no longer resurrect through pulls — their
@@ -1454,6 +1490,7 @@ export class SyncService {
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       const scope = teamCapable ? "all" : undefined;
       const { folders: cloudFolders } = await FoldersService.list(since, scope);
+      if (cloudFolders.length > 0) this.teamPassMovedWork = true;
       const ctx = await this.buildSpaceContext();
       // Parked or failed rows must retry: they hold the cursor back (and fail
       // a backfill) so one bad row never drops the rest of the delta.
@@ -1658,6 +1695,7 @@ export class SyncService {
     const pending =
       (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
     if (pending.length === 0) return;
+    this.teamPassMovedWork = true;
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
@@ -1830,6 +1868,7 @@ export class SyncService {
           ? await NotesService.list(BATCH_SIZE, undefined, cursor, scope, cursorId)
           : await NotesService.list(BATCH_SIZE, cursor, undefined, scope, cursorId);
         if (cloudNotes.length === 0) break;
+        this.teamPassMovedWork = true;
 
         for (const cloudNote of cloudNotes) {
           const local = await window.electronAPI.getNoteByClientId?.(

@@ -5,12 +5,28 @@ import logger from "../../../utils/logger";
 
 export const openwhisprProvider: InferenceProvider = {
   id: "openwhispr",
+  supportsImages: true,
   async call({ text, model, agentName, config, ctx }) {
-    logger.logReasoning("OPENWHISPR_START", { model, agentName });
+    logger.logReasoning("OPENWHISPR_START", {
+      model,
+      agentName,
+      hasScreenContext: !!config.screenContext,
+    });
 
     const customPrompt = config.systemPrompt
       ? undefined
       : getSettings().customPrompts.cleanup || undefined;
+
+    // "agent" only rides with a screenshot (which already requires the new
+    // API) — older servers reject unknown promptMode values, so plain agent
+    // requests omit it. Explicit "cleanup" stops the server flipping to the
+    // action prompt on an agent-name mention. Distinct from requestPurpose,
+    // which declares intent for org-policy enforcement.
+    const promptMode = config.systemPrompt
+      ? config.screenContext
+        ? "agent"
+        : undefined
+      : "cleanup";
 
     const result = await withSessionRefresh(async () => {
       const res = await window.electronAPI?.cloudReason?.(text, {
@@ -19,9 +35,8 @@ export const openwhisprProvider: InferenceProvider = {
         customPrompt,
         systemPrompt: config.systemPrompt,
         requestPurpose: config.requiresAgent ? "agent" : undefined,
-        // Routing already decided this is cleanup — stop the server from
-        // flipping to the action prompt on an agent-name mention.
-        promptMode: config.systemPrompt ? undefined : "cleanup",
+        promptMode,
+        screenContext: config.screenContext,
         language: config.language || ctx.getPreferredLanguage(),
         locale: ctx.getUiLanguage(),
       });
@@ -43,6 +58,7 @@ export const openwhisprProvider: InferenceProvider = {
       resultLength: result.text.length,
       promptMode: result.promptMode,
       matchType: result.matchType,
+      screenContextApplied: result.screenContextApplied,
     });
 
     return result.text;
