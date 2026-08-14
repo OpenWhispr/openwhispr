@@ -29,6 +29,7 @@ function loadModule() {
 function createFakeDbus({
   capabilities = ["actions", "body"],
   notifyId = 42,
+  connectionError = null,
   interfaceError = null,
   failFirstInterface = false,
   hangNotify = false,
@@ -55,11 +56,15 @@ function createFakeDbus({
       const connection = new EventEmitter();
       connection.end = () => {};
       connections.push(connection);
+      if (connectionError) {
+        process.nextTick(() => connection.emit("error", connectionError));
+      }
       return {
         connection,
         getService: () => ({
           getInterface: (path, name, cb) => {
             interfaceRequests += 1;
+            if (connectionError) return;
             const failThis = interfaceError || (failFirstInterface && interfaceRequests === 1);
             process.nextTick(() =>
               failThis ? cb(interfaceError || new Error("first connect fails")) : cb(null, iface)
@@ -125,6 +130,29 @@ test("a connection failure backs off to the overlay", async () => {
 
   assert.equal(await notifier.show(baseShowArgs()), null);
   assert.equal(notifier.isSupported(), false);
+});
+
+test("one D-Bus connection error advances the failure backoff once", async () => {
+  const { LinuxNotifier } = loadModule();
+  const fake = createFakeDbus({ connectionError: new Error("connection lost") });
+  const notifier = new LinuxNotifier({ platform: "linux", dbusModule: fake.module, now: () => 0 });
+
+  assert.equal(await notifier.show(baseShowArgs()), null);
+  assert.equal(notifier._failureCount, 1);
+  assert.equal(notifier._retryAt, 30 * 1000);
+});
+
+test("callers sharing one failed connection advance the backoff once", async () => {
+  const { LinuxNotifier } = loadModule();
+  const fake = createFakeDbus({ connectionError: new Error("connection lost") });
+  const notifier = new LinuxNotifier({ platform: "linux", dbusModule: fake.module, now: () => 0 });
+
+  assert.deepEqual(
+    await Promise.all([notifier.show(baseShowArgs()), notifier.show(baseShowArgs())]),
+    [null, null]
+  );
+  assert.equal(notifier._failureCount, 1);
+  assert.equal(notifier._retryAt, 30 * 1000);
 });
 
 test("a daemon that never answers Notify times out into fallback", async () => {

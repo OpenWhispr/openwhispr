@@ -77,6 +77,8 @@ class LinuxNotifier {
     this._now = now;
     this._failureCount = 0;
     this._retryAt = 0;
+    this._connectionGeneration = 0;
+    this._lastBrokenGeneration = -1;
     this._bus = null;
     this._iface = null;
     this._connectPromise = null;
@@ -133,6 +135,7 @@ class LinuxNotifier {
   _connect() {
     if (this._connectPromise) return this._connectPromise;
 
+    const generation = (this._connectionGeneration = this._connectionGeneration + 1);
     this._connectPromise = new Promise((resolve, reject) => {
       let settled = false;
       const timer = setTimeout(() => {
@@ -150,7 +153,7 @@ class LinuxNotifier {
         bus.connection.on("error", (err) => {
           if (this._bus !== bus) return;
           debugLogger.warn("Notification D-Bus connection error", { error: err.message });
-          this._markBroken();
+          this._markBroken(generation);
           if (!settled) {
             settled = true;
             clearTimeout(timer);
@@ -213,10 +216,15 @@ class LinuxNotifier {
     }
   }
 
-  _markBroken() {
-    const backoff = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** this._failureCount);
-    this._failureCount = Math.min(this._failureCount + 1, 16);
-    this._retryAt = this._now() + backoff;
+  _markBroken(generation = this._connectionGeneration) {
+    // A connection event and every caller awaiting that connection can all
+    // observe the same failure. Advance the backoff once for that transport.
+    if (this._lastBrokenGeneration !== generation) {
+      const backoff = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** this._failureCount);
+      this._failureCount = Math.min(this._failureCount + 1, 16);
+      this._retryAt = this._now() + backoff;
+      this._lastBrokenGeneration = generation;
+    }
 
     // Owners of live notifications must not keep waiting on a dead connection.
     const orphans = [...this._active.values()];
@@ -259,8 +267,11 @@ class LinuxNotifier {
     const deadline = this._now() + this._callTimeoutMs;
     const remaining = () => Math.max(1, deadline - this._now());
 
+    let connectionGeneration = this._connectionGeneration;
     try {
-      const iface = await this._withTimeout(this._connect(), remaining(), "D-Bus connection");
+      const connectionPromise = this._connect();
+      connectionGeneration = this._connectionGeneration;
+      const iface = await this._withTimeout(connectionPromise, remaining(), "D-Bus connection");
 
       if (!this._capabilities) {
         this._capabilities = await this._call(iface.GetCapabilities.bind(iface), [], remaining());
@@ -310,7 +321,7 @@ class LinuxNotifier {
       debugLogger.warn("Native notification failed, falling back to overlay", {
         error: err.message,
       });
-      this._markBroken();
+      this._markBroken(connectionGeneration);
       return null;
     }
   }

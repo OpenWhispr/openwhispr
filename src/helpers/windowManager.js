@@ -1452,6 +1452,8 @@ class WindowManager {
   }
 
   dismissMeetingNotification() {
+    // Invalidate a native show that may still be waiting on D-Bus.
+    this._nativeMeetingShowSeq = this._nativeMeetingShowSeq + 1;
     this._pendingNotificationData = null;
     if (this._nativeMeetingNotification) {
       this._nativeMeetingNotification.close();
@@ -1602,6 +1604,8 @@ class WindowManager {
   }
 
   dismissUpdateNotification({ persistent = true } = {}) {
+    // Invalidate a native show that may still be waiting on D-Bus.
+    this._nativeUpdateShowSeq = this._nativeUpdateShowSeq + 1;
     this._pendingUpdateNotificationData = null;
     if (persistent) this._updateNotificationDismissed = true;
     if (this._nativeUpdateNotification) {
