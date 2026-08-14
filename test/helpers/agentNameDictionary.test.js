@@ -79,6 +79,22 @@ test("does not recase an existing agent name when only capitalization changes", 
   });
 });
 
+test("does not remove a padded stored agent name when the name is unchanged", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges([" OpenWhispr "], "OpenWhispr", "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
+});
+
+test("removes the padded stored spelling when renaming away", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges([" OpenWhispr ", "Alice"], "Jarvis", "OpenWhispr"), {
+    add: ["Jarvis"],
+    remove: [" OpenWhispr "],
+  });
+});
+
 test("does not remove agent name when only surrounding whitespace changes", async () => {
   const { agentNameDictionaryChanges } = await load();
   assert.deepEqual(agentNameDictionaryChanges(["OpenWhispr"], "  OpenWhispr  ", "OpenWhispr"), {
