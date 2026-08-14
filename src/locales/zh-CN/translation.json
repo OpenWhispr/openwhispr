@@ -3044,7 +3044,8 @@
   },
   "assistant": {
     "panel": {
-      "selectionHint": "选择要编辑的文本，然后按"
+      "selectionHint": "选择要编辑的文本，然后按",
+      "copyToClipboard": "复制到剪贴板"
     }
   },
   "integrations": {

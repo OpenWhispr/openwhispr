@@ -3044,7 +3044,8 @@
   },
   "assistant": {
     "panel": {
-      "selectionHint": "Seleziona il testo da modificare con"
+      "selectionHint": "Seleziona il testo da modificare con",
+      "copyToClipboard": "Copia negli appunti"
     }
   },
   "integrations": {

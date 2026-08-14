@@ -26,7 +26,7 @@ import {
   resolveSelfHostedOpenAIBase,
 } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
-import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
+import { detectEndpointDialect, getGroqReasoningEffort } from "./ai/thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
@@ -800,9 +800,10 @@ class ReasoningService extends BaseReasoningService {
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
+    const groqReasoningEffort = needsGroqDisableThinking ? getGroqReasoningEffort(model) : null;
     const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
     const providerOptions = {
-      ...(needsGroqDisableThinking ? { groq: { reasoningEffort: "none" } } : {}),
+      ...(groqReasoningEffort ? { groq: { reasoningEffort: groqReasoningEffort } } : {}),
       ...(needsGeminiMinimalThinking
         ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
         : {}),

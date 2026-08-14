@@ -1,6 +1,6 @@
 // Single owner of the pill window's size priority: panel > menu > toast >
-// recording capsule > base. The assistant panel must never be collapsed by a
-// toast dismissing underneath it, nor the recording capsule clipped by a menu
+// compact listening pill > base. The assistant panel must never be collapsed
+// by a toast dismissing underneath it, nor the listening pill clipped by a menu
 // closing — higher states always win.
 export const SIZE_RANK = {
   BASE: 0,
@@ -11,11 +11,11 @@ export const SIZE_RANK = {
   ASSISTANT: 5,
 };
 
-export function resolveMainWindowSizeKey({ panelOpen, menuOpen, toastCount, capsule }) {
+export function resolveMainWindowSizeKey({ panelOpen, menuOpen, toastCount, compactPill }) {
   if (panelOpen) return "ASSISTANT";
-  if (menuOpen && (toastCount > 0 || capsule)) return "EXPANDED";
+  if (menuOpen && (toastCount > 0 || compactPill)) return "EXPANDED";
   if (menuOpen) return "WITH_MENU";
   if (toastCount > 0) return "WITH_TOAST";
-  if (capsule) return "RECORDING";
+  if (compactPill) return "RECORDING";
   return "BASE";
 }

@@ -27,6 +27,19 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
   return null;
 }
 
+export function getGroqReasoningEffort(model: string | null | undefined): "none" | "low" | null {
+  const groqModel = (model || "").toLowerCase();
+  if (groqModel.includes("qwen")) {
+    // qwen3 accepts none|default only.
+    return "none";
+  }
+  if (groqModel.includes("gpt-oss")) {
+    // gpt-oss accepts low|medium|high only; it has no off switch.
+    return "low";
+  }
+  return null;
+}
+
 export function suppressThinking(
   requestBody: Record<string, unknown>,
   providerKey: string,
@@ -47,14 +60,8 @@ export function suppressThinking(
   // Groq rejects unknown fields outright and takes a different reasoning_effort
   // enum per model family, so send nothing unless the family is known.
   if (providerKey === "groq") {
-    const groqModel = (model || "").toLowerCase();
-    if (groqModel.includes("qwen")) {
-      // qwen3 accepts none|default only.
-      requestBody.reasoning_effort = "none";
-    } else if (groqModel.includes("gpt-oss")) {
-      // gpt-oss accepts low|medium|high only; it has no off switch.
-      requestBody.reasoning_effort = "low";
-    }
+    const reasoningEffort = getGroqReasoningEffort(model);
+    if (reasoningEffort) requestBody.reasoning_effort = reasoningEffort;
     return;
   }
 

@@ -3092,7 +3092,8 @@
   },
   "assistant": {
     "panel": {
-      "selectionHint": "Selecciona texto para editarlo con"
+      "selectionHint": "Selecciona texto para editarlo con",
+      "copyToClipboard": "Copiar al portapapeles"
     }
   },
   "integrations": {

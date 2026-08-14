@@ -3044,7 +3044,8 @@
   },
   "assistant": {
     "panel": {
-      "selectionHint": "編集するテキストを選択"
+      "selectionHint": "編集するテキストを選択",
+      "copyToClipboard": "クリップボードにコピー"
     }
   },
   "integrations": {

@@ -26,6 +26,15 @@ test("groq gpt-oss models get reasoning_effort low, the lowest value that family
   assert.ok(!("chat_template_kwargs" in body), "Groq rejects chat_template_kwargs with a 400");
 });
 
+test("the AI SDK Groq option uses each model family's accepted reasoning enum", async () => {
+  const { getGroqReasoningEffort } = await load();
+
+  assert.equal(getGroqReasoningEffort("qwen/qwen3-32b"), "none");
+  assert.equal(getGroqReasoningEffort("openai/gpt-oss-120b"), "low");
+  assert.equal(getGroqReasoningEffort("llama-3.3-70b-versatile"), null);
+  assert.equal(getGroqReasoningEffort(undefined), null);
+});
+
 test("groq model family matching is case insensitive", async () => {
   const { suppressThinking } = await load();
 

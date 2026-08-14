@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Check, Copy, X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
+import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
 import { useChatMessageSender } from "../chat/useChatMessageSender";
 import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
+import {
+  ASSISTANT_PANEL_MIN_HEIGHT,
+  calculateAssistantPanelSize,
+} from "../../helpers/assistantPanelSizing";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 
 export interface AssistantCommand {
@@ -28,9 +34,14 @@ interface AssistantPanelProps {
   voiceState: Extract<AgentState, "idle" | "listening" | "transcribing">;
   open: boolean;
   onClose: () => void;
+  onResponseReadyChange: (ready: boolean) => void;
 }
 
 const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
+const PANEL_HEADER_HEIGHT = 64;
+const PANEL_FOOTER_HEIGHT = 64;
+const OUTPUT_VERTICAL_CHROME = 34;
+const RESIZE_DEBOUNCE_MS = 80;
 
 export function AssistantPanel({
   pendingCommand,
@@ -40,6 +51,7 @@ export function AssistantPanel({
   voiceState,
   open,
   onClose,
+  onResponseReadyChange,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
@@ -101,26 +113,138 @@ export function AssistantPanel({
 
   const isBusy = BUSY_STATES.includes(streaming.agentState);
 
-  // Esc: an active follow-up recording is cancelled by the recording cancel
-  // hotkey, so ignore it here; otherwise stop a running stream, then collapse.
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (voiceState === "listening") return;
-      if (isBusy) {
-        streaming.cancelStream();
-      } else {
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [voiceState, isBusy, streaming, onClose]);
-
   const latestAssistantMessage = [...messages]
     .reverse()
     .find((message) => message.role === "assistant");
   const responseContent = latestAssistantMessage?.content ?? "";
+  const isResponseReady = Boolean(
+    responseContent && !isBusy && !latestAssistantMessage?.isStreaming && voiceState === "idle"
+  );
+  const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const outputContentRef = useRef<HTMLDivElement>(null);
+  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const naturalHeightHighWaterRef = useRef(ASSISTANT_PANEL_MIN_HEIGHT);
+  const measuredMessageIdRef = useRef<string | number | null>(null);
+  const lastRequestedSizeRef = useRef("");
+
+  useEffect(() => {
+    onResponseReadyChange(isResponseReady);
+  }, [isResponseReady, onResponseReadyChange]);
+
+  useEffect(() => {
+    setCopied(false);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+  }, [responseContent]);
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    },
+    []
+  );
+
+  const handleCopy = useCallback(async () => {
+    const textToCopy = responseContent.trim();
+    if (!textToCopy) return;
+
+    try {
+      const result = await window.electronAPI?.writeClipboard?.(textToCopy);
+      if (result?.success === false) throw new Error("clipboard-write-failed");
+    } catch {
+      try {
+        await navigator.clipboard.writeText(textToCopy);
+      } catch {
+        setCopied(false);
+        return;
+      }
+    }
+
+    setCopied(true);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 1800);
+  }, [responseContent]);
+
+  // Esc cancels a running response or closes the panel. The screenshot's
+  // compact `C` hint is also a keyboard shortcut once a response is final.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (voiceState === "listening") return;
+        if (isBusy) streaming.cancelStream();
+        else onClose();
+        return;
+      }
+
+      const target = e.target as HTMLElement | null;
+      const isEditable =
+        target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+      if (
+        isResponseReady &&
+        e.key.toLowerCase() === "c" &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !isEditable
+      ) {
+        e.preventDefault();
+        void handleCopy();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [voiceState, isBusy, streaming, onClose, isResponseReady, handleCopy]);
+
+  // Grow with the rendered response while preserving the reference ratio.
+  // A per-message high-water mark prevents token-by-token reflow from making
+  // the Electron window pulse between nearby sizes during streaming.
+  useEffect(() => {
+    if (!open || !outputContentRef.current) return;
+
+    const messageId = latestAssistantMessage?.id ?? null;
+    if (measuredMessageIdRef.current !== messageId) {
+      measuredMessageIdRef.current = messageId;
+      naturalHeightHighWaterRef.current = ASSISTANT_PANEL_MIN_HEIGHT;
+      lastRequestedSizeRef.current = "";
+    }
+
+    const resizeToContent = () => {
+      const contentHeight = Math.ceil(
+        outputContentRef.current?.getBoundingClientRect().height ?? 0
+      );
+      const naturalHeight =
+        PANEL_HEADER_HEIGHT + PANEL_FOOTER_HEIGHT + OUTPUT_VERTICAL_CHROME + contentHeight;
+      naturalHeightHighWaterRef.current = Math.max(
+        naturalHeightHighWaterRef.current,
+        naturalHeight
+      );
+
+      const size = calculateAssistantPanelSize(naturalHeightHighWaterRef.current);
+      const sizeKey = `${size.windowWidth}x${size.windowHeight}`;
+      if (lastRequestedSizeRef.current === sizeKey) return;
+      lastRequestedSizeRef.current = sizeKey;
+
+      if (window.electronAPI?.resizeAssistantWindow) {
+        void window.electronAPI.resizeAssistantWindow(size.windowWidth, size.windowHeight);
+      } else {
+        void window.electronAPI?.resizeMainWindow?.("ASSISTANT");
+      }
+    };
+
+    const scheduleResize = () => {
+      if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+      resizeTimerRef.current = setTimeout(resizeToContent, RESIZE_DEBOUNCE_MS);
+    };
+
+    const observer = new ResizeObserver(scheduleResize);
+    observer.observe(outputContentRef.current);
+    scheduleResize();
+
+    return () => {
+      observer.disconnect();
+      if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+    };
+  }, [open, latestAssistantMessage?.id]);
 
   return (
     <div
@@ -132,13 +256,13 @@ export function AssistantPanel({
       )}
       aria-hidden={!open}
     >
-      <div
+      <header
         className="flex h-16 shrink-0 cursor-grab items-center gap-3 px-5 active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/50 bg-surface-1 text-muted-foreground shadow-[var(--shadow-card)]">
-          <BrandMarkIcon size={18} />
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-surface-1 text-muted-foreground shadow-[var(--shadow-card)]">
+          <BrandMarkIcon size={16} />
         </div>
 
         <div className="min-w-0 flex-1 text-right font-mono text-xs tracking-wide text-muted-foreground/70">
@@ -149,31 +273,62 @@ export function AssistantPanel({
             </kbd>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner agent-chat-scroll">
-        {responseContent ? (
-          <div style={{ animation: "agent-message-in 200ms ease-out both" }}>
-            <MarkdownRenderer
-              content={responseContent}
-              className="text-[15px] leading-relaxed text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
-            />
-            {latestAssistantMessage?.isStreaming && (
-              <span
-                className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
-                style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+      <main className="mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner agent-chat-scroll">
+        <div ref={outputContentRef}>
+          {responseContent ? (
+            <div style={{ animation: "agent-message-in 200ms ease-out both" }}>
+              <MarkdownRenderer
+                content={responseContent}
+                className="text-[15px] leading-relaxed text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
               />
-            )}
-          </div>
-        ) : isBusy ? (
-          <span className="text-[15px] font-medium select-none thinking-shimmer-text">
-            {t("agentMode.input.thinking")}...
-          </span>
-        ) : null}
-      </div>
+              {latestAssistantMessage?.isStreaming && (
+                <span
+                  className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
+                  style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+                />
+              )}
+            </div>
+          ) : isBusy ? (
+            <span className="text-[15px] font-medium select-none thinking-shimmer-text">
+              {t("agentMode.input.thinking")}...
+            </span>
+          ) : null}
+        </div>
+      </main>
 
-      {/* The persistent VoicePill in App occupies this footer space. */}
-      <div className="h-19 shrink-0" aria-hidden="true" />
+      <footer className="flex h-16 shrink-0 items-center justify-end gap-2 px-4">
+        {isResponseReady && (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="rounded-full px-4"
+              onClick={onClose}
+            >
+              <X aria-hidden="true" />
+              {t("common.close")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-full px-4"
+              onClick={() => void handleCopy()}
+              aria-live="polite"
+            >
+              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+              {copied ? t("common.copied") : t("assistant.panel.copyToClipboard")}
+              {!copied && (
+                <kbd className="ml-1 rounded bg-primary-foreground/15 px-1.5 py-0.5 font-mono text-[10px] font-medium">
+                  C
+                </kbd>
+              )}
+            </Button>
+          </>
+        )}
+      </footer>
     </div>
   );
 }

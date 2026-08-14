@@ -3072,7 +3072,8 @@
   },
   "assistant": {
     "panel": {
-      "selectionHint": "Выберите текст для редактирования с помощью"
+      "selectionHint": "Выберите текст для редактирования с помощью",
+      "copyToClipboard": "Копировать в буфер обмена"
     }
   },
   "integrations": {

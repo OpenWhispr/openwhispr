@@ -3209,7 +3209,8 @@
   },
   "assistant": {
     "panel": {
-      "selectionHint": "Text zum Bearbeiten auswählen mit"
+      "selectionHint": "Text zum Bearbeiten auswählen mit",
+      "copyToClipboard": "In die Zwischenablage kopieren"
     }
   },
   "integrations": {

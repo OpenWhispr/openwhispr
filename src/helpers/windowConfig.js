@@ -28,13 +28,48 @@ const FLOATING_OVERLAY_TYPE =
         : "toolbar"
       : "normal";
 
+const ASSISTANT_PANEL_SIZE_LIMITS = {
+  ratioWidth: 442,
+  ratioHeight: 538,
+  gutter: 24,
+  minSurfaceWidth: 360,
+  maxSurfaceWidth: 600,
+};
+
+function fitAssistantWindowToWorkArea(requestedSize, workArea) {
+  const limits = ASSISTANT_PANEL_SIZE_LIMITS;
+  const ratio = limits.ratioWidth / limits.ratioHeight;
+  const availableSurfaceWidth = Math.max(1, workArea.width - limits.gutter);
+  const availableSurfaceHeight = Math.max(1, workArea.height - limits.gutter);
+  const maximumSurfaceWidth = Math.max(
+    1,
+    Math.min(
+      limits.maxSurfaceWidth,
+      availableSurfaceWidth,
+      Math.floor(availableSurfaceHeight * ratio)
+    )
+  );
+  const minimumSurfaceWidth = Math.min(limits.minSurfaceWidth, maximumSurfaceWidth);
+  const requestedSurfaceWidth = Math.round(requestedSize.width - limits.gutter);
+  const surfaceWidth = Math.max(
+    minimumSurfaceWidth,
+    Math.min(maximumSurfaceWidth, requestedSurfaceWidth)
+  );
+  const surfaceHeight = Math.round(surfaceWidth / ratio);
+
+  return {
+    width: surfaceWidth + limits.gutter,
+    height: surfaceHeight + limits.gutter,
+  };
+}
+
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
-  RECORDING: { width: 280, height: 96 },
+  RECORDING: { width: 128, height: 96 },
   WITH_MENU: { width: 240, height: 280 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },
-  ASSISTANT: { width: 660, height: 660 },
+  ASSISTANT: { width: 384, height: 462 },
 };
 
 // Main dictation window configuration
@@ -260,6 +295,8 @@ module.exports = {
   NOTIFICATION_WINDOW_CONFIG,
   TRANSCRIPTION_PREVIEW_CONFIG,
   TRANSCRIPTION_PREVIEW_SIZE_LIMITS,
+  ASSISTANT_PANEL_SIZE_LIMITS,
+  fitAssistantWindowToWorkArea,
   WINDOW_SIZES,
   WindowPositionUtil,
 };

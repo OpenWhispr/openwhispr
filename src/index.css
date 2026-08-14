@@ -444,7 +444,7 @@ a:hover {
 
 /* The panel grows around the persistent pill at its bottom-right anchor. */
 .assistant-panel-surface {
-  clip-path: inset(calc(100% - 56px) 0 0 calc(100% - 128px) round 24px);
+  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
   opacity: 0;
   pointer-events: none;
   transform: translate(4px, 4px);

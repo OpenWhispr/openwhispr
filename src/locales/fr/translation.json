@@ -3209,7 +3209,8 @@
   },
   "assistant": {
     "panel": {
-      "selectionHint": "Sélectionnez du texte à modifier avec"
+      "selectionHint": "Sélectionnez du texte à modifier avec",
+      "copyToClipboard": "Copier dans le presse-papiers"
     }
   },
   "integrations": {

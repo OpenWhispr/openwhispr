@@ -151,6 +151,7 @@ export default function App() {
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
   const [assistantPanelMounted, setAssistantPanelMounted] = useState(false);
+  const [assistantResponseReady, setAssistantResponseReady] = useState(false);
   const [pendingCommand, setPendingCommand] = useState(null);
   const [panelConversationId, setPanelConversationId] = useState(null);
   const assistantPanelOpenRef = useRef(assistantPanelOpen);
@@ -165,9 +166,10 @@ export default function App() {
   const openAssistantPanel = React.useCallback(async () => {
     if (assistantPanelOpenRef.current) return;
     assistantPanelOpenRef.current = true;
+    setAssistantResponseReady(false);
     clearTimeout(assistantCloseTimerRef.current);
     // Grow the window before the panel mounts so its entrance never paints
-    // clipped inside the smaller pill/capsule bounds.
+    // clipped inside the compact pill bounds.
     await window.electronAPI?.resizeMainWindow?.("ASSISTANT");
     setAssistantPanelMounted(true);
     cancelAnimationFrame(assistantOpenFrameRef.current);
@@ -187,6 +189,7 @@ export default function App() {
   const handleAssistantCommand = React.useCallback(
     (command) => {
       commandIdRef.current += 1;
+      setAssistantResponseReady(false);
       setPendingCommand({
         id: commandIdRef.current,
         text: command.text,
@@ -245,6 +248,7 @@ export default function App() {
     cancelAnimationFrame(assistantOpenFrameRef.current);
     assistantPanelOpenRef.current = false;
     setAssistantPanelOpen(false);
+    setAssistantResponseReady(false);
     setPendingCommand(null);
     clearTimeout(assistantCloseTimerRef.current);
     assistantCloseTimerRef.current = setTimeout(() => {
@@ -252,17 +256,17 @@ export default function App() {
     }, ASSISTANT_TRANSITION_MS);
   }, [isAssistantVoice, isRecording, isProcessing, cancelRecording, cancelProcessing]);
 
-  // Single owner of the window size: panel > menu > toast > capsule > base.
+  // Single owner of the window size: panel > menu > toast > compact pill > base.
   // Grows apply immediately so content never clips; shrinks wait for the
   // content collapse animation to finish before the window snaps down.
-  const isCapsule = isRecording || isProcessing;
+  const isCompactPill = isRecording || isProcessing;
   const lastSizeKeyRef = useRef(null);
   useEffect(() => {
     const target = resolveMainWindowSizeKey({
       panelOpen: assistantPanelMounted,
       menuOpen: isCommandMenuOpen,
       toastCount,
-      capsule: isCapsule,
+      compactPill: isCompactPill,
     });
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
@@ -273,7 +277,7 @@ export default function App() {
     const shrinkDelay = prev === "ASSISTANT" ? 20 : 340;
     const timeout = setTimeout(() => window.electronAPI?.resizeMainWindow?.(target), shrinkDelay);
     return () => clearTimeout(timeout);
-  }, [assistantPanelMounted, isCommandMenuOpen, toastCount, isCapsule]);
+  }, [assistantPanelMounted, isCommandMenuOpen, toastCount, isCompactPill]);
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -351,6 +355,10 @@ export default function App() {
         if (assistantPanelMounted) return;
         if (isCommandMenuOpen) {
           setIsCommandMenuOpen(false);
+        } else if (isRecording) {
+          cancelRecording();
+        } else if (isProcessing) {
+          cancelProcessing();
         } else {
           handleClose();
         }
@@ -359,7 +367,14 @@ export default function App() {
 
     document.addEventListener("keydown", handleKeyPress);
     return () => document.removeEventListener("keydown", handleKeyPress);
-  }, [isCommandMenuOpen, assistantPanelMounted]);
+  }, [
+    isCommandMenuOpen,
+    assistantPanelMounted,
+    isRecording,
+    isProcessing,
+    cancelRecording,
+    cancelProcessing,
+  ]);
 
   // Determine current mic state
   const getMicState = () => {
@@ -410,144 +425,144 @@ export default function App() {
 
   return (
     <div className="dictation-window">
-      {/* This one pill persists while the assistant surface opens around it. */}
-      <div
-        className={`fixed z-50 transition-[bottom,right,left,transform] duration-300 ease-out ${pillPositionClass}`}
-      >
+      {/* The panel footer owns this pill until final-response actions replace it. */}
+      {(!assistantPanelMounted || !assistantResponseReady) && (
         <div
-          className="relative flex items-center gap-2"
-          onMouseEnter={() => {
-            if (assistantPanelMounted) return;
-            setIsHovered(true);
-            setWindowInteractivity(true);
-          }}
-          onMouseLeave={() => {
-            if (assistantPanelMounted) return;
-            setIsHovered(false);
-            if (!isCommandMenuOpen) {
-              setWindowInteractivity(false);
-            }
-          }}
+          className={`fixed z-50 transition-[bottom,right,left,transform] duration-300 ease-out ${pillPositionClass}`}
         >
-          <Tooltip
-            content={micTooltip}
-            disabled={assistantPanelMounted}
-            align={
-              panelStartPosition === "bottom-left"
-                ? "left"
-                : panelStartPosition === "center"
-                  ? "center"
-                  : "right"
-            }
-          >
-            <VoicePill
-              ref={buttonRef}
-              variant={assistantPanelMounted ? "panel" : "floating"}
-              state={commonPillState}
-              expanded={!assistantPanelMounted && isCapsule}
-              getAudioLevel={getAudioLevel}
-              isDragging={isDragging}
-              cancelLabel={
-                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
+          <div
+            className="relative flex items-center gap-2"
+            onMouseEnter={() => {
+              if (assistantPanelMounted) return;
+              setIsHovered(true);
+              setWindowInteractivity(true);
+            }}
+            onMouseLeave={() => {
+              if (assistantPanelMounted) return;
+              setIsHovered(false);
+              if (!isCommandMenuOpen) {
+                setWindowInteractivity(false);
               }
-              onCancel={() => (isRecording ? cancelRecording() : cancelProcessing())}
-              role={assistantPanelMounted ? "status" : "button"}
-              aria-label={assistantPanelMounted ? t("settingsPage.agentConfig.title") : micTooltip}
-              onMouseDown={(e) => {
-                if (assistantPanelMounted) return;
-                setIsCommandMenuOpen(false);
-                setDragStartPos({ x: e.clientX, y: e.clientY });
-                setHasDragged(false);
-                handleMouseDown(e);
-              }}
-              onMouseMove={(e) => {
-                if (assistantPanelMounted) return;
-                if (dragStartPos && !hasDragged) {
-                  const distance = Math.sqrt(
-                    Math.pow(e.clientX - dragStartPos.x, 2) +
-                      Math.pow(e.clientY - dragStartPos.y, 2)
-                  );
-                  if (distance > 5) {
-                    // 5px threshold for drag
-                    setHasDragged(true);
-                  }
-                }
-              }}
-              onMouseUp={(e) => {
-                if (assistantPanelMounted) return;
-                handleMouseUp(e);
-                setDragStartPos(null);
-              }}
-              onClick={(e) => {
-                if (assistantPanelMounted) return;
-                if (!hasDragged && micState !== "processing") {
-                  setIsCommandMenuOpen(false);
-                  toggleListening();
-                }
-                e.preventDefault();
-              }}
-              onContextMenu={(e) => {
-                if (assistantPanelMounted) return;
-                e.preventDefault();
-                if (!hasDragged) {
-                  setWindowInteractivity(true);
-                  setIsCommandMenuOpen((prev) => !prev);
-                }
-              }}
-            />
-          </Tooltip>
-          {!assistantPanelMounted && isCommandMenuOpen && (
-            <div
-              ref={commandMenuRef}
-              className="absolute bottom-full right-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
-              onMouseEnter={() => {
-                setWindowInteractivity(true);
-              }}
-              onMouseLeave={() => {
-                if (!isHovered) {
-                  setWindowInteractivity(false);
-                }
-              }}
+            }}
+          >
+            <Tooltip
+              content={micTooltip}
+              disabled={assistantPanelMounted}
+              align={
+                panelStartPosition === "bottom-left"
+                  ? "left"
+                  : panelStartPosition === "center"
+                    ? "center"
+                    : "right"
+              }
             >
-              <button
-                className="w-full px-3 py-2 text-left text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
-                onClick={() => {
-                  toggleListening();
-                }}
-              >
-                {isRecording
-                  ? t("app.commandMenu.stopListening")
-                  : t("app.commandMenu.startListening")}
-              </button>
-              {agentAllowed && (
-                <>
-                  <div className="h-px bg-border" />
-                  <button
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
-                    onClick={() => {
-                      setIsCommandMenuOpen(false);
-                      openAssistantPanel();
-                    }}
-                  >
-                    {t("app.commandMenu.askAssistant")}
-                  </button>
-                </>
-              )}
-              <div className="h-px bg-border" />
-              <button
-                className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
-                onClick={() => {
+              <VoicePill
+                ref={buttonRef}
+                variant={assistantPanelMounted ? "panel" : "floating"}
+                state={commonPillState}
+                expanded={!assistantPanelMounted && isCompactPill}
+                getAudioLevel={getAudioLevel}
+                isDragging={isDragging}
+                role={assistantPanelMounted ? "status" : "button"}
+                aria-label={
+                  assistantPanelMounted ? t("settingsPage.agentConfig.title") : micTooltip
+                }
+                onMouseDown={(e) => {
+                  if (assistantPanelMounted) return;
                   setIsCommandMenuOpen(false);
-                  setWindowInteractivity(false);
-                  handleClose();
+                  setDragStartPos({ x: e.clientX, y: e.clientY });
+                  setHasDragged(false);
+                  handleMouseDown(e);
+                }}
+                onMouseMove={(e) => {
+                  if (assistantPanelMounted) return;
+                  if (dragStartPos && !hasDragged) {
+                    const distance = Math.sqrt(
+                      Math.pow(e.clientX - dragStartPos.x, 2) +
+                        Math.pow(e.clientY - dragStartPos.y, 2)
+                    );
+                    if (distance > 5) {
+                      // 5px threshold for drag
+                      setHasDragged(true);
+                    }
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (assistantPanelMounted) return;
+                  handleMouseUp(e);
+                  setDragStartPos(null);
+                }}
+                onClick={(e) => {
+                  if (assistantPanelMounted) return;
+                  if (!hasDragged && micState !== "processing") {
+                    setIsCommandMenuOpen(false);
+                    toggleListening();
+                  }
+                  e.preventDefault();
+                }}
+                onContextMenu={(e) => {
+                  if (assistantPanelMounted) return;
+                  e.preventDefault();
+                  if (!hasDragged) {
+                    setWindowInteractivity(true);
+                    setIsCommandMenuOpen((prev) => !prev);
+                  }
+                }}
+              />
+            </Tooltip>
+            {!assistantPanelMounted && isCommandMenuOpen && (
+              <div
+                ref={commandMenuRef}
+                className="absolute bottom-full right-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
+                onMouseEnter={() => {
+                  setWindowInteractivity(true);
+                }}
+                onMouseLeave={() => {
+                  if (!isHovered) {
+                    setWindowInteractivity(false);
+                  }
                 }}
               >
-                {t("app.commandMenu.hideForNow")}
-              </button>
-            </div>
-          )}
+                <button
+                  className="w-full px-3 py-2 text-left text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
+                  onClick={() => {
+                    toggleListening();
+                  }}
+                >
+                  {isRecording
+                    ? t("app.commandMenu.stopListening")
+                    : t("app.commandMenu.startListening")}
+                </button>
+                {agentAllowed && (
+                  <>
+                    <div className="h-px bg-border" />
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                      onClick={() => {
+                        setIsCommandMenuOpen(false);
+                        openAssistantPanel();
+                      }}
+                    >
+                      {t("app.commandMenu.askAssistant")}
+                    </button>
+                  </>
+                )}
+                <div className="h-px bg-border" />
+                <button
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                  onClick={() => {
+                    setIsCommandMenuOpen(false);
+                    setWindowInteractivity(false);
+                    handleClose();
+                  }}
+                >
+                  {t("app.commandMenu.hideForNow")}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {assistantPanelMounted && (
         <AssistantPanel
@@ -558,6 +573,7 @@ export default function App() {
           voiceState={assistantVoiceState}
           open={assistantPanelOpen}
           onClose={handleAssistantPanelClose}
+          onResponseReadyChange={setAssistantResponseReady}
         />
       )}
     </div>

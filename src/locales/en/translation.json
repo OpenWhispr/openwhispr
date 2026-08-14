@@ -3209,7 +3209,8 @@
   },
   "assistant": {
     "panel": {
-      "selectionHint": "Select text to edit with"
+      "selectionHint": "Select text to edit with",
+      "copyToClipboard": "Copy to clipboard"
     }
   },
   "integrations": {

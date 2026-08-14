@@ -1,5 +1,4 @@
 import { forwardRef, type HTMLAttributes } from "react";
-import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { LiveWaveform } from "./LiveWaveform";
@@ -12,8 +11,6 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   getAudioLevel: () => number | null;
   expanded?: boolean;
   isDragging?: boolean;
-  cancelLabel?: string;
-  onCancel?: () => void;
 }
 
 const GROW_TRANSITION = "320ms cubic-bezier(0.2, 0, 0, 1)";
@@ -35,8 +32,6 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     getAudioLevel,
     expanded = false,
     isDragging = false,
-    cancelLabel,
-    onCancel,
     className,
     style,
     ...props
@@ -47,8 +42,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isProcessing = state === "processing";
   const isUnavailable = state === "unavailable";
   const isPanel = variant === "panel";
-  const showWaveform = isPanel || expanded;
-  const showCancel = !isPanel && expanded;
+  const showCompactPill = isPanel || expanded;
+  const restingWaveHeights = isPanel ? RESTING_WAVE_HEIGHTS.slice(0, 6) : RESTING_WAVE_HEIGHTS;
 
   return (
     <div
@@ -60,9 +55,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         className
       )}
       style={{
-        // The exact same root contracts into the compact panel control.
-        width: isPanel ? 112 : expanded ? 264 : 40,
-        height: isPanel ? 44 : 40,
+        // Listening uses the same compact pill as the assistant panel. The
+        // previous wide recording bar made the control feel like a different
+        // surface and forced an unnecessary large window resize.
+        width: isPanel ? 92 : showCompactPill ? 112 : 40,
+        height: isPanel ? 36 : showCompactPill ? 44 : 40,
         cursor: isProcessing ? "not-allowed" : isDragging ? "grabbing" : "pointer",
         transform: !isPanel && state === "hover" ? "scale(1.05)" : "scale(1)",
         transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
@@ -76,7 +73,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <BrandMarkIcon
-        size={isPanel ? 20 : state === "hover" ? 24 : 22}
+        size={isPanel ? 16 : showCompactPill ? 20 : state === "hover" ? 24 : 22}
         className={cn(
           "shrink-0 transition-[color,width,height] duration-200",
           (isUnavailable || isProcessing) && "animate-pulse"
@@ -84,26 +81,27 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <div
-        className="h-5 shrink-0 overflow-hidden bg-border/60"
+        className="shrink-0 overflow-hidden bg-border/60"
         style={{
-          width: isPanel ? 1 : 0,
-          marginLeft: isPanel ? 6 : 0,
-          marginRight: isPanel ? 6 : 0,
-          opacity: isPanel ? 1 : 0,
+          height: isPanel ? 16 : 20,
+          width: showCompactPill ? 1 : 0,
+          marginLeft: showCompactPill ? (isPanel ? 4 : 6) : 0,
+          marginRight: showCompactPill ? (isPanel ? 4 : 6) : 0,
+          opacity: showCompactPill ? 1 : 0,
           transition: `width ${GROW_TRANSITION}, margin ${GROW_TRANSITION}, opacity 180ms ease-out`,
         }}
       />
 
       <div
-        className="h-8 shrink-0 overflow-hidden text-current"
+        className="shrink-0 overflow-hidden text-current"
         style={{
-          width: isPanel ? 64 : expanded ? 148 : 0,
-          marginLeft: !isPanel && expanded ? 10 : 0,
-          opacity: showWaveform ? 1 : 0,
-          transition: `width ${GROW_TRANSITION}, margin-left ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
+          width: showCompactPill ? (isPanel ? 52 : 64) : 0,
+          height: isPanel ? 24 : 32,
+          opacity: showCompactPill ? 1 : 0,
+          transition: `width ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
         }}
       >
-        {isPanel && !isRecording ? (
+        {showCompactPill && !isRecording ? (
           <div
             className={cn(
               "flex h-full items-center justify-center gap-0.5",
@@ -111,7 +109,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
             )}
             aria-hidden="true"
           >
-            {RESTING_WAVE_HEIGHTS.map((height, index) => (
+            {restingWaveHeights.map((height, index) => (
               <span
                 key={`${height}-${index}`}
                 className="w-0.5 rounded-full bg-current"
@@ -123,34 +121,10 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
           <LiveWaveform
             getLevel={getAudioLevel}
             active={isRecording}
-            barCount={isPanel ? 8 : 14}
+            barCount={isPanel ? 6 : 8}
             className={isRecording ? "" : "opacity-60"}
           />
         )}
-      </div>
-
-      <div
-        className="shrink-0 overflow-hidden"
-        style={{
-          width: showCancel ? 32 : 0,
-          marginLeft: showCancel ? 6 : 0,
-          opacity: showCancel ? 1 : 0,
-          transition: `width ${GROW_TRANSITION}, margin-left ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
-        }}
-        // A near-miss on cancel must not commit via the capsule click handler.
-        onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          aria-label={cancelLabel}
-          tabIndex={showCancel ? 0 : -1}
-          onClick={onCancel}
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors duration-150 hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40"
-        >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground/10">
-            <X size={12} strokeWidth={2.5} className="text-foreground/80" />
-          </span>
-        </button>
       </div>
 
       {isUnavailable && (
