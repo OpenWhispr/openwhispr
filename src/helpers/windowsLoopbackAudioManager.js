@@ -294,27 +294,17 @@ class WindowsLoopbackAudioManager {
       };
     }
 
-    try {
-      const result = await this._runJsonCommand(["probe"], PROBE_TIMEOUT_MS);
-      const supportsNativeCapture = !!result?.supportsNativeCapture;
-      const supportsSystemAudio = result?.supportsSystemAudio !== false;
-      const available = !!result?.ok && supportsSystemAudio && supportsNativeCapture;
-      return {
-        available,
-        supportsNativeCapture,
-        supportsSystemAudio,
-        error: typeof result?.error === "string" ? result.error : null,
-        probeTransient: false,
-      };
-    } catch (error) {
-      return {
-        available: false,
-        supportsNativeCapture: false,
-        supportsSystemAudio: false,
-        error: error.message,
-        probeTransient: true,
-      };
-    }
+    // Thrown errors (spawn failure, probe timeout) are handled by
+    // getCapability's catch, which logs them and caches them transiently.
+    const result = await this._runJsonCommand(["probe"], PROBE_TIMEOUT_MS);
+    const supportsNativeCapture = !!result?.supportsNativeCapture;
+    const supportsSystemAudio = result?.supportsSystemAudio !== false;
+    return {
+      available: !!result?.ok && supportsSystemAudio && supportsNativeCapture,
+      supportsNativeCapture,
+      supportsSystemAudio,
+      error: typeof result?.error === "string" ? result.error : null,
+    };
   }
 
   _runJsonCommand(args, timeoutMs) {
