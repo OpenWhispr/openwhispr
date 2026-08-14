@@ -34,6 +34,23 @@ export interface NoteRecordingProvider {
   models: NoteRecordingProviderModel[];
 }
 
+// Session options for the shared dictation-realtime-* channels. `provider` is
+// what fetchRealtimeToken's allowlist keys on — the renderer must always send
+// it (built by dictationStreamingRouting.buildStreamingSessionOptions); the
+// main process defaults a missing value to "openai-realtime" for pre-1.8.4
+// renderers (#1624).
+export interface DictationRealtimeSessionOptions {
+  provider: string;
+  model?: string;
+  mode?: "byok" | "openwhispr";
+  language?: string;
+  sampleRate?: number;
+  keyterms?: string[];
+  environment?: string;
+  tenant?: string;
+  preview?: boolean;
+}
+
 export type NoteRecordingConfigFailure = { success: false } & PolicyFailureMetadata;
 
 export type NoteRecordingConfigResult =
@@ -2461,14 +2478,12 @@ declare global {
       ) => Promise<{ success: boolean }>;
 
       // Dictation realtime streaming
-      dictationRealtimeWarmup?: (options: {
-        model?: string;
-        mode?: "byok" | "openwhispr";
-      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      dictationRealtimeStart?: (options: {
-        model?: string;
-        mode?: "byok" | "openwhispr";
-      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
+      dictationRealtimeWarmup?: (
+        options: DictationRealtimeSessionOptions
+      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
+      dictationRealtimeStart?: (
+        options: DictationRealtimeSessionOptions
+      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;

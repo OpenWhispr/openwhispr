@@ -90,12 +90,17 @@ import {
   extractSelectionEditReplacement,
   getSelectionCaptureDisposition,
 } from "./selectionEditing";
+import {
+  REALTIME_MODELS,
+  defaultStreamingProviderName,
+  resolveStreamingProviderName,
+  buildStreamingSessionOptions,
+} from "./dictationStreamingRouting";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
-const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
 const micDeviceKey = (settings) => `${settings.preferBuiltInMic}|${settings.selectedMicDeviceId}`;
 
@@ -314,18 +319,8 @@ const STREAMING_PROVIDERS = {
   },
   "tinfoil-realtime": {
     awaitsFinalTranscript: true,
-    warmup: (opts) =>
-      window.electronAPI.dictationRealtimeWarmup({
-        ...opts,
-        provider: "tinfoil-realtime",
-        preview: true,
-      }),
-    start: (opts) =>
-      window.electronAPI.dictationRealtimeStart({
-        ...opts,
-        provider: "tinfoil-realtime",
-        preview: true,
-      }),
+    warmup: (opts) => window.electronAPI.dictationRealtimeWarmup(opts),
+    start: (opts) => window.electronAPI.dictationRealtimeStart(opts),
     send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
     stop: () => window.electronAPI.dictationRealtimeStop(),
     onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
@@ -480,6 +475,7 @@ class AudioManager {
     this.selectionCapturePromise = null;
     this.context = "dictation";
     this.sttConfig = null;
+    this.warmupFailureStreak = 0;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
     this._localSpeechGateState = null;
@@ -811,23 +807,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProvider() {
-    const fallback = this.context === "notes" ? "deepgram" : "openai-realtime";
-    return STREAMING_PROVIDERS[this.getStreamingProviderName()] || STREAMING_PROVIDERS[fallback];
+    return STREAMING_PROVIDERS[this.getStreamingProviderName()];
   }
 
   getStreamingProviderName() {
-    const s = getSettings();
-    if (s.cloudTranscriptionProvider === "tinfoil") {
-      return "tinfoil-realtime";
-    }
-    if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
-      return "corti";
-    }
-    if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
-      return "openai-realtime";
-    }
-    const defaultProvider = this.context === "notes" ? "deepgram" : "openai-realtime";
-    return this.sttConfig?.streamingProvider || defaultProvider;
+    const name = resolveStreamingProviderName({
+      settings: getSettings(),
+      context: this.context,
+      sttConfig: this.sttConfig,
+    });
+    // A server-driven sttConfig.streamingProvider we don't recognize must fall
+    // back to a provider we can run — and the reported name must match the
+    // channel bindings actually used, so the main process is never handed a
+    // provider id it would fail closed on.
+    return STREAMING_PROVIDERS[name] ? name : defaultStreamingProviderName(this.context);
   }
 
   async getAudioConstraints(forceDefaultMic = false) {
@@ -3611,26 +3604,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
-      const provider = this.getStreamingProvider();
+      const providerName = this.getStreamingProviderName();
+      const provider = STREAMING_PROVIDERS[providerName];
       const [, wsResult] = await Promise.all([
         this.cacheMicrophoneDeviceId(),
         withSessionRefresh(async () => {
-          const {
-            preferredLanguage: warmupLang,
-            cloudTranscriptionModel,
-            cloudTranscriptionMode,
-            cortiEnvironment,
-            cortiTenant,
-          } = getSettings();
-          const res = await provider.warmup({
-            sampleRate: 16000,
-            language: warmupLang && warmupLang !== "auto" ? warmupLang : undefined,
-            keyterms: this.getKeyterms(),
-            model: cloudTranscriptionModel,
-            mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
-            environment: cortiEnvironment,
-            tenant: cortiTenant,
-          });
+          const settings = getSettings();
+          const res = await provider.warmup(
+            buildStreamingSessionOptions({
+              providerName,
+              settings,
+              language: settings.preferredLanguage,
+              keyterms: this.getKeyterms(),
+            })
+          );
           // Throw error to trigger retry if AUTH_EXPIRED
           if (!res.success && res.code) {
             const err = new Error(res.error || "Warmup failed");
@@ -3663,6 +3650,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // re-fire once the warm window lapses (#845).
         await this._warmMicDriverIfCold("streaming");
 
+        this.warmupFailureStreak = 0;
         logger.info(
           "Streaming connection warmed up",
           { alreadyWarm: wsResult.alreadyWarm, micCached: !!this.cachedMicDeviceId },
@@ -3673,13 +3661,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         logger.debug("Streaming warmup skipped - API not configured", {}, "streaming");
         return false;
       } else {
-        logger.warn("Streaming warmup failed", { error: wsResult.error }, "streaming");
+        this._reportWarmupFailure(providerName, wsResult.error, wsResult.code);
         return false;
       }
     } catch (error) {
-      logger.error("Streaming warmup error", { error: error.message }, "streaming");
+      this._reportWarmupFailure(this.getStreamingProviderName(), error.message, error.code);
       return false;
     }
+  }
+
+  // Warmup exercises the same connect that recording start will make, so a
+  // failing warmup predicts a guaranteed user-facing failure at the next
+  // keypress — #1624 logged exactly this on every idle cycle for days at warn
+  // level and nobody saw it. Error level, provider named, streak counted.
+  _reportWarmupFailure(provider, error, code) {
+    this.warmupFailureStreak += 1;
+    logger.error(
+      "Streaming warmup failed",
+      { provider, error, code, consecutiveFailures: this.warmupFailureStreak },
+      "streaming"
+    );
   }
 
   async getOrCreateAudioContext() {
@@ -3914,23 +3915,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       //    so Deepgram receives data immediately (no idle timeout).
       const result = await withSessionRefresh(async () => {
         const streamingSettings = getSettings();
-        const {
-          cloudTranscriptionModel,
-          cloudTranscriptionMode,
-          cortiEnvironment,
-          cortiTenant,
-          useLocalWhisper,
-        } = streamingSettings;
-        const sttLanguage = this.getEffectiveSttLanguage(streamingSettings);
-        const res = await provider.start({
-          sampleRate: 16000,
-          language: sttLanguage && sttLanguage !== "auto" ? sttLanguage : undefined,
-          keyterms: this.getKeyterms(),
-          model: cloudTranscriptionModel,
-          mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
-          environment: cortiEnvironment,
-          tenant: cortiTenant,
-        });
+        const { useLocalWhisper } = streamingSettings;
+        const res = await provider.start(
+          buildStreamingSessionOptions({
+            providerName: this.getStreamingProviderName(),
+            settings: streamingSettings,
+            language: this.getEffectiveSttLanguage(streamingSettings),
+            keyterms: this.getKeyterms(),
+          })
+        );
 
         if (!res.success) {
           if (res.code === "NO_API") {
@@ -4019,7 +4012,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return this.startStreamingRecording(true);
       }
 
-      logger.error("Failed to start streaming recording", { error: error.message }, "streaming");
+      logger.error(
+        "Failed to start streaming recording",
+        { provider: this.getStreamingProviderName(), error: error.message, code: error.code },
+        "streaming"
+      );
 
       let errorTitle = "Streaming Error";
       let errorDescription = `Failed to start streaming: ${error.message}`;
