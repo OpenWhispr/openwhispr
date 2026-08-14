@@ -71,8 +71,13 @@ const CJK_CHAR_RANGE = "\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff";
 const CJK_TO_LATIN_RE = new RegExp(`([${CJK_CHAR_RANGE}])(?=[A-Za-z0-9])`, "g");
 const LATIN_TO_CJK_RE = new RegExp(`([A-Za-z0-9])(?=[${CJK_CHAR_RANGE}])`, "g");
 
-function normalizeCjkTranscript(transcript: string): string {
+function normalizeCjkTranscript(transcript: string, agentName: string): string {
+  const escapedName = agentName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const agentNamePattern = new RegExp(escapedName, "giu");
+
   return transcript
+    .normalize("NFC")
+    .replace(agentNamePattern, " $& ")
     .replace(CJK_PUNCTUATION_RE, (ch) => CJK_PUNCTUATION_MAP[ch] ?? ch)
     .replace(CJK_TO_LATIN_RE, "$1 ")
     .replace(LATIN_TO_CJK_RE, "$1 ");
@@ -108,9 +113,11 @@ export function detectAgentName(transcript: string, agentName: string, language?
   const base = baseLanguageOf(language);
   const localizedCues = (base && LOCALIZED_CUE_SETS.get(base)) || EMPTY_CUES;
   // Normalization is gated with the cues so non-CJK dictation stays untouched.
-  const source = base === "ja" || base === "zh" ? normalizeCjkTranscript(transcript) : transcript;
+  const normalizeCjk = base === "ja" || base === "zh";
+  const detectionName = normalizeCjk ? name.normalize("NFC") : name;
+  const source = normalizeCjk ? normalizeCjkTranscript(transcript, detectionName) : transcript;
 
-  const nameLower = name.toLowerCase().replace(/\s+/g, "");
+  const nameLower = detectionName.toLowerCase().replace(/\s+/g, "");
   const rawWords = source.split(/\s+/).filter(Boolean);
   const words = rawWords.map((w) => w.replace(/[.,!?;:'"()]/g, "").toLowerCase());
 
@@ -118,7 +125,7 @@ export function detectAgentName(transcript: string, agentName: string, language?
   // STT may split the name across tokens ("open whispr") or mishear it, so
   // compare joined windows up to the name's own token count (minimum 2)
   // against the name, allowing length-scaled edits.
-  const maxSpan = Math.max(2, name.split(/\s+/).length);
+  const maxSpan = Math.max(2, detectionName.split(/\s+/).length);
 
   for (let i = 0; i < words.length; i++) {
     let joined = "";

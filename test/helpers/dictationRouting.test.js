@@ -697,8 +697,18 @@ test("an override toggled on but never configured falls back to the base rules",
 test("wake-word language follows the dictation language when it is explicit", async () => {
   const { resolveWakeWordLanguage } = await load();
 
-  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "it", uiLanguage: "en" }), "it");
+  assert.equal(
+    resolveWakeWordLanguage({ preferredLanguage: "it", uiLanguage: "en" }, "fr"),
+    "it"
+  );
   assert.equal(resolveWakeWordLanguage({ preferredLanguage: "zh-CN", uiLanguage: "en" }), "zh-CN");
+});
+
+test("wake-word language uses detected speech before the UI language on auto", async () => {
+  const { resolveWakeWordLanguage } = await load();
+
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: "it" }, "en"), "en");
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "", uiLanguage: "en" }, "it"), "it");
 });
 
 test("wake-word language falls back to the UI language on auto or unset", async () => {

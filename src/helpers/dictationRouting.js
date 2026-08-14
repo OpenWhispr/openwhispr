@@ -141,11 +141,13 @@ export function resolveTranslationDisplayProvider({ translationMode, translation
   return resolveModeDisplayProvider(translationMode, translationProvider);
 }
 
-// Wake-word cues gate on the dictation language; with "auto" the UI language
-// is the best available hint for what the user actually speaks.
-export function resolveWakeWordLanguage({ preferredLanguage, uiLanguage }) {
+// Wake-word cues gate on the explicit dictation language, then the language
+// detected by STT, with the UI language as the final hint under auto-detect.
+export function resolveWakeWordLanguage({ preferredLanguage, uiLanguage }, detectedLanguage) {
   const language = typeof preferredLanguage === "string" ? preferredLanguage.trim() : "";
-  if (language && language !== "auto") return language;
+  if (language && language.toLowerCase() !== "auto") return language;
+  const detected = typeof detectedLanguage === "string" ? detectedLanguage.trim() : "";
+  if (detected && detected.toLowerCase() !== "auto") return detected;
   return typeof uiLanguage === "string" ? uiLanguage : undefined;
 }
 

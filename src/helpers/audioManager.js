@@ -143,7 +143,8 @@ function resolveReasoningRoute(
   agentName,
   voiceAgentRequested,
   translationRequested,
-  screenContext
+  screenContext,
+  detectedLanguage
 ) {
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
   const cleanupReachable =
@@ -163,7 +164,7 @@ function resolveReasoningRoute(
     agentInvoked:
       !translationRequested &&
       !!agentName &&
-      detectAgentName(text, agentName, resolveWakeWordLanguage(settings)),
+      detectAgentName(text, agentName, resolveWakeWordLanguage(settings, detectedLanguage)),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
@@ -2862,7 +2863,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext
+        screenContext,
+        result.sttLanguage
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");

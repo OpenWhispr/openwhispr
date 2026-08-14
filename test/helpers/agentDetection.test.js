@@ -140,6 +140,20 @@ test("splits unsegmented CJK-Latin transitions so cue and name separate", async 
   assert.equal(detectAgentName("「ねぇJarvisを呼んで」", "Jarvis", "ja"), true);
 });
 
+test("matches configured Unicode names in unsegmented CJK transcripts", async () => {
+  const { detectAgentName } = await load();
+
+  assert.equal(detectAgentName("ねぇジャービス、メールを書いて", "ジャービス", "ja"), true);
+  assert.equal(detectAgentName("你好小助手，帮我写邮件", "小助手", "zh-CN"), true);
+  assert.equal(detectAgentName("ねぇélodieメールを書いて", "Élodie", "ja"), true);
+});
+
+test("does not treat an unsegmented CJK mention as an address", async () => {
+  const { detectAgentName } = await load();
+
+  assert.equal(detectAgentName("これは小助手についての話です", "小助手", "zh-CN"), false);
+});
+
 test("leaves CJK punctuation untouched outside ja and zh dictation", async () => {
   const { detectAgentName } = await load();
 
@@ -152,6 +166,13 @@ test("leaves CJK punctuation untouched outside ja and zh dictation", async () =>
     detectAgentName("we compared prices to 小米。Jarvis pull up the page", "Jarvis", "zh"),
     true
   );
+});
+
+test("leaves non-CJK Unicode normalization behavior unchanged", async () => {
+  const { detectAgentName } = await load();
+  const decomposedName = "E\u0301lodie";
+
+  assert.equal(detectAgentName(`${decomposedName} take a note`, decomposedName, "fr"), true);
 });
 
 test("maps regional language codes to their base cue set", async () => {
