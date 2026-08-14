@@ -77,6 +77,8 @@ class DeepgramStreaming {
     this.onFinalTranscript = null;
     this.onError = null;
     this.onSessionEnd = null;
+    this.onConnectionLost = null;
+    this.connectionLossNotified = false;
     this.pendingResolve = null;
     this.pendingReject = null;
     this.connectionTimeout = null;
@@ -419,6 +421,7 @@ class DeepgramStreaming {
 
     this.ws = this.warmConnection;
     this.isConnected = true;
+    this.connectionLossNotified = false;
     this.sessionId = this.warmSessionId || null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
@@ -431,9 +434,10 @@ class DeepgramStreaming {
 
     this.ws.removeAllListeners("error");
     this.ws.on("error", (error) => {
+      const wasActive = this.isConnected;
       debugLogger.error("Deepgram WebSocket error", { error: error.message });
       this.cleanup();
-      this.onError?.(error);
+      if (wasActive && !this.isDisconnecting) this.notifyConnectionLost(error);
     });
 
     this.ws.removeAllListeners("close");
@@ -449,7 +453,7 @@ class DeepgramStreaming {
       }
       this.cleanup();
       if (wasActive && !this.isDisconnecting) {
-        this.onError?.(new Error(`Connection lost (code: ${code})`));
+        this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
       }
     });
 
@@ -562,6 +566,7 @@ class DeepgramStreaming {
     this.finalSegments = [];
     this.audioBytesSent = 0;
     this.resultsReceived = 0;
+    this.connectionLossNotified = false;
 
     if (replayBuffer && replayBuffer.length > 0) {
       this.coldStartBuffer = replayBuffer;
@@ -608,6 +613,7 @@ class DeepgramStreaming {
       });
 
       this.ws.on("error", (error) => {
+        const wasActive = this.isConnected;
         debugLogger.error("Deepgram WebSocket error", { error: error.message });
         // Invalidate cached token on auth failure so next attempt fetches fresh
         if (error.message && error.message.includes("401")) {
@@ -620,7 +626,11 @@ class DeepgramStreaming {
           this.pendingReject = null;
           this.pendingResolve = null;
         }
-        this.onError?.(error);
+        if (wasActive && !this.isDisconnecting) {
+          this.notifyConnectionLost(error);
+        } else if (!this.isDisconnecting) {
+          this.onError?.(error);
+        }
       });
 
       this.ws.on("close", (code, reason) => {
@@ -640,10 +650,20 @@ class DeepgramStreaming {
         }
         this.cleanup();
         if (wasActive && !this.isDisconnecting) {
-          this.onError?.(new Error(`Connection lost (code: ${code})`));
+          this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
         }
       });
     });
+  }
+
+  notifyConnectionLost(error) {
+    if (this.connectionLossNotified) return;
+    this.connectionLossNotified = true;
+    if (this.onConnectionLost) {
+      this.onConnectionLost(error);
+    } else {
+      this.onError?.(error);
+    }
   }
 
   handleMessage(data) {

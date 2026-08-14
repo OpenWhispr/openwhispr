@@ -51,19 +51,62 @@ func observerCallback(
 }
 
 // Usage: macos-text-monitor <pid>
-guard CommandLine.arguments.count >= 2,
-      let targetPid = Int32(CommandLine.arguments[1]),
+//        macos-text-monitor --selected-text <pid>
+//        macos-text-monitor --window-bounds <pid>
+let selectionReadMode = CommandLine.arguments.count >= 3 &&
+    CommandLine.arguments[1] == "--selected-text"
+let windowBoundsMode = CommandLine.arguments.count >= 3 &&
+    CommandLine.arguments[1] == "--window-bounds"
+let pidArgumentIndex = selectionReadMode || windowBoundsMode ? 2 : 1
+
+guard CommandLine.arguments.count > pidArgumentIndex,
+      let targetPid = Int32(CommandLine.arguments[pidArgumentIndex]),
       targetPid > 0 else {
-    writeError("Usage: macos-text-monitor <pid>")
+    writeError("Usage: macos-text-monitor [--selected-text|--window-bounds] <pid>")
     writeOutput("NO_ELEMENT")
     exit(1)
 }
 
 monitoredPid = targetPid
 
-// Read original text from stdin
+// Reports the target's window rect so the caller can tell which display the user
+// is working on. Asks the window server rather than accessibility on purpose:
+// AXFocusedWindow is unavailable in exactly the apps whose accessibility tree
+// stays dormant (Chromium), and window bounds need no Screen Recording
+// permission — only window *titles* do.
+if windowBoundsMode {
+    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+    // Largest window rather than frontmost: layer 0 still includes the full-width
+    // toolbar strips Arc-family browsers float above their content, and one of
+    // those spanning another display would name the wrong screen.
+    var best: (x: Int, y: Int, width: Int, height: Int, area: Double)?
+    for window in windows {
+        guard let ownerPid = window[kCGWindowOwnerPID as String] as? pid_t, ownerPid == targetPid,
+              let layer = window[kCGWindowLayer as String] as? Int, layer == 0,
+              let bounds = window[kCGWindowBounds as String] as? [String: Any],
+              let x = bounds["X"] as? Double, let y = bounds["Y"] as? Double,
+              let width = bounds["Width"] as? Double, let height = bounds["Height"] as? Double
+        else { continue }
+        let area = width * height
+        if area > (best?.area ?? 0) {
+            best = (Int(x), Int(y), Int(width), Int(height), area)
+        }
+    }
+
+    guard let window = best else {
+        writeOutput("NO_WINDOW")
+        exit(1)
+    }
+    writeOutput("BOUNDS:\(window.x),\(window.y),\(window.width),\(window.height)")
+    exit(0)
+}
+
+// Read original text from stdin (monitoring mode only). Selection reads are
+// spawned via execFile, which keeps stdin open without writing — blocking on
+// readLine there would hang until the caller's timeout kills the process.
 var originalText = ""
-if let line = readLine(strippingNewline: true) {
+if !selectionReadMode, let line = readLine(strippingNewline: true) {
     originalText = line
 }
 
@@ -98,6 +141,36 @@ for attempt in 1...maxRetries {
 
 guard let resolvedElement = focusedElement else {
     writeOutput("NO_ELEMENT")
+    exit(1)
+}
+
+// Selection capture is a short-lived, read-only mode used before an AI edit.
+// It deliberately uses the same AX client as the monitor so a packaged app's
+// trusted native helper does not need to rely on System Events automation.
+if selectionReadMode {
+    var selectionValue: AnyObject?
+    let selectionResult = AXUIElementCopyAttributeValue(
+        resolvedElement,
+        kAXSelectedTextAttribute as CFString,
+        &selectionValue
+    )
+
+    if selectionResult == .success, let selection = selectionValue as? String {
+        if selection.isEmpty {
+            writeOutput("NONE:")
+        } else {
+            writeTextOutput("SELECTED", selection)
+        }
+        exit(0)
+    }
+
+    if selectionResult == .noValue || selectionResult == .attributeUnsupported {
+        writeOutput("NONE:")
+        exit(0)
+    }
+
+    writeError("Cannot read selected text for PID \(monitoredPid) (error: \(selectionResult.rawValue))")
+    writeOutput("UNAVAILABLE:")
     exit(1)
 }
 

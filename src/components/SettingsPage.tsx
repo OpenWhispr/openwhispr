@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
+import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
@@ -105,8 +106,25 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
-import { clearMissingLocalModelSelections, useSettingsStore } from "../stores/settingsStore";
+import {
+  clearMissingLocalModelSelections,
+  TRANSCRIPTION_POLICY_PROVIDER_IDS,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
+import { highestPlan } from "../lib/usageStore";
+import { decideProPlanCardCta } from "../lib/upsell";
+import {
+  canChangeCloudBackupPreference,
+  effectiveAudioRetentionDays,
+  effectiveLocalHistoryEnabled,
+  isAgentAllowed,
+  isCloudBackupAllowed,
+  lockedLocalHistoryValue,
+  maxAudioRetentionDays,
+} from "../stores/policyRules";
+import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
+import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
@@ -268,42 +286,50 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
-
-  const transcriptionModes: InferenceModeOption[] = [
-    {
-      id: "openwhispr",
-      label: t("settingsPage.transcription.modes.openwhispr"),
-      description: t("settingsPage.transcription.modes.openwhisprDesc"),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
-    },
-    {
-      id: "providers",
-      label: t("settingsPage.transcription.modes.providers"),
-      description: t("settingsPage.transcription.modes.providersDesc"),
-      icon: <Key className="w-4 h-4" />,
-    },
-    {
-      id: "local",
-      label: t("settingsPage.transcription.modes.local"),
-      description: t("settingsPage.transcription.modes.localDesc"),
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
-      id: "self-hosted",
-      label: t("settingsPage.transcription.modes.selfHosted"),
-      description: t("settingsPage.transcription.modes.selfHostedDesc"),
-      icon: <Network className="w-4 h-4" />,
-    },
-  ];
-
+  const {
+    modes: transcriptionModes,
+    effectiveMode: effectiveTranscriptionMode,
+    isModeAllowed,
+  } = usePolicyModeOptions<InferenceModeOption>(
+    [
+      {
+        id: "openwhispr",
+        label: t("settingsPage.transcription.modes.openwhispr"),
+        description: t("settingsPage.transcription.modes.openwhisprDesc"),
+        icon: <Cloud className="w-4 h-4" />,
+        disabled: !isSignedIn,
+        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+      },
+      {
+        id: "providers",
+        label: t("settingsPage.transcription.modes.providers"),
+        description: t("settingsPage.transcription.modes.providersDesc"),
+        icon: <Key className="w-4 h-4" />,
+      },
+      {
+        id: "local",
+        label: t("settingsPage.transcription.modes.local"),
+        description: t("settingsPage.transcription.modes.localDesc"),
+        icon: <Cpu className="w-4 h-4" />,
+      },
+      {
+        id: "self-hosted",
+        label: t("settingsPage.transcription.modes.selfHosted"),
+        description: t("settingsPage.transcription.modes.selfHostedDesc"),
+        icon: <Network className="w-4 h-4" />,
+      },
+    ],
+    "transcription",
+    transcriptionMode,
+    { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
+  );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
+    if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
       return;
     }
-    if (mode === transcriptionMode) return;
+    if (mode === effectiveTranscriptionMode) return;
     setTranscriptionMode(mode);
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
@@ -378,19 +404,19 @@ function TranscriptionSection({
     <div className="space-y-4">
       <InferenceModeSelector
         modes={transcriptionModes}
-        activeMode={transcriptionMode}
+        activeMode={effectiveTranscriptionMode}
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {transcriptionMode === "local" && (
+      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {effectiveTranscriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}
           {renderPreviewToggle()}
         </>
       )}
 
-      {transcriptionMode === "self-hosted" && (
+      {effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel
           service="transcription"
           url={remoteTranscriptionUrl}
@@ -498,6 +524,7 @@ const LLM_TABS: LlmTab[] = [
   "noteFormatting",
   "chatIntelligence",
 ];
+const AGENT_LLM_TABS = new Set<LlmTab>(["dictationAgent", "chatIntelligence"]);
 
 function useSubTab<T extends string>(storageKey: string, options: readonly T[], initial?: T) {
   const [tab, setTab] = useLocalStorage<T>(storageKey, initial ?? options[0]);
@@ -620,7 +647,11 @@ function LlmsTabs({
   renderChatIntelligence: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", LLM_TABS, initialTab);
+  const agentAllowed = usePolicyStore(isAgentAllowed);
+  const visibleTabIds = agentAllowed
+    ? LLM_TABS
+    : LLM_TABS.filter((tabId) => !AGENT_LLM_TABS.has(tabId));
+  const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", visibleTabIds, initialTab);
 
   const subTabs = [
     { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
@@ -628,7 +659,7 @@ function LlmsTabs({
     { id: "dictationTranslation", name: t("settingsPage.llms.tabs.dictationTranslation") },
     { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
     { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
-  ];
+  ].filter((item) => visibleTabIds.includes(item.id as LlmTab));
 
   return (
     <div className="space-y-4">
@@ -649,10 +680,14 @@ function LlmsTabs({
         }}
       />
       <TabPanel active={tab === "dictationCleanup"}>{renderDictationCleanup()}</TabPanel>
-      <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      {agentAllowed && (
+        <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      )}
       <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
       <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
-      <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
+      {agentAllowed && (
+        <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
+      )}
     </div>
   );
 }
@@ -754,8 +789,10 @@ export default function SettingsPage({
     preferBuiltInMic,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
+    micWarmHoldSeconds,
     setPreferBuiltInMic,
     setSelectedMicDevice,
+    setMicWarmHoldSeconds,
     setUseLocalWhisper,
     setUiLanguage,
     setWhisperModel,
@@ -850,15 +887,38 @@ export default function SettingsPage({
   const translationKey = useSettingsStore((s) => s.translationKey);
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
 
+  const settingsPolicyState = usePolicySnapshot();
+  const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
+  const historyLockedByPolicy = lockedLocalHistoryValue(settingsPolicyState) !== null;
+  const effectiveDataRetentionEnabled = effectiveLocalHistoryEnabled(
+    settingsPolicyState,
+    dataRetentionEnabled
+  );
+  const cloudBackupPolicyAllowed = isCloudBackupAllowed(settingsPolicyState);
+  const audioRetentionCap = maxAudioRetentionDays(settingsPolicyState);
+  const enforcedAudioRetentionDays = effectiveAudioRetentionDays(
+    settingsPolicyState,
+    audioRetentionDays
+  );
+
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
 
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [isRemovingModels, setIsRemovingModels] = useState(false);
-  const cachePathHint =
+  const [cachePathHint, setCachePathHint] = useState(
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
       ? "%USERPROFILE%\\.cache\\openwhispr"
-      : "~/.cache/openwhispr";
+      : "~/.cache/openwhispr"
+  );
+  useEffect(() => {
+    window.electronAPI
+      ?.getModelCacheRoot?.()
+      .then((root) => {
+        if (root) setCachePathHint(root);
+      })
+      .catch(() => {});
+  }, []);
 
   const {
     status: updateStatus,
@@ -958,9 +1018,23 @@ export default function SettingsPage({
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
-  const coveringWorkspaceNames = (usage?.entitledWorkspaceIds ?? [])
-    .map((id) => billingWorkspaces.find((workspace) => workspace.id === id)?.name)
-    .filter((name): name is string => Boolean(name));
+  const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
+    usage?.entitledWorkspaceIds?.includes(workspace.id)
+  );
+  const coveringWorkspaceNames = coveringWorkspaces.map((workspace) => workspace.name);
+  // Reads the usage payload, not the workspace store, so the upgrade affordances
+  // stay hidden across the window where the store is still loading.
+  const isWorkspaceCovered =
+    !usage?.isPersonallySubscribed && (usage?.entitledWorkspaceIds?.length ?? 0) > 0;
+  // Null until the store resolves, so the label waits rather than guessing a tier.
+  const coveringPlanLabel =
+    isWorkspaceCovered && coveringWorkspaces.length
+      ? t(
+          `settingsPage.workspace.billing.planLabel.${highestPlan(
+            coveringWorkspaces.map((workspace) => workspace.plan)
+          )}`
+        )
+      : null;
   const hasShownApproachingToast = useRef(false);
   useEffect(() => {
     if (usage?.isApproachingLimit && !hasShownApproachingToast.current) {
@@ -1108,26 +1182,23 @@ export default function SettingsPage({
   const platform = getCachedPlatform();
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
+  const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
 
-  useEffect(() => {
-    if (platform === "linux") {
-      setAutoStartLoading(false);
-      return;
+  const readAutoStartState = useCallback(async () => {
+    if (!window.electronAPI?.getAutoStartEnabled) return;
+    try {
+      const state = await window.electronAPI.getAutoStartEnabled();
+      setAutoStartEnabled(state.enabled);
+      setAutoStartNeedsApproval(state.requiresApproval);
+    } catch (error) {
+      logger.error("Failed to get auto-start status", error, "settings");
     }
-    const loadAutoStart = async () => {
-      if (window.electronAPI?.getAutoStartEnabled) {
-        try {
-          const enabled = await window.electronAPI.getAutoStartEnabled();
-          setAutoStartEnabled(enabled);
-        } catch (error) {
-          logger.error("Failed to get auto-start status", error, "settings");
-        }
-      }
-      setAutoStartLoading(false);
-    };
-    loadAutoStart();
-  }, [platform]);
+  }, []);
+
+  useEffect(() => {
+    readAutoStartState().finally(() => setAutoStartLoading(false));
+  }, [readAutoStartState]);
 
   useEffect(() => {
     window.electronAPI?.syncNotificationPreferences?.({
@@ -1139,18 +1210,17 @@ export default function SettingsPage({
   }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders, notifyUpdates]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
-    if (window.electronAPI?.setAutoStartEnabled) {
-      try {
-        setAutoStartLoading(true);
-        const result = await window.electronAPI.setAutoStartEnabled(enabled);
-        if (result.success) {
-          setAutoStartEnabled(enabled);
-        }
-      } catch (error) {
-        logger.error("Failed to set auto-start", error, "settings");
-      } finally {
-        setAutoStartLoading(false);
-      }
+    if (!window.electronAPI?.setAutoStartEnabled) return;
+    try {
+      setAutoStartLoading(true);
+      const result = await window.electronAPI.setAutoStartEnabled(enabled);
+      // Read the state back rather than assuming: on Windows the OS can have the
+      // item disabled out from under us, and on macOS it can need approval first.
+      if (result.success) await readAutoStartState();
+    } catch (error) {
+      logger.error("Failed to set auto-start", error, "settings");
+    } finally {
+      setAutoStartLoading(false);
     }
   };
 
@@ -1342,9 +1412,20 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  // Signed out there is nothing to load and the plan grid is purely
+  // promotional; signed in, no card may claim a plan until usage confirms one.
+  const planStateKnown = !isSignedIn || usage?.status === "success";
+  const proCardCta = decideProPlanCardCta({
+    isSignedIn,
+    planStateKnown,
+    isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
+    plan: usage?.plan ?? "free",
+    isTrial: usage?.isTrial ?? false,
+    isWorkspaceCovered,
+  });
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [isOpeningBilling, setIsOpeningBilling] = useState(false);
+  const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [billingState, setBillingState] = useState<Record<string, boolean>>({
     pro: true,
     business: true,
@@ -1367,16 +1448,6 @@ export default function SettingsPage({
     localStorage.removeItem("onboardingCompleted");
     window.location.reload();
   }, []);
-
-  const handleBillingPortal = useCallback(async () => {
-    const result = await usage.openBillingPortal();
-    if (!result.success) {
-      toast({
-        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-        description: t("settingsPage.account.checkout.couldNotOpenDescription"),
-      });
-    }
-  }, [usage, toast, t]);
 
   const handleSwitchPlan = useCallback(
     async (plan: "monthly" | "annual", tier: "pro" | "business") => {
@@ -1793,7 +1864,29 @@ export default function SettingsPage({
                 {isSignedIn ? (
                   <div className="space-y-5">
                     <SectionHeader title={t("settingsPage.unifiedBilling.personalPlanTitle")} />
-                    {!usage || !usage.hasLoaded ? (
+                    {usage?.status === "error" ? (
+                      <SettingsPanel>
+                        <SettingsPanelRow>
+                          <SettingsRow
+                            label={t("settingsPage.account.planUnavailable.title")}
+                            description={t("settingsPage.account.planUnavailable.description")}
+                          >
+                            <Button
+                              onClick={() => void usage.retry()}
+                              variant="outline"
+                              size="sm"
+                              disabled={usage.isRetrying}
+                            >
+                              {usage.isRetrying ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                t("common.retry")
+                              )}
+                            </Button>
+                          </SettingsRow>
+                        </SettingsPanelRow>
+                      </SettingsPanel>
+                    ) : usage?.status !== "success" ? (
                       <SettingsPanel>
                         <SettingsPanelRow>
                           <div className="flex items-center justify-between">
@@ -1836,7 +1929,8 @@ export default function SettingsPage({
                                     ? usage.plan === "business"
                                       ? t("settingsPage.account.planLabels.business")
                                       : t("settingsPage.account.planLabels.pro")
-                                    : t("settingsPage.account.planLabels.free")
+                                    : (coveringPlanLabel ??
+                                      t("settingsPage.account.planLabels.free"))
                             }
                             description={
                               usage.isTrial
@@ -1861,10 +1955,14 @@ export default function SettingsPage({
                                       ? t("settingsPage.unifiedBilling.providedBy", {
                                           workspaces: coveringWorkspaceNames.join(", "),
                                         })
-                                      : t("settingsPage.account.planDescriptions.freeUsage", {
-                                          used: usage.wordsUsed.toLocaleString(i18n.language),
-                                          limit: usage.limit.toLocaleString(i18n.language),
-                                        })
+                                      : // usage.limit is -1 once subscribed, which the
+                                        // free-usage copy would print as "-1 words".
+                                        isWorkspaceCovered
+                                        ? t("settingsPage.account.planDescriptions.unlimited")
+                                        : t("settingsPage.account.planDescriptions.freeUsage", {
+                                            used: usage.wordsUsed.toLocaleString(i18n.language),
+                                            limit: usage.limit.toLocaleString(i18n.language),
+                                          })
                             }
                           >
                             {usage.isTrial ? (
@@ -1879,6 +1977,8 @@ export default function SettingsPage({
                                   ? t("settingsPage.account.badges.business")
                                   : t("settingsPage.account.badges.pro")}
                               </Badge>
+                            ) : coveringPlanLabel ? (
+                              <Badge variant="success">{coveringPlanLabel}</Badge>
                             ) : usage.isOverLimit ? (
                               <Badge variant="warning">
                                 {t("settingsPage.account.badges.limitReached")}
@@ -1932,23 +2032,7 @@ export default function SettingsPage({
                         <SettingsPanelRow>
                           {usage.isPastDue ? (
                             <Button
-                              onClick={async () => {
-                                setIsOpeningBilling(true);
-                                try {
-                                  const result = await usage.openBillingPortal();
-                                  if (!result.success) {
-                                    toast({
-                                      title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                      description: t(
-                                        "settingsPage.account.billing.couldNotOpenDescription"
-                                      ),
-                                      variant: "destructive",
-                                    });
-                                  }
-                                } finally {
-                                  setIsOpeningBilling(false);
-                                }
-                              }}
+                              onClick={() => void openBillingPortal()}
                               disabled={isOpeningBilling}
                               size="sm"
                               className="w-full"
@@ -1964,28 +2048,17 @@ export default function SettingsPage({
                             </Button>
                           ) : usage.isPersonallySubscribed && !usage.isTrial ? (
                             <Button
-                              onClick={async () => {
-                                const result = await usage.openBillingPortal();
-                                if (!result.success) {
-                                  toast({
-                                    title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                    description: t(
-                                      "settingsPage.account.billing.couldNotOpenDescription"
-                                    ),
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
+                              onClick={() => void openBillingPortal()}
                               variant="outline"
                               size="sm"
                               className="w-full"
-                              disabled={usage.checkoutLoading}
+                              disabled={isOpeningBilling}
                             >
-                              {usage.checkoutLoading
+                              {isOpeningBilling
                                 ? t("settingsPage.account.billing.opening")
                                 : t("settingsPage.account.billing.manageBilling")}
                             </Button>
-                          ) : (
+                          ) : isWorkspaceCovered ? null : (
                             <Button
                               onClick={async () => {
                                 setCheckoutTier("plan-upgrade");
@@ -2025,7 +2098,10 @@ export default function SettingsPage({
                     <div
                       className={cn(
                         "rounded-md p-2.5 flex flex-col",
-                        !usage?.isPersonallySubscribed && !usage?.isTrial
+                        planStateKnown &&
+                          !usage?.isPersonallySubscribed &&
+                          !usage?.isTrial &&
+                          !isWorkspaceCovered
                           ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
                           : "border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
                       )}
@@ -2076,20 +2152,23 @@ export default function SettingsPage({
                         </Button>
                       ) : usage?.isPersonallySubscribed && !usage?.isTrial ? (
                         <Button
-                          onClick={handleBillingPortal}
+                          onClick={() => void openBillingPortal()}
                           variant="outline"
                           size="sm"
                           className="mt-2 w-full h-6 text-[10px]"
+                          disabled={isOpeningBilling}
                         >
-                          {t("settingsPage.account.pricing.downgrade")}
+                          {isOpeningBilling
+                            ? t("settingsPage.account.billing.opening")
+                            : t("settingsPage.account.pricing.downgrade")}
                         </Button>
-                      ) : (
+                      ) : planStateKnown && !isWorkspaceCovered ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary/70">
                             {t("settingsPage.account.pricing.currentPlan")}
                           </span>
                         </div>
-                      )}
+                      ) : null}
                     </div>
 
                     <div
@@ -2148,16 +2227,13 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      {(usage?.isPersonallySubscribed &&
-                        usage?.plan === "pro" &&
-                        !usage?.isTrial) ||
-                      usage?.isTrial ? (
+                      {proCardCta === "currentPlan" ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary">
                             {t("settingsPage.account.pricing.currentPlan")}
                           </span>
                         </div>
-                      ) : usage?.isPersonallySubscribed && usage?.plan === "business" ? (
+                      ) : proCardCta === "downgradeToPro" ? (
                         <Button
                           onClick={() =>
                             handleSwitchPlan(billingState.pro ? "annual" : "monthly", "pro")
@@ -2173,7 +2249,21 @@ export default function SettingsPage({
                             t("settingsPage.account.pricing.downgrade")
                           )}
                         </Button>
-                      ) : (
+                      ) : proCardCta === "signUp" ? (
+                        <Button
+                          onClick={startOnboarding}
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                        >
+                          {t("settingsPage.account.pricing.pro.cta")}
+                        </Button>
+                      ) : proCardCta === "coveredByWorkspace" ? (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.coveredByWorkspace")}
+                          </span>
+                        </div>
+                      ) : proCardCta === "checkout" ? (
                         <Button
                           onClick={() =>
                             handleCheckout(billingState.pro ? "annual" : "monthly", "pro")
@@ -2188,7 +2278,7 @@ export default function SettingsPage({
                             t("settingsPage.account.pricing.pro.cta")
                           )}
                         </Button>
-                      )}
+                      ) : null}
                     </div>
 
                     <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
@@ -2414,12 +2504,7 @@ export default function SettingsPage({
         );
 
       case "workspace":
-        return (
-          <WorkspaceSection
-            initialSubTab={initialSubTab}
-            onNavigateToBilling={() => onNavigateToSection?.("plansBilling")}
-          />
-        );
+        return <WorkspaceSection initialSubTab={initialSubTab} />;
 
       case "general":
         return (
@@ -2764,18 +2849,39 @@ export default function SettingsPage({
                 description={t("settingsPage.general.startup.description")}
               />
               <SettingsPanel>
-                {platform !== "linux" && (
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.startup.launchAtLogin")}
+                    description={t("settingsPage.general.startup.launchAtLoginDescription")}
+                  >
+                    <Toggle
+                      checked={autoStartEnabled}
+                      onChange={(checked: boolean) => handleAutoStartChange(checked)}
+                      disabled={autoStartLoading}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                {autoStartNeedsApproval && (
                   <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.general.startup.launchAtLogin")}
-                      description={t("settingsPage.general.startup.launchAtLoginDescription")}
+                    <Alert
+                      variant="warning"
+                      className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
                     >
-                      <Toggle
-                        checked={autoStartEnabled}
-                        onChange={(checked: boolean) => handleAutoStartChange(checked)}
-                        disabled={autoStartLoading}
-                      />
-                    </SettingsRow>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>
+                        {t("settingsPage.general.startup.needsApproval.title")}
+                      </AlertTitle>
+                      <AlertDescription className="space-y-2">
+                        <p>{t("settingsPage.general.startup.needsApproval.description")}</p>
+                        <Button
+                          onClick={() => void window.electronAPI?.openLoginItemsSettings?.()}
+                          variant="outline"
+                          size="sm"
+                        >
+                          {t("settingsPage.general.startup.needsApproval.action")}
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
                   </SettingsPanelRow>
                 )}
                 <SettingsPanelRow>
@@ -2801,8 +2907,10 @@ export default function SettingsPage({
                     preferBuiltInMic={preferBuiltInMic}
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
+                    micWarmHoldSeconds={micWarmHoldSeconds}
                     onPreferBuiltInChange={setPreferBuiltInMic}
                     onDeviceSelect={setSelectedMicDevice}
+                    onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3376,24 +3484,26 @@ EOF`,
             </div>
 
             {/* Voice Agent Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.general.voiceAgentHotkey.title")}
-                description={t("settingsPage.general.voiceAgentHotkey.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={voiceAgentKey}
-                    onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
-                    onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
-                    validate={validateVoiceAgentHotkey}
-                    disabled={isAgentHotkeyCommitting}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                  />
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
+            {agentAllowedByPolicy && (
+              <div>
+                <SectionHeader
+                  title={t("settingsPage.general.voiceAgentHotkey.title")}
+                  description={t("settingsPage.general.voiceAgentHotkey.description")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={voiceAgentKey}
+                      onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
+                      onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
+                      validate={validateVoiceAgentHotkey}
+                      disabled={isAgentHotkeyCommitting}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
 
             {/* Translation Hotkey */}
             <div>
@@ -3468,24 +3578,26 @@ EOF`,
             </div>
 
             {/* Chat Agent Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("agentMode.settings.hotkey")}
-                description={t("agentMode.settings.hotkeyDescription")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={chatAgentKey}
-                    onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
-                    onClear={() => commitAgentHotkey(setChatAgentKey, "")}
-                    validate={validateChatAgentHotkey}
-                    disabled={isAgentHotkeyCommitting}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                  />
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
+            {agentAllowedByPolicy && (
+              <div>
+                <SectionHeader
+                  title={t("agentMode.settings.hotkey")}
+                  description={t("agentMode.settings.hotkeyDescription")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={chatAgentKey}
+                      onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
+                      onClear={() => commitAgentHotkey(setChatAgentKey, "")}
+                      validate={validateChatAgentHotkey}
+                      disabled={isAgentHotkeyCommitting}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
           </div>
         );
 
@@ -3509,10 +3621,20 @@ EOF`,
                     <SettingsPanelRow>
                       <SettingsRow
                         label={t("settingsPage.privacy.cloudBackup")}
-                        description={t("settingsPage.privacy.cloudBackupDescription")}
+                        description={
+                          cloudBackupPolicyAllowed
+                            ? t("settingsPage.privacy.cloudBackupDescription")
+                            : t("common.managedByOrg")
+                        }
                       >
                         <Toggle
                           checked={cloudBackupEnabled}
+                          disabled={
+                            !canChangeCloudBackupPreference(
+                              cloudBackupPolicyAllowed,
+                              cloudBackupEnabled
+                            )
+                          }
                           onChange={(v) => {
                             setCloudBackupEnabled(v);
                             if (v) {
@@ -3610,13 +3732,29 @@ EOF`,
                     description={t("settingsPage.privacy.audioRetentionDescription")}
                   >
                     <select
-                      value={audioRetentionDays}
-                      onChange={(e) => setAudioRetentionDays(parseInt(e.target.value, 10))}
+                      value={enforcedAudioRetentionDays}
+                      onChange={(e) => {
+                        const days = parseInt(e.target.value, 10);
+                        if (audioRetentionCap !== null && days > audioRetentionCap) return;
+                        setAudioRetentionDays(days);
+                      }}
                       className={RETENTION_SELECT_CLASS}
                     >
                       <option value={0}>{t("settingsPage.privacy.audioRetentionDisabled")}</option>
+                      {enforcedAudioRetentionDays > 0 &&
+                        !RETENTION_DAY_OPTIONS.includes(enforcedAudioRetentionDays) && (
+                          <option value={enforcedAudioRetentionDays}>
+                            {t("settingsPage.privacy.retentionDays", {
+                              count: enforcedAudioRetentionDays,
+                            })}
+                          </option>
+                        )}
                       {RETENTION_DAY_OPTIONS.map((days) => (
-                        <option key={days} value={days}>
+                        <option
+                          key={days}
+                          value={days}
+                          disabled={audioRetentionCap !== null && days > audioRetentionCap}
+                        >
                           {t("settingsPage.privacy.retentionDays", { count: days })}
                         </option>
                       ))}
@@ -3655,9 +3793,17 @@ EOF`,
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.dataRetention")}
-                    description={t("settingsPage.privacy.dataRetentionDescription")}
+                    description={
+                      historyLockedByPolicy
+                        ? t("common.managedByOrg")
+                        : t("settingsPage.privacy.dataRetentionDescription")
+                    }
                   >
-                    <Toggle checked={dataRetentionEnabled} onChange={setDataRetentionEnabled} />
+                    <Toggle
+                      checked={effectiveDataRetentionEnabled}
+                      disabled={historyLockedByPolicy}
+                      onChange={setDataRetentionEnabled}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>
@@ -3667,7 +3813,7 @@ EOF`,
                   >
                     <select
                       value={transcriptRetentionDays}
-                      disabled={!dataRetentionEnabled}
+                      disabled={!effectiveDataRetentionEnabled}
                       onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
                       className={RETENTION_SELECT_CLASS}
                     >
@@ -3689,7 +3835,7 @@ EOF`,
                   >
                     <Toggle
                       checked={saveDiscardedTranscriptions}
-                      disabled={!dataRetentionEnabled || audioRetentionDays === 0}
+                      disabled={!effectiveDataRetentionEnabled || enforcedAudioRetentionDays === 0}
                       onChange={setSaveDiscardedTranscriptions}
                     />
                   </SettingsRow>

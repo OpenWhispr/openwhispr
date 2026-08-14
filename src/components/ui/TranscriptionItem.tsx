@@ -84,7 +84,8 @@ export default function TranscriptionItem({
   const isConfigError =
     errorCode === "API_KEY_MISSING" ||
     errorCode === "INVALID_KEY" ||
-    errorCode === "MODEL_NOT_AVAILABLE";
+    errorCode === "MODEL_NOT_AVAILABLE" ||
+    errorCode === "CUSTOM_ENDPOINT_INVALID";
   const isLimitError = errorCode === "LIMIT_REACHED";
   const isOfflineError = errorCode === "OFFLINE";
 

@@ -38,23 +38,30 @@ function sha256File(filePath) {
 
 // Shared download/install pipeline for GPU server binaries fetched from GitHub
 // releases (whisper CUDA, whisper Vulkan, llama Vulkan). Subclasses configure
-// the release URL and per-`${platform}-${arch}` assets (exact assetName or
-// assetPattern regex; optional libPattern for companion libs). Archives are
-// sha256-verified against expectedDigests, falling back to the digest the
-// GitHub API reports.
+// the release URL, a dirName, and per-`${platform}-${arch}` assets (exact
+// assetName or assetPattern regex; optional libPattern for companion libs).
+// Archives are sha256-verified against expectedDigests, falling back to the
+// digest the GitHub API reports.
+//
+// Each pack installs into its own `userData/bin/<dirName>/` directory: the
+// packs ship identically-named ggml DLLs, so a shared directory lets one
+// pack's install silently overwrite another's runtime (and one pack's delete
+// remove another's libs). The directory is staged next to its final location
+// and swapped in with a single rename, so a crash or power loss mid-install
+// can never leave a truncated binary that isDownloaded() reports as installed.
 class GpuBinaryManager {
   constructor(config) {
     this.config = config;
-    this._binDir = null;
     this._downloadSignal = null;
     this._downloading = false;
   }
 
+  get binRoot() {
+    return path.join(app.getPath("userData"), "bin");
+  }
+
   get binDir() {
-    if (!this._binDir) {
-      this._binDir = path.join(app.getPath("userData"), "bin");
-    }
-    return this._binDir;
+    return path.join(this.binRoot, this.config.dirName);
   }
 
   _getAssetConfig() {
@@ -140,15 +147,16 @@ class GpuBinaryManager {
     const tempDir = getSafeTempDir();
     let archivePath = null;
     let extractDir = null;
+    let stagingDir = null;
 
     try {
-      await fsPromises.mkdir(this.binDir, { recursive: true });
-      await cleanupStaleDownloads(this.binDir);
+      await fsPromises.mkdir(this.binRoot, { recursive: true });
+      await cleanupStaleDownloads(this.binRoot);
 
       const { asset, version } = await this._resolveAsset(assetConfig);
 
       const requiredBytes = (asset.size || FALLBACK_ASSET_SIZE) * DISK_SPACE_MULTIPLIER;
-      const spaceCheck = await checkDiskSpace(this.binDir, requiredBytes);
+      const spaceCheck = await checkDiskSpace(this.binRoot, requiredBytes);
       if (!spaceCheck.ok) {
         throw new Error(
           `Not enough disk space. Need ~${Math.round(requiredBytes / 1_000_000)}MB, ` +
@@ -179,20 +187,31 @@ class GpuBinaryManager {
       const binaryPath = await findFile(extractDir, assetConfig.binaryName);
       if (!binaryPath) throw new Error(`${assetConfig.binaryName} not found in archive`);
 
-      const outputPath = path.join(this.binDir, assetConfig.outputName);
+      // Stage the complete pack beside its final directory (same volume), then
+      // swap it in with one rename. The prefix keeps cleanupStaleDownloads able
+      // to reap a staging dir orphaned by a crash.
+      stagingDir = path.join(this.binRoot, `temp-extract-stage-${this.config.dirName}`);
+      await fsPromises.rm(stagingDir, { recursive: true, force: true });
+      await fsPromises.mkdir(stagingDir, { recursive: true });
+
+      const outputPath = path.join(stagingDir, assetConfig.outputName);
       await fsPromises.copyFile(binaryPath, outputPath);
       if (process.platform !== "win32") await fsPromises.chmod(outputPath, 0o755);
 
       if (assetConfig.libPattern) {
         const libs = await findFiles(extractDir, assetConfig.libPattern);
         for (const lib of libs) {
-          const dest = path.join(this.binDir, path.basename(lib));
+          const dest = path.join(stagingDir, path.basename(lib));
           await fsPromises.copyFile(lib, dest);
           if (process.platform !== "win32") await fsPromises.chmod(dest, 0o755);
         }
       }
 
-      debugLogger.info(`${this.config.name} binary installed`, { version, path: outputPath });
+      await fsPromises.rm(this.binDir, { recursive: true, force: true });
+      await fsPromises.rename(stagingDir, this.binDir);
+      stagingDir = null;
+
+      debugLogger.info(`${this.config.name} binary installed`, { version, path: this.binDir });
       return { version };
     } finally {
       this._downloading = false;
@@ -200,6 +219,9 @@ class GpuBinaryManager {
       if (archivePath) await fsPromises.unlink(archivePath).catch(() => {});
       if (extractDir) {
         await fsPromises.rm(extractDir, { recursive: true, force: true }).catch(() => {});
+      }
+      if (stagingDir) {
+        await fsPromises.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
       }
     }
   }
@@ -214,8 +236,7 @@ class GpuBinaryManager {
   }
 
   async delete() {
-    const assetConfig = this._getAssetConfig();
-    if (!assetConfig) return { deletedCount: 0, freedBytes: 0 };
+    if (!this._getAssetConfig()) return { deletedCount: 0, freedBytes: 0 };
 
     let deletedCount = 0;
     let freedBytes = 0;
@@ -223,19 +244,17 @@ class GpuBinaryManager {
     try {
       const entries = await fsPromises.readdir(this.binDir);
       for (const entry of entries) {
-        if (entry !== assetConfig.outputName && !assetConfig.libPattern?.test(entry)) continue;
-        const filePath = path.join(this.binDir, entry);
         try {
-          const stats = await fsPromises.stat(filePath);
-          await fsPromises.unlink(filePath);
+          const stats = await fsPromises.stat(path.join(this.binDir, entry));
           freedBytes += stats.size;
           deletedCount++;
         } catch {
-          // Continue with remaining files
+          // Still deleted with the directory below
         }
       }
+      await fsPromises.rm(this.binDir, { recursive: true, force: true });
     } catch {
-      // Directory may not exist
+      // Pack directory may not exist
     }
 
     debugLogger.info(`${this.config.name} binary deleted`, { deletedCount, freedBytes });
@@ -243,4 +262,58 @@ class GpuBinaryManager {
   }
 }
 
+// One-time healing of the pre-subdirectory layout, where every pack installed
+// directly into userData/bin and their identically-named ggml DLLs overwrote
+// each other. A pack without companion libs is just moved into its directory.
+// A pack with libs can't tell which of the surviving DLLs are its own (the
+// clobbering destroyed that), so its files are removed and the pack shows as
+// not installed until re-downloaded from Settings. Synchronous so it completes
+// before startup pre-warm reads any binary path. Returns the names of the
+// packs that were cleared so the caller can tell the user to re-download
+// them instead of leaving a silent CPU fallback (#1606).
+function migrateLegacyBinDir(managers) {
+  const clearedPacks = [];
+  const packs = managers
+    .map((m) => ({ manager: m, assetConfig: m._getAssetConfig() }))
+    .filter((p) => p.assetConfig);
+  if (packs.length === 0) return clearedPacks;
+
+  const binRoot = packs[0].manager.binRoot;
+  if (!fs.existsSync(binRoot)) return clearedPacks;
+
+  for (const { manager, assetConfig } of packs) {
+    const legacyBinary = path.join(binRoot, assetConfig.outputName);
+    try {
+      if (!fs.existsSync(legacyBinary)) continue;
+      if (assetConfig.libPattern) {
+        fs.unlinkSync(legacyBinary);
+        clearedPacks.push(manager.config.name);
+        debugLogger.info(`${manager.config.name} legacy install removed (needs re-download)`);
+      } else if (manager.isDownloaded()) {
+        fs.unlinkSync(legacyBinary);
+      } else {
+        fs.mkdirSync(manager.binDir, { recursive: true });
+        fs.renameSync(legacyBinary, path.join(manager.binDir, assetConfig.outputName));
+        debugLogger.info(`${manager.config.name} migrated`, { to: manager.binDir });
+      }
+    } catch (err) {
+      debugLogger.warn(`${manager.config.name} legacy migration failed`, { error: err.message });
+    }
+  }
+
+  // The lib-carrying packs' orphaned companion libs (ownership is unknowable)
+  const libPatterns = packs.map((p) => p.assetConfig.libPattern).filter(Boolean);
+  if (libPatterns.length === 0) return clearedPacks;
+  try {
+    for (const entry of fs.readdirSync(binRoot, { withFileTypes: true })) {
+      if (!entry.isFile() || !libPatterns.some((pattern) => pattern.test(entry.name))) continue;
+      try {
+        fs.unlinkSync(path.join(binRoot, entry.name));
+      } catch {}
+    }
+  } catch {}
+  return clearedPacks;
+}
+
 module.exports = GpuBinaryManager;
+module.exports.migrateLegacyBinDir = migrateLegacyBinDir;

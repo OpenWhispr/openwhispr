@@ -1,3 +1,5 @@
+const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
+
 class AuthContextError extends Error {
   constructor(message, code = "AUTH_CONTEXT_CHANGED") {
     super(message);
@@ -90,10 +92,12 @@ function createCloudApiRequestHandler({
       // no account fence and remain usable while auth is unresolved.
       const fence = opts.public ? null : captureAuthFence(tokenStore, opts.expectedAuthGeneration);
       const method = (opts.method || "GET").toUpperCase();
-      const headers = {
-        "x-openwhispr-version": getAppVersion(),
-        ...(fence ? { Authorization: fence.authorization } : {}),
-      };
+      // Public invitation previews are not policy-aware and intentionally stay
+      // on the legacy API contract. Authenticated cloud calls opt into policy
+      // v1 using the same exact headers as direct main-process request paths.
+      const headers = fence
+        ? withPolicyRequestHeaders({ Authorization: fence.authorization }, getAppVersion())
+        : { "x-openwhispr-version": getAppVersion() };
       const fetchOptions = {
         method,
         headers,
@@ -140,6 +144,7 @@ function createCloudApiRequestHandler({
           status: response.status,
           code: data?.code,
           details: data?.data,
+          minAppVersion: data?.minAppVersion ?? data?.data?.minAppVersion,
         };
       }
 

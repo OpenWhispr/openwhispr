@@ -86,3 +86,30 @@ test("reconciling a provider clears an active event removed by a snapshot", () =
   assert.equal(promptCount, 1, "a periodic snapshot must not re-fire an old reminder");
   scheduler.stop();
 });
+
+test("resetting a provider re-arms the next meeting timer for upcoming events", () => {
+  const futureEvent = {
+    id: "meeting-future",
+    provider: "google",
+    summary: "Future meeting",
+    start_time: new Date(Date.now() + 600_000).toISOString(),
+    end_time: new Date(Date.now() + 1200_000).toISOString(),
+  };
+  const databaseManager = {
+    getUpcomingEvents: () => [futureEvent],
+    getActiveEvents: () => [],
+  };
+  const scheduler = new CalendarReminderScheduler(databaseManager);
+
+  scheduler.scheduleNextMeeting();
+  assert.notEqual(scheduler.nextMeetingTimer, null);
+
+  scheduler.reset("apple");
+  assert.notEqual(
+    scheduler.nextMeetingTimer,
+    null,
+    "reset(provider) must re-arm the next meeting timer"
+  );
+
+  scheduler.stop();
+});

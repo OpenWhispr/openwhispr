@@ -25,6 +25,14 @@ import {
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
 import { useSettingsStore } from "../stores/settingsStore";
+import {
+  filterByokProviderOptionsByPolicy,
+  isProviderAllowedByPolicy,
+  reconcileCloudProviderSelection,
+  shouldPersistProviderFallback,
+  type TranscriptionPolicyContext,
+} from "../stores/policyRules";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
@@ -183,7 +191,13 @@ function LocalModelCard({
 }
 
 interface TranscriptionModelPickerProps {
+  /** Settings scope whose provider/model keys this picker edits. */
+  transcriptionContext?: TranscriptionPolicyContext;
   selectedCloudProvider: string;
+  /**
+   * Policy reconciliation only — a user-driven pick goes through
+   * switchCloudTranscriptionProvider so the outgoing model survives the swap.
+   */
   onCloudProviderSelect: (providerId: string) => void;
   selectedCloudModel: string;
   onCloudModelSelect: (modelId: string) => void;
@@ -276,8 +290,6 @@ const PROVIDER_CREDENTIALS: Record<
   },
 };
 
-const VALID_CLOUD_PROVIDER_IDS = CLOUD_PROVIDER_TABS.map((p) => p.id);
-
 const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
@@ -322,6 +334,7 @@ function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
 }
 
 export default function TranscriptionModelPicker({
+  transcriptionContext = "dictation",
   selectedCloudProvider,
   onCloudProviderSelect,
   selectedCloudModel,
@@ -340,6 +353,9 @@ export default function TranscriptionModelPicker({
   streamingOnly = false,
 }: TranscriptionModelPickerProps) {
   const { t } = useTranslation();
+  const switchCloudTranscriptionProvider = useSettingsStore(
+    (s) => s.switchCloudTranscriptionProvider
+  );
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
@@ -360,6 +376,7 @@ export default function TranscriptionModelPicker({
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
+  const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
@@ -375,6 +392,12 @@ export default function TranscriptionModelPicker({
     percentage: 0,
   });
   const [gpuDismissed, setGpuDismissed] = useState(false);
+  // The pack fell back to CPU on this machine (persisted by main until retried)
+  const [gpuFailed, setGpuFailed] = useState(false);
+  // A server reload with the new backend is in flight (Vulkan cold starts are slow)
+  const [gpuActivating, setGpuActivating] = useState(false);
+  // Live truth from the running server; "active" is never inferred from a download
+  const [gpuActive, setGpuActive] = useState(false);
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -386,23 +409,36 @@ export default function TranscriptionModelPicker({
   const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const loadLocalModelsRef = useRef<(() => Promise<void>) | null>(null);
   const loadParakeetModelsRef = useRef<(() => Promise<void>) | null>(null);
-  const ensureValidCloudSelectionRef = useRef<(() => void) | null>(null);
   const selectedLocalModelRef = useRef(selectedLocalModel);
   const onLocalModelSelectRef = useRef(onLocalModelSelect);
 
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const colorScheme: ColorScheme = variant === "settings" ? "purple" : "blue";
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
-  const cloudProviders = useMemo(
+  const policyState = usePolicySnapshot();
+  const providerAllowed = useCallback(
+    (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
+    [policyState]
+  );
+  const availableCloudProviders = useMemo(
     () => (streamingOnly ? getStreamingTranscriptionProviders() : getTranscriptionProviders()),
     [streamingOnly]
   );
+  const cloudProviders = useMemo(
+    () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),
+    [availableCloudProviders, policyState]
+  );
   const cloudProviderTabs = useMemo(() => {
-    const visibleIds = new Set([...cloudProviders.map((p) => p.id), "custom"]);
-    return CLOUD_PROVIDER_TABS.filter((p) => visibleIds.has(p.id)).map((provider) =>
-      provider.id === "custom" ? { ...provider, name: t("transcription.customProvider") } : provider
+    const availableIds = new Set(availableCloudProviders.map((p) => p.id));
+    if (!streamingOnly) availableIds.add("custom");
+    const tabs = CLOUD_PROVIDER_TABS.filter((provider) => availableIds.has(provider.id)).map(
+      (provider) =>
+        provider.id === "custom"
+          ? { ...provider, name: t("transcription.customProvider") }
+          : provider
     );
-  }, [cloudProviders, t]);
+    return filterByokProviderOptionsByPolicy(tabs, "transcription", policyState);
+  }, [availableCloudProviders, policyState, streamingOnly, t]);
 
   useEffect(() => {
     selectedLocalModelRef.current = selectedLocalModel;
@@ -462,41 +498,64 @@ export default function TranscriptionModelPicker({
     return queuedLoad;
   }, []);
 
-  const ensureValidCloudSelection = useCallback(() => {
-    const isValidProvider = VALID_CLOUD_PROVIDER_IDS.includes(selectedCloudProvider);
-
-    if (!isValidProvider) {
-      const knownProviderUrls = cloudProviders.map((p) => p.baseUrl);
-      const hasCustomUrl =
-        cloudTranscriptionBaseUrl &&
-        cloudTranscriptionBaseUrl.trim() !== "" &&
-        cloudTranscriptionBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE &&
-        !knownProviderUrls.includes(cloudTranscriptionBaseUrl);
-
-      if (hasCustomUrl) {
-        onCloudProviderSelect("custom");
-      } else {
-        const firstProvider = cloudProviders[0];
-        if (firstProvider) {
-          onCloudProviderSelect(firstProvider.id);
-          if (firstProvider.models?.length) {
-            onCloudModelSelect(firstProvider.models[0].id);
-          }
-        }
-      }
-    } else if (selectedCloudProvider !== "custom" && !selectedCloudModel) {
-      const provider = cloudProviders.find((p) => p.id === selectedCloudProvider);
-      if (provider?.models?.length) {
-        onCloudModelSelect(provider.models[0].id);
-      }
-    }
+  const effectiveCloudSelection = useMemo(() => {
+    // Every provider's URL counts as known, including policy-blocked ones:
+    // otherwise a blocked provider's stored URL reads as a custom endpoint and
+    // reconciliation would keep pointing "custom" at what policy just denied.
+    const knownProviderUrls = new Set(
+      availableCloudProviders.map((provider) => normalizeBaseUrl(provider.baseUrl))
+    );
+    const normalizedBaseUrl = normalizeBaseUrl(cloudTranscriptionBaseUrl);
+    const hasCustomUrl = Boolean(
+      normalizedBaseUrl &&
+      normalizedBaseUrl !== normalizeBaseUrl(API_ENDPOINTS.TRANSCRIPTION_BASE) &&
+      !knownProviderUrls.has(normalizedBaseUrl)
+    );
+    return (
+      reconcileCloudProviderSelection({
+        selectedProvider: selectedCloudProvider,
+        selectedModel: selectedCloudModel,
+        allowedProviders: cloudProviders,
+        customAllowed: !streamingOnly && providerAllowed("custom"),
+        hasCustomUrl,
+      }) ?? { provider: selectedCloudProvider, model: selectedCloudModel }
+    );
   }, [
+    availableCloudProviders,
     cloudProviders,
     cloudTranscriptionBaseUrl,
     selectedCloudProvider,
     selectedCloudModel,
-    onCloudProviderSelect,
+    providerAllowed,
+    streamingOnly,
+  ]);
+  const displayedCloudProvider = effectiveCloudSelection.provider;
+  const displayedCloudModel = effectiveCloudSelection.model;
+
+  useEffect(() => {
+    if (
+      effectiveLocal ||
+      !shouldPersistProviderFallback(policyState, isSignedIn) ||
+      (effectiveCloudSelection.provider === selectedCloudProvider &&
+        effectiveCloudSelection.model === selectedCloudModel)
+    ) {
+      return;
+    }
+    if (effectiveCloudSelection.provider !== selectedCloudProvider) {
+      onCloudProviderSelect(effectiveCloudSelection.provider);
+    }
+    if (effectiveCloudSelection.model !== selectedCloudModel) {
+      onCloudModelSelect(effectiveCloudSelection.model);
+    }
+  }, [
+    effectiveCloudSelection,
+    effectiveLocal,
+    isSignedIn,
     onCloudModelSelect,
+    onCloudProviderSelect,
+    policyState,
+    selectedCloudModel,
+    selectedCloudProvider,
   ]);
 
   useEffect(() => {
@@ -505,10 +564,6 @@ export default function TranscriptionModelPicker({
   useEffect(() => {
     loadParakeetModelsRef.current = loadParakeetModels;
   }, [loadParakeetModels]);
-  useEffect(() => {
-    ensureValidCloudSelectionRef.current = ensureValidCloudSelection;
-  }, [ensureValidCloudSelection]);
-
   useEffect(() => {
     if (!effectiveLocal) return;
 
@@ -526,7 +581,6 @@ export default function TranscriptionModelPicker({
 
     hasLoadedRef.current = false;
     hasLoadedParakeetRef.current = false;
-    ensureValidCloudSelectionRef.current?.();
   }, [effectiveLocal]);
 
   useEffect(() => {
@@ -543,16 +597,24 @@ export default function TranscriptionModelPicker({
     if (getCachedPlatform() === "darwin") return;
     const detect = async () => {
       try {
-        const cuda = await window.electronAPI?.getCudaWhisperStatus?.();
-        if (cuda?.gpuInfo.hasNvidiaGpu) {
+        const [cuda, vulkan] = await Promise.all([
+          window.electronAPI?.getCudaWhisperStatus?.(),
+          window.electronAPI?.getVulkanWhisperStatus?.(),
+        ]);
+        // Cards below the CUDA build's kernel floor (e.g. Maxwell) crash at the
+        // first kernel launch, so they get the Vulkan pack like AMD/Intel GPUs.
+        const cudaEligible = !!cuda?.gpuInfo.hasNvidiaGpu && !!cuda.gpuInfo.cudaSupported;
+        // Prefer the pack that's already installed: a working Vulkan setup must
+        // not be re-prompted to download the CUDA pack (matches the resolver,
+        // which only prefers CUDA when it is actually downloaded).
+        if (cudaEligible && (cuda.downloaded || !vulkan?.downloaded)) {
           setGpuBackend("cuda");
           setGpuDownloaded(cuda.downloaded);
-          return;
-        }
-        const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
-        if (vulkan?.vulkan.available) {
+          setGpuFailed(!!cuda.gpuFailed);
+        } else if (vulkan?.vulkan.available) {
           setGpuBackend("vulkan");
           setGpuDownloaded(vulkan.downloaded);
+          setGpuFailed(!!vulkan.gpuFailed);
         }
       } catch {}
     };
@@ -568,6 +630,48 @@ export default function TranscriptionModelPicker({
     return subscribe?.((data) => setGpuProgress(data));
   }, [gpuDownloading, gpuBackend]);
 
+  // Live server state: "GPU acceleration active" reflects what the server is
+  // actually running on, not just that a pack is on disk (a crashed GPU server
+  // silently falls back to CPU). Faster poll while an activation is in flight.
+  useEffect(() => {
+    if (!effectiveLocal || internalLocalProvider !== "whisper" || !gpuDownloaded) return;
+    const poll = () => {
+      window.electronAPI
+        ?.whisperServerStatus?.()
+        .then((status) => {
+          setGpuActive(!!status?.gpuAccelerated);
+          if (status?.gpuAccelerated) setGpuActivating(false);
+        })
+        .catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, gpuActivating ? 1000 : 5000);
+    return () => clearInterval(id);
+  }, [effectiveLocal, internalLocalProvider, gpuDownloaded, gpuActivating]);
+
+  // Safety valve: a Vulkan cold start can take up to ~2 minutes (see #698);
+  // past that the live status or a fallback notification settles the state.
+  useEffect(() => {
+    if (!gpuActivating) return;
+    const timeout = setTimeout(() => setGpuActivating(false), 150_000);
+    return () => clearTimeout(timeout);
+  }, [gpuActivating]);
+
+  // Main falls back to CPU (and remembers it) when a GPU server crashes
+  useEffect(() => {
+    const onFallback = () => {
+      setGpuFailed(true);
+      setGpuActivating(false);
+      setGpuActive(false);
+    };
+    const disposeCuda = window.electronAPI?.onCudaFallbackNotification?.(onFallback);
+    const disposeVulkan = window.electronAPI?.onGpuFallbackNotification?.(onFallback);
+    return () => {
+      disposeCuda?.();
+      disposeVulkan?.();
+    };
+  }, []);
+
   const handleGpuDownload = async () => {
     setGpuDownloading(true);
     try {
@@ -575,10 +679,22 @@ export default function TranscriptionModelPicker({
         gpuBackend === "cuda"
           ? await window.electronAPI?.downloadCudaWhisperBinary?.()
           : await window.electronAPI?.downloadVulkanWhisperBinary?.();
-      if (result?.success) setGpuDownloaded(true);
+      if (result?.success) {
+        setGpuDownloaded(true);
+        setGpuFailed(false);
+        // Main reloads the server with the new backend only when one is loaded;
+        // otherwise the pack simply engages on the next dictation.
+        setGpuActivating(!!result.willRestart);
+      }
     } finally {
       setGpuDownloading(false);
     }
+  };
+
+  const handleGpuRetry = async () => {
+    setGpuFailed(false);
+    const result = await window.electronAPI?.whisperGpuRetry?.();
+    setGpuActivating(!!result?.willRestart);
   };
 
   const handleGpuDelete = async () => {
@@ -586,7 +702,12 @@ export default function TranscriptionModelPicker({
       gpuBackend === "cuda"
         ? await window.electronAPI?.deleteCudaWhisperBinary?.()
         : await window.electronAPI?.deleteVulkanWhisperBinary?.();
-    if (result?.success) setGpuDownloaded(false);
+    if (result?.success) {
+      setGpuDownloaded(false);
+      setGpuFailed(false);
+      setGpuActivating(false);
+      setGpuActive(false);
+    }
   };
 
   const handleGpuCancel = async () => {
@@ -626,29 +747,20 @@ export default function TranscriptionModelPicker({
   const handleModeChange = useCallback(
     (isLocal: boolean) => {
       onModeChange(isLocal);
-      if (!isLocal) ensureValidCloudSelection();
     },
-    [onModeChange, ensureValidCloudSelection]
+    [onModeChange]
   );
 
+  // switchCloudTranscriptionProvider writes both the provider and the model for
+  // this scope: it remembers the outgoing provider's model and restores the
+  // incoming one. It never touches cloudTranscriptionBaseUrl — that key is the
+  // Custom tab's only storage, and writing it here destroyed the URL (#1459).
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
-      onCloudProviderSelect(providerId);
-      const provider = cloudProviders.find((p) => p.id === providerId);
-
-      if (providerId === "custom") {
-        onCloudModelSelect("whisper-1");
-        return;
-      }
-
-      if (provider) {
-        setCloudTranscriptionBaseUrl?.(provider.baseUrl);
-        if (provider.models?.length) {
-          onCloudModelSelect(provider.models[0].id);
-        }
-      }
+      if (!providerAllowed(providerId)) return;
+      switchCloudTranscriptionProvider(transcriptionContext, providerId);
     },
-    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, setCloudTranscriptionBaseUrl]
+    [providerAllowed, switchCloudTranscriptionProvider, transcriptionContext]
   );
 
   const handleLocalProviderChange = useCallback(
@@ -694,8 +806,7 @@ export default function TranscriptionModelPicker({
       for (const provider of cloudProviders) {
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);
         if (normalized === providerNormalized) {
-          onCloudProviderSelect(provider.id);
-          onCloudModelSelect("whisper-1");
+          switchCloudTranscriptionProvider(transcriptionContext, provider.id);
           break;
         }
       }
@@ -704,8 +815,8 @@ export default function TranscriptionModelPicker({
     cloudTranscriptionBaseUrl,
     selectedCloudProvider,
     setCloudTranscriptionBaseUrl,
-    onCloudProviderSelect,
-    onCloudModelSelect,
+    switchCloudTranscriptionProvider,
+    transcriptionContext,
     cloudProviders,
   ]);
 
@@ -730,12 +841,12 @@ export default function TranscriptionModelPicker({
   );
 
   const currentCloudProvider = useMemo<TranscriptionProviderData | undefined>(
-    () => cloudProviders.find((p) => p.id === selectedCloudProvider),
-    [cloudProviders, selectedCloudProvider]
+    () => cloudProviders.find((p) => p.id === displayedCloudProvider),
+    [cloudProviders, displayedCloudProvider]
   );
 
   const providerCredentials =
-    PROVIDER_CREDENTIALS[selectedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
+    PROVIDER_CREDENTIALS[displayedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
   const credentialValues: Record<ProviderCredentialField["key"], string> = {
     openaiApiKey,
     groqApiKey,
@@ -761,7 +872,7 @@ export default function TranscriptionModelPicker({
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
-    const { icon, invertInDark } = getRemoteProviderIcon(selectedCloudProvider);
+    const { icon, invertInDark } = getRemoteProviderIcon(displayedCloudProvider);
     return currentCloudProvider.models.map((m) => ({
       value: m.id,
       label: m.name,
@@ -771,7 +882,7 @@ export default function TranscriptionModelPicker({
       icon,
       invertInDark,
     }));
-  }, [currentCloudProvider, selectedCloudProvider, t]);
+  }, [currentCloudProvider, displayedCloudProvider, t]);
 
   const progressDisplay = useMemo(() => {
     if (!effectiveLocal) return null;
@@ -946,127 +1057,133 @@ export default function TranscriptionModelPicker({
 
       {!effectiveLocal ? (
         <>
-          <ProviderTabs
-            providers={cloudProviderTabs}
-            selectedId={selectedCloudProvider}
-            onSelect={handleCloudProviderChange}
-            colorScheme="purple"
-            wrap
-          />
+          {cloudProviderTabs.length > 0 && (
+            <ProviderTabs
+              providers={cloudProviderTabs}
+              selectedId={displayedCloudProvider}
+              onSelect={handleCloudProviderChange}
+              colorScheme="purple"
+              wrap
+            />
+          )}
 
-          <div>
-            {selectedCloudProvider === "custom" ? (
-              <div className="space-y-2">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-foreground">
-                    {t("transcription.endpointUrl")}
-                  </label>
-                  <Input
-                    value={cloudTranscriptionBaseUrl}
-                    onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
-                    onBlur={handleBaseUrlBlur}
-                    placeholder="https://your-api.example.com/v1"
-                    className="h-8 text-sm"
+          {providerAllowed(displayedCloudProvider) && (
+            <div>
+              {displayedCloudProvider === "custom" ? (
+                <div className="space-y-2">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-foreground">
+                      {t("transcription.endpointUrl")}
+                    </label>
+                    <Input
+                      value={cloudTranscriptionBaseUrl}
+                      onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
+                      onBlur={handleBaseUrlBlur}
+                      placeholder="https://your-api.example.com/v1"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+
+                  <ApiKeyInput
+                    apiKey={customTranscriptionApiKey}
+                    setApiKey={setCustomTranscriptionApiKey}
+                    label={t("transcription.apiKeyOptional")}
+                    helpText=""
                   />
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-foreground">
+                      {t("common.model")}
+                    </label>
+                    <Input
+                      value={displayedCloudModel}
+                      onChange={(e) => onCloudModelSelect(e.target.value)}
+                      placeholder="whisper-1"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+
+                  {/azure\.com/i.test(cloudTranscriptionBaseUrl || "") && (
+                    <p className="text-xs text-muted-foreground">{t("transcription.azureHint")}</p>
+                  )}
                 </div>
-
-                <ApiKeyInput
-                  apiKey={customTranscriptionApiKey}
-                  setApiKey={setCustomTranscriptionApiKey}
-                  label={t("transcription.apiKeyOptional")}
-                  helpText=""
-                />
-
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-foreground">
-                    {t("common.model")}
-                  </label>
-                  <Input
-                    value={selectedCloudModel}
-                    onChange={(e) => onCloudModelSelect(e.target.value)}
-                    placeholder="whisper-1"
-                    className="h-8 text-sm"
-                  />
-                </div>
-
-                {/azure\.com/i.test(cloudTranscriptionBaseUrl || "") && (
-                  <p className="text-xs text-muted-foreground">{t("transcription.azureHint")}</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {providerCredentials.fields.map((field, index) => (
-                  <div key={field.key} className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-foreground">
-                        {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
-                      </label>
-                      {index === 0 && (
-                        <GetApiKeyLink
-                          url={providerCredentials.consoleUrl}
-                          labelKey="transcription.getKey"
-                          className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+              ) : (
+                <div className="space-y-2">
+                  {providerCredentials.fields.map((field, index) => (
+                    <div key={field.key} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-foreground">
+                          {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
+                        </label>
+                        {index === 0 && (
+                          <GetApiKeyLink
+                            url={providerCredentials.consoleUrl}
+                            labelKey="transcription.getKey"
+                            className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                          />
+                        )}
+                      </div>
+                      {field.input === "secret" ? (
+                        <ApiKeyInput
+                          apiKey={credentialValues[field.key]}
+                          setApiKey={credentialSetters[field.key]}
+                          label=""
+                          helpText=""
+                        />
+                      ) : field.input === "select" ? (
+                        <Select
+                          value={credentialValues[field.key]}
+                          onValueChange={credentialSetters[field.key]}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options?.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={credentialValues[field.key]}
+                          onChange={(e) => credentialSetters[field.key](e.target.value)}
+                          placeholder={field.placeholder}
+                          className="h-8 text-sm"
                         />
                       )}
                     </div>
-                    {field.input === "secret" ? (
-                      <ApiKeyInput
-                        apiKey={credentialValues[field.key]}
-                        setApiKey={credentialSetters[field.key]}
-                        label=""
-                        helpText=""
-                      />
-                    ) : field.input === "select" ? (
-                      <Select
-                        value={credentialValues[field.key]}
-                        onValueChange={credentialSetters[field.key]}
-                      >
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options?.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        value={credentialValues[field.key]}
-                        onChange={(e) => credentialSetters[field.key](e.target.value)}
-                        placeholder={field.placeholder}
-                        className="h-8 text-sm"
-                      />
+                  ))}
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-foreground">
+                      {t("common.model")}
+                    </label>
+                    <ModelCardList
+                      models={cloudModelOptions}
+                      selectedModel={displayedCloudModel}
+                      onModelSelect={onCloudModelSelect}
+                      colorScheme="purple"
+                    />
+                    {displayedCloudProvider === "tinfoil" && (
+                      <p className="text-xs text-muted-foreground/70">
+                        {t("transcription.tinfoil.transportNote")}{" "}
+                        <a
+                          href={TINFOIL_AUDIO_DOCS_URL}
+                          onClick={createExternalLinkHandler(TINFOIL_AUDIO_DOCS_URL)}
+                          className="text-primary/70 hover:text-primary transition-colors"
+                        >
+                          {t("transcription.tinfoil.docsLink")}
+                        </a>
+                      </p>
                     )}
                   </div>
-                ))}
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">{t("common.model")}</label>
-                  <ModelCardList
-                    models={cloudModelOptions}
-                    selectedModel={selectedCloudModel}
-                    onModelSelect={onCloudModelSelect}
-                    colorScheme="purple"
-                  />
-                  {selectedCloudProvider === "tinfoil" && (
-                    <p className="text-xs text-muted-foreground/70">
-                      {t("transcription.tinfoil.transportNote")}{" "}
-                      <a
-                        href={TINFOIL_AUDIO_DOCS_URL}
-                        onClick={createExternalLinkHandler(TINFOIL_AUDIO_DOCS_URL)}
-                        className="text-primary/70 hover:text-primary transition-colors"
-                      >
-                        {t("transcription.tinfoil.docsLink")}
-                      </a>
-                    </p>
-                  )}
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -1101,8 +1218,41 @@ export default function TranscriptionModelPicker({
                 {gpuDownloaded ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Check size={13} className="text-success" />
-                      <span className="text-xs font-medium text-foreground">{t("gpu.active")}</span>
+                      {gpuFailed ? (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
+                          <span className="text-xs font-medium text-foreground">
+                            {t("gpu.activationFailed")}
+                          </span>
+                          <button
+                            onClick={handleGpuRetry}
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+                          >
+                            {t("gpu.retry")}
+                          </button>
+                        </>
+                      ) : gpuActivating ? (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
+                          <span className="text-xs font-medium text-foreground">
+                            {t("gpu.activating")}
+                          </span>
+                        </>
+                      ) : gpuActive ? (
+                        <>
+                          <Check size={13} className="text-success" />
+                          <span className="text-xs font-medium text-foreground">
+                            {t("gpu.active")}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
+                          <span className="text-xs font-medium text-foreground">
+                            {t("gpu.ready")}
+                          </span>
+                        </>
+                      )}
                     </div>
                     <Button
                       onClick={handleGpuDelete}

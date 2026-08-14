@@ -14,6 +14,23 @@ const BYOK_KEY_BRIDGES = [
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
+  {
+    base: "note-formatting-custom",
+    get: "getNoteFormattingCustomKey",
+    save: "saveNoteFormattingCustomKey",
+  },
+  { base: "translation-custom", get: "getTranslationCustomKey", save: "saveTranslationCustomKey" },
+  {
+    base: "dictation-agent-custom",
+    get: "getDictationAgentCustomKey",
+    save: "saveDictationAgentCustomKey",
+  },
+  {
+    base: "dictation-agent-vision-custom",
+    get: "getDictationAgentVisionCustomKey",
+    save: "saveDictationAgentVisionCustomKey",
+  },
+  { base: "chat-agent-custom", get: "getChatAgentCustomKey", save: "saveChatAgentCustomKey" },
 ];
 const secretKeyApi = {};
 for (const k of BYOK_KEY_BRIDGES) {
@@ -45,13 +62,23 @@ const registerListener = (channel, handlerFactory) => {
 
 contextBridge.exposeInMainWorld("electronAPI", {
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
+  captureSelectedText: () => ipcRenderer.invoke("capture-selected-text"),
+  replaceSelectedText: (sessionId, text, options) =>
+    ipcRenderer.invoke("replace-selected-text", sessionId, text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
+  captureDictationTarget: () => ipcRenderer.invoke("capture-dictation-target"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
+  onPrepareDictation: registerListener("prepare-dictation", (callback) => () => callback()),
+  onCancelDictationPreparation: registerListener(
+    "cancel-dictation-preparation",
+    (callback) => () => callback()
+  ),
+  micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
@@ -302,6 +329,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   whisperServerStart: (modelName) => ipcRenderer.invoke("whisper-server-start", modelName),
   whisperServerStop: () => ipcRenderer.invoke("whisper-server-stop"),
   whisperServerStatus: () => ipcRenderer.invoke("whisper-server-status"),
+  whisperGpuRetry: () => ipcRenderer.invoke("whisper-gpu-retry"),
 
   // CUDA GPU acceleration
   listGpus: () => ipcRenderer.invoke("list-gpus"),
@@ -334,6 +362,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "gpu-fallback-notification",
     (callback) => () => callback()
   ),
+
+  // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
+  getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),
+  dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
 
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
@@ -530,6 +562,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   listBedrockModels: (config) => ipcRenderer.invoke("bedrock-list-models", config),
+  getManagedEnterpriseConfig: (accountId, workspaceId, expectedAuthGeneration, forceRefresh) =>
+    ipcRenderer.invoke(
+      "get-managed-enterprise-config",
+      accountId,
+      workspaceId,
+      expectedAuthGeneration,
+      forceRefresh
+    ),
+  onManagedEnterpriseConfigChanged: registerListener(
+    "managed-enterprise-config-changed",
+    (callback) => (_event, snapshot) => callback(snapshot)
+  ),
+  clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
@@ -573,10 +618,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),
   openAccessibilitySettings: () => ipcRenderer.invoke("open-accessibility-settings"),
   openSystemAudioSettings: () => ipcRenderer.invoke("open-system-audio-settings"),
+  openScreenRecordingSettings: () => ipcRenderer.invoke("open-screen-recording-settings"),
+  openLoginItemsSettings: () => ipcRenderer.invoke("open-login-items-settings"),
+  checkScreenRecordingAccess: () => ipcRenderer.invoke("check-screen-recording-access"),
+  requestScreenRecordingAccess: () => ipcRenderer.invoke("request-screen-recording-access"),
+  captureScreenContext: () => ipcRenderer.invoke("capture-screen-context"),
+  setScreenContextEnabled: (enabled) => ipcRenderer.invoke("screen-context-set-enabled", enabled),
   showEmojiPanel: () => ipcRenderer.invoke("show-emoji-panel"),
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
+  getModelCacheRoot: () => ipcRenderer.invoke("get-model-cache-root"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
   authGetToken: () => ipcRenderer.invoke("auth-get-token"),
@@ -601,6 +653,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
+  getWorkspacePolicy: (accountId, expectedAuthGeneration) =>
+    ipcRenderer.invoke("get-workspace-policy", accountId, expectedAuthGeneration),
+  onWorkspacePolicyChanged: (callback) => {
+    const listener = (_event, snapshot) => callback(snapshot);
+    ipcRenderer.on("workspace-policy-changed", listener);
+    return () => ipcRenderer.removeListener("workspace-policy-changed", listener);
+  },
   getNoteRecordingConfig: () => ipcRenderer.invoke("get-note-recording-config"),
 
   // Cloud audio file transcription
@@ -711,8 +770,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-speakers-merged",
     (callback) => (_event, data) => callback(data)
   ),
+  onMeetingSessionSpeakerConfigUpdated: registerListener(
+    "meeting-session-speaker-config-updated",
+    (callback) => (_event, data) => callback(data)
+  ),
   onMeetingTranscriptionError: registerListener(
     "meeting-transcription-error",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingTranscriptionFatalError: registerListener(
+    "meeting-transcription-fatal-error",
     (callback) => (_event, data) => callback(data)
   ),
 
@@ -1031,7 +1098,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Google Calendar
   gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),
-  gcalDisconnect: () => ipcRenderer.invoke("gcal-disconnect"),
+  gcalDisconnect: (email) => ipcRenderer.invoke("gcal-disconnect", email),
   gcalGetConnectionStatus: () => ipcRenderer.invoke("gcal-get-connection-status"),
   gcalGetCalendars: () => ipcRenderer.invoke("gcal-get-calendars"),
   gcalSetCalendarSelection: (calendarId, isSelected) =>
@@ -1041,6 +1108,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   gcalGetUpcomingEvents: (windowMinutes) =>
     ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
+
+  // Microsoft Calendar
+  mcalStartOAuth: () => ipcRenderer.invoke("mcal-start-oauth"),
+  mcalDisconnect: (email) => ipcRenderer.invoke("mcal-disconnect", email),
+  mcalGetConnectionStatus: () => ipcRenderer.invoke("mcal-get-connection-status"),
+  mcalSetPrimaryOnly: (value) => ipcRenderer.invoke("mcal-set-primary-only", value),
 
   // Apple Calendar (macOS EventKit)
   acalConnect: () => ipcRenderer.invoke("acal-connect"),
@@ -1060,6 +1133,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onGcalEventsSynced: registerListener(
     "gcal-events-synced",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Microsoft Calendar event listeners
+  onMcalConnectionChanged: registerListener(
+    "mcal-connection-changed",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMcalEventsSynced: registerListener(
+    "mcal-events-synced",
     (callback) => (_event, data) => callback(data)
   ),
 

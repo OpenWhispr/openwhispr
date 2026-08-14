@@ -25,8 +25,9 @@ function parseHotkeyList(value) {
   const result = [];
   for (let i = 0; i < raw.length; i++) {
     let hotkey = raw[i].trim();
-    // A non-final segment ending in "+" lost its comma key to the split.
-    if (hotkey.endsWith("+") && i < raw.length - 1) {
+    // A non-final segment ending in "+" lost its comma key to the split only if
+    // the next raw element was empty (the trailing comma key produced an empty string).
+    if (hotkey.endsWith("+") && i < raw.length - 1 && raw[i + 1].trim() === "") {
       hotkey += HOTKEY_LIST_SEPARATOR;
     }
     if (!hotkey || seen.has(hotkey)) continue;

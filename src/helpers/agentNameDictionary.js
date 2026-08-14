@@ -13,10 +13,12 @@
  */
 export function agentNameDictionaryChanges(dictionary, newName, oldName) {
   const words = Array.isArray(dictionary) ? dictionary : [];
-  const trimmed = newName.trim();
+  const trimmedNew = typeof newName === "string" ? newName.trim() : "";
+  const trimmedOld = typeof oldName === "string" ? oldName.trim() : "";
 
   return {
-    add: trimmed && !words.includes(trimmed) ? [trimmed] : [],
-    remove: oldName && oldName !== newName && words.includes(oldName) ? [oldName] : [],
+    add: trimmedNew && !words.includes(trimmedNew) ? [trimmedNew] : [],
+    remove:
+      trimmedOld && trimmedOld !== trimmedNew && words.includes(trimmedOld) ? [trimmedOld] : [],
   };
 }

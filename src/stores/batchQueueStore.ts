@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { transcribeFileWithSpeakers } from "../services/fileTranscription";
 import type { FileTranscriptionConfig, DiarizationSettings } from "../services/fileTranscription";
-import { DOWNLOAD_ERROR_KEYS } from "../components/notes/shared";
+import { DOWNLOAD_ERROR_KEYS, transcriptionErrorKey } from "../components/notes/shared";
+import { saveUploadNote, uploadTitleFallback } from "../services/uploadNotes";
+import { getSettings } from "./settingsStore";
+import { isTranscriptionContextAllowed } from "./policyRules";
+import { usePolicyStore } from "./policyStore";
 
 export type QueueItemStatus = "queued" | "downloading" | "transcribing" | "done" | "error";
 
@@ -115,6 +119,7 @@ export function processBatchQueue(
   diarization: DiarizationSettings
 ): void {
   if (useBatchQueueStore.getState().isProcessing) return;
+  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) return;
   const run = ++runId;
   useBatchQueueStore.setState({ isProcessing: true });
 
@@ -204,9 +209,9 @@ export function processBatchQueue(
         updateItem(item.id, {
           status: "error",
           error:
-            transcriptionResult.code === "NO_SPEECH_DETECTED"
-              ? "noSpeechDetected"
-              : transcriptionResult.error || "batchTranscriptionFailed",
+            transcriptionErrorKey(transcriptionResult) ||
+            transcriptionResult.error ||
+            "batchTranscriptionFailed",
         });
         return;
       }
@@ -217,22 +222,20 @@ export function processBatchQueue(
       // titles as the single-file flow.
       let noteTitle = noteName;
       if (item.source === "file") {
-        const words = finalText.trim().split(/\s+/);
-        const fallback =
-          words.slice(0, 6).join(" ") + (words.length > 6 ? "..." : "") ||
-          noteName.replace(/\.[^.]+$/, "");
-        noteTitle = (await transcribeOpts.generateTitle?.(finalText)) || fallback;
+        noteTitle =
+          (await transcribeOpts.generateTitle?.(finalText)) ||
+          uploadTitleFallback(finalText, noteName);
         if (run !== runId) return;
       }
 
-      const noteRes = await window.electronAPI.saveNote(
-        noteTitle,
-        finalText,
-        "upload",
-        noteName,
-        null,
-        transcribeOpts.folderId
-      );
+      const noteRes = await saveUploadNote({
+        title: noteTitle,
+        text: finalText,
+        sourceName: noteName,
+        folderId: transcribeOpts.folderId,
+        diarization,
+        durationSeconds: transcriptionResult.durationSeconds,
+      });
 
       if (noteRes.success && noteRes.note) {
         updateItem(item.id, {
@@ -247,7 +250,8 @@ export function processBatchQueue(
     } catch (err) {
       updateItem(item.id, {
         status: "error",
-        error: err instanceof Error ? err.message : "batchUnknownError",
+        error:
+          transcriptionErrorKey(err) || (err instanceof Error ? err.message : "batchUnknownError"),
       });
     } finally {
       // Nothing else owns the temp file, so delete it even for a stale run.

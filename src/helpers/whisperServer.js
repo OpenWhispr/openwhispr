@@ -11,6 +11,8 @@ const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
+const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
+const { BIN_SUBDIR: VULKAN_BIN_SUBDIR } = require("./whisperVulkanManager");
 const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
 const {
   computeTranscriptionTimeoutMs,
@@ -134,10 +136,20 @@ function buildWhisperServerArgs({
   vadEnabled = false,
   vadModelPath = null,
   vadConfig,
+  gpuDeviceIndex = null,
 }) {
   const args = ["--model", modelPath, "--host", "127.0.0.1", "--port", String(port)];
 
   if (threads) args.push("--threads", String(threads));
+
+  // --device counts the logical GPU devices ggml registers, i.e. exactly the
+  // indices whisper-server prints as "ggml_vulkan: N = ...". Do NOT use
+  // GGML_VK_VISIBLE_DEVICES here: it takes raw physical enumeration indices,
+  // which diverge from the printed ones whenever a device is filtered out
+  // (lavapipe, dual-driver dedupe).
+  if (Number.isInteger(gpuDeviceIndex) && gpuDeviceIndex >= 0) {
+    args.push("--device", String(gpuDeviceIndex));
+  }
 
   // whisper.cpp defaults to English when --language is omitted;
   // explicitly pass "auto" to enable language auto-detection
@@ -172,6 +184,43 @@ function buildWhisperServerArgs({
   }
 
   return args;
+}
+
+// ggml-vulkan prints one line per usable device on startup, e.g.
+// "ggml_vulkan: 0 = Intel(R) UHD Graphics 770 (Intel Corporation) | uma: 1 | fp16: 1 | ..."
+// The leading number is the logical index --device selects; uma: 1 marks an
+// integrated (host-memory) device. Format verified against the pinned
+// OpenWhispr/whisper.cpp tag (ggml-vulkan.cpp, ggml_vk_print_gpu_info).
+const VULKAN_DEVICE_LINE = /^ggml_vulkan: (\d+) = (.+?) \((.+?)\) \| uma: ([01]) \|/gm;
+
+function parseVulkanDevices(stderr) {
+  const devices = [];
+  for (const match of String(stderr || "").matchAll(VULKAN_DEVICE_LINE)) {
+    devices.push({
+      index: parseInt(match[1], 10),
+      name: match[2],
+      driver: match[3],
+      uma: parseInt(match[4], 10),
+    });
+  }
+  return devices;
+}
+
+function resolveVulkanPinAction({ devices, appliedPin }) {
+  if (appliedPin != null) {
+    // A persisted pin that no longer resolves to a device (hardware change)
+    // must be dropped, or ggml silently runs on CPU forever.
+    if (devices.length > 0 && appliedPin >= devices.length) return { action: "clear" };
+    return { action: "none" };
+  }
+
+  // ggml defaults to device 0; only intervene when that default is an iGPU
+  // and a discrete device is available. See #1606.
+  if (devices.length >= 2 && devices[0].uma === 1) {
+    const discrete = devices.find((d) => d.uma === 0);
+    if (discrete) return { action: "pin", index: discrete.index };
+  }
+  return { action: "none" };
 }
 
 function shouldFallbackToCpuAfterRequestError({
@@ -325,7 +374,8 @@ class WhisperServerManager extends EventEmitter {
     if (gpuBackend) {
       const ext = process.platform === "win32" ? ".exe" : "";
       const gpuBinary = `whisper-server-${process.platform}-${process.arch}-${gpuBackend}${ext}`;
-      const gpuPath = path.join(app.getPath("userData"), "bin", gpuBinary);
+      const subdir = gpuBackend === "cuda" ? CUDA_BIN_SUBDIR : VULKAN_BIN_SUBDIR;
+      const gpuPath = path.join(app.getPath("userData"), "bin", subdir, gpuBinary);
       if (fs.existsSync(gpuPath)) return gpuPath;
     }
 
@@ -475,6 +525,19 @@ class WhisperServerManager extends EventEmitter {
     this.useCuda = usingCuda;
     this.useVulkan = usingVulkan;
 
+    // Pin Vulkan to a specific device: an explicit option wins (set by the
+    // one-shot restart below; -1 means "explicitly unpinned", so the stale env
+    // value must not resurface), else the persisted choice from a prior run.
+    let vulkanDeviceIndex = null;
+    if (usingVulkan) {
+      if (Number.isInteger(options.vulkanDeviceIndex)) {
+        vulkanDeviceIndex = options.vulkanDeviceIndex;
+      } else {
+        const persisted = parseInt(process.env.WHISPER_VULKAN_DEVICE, 10);
+        if (Number.isInteger(persisted) && persisted >= 0) vulkanDeviceIndex = persisted;
+      }
+    }
+
     // Check for FFmpeg first - only use --convert flag if FFmpeg is available
     const ffmpegPath = this.getFFmpegPath();
     const spawnEnv = { ...process.env };
@@ -506,6 +569,7 @@ class WhisperServerManager extends EventEmitter {
       vadEnabled: options.vadEnabled === true,
       vadModelPath: options.vadModelPath || null,
       vadConfig: options.vadConfig,
+      gpuDeviceIndex: vulkanDeviceIndex,
     });
 
     // FFmpeg is required for pre-converting audio to 16kHz mono WAV
@@ -524,6 +588,7 @@ class WhisperServerManager extends EventEmitter {
       cwd: serverBinaryDir,
       cuda: usingCuda,
       vulkan: usingVulkan,
+      vulkanDeviceIndex,
       threads: threadResolution,
     });
 
@@ -540,7 +605,6 @@ class WhisperServerManager extends EventEmitter {
 
     let stderrBuffer = "";
     let exitCode = null;
-    let earlyExit = false;
 
     this.process.stdout.on("data", (data) => {
       debugLogger.debug("whisper-server stdout", { data: data.toString().trim() });
@@ -558,7 +622,6 @@ class WhisperServerManager extends EventEmitter {
 
     this.process.on("close", (code) => {
       exitCode = code;
-      if (Date.now() - startTime < 10000) earlyExit = true;
       debugLogger.debug("whisper-server process exited", { code });
       this.ready = false;
       this.process = null;
@@ -574,25 +637,22 @@ class WhisperServerManager extends EventEmitter {
     } catch (err) {
       // An intentional stop() during startup is not a GPU/thread failure
       if (err.isStopped) throw err;
-      if (usingVulkan) {
-        // Fall back on ANY startup rejection — Vulkan can die late (VRAM OOM
-        // mid-model-load) or hang, not just exit early like the CUDA rule below
-        debugLogger.warn("Vulkan whisper-server failed, falling back to CPU", {
-          error: err.message,
-          exitCode,
-          stderr: stderrBuffer.slice(0, 200),
-        });
-        this.emit("gpu-fallback");
+      if (usingCuda || usingVulkan) {
+        // Fall back on ANY startup rejection — a GPU server can exit early
+        // (missing kernels), die late (VRAM OOM mid-model-load), or hang, and
+        // in every case the CPU binary is the working answer. stop() reaps a
+        // hung process before the CPU restart.
+        debugLogger.warn(
+          `${usingCuda ? "CUDA" : "Vulkan"} whisper-server failed, falling back to CPU`,
+          {
+            error: err.message,
+            exitCode,
+            stderr: stderrBuffer.slice(0, 200),
+          }
+        );
+        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback");
         await this.stop();
         return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
-      }
-      if (usingCuda && earlyExit) {
-        debugLogger.warn("CUDA whisper-server failed, falling back to CPU", {
-          exitCode,
-          stderr: stderrBuffer.slice(0, 200),
-        });
-        this.emit("cuda-fallback");
-        return this._doStart(modelPath, { ...options, useCuda: false });
       }
       if (shouldFallbackToDefaultThreads(threadResolution)) {
         const defaultThreadResolution = createThreadResolution(
@@ -613,6 +673,42 @@ class WhisperServerManager extends EventEmitter {
         });
       }
       throw err;
+    }
+
+    // One-shot after the server is up: if ggml defaulted to an integrated GPU
+    // while a discrete one is available, restart pinned to the discrete device
+    // (and drop a persisted pin that no longer resolves). vulkanPinChecked
+    // bounds this to a single extra start; if the pinned restart fails, the
+    // catch above falls back to CPU as usual. See #1606.
+    if (usingVulkan && !options.vulkanPinChecked) {
+      const pinAction = resolveVulkanPinAction({
+        devices: parseVulkanDevices(stderrBuffer),
+        appliedPin: vulkanDeviceIndex,
+      });
+      if (pinAction.action === "pin") {
+        debugLogger.info("Vulkan device 0 is integrated; restarting pinned to discrete GPU", {
+          index: pinAction.index,
+        });
+        this.emit("vulkan-device-pinned", { index: pinAction.index });
+        await this.stop();
+        return this._doStart(modelPath, {
+          ...options,
+          vulkanDeviceIndex: pinAction.index,
+          vulkanPinChecked: true,
+        });
+      }
+      if (pinAction.action === "clear") {
+        debugLogger.warn("Persisted Vulkan device pin is out of range; clearing it", {
+          appliedPin: vulkanDeviceIndex,
+        });
+        this.emit("vulkan-device-pin-cleared");
+        await this.stop();
+        return this._doStart(modelPath, {
+          ...options,
+          vulkanDeviceIndex: -1,
+          vulkanPinChecked: true,
+        });
+      }
     }
 
     this.startHealthCheck();
@@ -1002,20 +1098,28 @@ class WhisperServerManager extends EventEmitter {
   }
 
   getStatus() {
+    const running = this.ready && (this.process !== null || this.isRemote);
+    const gpuBackend = this.useCuda ? "cuda" : this.useVulkan ? "vulkan" : null;
     return {
       available: this.isAvailable(),
-      running: this.ready && (this.process !== null || this.isRemote),
+      running,
       port: this.port,
       hostname: this.hostname,
       isRemote: this.isRemote,
       modelPath: this.modelPath,
       modelName: this.modelPath ? path.basename(this.modelPath, ".bin").replace("ggml-", "") : null,
+      // What the server is actually running on right now — the UI must never
+      // infer this from "the GPU pack is downloaded" (see the CPU fallbacks)
+      gpuBackend,
+      gpuAccelerated: running && !this.isRemote && gpuBackend !== null,
     };
   }
 }
 
 module.exports = WhisperServerManager;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
+module.exports.parseVulkanDevices = parseVulkanDevices;
+module.exports.resolveVulkanPinAction = resolveVulkanPinAction;
 module.exports.getVadSignature = getVadSignature;
 module.exports.resolveWhisperThreads = resolveWhisperThreads;
 module.exports.shouldFallbackToCpuAfterRequestError = shouldFallbackToCpuAfterRequestError;

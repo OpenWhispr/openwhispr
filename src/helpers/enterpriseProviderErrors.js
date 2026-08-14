@@ -6,6 +6,48 @@
 
 const { classifyNetworkError } = require("./networkErrors");
 
+function mapManagedIdentityError(error, provider) {
+  const code = error?.code;
+  if (!code) return null;
+  if (["AUTH_CONTEXT_CHANGED", "AUTH_CONTEXT_UNVALIDATED", "AUTH_EXPIRED"].includes(code)) {
+    return {
+      message: "Your OpenWhispr session changed or expired.",
+      action: "Sign in again, then retry.",
+      retryable: true,
+    };
+  }
+  if (code === "SSO_REQUIRED") {
+    return {
+      message: "Company SSO is required for managed enterprise AI.",
+      action: "Sign out and sign back in with your company SSO account.",
+    };
+  }
+  if (code === "DIRECTORY_ASSIGNMENT_REQUIRED") {
+    return {
+      message: error.message,
+      action: "Ask your IT administrator to restore your directory assignment.",
+    };
+  }
+  if (
+    [
+      "PROVIDER_NOT_ALLOWED",
+      "PROVIDER_NOT_CONFIGURED",
+      "WORKSPACE_SUBSCRIPTION_REQUIRED",
+      "MANAGED_CONFIG_INVALID",
+    ].includes(code)
+  ) {
+    return { message: error.message, action: "Contact your IT administrator." };
+  }
+  if (code === "IDENTITY_EXCHANGE_FAILED") {
+    return {
+      message: `Could not obtain temporary ${provider === "bedrock" ? "AWS" : "Azure"} access.`,
+      action: "Ask your IT administrator to verify the configured federated identity trust.",
+      retryable: true,
+    };
+  }
+  return null;
+}
+
 function mapBedrockError(error, config = {}) {
   const msg = error?.message || error?.code || String(error);
   const profile = config.bedrockProfile || "default";
@@ -123,6 +165,8 @@ function mapVertexError(error, config = {}) {
  * @returns {{ message: string, action?: string, copyCommand?: string, retryable?: boolean }}
  */
 function mapEnterpriseError(provider, error, config = {}) {
+  const managed = mapManagedIdentityError(error, provider);
+  if (managed) return managed;
   switch (provider) {
     case "bedrock":
       return mapBedrockError(error, config);
@@ -167,6 +211,14 @@ function isPrivateIPv4(hostname) {
 function isPrivateIPv6(hostname) {
   if (hostname === "::1") return true;
   if (/^(fe80|fc[0-9a-f]{2}|fd[0-9a-f]{2}):/i.test(hostname)) return true;
+  // The URL parser rewrites an IPv4-mapped address to its hex form, so
+  // "::ffff:169.254.169.254" reaches us as "::ffff:a9fe:a9fe".
+  const mappedHex = hostname.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (mappedHex) {
+    const hi = parseInt(mappedHex[1], 16);
+    const lo = parseInt(mappedHex[2], 16);
+    return isPrivateIPv4(`${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`);
+  }
   const mapped = hostname.match(/^::ffff:(.+)$/i);
   return mapped ? isPrivateIPv4(mapped[1]) : false;
 }
@@ -182,7 +234,9 @@ function validateEnterpriseEndpoint(endpoint) {
   if (url.protocol !== "https:") {
     throw new Error("Endpoint must use HTTPS.");
   }
-  const hostname = url.hostname.toLowerCase();
+  // URL.hostname keeps the brackets around an IPv6 literal ("[::1]"), which no
+  // isPrivateIPv6 branch can match — strip them or the whole IPv6 arm is dead.
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
     BLOCKED_HOSTS.has(hostname) ||
     BLOCKED_SUFFIXES.some((suffix) => hostname.endsWith(suffix)) ||

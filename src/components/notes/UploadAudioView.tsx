@@ -29,16 +29,22 @@ import {
   findDefaultFolder,
   findVideosFolder,
   DOWNLOAD_ERROR_KEYS,
+  transcriptionErrorKey,
   MEETINGS_FOLDER_NAME,
 } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
-import { getAllReasoningModels, getBatchTranscriptionModel } from "../../models/ModelRegistry";
+import {
+  getAllReasoningModels,
+  getBatchTranscriptionModel,
+  getTranscriptionProviders,
+} from "../../models/ModelRegistry";
 import {
   useSettingsStore,
   selectIsCloudCleanupMode,
+  selectPolicyEffectiveSettings,
   selectResolvedUploadTranscription,
   getSettings,
 } from "../../stores/settingsStore";
@@ -54,6 +60,11 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
+import { isTranscriptionContextAllowed } from "../../stores/policyRules";
+import { usePolicyStore } from "../../stores/policyStore";
+import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
+import { resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
+import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -130,7 +141,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     durationSeconds?: number | null;
   } | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [partialWarning, setPartialWarning] = useState(false);
+  const [partialWarning, setPartialWarning] = useState<{ failed: number; total: number } | null>(
+    null
+  );
   const [noteId, setNoteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -226,7 +239,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const { isSignedIn } = useAuth();
   const usage = useUsage();
-  const isProUser = usage?.isSubscribed || usage?.isTrial;
+  // The server enforces the free-tier size limit regardless, so an unresolved
+  // entitlement should not block a payer's upload.
+  const isProUser = usage?.hasPaidAccessOptimistic ?? false;
 
   const {
     openaiApiKey,
@@ -236,6 +251,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     customTranscriptionApiKey,
   } = useSettings();
+  const policyState = usePolicySnapshot();
 
   const {
     useLocalWhisper,
@@ -247,7 +263,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionBaseUrl,
     cloudTranscriptionMode,
     transcriptionMode,
-  } = useSettingsStore(useShallow(selectResolvedUploadTranscription));
+  } = useSettingsStore(
+    useShallow((settings) =>
+      selectResolvedUploadTranscription(selectPolicyEffectiveSettings(settings, policyState))
+    )
+  );
+  const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");
 
   const remoteTranscriptionUrl = useSettingsStore((s) => s.remoteTranscriptionUrl);
   const remoteTranscriptionModel = useSettingsStore((s) => s.remoteTranscriptionModel);
@@ -263,10 +284,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
   const cortiTenant = useSettingsStore((s) => s.cortiTenant);
   const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
-  const isCloudCleanup = useSettingsStore(selectIsCloudCleanupMode);
-  const effectiveCleanupModel = useSettingsStore((s) =>
-    selectIsCloudCleanupMode(s) ? "" : s.cleanupModel
+  const isCloudCleanup = useSettingsStore((settings) =>
+    selectIsCloudCleanupMode(selectPolicyEffectiveSettings(settings, policyState))
   );
+  const effectiveCleanupModel = useSettingsStore((settings) => {
+    const effectiveSettings = selectPolicyEffectiveSettings(settings, policyState);
+    return selectIsCloudCleanupMode(effectiveSettings) ? "" : effectiveSettings.cleanupModel;
+  });
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
 
   const isOpenWhisprCloud =
@@ -362,8 +386,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         if (isSelfHosted) {
           if (!cancelled) setProviderReady(!!remoteTranscriptionUrl?.trim());
         } else if (cloudTranscriptionProvider === "custom") {
-          // Custom providers only need a base URL; API key is truly optional
-          if (!cancelled) setProviderReady(!!cloudTranscriptionBaseUrl?.trim());
+          const route = resolveTranscriptionRoute({
+            settings: { cloudTranscriptionProvider, cloudTranscriptionBaseUrl },
+            providers: getTranscriptionProviders(),
+          });
+          if (!cancelled) setProviderReady(route.transport !== "error");
         } else if (cloudTranscriptionProvider === "corti") {
           if (!cancelled) setProviderReady(!!(cortiClientId && cortiClientSecret));
         } else {
@@ -467,7 +494,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,
     cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
     cloudTranscriptionModel,
-    language: getBaseLanguageCode(preferredLanguage) || "en",
+    // Empty = auto-detect; the resolver supplies a default where one is required.
+    language: getBaseLanguageCode(preferredLanguage) || "",
     cortiEnvironment,
     cortiTenant,
     transcriptionMode,
@@ -565,7 +593,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setState("idle");
     setFile(null);
     setResult(null);
-    setPartialWarning(false);
+    setPartialWarning(null);
     setNoteId(null);
     setError(null);
     setProgress(0);
@@ -587,9 +615,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     runIdRef.current++;
     reset();
   };
-
   const handleTranscribe = async () => {
     if (!file || batch.isProcessing) return;
+    if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
+      setError(t("common.managedByOrg"));
+      return;
+    }
     const currentFile = file;
     const currentTempPath = downloadedTempPath;
     const runId = ++runIdRef.current;
@@ -626,14 +657,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
+      const diarization: DiarizationSettings = {
+        enabled: diarizationEnabled,
+        localModelsReady: !!diarizationModelsReady,
+        numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
+      };
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
         buildTranscriptionConfig(),
-        {
-          enabled: diarizationEnabled,
-          localModelsReady: !!diarizationModelsReady,
-          numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
-        },
+        diarization,
         currentFile.durationSeconds,
         { requestId }
       ).finally(() => {
@@ -649,31 +681,29 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (res.success && res.text) {
         setProgress(100);
         setResult(res.text);
-        setPartialWarning(!!res.warning);
+        setPartialWarning(
+          res.failedChunks && res.totalChunks
+            ? { failed: res.failedChunks, total: res.totalChunks }
+            : null
+        );
 
         let title: string;
         if (currentFile.fromUrl) {
           title = currentFile.name;
         } else {
-          const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
-          const fallbackTitle =
-            textFallback.length > 0
-              ? textFallback + (res.text.trim().split(/\s+/).length > 6 ? "..." : "")
-              : currentFile.name.replace(/\.[^.]+$/, "");
           const aiTitle = await generateTitle(res.text);
           if (runId !== runIdRef.current) return;
-          title = aiTitle || fallbackTitle;
+          title = aiTitle || uploadTitleFallback(res.text, currentFile.name);
         }
 
-        const folderId = selectedFolderId ? Number(selectedFolderId) : null;
-        const noteRes = await window.electronAPI.saveNote(
+        const noteRes = await saveUploadNote({
           title,
-          res.text,
-          "upload",
-          currentFile.name,
-          null,
-          folderId
-        );
+          text: res.text,
+          sourceName: currentFile.name,
+          folderId: selectedFolderId ? Number(selectedFolderId) : null,
+          diarization,
+          durationSeconds: res.durationSeconds,
+        });
         if (runId !== runIdRef.current) return;
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
         if (currentTempPath) {
@@ -683,9 +713,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setState("complete");
       } else {
         setProgress(0);
+        const errorKey = transcriptionErrorKey(res);
         setError(
-          res.code === "NO_SPEECH_DETECTED"
-            ? t("notes.upload.noSpeechDetected")
+          errorKey
+            ? t(`notes.upload.${errorKey}`)
             : res.error || t("notes.upload.transcriptionFailed")
         );
         setState("error");
@@ -696,7 +727,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (progressCleanupRef.current) progressCleanupRef.current();
       progressCleanupRef.current = null;
       setProgress(0);
-      setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
+      const errorKey = transcriptionErrorKey(err);
+      if (errorKey) {
+        setError(t(`notes.upload.${errorKey}`));
+      } else {
+        setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
+      }
       setState("error");
     }
   };
@@ -818,6 +854,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const startBatchProcessing = () => {
     if (state === "downloading" || state === "transcribing") return;
+    if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
+      setBatchUrlNotice(t("common.managedByOrg"));
+      return;
+    }
     setBatchUrlNotice(null);
 
     const transcribeOpts: TranscribeOptions = {
@@ -1047,7 +1087,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                       variant="default"
                       size="sm"
                       onClick={startBatchProcessing}
-                      disabled={state === "downloading" || state === "transcribing"}
+                      disabled={
+                        !uploadAllowedByPolicy ||
+                        state === "downloading" ||
+                        state === "transcribing"
+                      }
                       className="h-8 text-xs px-5"
                     >
                       {t("notes.upload.transcribe")}
@@ -1065,7 +1109,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               getActiveModelLabel={getActiveModelLabel}
               reset={reset}
               handleTranscribe={handleTranscribe}
-              transcribeDisabled={batch.isProcessing}
+              transcribeDisabled={batch.isProcessing || !uploadAllowedByPolicy}
               requiresUpgrade={!!requiresUpgrade}
               fileTooLarge={fileTooLarge}
               isLargeFile={isLargeFile}
@@ -1259,7 +1303,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
             {diarizationEnabled && diarizationModelsReady && (
               <div className="mt-2">
+                <label
+                  htmlFor="upload-num-speakers"
+                  className="block text-xs font-medium text-foreground/50"
+                >
+                  {t("notes.upload.numSpeakersLabel")}
+                </label>
                 <input
+                  id="upload-num-speakers"
                   type="number"
                   min="2"
                   max={MAX_SPEAKER_COUNT}
@@ -1274,12 +1325,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     setDiarizationNumSpeakers(String(isNaN(n) ? "" : n));
                   }}
                   placeholder={t("notes.upload.numSpeakersPlaceholder")}
-                  aria-label={t("notes.upload.numSpeakersPlaceholder")}
                   className={cn(
                     uploadFieldClass,
-                    "w-full h-8 px-2.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    "mt-1 w-full h-8 px-2.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   )}
                 />
+                <p className="text-[10px] text-foreground/25 mt-1.5">
+                  {t("notes.upload.numSpeakersHint")}
+                </p>
               </div>
             )}
           </div>
@@ -1777,9 +1830,9 @@ function FolderSelect({
 }
 
 interface CompleteViewProps {
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
   result: string;
-  partialWarning: boolean;
+  partialWarning: { failed: number; total: number } | null;
   folders: FolderItem[];
   selectedFolderId: string;
   handleFolderChange: (val: string) => void;
@@ -1848,7 +1901,10 @@ function CompleteView({
 
       {partialWarning && (
         <p className="text-xs text-destructive/50 max-w-[240px] text-center mb-4 -mt-2">
-          {t("notes.upload.partialWarning")}
+          {t("notes.upload.partialWarningCount", {
+            failed: partialWarning.failed,
+            total: partialWarning.total,
+          })}
         </p>
       )}
 

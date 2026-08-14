@@ -17,7 +17,7 @@ function setPlatform(platform) {
 
 afterEach(() => setPlatform(originalPlatform));
 
-function loadDetector(platform, spawn) {
+function loadDetector(platform, spawn, ownPids) {
   delete require.cache[detectorModulePath];
   setPlatform(platform);
 
@@ -33,6 +33,11 @@ function loadDetector(platform, spawn) {
     // on the host rather than by setPlatform().
     if (request === "./binaryResolver") {
       return { resolveBundledBinary: (name) => `/fake/bin/${name}` };
+    }
+    // Outside Electron the real module can only see the main pid, so the
+    // child-process PIDs that matter for #1392 have to be injected.
+    if (request === "./ownProcessPids" && ownPids) {
+      return { getOwnProcessPids: () => new Set(ownPids) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -63,15 +68,19 @@ function createFakeChild(spawnError) {
   return child;
 }
 
-function createDetector(platform, { spawnError } = {}) {
+function createDetector(platform, { spawnError, ownPids } = {}) {
   const children = [];
   const calls = [];
-  const AudioActivityDetector = loadDetector(platform, (command, args, options) => {
-    calls.push({ command, args, options });
-    const child = createFakeChild(spawnError);
-    children.push(child);
-    return child;
-  });
+  const AudioActivityDetector = loadDetector(
+    platform,
+    (command, args, options) => {
+      calls.push({ command, args, options });
+      const child = createFakeChild(spawnError);
+      children.push(child);
+      return child;
+    },
+    ownPids
+  );
 
   const detector = new AudioActivityDetector();
   detector._isMicActive = async () => false;
@@ -227,5 +236,194 @@ test("unsupported platforms poll without spawning a listener", async () => {
 
   assert.equal(calls.length, 0);
   assert.notEqual(detector.checkInterval, null);
+  detector.stop();
+});
+
+// The native listeners are edge-triggered: they emit only on state transitions,
+// so an edge swallowed by a gate is never re-delivered. The detector must
+// remember the last known state and re-evaluate it when the gate lifts.
+// Mirrors SUSTAINED_EVENT_DRIVEN_MS and COOLDOWN_MS in audioActivityDetector.js.
+const SUSTAINED_MS = 2 * 1000;
+const COOLDOWN_MS = 5 * 60 * 1000;
+
+test("darwin: a mic edge swallowed by the recording gate is re-evaluated when recording stops", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.setUserRecording(true);
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  assert.equal(detector._sustainedTimer, null, "a gated edge must not arm the sustained timer");
+
+  detector.setUserRecording(false);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 1, "the ongoing call must be detected once the gate lifts");
+  detector.stop();
+});
+
+test("darwin: a mic edge swallowed by the dismissal cooldown is re-evaluated when it expires", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.dismiss();
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  assert.equal(detector._sustainedTimer, null, "the cooldown must still swallow the prompt");
+
+  // Split ticks: mocked timers do not cascade timers armed inside a callback.
+  t.mock.timers.tick(COOLDOWN_MS);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 1, "a call outlasting the cooldown must still be detected");
+  detector.stop();
+});
+
+test("darwin: a dismissed call that keeps running re-prompts after the cooldown", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(emitted.length, 1);
+
+  detector.dismiss();
+  t.mock.timers.tick(COOLDOWN_MS);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 2, "polling parity: an ongoing call re-prompts after the cooldown");
+  detector.stop();
+});
+
+test("darwin: a mic that went quiet while recording does not re-prompt when recording stops", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.setUserRecording(true);
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  children[0].stdout.emit("data", "MIC_INACTIVE\n");
+  detector.setUserRecording(false);
+  t.mock.timers.tick(SUSTAINED_MS * 2);
+
+  assert.equal(emitted.length, 0, "a released mic must not produce a stale prompt");
+  detector.stop();
+});
+
+test("darwin: a call that outlives the mic warm-hold is detected when the hold releases", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.setMicWarmHold(true);
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  assert.equal(
+    detector._sustainedTimer,
+    null,
+    "warm-hold evidence must not arm the sustained timer"
+  );
+
+  detector.setMicWarmHold(false);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 1, "a call still holding the mic after our hold ends must prompt");
+  detector.stop();
+});
+
+test("darwin: a warm-hold that releases cleanly does not produce a stale prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  detector.setMicWarmHold(true);
+  children[0].stdout.emit("data", "MIC_ACTIVE\n");
+  detector.setMicWarmHold(false);
+  children[0].stdout.emit("data", "MIC_INACTIVE\n");
+  t.mock.timers.tick(SUSTAINED_MS * 2);
+
+  assert.equal(emitted.length, 0, "the release edge must cancel the pending re-evaluation");
+  detector.stop();
+});
+
+test("win32: an unrelated app's mic session ending does not hide an ongoing dismissed call", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32");
+  const emitted = [];
+  detector.on("sustained-audio-detected", (data) => emitted.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "MIC_START 11\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(emitted.length, 1);
+  detector.dismiss();
+
+  // pid 11 never stopped, so the reference count must still hold it — otherwise
+  // pid 22's stop reads as "every mic closed" and cancels the re-evaluation.
+  children[0].stdout.emit("data", "MIC_START 22\nMIC_STOP 22\n");
+  t.mock.timers.tick(COOLDOWN_MS);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(emitted.length, 2, "the still-running call must re-prompt after the cooldown");
+  detector.stop();
+});
+
+// #1392: the helper is given a single --exclude-pid for the main process, but
+// dictation opens the mic from Chromium's audio service, so OpenWhispr's own
+// capture is reported back to us under a child PID and read as a meeting.
+test("win32: a mic session from one of our own child processes is ignored", async () => {
+  const AUDIO_SERVICE_PID = 4242;
+  const { detector, children } = createDetector("win32", {
+    ownPids: [process.pid, AUDIO_SERVICE_PID],
+  });
+
+  await detector.start();
+  children[0].stdout.emit("data", `MIC_START ${AUDIO_SERVICE_PID}\n`);
+
+  assert.equal(detector._activeMicPids.size, 0);
+  assert.equal(detector._sustainedTimer, null, "our own dictation must not arm detection");
+  assert.equal(detector._lastKnownMicState, false, "and must not leave stale state behind");
+  detector.stop();
+});
+
+test("win32: a mic session from another application is still detected", async () => {
+  const { detector, children } = createDetector("win32", {
+    ownPids: [process.pid, 4242],
+  });
+
+  await detector.start();
+  children[0].stdout.emit("data", "MIC_START 9001\n");
+
+  assert.deepEqual([...detector._activeMicPids], [9001]);
+  assert.notEqual(detector._sustainedTimer, null);
+  detector.stop();
+});
+
+test("win32: our own capture cannot cancel a real meeting already in progress", async () => {
+  const AUDIO_SERVICE_PID = 4242;
+  const { detector, children } = createDetector("win32", {
+    ownPids: [process.pid, AUDIO_SERVICE_PID],
+  });
+
+  await detector.start();
+  children[0].stdout.emit("data", "MIC_START 9001\n");
+  children[0].stdout.emit("data", `MIC_START ${AUDIO_SERVICE_PID}\n`);
+  children[0].stdout.emit("data", `MIC_STOP ${AUDIO_SERVICE_PID}\n`);
+
+  // Dropping our own stop must not empty the set while the other app holds it.
+  assert.deepEqual([...detector._activeMicPids], [9001]);
+  assert.notEqual(detector._sustainedTimer, null);
   detector.stop();
 });

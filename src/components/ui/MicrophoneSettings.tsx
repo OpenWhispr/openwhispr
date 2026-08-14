@@ -7,6 +7,7 @@ import { Button } from "./button";
 import { RefreshCw, Mic } from "lucide-react";
 import { isBuiltInMicrophone } from "../../utils/audioDeviceUtils";
 import { resolveMicDeviceSelection } from "../../helpers/micDeviceSelection";
+import { MIC_WARM_HOLD_CHOICES } from "../../stores/settingsStore";
 
 interface AudioDevice {
   deviceId: string;
@@ -18,16 +19,20 @@ interface MicrophoneSettingsProps {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
   selectedMicDeviceLabel: string;
+  micWarmHoldSeconds: number;
   onPreferBuiltInChange: (value: boolean) => void;
   onDeviceSelect: (deviceId: string, label: string) => void;
+  onMicWarmHoldSecondsChange: (seconds: number) => void;
 }
 
 export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
   preferBuiltInMic,
   selectedMicDeviceId,
   selectedMicDeviceLabel,
+  micWarmHoldSeconds,
   onPreferBuiltInChange,
   onDeviceSelect,
+  onMicWarmHoldSecondsChange,
 }) => {
   const { t } = useTranslation();
   const [devices, setDevices] = useState<AudioDevice[]>([]);
@@ -197,6 +202,34 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
 
           <p className="text-xs text-muted-foreground">{t("microphoneSettings.helpText")}</p>
         </div>
+      )}
+
+      <SettingsRow
+        label={t("microphoneSettings.warmHold.label")}
+        description={t("microphoneSettings.warmHold.description")}
+      >
+        <Select
+          value={String(micWarmHoldSeconds)}
+          onValueChange={(value) => onMicWarmHoldSecondsChange(Number(value))}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {/* Derived from the store's whitelist so a new option can't silently
+                snap to 0 in the setter; its label key is the value itself. */}
+            {MIC_WARM_HOLD_CHOICES.map((seconds) => (
+              <SelectItem key={seconds} value={String(seconds)}>
+                {t(`microphoneSettings.warmHold.options.${seconds}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsRow>
+      {micWarmHoldSeconds > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {t("microphoneSettings.warmHold.privacyNote")}
+        </p>
       )}
     </div>
   );

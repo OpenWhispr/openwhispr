@@ -9,7 +9,12 @@ import { useDialogs } from "../../hooks/useDialogs";
 import { Button } from "../ui/button";
 import { ConfirmDialog } from "../ui/dialog";
 import { useToast } from "../ui/useToast";
-import type { Workspace, WorkspaceInvitation, WorkspaceMember } from "../../types/electron";
+import type {
+  Workspace,
+  WorkspaceInvitation,
+  WorkspaceJoinRequest,
+  WorkspaceMember,
+} from "../../types/electron";
 import InviteTeammateDialog from "../InviteTeammateDialog";
 import MemberAvatar from "../MemberAvatar";
 import RoleBadge from "../RoleBadge";
@@ -24,14 +29,13 @@ import { canManageWorkspace } from "../../lib/spacePermissions";
 
 interface Props {
   workspace: Workspace;
-  onNavigateToBilling: () => void;
 }
 
 function invitationDaysLeft(inv: WorkspaceInvitation): number {
   return Math.ceil((new Date(inv.expires_at).getTime() - Date.now()) / 86_400_000);
 }
 
-export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: Props) {
+export default function WorkspaceMembersTab({ workspace }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
@@ -43,13 +47,14 @@ export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: 
     }))
   );
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
+  const [joinRequests, setJoinRequests] = useState<WorkspaceJoinRequest[]>([]);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState(false);
   const [invitationsError, setInvitationsError] = useState(false);
   const canManage = canManageWorkspace(workspace.role);
-
   async function loadMembers() {
     setMembersLoading(true);
     setMembersError(false);
@@ -59,6 +64,40 @@ export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: 
       setMembersError(true);
     } finally {
       setMembersLoading(false);
+    }
+  }
+
+  async function refreshJoinRequests() {
+    try {
+      setJoinRequests(await WorkspacesService.listJoinRequests(workspace.id));
+    } catch {
+      // Requests are additive context; a failure here must not break the tab.
+      setJoinRequests([]);
+    }
+  }
+
+  async function decideJoinRequest(request: WorkspaceJoinRequest, decision: "approve" | "deny") {
+    setDecidingId(request.id);
+    try {
+      await WorkspacesService.decideJoinRequest(workspace.id, request.id, decision);
+      setJoinRequests((current) => current.filter((r) => r.id !== request.id));
+      if (decision === "approve") await loadMembers();
+      toast({
+        title:
+          decision === "approve"
+            ? t("settingsPage.workspace.joinRequests.approved", {
+                name: request.name ?? request.email,
+              })
+            : t("settingsPage.workspace.joinRequests.denied"),
+      });
+    } catch (error) {
+      toast({
+        title: t("settingsPage.workspace.joinRequests.errorTitle"),
+        description: error instanceof Error ? error.message : t("common.unknownError"),
+        variant: "destructive",
+      });
+    } finally {
+      setDecidingId(null);
     }
   }
 
@@ -75,7 +114,10 @@ export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: 
 
   useEffect(() => {
     void loadMembers();
-    if (canManage) void refreshInvitations();
+    if (canManage) {
+      void refreshInvitations();
+      void refreshJoinRequests();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
@@ -292,6 +334,54 @@ export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: 
         </div>
       )}
 
+      {canManage && joinRequests.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-foreground mb-2">
+            {t("settingsPage.workspace.joinRequests.title")}
+          </h4>
+          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+            {joinRequests.map((request) => (
+              <div key={request.id} className="flex items-center gap-3 px-4 h-12">
+                <MemberAvatar
+                  name={request.name}
+                  email={request.email}
+                  image={request.image}
+                  size="sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground truncate">
+                    {request.name ?? request.email}
+                  </p>
+                  {request.name && (
+                    <p className="text-[11px] text-muted-foreground truncate">{request.email}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void decideJoinRequest(request, "deny")}
+                    disabled={decidingId !== null}
+                  >
+                    {t("settingsPage.workspace.joinRequests.deny")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => void decideJoinRequest(request, "approve")}
+                    disabled={decidingId !== null}
+                  >
+                    {decidingId === request.id && (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    )}
+                    {t("settingsPage.workspace.joinRequests.approve")}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {canManage && invitations.length > 0 && (
         <div>
           <h4 className="text-xs font-semibold text-foreground mb-2">
@@ -356,7 +446,6 @@ export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: 
         workspaceId={workspace.id}
         workspaceName={workspace.name}
         onInvited={refreshInvitations}
-        onNavigateToBilling={onNavigateToBilling}
       />
 
       <ConfirmDialog

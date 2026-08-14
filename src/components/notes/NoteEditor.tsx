@@ -1,12 +1,4 @@
-import {
-  useState,
-  useRef,
-  useEffect,
-  useMemo,
-  useCallback,
-  useSyncExternalStore,
-  type ComponentProps,
-} from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Download,
@@ -44,7 +36,6 @@ import {
 } from "../../stores/noteStore";
 import { NoteSharingService } from "../../services/NoteSharingService";
 import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
-import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
@@ -72,7 +63,6 @@ import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
   lockTranscriptSpeaker,
-  mergeTranscriptSegments,
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
@@ -178,6 +168,7 @@ interface NoteEditorProps {
   isSaving: boolean;
   isRecording: boolean;
   isProcessing: boolean;
+  recordingAllowed?: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
@@ -209,6 +200,7 @@ export default function NoteEditor({
   isSaving,
   isRecording,
   isProcessing,
+  recordingAllowed = true,
   onStartRecording,
   onStopRecording,
   onExportNote,
@@ -256,9 +248,6 @@ export default function NoteEditor({
   // Persisted flag is the restart-safe truth; the live cache overlays it for
   // the current session (it reflects server state before the flag persists).
   const isShared = shareCache ? shareCache.share.visibility !== "private" : Boolean(note.is_shared);
-  // Same gate as SyncService.canSyncSharedNotes: sharing needs a subscription.
-  // An already-shared note stays manageable (unshare/revoke) after a lapse.
-  const isSubscribed = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
   const aclState: NoteAclState = shareCache
     ? "loaded"
     : !note.cloud_id || !isSignedIn
@@ -275,8 +264,7 @@ export default function NoteEditor({
   const canShare =
     isSignedIn &&
     (!note.cloud_id || isTeamNote || aclState === "loaded") &&
-    shareCapabilities.canShare &&
-    (isSubscribed || Boolean(note.is_shared));
+    shareCapabilities.canShare;
   const canEditNote = shareCapabilities.canEdit;
   // Re-filing is owner-only on shared personal notes (a denied folder_id
   // PATCH would fork an unexpected Personal copy); team members keep
@@ -363,7 +351,6 @@ export default function NoteEditor({
     Array<{ id: number; display_name: string; email: string | null }>
   >([]);
   const editorRef = useRef<Editor | null>(null);
-  const displaySegmentsRef = useRef<TranscriptSegment[]>([]);
 
   const embeddedChat = useEmbeddedChat({
     noteId: note.id,
@@ -397,10 +384,6 @@ export default function NoteEditor({
     if (diarizedSegments && diarizedSegments.length > 0) return diarizedSegments;
     return parseTranscriptSegments(note.transcript || "");
   }, [diarizedSegments, note.transcript]);
-
-  useEffect(() => {
-    displaySegmentsRef.current = displaySegments;
-  }, [displaySegments]);
 
   const hasChatSegments = displaySegments.length > 0;
 
@@ -525,49 +508,28 @@ export default function NoteEditor({
     prevRecordingForDiarizationRef.current = isRecording;
   }, [diarizationSessionId, isRecording, scheduleUiUpdate]);
 
+  // Persistence happens in meetingRecordingStore's module-level listener
+  // (#1495); this only mirrors a published result into the rendered note's UI.
+  const completedDiarization = useMeetingRecordingStore((s) => s.completedDiarization);
   useEffect(() => {
-    const expectedSession = diarizationSessionId;
-    const cleanup = window.electronAPI?.onMeetingDiarizationComplete?.(async (data) => {
-      if (!expectedSession || data?.sessionId !== expectedSession) return;
+    if (!completedDiarization || completedDiarization.noteId !== note.id) return;
+    // Consume so a remount can't repaint this overlay over newer edits; the
+    // transcript itself is already persisted.
+    useMeetingRecordingStore.setState({ completedDiarization: null });
+    setIsDiarizing(false);
 
-      setIsDiarizing(false);
+    const enriched = completedDiarization.segments;
+    if (enriched.length === 0) return;
+    setDiarizedSegments(enriched);
 
-      if (!data?.segments?.length) return;
-
-      // Store segments outlive their recording — only use them for the note they belong to.
-      const { recordingNoteId, segments: liveSegments } = useMeetingRecordingStore.getState();
-      const persisted = await window.electronAPI?.getNote?.(note.id);
-      const existing = persisted?.transcript
-        ? parseTranscriptSegments(persisted.transcript)
-        : recordingNoteId === note.id && liveSegments.length > 0
-          ? liveSegments
-          : displaySegmentsRef.current;
-
-      const enriched = mergeTranscriptSegments(
-        existing,
-        data.segments.map((s: any, i: number) => ({
-          ...s,
-          id: s.id || `diarized-${i}`,
-        }))
-      );
-      setDiarizedSegments(enriched);
-
-      window.electronAPI.updateNote(note.id, { transcript: serializeTranscriptSegments(enriched) });
-
-      if (data.speakerEmbeddings) {
-        window.electronAPI?.saveNoteSpeakerEmbeddings?.(note.id, data.speakerEmbeddings);
-      }
-
-      const autoMappings: Record<string, string> = {};
-      for (const s of enriched) {
-        if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
-      }
-      if (Object.keys(autoMappings).length > 0) {
-        setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
-      }
-    });
-    return () => cleanup?.();
-  }, [note.id, diarizationSessionId]);
+    const autoMappings: Record<string, string> = {};
+    for (const s of enriched) {
+      if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
+    }
+    if (Object.keys(autoMappings).length > 0) {
+      setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
+    }
+  }, [completedDiarization, note.id]);
 
   const persistDisplaySegments = useCallback(
     async (nextSegments: TranscriptSegment[], updateOverlay = true) => {
@@ -1252,6 +1214,7 @@ export default function NoteEditor({
           <NoteBottomBar
             isRecording={isRecording}
             isProcessing={isProcessing}
+            recordingDisabled={!recordingAllowed}
             onStartRecording={onStartRecording}
             onStopRecording={onStopRecording}
             onAskSubmit={handleAskSubmit}

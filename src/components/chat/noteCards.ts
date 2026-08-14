@@ -19,9 +19,10 @@ function cardFromHit(
   // open. Non-numeric ids (cloud UUIDs) are equally unopenable locally.
   if (hit.id == null) return null;
   const noteId = Number(hit.id);
-  if (!Number.isFinite(noteId) || seen.has(noteId)) return null;
+  if (!Number.isSafeInteger(noteId) || noteId <= 0 || seen.has(noteId)) return null;
   seen.add(noteId);
-  return { noteId, title: typeof hit.title === "string" && hit.title ? hit.title : fallbackTitle };
+  const rawTitle = typeof hit.title === "string" ? hit.title.trim() : "";
+  return { noteId, title: rawTitle || fallbackTitle };
 }
 
 // Note cards rendered under an assistant message: one per note the turn
@@ -41,12 +42,12 @@ export function extractNoteCards(
     if (NOTE_TOOLS.has(tc.name) && tc.metadata && !Array.isArray(tc.metadata)) {
       if (!tc.metadata.id) continue;
       const noteId = Number(tc.metadata.id);
-      if (!Number.isFinite(noteId) || seen.has(noteId)) continue;
+      if (!Number.isSafeInteger(noteId) || noteId <= 0 || seen.has(noteId)) continue;
       seen.add(noteId);
-      const title =
-        (tc.metadata.title as string) ||
-        tc.result?.replace(/^(Created|Updated|Retrieved) note: "(.+)"$/, "$2") ||
-        fallbackTitle;
+      const metaTitle = typeof tc.metadata.title === "string" ? tc.metadata.title.trim() : "";
+      const resultTitle =
+        tc.result?.replace(/^(Created|Updated|Retrieved) note: "(.+)"$/, "$2")?.trim() || "";
+      const title = metaTitle || resultTitle || fallbackTitle;
       cards.push({ noteId, title });
     } else if (tc.name === "search_notes" && Array.isArray(tc.metadata)) {
       for (const hit of tc.metadata) {
