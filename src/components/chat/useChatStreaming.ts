@@ -64,6 +64,8 @@ interface UseChatStreamingOptions {
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
+  /** Fires exactly once when displayable assistant content becomes available. */
+  onResponseContent?: () => void;
 }
 
 export interface SendToAIOptions {
@@ -93,6 +95,7 @@ export function useChatStreaming({
   noteContext: externalNoteContext,
   searchScope,
   onStreamComplete,
+  onResponseContent,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
   const [agentState, setAgentState] = useState<AgentState>("idle");
@@ -127,6 +130,12 @@ export function useChatStreaming({
 
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
+      let responseAnnounced = false;
+      const announceResponse = () => {
+        if (responseAnnounced) return;
+        responseAnnounced = true;
+        onResponseContent?.();
+      };
       const settings = getSettings();
       const chatConfig = selectResolvedLLMConfig(settings, "chatIntelligence");
       const chatAgentMode = chatConfig.mode || "openwhispr";
@@ -145,6 +154,7 @@ export function useChatStreaming({
         const restriction = !isAgentAllowed(policyState)
           ? t("common.policyAgentRestricted")
           : t("common.policyAiProcessingRestricted");
+        announceResponse();
         setMessages((prev) => [
           ...prev,
           { id: crypto.randomUUID(), role: "assistant", content: restriction, isStreaming: false },
@@ -333,6 +343,7 @@ export function useChatStreaming({
             break;
           }
           if (chunk.type === "content") {
+            if (chunk.text) announceResponse();
             fullContent += chunk.text;
             setMessages((prev) =>
               prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
@@ -396,6 +407,7 @@ export function useChatStreaming({
         const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
         onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
       } catch (error) {
+        announceResponse();
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
@@ -413,7 +425,7 @@ export function useChatStreaming({
       setToolStatus("");
       setActiveToolName("");
     },
-    [t, setMessages, onStreamComplete]
+    [t, setMessages, onStreamComplete, onResponseContent]
   );
 
   return {

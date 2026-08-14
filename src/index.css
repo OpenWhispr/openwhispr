@@ -467,6 +467,11 @@ a:hover {
   .assistant-panel-surface {
     transition-duration: 1ms;
   }
+
+  .agent-thinking-beam[data-active] {
+    animation-duration: 1ms, 1ms !important;
+    animation-iteration-count: 1, 1 !important;
+  }
 }
 
 @keyframes waveform-bar {

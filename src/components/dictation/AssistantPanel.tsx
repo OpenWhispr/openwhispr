@@ -35,6 +35,7 @@ interface AssistantPanelProps {
   open: boolean;
   onClose: () => void;
   onResponseReadyChange: (ready: boolean) => void;
+  onResponseContent: () => void;
 }
 
 const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
@@ -52,6 +53,7 @@ export function AssistantPanel({
   open,
   onClose,
   onResponseReadyChange,
+  onResponseContent,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
@@ -67,6 +69,7 @@ export function AssistantPanel({
     onStreamComplete: (_assistantId, content, toolCalls) => {
       persistence.saveAssistantMessage(content, toolCalls);
     },
+    onResponseContent,
   });
 
   const createConversation = useCallback(
@@ -171,8 +174,12 @@ export function AssistantPanel({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (voiceState === "listening") return;
-        if (isBusy) streaming.cancelStream();
-        else onClose();
+        if (isBusy) {
+          streaming.cancelStream();
+          // A hidden panel means the compact Beam circle owns the thinking
+          // state; cancelling it must also dismiss that otherwise-idle shell.
+          if (!open) onClose();
+        } else onClose();
         return;
       }
 
@@ -193,7 +200,7 @@ export function AssistantPanel({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [voiceState, isBusy, streaming, onClose, isResponseReady, handleCopy]);
+  }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, handleCopy]);
 
   // Grow with the rendered response while preserving the reference ratio.
   // A per-message high-water mark prevents token-by-token reflow from making
@@ -290,10 +297,6 @@ export function AssistantPanel({
                 />
               )}
             </div>
-          ) : isBusy ? (
-            <span className="text-[15px] font-medium select-none thinking-shimmer-text">
-              {t("agentMode.input.thinking")}...
-            </span>
           ) : null}
         </div>
       </main>

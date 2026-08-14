@@ -13,6 +13,7 @@ import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
+import { resolveVoiceActivityPresentation } from "./helpers/voicePillPresentation";
 
 const ASSISTANT_TRANSITION_MS = 360;
 
@@ -152,6 +153,7 @@ export default function App() {
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
   const [assistantPanelMounted, setAssistantPanelMounted] = useState(false);
   const [assistantResponseReady, setAssistantResponseReady] = useState(false);
+  const [assistantThinking, setAssistantThinking] = useState(false);
   const [pendingCommand, setPendingCommand] = useState(null);
   const [panelConversationId, setPanelConversationId] = useState(null);
   const assistantPanelOpenRef = useRef(assistantPanelOpen);
@@ -164,6 +166,7 @@ export default function App() {
   }, [assistantPanelOpen]);
 
   const openAssistantPanel = React.useCallback(async () => {
+    setAssistantThinking(false);
     if (assistantPanelOpenRef.current) return;
     assistantPanelOpenRef.current = true;
     setAssistantResponseReady(false);
@@ -186,28 +189,44 @@ export default function App() {
     []
   );
 
+  const beginAssistantThinking = React.useCallback(() => {
+    clearTimeout(assistantCloseTimerRef.current);
+    cancelAnimationFrame(assistantOpenFrameRef.current);
+    assistantPanelOpenRef.current = false;
+    setAssistantPanelOpen(false);
+    setAssistantResponseReady(false);
+    setAssistantThinking(true);
+    // Keep the conversation logic mounted while the visible window contracts
+    // back to the Beam-wrapped logo circle.
+    setAssistantPanelMounted(true);
+  }, []);
+
   const handleAssistantCommand = React.useCallback(
     (command) => {
       commandIdRef.current += 1;
-      setAssistantResponseReady(false);
+      beginAssistantThinking();
       setPendingCommand({
         id: commandIdRef.current,
         text: command.text,
         attachment: command.attachment ?? null,
       });
-      openAssistantPanel();
     },
-    [openAssistantPanel]
+    [beginAssistantThinking]
   );
+
+  const handleAssistantResponseContent = React.useCallback(() => {
+    setAssistantThinking(false);
+    void openAssistantPanel();
+  }, [openAssistantPanel]);
 
   const handleCommandConsumed = React.useCallback((id) => {
     setPendingCommand((current) => (current?.id === id ? null : current));
   }, []);
 
   useEffect(() => {
-    window.electronAPI?.setAssistantPanelOpen?.(assistantPanelMounted);
-    if (assistantPanelMounted) setIsHovered(false);
-  }, [assistantPanelMounted]);
+    window.electronAPI?.setAssistantPanelOpen?.(assistantPanelOpen);
+    if (assistantPanelOpen) setIsHovered(false);
+  }, [assistantPanelOpen]);
 
   useEffect(() => {
     if (isCommandMenuOpen || toastCount > 0 || assistantPanelMounted) {
@@ -238,6 +257,12 @@ export default function App() {
     onAssistantCommand: handleAssistantCommand,
   });
 
+  useEffect(() => {
+    if (isAssistantVoice && isProcessing && assistantPanelOpenRef.current) {
+      beginAssistantThinking();
+    }
+  }, [isAssistantVoice, isProcessing, beginAssistantThinking]);
+
   const handleAssistantPanelClose = React.useCallback(() => {
     // Dismissing the panel mid-command must also abandon the command, or its
     // completion reopens the panel and answers a question the user withdrew.
@@ -249,6 +274,7 @@ export default function App() {
     assistantPanelOpenRef.current = false;
     setAssistantPanelOpen(false);
     setAssistantResponseReady(false);
+    setAssistantThinking(false);
     setPendingCommand(null);
     clearTimeout(assistantCloseTimerRef.current);
     assistantCloseTimerRef.current = setTimeout(() => {
@@ -259,11 +285,17 @@ export default function App() {
   // Single owner of the window size: panel > menu > toast > compact pill > base.
   // Grows apply immediately so content never clips; shrinks wait for the
   // content collapse animation to finish before the window snaps down.
-  const isCompactPill = isRecording || isProcessing;
+  const voiceActivity = resolveVoiceActivityPresentation({
+    isRecording,
+    isProcessing,
+    isAssistantVoice,
+    assistantThinking,
+  });
+  const isCompactPill = voiceActivity.compactPill;
   const lastSizeKeyRef = useRef(null);
   useEffect(() => {
     const target = resolveMainWindowSizeKey({
-      panelOpen: assistantPanelMounted,
+      panelOpen: assistantPanelOpen,
       menuOpen: isCommandMenuOpen,
       toastCount,
       compactPill: isCompactPill,
@@ -274,10 +306,10 @@ export default function App() {
       window.electronAPI?.resizeMainWindow?.(target);
       return;
     }
-    const shrinkDelay = prev === "ASSISTANT" ? 20 : 340;
+    const shrinkDelay = prev === "ASSISTANT" ? ASSISTANT_TRANSITION_MS : 340;
     const timeout = setTimeout(() => window.electronAPI?.resizeMainWindow?.(target), shrinkDelay);
     return () => clearTimeout(timeout);
-  }, [assistantPanelMounted, isCommandMenuOpen, toastCount, isCompactPill]);
+  }, [assistantPanelOpen, isCommandMenuOpen, toastCount, isCompactPill]);
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -408,14 +440,11 @@ export default function App() {
       : isProcessing && isAssistantVoice
         ? "transcribing"
         : "idle";
-  const commonPillState = assistantPanelMounted
-    ? assistantVoiceState === "listening"
-      ? "recording"
-      : assistantVoiceState === "transcribing"
-        ? "processing"
-        : "idle"
-    : micState;
-  const pillPositionClass = assistantPanelMounted
+  const commonPillState =
+    micState === "unavailable"
+      ? "unavailable"
+      : voiceActivity.activeState || (assistantPanelOpen ? "idle" : micState);
+  const pillPositionClass = assistantPanelOpen
     ? "bottom-7 right-7"
     : panelStartPosition === "bottom-left"
       ? "bottom-1 left-1"
@@ -426,7 +455,7 @@ export default function App() {
   return (
     <div className="dictation-window">
       {/* The panel footer owns this pill until final-response actions replace it. */}
-      {(!assistantPanelMounted || !assistantResponseReady) && (
+      {(!assistantPanelOpen || !assistantResponseReady) && (
         <div
           className={`fixed z-50 transition-[bottom,right,left,transform] duration-300 ease-out ${pillPositionClass}`}
         >
@@ -458,9 +487,9 @@ export default function App() {
             >
               <VoicePill
                 ref={buttonRef}
-                variant={assistantPanelMounted ? "panel" : "floating"}
+                variant={assistantPanelOpen ? "panel" : "floating"}
                 state={commonPillState}
-                expanded={!assistantPanelMounted && isCompactPill}
+                expanded={!assistantPanelOpen && isCompactPill}
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}
                 role={assistantPanelMounted ? "status" : "button"}
@@ -574,6 +603,7 @@ export default function App() {
           open={assistantPanelOpen}
           onClose={handleAssistantPanelClose}
           onResponseReadyChange={setAssistantResponseReady}
+          onResponseContent={handleAssistantResponseContent}
         />
       )}
     </div>
