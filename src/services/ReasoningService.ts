@@ -32,6 +32,7 @@ import {
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
+import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
@@ -628,7 +629,8 @@ class ReasoningService extends BaseReasoningService {
 
     const decoder = new TextDecoder();
     let buffer = "";
-    let insideThinkBlock = false;
+    const stripThinking = (isLocalProvider || isLanChat) && config.disableThinking !== false;
+    const filterThinkTags = stripThinking ? createStreamingThinkFilter() : null;
 
     try {
       while (true) {
@@ -651,30 +653,8 @@ class ReasoningService extends BaseReasoningService {
             let content = parsed.choices?.[0]?.delta?.content;
             if (!content) continue;
 
-            const stripThinking =
-              (isLocalProvider || isLanChat) && config.disableThinking !== false;
-            if (stripThinking) {
-              if (insideThinkBlock) {
-                const endIdx = content.indexOf("</think>");
-                if (endIdx !== -1) {
-                  insideThinkBlock = false;
-                  content = content.slice(endIdx + 8);
-                } else {
-                  continue;
-                }
-              }
-              const startIdx = content.indexOf("<think>");
-              if (startIdx !== -1) {
-                const before = content.slice(0, startIdx);
-                const after = content.slice(startIdx + 7);
-                const endIdx = after.indexOf("</think>");
-                if (endIdx !== -1) {
-                  content = before + after.slice(endIdx + 8);
-                } else {
-                  insideThinkBlock = true;
-                  content = before;
-                }
-              }
+            if (filterThinkTags) {
+              content = filterThinkTags(content);
               if (!content) continue;
             }
 
