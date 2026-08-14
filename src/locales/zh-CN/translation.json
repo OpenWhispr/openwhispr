@@ -2153,6 +2153,7 @@
       "allSubscribed": "您拥有的所有工作区都已有有效订阅。如需更改现有工作区的方案，请联系销售。",
       "workspaceLabel": "工作区",
       "seatsLabel": "席位",
+      "seatsHint_one": "当前已使用 {{count}} 个席位",
       "seatsHint_other": "当前已使用 {{count}} 个席位",
       "intervalLabel": "计费周期",
       "interval": {
