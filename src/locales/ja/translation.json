@@ -2736,6 +2736,7 @@
     "wordsReady_other": "{{count}} 個の単語が準備完了",
     "import": "インポート",
     "yourDictionary": "あなたの辞書",
+    "promptLimitNotice": "辞書は現在{{chars}}文字です。GroqおよびWhisperモデルは最初の約900文字しか使用しないため、リスト上部の単語が優先されます。その他のモデルには全リストが送信されます。",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
     "editWord": "{{word}} を編集",

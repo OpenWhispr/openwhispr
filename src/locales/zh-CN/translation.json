@@ -2808,6 +2808,7 @@
     "wordsReady_other": "{{count}} 个词语就绪",
     "import": "导入",
     "yourDictionary": "你的词典",
+    "promptLimitNotice": "词典当前共 {{chars}} 个字符。Groq 和 Whisper 模型仅使用前约 900 个字符，列表靠前的词优先生效；其他模型会收到完整列表。",
     "exportDictionary": "导出词典",
     "exportFailed": "导出失败",
     "editWord": "编辑 {{word}}",
