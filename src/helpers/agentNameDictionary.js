@@ -11,14 +11,20 @@
  * @param {string} [oldName]
  * @returns {{ add: string[], remove: string[] }}
  */
+function findStoredWord(words, word) {
+  const needle = word.toLowerCase();
+  return words.find((w) => typeof w === "string" && w.trim().toLowerCase() === needle);
+}
+
 export function agentNameDictionaryChanges(dictionary, newName, oldName) {
   const words = Array.isArray(dictionary) ? dictionary : [];
   const trimmedNew = typeof newName === "string" ? newName.trim() : "";
   const trimmedOld = typeof oldName === "string" ? oldName.trim() : "";
+  const storedNew = trimmedNew ? findStoredWord(words, trimmedNew) : undefined;
+  const storedOld = trimmedOld ? findStoredWord(words, trimmedOld) : undefined;
 
   return {
-    add: trimmedNew && !words.includes(trimmedNew) ? [trimmedNew] : [],
-    remove:
-      trimmedOld && trimmedOld !== trimmedNew && words.includes(trimmedOld) ? [trimmedOld] : [],
+    add: trimmedNew && !storedNew ? [trimmedNew] : [],
+    remove: storedOld && storedOld.toLowerCase() !== trimmedNew.toLowerCase() ? [storedOld] : [],
   };
 }
