@@ -3348,8 +3348,17 @@ class IPCHandlers {
         // that capture is done. Idempotent — reads the current slot hotkeys.
         this.windowManager.reconcileNativeKeyListeners();
 
+        // A hotkey GNOME/KDE can't bind is owned by the key listener re-armed
+        // above; re-creating a DE binding for it would only fail.
+        const delegatedToListener = hotkeyManager.delegatesToNativeListener(effectiveHotkey);
+
         // On GNOME, re-register the keybinding with the effective hotkey
-        if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager && effectiveHotkey) {
+        if (
+          !delegatedToListener &&
+          hotkeyManager.isUsingGnome() &&
+          hotkeyManager.gnomeManager &&
+          effectiveHotkey
+        ) {
           const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(effectiveHotkey);
           debugLogger.log(
             `[IPC] Re-registering GNOME keybinding "${gnomeHotkey}" after capture mode`
@@ -3366,7 +3375,12 @@ class IPCHandlers {
         }
 
         // On KDE (X11 or Wayland), re-register the keybinding with the effective hotkey
-        if (hotkeyManager.isUsingKDE() && hotkeyManager.kdeManager && effectiveHotkey) {
+        if (
+          !delegatedToListener &&
+          hotkeyManager.isUsingKDE() &&
+          hotkeyManager.kdeManager &&
+          effectiveHotkey
+        ) {
           debugLogger.log(
             `[IPC] Re-registering KDE keybinding "${effectiveHotkey}" after capture mode`
           );

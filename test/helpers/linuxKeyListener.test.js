@@ -68,8 +68,19 @@ function parseLine(line) {
     /Listening for: .* \(code=(\d+), ctrl=(\d+)\/(\d+), alt=(\d+)\/(\d+), shift=(\d+)\/(\d+), super=(\d+)\/(\d+), mod_only=(\d+)\)/
   );
   assert.ok(match, `unparseable diagnostic: ${line}`);
-  const [, code, ctrlReq, ctrlSide, altReq, altSide, shiftReq, shiftSide, superReq, superSide, modOnly] =
-    match.map(Number);
+  const [
+    ,
+    code,
+    ctrlReq,
+    ctrlSide,
+    altReq,
+    altSide,
+    shiftReq,
+    shiftSide,
+    superReq,
+    superSide,
+    modOnly,
+  ] = match.map(Number);
   return {
     code,
     ctrl: { required: ctrlReq, side: ctrlSide },
@@ -85,7 +96,13 @@ const SIDE = { EITHER: 0, LEFT: 1, RIGHT: 2 };
 
 test("right-side single modifiers parse as modifier-only, side=RIGHT", { skip }, async () => {
   const modFor = (hotkey) =>
-    hotkey === "RightAlt" ? "alt" : hotkey === "RightShift" ? "shift" : hotkey.includes("RightCtrl") || hotkey.includes("RightControl") ? "ctrl" : "super";
+    hotkey === "RightAlt"
+      ? "alt"
+      : hotkey === "RightShift"
+        ? "shift"
+        : hotkey.includes("RightCtrl") || hotkey.includes("RightControl")
+          ? "ctrl"
+          : "super";
 
   for (const hotkey of ["RightAlt", "RightControl", "RightCtrl", "RightShift", "RightSuper"]) {
     const diag = parseLine(await parseDiagnostics(hotkey));
@@ -121,11 +138,15 @@ test("left-side modifiers parse as side=LEFT", { skip }, async () => {
   assert.equal(diag.code, 37, "target should stay KEY_K (37)");
 });
 
-test("multi-modifier combos with no base key are modifier-only with generic sides", { skip }, async () => {
-  const diag = parseLine(await parseDiagnostics("Control+Super"));
-  assert.equal(diag.modOnly, 1);
-  assert.equal(diag.ctrl.required, 1);
-  assert.equal(diag.super.required, 1);
-  assert.equal(diag.ctrl.side, SIDE.EITHER);
-  assert.equal(diag.super.side, SIDE.EITHER);
-});
+test(
+  "multi-modifier combos with no base key are modifier-only with generic sides",
+  { skip },
+  async () => {
+    const diag = parseLine(await parseDiagnostics("Control+Super"));
+    assert.equal(diag.modOnly, 1);
+    assert.equal(diag.ctrl.required, 1);
+    assert.equal(diag.super.required, 1);
+    assert.equal(diag.ctrl.side, SIDE.EITHER);
+    assert.equal(diag.super.side, SIDE.EITHER);
+  }
+);

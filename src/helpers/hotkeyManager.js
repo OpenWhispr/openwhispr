@@ -205,8 +205,23 @@ class HotkeyManager extends EventEmitter {
       );
     }
 
+    // A hotkey the DE backend can't express goes to the evdev listener via the
+    // globalShortcut path below; drop any binding this slot still holds there.
+    const delegated = this.delegatesToNativeListener(hotkey);
+    if (delegated) {
+      // setupShortcuts() rejects cross-slot conflicts before tearing anything
+      // down; check here too so a rejected hotkey can't leave this slot unbound.
+      const conflict = this._findSlotConflict(slotName, hotkey);
+      if (conflict) return conflict;
+
+      this.unregisterSlot(slotName);
+      debugLogger.log(
+        `[HotkeyManager] Slot "${slotName}" hotkey "${hotkey}" delegated to the native key listener`
+      );
+    }
+
     // On GNOME (X11 or Wayland), route named slots through native gsettings
-    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+    if (!delegated && this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
       const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       if (!gnomeHotkey) {
         debugLogger.log(
@@ -256,7 +271,7 @@ class HotkeyManager extends EventEmitter {
     // On KDE (X11 or Wayland), route persistent slots through KGlobalAccel D-Bus.
     // Temporary slots like "cancel" stay on globalShortcut to avoid stale
     // KGlobalAccel registrations after crash (Escape would stop working system-wide).
-    if (this.useKDE && this.kdeManager && slotName !== "cancel") {
+    if (!delegated && this.useKDE && this.kdeManager && slotName !== "cancel") {
       this.unregisterSlot(slotName);
 
       if (slotName === "agent") {
@@ -364,18 +379,39 @@ class HotkeyManager extends EventEmitter {
   }
 
   /**
+   * True when a DE-native backend is active but cannot express this hotkey, so
+   * the low-level evdev listener owns it instead. GNOME's gsettings bindings need
+   * a regular key and KDE's Qt key codes are side-agnostic, so neither can bind a
+   * right-side modifier — but the listener reads /dev/input on any compositor.
+   * Hyprland binds them itself as XKB side keysyms (Alt_R), so it is excluded:
+   * watching those too would fire dictation twice per press.
+   */
+  delegatesToNativeListener(hotkey) {
+    return isRightSideModifier(hotkey) && (this.useGnome || this.useKDE);
+  }
+
+  /**
    * Hotkeys that must be watched by a native low-level listener (Windows/Linux)
    * instead of globalShortcut. Modifier-only and right-side-modifier combos never
    * register through globalShortcut, and in push-to-talk mode dictation also needs
    * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
    * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
    * Each slot may bind several hotkeys, so we evaluate every one.
+   *
+   * On GNOME/KDE/Hyprland the DE delivers hotkeys over D-Bus, so the listener
+   * watches nothing there — except the hotkeys those backends refused outright
+   * (see delegatesToNativeListener), which nothing else would deliver.
    */
   getNativeListenerKeys(activationMode) {
+    const usesNativeShortcut = this.isUsingNativeShortcut();
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
         if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
+        if (usesNativeShortcut) {
+          if (this.delegatesToNativeListener(hotkey)) keys.push(hotkey);
+          continue;
+        }
         const pushToTalk = slotName === "dictation" && activationMode === "push";
         if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
           keys.push(hotkey);
@@ -745,6 +781,8 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            if (await this._activateDelegatedHotkey(hotkey, callback, "GNOME")) return;
+
             const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
 
             const success = await this.gnomeManager.registerKeybinding(gnomeHotkey);
@@ -834,6 +872,8 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            if (await this._activateDelegatedHotkey(hotkey, callback, "KDE")) return;
+
             const result = await this.kdeManager.registerKeybinding(hotkey, "dictation", callback);
             if (result === true) {
               this.currentHotkey = hotkey;
@@ -1080,6 +1120,44 @@ class HotkeyManager extends EventEmitter {
   }
 
   /**
+   * Drop the dictation binding a DE-native backend holds. Both calls are
+   * idempotent and swallow their own errors, so this is safe when nothing is
+   * bound — including a binding left in gsettings/KGlobalAccel by an earlier run.
+   * unregisterSlot() can't do this: "dictation" is not a GNOME native slot.
+   */
+  async unregisterDictationFromNativeBackend() {
+    if (this.useGnome && this.gnomeManager) {
+      await this.gnomeManager.unregisterKeybinding("dictation");
+    }
+    if (this.useKDE && this.kdeManager) {
+      await this.kdeManager.unregisterKeybinding("dictation");
+    }
+  }
+
+  /**
+   * Claim the dictation slot for a hotkey the DE backend cannot bind, so
+   * reconcileNativeKeyListeners() arms the evdev listener for it instead of
+   * falling back to another hotkey. Returns false when `hotkey` is not
+   * delegated, leaving the caller's DE registration path to run.
+   */
+  async _activateDelegatedHotkey(hotkey, callback, backend) {
+    if (!this.delegatesToNativeListener(hotkey)) return false;
+
+    await this.unregisterDictationFromNativeBackend();
+
+    const result = this.setupShortcuts(hotkey, callback);
+    if (result.success) {
+      this.notifyActiveHotkey(hotkey);
+      debugLogger.log(
+        `[HotkeyManager] ${backend} cannot bind "${hotkey}" — delegated to the native key listener`
+      );
+    } else {
+      this.notifyHotkeyFailure(hotkey, result);
+    }
+    return true;
+  }
+
+  /**
    * Try fallback hotkeys via a native registration function.
    * @param {string} hotkey - The original hotkey that failed
    * @param {string} backend - Backend name for logging (e.g. "GNOME", "KDE", "Hyprland")
@@ -1167,7 +1245,15 @@ class HotkeyManager extends EventEmitter {
         }
       }
 
-      if (this.useGnome && this.gnomeManager) {
+      // A hotkey the DE backend can't express falls through to the globalShortcut
+      // path below, where it is claimed for the evdev listener. Release the DE
+      // binding first so the hotkey it currently holds stops firing.
+      const delegated = this.delegatesToNativeListener(primary);
+      if (delegated) {
+        await this.unregisterDictationFromNativeBackend();
+      }
+
+      if (!delegated && this.useGnome && this.gnomeManager) {
         debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${primary}"`);
         const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(primary);
         const success = await this.gnomeManager.updateKeybinding(gnomeHotkey);
@@ -1214,7 +1300,7 @@ class HotkeyManager extends EventEmitter {
         };
       }
 
-      if (this.useKDE && this.kdeManager) {
+      if (!delegated && this.useKDE && this.kdeManager) {
         debugLogger.log(`[HotkeyManager] Updating KDE hotkey to "${primary}"`);
         const previousHotkey = this.currentHotkey;
         await this.kdeManager.unregisterKeybinding("dictation");

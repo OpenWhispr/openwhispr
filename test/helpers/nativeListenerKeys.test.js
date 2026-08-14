@@ -78,6 +78,43 @@ test("membership and lookup helpers work across multi-hotkey slots", () => {
   assert.equal(mgr.getSlotHotkey("dictation"), "GLOBE");
 });
 
+// On a DE-native backend the desktop delivers hotkeys over D-Bus, so the evdev
+// listener must stay out of the way — except for hotkeys the backend cannot
+// express at all, which nothing else would deliver.
+
+test("GNOME/KDE hand right-side modifiers to the listener and keep the rest", () => {
+  for (const backend of ["useGnome", "useKDE"]) {
+    const mgr = makeManager({ dictation: "RightAlt", agent: "Control+Super", meeting: "F9" });
+    mgr[backend] = true;
+    assert.deepEqual(
+      mgr.getNativeListenerKeys("tap"),
+      ["RightAlt"],
+      `${backend} should delegate only the right-side modifier`
+    );
+    assert.equal(mgr.delegatesToNativeListener("RightAlt"), true);
+    assert.equal(mgr.delegatesToNativeListener("Control+Super"), false);
+  }
+});
+
+test("GNOME/KDE do not double-watch a DE-bound dictation key in push mode", () => {
+  const mgr = makeManager({ dictation: "F8" });
+  mgr.useGnome = true;
+  assert.deepEqual(mgr.getNativeListenerKeys("push"), []);
+});
+
+test("Hyprland binds right-side modifiers itself, so nothing is watched", () => {
+  const mgr = makeManager({ dictation: "RightAlt" });
+  mgr.useHyprland = true;
+  assert.equal(mgr.delegatesToNativeListener("RightAlt"), false);
+  assert.deepEqual(mgr.getNativeListenerKeys("tap"), []);
+});
+
+test("with no DE backend a right-side modifier is watched as before", () => {
+  const mgr = makeManager({ dictation: "RightAlt" });
+  assert.equal(mgr.delegatesToNativeListener("RightAlt"), false);
+  assert.deepEqual(mgr.getNativeListenerKeys("tap"), ["RightAlt"]);
+});
+
 // The macOS Globe listener config drives both mouse-button suppression and
 // whether macOS's own standalone Globe action has to stand down.
 const MAC_SLOTS = ["dictation", "agent", "voiceAgent", "translation"];

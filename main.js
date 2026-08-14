@@ -1622,41 +1622,48 @@ async function startApp() {
     nativeKeyManager.on("key-down", dispatchNativeKeyDown);
     nativeKeyManager.on("key-up", dispatchNativeKeyUp);
 
+    // Push-to-talk keys still work as tap via globalShortcut, but a right-side
+    // modifier hotkey has no fallback — without a working listener it is dead,
+    // so tell the user instead of failing silently. Linux only: on Windows the
+    // same situation is reported through "windows-ptt-unavailable".
+    const reportDeadRightSideHotkeys = () => {
+      const { isRightSideModifier } = require("./src/helpers/hotkeyManager");
+      const deadKeys = hotkeyManager
+        .getNativeListenerKeys(windowManager.getActivationMode())
+        .filter(isRightSideModifier);
+      if (deadKeys.length > 0) {
+        hotkeyManager.notifyHotkeyFailure(deadKeys.join(", "));
+      }
+    };
+
     nativeKeyManager.on("error", (error) => {
       debugLogger.warn("[Push-to-Talk] Native key listener error", { error: error.message });
-      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
-        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
-          reason: "error",
-          message: error.message,
-        });
+      if (isWindows) {
+        if (isLiveWindow(windowManager.mainWindow)) {
+          windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
+            reason: "error",
+            message: error.message,
+          });
+        }
+        return;
       }
+      reportDeadRightSideHotkeys();
     });
 
     nativeKeyManager.on("unavailable", () => {
       debugLogger.debug(
         "[Push-to-Talk] Native key listener unavailable - falling back to toggle mode"
       );
-      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
-        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
-          reason: "binary_not_found",
-          message: i18nMain.t("windows.pttUnavailable"),
-        });
-      } else if (!isWindows) {
-        // Push-to-talk keys still work as tap via globalShortcut, but a
-        // right-side modifier hotkey has no fallback — without the native
-        // listener it is dead, so tell the user instead of failing silently.
-        const { isRightSideModifier } = require("./src/helpers/hotkeyManager");
-        const deadKeys = hotkeyManager
-          .getNativeListenerKeys(windowManager.getActivationMode())
-          .filter(isRightSideModifier);
-        if (deadKeys.length > 0) {
-          hotkeyManager.notifyHotkeyFailure(deadKeys.join(", "), {
-            error: i18nMain.t("hotkey.errors.registrationFailed", {
-              hotkey: deadKeys.join(", "),
-            }),
+      if (isWindows) {
+        if (isLiveWindow(windowManager.mainWindow)) {
+          windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
+            reason: "binary_not_found",
+            message: i18nMain.t("windows.pttUnavailable"),
           });
         }
+        return;
       }
+      reportDeadRightSideHotkeys();
     });
 
     nativeKeyManager.on("ready", () => {
@@ -1668,13 +1675,8 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        // Broadcast to every window: the dictation overlay shows the toast,
-        // and the control panel (when its Settings modal is open) also flips
-        // push-to-talk back to tap mode.
-        for (const win of BrowserWindow.getAllWindows()) {
-          if (!win.isDestroyed()) {
-            win.webContents.send("linux-ptt-permission-denied");
-          }
+        if (isLiveWindow(windowManager.mainWindow)) {
+          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
         }
       });
     }

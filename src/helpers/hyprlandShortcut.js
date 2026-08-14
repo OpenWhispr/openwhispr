@@ -24,6 +24,34 @@ const ELECTRON_TO_HYPRLAND_MOD = {
   cmdorctrl: "CTRL",
 };
 
+// Side-specific modifier keys usable as the standalone trigger of a
+// modifier-only bind. Hyprland binds keysyms (Alt_R, Control_R, ...), so a
+// right-side modifier hotkey ("RightAlt") maps to one of these. In a compound
+// combo ("RightAlt+Space") the side specificity can't be expressed through
+// Hyprland's generic modifier mask, so the converter refuses those.
+const ELECTRON_TO_XKB_SIDE_KEY = {
+  rightalt: "Alt_R",
+  rightoption: "Alt_R",
+  leftalt: "Alt_L",
+  leftoption: "Alt_L",
+  rightcontrol: "Control_R",
+  rightctrl: "Control_R",
+  leftcontrol: "Control_L",
+  leftctrl: "Control_L",
+  rightshift: "Shift_R",
+  leftshift: "Shift_L",
+  rightsuper: "Super_R",
+  rightmeta: "Super_R",
+  rightwin: "Super_R",
+  rightcommand: "Super_R",
+  rightcmd: "Super_R",
+  leftsuper: "Super_L",
+  leftmeta: "Super_L",
+  leftwin: "Super_L",
+  leftcommand: "Super_L",
+  leftcmd: "Super_L",
+};
+
 // Map Electron key names to Hyprland key names
 const ELECTRON_TO_HYPRLAND_KEY = {
   pageup: "Page_Up",
@@ -215,34 +243,6 @@ class HyprlandShortcutManager {
       return null;
     }
 
-    // Side-specific modifier keys usable as the standalone trigger of a
-    // modifier-only bind. Hyprland binds keysyms (Alt_R, Control_R, ...), so a
-    // right-side modifier hotkey ("RightAlt") maps to one of these. In a
-    // compound combo ("RightAlt+Space") the side specificity can't be expressed
-    // through Hyprland's generic modifier mask, so those are refused below.
-    const ELECTRON_TO_XKB_SIDE_KEY = {
-      rightalt: "Alt_R",
-      rightoption: "Alt_R",
-      leftalt: "Alt_L",
-      leftoption: "Alt_L",
-      rightcontrol: "Control_R",
-      rightctrl: "Control_R",
-      leftcontrol: "Control_L",
-      leftctrl: "Control_L",
-      rightshift: "Shift_R",
-      leftshift: "Shift_L",
-      rightsuper: "Super_R",
-      rightmeta: "Super_R",
-      rightwin: "Super_R",
-      rightcommand: "Super_R",
-      rightcmd: "Super_R",
-      leftsuper: "Super_L",
-      leftmeta: "Super_L",
-      leftwin: "Super_L",
-      leftcommand: "Super_L",
-      leftcmd: "Super_L",
-    };
-
     // Separate modifiers from the key
     const modifiers = [];
     let key = null;
@@ -285,10 +285,8 @@ class HyprlandShortcutManager {
         SUPER: "Super_L",
       };
       key = modToXkbKey[triggerMod] || triggerMod;
-    } else if (!key && modifiers.length === 1) {
-      // Single generic modifier -- can't create a useful bind
-      return null;
     } else if (!key) {
+      // Single generic modifier -- can't create a useful bind
       return null;
     }
 

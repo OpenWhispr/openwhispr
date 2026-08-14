@@ -13,6 +13,9 @@ class LinuxKeyManager extends EventEmitter {
     super();
     this.isSupported = process.platform === "linux";
     this.hasReportedError = false;
+    // Key set already reported as unwatchable, so re-arming the same keys stays
+    // quiet while a newly chosen hotkey is still reported.
+    this.unavailableReportedFor = null;
     this.listeners = new Map(); // key string -> { child, watchdog }
   }
 
@@ -32,12 +35,18 @@ class LinuxKeyManager extends EventEmitter {
 
     const listenerPath = this.resolveListenerBinary();
     if (!listenerPath) {
-      // Emit on every arming attempt (not once per session): a right-side
-      // modifier hotkey set later in Settings has no globalShortcut fallback,
-      // so its failure must be reported even if an earlier attempt already was.
-      this.emit("unavailable", new Error("Linux key listener binary not found"));
+      // Report once per key set rather than once per session: a right-side
+      // modifier hotkey set later in Settings has no globalShortcut fallback, so
+      // its failure must still be reported — but re-arming an already-reported
+      // set (every settings save, every activation-mode change) must not repeat.
+      const signature = [...desired].sort().join("|");
+      if (this.unavailableReportedFor !== signature) {
+        this.unavailableReportedFor = signature;
+        this.emit("unavailable", new Error("Linux key listener binary not found"));
+      }
       return;
     }
+    this.unavailableReportedFor = null;
 
     for (const key of desired) {
       if (!this.listeners.has(key)) this._startKey(key, listenerPath);
