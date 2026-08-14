@@ -59,9 +59,7 @@ export const tinfoilProvider: InferenceProvider = {
 
     if (
       config.requireCompleteOutput &&
-      response.choices?.some((choice: any) =>
-        isTruncatedFinishReason(choice?.finish_reason)
-      )
+      response.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason))
     ) {
       throw new Error("Model output was truncated before the selection edit completed");
     }

@@ -319,9 +319,7 @@ export const openaiProvider: InferenceProvider = {
       const responseIncomplete =
         response?.status === "incomplete" ||
         !!response?.incomplete_details ||
-        response?.choices?.some((choice: any) =>
-          isTruncatedFinishReason(choice?.finish_reason)
-        );
+        response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
       if (responseIncomplete) {
         throw new Error("Model output was truncated before the selection edit completed");
       }
