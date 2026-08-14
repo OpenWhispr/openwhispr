@@ -42,6 +42,38 @@ function getAsciiSafeCacheRoot() {
   }
 }
 
+// Only these subdirs resolve through getCacheRoot(). qdrant-data,
+// embedding-models, and yt-dlp are read from the home cache directly by their
+// managers (and tolerate non-ASCII paths), so they must stay put.
+const RELOCATED_SUBDIRS = ["whisper-models", "parakeet-models", "diarization-models", "models"];
+
+let migratedLegacyRoot = null;
+
+function migrateLegacyModelDirs(legacyRoot, safeRoot) {
+  if (migratedLegacyRoot === legacyRoot) return;
+  migratedLegacyRoot = legacyRoot;
+  for (const subdir of RELOCATED_SUBDIRS) {
+    const from = path.join(legacyRoot, subdir);
+    const to = path.join(safeRoot, subdir);
+    try {
+      if (!fs.existsSync(from) || fs.existsSync(to)) continue;
+      try {
+        fs.renameSync(from, to);
+      } catch {
+        // Cross-volume move: copy to a staging dir first so an interrupted
+        // copy can never be mistaken for a complete model dir.
+        const staging = `${to}.migrating`;
+        fs.rmSync(staging, { recursive: true, force: true });
+        fs.cpSync(from, staging, { recursive: true });
+        fs.renameSync(staging, to);
+        fs.rmSync(from, { recursive: true, force: true });
+      }
+    } catch {
+      // Leave the legacy copy in place; the model re-downloads if needed.
+    }
+  }
+}
+
 function getCacheRoot() {
   const homeDir = app?.getPath?.("home") || os.homedir();
   const homeCache = path.join(homeDir, ".cache", "openwhispr");
@@ -51,7 +83,9 @@ function getCacheRoot() {
   }
 
   const safeRoot = getAsciiSafeCacheRoot();
-  return safeRoot || homeCache;
+  if (!safeRoot) return homeCache;
+  migrateLegacyModelDirs(homeCache, safeRoot);
+  return safeRoot;
 }
 
 function getModelsDirForService(service) {

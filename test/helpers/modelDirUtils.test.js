@@ -86,4 +86,55 @@ describe("modelDirUtils ASCII-safe cache (#1399)", () => {
     const { getCacheRoot } = loadFresh(home);
     assert.strictEqual(getCacheRoot(), path.join(home, ".cache", "openwhispr"));
   });
+
+  it("migrates legacy model dirs into the safe root and leaves home-based dirs alone", () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    const programData = path.join(tempRoot, "ProgramData");
+    process.env.ProgramData = programData;
+
+    const home = path.join(tempRoot, "使用者", "詩涵");
+    const legacyRoot = path.join(home, ".cache", "openwhispr");
+    fs.mkdirSync(path.join(legacyRoot, "whisper-models"), { recursive: true });
+    fs.writeFileSync(path.join(legacyRoot, "whisper-models", "ggml-base.bin"), "model");
+    fs.mkdirSync(path.join(legacyRoot, "models"), { recursive: true });
+    fs.writeFileSync(path.join(legacyRoot, "models", "qwen.gguf"), "llm");
+    fs.mkdirSync(path.join(legacyRoot, "qdrant-data"), { recursive: true });
+    fs.mkdirSync(path.join(legacyRoot, "embedding-models"), { recursive: true });
+
+    const { getCacheRoot } = loadFresh(home);
+    const root = getCacheRoot();
+
+    assert.strictEqual(root, path.join(programData, "OpenWhispr", "cache"));
+    assert.strictEqual(
+      fs.readFileSync(path.join(root, "whisper-models", "ggml-base.bin"), "utf8"),
+      "model"
+    );
+    assert.strictEqual(fs.readFileSync(path.join(root, "models", "qwen.gguf"), "utf8"), "llm");
+    assert.ok(!fs.existsSync(path.join(legacyRoot, "whisper-models")));
+    assert.ok(!fs.existsSync(path.join(legacyRoot, "models")));
+    // qdrantManager and localEmbeddings read these from the home cache directly.
+    assert.ok(fs.existsSync(path.join(legacyRoot, "qdrant-data")));
+    assert.ok(fs.existsSync(path.join(legacyRoot, "embedding-models")));
+  });
+
+  it("never overwrites models already present at the safe root", () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    const programData = path.join(tempRoot, "ProgramData");
+    process.env.ProgramData = programData;
+
+    const home = path.join(tempRoot, "使用者", "詩涵");
+    const legacyDir = path.join(home, ".cache", "openwhispr", "whisper-models");
+    fs.mkdirSync(legacyDir, { recursive: true });
+    fs.writeFileSync(path.join(legacyDir, "ggml-base.bin"), "old");
+
+    const newDir = path.join(programData, "OpenWhispr", "cache", "whisper-models");
+    fs.mkdirSync(newDir, { recursive: true });
+    fs.writeFileSync(path.join(newDir, "ggml-base.bin"), "new");
+
+    const { getCacheRoot } = loadFresh(home);
+    getCacheRoot();
+
+    assert.strictEqual(fs.readFileSync(path.join(newDir, "ggml-base.bin"), "utf8"), "new");
+    assert.strictEqual(fs.readFileSync(path.join(legacyDir, "ggml-base.bin"), "utf8"), "old");
+  });
 });

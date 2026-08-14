@@ -8086,6 +8086,11 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("get-model-cache-root", () => {
+      const { getCacheRoot } = require("./modelDirUtils");
+      return getCacheRoot();
+    });
+
     ipcMain.handle("open-whisper-models-folder", async () => {
       try {
         const { getCacheRoot } = require("./modelDirUtils");
