@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AudioLines, Check, MousePointer2 } from "lucide-react";
+import { AudioLines, Check, CircleCheck, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import ReasoningModelSelector from "../ReasoningModelSelector";
@@ -43,7 +43,7 @@ export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
           }`}
         >
           {assistant ? (
-            <Check className="size-3.5" strokeWidth={2.5} />
+            <CircleCheck className="size-3.5" strokeWidth={2} />
           ) : (
             <AudioLines className="size-3.5" />
           )}
@@ -239,7 +239,7 @@ export function ByokProviderStep({
   };
 
   const inputClass =
-    "h-9 rounded-xl! border border-neutral-200 bg-neutral-100 px-3 text-xs text-neutral-950 shadow-none! placeholder:text-neutral-500 disabled:opacity-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-neutral-200 dark:bg-neutral-100 dark:text-neutral-950";
+    "onboarding-provider-input h-9 rounded-xl! border px-3 text-xs shadow-none! focus:ring-2 focus:ring-blue-500/15";
 
   return (
     <section className="mx-auto mt-8 w-full max-w-[23.75rem] rounded-[1.125rem] border border-neutral-200 bg-white px-3 py-[1.125rem] text-neutral-950">

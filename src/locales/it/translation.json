@@ -366,7 +366,7 @@
         "clinical": "FOR CLINICAL TRANSCRIPTION",
         "clientId": "Client ID",
         "clientSecret": "Client secret",
-        "runTest": "Run test",
+        "runTest": "Run Test",
         "testing": "Testing…",
         "connected": "Connected",
         "connectionFailed": "The connection could not be verified."

@@ -377,6 +377,20 @@ h1 {
   background-color: var(--color-white) !important;
 }
 
+.onboarding-provider-input,
+.onboarding-provider-input:hover,
+.onboarding-provider-input:focus-visible,
+.onboarding-provider-input:disabled {
+  border-color: var(--color-neutral-200) !important;
+  background-color: var(--color-neutral-100) !important;
+  color: var(--color-neutral-950) !important;
+  opacity: 1 !important;
+}
+
+.onboarding-provider-input::placeholder {
+  color: var(--color-neutral-500) !important;
+}
+
 /* Modern Button Styling - handled by button component */
 button {
   font-family: var(--font-family-sans);
