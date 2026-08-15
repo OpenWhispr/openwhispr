@@ -60,6 +60,28 @@ test("versioned sessions reject malformed or old data", async () => {
   assert.deepEqual(parseOnboardingSession(JSON.stringify(session)), session);
 });
 
+test("an explicit restart clears every persisted route choice and returns to auth", async () => {
+  const { resetOnboardingProgress } = await load();
+  const values = new Map([
+    ["onboardingSessionV2", '{"currentStepId":"permissions"}'],
+    ["onboardingCompleted", "true"],
+    ["authenticationSkipped", "true"],
+    ["skipAuth", "true"],
+  ]);
+  const storage = {
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+
+  resetOnboardingProgress(storage);
+
+  assert.equal(values.get("onboardingCurrentStep"), "0");
+  assert.equal(values.has("onboardingSessionV2"), false);
+  assert.equal(values.has("onboardingCompleted"), false);
+  assert.equal(values.has("authenticationSkipped"), false);
+  assert.equal(values.has("skipAuth"), false);
+});
+
 test("legacy numeric steps migrate conservatively", async () => {
   const { migrateLegacyOnboardingStep } = await load();
   assert.equal(migrateLegacyOnboardingStep(null), "auth");

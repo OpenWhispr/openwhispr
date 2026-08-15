@@ -94,6 +94,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
+import { resetOnboardingProgress } from "./onboarding/flow";
 import type {
   ChineseScriptPreference,
   GpuDevice,
@@ -1466,8 +1467,7 @@ export default function SettingsPage({
 
   const startOnboarding = useCallback(() => {
     localStorage.setItem("pendingCloudMigration", "true");
-    localStorage.setItem("onboardingCurrentStep", "0");
-    localStorage.removeItem("onboardingCompleted");
+    resetOnboardingProgress(localStorage);
     window.location.reload();
   }, []);
 
