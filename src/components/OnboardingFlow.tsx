@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Mail, Mic, Sparkles } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
 import UseCaseStep from "./onboarding/UseCaseStep";
@@ -9,6 +9,7 @@ import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingSh
 import CompactPermissionsStep from "./onboarding/CompactPermissionsStep";
 import LanguageSelectionStep from "./onboarding/LanguageSelectionStep";
 import ShortcutSetupStep from "./onboarding/ShortcutSetupStep";
+import AssistantHotkeyPreview from "./onboarding/AssistantHotkeyPreview";
 import DemoStep from "./onboarding/DemoStep";
 import CalendarConnectionsStep from "./onboarding/CalendarConnectionsStep";
 import SetupChoiceStep from "./onboarding/SetupChoiceStep";
@@ -28,12 +29,7 @@ import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
-import {
-  formatHotkeyLabel,
-  getDefaultHotkey,
-  parseHotkeyList,
-  serializeHotkeyList,
-} from "../utils/hotkeys";
+import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform } from "../utils/platform";
@@ -61,49 +57,6 @@ function progressForStep(stepId: OnboardingStepId): number {
   if (["dictation-hotkey", "assistant-hotkey"].includes(stepId)) return 2;
   if (stepId === "notes") return 3;
   return stepId.endsWith("assistant") ? 1 : 0;
-}
-
-function AssistantPreview({ hotkey }: { hotkey: string }) {
-  const { t } = useTranslation();
-
-  return (
-    <div className="onboarding-code-hero mx-auto mb-7 max-w-4xl overflow-hidden rounded-3xl border border-border p-5 shadow-lg md:p-7">
-      <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Mail className="size-4" />
-            </span>
-            <div className="min-w-0 space-y-2">
-              <p className="text-xs font-semibold text-foreground">Eren</p>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {t("onboarding.rehaul.assistantDemo.email")}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-primary/20 bg-card/90 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-            <Sparkles className="size-4" />
-            OpenWhispr Assistant
-          </div>
-          <p className="mt-3 text-xs leading-5 text-foreground">
-            {t("onboarding.rehaul.assistantDemo.prompt")}
-          </p>
-          <div className="mt-4 flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-2 text-xs text-muted-foreground">
-            <Mic className="size-3.5 text-primary" />
-            <span className="truncate">{formatHotkeyLabel(hotkey)}</span>
-            <span className="ml-auto flex items-end gap-0.5" aria-hidden="true">
-              {[2, 4, 6, 4, 3].map((height, index) => (
-                <span key={index} className="w-0.5 rounded-full bg-primary" style={{ height }} />
-              ))}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
@@ -208,6 +161,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       return registered ? null : t("onboarding.rehaul.hotkey.inUse");
     },
     [registerHotkey, t, withExtraDictationHotkeys]
+  );
+
+  const confirmAssistantHotkey = useCallback(
+    async (value: string) => {
+      const registered = await settings.setVoiceAgentKey(
+        serializeHotkeyList([value, ...parseHotkeyList(settings.voiceAgentKey).slice(1)])
+      );
+      return registered ? null : t("onboarding.rehaul.hotkey.inUse");
+    },
+    [settings, t]
   );
 
   const syncUseCases = useCallback(() => {
@@ -324,9 +287,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return;
       }
     } else if (currentStepId === "assistant-hotkey") {
-      settings.setVoiceAgentKey(
-        serializeHotkeyList([assistantHotkey, ...parseHotkeyList(settings.voiceAgentKey).slice(1)])
-      );
+      if (parseHotkeyList(settings.voiceAgentKey)[0] !== assistantHotkey) {
+        const registered = await settings.setVoiceAgentKey(
+          serializeHotkeyList([
+            assistantHotkey,
+            ...parseHotkeyList(settings.voiceAgentKey).slice(1),
+          ])
+        );
+        if (!registered) {
+          setFatalError(t("onboarding.rehaul.hotkey.inUse"));
+          return;
+        }
+      }
     } else if (currentStepId === "byok-dictation") {
       settingsStore.setCloudTranscriptionForAllScopes({
         useLocalWhisper: false,
@@ -491,7 +463,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         const assistant = currentStepId === "assistant-hotkey";
         return (
           <div className="h-full w-full pt-5">
-            {assistant && <AssistantPreview hotkey={assistantHotkey} />}
             <OnboardingStepHeader
               title={t(
                 assistant
@@ -500,7 +471,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               )}
               titleLines={
                 assistant
-                  ? undefined
+                  ? [
+                      t("onboarding.rehaul.assistantHotkey.titleLineOne"),
+                      t("onboarding.rehaul.assistantHotkey.titleLineTwo"),
+                    ]
                   : [
                       t("onboarding.rehaul.dictationHotkey.titleLineOne"),
                       t("onboarding.rehaul.dictationHotkey.titleLineTwo"),
@@ -512,6 +486,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   : "onboarding.rehaul.dictationHotkey.description"
               )}
             />
+            {assistant && <AssistantHotkeyPreview />}
             <ShortcutSetupStep
               value={
                 (assistant ? assistantHotkeyConfirmed : dictationHotkeyConfirmed)
@@ -529,13 +504,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   setDictationHotkeyConfirmed(true);
                 }
               }}
-              recommended={assistant ? "CommandOrControl+Shift+Space" : getDefaultHotkey()}
+              recommended={assistant ? "Control+Shift" : getDefaultHotkey()}
               captureLabel={t("onboarding.rehaul.hotkey.capture")}
               recommendedLabel={t("common.recommended")}
               confirmLabel={(label) => t("onboarding.rehaul.hotkey.confirm", { hotkey: label })}
               chooseAnotherLabel={t("onboarding.rehaul.hotkey.chooseAnother")}
               validate={assistant ? validateAssistantHotkey : validateDictationHotkey}
-              onConfirm={assistant ? undefined : confirmDictationHotkey}
+              onConfirm={assistant ? confirmAssistantHotkey : confirmDictationHotkey}
+              dense={assistant}
+              showCandidateActions={!assistant}
             />
           </div>
         );

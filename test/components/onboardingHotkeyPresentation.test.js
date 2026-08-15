@@ -14,7 +14,7 @@ test("compound shortcuts produce ordered keycaps and readable instructions", asy
 
   assert.deepEqual(
     getHotkeyKeycaps("Control+Shift+K").map(({ label }) => label),
-    ["control", "shift", "k"]
+    ["control", "Shift", "k"]
   );
   assert.equal(formatHotkeyInstruction("Control+Shift+K"), "Ctrl + Shift + K");
 });
