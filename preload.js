@@ -61,6 +61,15 @@ const registerListener = (channel, handlerFactory) => {
 };
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
+  beginOnboardingDemo: (session) => ipcRenderer.invoke("onboarding-demo-begin", session),
+  endOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-end", id),
+  publishOnboardingDemoEvent: (event) => ipcRenderer.invoke("onboarding-demo-publish", event),
+  onOnboardingDemoEvent: registerListener(
+    "onboarding-demo-event",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  testProviderConnection: (config) => ipcRenderer.invoke("test-provider-connection", config),
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
   captureSelectedText: () => ipcRenderer.invoke("capture-selected-text"),
   replaceSelectedText: (sessionId, text, options) =>

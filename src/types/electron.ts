@@ -825,6 +825,16 @@ export interface ConversationPreview {
   last_message_role?: "user" | "assistant" | "system" | null;
 }
 
+export type OnboardingDemoKind = "dictation" | "assistant";
+export type OnboardingDemoStatus = "listening" | "processing" | "partial" | "success" | "error";
+export interface OnboardingDemoEvent {
+  demoId: string;
+  kind: OnboardingDemoKind;
+  status: OnboardingDemoStatus;
+  text?: string;
+  message?: string;
+}
+
 export interface ReferralItem {
   id: string;
   email: string;
@@ -838,6 +848,19 @@ declare global {
   interface Window {
     electronAPI: {
       // Basic window operations
+      setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
+      endOnboardingDemo?: (id: string) => Promise<boolean>;
+      publishOnboardingDemoEvent?: (event: Omit<OnboardingDemoEvent, "demoId">) => Promise<boolean>;
+      onOnboardingDemoEvent?: (callback: (event: OnboardingDemoEvent) => void) => () => void;
+      testProviderConnection?: (config: {
+        scope: "transcription" | "reasoning";
+        provider: string;
+        apiKey?: string;
+        baseUrl?: string;
+        environment?: string;
+        tenant?: string;
+      }) => Promise<{ success: boolean; error?: string }>;
       pasteText: (
         text: string,
         options?: {

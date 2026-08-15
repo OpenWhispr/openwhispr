@@ -133,6 +133,7 @@ const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
+const { testProviderConnection } = require("./providerConnectionTest");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
   CLOUD_UPLOAD_TIMEOUT_MS,
@@ -570,6 +571,7 @@ class IPCHandlers {
     this._autoLearnLatestData = null;
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
+    this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
@@ -1119,6 +1121,67 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
+      this.windowManager.setOnboardingWindowMode(mode)
+    );
+
+    ipcMain.handle("onboarding-demo-begin", (_event, session) => {
+      if (
+        !session ||
+        typeof session.id !== "string" ||
+        session.id.length > 128 ||
+        !["dictation", "assistant"].includes(session.kind)
+      ) {
+        return false;
+      }
+      this._onboardingDemoSession = {
+        id: session.id,
+        kind: session.kind,
+        startedAt: Date.now(),
+      };
+      return true;
+    });
+
+    ipcMain.handle("onboarding-demo-end", (_event, id) => {
+      if (this._onboardingDemoSession?.id === id) {
+        this._onboardingDemoSession = null;
+      }
+      return true;
+    });
+
+    ipcMain.handle("onboarding-demo-publish", (_event, event) => {
+      const session = this._onboardingDemoSession;
+      if (!session || !event || event.kind !== session.kind) return false;
+      if (!["listening", "processing", "partial", "success", "error"].includes(event.status)) {
+        return false;
+      }
+      const text = typeof event.text === "string" ? event.text.slice(0, 20000) : undefined;
+      const message = typeof event.message === "string" ? event.message.slice(0, 500) : undefined;
+      broadcastToWindows("onboarding-demo-event", {
+        demoId: session.id,
+        kind: session.kind,
+        status: event.status,
+        text,
+        message,
+      });
+      return true;
+    });
+
+    ipcMain.handle("test-provider-connection", async (_event, config) => {
+      if (config?.provider === "corti" && config?.scope === "transcription") {
+        try {
+          await this._mintStoredCortiToken({
+            environment: config.environment,
+            tenant: config.tenant,
+          });
+          return { success: true };
+        } catch {
+          return { success: false, error: "Corti rejected these credentials." };
+        }
+      }
+      return testProviderConnection(config);
+    });
+
     ipcMain.handle("window-minimize", () => {
       if (this.windowManager.controlPanelWindow) {
         this.windowManager.controlPanelWindow.minimize();

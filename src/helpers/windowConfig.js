@@ -60,10 +60,15 @@ const MAIN_WINDOW_CONFIG = {
   type: MAIN_OVERLAY_TYPE,
 };
 
+const ONBOARDING_WINDOW_SIZES = {
+  COMPACT: { width: 546, height: 654 },
+  EXPANDED: { width: 1200, height: 800 },
+};
+
 // Control panel window configuration
 const CONTROL_PANEL_CONFIG = {
-  width: 1200,
-  height: 800,
+  width: ONBOARDING_WINDOW_SIZES.EXPANDED.width,
+  height: ONBOARDING_WINDOW_SIZES.EXPANDED.height,
   backgroundColor: "#1c1c2e",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
@@ -285,6 +290,7 @@ const AGENT_OVERLAY_CONFIG = {
 module.exports = {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  ONBOARDING_WINDOW_SIZES,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
   TRANSCRIPTION_PREVIEW_CONFIG,

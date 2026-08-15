@@ -12,6 +12,7 @@ const { DEV_SERVER_PORT } = DevServerManager;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  ONBOARDING_WINDOW_SIZES,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
   TRANSCRIPTION_PREVIEW_CONFIG,
@@ -19,11 +20,13 @@ const {
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
+const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 
 class WindowManager {
   constructor() {
     this.mainWindow = null;
     this.controlPanelWindow = null;
+    this._onboardingRestoreBounds = null;
     this.agentWindow = null;
     this.notificationWindow = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
@@ -1167,6 +1170,42 @@ class WindowManager {
         this.mainWindow.focus();
       }
     }
+  }
+
+  setOnboardingWindowMode(mode) {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return false;
+    if (!new Set(["compact", "expanded", "restore"]).has(mode)) return false;
+    if (win.isFullScreen() || win.isMaximized()) return false;
+
+    const current = win.getContentBounds();
+    const { workArea } = screen.getDisplayMatching(win.getBounds());
+
+    if (mode === "restore") {
+      if (!this._onboardingRestoreBounds) return true;
+      win.setContentBounds(clampedBounds(this._onboardingRestoreBounds, workArea), true);
+      this._onboardingRestoreBounds = null;
+      return true;
+    }
+
+    if (!this._onboardingRestoreBounds) {
+      this._onboardingRestoreBounds = current;
+    }
+
+    const target =
+      mode === "compact" ? ONBOARDING_WINDOW_SIZES.COMPACT : ONBOARDING_WINDOW_SIZES.EXPANDED;
+    const next = centeredBounds(current, target, workArea);
+    if (
+      current.x === next.x &&
+      current.y === next.y &&
+      current.width === next.width &&
+      current.height === next.height
+    ) {
+      return true;
+    }
+
+    win.setContentBounds(next, true);
+    return true;
   }
 
   hideControlPanelToTray() {
