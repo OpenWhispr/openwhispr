@@ -304,7 +304,7 @@
   }
   to {
     opacity: 0;
-    transform: translateY(15rem) rotate(360deg);
+    transform: translateY(28rem) rotate(540deg);
   }
 }
 

@@ -217,8 +217,10 @@
       },
       "dictationDemo": {
         "title": "Try your first dictation",
+        "titleLineOne": "Try your",
+        "titleLineTwo": "first dictation",
         "description": "Press {{hotkey}} and start speaking. OpenWhispr will turn your voice into text.",
-        "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
+        "founder": "Hi, I am Gabe, Founder of OpenWhispr",
         "prompt": "Try saying: “I’m testing dictation for the first time.”",
         "placeholder": "Your dictation will appear here…"
       },
