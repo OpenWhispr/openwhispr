@@ -184,8 +184,7 @@ function extractCorrections(originalText, fieldValue, existingDictionary) {
     // Single-word: keep the strict phonetic gate. Multi-word name fixes often
     // have one close pair and one looser pair — gate on the block average so
     // "Shunade Byrn" → "Sinead Byrne" can learn both.
-    const gate =
-      block.length === 1 ? ratios[0] : ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    const gate = block.length === 1 ? ratios[0] : ratios.reduce((a, b) => a + b, 0) / ratios.length;
     // 0.65 threshold allows phonetic corrections like "Shunade" → "Sinead" (dist 4/7 = 0.57)
     // while filtering out unrelated word replacements.
     if (gate > 0.65) continue;
