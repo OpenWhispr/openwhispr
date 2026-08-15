@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { SendHorizontal, Square } from "lucide-react";
+import { Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
+import { SendIcon } from "../ui/SendIcon";
 import type { AgentState } from "./types";
 
 interface ChatInputProps {
@@ -145,16 +146,17 @@ export function ChatInput({
               <button
                 onClick={handleSubmit}
                 disabled={!inputText.trim()}
+                aria-label={t("agentMode.input.send")}
                 className={cn(
-                  "p-1 rounded-sm shrink-0",
+                  "rounded-full shrink-0",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
-                  "transition-colors duration-100",
+                  "transition-all duration-100",
                   inputText.trim()
-                    ? "text-primary hover:text-primary/80"
-                    : "text-muted-foreground/25 cursor-default"
+                    ? "hover:brightness-110 active:scale-95"
+                    : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                <SendHorizontal size={14} />
+                <SendIcon size={24} className="block" />
               </button>
             ) : null}
           </div>

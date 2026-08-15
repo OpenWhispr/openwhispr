@@ -1,10 +1,87 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Mic, ArrowUp, Square, Loader2 } from "lucide-react";
+import { Mic, Square, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { SendIcon } from "../ui/SendIcon";
 import { formatMmSs } from "../../utils/formatDuration";
+import { getMicAnalyser, useMeetingRecordingStore } from "../../stores/meetingRecordingStore";
 
-const BAR_COUNT = 5;
+// Brand gradient from the Figma mic/send assets (#5B81E4 → #154BD4 → #163992, top-right to bottom-left)
+const GRADIENT_CIRCLE =
+  "bg-[linear-gradient(221deg,#5B81E4_0%,#154BD4_55%,#163992_100%)] text-white";
+
+const WAVE_BAR_COUNT = 40;
+const WAVE_SAMPLE_MS = 150;
+const WAVE_MAX_PX = 20;
+const WAVE_MIN_PX = 2;
+// Bars scale against a decaying session peak, so any mic gain fills the range.
+const WAVE_PEAK_FLOOR = 0.01;
+const WAVE_PEAK_DECAY = 0.99;
+const WAVE_QUIET_NORM = 0.14;
+
+function waveBarStyle(norm: number, index: number): React.CSSProperties {
+  if (norm < WAVE_QUIET_NORM) {
+    return { height: WAVE_MIN_PX, backgroundColor: "rgba(143,170,255,0.35)" };
+  }
+  // Periwinkle (#8FAAFF) → orange (#FFA23E) across the strip, louder = more opaque
+  const t = index / (WAVE_BAR_COUNT - 1);
+  const r = Math.round(143 + 112 * t);
+  const g = Math.round(170 - 8 * t);
+  const b = Math.round(255 - 193 * t);
+  const alpha = 0.55 + 0.45 * Math.min(1, norm);
+  return {
+    height: Math.max(WAVE_MIN_PX, Math.round(Math.sqrt(norm) * WAVE_MAX_PX)),
+    backgroundColor: `rgba(${r},${g},${b},${alpha})`,
+  };
+}
+
+function readMicLevel(buf: React.MutableRefObject<Float32Array<ArrayBuffer> | null>): number {
+  const analyser = getMicAnalyser();
+  if (!analyser) return useMeetingRecordingStore.getState().currentMicLevel;
+  if (!buf.current || buf.current.length !== analyser.fftSize) {
+    buf.current = new Float32Array(analyser.fftSize);
+  }
+  analyser.getFloatTimeDomainData(buf.current);
+  let sumSquares = 0;
+  for (let i = 0; i < buf.current.length; i++) {
+    const v = buf.current[i];
+    sumSquares += v * v;
+  }
+  return Math.sqrt(sumSquares / buf.current.length);
+}
+
+function RecordingWaveform() {
+  const [samples, setSamples] = useState<number[]>([]);
+  const bufRef = useRef<Float32Array<ArrayBuffer> | null>(null);
+  const peakRef = useRef(WAVE_PEAK_FLOOR);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const level = readMicLevel(bufRef);
+      peakRef.current = Math.max(level, peakRef.current * WAVE_PEAK_DECAY, WAVE_PEAK_FLOOR);
+      const norm = Math.min(1, level / peakRef.current);
+      setSamples((prev) => [...prev.slice(-(WAVE_BAR_COUNT - 1)), norm]);
+    }, WAVE_SAMPLE_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const padded =
+    samples.length < WAVE_BAR_COUNT
+      ? [...Array<number>(WAVE_BAR_COUNT - samples.length).fill(0), ...samples]
+      : samples;
+
+  return (
+    <div className="flex items-center gap-0.5 h-5">
+      {padded.map((norm, i) => (
+        <div
+          key={i}
+          className="w-0.5 rounded-full shrink-0 transition-[height,background-color] duration-150 ease-out"
+          style={waveBarStyle(norm, i)}
+        />
+      ))}
+    </div>
+  );
+}
 
 interface NoteBottomBarProps {
   isRecording: boolean;
@@ -113,62 +190,57 @@ export default function NoteBottomBar({
             {isRecording ? (
               <button
                 onClick={onStopRecording}
+                aria-label={t("notes.editor.stop")}
+                title={t("notes.editor.stop")}
                 className={cn(
-                  "flex items-center gap-2 h-10 pl-3.5 pr-3 rounded-xl",
-                  "bg-primary/6 dark:bg-primary/10",
-                  "border border-primary/20 dark:border-primary/25",
-                  "transition-colors duration-150",
-                  "hover:bg-primary/10 dark:hover:bg-primary/15"
+                  "group flex items-center gap-2.5 h-10 pl-1 pr-3.5 rounded-full",
+                  "bg-card dark:bg-surface-2",
+                  "border border-primary/15 dark:border-primary/25",
+                  "transition-all duration-200",
+                  "hover:border-primary/30 dark:hover:border-primary/40",
+                  "active:scale-[0.99]"
                 )}
               >
-                <div className="flex items-end gap-0.5 h-3.5">
-                  {Array.from({ length: BAR_COUNT }, (_, i) => (
-                    <div
-                      key={i}
-                      className="w-0.5 rounded-full bg-primary/60 dark:bg-primary/70 origin-bottom"
-                      style={{
-                        height: "100%",
-                        animation: `waveform-bar ${0.5 + i * 0.07}s ease-in-out infinite`,
-                        animationDelay: `${i * 0.04}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-                <span className="text-[11px] font-medium tabular-nums text-primary/60 dark:text-primary/70">
+                <span
+                  className={cn(
+                    "flex items-center justify-center w-8 h-8 rounded-full shrink-0",
+                    GRADIENT_CIRCLE,
+                    "transition-[filter] duration-150 group-hover:brightness-110"
+                  )}
+                >
+                  <Square size={11} fill="currentColor" />
+                </span>
+                <RecordingWaveform />
+                <span className="text-[13px] font-semibold tabular-nums tracking-[0.08em] text-foreground/85 shrink-0">
                   {elapsedLabel}
                 </span>
-                <Square size={9} fill="currentColor" className="text-primary/50" />
               </button>
             ) : isProcessing ? (
               <div
                 className={cn(
-                  "flex items-center justify-center w-10 h-10 rounded-xl",
-                  "bg-foreground/3 dark:bg-white/4",
-                  "border border-border/20 dark:border-white/6"
+                  "flex items-center justify-center w-10 h-10 rounded-full",
+                  GRADIENT_CIRCLE
                 )}
               >
-                <Loader2 size={14} className="animate-spin text-foreground/25" />
+                <Loader2 size={16} className="animate-spin text-white/90" />
               </div>
             ) : (
               <button
                 onClick={onStartRecording}
                 disabled={recordingDisabled}
                 className={cn(
-                  "flex items-center justify-center w-10 h-10 rounded-xl",
-                  "bg-foreground/3 dark:bg-white/4",
-                  "border border-border/20 dark:border-white/6",
-                  "text-foreground/30 dark:text-foreground/20",
+                  "flex items-center justify-center w-10 h-10 rounded-full",
+                  GRADIENT_CIRCLE,
                   "transition-all duration-200",
-                  "hover:bg-foreground/6 dark:hover:bg-white/8",
-                  "hover:text-foreground/50 dark:hover:text-foreground/35",
-                  "hover:border-border/30 dark:hover:border-white/10",
+                  "hover:brightness-110",
                   "active:scale-95",
-                  "disabled:pointer-events-none disabled:opacity-40"
+                  "disabled:pointer-events-none disabled:opacity-40 disabled:saturate-0",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                 )}
                 aria-label={t("notes.editor.transcribe")}
                 title={recordingDisabled ? t("common.managedByOrg") : undefined}
               >
-                <Mic size={15} />
+                <Mic size={18} />
               </button>
             )}
           </div>
@@ -208,16 +280,15 @@ export default function NoteBottomBar({
                 onClick={handleSubmit}
                 disabled={askDisabled}
                 className={cn(
-                  "flex items-center justify-center w-6 h-6 rounded-md shrink-0",
-                  "bg-foreground dark:bg-foreground/90 text-background",
+                  "flex items-center justify-center w-6 h-6 rounded-full shrink-0",
                   "transition-all duration-150",
-                  "hover:bg-foreground/85 dark:hover:bg-foreground/80",
+                  "hover:brightness-110",
                   "active:scale-90",
                   "disabled:opacity-30"
                 )}
                 aria-label={t("embeddedChat.send")}
               >
-                <ArrowUp size={13} strokeWidth={2.5} />
+                <SendIcon size={24} className="block" />
               </button>
             ) : !isExpanded ? (
               <div className="shrink-0">{actionPicker}</div>
