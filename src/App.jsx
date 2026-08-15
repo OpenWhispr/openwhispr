@@ -215,6 +215,8 @@ export default function App() {
     cancelProcessing,
   } = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
+    onDemoEvent: (event) =>
+      window.electronAPI?.publishOnboardingDemoEvent?.({ kind: "dictation", ...event }),
   });
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo

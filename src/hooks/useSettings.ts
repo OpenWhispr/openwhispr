@@ -64,6 +64,7 @@ export interface HotkeySettings {
 export interface OnboardingSettings {
   onboardingUseCases: string[];
   onboardingUseCaseNote: string;
+  spokenLanguages: string[];
 }
 
 export interface MicrophoneSettings {
@@ -333,6 +334,8 @@ function useSettingsInternal() {
     setOnboardingUseCases: store.setOnboardingUseCases,
     onboardingUseCaseNote: store.onboardingUseCaseNote,
     setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
+    spokenLanguages: store.spokenLanguages,
+    setSpokenLanguages: store.setSpokenLanguages,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,

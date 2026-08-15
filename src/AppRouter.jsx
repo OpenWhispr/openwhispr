@@ -6,6 +6,7 @@ import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.
 import TranscriptionPreviewOverlay from "./components/TranscriptionPreviewOverlay.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
 import WindowControls from "./components/WindowControls.tsx";
+import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
@@ -141,6 +142,7 @@ function MainApp() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <OnboardingFlow onComplete={handleOnboardingComplete} />
+        <BackgroundModelDownloadTray />
       </Suspense>
     );
   }
@@ -185,6 +187,7 @@ function MainApp() {
   return isControlPanel ? (
     <Suspense fallback={<LoadingFallback />}>
       <ControlPanel initialSettingsSection={postOnboardingSettingsSection} />
+      <BackgroundModelDownloadTray />
     </Suspense>
   ) : (
     <App />

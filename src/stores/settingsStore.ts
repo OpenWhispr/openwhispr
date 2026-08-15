@@ -291,6 +291,7 @@ const ARRAY_SETTINGS = new Set([
   "gcalAccounts",
   "mcalAccounts",
   "onboardingUseCases",
+  "spokenLanguages",
   "translationTargets",
 ]);
 
@@ -864,6 +865,7 @@ export interface SettingsState
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
+  setSpokenLanguages: (languages: string[]) => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
@@ -1253,6 +1255,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   translationKey: readString("translationKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
+  spokenLanguages: readStringArray("spokenLanguages", []),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
@@ -1976,6 +1979,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setOnboardingUseCaseNote: createStringSetter("onboardingUseCaseNote"),
+
+  setSpokenLanguages: (languages: string[]) => {
+    if (isBrowser) localStorage.setItem("spokenLanguages", JSON.stringify(languages));
+    set({ spokenLanguages: languages });
+  },
 
   setActivationMode: (mode: "tap" | "push") => {
     if (isBrowser) localStorage.setItem("activationMode", mode);

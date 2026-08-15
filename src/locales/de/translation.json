@@ -135,6 +135,7 @@
     "pttUnavailable": "Der native Push-to-Talk-Listener ist nicht verfügbar"
   },
   "common": {
+    "continue": "Continue",
     "add": "Hinzufügen",
     "retry": "Erneut versuchen",
     "back": "Zurück",
@@ -178,6 +179,118 @@
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt."
   },
   "onboarding": {
+    "rehaul": {
+      "permissions": {
+        "title": "Set up OpenWhispr in 3 minutes"
+      },
+      "languages": {
+        "title": "Which languages do you speak?",
+        "description": "Select all that apply. Multiple selections use automatic language detection."
+      },
+      "dictationHotkey": {
+        "title": "Set up your keyboard shortcut",
+        "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
+      },
+      "assistantHotkey": {
+        "title": "Set up OpenWhispr Assistant",
+        "description": "Speak a request, and OpenWhispr Assistant writes the result for you."
+      },
+      "hotkey": {
+        "capture": "Press the keys you want to use",
+        "confirm": "Press {{hotkey}} again to confirm",
+        "chooseAnother": "Choose another shortcut"
+      },
+      "dictationDemo": {
+        "title": "Try your first dictation",
+        "description": "Press {{hotkey}} and start speaking. OpenWhispr will turn your voice into text.",
+        "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
+        "prompt": "Try saying: “I’m testing dictation for the first time.”",
+        "placeholder": "Your dictation will appear here…"
+      },
+      "assistantDemo": {
+        "title": "Meet OpenWhispr Assistant",
+        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "email": "Hey! Want to grab coffee next week? Let me know what works for you.",
+        "prompt": "Reply that Tuesday at 3 works. Send an invite.",
+        "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
+      },
+      "demo": {
+        "listening": "Listening…",
+        "processing": "Turning your voice into text…"
+      },
+      "notes": {
+        "title": "Record meetings without a bot with OpenWhispr Notes",
+        "description": "Connect a calendar so OpenWhispr can recognize your meetings and turn conversations into clear notes."
+      },
+      "setupChoice": {
+        "title": "Choose your OpenWhispr setup",
+        "description": "Pick the option that fits how you work.",
+        "cloud": {
+          "title": "OpenWhispr Cloud",
+          "description": "Get 2,000 free words each week. Your settings stay synced across devices.",
+          "continue": "Continue for free",
+          "signIn": "Sign in to use Cloud",
+          "features": {
+            "fast": "Fastest, no setup required",
+            "privacy": "Privacy-focused processing",
+            "sync": "Settings sync across devices",
+            "features": "AI features for notes and actions"
+          }
+        },
+        "byok": {
+          "title": "API Provider",
+          "description": "Use your own API key from a supported provider."
+        },
+        "local": {
+          "title": "On your device",
+          "description": "Private offline transcription. Required space depends on the models you choose."
+        },
+        "enterprise": {
+          "title": "Enterprise",
+          "description": "Use an organization-managed AI provider with team controls."
+        },
+        "warnings": {
+          "byok": {
+            "title": "Your provider handles your data",
+            "description": "You’ll add credentials for separate dictation and Assistant providers. Provider pricing and retention policies apply."
+          },
+          "local": {
+            "title": "Local setup takes a few extra steps",
+            "description": "Choose and download dictation and Assistant models. Download size is shown before installation."
+          },
+          "enterprise": {
+            "title": "Have your organization credentials ready",
+            "description": "Manual enterprise setup is available only when your workspace policy permits it."
+          }
+        },
+        "useCloud": "Use Cloud instead",
+        "continueSetup": "Continue setup"
+      },
+      "provider": {
+        "progress": "Provider setup progress",
+        "dictation": "Dictation",
+        "assistant": "Assistant",
+        "title": "Connect your AI provider",
+        "description": "Choose a provider, add your credentials, and test the connection.",
+        "runTest": "Run test",
+        "testing": "Testing…",
+        "connected": "Connected",
+        "connectionFailed": "The connection could not be verified."
+      },
+      "local": {
+        "title": "Set up local models",
+        "description": "Choose the models you want to run on your device.",
+        "downloadInBackground": "Finish in background",
+        "downloads": "Model downloads",
+        "downloading": "Downloading… {{progress}}%",
+        "installing": "Installing model…"
+      },
+      "enterprise": {
+        "title": "Connect your enterprise provider",
+        "description": "Use your organization’s credentials for dictation intelligence and the Assistant.",
+        "dictationIntelligence": "Dictation intelligence"
+      }
+    },
     "steps": {
       "welcome": "Willkommen",
       "setup": "Einrichtung",

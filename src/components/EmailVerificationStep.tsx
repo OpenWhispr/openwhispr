@@ -4,7 +4,7 @@ import { OPENWHISPR_API_URL } from "../config/constants";
 import { authClient } from "../lib/auth";
 import { Button } from "./ui/button";
 import { Mail, Loader2, Check, RefreshCw } from "lucide-react";
-import logoIcon from "../assets/icon.png";
+import { BrandMark } from "./onboarding/OnboardingShell";
 
 interface EmailVerificationStepProps {
   email: string;
@@ -80,12 +80,10 @@ export default function EmailVerificationStep({
   if (verified) {
     return (
       <div className="space-y-3">
-        <div className="text-center mb-4">
-          <img
-            src={logoIcon}
-            alt="OpenWhispr"
-            className="w-12 h-12 mx-auto mb-2.5 rounded-lg shadow-sm"
-          />
+        <div className="onboarding-brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center text-primary-foreground">
+          <BrandMark className="mx-auto size-14" />
+        </div>
+        <div className="mb-4 text-center">
           <div className="w-8 h-8 mx-auto bg-success/10 rounded-full flex items-center justify-center mb-2">
             <Check className="w-4 h-4 text-success" />
           </div>
@@ -102,12 +100,10 @@ export default function EmailVerificationStep({
 
   return (
     <div className="space-y-3">
-      <div className="text-center mb-4">
-        <img
-          src={logoIcon}
-          alt="OpenWhispr"
-          className="w-12 h-12 mx-auto mb-2.5 rounded-lg shadow-sm"
-        />
+      <div className="onboarding-brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center text-primary-foreground">
+        <BrandMark className="mx-auto size-14" />
+      </div>
+      <div className="mb-4 text-center">
         <div className="w-8 h-8 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-3">
           <Mail className="w-4 h-4 text-primary" />
         </div>
@@ -136,7 +132,7 @@ export default function EmailVerificationStep({
         variant="outline"
         onClick={handleResend}
         disabled={resendCooldown > 0 || isResending}
-        className="w-full h-9"
+        className="h-11 w-full rounded-full"
       >
         {isResending ? (
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
