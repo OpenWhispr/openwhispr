@@ -849,6 +849,7 @@ declare global {
     electronAPI: {
       // Basic window operations
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      setOnboardingActive?: (active: boolean) => Promise<boolean>;
       beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
       endOnboardingDemo?: (id: string) => Promise<boolean>;
       stopOnboardingDemo?: (id: string) => Promise<boolean>;

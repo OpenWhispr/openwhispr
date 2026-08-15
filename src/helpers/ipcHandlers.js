@@ -1125,6 +1125,11 @@ class IPCHandlers {
       this.windowManager.setOnboardingWindowMode(mode)
     );
 
+    ipcMain.handle("onboarding-set-active", (_event, active) => {
+      if (typeof active !== "boolean") return false;
+      return this.windowManager.setOnboardingActive(active);
+    });
+
     ipcMain.handle("onboarding-demo-begin", (_event, session) => {
       if (
         !session ||
@@ -1139,8 +1144,7 @@ class IPCHandlers {
         kind: session.kind,
         startedAt: Date.now(),
       };
-      this.windowManager.beginOnboardingDemo();
-      return true;
+      return this.windowManager.beginOnboardingDemo(session.kind);
     });
 
     ipcMain.handle("onboarding-demo-end", (_event, id) => {
