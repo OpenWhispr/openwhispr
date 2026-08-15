@@ -85,8 +85,11 @@ import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValida
 import { isEmptyRecording } from "./recordingGuard";
 import {
   DICTIONARY_ECHO_CODE,
+  DEFAULT_MAX_PROMPT_CHARS,
+  GROQ_MAX_PROMPT_CHARS,
   dictionaryEchoError,
-  matchesDictionaryPrompt,
+  matchesSentDictionaryPrompt,
+  truncateDictionaryPrompt,
 } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
@@ -649,10 +652,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Check the dictionary on its own as well as the full prompt: the echo filter needs
   // 70% of the prompt's words to appear, and a Chinese script bias counts as one more
   // word, which alone pushes a one- or two-term dictionary under the threshold.
+  // Each is also compared against its sent-size prefixes, since the request path
+  // caps the prompt at ~900 chars and an echo of that prefix can never clear the
+  // usage threshold against a much larger full join (#1636).
   isDictionaryEcho(text) {
     return (
-      matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt()) ||
-      matchesDictionaryPrompt(text, this.getWhisperPrompt())
+      matchesSentDictionaryPrompt(text, this.getCustomDictionaryPrompt()) ||
+      matchesSentDictionaryPrompt(text, this.getWhisperPrompt())
     );
   }
 
@@ -3325,16 +3331,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const endpoint = this.getTranscriptionEndpoint(model);
 
       // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
-      // 890 leaves margin for UTF-16 vs codepoint counting drift.
+      // Caps and truncation live in dictionaryEchoFilter.js so the echo check can
+      // reconstruct exactly what was sent (#1636).
       const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
-      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
+      const MAX_PROMPT_CHARS = isGroqEndpoint ? GROQ_MAX_PROMPT_CHARS : DEFAULT_MAX_PROMPT_CHARS;
       let dictionaryPrompt = this.getWhisperPrompt(apiSettings);
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
           const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+          dictionaryPrompt = truncateDictionaryPrompt(dictionaryPrompt, MAX_PROMPT_CHARS);
           logger.debug(
             "Custom dictionary prompt truncated",
             {
