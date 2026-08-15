@@ -132,6 +132,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+  const cloudTranscriptionMode = useSettingsStore((s) => s.cloudTranscriptionMode);
+
+  // Non-signed-in users in cloud mode must default to BYOK immediately, not
+  // only at completeOnboarding: the dictation test step runs before finish,
+  // and OpenWhispr Cloud without a session fails it with "Session Expired".
+  useEffect(() => {
+    if (!isSignedIn && !useLocalWhisper && cloudTranscriptionMode !== "byok") {
+      updateTranscriptionSettings({ cloudTranscriptionMode: "byok" });
+    }
+  }, [isSignedIn, useLocalWhisper, cloudTranscriptionMode, updateTranscriptionSettings]);
 
   // Onboarding edits only the primary dictation hotkey; extra bindings are
   // preserved via withExtraDictationHotkeys.
