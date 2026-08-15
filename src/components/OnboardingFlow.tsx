@@ -600,9 +600,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "setup-choice":
         return (
-          <div className="w-full">
+          <div className="h-full w-full pt-6">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.setupChoice.title")}
+              titleLines={[
+                t("onboarding.rehaul.setupChoice.titleLineOne"),
+                t("onboarding.rehaul.setupChoice.titleLineTwo"),
+              ]}
               description={t("onboarding.rehaul.setupChoice.description")}
             />
             <SetupChoiceStep
@@ -659,6 +663,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const hotkeyStep = currentStepId === "dictation-hotkey" || currentStepId === "assistant-hotkey";
   const demoStep = currentStepId === "dictation-demo" || currentStepId === "assistant-demo";
   const inlineGatedStep = hotkeyStep || demoStep;
+  const choiceStep = currentStepId === "setup-choice";
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
 
   return (
@@ -666,12 +671,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       <OnboardingShell
         compact={compact}
         onBack={
-          hasShellNavigation && currentStepId !== "languages" && session.history.length > 0
+          hasShellNavigation &&
+          currentStepId !== "languages" &&
+          !choiceStep &&
+          session.history.length > 0
             ? goBack
             : undefined
         }
         onContinue={
-          hasShellNavigation && (!inlineGatedStep || canContinue)
+          hasShellNavigation && !choiceStep && (!inlineGatedStep || canContinue)
             ? () => void continueFromCurrentStep()
             : undefined
         }

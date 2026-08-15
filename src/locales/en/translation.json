@@ -279,6 +279,8 @@
       },
       "setupChoice": {
         "title": "Choose your OpenWhispr setup",
+        "titleLineOne": "Choose your",
+        "titleLineTwo": "OpenWhispr setup",
         "description": "Pick the option that fits how you work.",
         "cloud": {
           "title": "OpenWhispr Cloud",
@@ -287,7 +289,7 @@
           "signIn": "Sign in to use Cloud",
           "features": {
             "fast": "Fastest, no setup required",
-            "privacy": "Privacy-focused processing",
+            "privacy": "Clear privacy and zero data-retention",
             "sync": "Settings sync across devices",
             "features": "AI features for notes and actions"
           }
@@ -298,7 +300,7 @@
         },
         "local": {
           "title": "On your device",
-          "description": "Private offline transcription. Required space depends on the models you choose."
+          "description": "Private offline transcription. Needs at least {{minimumSpace}} GB free space."
         },
         "enterprise": {
           "title": "Enterprise",
@@ -307,15 +309,33 @@
         "warnings": {
           "byok": {
             "title": "Your provider handles your data",
-            "description": "You’ll add credentials for separate dictation and Assistant providers. Provider pricing and retention policies apply."
+            "description": "You’ll add credentials for separate dictation and Assistant providers. Provider pricing and retention policies apply.",
+            "continue": "Set up API provider",
+            "steps": {
+              "1": "Choose providers for dictation and Assistant",
+              "2": "Add credentials using secure storage",
+              "3": "Test each connection before activation"
+            }
           },
           "local": {
             "title": "Local setup takes a few extra steps",
-            "description": "Choose and download dictation and Assistant models. Download size is shown before installation."
+            "description": "Local processing keeps your speech on this device, but requires a one-time setup and at least {{minimumSpace}} GB of free space.",
+            "continue": "Setup Locally",
+            "steps": {
+              "1": "Choose a transcription engine",
+              "2": "Configure or download a model, about {{modelSize}}",
+              "3": "Wait for installation and activation"
+            }
           },
           "enterprise": {
             "title": "Have your organization credentials ready",
-            "description": "Manual enterprise setup is available only when your workspace policy permits it."
+            "description": "Manual enterprise setup is available only when your workspace policy permits it.",
+            "continue": "Set up enterprise",
+            "steps": {
+              "1": "Sign in with SSO or enter approved credentials",
+              "2": "Choose an available region and model",
+              "3": "Test the managed connection before activation"
+            }
           }
         },
         "useCloud": "Use Cloud instead",
