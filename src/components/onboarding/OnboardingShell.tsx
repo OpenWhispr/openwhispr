@@ -120,7 +120,7 @@ export default function OnboardingShell({
       />
 
       <div
-        className={`min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-6 py-8 md:px-12"}`}
+        className={`onboarding-shell-scroll min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-6 py-8 md:px-12"}`}
       >
         <div
           className={`mx-auto flex min-h-full w-full justify-center ${

@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AudioLines, Check, CircleCheck, MousePointer2 } from "lucide-react";
+import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import TranscriptionModelPicker from "../TranscriptionModelPicker";
-import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseProviderConfig from "../EnterpriseProviderConfig";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
-import { useSettings } from "../../hooks/useSettings";
+import { useModelDownload } from "../../hooks/useModelDownload";
 import { LLM_ENTERPRISE_POLICY_PROVIDER_IDS, useSettingsStore } from "../../stores/settingsStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
@@ -20,16 +18,20 @@ import {
 } from "../../stores/policyRules";
 import {
   getTranscriptionProviders,
+  getParakeetModels,
+  getWhisperModels,
   modelRegistry,
   type CloudProviderData,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
 import type { OnboardingStepId } from "./flow";
+import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
   const { t } = useTranslation();
   const assistant = stepId.endsWith("assistant");
   const enterprise = stepId.startsWith("enterprise");
+  const local = stepId.startsWith("local");
   return (
     <div
       className="relative mx-auto flex w-36 items-start justify-between"
@@ -43,7 +45,11 @@ export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
           }`}
         >
           {assistant ? (
-            <CircleCheck className="size-3.5" strokeWidth={2} />
+            local ? (
+              <AudioLines className="size-3.5" />
+            ) : (
+              <CircleCheck className="size-3.5" strokeWidth={2} />
+            )
           ) : (
             <AudioLines className="size-3.5" />
           )}
@@ -64,7 +70,11 @@ export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
         >
           <MousePointer2 className="size-3.5" />
         </span>
-        <span className="text-[0.6875rem]">{t("onboarding.rehaul.provider.assistant")}</span>
+        <span className="text-[0.6875rem]">
+          {local && assistant
+            ? t("onboarding.rehaul.local.agent")
+            : t("onboarding.rehaul.provider.assistant")}
+        </span>
       </div>
     </div>
   );
@@ -306,10 +316,10 @@ export function ByokProviderStep({
               <Select value={selectedProvider || undefined} onValueChange={chooseProvider}>
                 <SelectTrigger className="h-9 rounded-xl border-neutral-200 bg-neutral-100 px-3 text-xs text-neutral-950 disabled:opacity-100 disabled:[&>svg]:hidden dark:border-neutral-200 dark:bg-neutral-100 dark:text-neutral-950">
                   {currentProvider ? (
-                    <span className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                       <ProviderIcon provider={currentProvider.id} className="size-4" forceLight />
                       {providerDisplayName(currentProvider)}
-                    </span>
+                    </div>
                   ) : (
                     <span className="text-neutral-500">
                       {t("onboarding.rehaul.provider.providerPlaceholder")}
@@ -436,84 +446,297 @@ export function ByokProviderStep({
 export function LocalModelSetupStep({
   stepId,
   onReadinessChange,
+  onProceed,
+  onSkip,
 }: {
   stepId: "local-dictation" | "local-assistant";
   onReadinessChange: (ready: boolean) => void;
+  onProceed: () => void;
+  onSkip: () => void;
 }) {
-  const settings = useSettings();
+  const { t } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
-  const selectedModel = assistant
-    ? store.chatAgentModel
-    : settings.localTranscriptionProvider === "nvidia"
-      ? settings.parakeetModel
-      : settings.whisperModel;
+  const [selectedProvider, setSelectedProvider] = useState(assistant ? "qwen" : "whisper");
+  const [selectedModel, setSelectedModel] = useState("");
+  const [downloadedWhisper, setDownloadedWhisper] = useState<Set<string>>(new Set());
+  const [downloadedParakeet, setDownloadedParakeet] = useState<Set<string>>(new Set());
+  const [downloadedLlm, setDownloadedLlm] = useState<Set<string>>(new Set());
+
+  const refreshDownloadedModels = useCallback(async () => {
+    const [whisper, parakeet, llm] = await Promise.all([
+      window.electronAPI?.listWhisperModels?.().catch(() => undefined),
+      window.electronAPI?.listParakeetModels?.().catch(() => undefined),
+      window.electronAPI?.modelGetAll?.().catch(() => undefined),
+    ]);
+    setDownloadedWhisper(
+      new Set(
+        (whisper?.models ?? []).filter((model) => model.downloaded).map((model) => model.model)
+      )
+    );
+    setDownloadedParakeet(
+      new Set(
+        (parakeet?.models ?? []).filter((model) => model.downloaded).map((model) => model.model)
+      )
+    );
+    setDownloadedLlm(
+      new Set((llm ?? []).filter((model) => model.isDownloaded).map((model) => model.id))
+    );
+  }, []);
+
+  const whisperDownload = useModelDownload({
+    modelType: "whisper",
+    onDownloadComplete: refreshDownloadedModels,
+  });
+  const parakeetDownload = useModelDownload({
+    modelType: "parakeet",
+    onDownloadComplete: refreshDownloadedModels,
+  });
+  const llmDownload = useModelDownload({
+    modelType: "llm",
+    onDownloadComplete: refreshDownloadedModels,
+  });
 
   useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      if (!selectedModel) {
-        onReadinessChange(false);
-        return;
-      }
+    void refreshDownloadedModels();
+  }, [refreshDownloadedModels]);
+
+  useEffect(() => {
+    const saved = useSettingsStore.getState();
+    const defaultProvider = assistant
+      ? modelRegistry.getProvider(saved.chatAgentProvider)
+        ? saved.chatAgentProvider
+        : "qwen"
+      : saved.localTranscriptionProvider === "nvidia"
+        ? "nvidia"
+        : "whisper";
+    setSelectedProvider(defaultProvider);
+    setSelectedModel("");
+    onReadinessChange(false);
+  }, [assistant, onReadinessChange, stepId]);
+
+  const providerOptions = useMemo(() => {
+    if (assistant) {
+      return modelRegistry.getAllProviders().map((provider) => ({
+        id: provider.id,
+        name: provider.name,
+        icon: provider.id,
+      }));
+    }
+    return [
+      { id: "whisper", name: "OpenAI", icon: "openai" },
+      { id: "nvidia", name: "NVIDIA", icon: "nvidia" },
+    ];
+  }, [assistant]);
+
+  const models = useMemo(() => {
+    if (assistant) {
+      return (modelRegistry.getProvider(selectedProvider)?.models ?? []).map((model) => ({
+        id: model.id,
+        name: model.name,
+        size: model.size,
+        recommended: model.recommended,
+        icon: selectedProvider,
+      }));
+    }
+    if (selectedProvider === "nvidia") {
+      return Object.entries(getParakeetModels()).map(([id, model]) => ({
+        id,
+        name: model.name,
+        size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
+        recommended: model.recommended,
+        icon: "nvidia",
+      }));
+    }
+    return Object.entries(getWhisperModels()).map(([id, model]) => ({
+      id,
+      name: model.name,
+      size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
+      recommended: model.recommended,
+      icon: "openai",
+    }));
+  }, [assistant, selectedProvider]);
+
+  const currentProvider = providerOptions.find((provider) => provider.id === selectedProvider);
+  const activeDownload = assistant
+    ? llmDownload
+    : selectedProvider === "nvidia"
+      ? parakeetDownload
+      : whisperDownload;
+  const downloadedModels = assistant
+    ? downloadedLlm
+    : selectedProvider === "nvidia"
+      ? downloadedParakeet
+      : downloadedWhisper;
+  const selectedReady = Boolean(selectedModel && downloadedModels.has(selectedModel));
+
+  useEffect(() => {
+    onReadinessChange(selectedReady);
+  }, [onReadinessChange, selectedReady]);
+
+  const selectInstalledModel = useCallback(
+    (modelId: string) => {
+      setSelectedModel(modelId);
       if (assistant) {
-        const models = await window.electronAPI?.modelGetAll?.();
-        if (!cancelled) {
-          onReadinessChange(
-            Array.isArray(models) &&
-              models.some((model) => model.id === selectedModel && model.isDownloaded)
-          );
-        }
+        store.setChatAgentMode("local");
+        store.setChatAgentProvider(selectedProvider);
+        store.setChatAgentModel(modelId);
+      } else if (selectedProvider === "nvidia") {
+        store.setLocalTranscriptionProvider("nvidia");
+        store.setParakeetModel(modelId);
       } else {
-        const status =
-          settings.localTranscriptionProvider === "nvidia"
-            ? await window.electronAPI?.checkParakeetModelStatus?.(selectedModel)
-            : await window.electronAPI?.checkModelStatus?.(selectedModel);
-        if (!cancelled) onReadinessChange(status?.downloaded === true);
+        store.setLocalTranscriptionProvider("whisper");
+        store.setWhisperModel(modelId);
       }
-    };
-    void check();
-    const interval = window.setInterval(check, 2000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [assistant, onReadinessChange, selectedModel, settings.localTranscriptionProvider]);
+      if (localStorage.getItem("localSetupPending") !== "true") {
+        forgetPendingLocalModel(assistant ? "assistant" : "dictation", modelId);
+      }
+    },
+    [assistant, selectedProvider, store]
+  );
+
+  const downloadModel = (modelId: string) => {
+    rememberPendingLocalModel(assistant ? "assistant" : "dictation", {
+      provider: selectedProvider,
+      modelId,
+    });
+    void activeDownload.downloadModel(modelId, selectInstalledModel);
+  };
+
+  const chooseProvider = (providerId: string) => {
+    setSelectedProvider(providerId);
+    setSelectedModel("");
+    onReadinessChange(false);
+  };
+
+  const anyDownloadActive =
+    whisperDownload.isDownloading || parakeetDownload.isDownloading || llmDownload.isDownloading;
 
   return (
-    <ProviderCard stepId={stepId}>
-      {assistant ? (
-        <ReasoningModelSelector
-          reasoningModel={store.chatAgentModel}
-          setReasoningModel={store.setChatAgentModel}
-          localReasoningProvider={store.chatAgentProvider}
-          setLocalReasoningProvider={store.setChatAgentProvider}
-          cloudReasoningBaseUrl={store.chatAgentCloudBaseUrl}
-          setCloudReasoningBaseUrl={store.setChatAgentCloudBaseUrl}
-          setReasoningMode={store.setChatAgentMode}
-          mode="local"
-        />
-      ) : (
-        <TranscriptionModelPicker
-          transcriptionContext="dictation"
-          selectedCloudProvider={settings.cloudTranscriptionProvider}
-          onCloudProviderSelect={settings.setCloudTranscriptionProvider}
-          selectedCloudModel={settings.cloudTranscriptionModel}
-          onCloudModelSelect={settings.setCloudTranscriptionModel}
-          selectedLocalModel={selectedModel}
-          onLocalModelSelect={(model) => {
-            if (settings.localTranscriptionProvider === "nvidia") settings.setParakeetModel(model);
-            else settings.setWhisperModel(model);
-          }}
-          selectedLocalProvider={settings.localTranscriptionProvider}
-          onLocalProviderSelect={settings.setLocalTranscriptionProvider}
-          useLocalWhisper
-          onModeChange={settings.setUseLocalWhisper}
-          variant="onboarding"
-          mode="local"
-        />
-      )}
-    </ProviderCard>
+    <section className="mx-auto mt-8 w-full max-w-[23.75rem] rounded-[1.125rem] border border-neutral-200 bg-white px-3 py-[1.125rem] text-neutral-950">
+      <SetupStageStepper stepId={stepId} />
+
+      <div className="mt-5">
+        <FieldLabel>{t("onboarding.rehaul.local.providerLabel")}</FieldLabel>
+        <Select value={selectedProvider} onValueChange={chooseProvider}>
+          <SelectTrigger className="h-9 rounded-xl border-neutral-200 bg-neutral-100 px-3 text-xs text-neutral-950 dark:border-neutral-200 dark:bg-neutral-100 dark:text-neutral-950">
+            <div className="flex items-center gap-2">
+              <ProviderIcon
+                provider={currentProvider?.icon ?? selectedProvider}
+                className="size-4"
+                forceLight
+                monochrome={assistant && selectedProvider === "qwen"}
+              />
+              {currentProvider?.name ?? selectedProvider}
+            </div>
+          </SelectTrigger>
+          <SelectContent className="border-neutral-200 bg-white text-neutral-950 dark:border-neutral-200 dark:bg-white dark:text-neutral-950">
+            {providerOptions.map((provider) => (
+              <SelectItem key={provider.id} value={provider.id}>
+                <span className="flex items-center gap-2">
+                  <ProviderIcon provider={provider.icon} className="size-4" forceLight />
+                  {provider.name}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="mt-4 h-64 overflow-y-auto rounded-2xl border border-neutral-200 bg-neutral-100 px-2">
+        {models.map((model) => {
+          const isDownloaded = downloadedModels.has(model.id);
+          const isDownloading = activeDownload.isDownloadingModel(model.id);
+          const isSelected = selectedModel === model.id && isDownloaded;
+          const percentage = Math.round(activeDownload.downloadProgress.percentage);
+          return (
+            <div
+              key={model.id}
+              className="flex min-h-16 items-center gap-3 border-b border-neutral-200 px-1 py-2 last:border-b-0"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white">
+                <ProviderIcon
+                  provider={model.icon}
+                  className="size-5"
+                  forceLight
+                  monochrome={assistant && model.icon === "qwen"}
+                />
+              </span>
+              <button
+                type="button"
+                disabled={!isDownloaded}
+                onClick={() => selectInstalledModel(model.id)}
+                className="min-w-0 flex-1 text-left disabled:cursor-default"
+              >
+                <span className="block truncate text-sm font-medium text-neutral-950">
+                  {model.name}
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-neutral-500">
+                  {model.size}
+                  {!assistant && model.recommended && ` - ${t("common.recommended")}`}
+                </span>
+              </button>
+
+              {isDownloading ? (
+                <span className="-mr-2 flex h-8 shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-white text-[0.6875rem]">
+                  <span className="flex items-center bg-neutral-100 px-2 text-neutral-500">
+                    {percentage}%
+                  </span>
+                  <span className="flex items-center px-2 text-neutral-500">
+                    {activeDownload.isInstalling
+                      ? t("onboarding.rehaul.local.installing")
+                      : t("onboarding.rehaul.local.downloadingShort")}
+                  </span>
+                </span>
+              ) : isSelected ? (
+                <span className="-mr-2 flex h-7 shrink-0 items-center gap-1 rounded-full bg-blue-500 px-3 text-xs text-white">
+                  <Check className="size-3.5" />
+                  {t("onboarding.rehaul.local.selected")}
+                </span>
+              ) : isDownloaded ? (
+                <Button
+                  type="button"
+                  onClick={() => selectInstalledModel(model.id)}
+                  className="-mr-2 h-7 gap-1.5 rounded-full border-neutral-950! bg-neutral-950 px-2.5 text-xs font-normal text-white shadow-none! hover:bg-neutral-800"
+                >
+                  {t("onboarding.rehaul.local.use")}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => downloadModel(model.id)}
+                  className="-mr-2 h-7 gap-1.5 rounded-full border-neutral-950! bg-neutral-950 px-2.5 text-xs font-normal text-white shadow-none! hover:bg-neutral-800 disabled:bg-neutral-300 disabled:opacity-100"
+                >
+                  <Download className="size-3.5" />
+                  {t("onboarding.rehaul.local.download")}
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`mt-6 grid gap-2 ${anyDownloadActive ? "grid-cols-2" : "grid-cols-1"}`}>
+        {anyDownloadActive && (
+          <Button
+            type="button"
+            variant="outline-flat"
+            onClick={onSkip}
+            className="h-8 rounded-full! border-neutral-200! bg-white! text-sm font-normal text-neutral-950 shadow-none!"
+          >
+            {t("common.skip")}
+          </Button>
+        )}
+        <Button
+          type="button"
+          onClick={onProceed}
+          disabled={!selectedReady}
+          className="h-8 rounded-full border-neutral-200! bg-blue-500 text-sm font-normal text-white shadow-none! hover:bg-blue-600 disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100!"
+        >
+          {t("onboarding.rehaul.provider.proceed")}
+        </Button>
+      </div>
+    </section>
   );
 }
 

@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Loader2, X } from "lucide-react";
+import { CirclePause } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "../ui/button";
-import { Progress } from "../ui/progress";
+import { ProviderIcon } from "../ui/ProviderIcon";
+import {
+  getParakeetModelInfo,
+  getWhisperModelInfo,
+  modelRegistry,
+} from "../../models/ModelRegistry";
+import { useSettingsStore } from "../../stores/settingsStore";
+import {
+  consumePendingLocalModel,
+  hasPendingLocalModels,
+  type PendingLocalModelKind,
+} from "./pendingLocalModels";
 import type {
   LocalLLMDownloadProgressEvent,
   ParakeetDownloadProgressData,
@@ -25,6 +35,50 @@ function downloadKey(kind: DownloadKind, id: string) {
 
 function clampPercentage(value: number | undefined) {
   return Math.max(0, Math.min(100, Number.isFinite(value) ? (value ?? 0) : 0));
+}
+
+function downloadDisplay(download: ActiveDownload) {
+  if (download.kind === "whisper") {
+    return { name: getWhisperModelInfo(download.id)?.name ?? download.id, provider: "openai" };
+  }
+  if (download.kind === "parakeet") {
+    return { name: getParakeetModelInfo(download.id)?.name ?? download.id, provider: "nvidia" };
+  }
+  const localModel = modelRegistry.getModel(download.id);
+  return {
+    name: localModel?.model.name ?? download.id,
+    provider: localModel?.provider.id ?? "local",
+  };
+}
+
+function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string) {
+  if (localStorage.getItem("localSetupPending") !== "true") return;
+  const selection = consumePendingLocalModel(kind, modelId);
+  if (!selection) return;
+
+  const store = useSettingsStore.getState();
+  if (kind === "dictation") {
+    if (selection.provider === "nvidia") {
+      store.setLocalTranscriptionProvider("nvidia");
+      store.setParakeetModel(selection.modelId);
+    } else {
+      store.setLocalTranscriptionProvider("whisper");
+      store.setWhisperModel(selection.modelId);
+    }
+    store.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
+    return;
+  }
+
+  store.setChatAgentMode("local");
+  store.setChatAgentProvider(selection.provider);
+  store.setChatAgentModel(selection.modelId);
+  store.setCloudReasoningForAllScopes({
+    cleanupCloudMode: "local",
+    cleanupProvider: selection.provider,
+    cleanupModel: selection.modelId,
+    useCleanupModel: true,
+    useDictationAgent: true,
+  });
 }
 
 export default function BackgroundModelDownloadTray() {
@@ -86,6 +140,7 @@ export default function BackgroundModelDownloadTray() {
       data: WhisperDownloadProgressData | ParakeetDownloadProgressData
     ) => {
       const key = downloadKey(kind, data.model);
+      if (data.type === "complete") activatePendingLocalModel("dictation", data.model);
       setDownloads((current) => {
         if (data.type === "complete") {
           const next = { ...current };
@@ -107,6 +162,7 @@ export default function BackgroundModelDownloadTray() {
 
     const updateLlm = (_event: unknown, data: LocalLLMDownloadProgressEvent) => {
       const key = downloadKey("llm", data.modelId);
+      if (data.type === "complete") activatePendingLocalModel("assistant", data.modelId);
       setDownloads((current) => {
         if (data.type === "complete") {
           const next = { ...current };
@@ -143,62 +199,50 @@ export default function BackgroundModelDownloadTray() {
   const activeDownloads = useMemo(() => Object.values(downloads), [downloads]);
 
   useEffect(() => {
-    if (hydrated && activeDownloads.length === 0) {
+    if (hydrated && activeDownloads.length === 0 && !hasPendingLocalModels()) {
       localStorage.removeItem("localSetupPending");
     }
   }, [activeDownloads.length, hydrated]);
-
-  const cancelDownload = async (download: ActiveDownload) => {
-    if (download.kind === "whisper") await window.electronAPI?.cancelWhisperDownload?.();
-    else if (download.kind === "parakeet") await window.electronAPI?.cancelParakeetDownload?.();
-    else await window.electronAPI?.modelCancelDownload?.(download.id);
-  };
 
   if (activeDownloads.length === 0) return null;
 
   return (
     <aside
-      className="fixed right-5 top-12 z-50 w-[min(22rem,calc(100vw-2.5rem))] space-y-2"
+      className="fixed right-7 top-5 z-50 w-[14.5rem] overflow-hidden rounded-xl border border-neutral-200 bg-white text-neutral-950 shadow-sm"
       aria-label={t("onboarding.rehaul.local.downloads")}
       aria-live="polite"
     >
+      <div className="flex h-8 items-center gap-1.5 bg-neutral-100 px-2.5 text-xs text-neutral-500">
+        <CirclePause className="size-3.5 text-blue-500" />
+        {t("onboarding.rehaul.local.downloadInProgress")}
+      </div>
       {activeDownloads.map((download) => (
         <div
           key={downloadKey(download.kind, download.id)}
-          className="rounded-2xl border border-border bg-card/95 p-4 shadow-xl backdrop-blur"
+          className="border-t border-neutral-200 p-2.5"
         >
-          <div className="flex items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              {download.installing ? (
-                <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
-              ) : (
-                <Download className="size-4" />
-              )}
+          <div className="flex items-center gap-2 text-xs">
+            <ProviderIcon
+              provider={downloadDisplay(download).provider}
+              className="size-3.5"
+              forceLight
+              monochrome={downloadDisplay(download).provider === "qwen"}
+            />
+            <span className="min-w-0 flex-1 truncate font-medium">
+              {downloadDisplay(download).name}
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">{download.id}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {download.error
-                  ? download.error
-                  : download.installing
-                    ? t("onboarding.rehaul.local.installing")
-                    : t("onboarding.rehaul.local.downloading", {
-                        progress: Math.round(download.percentage),
-                      })}
-              </p>
-              {!download.error && <Progress value={download.percentage} className="mt-3 h-1.5" />}
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 rounded-full"
-              aria-label={t("common.cancel")}
-              onClick={() => void cancelDownload(download)}
-            >
-              <X className="size-4" />
-            </Button>
+            <span className="text-neutral-500">{Math.round(download.percentage)}%</span>
           </div>
+          {download.error ? (
+            <p className="mt-1 truncate text-[0.625rem] text-destructive">{download.error}</p>
+          ) : (
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-[width] motion-reduce:transition-none"
+                style={{ width: `${download.percentage}%` }}
+              />
+            </div>
+          )}
         </div>
       ))}
     </aside>
