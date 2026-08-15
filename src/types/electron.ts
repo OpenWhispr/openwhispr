@@ -1613,6 +1613,13 @@ declare global {
         language?: string;
         contextBias?: string[];
       }) => Promise<ProxyTranscriptionResult>;
+      getSarvamKey: () => Promise<string | null>;
+      saveSarvamKey: (key: string) => Promise<void>;
+      proxySarvamTranscription: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+      }) => Promise<ProxyTranscriptionResult>;
 
       // Corti credential management
       getCortiClientId?: () => Promise<string | null>;

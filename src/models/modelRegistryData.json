@@ -273,6 +273,25 @@
           "streaming": true
         }
       ]
+    },
+    {
+      "id": "sarvam",
+      "name": "Sarvam",
+      "baseUrl": "https://api.sarvam.ai",
+      "models": [
+        {
+          "id": "saaras:v3",
+          "name": "Saaras v3",
+          "description": "Multilingual speech recognition for Indian languages",
+          "descriptionKey": "models.descriptions.transcription.sarvam_saaras_v3"
+        },
+        {
+          "id": "saaras:v4",
+          "name": "Saaras v4",
+          "description": "Latest multilingual speech recognition from Sarvam",
+          "descriptionKey": "models.descriptions.transcription.sarvam_saaras_v4"
+        }
+      ]
     }
   ],
   "cloudProviders": [

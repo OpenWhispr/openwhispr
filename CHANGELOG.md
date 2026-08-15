@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Sarvam AI is available as a speech-to-text provider.** Dictate in 22 Indian languages plus English — Hindi, Tamil, Telugu, Bengali, Marathi, Kannada, Malayalam, Punjabi, Gujarati and more — using your own Sarvam key, under Settings → Speech to Text. An unset language auto-detects. Sarvam's API accepts 30 seconds of audio per request, so longer recordings are split locally and their transcripts rejoined, and recording length stays unconstrained on dictation, re-transcribe, and upload alike.
 - **Uploaded and URL-ingested notes remember their speaker detection.** A note created through Upload ran speaker detection but stored none of it — the note now records that diarization ran, the speaker count you chose, and the audio duration, so it behaves like a meeting note when you record into it or resolve participants. An upload with speaker detection off writes nothing, preserving your global speaker setting. Present since upload speaker detection shipped in 1.7.6. (#1610)
 
 ## [1.8.3] - 2026-08-12

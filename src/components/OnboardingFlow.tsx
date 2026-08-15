@@ -111,6 +111,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    sarvamApiKey,
     tinfoilApiKey,
     dictationKey,
     meetingKey,
@@ -924,6 +925,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return xaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {
             return mistralApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "sarvam") {
+            return sarvamApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "corti") {
             return cortiClientId.trim().length > 0 && cortiClientSecret.trim().length > 0;
           } else if (cloudTranscriptionProvider === "tinfoil") {
