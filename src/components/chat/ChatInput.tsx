@@ -88,10 +88,14 @@ export function ChatInput({
     <div className="shrink-0 px-3 pb-3 pt-1">
       <div
         className={cn(
-          "flex items-center gap-2 min-h-11 px-3 rounded-lg",
-          "bg-surface-1 border border-border/30",
-          "transition-colors duration-150",
-          isIdle && "focus-within:border-primary/30"
+          "flex items-center gap-2 min-h-11 pl-4 pr-1.5 rounded-full",
+          "bg-white/55 dark:bg-white/6",
+          "backdrop-blur-xl backdrop-saturate-150 transform-gpu",
+          "border border-black/10 dark:border-white/14",
+          "shadow-(--shadow-glass)",
+          "transition-all duration-200",
+          isIdle &&
+            "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8"
         )}
       >
         {isListening && (
@@ -124,7 +128,7 @@ export function ChatInput({
               autoFocus={autoFocus}
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
-                "input-inline flex-1 outline-none bg-transparent",
+                "input-inline flex-1 outline-none bg-transparent caret-primary",
                 "text-[13px] text-foreground placeholder:text-muted-foreground/40",
                 "min-w-0 p-0",
                 isBusy && "text-muted-foreground/30 cursor-not-allowed"
@@ -134,7 +138,7 @@ export function ChatInput({
               <button
                 onClick={onCancel}
                 className={cn(
-                  "p-1 rounded-sm shrink-0",
+                  "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
                   "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-colors duration-100"
@@ -156,7 +160,7 @@ export function ChatInput({
                     : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                <SendIcon size={24} className="block" />
+                <SendIcon size={28} className="block" />
               </button>
             ) : null}
           </div>

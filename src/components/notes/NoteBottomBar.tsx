@@ -161,6 +161,14 @@ export default function NoteBottomBar({
     onInputFocus?.();
   }, [onInputFocus]);
 
+  const micHidden = !hideInput && isExpanded && !isRecording;
+
+  // Chat panel opening hides the input; drop the expanded state so the bar
+  // comes back in its idle layout (mic visible) when the panel closes.
+  useEffect(() => {
+    if (hideInput) setIsExpanded(false);
+  }, [hideInput]);
+
   useEffect(() => {
     if (!isExpanded) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -175,16 +183,16 @@ export default function NoteBottomBar({
   return (
     <div
       ref={containerRef}
-      className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-4 pt-3 pointer-events-none bg-background"
+      className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-4 pt-6 pointer-events-none bg-gradient-to-t from-background from-45% to-transparent"
     >
-      <div
-        className={cn("flex items-end gap-2 pointer-events-auto", hideInput && "justify-center")}
-      >
+      <div className="flex items-end pointer-events-auto w-full max-w-[600px] mx-auto">
         {canRecord && (
           <div
             className={cn(
-              "shrink-0 transition-all duration-300 ease-out overflow-hidden",
-              !hideInput && isExpanded && !isRecording ? "w-0 opacity-0" : "w-auto opacity-100"
+              "shrink-0 overflow-hidden",
+              "transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+              isRecording ? "w-auto" : micHidden ? "w-0" : "w-11",
+              !hideInput && !micHidden ? "mr-2" : "mr-0"
             )}
           >
             {isRecording ? (
@@ -192,10 +200,13 @@ export default function NoteBottomBar({
                 onClick={onStopRecording}
                 aria-label={t("notes.editor.stop")}
                 title={t("notes.editor.stop")}
+                style={{ animation: "scale-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) backwards" }}
                 className={cn(
-                  "group flex items-center gap-2.5 h-10 pl-1 pr-3.5 rounded-full",
-                  "bg-card dark:bg-surface-2",
+                  "group flex items-center gap-2.5 h-11 pl-0.5 pr-3.5 rounded-full",
+                  "bg-white/55 dark:bg-white/6",
+                  "backdrop-blur-xl backdrop-saturate-150 transform-gpu",
                   "border border-primary/15 dark:border-primary/25",
+                  "shadow-(--shadow-glass)",
                   "transition-all duration-200",
                   "hover:border-primary/30 dark:hover:border-primary/40",
                   "active:scale-[0.99]"
@@ -218,7 +229,7 @@ export default function NoteBottomBar({
             ) : isProcessing ? (
               <div
                 className={cn(
-                  "flex items-center justify-center w-10 h-10 rounded-full",
+                  "flex items-center justify-center w-11 h-11 rounded-full",
                   GRADIENT_CIRCLE
                 )}
               >
@@ -228,73 +239,82 @@ export default function NoteBottomBar({
               <button
                 onClick={onStartRecording}
                 disabled={recordingDisabled}
+                tabIndex={micHidden ? -1 : undefined}
                 className={cn(
-                  "flex items-center justify-center w-10 h-10 rounded-full",
+                  "flex items-center justify-center w-11 h-11 rounded-full",
                   GRADIENT_CIRCLE,
-                  "transition-all duration-200",
+                  "transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   "hover:brightness-110",
                   "active:scale-95",
                   "disabled:pointer-events-none disabled:opacity-40 disabled:saturate-0",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                  micHidden
+                    ? "translate-x-10 opacity-0 pointer-events-none"
+                    : "translate-x-0 opacity-100"
                 )}
                 aria-label={t("notes.editor.transcribe")}
                 title={recordingDisabled ? t("common.managedByOrg") : undefined}
               >
-                <Mic size={18} />
+                <Mic size={20} />
               </button>
             )}
           </div>
         )}
 
-        {!hideInput && (
-          <div
+        <div
+          aria-hidden={hideInput}
+          className={cn(
+            "flex-1 min-w-0 flex items-center h-11 gap-2",
+            "rounded-full",
+            "bg-white/55 dark:bg-white/6",
+            "backdrop-blur-xl backdrop-saturate-150",
+            "border shadow-(--shadow-glass) transform-gpu",
+            "transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+            hideInput
+              ? "max-w-0 opacity-0 pl-0 pr-0 border-transparent shadow-none pointer-events-none"
+              : "max-w-[600px] opacity-100 pl-4 pr-1.5",
+            isExpanded
+              ? "border-black/15 dark:border-white/22 ring-[3px] ring-primary/8"
+              : !hideInput && "border-black/10 dark:border-white/14"
+          )}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={handleInputFocus}
+            disabled={askDisabled}
+            tabIndex={hideInput ? -1 : undefined}
+            placeholder={t("embeddedChat.askPlaceholder")}
             className={cn(
-              "flex-1 min-w-0 flex items-center h-10 px-3 gap-2",
-              "rounded-xl",
-              "bg-foreground/3 dark:bg-white/4",
-              "border",
-              "transition-all duration-200",
-              isExpanded
-                ? "border-foreground/12 dark:border-white/10 shadow-[0_0_0_3px_rgba(0,0,0,0.02)] dark:shadow-[0_0_0_3px_rgba(255,255,255,0.02)]"
-                : "border-border/20 dark:border-white/6"
+              "input-inline flex-1 bg-transparent outline-none min-w-0 p-0 caret-primary",
+              "text-[13px] text-foreground",
+              "placeholder:text-foreground/25 dark:placeholder:text-foreground/15"
             )}
-          >
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={handleInputFocus}
-              disabled={askDisabled}
-              placeholder={t("embeddedChat.askPlaceholder")}
-              className={cn(
-                "input-inline flex-1 bg-transparent outline-none min-w-0 p-0",
-                "text-[13px] text-foreground",
-                "placeholder:text-foreground/25 dark:placeholder:text-foreground/15"
-              )}
-            />
+          />
 
-            {hasText ? (
-              <button
-                onClick={handleSubmit}
-                disabled={askDisabled}
-                className={cn(
-                  "flex items-center justify-center w-6 h-6 rounded-full shrink-0",
-                  "transition-all duration-150",
-                  "hover:brightness-110",
-                  "active:scale-90",
-                  "disabled:opacity-30"
-                )}
-                aria-label={t("embeddedChat.send")}
-              >
-                <SendIcon size={24} className="block" />
-              </button>
-            ) : !isExpanded ? (
-              <div className="shrink-0">{actionPicker}</div>
-            ) : null}
-          </div>
-        )}
+          {hasText ? (
+            <button
+              onClick={handleSubmit}
+              disabled={askDisabled}
+              style={{ animation: "scale-in 0.15s ease-out backwards" }}
+              className={cn(
+                "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                "transition-all duration-150",
+                "hover:brightness-110",
+                "active:scale-90",
+                "disabled:opacity-30"
+              )}
+              aria-label={t("embeddedChat.send")}
+            >
+              <SendIcon size={28} className="block" />
+            </button>
+          ) : !isExpanded ? (
+            <div className="shrink-0">{actionPicker}</div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
