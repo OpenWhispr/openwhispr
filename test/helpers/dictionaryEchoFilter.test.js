@@ -124,3 +124,62 @@ test("returns false when text or prompt normalizes to empty string (punctuation 
   assert.equal(matchesDictionaryPrompt("???", "OpenWhispr, Parakeet"), false);
   assert.equal(matchesDictionaryPrompt("OpenWhispr, Parakeet", "!!!"), false);
 });
+
+// #1636: the request path caps the sent prompt at ~900 chars (890 for Groq),
+// but the echo check compared against the full dictionary join. An exact echo
+// of the sent prefix has dictionaryUsage ≈ sentChars / joinChars against the
+// full join, so a large dictionary made the echo mathematically undetectable.
+
+function buildLargeDictionary(termCount = 390) {
+  const terms = [];
+  for (let i = 0; i < termCount; i++) terms.push(`term${i}alpha`);
+  return terms.join(", ");
+}
+
+test("truncateDictionaryPrompt trims to the last comma within the cap", async () => {
+  const { truncateDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(truncateDictionaryPrompt("Alpha, Bravo, Charlie", 999), "Alpha, Bravo, Charlie");
+  assert.equal(truncateDictionaryPrompt("Alpha, Bravo, Charlie", 14), "Alpha, Bravo");
+  assert.equal(truncateDictionaryPrompt("NoCommaHere", 5), "NoCom");
+  assert.equal(truncateDictionaryPrompt(null, 900), null);
+});
+
+test("detects an exact echo of the sent (900-char capped) prompt against a large dictionary", async () => {
+  const { matchesSentDictionaryPrompt, matchesDictionaryPrompt, truncateDictionaryPrompt } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+  const fullPrompt = buildLargeDictionary();
+  assert.ok(fullPrompt.length > 3000);
+  const sentPrompt = truncateDictionaryPrompt(fullPrompt, 900);
+
+  // the old full-list-only comparison misses the echo of what was actually sent
+  assert.equal(matchesDictionaryPrompt(sentPrompt, fullPrompt), false);
+  // the sent-prefix-aware check catches it
+  assert.equal(matchesSentDictionaryPrompt(sentPrompt, fullPrompt), true);
+});
+
+test("detects an echo of the Groq-capped (890-char) prompt", async () => {
+  const { matchesSentDictionaryPrompt, truncateDictionaryPrompt } = await import(
+    "../../src/utils/dictionaryEchoFilter.js"
+  );
+  const fullPrompt = buildLargeDictionary();
+  const sentPrompt = truncateDictionaryPrompt(fullPrompt, 890);
+  assert.equal(matchesSentDictionaryPrompt(sentPrompt, fullPrompt), true);
+});
+
+test("sent-prefix check still detects a verbatim full echo and stays quiet on real speech", async () => {
+  const { matchesSentDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const smallDict = "OpenWhispr, Parakeet, Alcahest";
+  assert.equal(matchesSentDictionaryPrompt("OpenWhispr, Parakeet, Alcahest", smallDict), true);
+
+  const fullPrompt = buildLargeDictionary();
+  // dictation that merely uses a few dictionary terms is not an echo
+  assert.equal(
+    matchesSentDictionaryPrompt(
+      "remember to file the term1alpha report before the term2alpha meeting tomorrow",
+      fullPrompt
+    ),
+    false
+  );
+  assert.equal(matchesSentDictionaryPrompt("The quick brown fox jumps over it", fullPrompt), false);
+  assert.equal(matchesSentDictionaryPrompt("anything", null), false);
+});
