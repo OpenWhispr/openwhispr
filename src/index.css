@@ -322,7 +322,7 @@
 }
 
 .brand-script {
-  font-family: var(--font-family-sans);
+  font-family: "Snell Roundhand", "Segoe Script", cursive;
   font-style: italic;
 }
 

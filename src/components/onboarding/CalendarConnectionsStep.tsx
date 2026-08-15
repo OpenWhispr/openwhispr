@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { CheckCircle2, FileSearch, Loader2, MessageCircle, UsersRound } from "lucide-react";
 import { Button } from "../ui/button";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -8,6 +8,8 @@ import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import googleCalendarIcon from "../../assets/icons/google-calendar.svg";
 import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.svg";
 import appleCalendarIcon from "../../assets/icons/apple-calendar.svg";
+import notesBackdrop from "../../assets/onboarding-notes-motion.webp";
+import { BrandMark } from "./OnboardingShell";
 
 type ProviderId = "google" | "microsoft" | "apple";
 
@@ -89,15 +91,15 @@ export default function CalendarConnectionsStep() {
     {
       id: "google" as const,
       icon: googleCalendarIcon,
-      title: t("integrations.googleCalendar.title"),
-      description: t("integrations.googleCalendar.description"),
+      title: t("onboarding.rehaul.notes.connectors.googleTitle"),
+      description: t("onboarding.rehaul.notes.connectors.googleDescription"),
       connected: store.gcalAccounts.length > 0,
     },
     {
       id: "microsoft" as const,
       icon: microsoftCalendarIcon,
-      title: t("integrations.microsoftCalendar.title"),
-      description: t("integrations.microsoftCalendar.description"),
+      title: t("onboarding.rehaul.notes.connectors.microsoftTitle"),
+      description: t("onboarding.rehaul.notes.connectors.microsoftDescription"),
       connected: store.mcalAccounts.length > 0,
     },
     ...(isMac
@@ -105,8 +107,8 @@ export default function CalendarConnectionsStep() {
           {
             id: "apple" as const,
             icon: appleCalendarIcon,
-            title: t("integrations.appleCalendar.title"),
-            description: t("integrations.appleCalendar.description"),
+            title: t("onboarding.rehaul.notes.connectors.appleTitle"),
+            description: t("onboarding.rehaul.notes.connectors.appleDescription"),
             connected: store.appleCalendarConnected,
           },
         ]
@@ -114,36 +116,64 @@ export default function CalendarConnectionsStep() {
   ];
 
   return (
-    <div className="mx-auto mt-6 w-full max-w-3xl space-y-6">
-      <div className="onboarding-code-hero relative overflow-hidden rounded-3xl border border-border p-7 md:p-9">
-        <div className="max-w-md rounded-2xl border border-border/60 bg-card/85 p-5 shadow-lg backdrop-blur">
-          <p className="text-xs font-medium uppercase tracking-wider text-success">
-            {t("onboarding.meeting.title")}
-          </p>
-          <p className="mt-2 text-lg font-medium text-foreground">
-            {t("onboarding.meeting.autoDetect")}
-          </p>
+    <div className="mx-auto mt-8 w-full max-w-[25rem] space-y-3">
+      <section className="grid h-48 grid-cols-[2fr_3fr] overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <div
+          className="relative bg-cover bg-center"
+          style={{ backgroundImage: `url(${notesBackdrop})` }}
+        >
+          <div className="absolute left-5 top-19 flex w-36 items-center gap-2 rounded-lg bg-neutral-950/80 p-2 text-white shadow-lg backdrop-blur-sm">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-blue-500">
+              <BrandMark className="size-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[11px] font-medium">
+                {t("onboarding.rehaul.notes.hero.detected")}
+              </span>
+              <span className="block truncate text-[9px] text-neutral-300">
+                {t("onboarding.rehaul.notes.hero.transcribe")}
+              </span>
+            </span>
+          </div>
         </div>
-      </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="p-3.5 text-left">
+          <p className="text-[13px] font-medium leading-[1.35] text-neutral-950">
+            {t("onboarding.rehaul.notes.hero.description")}
+          </p>
+          <ul className="mt-4 space-y-3 text-[11px] text-neutral-950">
+            {[
+              [MessageCircle, t("onboarding.rehaul.notes.hero.chat")],
+              [FileSearch, t("onboarding.rehaul.notes.hero.transcript")],
+              [UsersRound, t("onboarding.rehaul.notes.hero.speakers")],
+            ].map(([Icon, label]) => (
+              <li key={String(label)} className="flex items-center gap-2">
+                <span className="flex size-4 items-center justify-center rounded-full bg-blue-50 text-blue-500">
+                  <Icon className="size-2.5" />
+                </span>
+                {String(label)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 px-3">
         {providers.map((provider, index) => (
           <div
             key={provider.id}
-            className={`flex items-center gap-4 px-5 py-4 ${index > 0 ? "border-t border-border" : ""}`}
+            className={`flex h-16 items-center gap-3 ${index > 0 ? "border-t border-neutral-200" : ""}`}
           >
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background">
-              <img src={provider.icon} alt="" className="size-6" />
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white">
+              <img src={provider.icon} alt="" className="size-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">{provider.title}</p>
-              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                {provider.description}
-              </p>
+              <p className="text-sm font-medium text-neutral-950">{provider.title}</p>
+              <p className="mt-0.5 truncate text-xs text-neutral-500">{provider.description}</p>
             </div>
             {provider.connected ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-                <Check className="size-3.5" />
+              <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-blue-500 px-3 text-xs font-medium text-white">
+                <CheckCircle2 className="size-3.5" />
                 {t(
                   `integrations.${provider.id === "microsoft" ? "microsoftCalendar" : `${provider.id}Calendar`}.connected`
                 )}
@@ -151,16 +181,14 @@ export default function CalendarConnectionsStep() {
             ) : (
               <Button
                 type="button"
-                variant="outline"
+                variant="default"
                 size="sm"
                 disabled={connecting !== null}
                 onClick={() => void connect(provider.id)}
-                className="rounded-full"
+                className="h-7 rounded-full bg-neutral-950 px-3 text-xs text-white hover:bg-neutral-800"
               >
                 {connecting === provider.id && <Loader2 className="size-3.5 animate-spin" />}
-                {t(
-                  `integrations.${provider.id === "microsoft" ? "microsoftCalendar" : `${provider.id}Calendar`}.connect`
-                )}
+                {t("onboarding.rehaul.notes.connectors.connect")}
               </Button>
             )}
           </div>
@@ -168,7 +196,7 @@ export default function CalendarConnectionsStep() {
       </div>
 
       {error && (
-        <p role="alert" className="text-center text-sm text-destructive">
+        <p role="alert" className="text-center text-xs text-red-500">
           {error}
         </p>
       )}

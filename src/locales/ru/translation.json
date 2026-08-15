@@ -251,7 +251,27 @@
       },
       "notes": {
         "title": "Record meetings without a bot with OpenWhispr Notes",
-        "description": "Connect a calendar so OpenWhispr can recognize your meetings and turn conversations into clear notes."
+        "titleLineOne": "Record meetings without a bot",
+        "titleLineTwoPrefix": "with OpenWhispr",
+        "titleLineTwoBrand": "Notes",
+        "description": "OpenWhispr turns your conversation into clear notes. No meeting bot joins your call.",
+        "hero": {
+          "detected": "Meeting Detected",
+          "transcribe": "Want to transcribe the meeting?",
+          "description": "Record your meeting and let OpenWhispr turn the conversation into clear, organized notes.",
+          "chat": "Chat with your meeting notes",
+          "transcript": "Review the full transcript",
+          "speakers": "See who said what"
+        },
+        "connectors": {
+          "connect": "Connect",
+          "googleTitle": "Google Calendar",
+          "googleDescription": "Sync your meetings.",
+          "microsoftTitle": "Microsoft Outlook",
+          "microsoftDescription": "Bring in work meetings and invites.",
+          "appleTitle": "Apple Calendar",
+          "appleDescription": "Sync events from your Mac and iPhone."
+        }
       },
       "setupChoice": {
         "title": "Choose your OpenWhispr setup",
