@@ -2948,14 +2948,15 @@
         "identifying": "Identifying speakers",
         "notLabeled": "Speakers not labeled",
         "finalizing": "Finalizing speakers…",
-        "justYou": "just you",
-        "defaultingHint": "defaulting to 1 other — change if more",
+        "justYou": "Just you",
+        "assumedHint": "assuming 2 — adjust if more",
+        "speakersLabel": "Speakers",
+        "labelToggle": "Label speakers",
         "toggleAria": "Toggle speaker identification for this recording",
         "incAria": "Increase expected speaker count",
-        "decAria": "Decrease expected speaker count",
-        "othersInCall_one": "{{count}} other in call",
-        "othersInCall_other": "{{count}} others in call"
-      }
+        "decAria": "Decrease expected speaker count"
+      },
+      "consentNotice": "Always get consent when recording others"
     },
     "overview": {
       "subtitle": {

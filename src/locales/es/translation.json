@@ -2789,14 +2789,15 @@
         "identifying": "Identificando participantes",
         "notLabeled": "Participantes sin etiquetar",
         "finalizing": "Finalizando participantes…",
-        "justYou": "solo tú",
-        "defaultingHint": "por defecto 1 otra persona",
+        "justYou": "Solo tú",
+        "assumedHint": "se asumen 2 — ajústalo si hay más",
+        "speakersLabel": "Participantes",
+        "labelToggle": "Etiquetar participantes",
         "toggleAria": "Alternar identificación de participantes para esta grabación",
         "incAria": "Aumentar número de participantes esperados",
-        "decAria": "Disminuir número de participantes esperados",
-        "othersInCall_one": "{{count}} otra persona en la llamada",
-        "othersInCall_other": "{{count}} otras personas en la llamada"
-      }
+        "decAria": "Disminuir número de participantes esperados"
+      },
+      "consentNotice": "Pide siempre consentimiento al grabar a otras personas"
     },
     "overview": {
       "subtitle": {

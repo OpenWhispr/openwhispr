@@ -2741,14 +2741,15 @@
         "identifying": "Identificazione dei partecipanti",
         "notLabeled": "Partecipanti non etichettati",
         "finalizing": "Finalizzazione dei partecipanti…",
-        "justYou": "solo tu",
-        "defaultingHint": "predefinito 1 altra persona",
+        "justYou": "Solo tu",
+        "assumedHint": "si presumono 2 — modifica se sono di più",
+        "speakersLabel": "Partecipanti",
+        "labelToggle": "Etichetta i partecipanti",
         "toggleAria": "Attiva/disattiva l'identificazione dei partecipanti per questa registrazione",
         "incAria": "Aumenta il numero di partecipanti previsti",
-        "decAria": "Diminuisci il numero di partecipanti previsti",
-        "othersInCall_one": "{{count}} altra persona in chiamata",
-        "othersInCall_other": "{{count}} altre persone in chiamata"
-      }
+        "decAria": "Diminuisci il numero di partecipanti previsti"
+      },
+      "consentNotice": "Ottieni sempre il consenso quando registri altre persone"
     },
     "overview": {
       "subtitle": {

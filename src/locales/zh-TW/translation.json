@@ -2742,13 +2742,14 @@
         "notLabeled": "發言者未標記",
         "finalizing": "正在完成發言者辨識…",
         "justYou": "只有你",
-        "defaultingHint": "預設 1 位其他人",
+        "assumedHint": "預設 2 人——如有更多請調整",
+        "speakersLabel": "發言人數",
+        "labelToggle": "標記發言者",
         "toggleAria": "切換此錄音的發言者辨識",
         "incAria": "增加預期發言人數",
-        "decAria": "減少預期發言人數",
-        "othersInCall_one": "通話中還有 {{count}} 人",
-        "othersInCall_other": "通話中還有 {{count}} 人"
-      }
+        "decAria": "減少預期發言人數"
+      },
+      "consentNotice": "錄製他人時請務必徵得同意"
     },
     "overview": {
       "subtitle": {

@@ -2742,13 +2742,14 @@
         "notLabeled": "发言者未标记",
         "finalizing": "正在完成发言者识别…",
         "justYou": "只有你",
-        "defaultingHint": "默认 1 位其他人",
+        "assumedHint": "默认 2 人——如有更多请调整",
+        "speakersLabel": "发言人数",
+        "labelToggle": "标记发言者",
         "toggleAria": "切换本次录音的发言者识别",
         "incAria": "增加预计发言人数",
-        "decAria": "减少预计发言人数",
-        "othersInCall_one": "通话中还有 {{count}} 人",
-        "othersInCall_other": "通话中还有 {{count}} 人"
-      }
+        "decAria": "减少预计发言人数"
+      },
+      "consentNotice": "录制他人时请务必征得同意"
     },
     "overview": {
       "subtitle": {

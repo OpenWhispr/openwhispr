@@ -2741,14 +2741,15 @@
         "identifying": "Identificando participantes",
         "notLabeled": "Participantes sem rótulo",
         "finalizing": "Finalizando participantes…",
-        "justYou": "só você",
-        "defaultingHint": "assumindo 1 outra pessoa",
+        "justYou": "Só você",
+        "assumedHint": "assumindo 2 — ajuste se houver mais",
+        "speakersLabel": "Participantes",
+        "labelToggle": "Rotular participantes",
         "toggleAria": "Alternar identificação de participantes para esta gravação",
         "incAria": "Aumentar número esperado de participantes",
-        "decAria": "Diminuir número esperado de participantes",
-        "othersInCall_one": "{{count}} outra pessoa na chamada",
-        "othersInCall_other": "{{count}} outras pessoas na chamada"
-      }
+        "decAria": "Diminuir número esperado de participantes"
+      },
+      "consentNotice": "Sempre obtenha consentimento ao gravar outras pessoas"
     },
     "overview": {
       "subtitle": {

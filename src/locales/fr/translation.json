@@ -2948,14 +2948,15 @@
         "identifying": "Identification des intervenants",
         "notLabeled": "Intervenants non étiquetés",
         "finalizing": "Finalisation des intervenants…",
-        "justYou": "juste vous",
-        "defaultingHint": "par défaut 1 autre",
+        "justYou": "Juste vous",
+        "assumedHint": "2 par défaut — ajustez si plus",
+        "speakersLabel": "Intervenants",
+        "labelToggle": "Étiqueter les intervenants",
         "toggleAria": "Activer l'identification des intervenants pour cet enregistrement",
         "incAria": "Augmenter le nombre d'intervenants attendus",
-        "decAria": "Diminuer le nombre d'intervenants attendus",
-        "othersInCall_one": "{{count}} autre dans l'appel",
-        "othersInCall_other": "{{count}} autres dans l'appel"
-      }
+        "decAria": "Diminuer le nombre d'intervenants attendus"
+      },
+      "consentNotice": "Obtenez toujours le consentement avant d'enregistrer d'autres personnes"
     },
     "overview": {
       "subtitle": {
