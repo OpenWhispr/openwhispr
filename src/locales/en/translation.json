@@ -203,7 +203,20 @@
       },
       "assistantHotkey": {
         "title": "Set up OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you."
+        "titleLineOne": "Set up",
+        "titleLineTwo": "OpenWhispr Assistant",
+        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "preview": {
+          "newMessage": "New Message",
+          "toLabel": "To:",
+          "recipient": "alex@northstarstudio.co",
+          "subjectLabel": "Subject:",
+          "subject": "Project completed",
+          "greeting": "Hi Alex,",
+          "bodyLineOne": "The new project is complete and ready for review.",
+          "bodyLineTwo": "I’ve wrapped up the final updates and everything is good to go from my side.",
+          "prompt": "Draft an email notifying the client that I have completed the new project"
+        }
       },
       "hotkey": {
         "capture": "Press the keys you want to use",

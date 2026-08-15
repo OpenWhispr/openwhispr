@@ -36,6 +36,8 @@ interface ShortcutSetupStepProps {
   chooseAnotherLabel: string;
   validate?: (value: string) => string | null;
   onConfirm?: (value: string) => Promise<string | null>;
+  dense?: boolean;
+  showCandidateActions?: boolean;
 }
 
 export default function ShortcutSetupStep({
@@ -48,6 +50,8 @@ export default function ShortcutSetupStep({
   chooseAnotherLabel,
   validate,
   onConfirm,
+  dense = false,
+  showCandidateActions = true,
 }: ShortcutSetupStepProps) {
   const [candidate, setCandidate] = useState(value);
   const [confirmed, setConfirmed] = useState(false);
@@ -80,7 +84,7 @@ export default function ShortcutSetupStep({
   };
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-[22.25rem] text-center">
+    <div className={`mx-auto w-full max-w-[22.25rem] text-center ${dense ? "mt-4" : "mt-8"}`}>
       <div
         className={`relative flex h-32 items-center justify-center rounded-2xl bg-white px-6 ${
           candidate ? "border border-transparent" : "border border-dashed border-neutral-300"
@@ -115,7 +119,7 @@ export default function ShortcutSetupStep({
         )}
       </div>
 
-      {candidate && !error && (
+      {candidate && !error && showCandidateActions && (
         <div className="mt-8 space-y-2 text-center" aria-live="polite">
           <p className="mx-auto w-fit rounded-full bg-neutral-200 px-5 py-2 text-sm text-neutral-600">
             {confirmed

@@ -27,7 +27,7 @@ const LABELS: Record<string, string> = {
   Alt: "alt",
   Cmd: "command",
   Command: "command",
-  Shift: "shift",
+  Shift: "Shift",
   Win: "windows",
   Super: "super",
   "Globe/Fn": "fn",
