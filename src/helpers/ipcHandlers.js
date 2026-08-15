@@ -2502,6 +2502,32 @@ class IPCHandlers {
       return this.clipboardManager.checkPasteTools();
     });
 
+    // Voice drafts (chat input): persist a recorded buffer so the file-based
+    // transcription pipeline (all providers) can consume it, then delete it.
+    ipcMain.handle("save-temp-audio", async (event, buffer) => {
+      const tempPath = path.join(
+        os.tmpdir(),
+        `ow-voice-draft-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.webm`
+      );
+      fs.writeFileSync(tempPath, Buffer.from(buffer));
+      return { success: true, path: tempPath };
+    });
+
+    ipcMain.handle("delete-temp-audio", async (event, tempPath) => {
+      // Only files this handler family created are deletable.
+      const resolved = path.resolve(tempPath);
+      const validPrefix = path.join(os.tmpdir(), "ow-voice-draft-");
+      if (!resolved.startsWith(validPrefix)) {
+        return { success: false, error: "Invalid temp path" };
+      }
+      try {
+        fs.unlinkSync(resolved);
+      } catch {
+        // Already gone — fine.
+      }
+      return { success: true };
+    });
+
     ipcMain.handle("transcribe-local-whisper", async (event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-whisper called", {
         audioBlobType: typeof audioBlob,

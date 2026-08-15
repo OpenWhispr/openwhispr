@@ -135,6 +135,7 @@ export default function EmbeddedChat({
         partialTranscript=""
         onTextSubmit={onTextSubmit}
         onCancel={onCancel}
+        voiceDraft
       />
     </>
   );

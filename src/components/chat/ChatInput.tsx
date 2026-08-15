@@ -1,8 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Square } from "lucide-react";
+import { Mic, Square, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { SendIcon } from "../ui/SendIcon";
+import { LiveWaveform } from "../ui/LiveWaveform";
+import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
+import { useToast } from "../ui/useToast";
+import { formatMmSs } from "../../utils/formatDuration";
+import { useVoiceDraft } from "./useVoiceDraft";
 import type { AgentState } from "./types";
 
 interface ChatInputProps {
@@ -12,6 +17,8 @@ interface ChatInputProps {
   onCancel?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
+  /** Offer a mic when the input is empty; recordings transcribe into the input. */
+  voiceDraft?: boolean;
 }
 
 function RecordingIndicator() {
@@ -49,10 +56,28 @@ export function ChatInput({
   onCancel,
   autoFocus = false,
   placeholder,
+  voiceDraft = false,
 }: ChatInputProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [inputText, setInputText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const voice = useVoiceDraft({
+    onTranscript: (text) => {
+      setInputText((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+      requestAnimationFrame(() => inputRef.current?.focus());
+    },
+    onError: (message) => {
+      toast({
+        title: t("notes.upload.transcriptionFailed"),
+        description: message || undefined,
+        variant: "destructive",
+      });
+    },
+  });
+  const isVoiceRecording = voice.status === "recording";
+  const isVoiceTranscribing = voice.status === "transcribing";
 
   const handleSubmit = useCallback(() => {
     const text = inputText.trim();
@@ -116,7 +141,56 @@ export function ChatInput({
           </>
         )}
 
-        {(isIdle || isBusy) && (
+        {isVoiceRecording && (
+          <div
+            className="flex items-center gap-2.5 w-full py-1.5"
+            style={{ animation: "fade-in-content 0.3s ease-out backwards" }}
+          >
+            <LiveWaveform readLevel={voice.readLevel} className="flex-1 overflow-hidden" />
+            <span className="text-[13px] font-semibold tabular-nums tracking-[0.08em] text-foreground/85 shrink-0">
+              {formatMmSs(voice.elapsed)}
+            </span>
+            <button
+              onClick={voice.cancel}
+              aria-label={t("common.cancel")}
+              title={t("common.cancel")}
+              className={cn(
+                "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",
+                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                "transition-colors duration-100"
+              )}
+            >
+              <X size={14} />
+            </button>
+            <button
+              onClick={voice.stop}
+              aria-label={t("notes.editor.stop")}
+              title={t("notes.editor.stop")}
+              style={{ animation: "scale-in 0.15s ease-out backwards" }}
+              className={cn(
+                "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                GRADIENT_CIRCLE,
+                "hover:brightness-110 active:scale-95",
+                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                "transition-all duration-100"
+              )}
+            >
+              <Square size={10} fill="currentColor" />
+            </button>
+          </div>
+        )}
+
+        {isVoiceTranscribing && (
+          <>
+            <ProcessingIndicator />
+            <span className="text-[12px] text-muted-foreground select-none">
+              {t("agentMode.input.transcribing")}
+            </span>
+          </>
+        )}
+
+        {(isIdle || isBusy) && !isVoiceRecording && !isVoiceTranscribing && (
           <div className="flex items-center gap-2 w-full">
             <input
               ref={inputRef}
@@ -146,11 +220,14 @@ export function ChatInput({
               >
                 <Square size={12} className="fill-current" />
               </button>
-            ) : isIdle ? (
+            ) : isIdle && (inputText.trim() || !voiceDraft) ? (
               <button
                 onClick={handleSubmit}
                 disabled={!inputText.trim()}
                 aria-label={t("agentMode.input.send")}
+                style={
+                  voiceDraft ? { animation: "scale-in 0.15s ease-out backwards" } : undefined
+                }
                 className={cn(
                   "rounded-full shrink-0",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
@@ -161,6 +238,21 @@ export function ChatInput({
                 )}
               >
                 <SendIcon size={28} className="block" />
+              </button>
+            ) : isIdle ? (
+              <button
+                onClick={voice.start}
+                aria-label={t("notes.editor.transcribe")}
+                title={t("notes.editor.transcribe")}
+                className={cn(
+                  "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                  GRADIENT_CIRCLE,
+                  "hover:brightness-110 active:scale-95",
+                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                  "transition-all duration-100"
+                )}
+              >
+                <Mic size={14} />
               </button>
             ) : null}
           </div>

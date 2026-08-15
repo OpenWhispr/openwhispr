@@ -2567,8 +2567,8 @@
       "actions": "Actions"
     },
     "spaces": {
-      "privateSpaces": "Private spaces",
-      "teamSpaces": "Team spaces",
+      "privateSpaces": "Private notes",
+      "teamSpaces": "Teamspaces",
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
       "newSpace": "New team space",

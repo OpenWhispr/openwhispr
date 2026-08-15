@@ -3,84 +3,19 @@ import { useTranslation } from "react-i18next";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { SendIcon } from "../ui/SendIcon";
+import { LiveWaveform } from "../ui/LiveWaveform";
+import { analyserRms } from "../../utils/audioLevel";
+import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
 import { formatMmSs } from "../../utils/formatDuration";
 import { getMicAnalyser, useMeetingRecordingStore } from "../../stores/meetingRecordingStore";
 
-// Brand gradient from the Figma mic/send assets (#5B81E4 → #154BD4 → #163992, top-right to bottom-left)
-const GRADIENT_CIRCLE =
-  "bg-[linear-gradient(221deg,#5B81E4_0%,#154BD4_55%,#163992_100%)] text-white";
+// Module-level buffer: there is a single meeting mic analyser at a time.
+const micLevelBuf: { current: Float32Array<ArrayBuffer> | null } = { current: null };
 
-const WAVE_BAR_COUNT = 40;
-const WAVE_SAMPLE_MS = 150;
-const WAVE_MAX_PX = 20;
-const WAVE_MIN_PX = 2;
-// Bars scale against a decaying session peak, so any mic gain fills the range.
-const WAVE_PEAK_FLOOR = 0.01;
-const WAVE_PEAK_DECAY = 0.99;
-const WAVE_QUIET_NORM = 0.14;
-
-function waveBarStyle(norm: number, index: number): React.CSSProperties {
-  if (norm < WAVE_QUIET_NORM) {
-    return { height: WAVE_MIN_PX, backgroundColor: "rgba(143,170,255,0.35)" };
-  }
-  // Periwinkle (#8FAAFF) → orange (#FFA23E) across the strip, louder = more opaque
-  const t = index / (WAVE_BAR_COUNT - 1);
-  const r = Math.round(143 + 112 * t);
-  const g = Math.round(170 - 8 * t);
-  const b = Math.round(255 - 193 * t);
-  const alpha = 0.55 + 0.45 * Math.min(1, norm);
-  return {
-    height: Math.max(WAVE_MIN_PX, Math.round(Math.sqrt(norm) * WAVE_MAX_PX)),
-    backgroundColor: `rgba(${r},${g},${b},${alpha})`,
-  };
-}
-
-function readMicLevel(buf: React.MutableRefObject<Float32Array<ArrayBuffer> | null>): number {
+function readMeetingMicLevel(): number {
   const analyser = getMicAnalyser();
   if (!analyser) return useMeetingRecordingStore.getState().currentMicLevel;
-  if (!buf.current || buf.current.length !== analyser.fftSize) {
-    buf.current = new Float32Array(analyser.fftSize);
-  }
-  analyser.getFloatTimeDomainData(buf.current);
-  let sumSquares = 0;
-  for (let i = 0; i < buf.current.length; i++) {
-    const v = buf.current[i];
-    sumSquares += v * v;
-  }
-  return Math.sqrt(sumSquares / buf.current.length);
-}
-
-function RecordingWaveform() {
-  const [samples, setSamples] = useState<number[]>([]);
-  const bufRef = useRef<Float32Array<ArrayBuffer> | null>(null);
-  const peakRef = useRef(WAVE_PEAK_FLOOR);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      const level = readMicLevel(bufRef);
-      peakRef.current = Math.max(level, peakRef.current * WAVE_PEAK_DECAY, WAVE_PEAK_FLOOR);
-      const norm = Math.min(1, level / peakRef.current);
-      setSamples((prev) => [...prev.slice(-(WAVE_BAR_COUNT - 1)), norm]);
-    }, WAVE_SAMPLE_MS);
-    return () => clearInterval(id);
-  }, []);
-
-  const padded =
-    samples.length < WAVE_BAR_COUNT
-      ? [...Array<number>(WAVE_BAR_COUNT - samples.length).fill(0), ...samples]
-      : samples;
-
-  return (
-    <div className="flex items-center gap-0.5 h-5">
-      {padded.map((norm, i) => (
-        <div
-          key={i}
-          className="w-0.5 rounded-full shrink-0 transition-[height,background-color] duration-150 ease-out"
-          style={waveBarStyle(norm, i)}
-        />
-      ))}
-    </div>
-  );
+  return analyserRms(analyser, micLevelBuf);
 }
 
 interface NoteBottomBarProps {
@@ -191,7 +126,7 @@ export default function NoteBottomBar({
             className={cn(
               "shrink-0 overflow-hidden",
               "transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
-              isRecording ? "w-auto" : micHidden ? "w-0" : "w-11",
+              isRecording ? "w-[284px]" : micHidden ? "w-0" : "w-11",
               !hideInput && !micHidden ? "mr-2" : "mr-0"
             )}
           >
@@ -200,16 +135,14 @@ export default function NoteBottomBar({
                 onClick={onStopRecording}
                 aria-label={t("notes.editor.stop")}
                 title={t("notes.editor.stop")}
-                style={{ animation: "scale-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) backwards" }}
                 className={cn(
-                  "group flex items-center gap-2.5 h-11 pl-0.5 pr-3.5 rounded-full",
+                  "group flex items-center gap-2.5 w-full h-11 pl-0.5 pr-3.5 rounded-full",
                   "bg-white/55 dark:bg-white/6",
                   "backdrop-blur-xl backdrop-saturate-150 transform-gpu",
                   "border border-primary/15 dark:border-primary/25",
                   "shadow-(--shadow-glass)",
-                  "transition-all duration-200",
-                  "hover:border-primary/30 dark:hover:border-primary/40",
-                  "active:scale-[0.99]"
+                  "transition-[border-color] duration-200",
+                  "hover:border-primary/30 dark:hover:border-primary/40"
                 )}
               >
                 <span
@@ -221,24 +154,15 @@ export default function NoteBottomBar({
                 >
                   <Square size={11} fill="currentColor" />
                 </span>
-                <RecordingWaveform />
+                <LiveWaveform readLevel={readMeetingMicLevel} />
                 <span className="text-[13px] font-semibold tabular-nums tracking-[0.08em] text-foreground/85 shrink-0">
                   {elapsedLabel}
                 </span>
               </button>
-            ) : isProcessing ? (
-              <div
-                className={cn(
-                  "flex items-center justify-center w-11 h-11 rounded-full",
-                  GRADIENT_CIRCLE
-                )}
-              >
-                <Loader2 size={16} className="animate-spin text-white/90" />
-              </div>
             ) : (
               <button
                 onClick={onStartRecording}
-                disabled={recordingDisabled}
+                disabled={recordingDisabled || isProcessing}
                 tabIndex={micHidden ? -1 : undefined}
                 className={cn(
                   "flex items-center justify-center w-11 h-11 rounded-full",
@@ -246,8 +170,9 @@ export default function NoteBottomBar({
                   "transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   "hover:brightness-110",
                   "active:scale-95",
-                  "disabled:pointer-events-none disabled:opacity-40 disabled:saturate-0",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                  recordingDisabled && "opacity-40 saturate-0 pointer-events-none",
+                  isProcessing && "pointer-events-none",
                   micHidden
                     ? "translate-x-10 opacity-0 pointer-events-none"
                     : "translate-x-0 opacity-100"
@@ -255,7 +180,11 @@ export default function NoteBottomBar({
                 aria-label={t("notes.editor.transcribe")}
                 title={recordingDisabled ? t("common.managedByOrg") : undefined}
               >
-                <Mic size={20} />
+                {isProcessing ? (
+                  <Loader2 size={16} className="animate-spin text-white/90" />
+                ) : (
+                  <Mic size={20} />
+                )}
               </button>
             )}
           </div>

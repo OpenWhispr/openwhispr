@@ -2359,8 +2359,8 @@
       "actions": "操作"
     },
     "spaces": {
-      "privateSpaces": "私人空间",
-      "teamSpaces": "团队空间",
+      "privateSpaces": "私人笔记",
+      "teamSpaces": "Teamspaces",
       "personal": "个人",
       "privateTooltip": "只有你可以看到你的个人空间",
       "newSpace": "新建团队空间",

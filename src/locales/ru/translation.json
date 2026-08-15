@@ -2373,8 +2373,8 @@
       "actions": "Действия"
     },
     "spaces": {
-      "privateSpaces": "Личные пространства",
-      "teamSpaces": "Командные пространства",
+      "privateSpaces": "Личные заметки",
+      "teamSpaces": "Teamspaces",
       "personal": "Личное",
       "privateTooltip": "Только вы видите своё личное пространство",
       "newSpace": "Новое командное пространство",

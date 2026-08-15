@@ -2287,8 +2287,8 @@
       "actions": "アクション"
     },
     "spaces": {
-      "privateSpaces": "プライベートスペース",
-      "teamSpaces": "チームスペース",
+      "privateSpaces": "プライベートノート",
+      "teamSpaces": "Teamspaces",
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
       "newSpace": "新しいチームスペース",
