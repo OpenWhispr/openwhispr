@@ -25,6 +25,15 @@ function buildInstruction({ language, prompt }) {
   return lines.join("\n");
 }
 
+// Transcription needs no reasoning, and default thinking adds seconds of
+// latency per dictation. 3.x models take thinkingLevel; 2.5 models take
+// thinkingBudget. Unknown models get no config, and a 400 retries without it.
+function thinkingConfigFor(model) {
+  if (model.startsWith("gemini-3")) return { thinkingLevel: "minimal" };
+  if (model.startsWith("gemini-2.5")) return { thinkingBudget: 0 };
+  return null;
+}
+
 // Gemini's inlineData audio formats do not include webm/Opus (the dictation
 // recording format), so every input is converted to 16 kHz mono wav first —
 // ffmpeg accepts whatever the dictation or upload paths hand over.
@@ -55,23 +64,40 @@ async function transcribeAudio({ audioBuffer, model, language, prompt, apiKey })
     "transcription"
   );
 
-  const response = await net.fetch(
-    `${GEMINI_GENERATE_CONTENT_BASE}/models/${resolvedModel}:generateContent`,
-    {
+  const thinking = thinkingConfigFor(resolvedModel);
+  const buildBody = (withThinking) =>
+    JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: buildInstruction({ language, prompt }) },
+            { inlineData: { mimeType: "audio/wav", data: wavBase64 } },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0,
+        ...(withThinking && thinking ? { thinkingConfig: thinking } : {}),
+      },
+    });
+  const doFetch = (withThinking) =>
+    net.fetch(`${GEMINI_GENERATE_CONTENT_BASE}/models/${resolvedModel}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey.trim() },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: buildInstruction({ language, prompt }) },
-              { inlineData: { mimeType: "audio/wav", data: wavBase64 } },
-            ],
-          },
-        ],
-      }),
-    }
-  );
+      body: buildBody(withThinking),
+    });
+
+  let response = await doFetch(true);
+  if (response.status === 400 && thinking) {
+    // The thinking knob varies across model generations — retry without it
+    // rather than failing the dictation on an INVALID_ARGUMENT.
+    debugLogger.debug(
+      "Gemini rejected thinkingConfig, retrying without it",
+      { model: resolvedModel },
+      "transcription"
+    );
+    response = await doFetch(false);
+  }
 
   if (response.status === 401 || response.status === 403) {
     const error = new Error("Invalid Gemini API key. Check your key in Settings.");
