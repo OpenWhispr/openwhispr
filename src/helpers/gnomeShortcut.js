@@ -34,7 +34,7 @@ const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-k
 // Valid pattern for GNOME shortcut format using X11 keysym names (case-sensitive).
 // Modifiers are case-insensitive (GTK normalizes them), keysyms are exact.
 const VALID_SHORTCUT_PATTERN =
-  /^(<(Control|Alt|Shift|Super)>)*(F([1-9]|1[0-9]|2[0-4])|[a-z0-9]|space|Escape|Tab|BackSpace|grave|Pause|Scroll_Lock|Insert|Delete|Home|End|Page_Up|Page_Down|Up|Down|Left|Right|Return|Print)$/;
+  /^(<(Control|Alt|Shift|Super)>)*(F([1-9]|1[0-9]|2[0-4])|comma|period|slash|plus|minus|equal|semicolon|apostrophe|backslash|bracketleft|bracketright|[a-z0-9]|space|Escape|Tab|BackSpace|grave|Pause|Scroll_Lock|Insert|Delete|Home|End|Page_Up|Page_Down|Up|Down|Left|Right|Return|Print)$/;
 
 // Map Electron key names (lowercased) to X11 keysym names (case-sensitive).
 // Source: X11/keysymdef.h, lookup via XStringToKeysym(3).
@@ -63,6 +63,19 @@ const ELECTRON_TO_GNOME_KEY_MAP = {
   down: "Down",
   left: "Left",
   right: "Right",
+  // Punctuation must be X11 keysyms; a literal "," fails VALID_SHORTCUT_PATTERN.
+  ",": "comma",
+  ".": "period",
+  "/": "slash",
+  "-": "minus",
+  "=": "equal",
+  ";": "semicolon",
+  "'": "apostrophe",
+  "[": "bracketleft",
+  "]": "bracketright",
+  "\\": "backslash",
+  plus: "plus",
+  "+": "plus",
 };
 
 let dbus = null;
