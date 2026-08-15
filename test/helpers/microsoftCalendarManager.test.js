@@ -100,3 +100,104 @@ test("_mapEvent falls back to a meeting link found in location or body text", ()
   assert.equal(mapped.hangout_link, "https://example.zoom.us/j/123456789");
   assert.equal(mapped.attendees, null);
 });
+
+function createManager(MicrosoftCalendarManager, upserted, contacts = []) {
+  return new MicrosoftCalendarManager(
+    {
+      removeStaleCalendarEvents: () => {},
+      upsertCalendarEvents: (events) => upserted.push(...events),
+      removeCalendarEvents: () => {},
+      updateMicrosoftCalendarSyncToken: () => {},
+      upsertContacts: (rows) => contacts.push(...rows),
+    },
+    {}
+  );
+}
+
+const STRIPPED_OCCURRENCE = {
+  id: "occ-1",
+  type: "occurrence",
+  seriesMasterId: "master-1",
+  start: { dateTime: "2026-07-20T09:25:00.0000000" },
+  end: { dateTime: "2026-07-20T09:30:00.0000000" },
+};
+
+test("_syncCalendar backfills stripped recurring occurrences from their series master", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const upserted = [];
+  const contacts = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, contacts);
+
+  const masterFetches = [];
+  manager._apiGet = async (url) => {
+    if (url.includes("/calendarView/delta")) {
+      return {
+        "@odata.deltaLink": "delta-link",
+        value: [
+          STRIPPED_OCCURRENCE,
+          {
+            ...STRIPPED_OCCURRENCE,
+            id: "occ-2",
+            start: { dateTime: "2026-07-21T09:25:00.0000000" },
+            end: { dateTime: "2026-07-21T09:30:00.0000000" },
+          },
+          {
+            id: "evt-1",
+            subject: "One-off",
+            start: { dateTime: "2026-07-20T17:00:00.0000000" },
+            end: { dateTime: "2026-07-20T17:30:00.0000000" },
+          },
+        ],
+      };
+    }
+    masterFetches.push(url);
+    return {
+      id: "master-1",
+      subject: "Standup",
+      isAllDay: false,
+      onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/meetup-join/abc" },
+      organizer: { emailAddress: { address: "organizer@example.com" } },
+      attendees: [
+        {
+          emailAddress: { address: "me@example.com", name: "Me" },
+          status: { response: "accepted" },
+        },
+      ],
+    };
+  };
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+
+  assert.equal(masterFetches.length, 1);
+  assert.match(masterFetches[0], /^\/me\/events\/master-1\?\$select=/);
+
+  const occurrence = upserted.find((event) => event.id === "occ-1");
+  assert.equal(occurrence.summary, "Standup");
+  assert.equal(occurrence.start_time, "2026-07-20T09:25:00Z");
+  assert.equal(occurrence.hangout_link, "https://teams.microsoft.com/l/meetup-join/abc");
+  assert.equal(occurrence.organizer_email, "organizer@example.com");
+  assert.equal(occurrence.attendees_count, 1);
+  assert.equal(upserted.find((event) => event.id === "occ-2").summary, "Standup");
+  assert.equal(upserted.find((event) => event.id === "evt-1").summary, "One-off");
+  assert.ok(contacts.some((contact) => contact.email === "me@example.com"));
+});
+
+test("_syncCalendar keeps stripped occurrences when the series master fetch fails", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const upserted = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted);
+
+  manager._apiGet = async (url) => {
+    if (url.includes("/calendarView/delta")) {
+      return { "@odata.deltaLink": "delta-link", value: [STRIPPED_OCCURRENCE] };
+    }
+    throw new Error("master gone");
+  };
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+
+  assert.equal(upserted.length, 1);
+  assert.equal(upserted[0].id, "occ-1");
+  assert.equal(upserted[0].summary, null);
+  assert.equal(upserted[0].start_time, "2026-07-20T09:25:00Z");
+});
