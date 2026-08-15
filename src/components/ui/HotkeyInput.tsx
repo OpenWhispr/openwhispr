@@ -435,9 +435,9 @@ export function HotkeyInput({
   }, [onBlur, clearFnHeld]);
 
   useEffect(() => {
-    if (autoFocus && containerRef.current) {
-      containerRef.current.focus();
-    }
+    if (!autoFocus) return;
+    const frame = requestAnimationFrame(() => containerRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
   }, [autoFocus]);
 
   useEffect(() => {

@@ -497,10 +497,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   setDictationHotkeyConfirmed(true);
                 }
               }}
-              recommended={assistant ? "Control+Shift" : getDefaultHotkey()}
+              recommended={assistant ? "CommandOrControl+Shift+Space" : getDefaultHotkey()}
               captureLabel={t("onboarding.rehaul.hotkey.capture")}
               recommendedLabel={t("common.recommended")}
-              confirmLabel={(label) => t("onboarding.rehaul.hotkey.confirm", { hotkey: label })}
               chooseAnotherLabel={t("onboarding.rehaul.hotkey.chooseAnother")}
               validate={assistant ? validateAssistantHotkey : validateDictationHotkey}
               onConfirm={assistant ? confirmAssistantHotkey : confirmDictationHotkey}

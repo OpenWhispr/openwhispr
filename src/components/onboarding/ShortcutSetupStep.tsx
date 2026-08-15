@@ -32,7 +32,6 @@ interface ShortcutSetupStepProps {
   recommended: string;
   captureLabel: string;
   recommendedLabel: string;
-  confirmLabel: (label: string) => string;
   chooseAnotherLabel: string;
   validate?: (value: string) => string | null;
   onConfirm?: (value: string) => Promise<string | null>;
@@ -46,7 +45,6 @@ export default function ShortcutSetupStep({
   recommended,
   captureLabel,
   recommendedLabel,
-  confirmLabel,
   chooseAnotherLabel,
   validate,
   onConfirm,
@@ -54,33 +52,33 @@ export default function ShortcutSetupStep({
   showCandidateActions = true,
 }: ShortcutSetupStepProps) {
   const [candidate, setCandidate] = useState(value);
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmed, setConfirmed] = useState(Boolean(value));
   const [error, setError] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [captureKey, setCaptureKey] = useState(0);
 
   const handleChange = async (next: string) => {
     setError(null);
-    if (candidate === next && !confirmed) {
-      setIsConfirming(true);
-      const confirmationError = (await onConfirm?.(next)) ?? null;
-      setIsConfirming(false);
-      if (confirmationError) {
-        setError(confirmationError);
-        setCandidate("");
-        return;
-      }
-      setConfirmed(true);
-      onChange(next);
-      return;
-    }
     setCandidate(next);
     setConfirmed(false);
+    setIsConfirming(true);
+    const confirmationError = (await onConfirm?.(next)) ?? null;
+    setIsConfirming(false);
+    if (confirmationError) {
+      setError(confirmationError);
+      setCandidate("");
+      setCaptureKey((current) => current + 1);
+      return;
+    }
+    setConfirmed(true);
+    onChange(next);
   };
 
   const reset = () => {
     setCandidate("");
     setConfirmed(false);
     setError(null);
+    setCaptureKey((current) => current + 1);
   };
 
   return (
@@ -91,9 +89,11 @@ export default function ShortcutSetupStep({
         }`}
       >
         <HotkeyInput
+          key={captureKey}
           value={candidate}
           onChange={(next) => void handleChange(next)}
           onClear={reset}
+          autoFocus
           variant="capture-overlay"
           validate={validate}
           onValidationError={setError}
@@ -119,12 +119,10 @@ export default function ShortcutSetupStep({
         )}
       </div>
 
-      {candidate && !error && showCandidateActions && (
+      {candidate && confirmed && !error && showCandidateActions && (
         <div className="mt-8 space-y-2 text-center" aria-live="polite">
           <p className="mx-auto w-fit rounded-full bg-neutral-200 px-5 py-2 text-sm text-neutral-600">
-            {confirmed
-              ? formatHotkeyInstruction(candidate)
-              : confirmLabel(formatHotkeyInstruction(candidate))}
+            {formatHotkeyInstruction(candidate)}
           </p>
           <button
             type="button"
