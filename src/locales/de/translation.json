@@ -1552,7 +1552,7 @@
             "Notizen per öffentlichem Link teilen",
             "Persönlicher API-Zugang",
             "MCP-Integration in all deinen Apps",
-            "Mobile App (iOS demnächst verfügbar)",
+            "Mobile App",
             "E-Mail-Support"
           ],
           "cta": "Jetzt starten",
@@ -1568,9 +1568,8 @@
           "includesPrefix": "Alle Pro-Funktionen +",
           "badge": "Beliebteste Wahl",
           "features": [
-            "Team-Bereiche für gemeinsame Notizen",
-            "Workspace-Rollen & Mitgliederverwaltung",
             "Unbegrenzte Meeting-Aufnahmen",
+            "Workspace-Rollen & Mitgliederverwaltung",
             "Agentenmodus",
             "Chat über Ihre Daten",
             "Prioritäts-Support"

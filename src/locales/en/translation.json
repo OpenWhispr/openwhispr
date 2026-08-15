@@ -1552,7 +1552,7 @@
             "Share notes with public links",
             "Personal API access",
             "MCP integration in all your apps",
-            "Mobile app (iOS Coming Soon)",
+            "Mobile app",
             "Email support"
           ],
           "cta": "Get Started",
@@ -1568,9 +1568,8 @@
           "includesPrefix": "All Pro features +",
           "badge": "Most Popular",
           "features": [
-            "Team spaces for shared notes",
-            "Workspace roles & member management",
             "Unlimited meeting recordings",
+            "Workspace roles & member management",
             "Agent mode",
             "Chat over your data",
             "Priority support"

@@ -1314,7 +1314,7 @@
             "Comparte notas con enlaces públicos",
             "Acceso personal a la API",
             "Integración MCP en todas tus apps",
-            "Aplicación móvil (iOS próximamente)",
+            "Aplicación móvil",
             "Soporte por correo electrónico"
           ],
           "cta": "Comenzar",
@@ -1330,9 +1330,8 @@
           "includesPrefix": "Todas las funciones de Pro +",
           "badge": "Más popular",
           "features": [
-            "Espacios de equipo para notas compartidas",
-            "Roles y gestión de miembros del espacio de trabajo",
             "Grabaciones de reuniones ilimitadas",
+            "Roles y gestión de miembros del espacio de trabajo",
             "Modo agente",
             "Chatea sobre tus datos",
             "Soporte prioritario"
