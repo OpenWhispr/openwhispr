@@ -1170,10 +1170,21 @@ class IPCHandlers {
     ipcMain.handle("test-provider-connection", async (_event, config) => {
       if (config?.provider === "corti" && config?.scope === "transcription") {
         try {
-          await this._mintStoredCortiToken({
-            environment: config.environment,
-            tenant: config.tenant,
-          });
+          const clientId = String(config.clientId || "").trim();
+          const clientSecret = String(config.clientSecret || "").trim();
+          if (clientId && clientSecret) {
+            await getCortiToken({
+              environment: config.environment || "us",
+              tenant: String(config.tenant || "").trim() || "base",
+              clientId,
+              clientSecret,
+            });
+          } else {
+            await this._mintStoredCortiToken({
+              environment: config.environment,
+              tenant: config.tenant,
+            });
+          }
           return { success: true };
         } catch {
           return { success: false, error: "Corti rejected these credentials." };
