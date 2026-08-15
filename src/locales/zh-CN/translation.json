@@ -1969,9 +1969,6 @@
       },
       "general": {
         "nameLabel": "工作区名称",
-        "slugLabel": "简短名称",
-        "slugHint": "用于 URL 和邀请链接。仅限小写字母、数字和连字符。",
-        "slugInvalid": "仅限小写字母、数字和连字符。",
         "saved": "工作区已更新",
         "dangerTitle": "删除工作区",
         "dangerDescription": "所有共享笔记、文件夹和集成都将被删除。此操作无法撤销。",

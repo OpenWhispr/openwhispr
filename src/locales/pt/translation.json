@@ -1948,9 +1948,6 @@
       },
       "general": {
         "nameLabel": "Nome do espaço de trabalho",
-        "slugLabel": "Nome curto",
-        "slugHint": "Usado em URLs e links de convite. Apenas letras minúsculas, dígitos e hifens.",
-        "slugInvalid": "Apenas letras minúsculas, dígitos e hifens.",
         "saved": "Espaço de trabalho atualizado",
         "dangerTitle": "Excluir espaço de trabalho",
         "dangerDescription": "Todas as notas, pastas e integrações compartilhadas serão excluídas. Esta ação não pode ser desfeita.",
