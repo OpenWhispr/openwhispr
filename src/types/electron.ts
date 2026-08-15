@@ -721,6 +721,8 @@ export interface PasteToolsResult {
   terminalAware?: boolean;
   hasNativeBinary?: boolean;
   hasUinput?: boolean;
+  hasWtype?: boolean;
+  isWlroots?: boolean;
   tools?: string[];
   recommendedInstall?: string;
 }
@@ -1537,13 +1539,17 @@ declare global {
         isWayland: boolean;
         hasYdotool: boolean;
         hasYdotoold: boolean;
+        hasWtype: boolean;
         daemonRunning: boolean;
         hasService: boolean;
         hasUinput: boolean;
         hasUdevRule: boolean;
         hasGroup: boolean;
         isNixOS: boolean;
-        allGood: boolean;
+        isKde: boolean;
+        isWlroots: boolean;
+        hasXclip: boolean;
+        hasXsel: boolean;
       }>;
 
       // Globe key listener for hotkey capture (macOS only)

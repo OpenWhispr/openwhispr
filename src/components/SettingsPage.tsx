@@ -74,6 +74,7 @@ import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { formatHotkeyLabel } from "../utils/hotkeys";
+import { getLinuxPasteInstallCommands, needsLinuxPasteToolGuidance } from "../utils/linuxPasteTools";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
@@ -985,22 +986,23 @@ export default function SettingsPage({
     }
   };
 
-  // ydotool status for Wayland paste diagnostics
+  // Wayland paste tool status for diagnostics.
   const [ydotoolStatus, setYdotoolStatus] = useState<{
     isLinux: boolean;
     isWayland: boolean;
     hasYdotool: boolean;
     hasYdotoold: boolean;
+    hasWtype: boolean;
     daemonRunning: boolean;
     hasService: boolean;
     hasUinput: boolean;
     hasUdevRule: boolean;
     hasGroup: boolean;
-    allGood: boolean;
-    isKde?: boolean;
-    hasXclip?: boolean;
-    hasXsel?: boolean;
-    isNixOS?: boolean;
+    isKde: boolean;
+    isWlroots: boolean;
+    hasXclip: boolean;
+    hasXsel: boolean;
+    isNixOS: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
 
@@ -2949,7 +2951,7 @@ export default function SettingsPage({
                   })}
                   description={t("settingsPage.general.waylandPaste.description", {
                     defaultValue:
-                      "Auto-paste on Wayland requires ydotool. Check the status of each component below.",
+                      "Auto-paste on Wayland uses ydotool or wtype. wtype is preferred on wlroots compositors.",
                   })}
                 />
                 {(() => {
@@ -2960,9 +2962,28 @@ export default function SettingsPage({
                   }
                   const checks = [
                     {
+                      key: "hasWtype",
+                      label: "wtype",
+                      ok: ydotoolStatus.hasWtype,
+                      required: ydotoolStatus.isWlroots,
+                      desc: t("settingsPage.general.waylandPaste.wtypeDesc"),
+                      steps: [
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.wtype.step1Title"),
+                          desc: t("settingsPage.general.waylandPaste.guide.wtype.step1Desc"),
+                          cmds: getLinuxPasteInstallCommands(t, "wtype"),
+                        },
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.wtype.step2Title"),
+                          cmds: [{ cmd: "which wtype" }],
+                        },
+                      ],
+                    },
+                    {
                       key: "hasYdotool",
                       label: "ydotool",
                       ok: ydotoolStatus.hasYdotool,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.ydotoolDesc", {
                         defaultValue: "Input automation tool for Wayland",
                       }),
@@ -2975,12 +2996,7 @@ export default function SettingsPage({
                             defaultValue:
                               "Use your distribution's package manager to install ydotool.",
                           }),
-                          cmds: [
-                            { label: "Ubuntu / Pop!_OS / Debian", cmd: "sudo apt install ydotool" },
-                            { label: "Fedora", cmd: "sudo dnf install ydotool" },
-                            { label: "Arch Linux", cmd: "sudo pacman -S ydotool" },
-                            { label: "openSUSE", cmd: "sudo zypper install ydotool" },
-                          ],
+                          cmds: getLinuxPasteInstallCommands(t, "ydotool"),
                         },
                         {
                           title: t("settingsPage.general.waylandPaste.guide.ydotool.step2Title", {
@@ -2997,6 +3013,7 @@ export default function SettingsPage({
                       key: "hasYdotoold",
                       label: "ydotoold",
                       ok: ydotoolStatus.hasYdotoold,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.ydotooldDesc", {
                         defaultValue: "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
                       }),
@@ -3024,6 +3041,7 @@ export default function SettingsPage({
                       key: "hasUinput",
                       label: "/dev/uinput",
                       ok: ydotoolStatus.hasUinput,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.uinputDesc", {
                         defaultValue: "Kernel input device access",
                       }),
@@ -3123,6 +3141,7 @@ export default function SettingsPage({
                         defaultValue: "input group",
                       }),
                       ok: ydotoolStatus.hasGroup,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.inputGroupDesc", {
                         defaultValue: "User must be in the input group (requires re-login)",
                       }),
@@ -3150,6 +3169,7 @@ export default function SettingsPage({
                         defaultValue: "systemd service",
                       }),
                       ok: ydotoolStatus.hasService,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.serviceDesc", {
                         defaultValue: "User service file for auto-starting ydotoold",
                       }),
@@ -3205,6 +3225,7 @@ EOF`,
                         defaultValue: "ydotoold daemon",
                       }),
                       ok: ydotoolStatus.daemonRunning,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.daemonDesc", {
                         defaultValue: "Background service must be running",
                       }),
@@ -3247,6 +3268,7 @@ EOF`,
                       key: "hasXclip",
                       label: "xclip",
                       ok: ydotoolStatus.hasXclip || ydotoolStatus.hasXsel || false,
+                      required: true,
                       desc: t("settingsPage.general.waylandPaste.xclipDesc", {
                         defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
                       }),
@@ -3264,7 +3286,7 @@ EOF`,
                     });
                   }
 
-                  const allOk = checks.every((c) => c.ok);
+                  const allOk = checks.filter((c) => c.required).every((c) => c.ok);
                   const activeGuide = checks.find((c) => c.key === ydotoolGuideKey);
 
                   return (
@@ -3897,7 +3919,7 @@ EOF`,
 
               {platform === "linux" &&
                 permissionsHook.pasteToolsInfo &&
-                !permissionsHook.pasteToolsInfo.available && (
+                needsLinuxPasteToolGuidance(permissionsHook.pasteToolsInfo) && (
                   <PasteToolsInfo
                     pasteToolsInfo={permissionsHook.pasteToolsInfo}
                     isChecking={permissionsHook.isCheckingPasteTools}

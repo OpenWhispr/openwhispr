@@ -1116,8 +1116,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "For automatic text pasting, install",
     "methodReady": "for automatic text pasting",
@@ -1133,6 +1135,7 @@
     "waylandClipboardTitle": "Clipboard Mode on Wayland",
     "windowsReady": "Windows supports automatic pasting out of the box. No setup required!",
     "withoutToolPrefix": "Without this tool, OpenWhispr will copy text to your clipboard. You can then paste manually with Ctrl+V.",
+    "wtypeFallbackDescription": "wtype is the preferred auto-paste method for this wlroots compositor. A fallback is available, but may be less reliable.",
     "xwaylandAppsOnly": "automatic pasting works for XWayland apps only"
   },
   "promptStudio": {
@@ -1909,11 +1912,12 @@
       },
       "waylandPaste": {
         "title": "Wayland Paste Setup",
-        "description": "Auto-paste on Wayland requires ydotool. Check the status of each component below.",
+        "description": "Auto-paste on Wayland uses ydotool or wtype. wtype is preferred on wlroots compositors.",
         "allGoodDesc": "Auto-paste is ready to go.",
         "recheck": "Re-check",
         "copy": "Copy",
         "ydotoolDesc": "Input automation tool for Wayland",
+        "wtypeDesc": "Preferred input automation tool on wlroots compositors",
         "ydotooldDesc": "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
         "uinputDesc": "Kernel input device access",
         "uinputRuleFound": "Rule present but not active. A reboot should fix it.",
@@ -1931,6 +1935,11 @@
             "step1Desc": "Use your distribution's package manager to install ydotool.",
             "step2Title": "Verify installation",
             "step2Desc": "Check that ydotool is available in your PATH."
+          },
+          "wtype": {
+            "step1Title": "Install wtype",
+            "step1Desc": "wtype is the primary auto-paste method on Hyprland, Sway, and other wlroots compositors.",
+            "step2Title": "Verify installation"
           },
           "ydotoold": {
             "step1Title": "Install ydotoold",

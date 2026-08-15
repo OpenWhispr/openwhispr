@@ -5,45 +5,13 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const debugLogger = require("./debugLogger");
+const { getLinuxSessionInfo } = require("./linuxSession");
 
 const CACHE_TTL_MS = 30000;
 
 // isTrustedAccessibilityClient() is a cheap synchronous syscall, so the cache
 // only exists to debounce the dialog shown on denial.
 const ACCESSIBILITY_CHECK_TTL_MS = 5000;
-
-const getLinuxDesktopEnv = () =>
-  [process.env.XDG_CURRENT_DESKTOP, process.env.XDG_SESSION_DESKTOP, process.env.DESKTOP_SESSION]
-    .filter(Boolean)
-    .join(":")
-    .toLowerCase();
-
-const isGnomeDesktop = (desktopEnv) => desktopEnv.includes("gnome");
-
-const isKdeDesktop = (desktopEnv) => desktopEnv.includes("kde");
-
-const isWlrootsCompositor = (desktopEnv) => {
-  const wlrootsDesktops = ["sway", "hyprland", "wayfire", "river", "dwl", "labwc", "cage"];
-  return (
-    wlrootsDesktops.some((wm) => desktopEnv.includes(wm)) ||
-    !!process.env.SWAYSOCK ||
-    !!process.env.HYPRLAND_INSTANCE_SIGNATURE
-  );
-};
-
-const getLinuxSessionInfo = () => {
-  const isWayland =
-    (process.env.XDG_SESSION_TYPE || "").toLowerCase() === "wayland" ||
-    !!process.env.WAYLAND_DISPLAY;
-  const xwaylandAvailable = isWayland && !!process.env.DISPLAY;
-  const desktopEnv = getLinuxDesktopEnv();
-  const isGnome = isWayland && isGnomeDesktop(desktopEnv);
-  const isKde = isWayland && isKdeDesktop(desktopEnv);
-  const isWlroots = isWayland && isWlrootsCompositor(desktopEnv);
-  const isHyprland = isWayland && !!process.env.HYPRLAND_INSTANCE_SIGNATURE;
-
-  return { isWayland, xwaylandAvailable, desktopEnv, isGnome, isKde, isWlroots, isHyprland };
-};
 
 const PASTE_DELAYS = {
   darwin: 120,
@@ -2306,8 +2274,6 @@ Would you like to open System Settings now?`;
       } else {
         recommendedInstall = "xdotool";
       }
-    } else if (isWayland && hasNativeBinary && !hasUinput && tools.length === 0) {
-      recommendedInstall = "usermod -aG input $USER";
     }
 
     let method = null;
@@ -2334,6 +2300,8 @@ Would you like to open System Settings now?`;
       xwaylandAvailable,
       hasNativeBinary,
       hasUinput,
+      hasWtype,
+      isWlroots,
       tools,
       recommendedInstall,
     };
