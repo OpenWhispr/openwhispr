@@ -167,13 +167,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     void window.electronAPI?.setOnboardingWindowMode?.(compact ? "compact" : "expanded");
   }, [compact]);
 
-  useEffect(
-    () => () => {
-      void window.electronAPI?.setOnboardingWindowMode?.("restore");
-    },
-    []
-  );
-
   useEffect(() => {
     setStageReady(false);
   }, [currentStepId]);

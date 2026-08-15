@@ -29,6 +29,8 @@ class WindowManager {
     this.mainWindow = null;
     this.controlPanelWindow = null;
     this._onboardingRestoreBounds = null;
+    this._onboardingWindowMode = null;
+    this._onboardingWindowState = null;
     this.agentWindow = null;
     this.notificationWindow = null;
     this._notificationLoadTimeout = null;
@@ -681,6 +683,9 @@ class WindowManager {
     }
 
     this.controlPanelWindow = new BrowserWindow(CONTROL_PANEL_CONFIG);
+    this._onboardingRestoreBounds = null;
+    this._onboardingWindowMode = null;
+    this._onboardingWindowState = null;
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
       const appUrl = DevServerManager.getAppUrl(true);
@@ -726,10 +731,9 @@ class WindowManager {
     };
 
     this.controlPanelWindow.once("ready-to-show", () => {
-      clearVisibilityTimer();
-      this.controlPanelWindow.show();
-      this.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      // AppRouter signals either an onboarding size or the restored control-
+      // panel mode once auth/policy resolution decides which UI will render.
+      // Waiting avoids a visible expanded → compact flash on fresh installs.
     });
 
     this.controlPanelWindow.on("close", (event) => {
@@ -742,6 +746,9 @@ class WindowManager {
     this.controlPanelWindow.on("closed", () => {
       clearVisibilityTimer();
       this.controlPanelWindow = null;
+      this._onboardingRestoreBounds = null;
+      this._onboardingWindowMode = null;
+      this._onboardingWindowState = null;
       dockManager.setControlPanelVisible(false);
     });
 
@@ -1175,6 +1182,13 @@ class WindowManager {
     }
   }
 
+  _showControlPanelAfterModeApplied(win) {
+    if (win.isVisible()) return;
+    win.show();
+    win.focus();
+    dockManager.setControlPanelVisible(true);
+  }
+
   setOnboardingWindowMode(mode) {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return false;
@@ -1185,14 +1199,50 @@ class WindowManager {
     const { workArea } = screen.getDisplayMatching(win.getBounds());
 
     if (mode === "restore") {
-      if (!this._onboardingRestoreBounds) return true;
-      win.setContentBounds(clampedBounds(this._onboardingRestoreBounds, workArea), true);
+      if (this._onboardingRestoreBounds) {
+        win.setContentBounds(clampedBounds(this._onboardingRestoreBounds, workArea), true);
+      }
+      const state = this._onboardingWindowState;
+      if (state) {
+        win.setResizable(state.resizable);
+        win.setMinimizable(state.minimizable);
+        win.setMaximizable(state.maximizable);
+        win.setClosable(state.closable);
+        win.setFullScreenable(state.fullscreenable);
+      }
+      if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
+        win.setWindowButtonVisibility(true);
+      }
       this._onboardingRestoreBounds = null;
+      this._onboardingWindowMode = null;
+      this._onboardingWindowState = null;
+      this._showControlPanelAfterModeApplied(win);
       return true;
     }
 
     if (!this._onboardingRestoreBounds) {
       this._onboardingRestoreBounds = current;
+      this._onboardingWindowState = {
+        resizable: win.isResizable(),
+        minimizable: win.isMinimizable(),
+        maximizable: win.isMaximizable(),
+        closable: win.isClosable(),
+        fullscreenable: win.isFullScreenable(),
+      };
+    }
+
+    win.setResizable(false);
+    win.setMinimizable(false);
+    win.setMaximizable(false);
+    win.setClosable(false);
+    win.setFullScreenable(false);
+    if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
+      win.setWindowButtonVisibility(false);
+    }
+
+    if (this._onboardingWindowMode === mode) {
+      this._showControlPanelAfterModeApplied(win);
+      return true;
     }
 
     const target =
@@ -1204,10 +1254,14 @@ class WindowManager {
       current.width === next.width &&
       current.height === next.height
     ) {
+      this._onboardingWindowMode = mode;
+      this._showControlPanelAfterModeApplied(win);
       return true;
     }
 
     win.setContentBounds(next, true);
+    this._onboardingWindowMode = mode;
+    this._showControlPanelAfterModeApplied(win);
     return true;
   }
 

@@ -112,6 +112,14 @@ function MainApp() {
     setIsLoading(false);
   }, [authLoaded, isControlPanel, isDictationPanel, isGracePeriodOnly, isSignedIn]);
 
+  useEffect(() => {
+    if (!isControlPanel || isLoading || isWaitingForPolicyStart || showOnboarding) return;
+    // The main process waits for this renderer decision before showing the
+    // control panel, preventing a fresh install from flashing at 1200×800
+    // before the compact onboarding mode is applied.
+    void window.electronAPI?.setOnboardingWindowMode?.("restore");
+  }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
+
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {
       setPostOnboardingSettingsSection("transcription");
