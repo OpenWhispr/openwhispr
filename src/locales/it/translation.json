@@ -387,7 +387,23 @@
       "enterprise": {
         "title": "Connect your enterprise provider",
         "description": "Use your organization’s credentials for dictation intelligence and the Assistant.",
-        "dictationIntelligence": "Dictation intelligence"
+        "descriptionLineOne": "Use your organization’s credentials",
+        "descriptionLineTwo": "to connect a provider.",
+        "dictationIntelligence": "Dictation intelligence",
+        "ssoProfile": "SSO Profile",
+        "accessKeys": "Access Keys",
+        "profileName": "Profile Name",
+        "profilePlaceholder": "Add profile name",
+        "accessKeyId": "Access Key ID",
+        "secretAccessKey": "Secret Access Key",
+        "region": "Region",
+        "regionPlaceholder": "Choose a region",
+        "model": "Model",
+        "modelPlaceholder": "Choose a model",
+        "testConnection": "Test Connection",
+        "managedTitle": "Your provider is managed by your organization",
+        "managedDescription": "OpenWhispr will use the provider and model assigned by your administrator.",
+        "unavailable": "Enterprise setup is unavailable under your workspace policy."
       }
     },
     "steps": {

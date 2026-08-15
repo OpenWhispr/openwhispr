@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { CheckCircle, XCircle, Loader2, Copy } from "lucide-react";
@@ -7,12 +7,18 @@ interface TestConnectionButtonProps {
   provider: string;
   getConfig: () => Record<string, unknown>;
   onStatusChange?: (connected: boolean) => void;
+  variant?: "default" | "inline";
+  disabled?: boolean;
+  resetKey?: string;
 }
 
 export default function TestConnectionButton({
   provider,
   getConfig,
   onStatusChange,
+  variant = "default",
+  disabled = false,
+  resetKey,
 }: TestConnectionButtonProps) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
@@ -21,17 +27,35 @@ export default function TestConnectionButton({
     action?: string;
     copyCommand?: string;
   } | null>(null);
+  const requestIdRef = useRef(0);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    requestIdRef.current += 1;
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    setStatus("idle");
+    setErrorInfo(null);
+    onStatusChange?.(false);
+    return () => {
+      requestIdRef.current += 1;
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
+  }, [onStatusChange, resetKey]);
 
   const handleTest = async () => {
+    const requestId = ++requestIdRef.current;
     setStatus("testing");
     onStatusChange?.(false);
     setErrorInfo(null);
     try {
       const result = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
+      if (requestId !== requestIdRef.current) return;
       if (result?.success) {
         setStatus("success");
         onStatusChange?.(true);
-        setTimeout(() => setStatus("idle"), 8000);
+        resetTimerRef.current = setTimeout(() => {
+          if (requestId === requestIdRef.current) setStatus("idle");
+        }, 8000);
       } else {
         setStatus("error");
         onStatusChange?.(false);
@@ -42,6 +66,7 @@ export default function TestConnectionButton({
         });
       }
     } catch {
+      if (requestId !== requestIdRef.current) return;
       setStatus("error");
       onStatusChange?.(false);
       setErrorInfo({ message: "Connection test failed unexpectedly." });
@@ -52,6 +77,42 @@ export default function TestConnectionButton({
     navigator.clipboard.writeText(text);
   };
 
+  if (variant === "inline") {
+    return (
+      <div className="space-y-2">
+        <div className="flex h-11 items-center justify-between rounded-xl border border-neutral-200 bg-white px-3">
+          <span className="text-xs font-medium text-neutral-950">
+            {t("onboarding.rehaul.enterprise.testConnection")}
+          </span>
+          <Button
+            type="button"
+            onClick={handleTest}
+            disabled={disabled || status === "testing"}
+            className="h-7 rounded-full border-neutral-950! bg-neutral-950 px-3 text-[0.6875rem] font-normal text-white shadow-none! hover:bg-neutral-800 disabled:border-neutral-200! disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100!"
+          >
+            {status === "testing" && <Loader2 className="mr-1.5 size-3 animate-spin" />}
+            {status === "success" && <CheckCircle className="mr-1.5 size-3" />}
+            {status === "error" && <XCircle className="mr-1.5 size-3" />}
+            {status === "testing"
+              ? t("reasoning.enterprise.testing", { defaultValue: "Testing..." })
+              : status === "success"
+                ? t("reasoning.enterprise.testSuccess", { defaultValue: "Connected" })
+                : t("onboarding.rehaul.provider.runTest")}
+          </Button>
+        </div>
+
+        {status === "error" && errorInfo && (
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-2.5">
+            <p className="text-xs font-medium text-destructive">{errorInfo.message}</p>
+            {errorInfo.action && (
+              <p className="mt-1 text-xs text-muted-foreground">{errorInfo.action}</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2 pt-2">
       <Button
@@ -59,7 +120,7 @@ export default function TestConnectionButton({
         variant="outline"
         size="sm"
         onClick={handleTest}
-        disabled={status === "testing"}
+        disabled={disabled || status === "testing"}
         className="w-full"
       >
         {status === "testing" && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}

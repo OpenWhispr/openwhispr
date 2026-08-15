@@ -233,15 +233,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ]
   );
 
-  const applyReasoningSelectionToAllScopes = useCallback(() => {
-    settingsStore.setCloudReasoningForAllScopes({
-      cleanupCloudMode: "byok",
-      cleanupProvider: settingsStore.chatAgentProvider,
-      cleanupModel: settingsStore.chatAgentModel,
-      useCleanupModel: true,
-      useDictationAgent: true,
-    });
-  }, [settingsStore]);
+  const applyReasoningSelectionToAllScopes = useCallback(
+    (mode: "byok" | "local") => {
+      settingsStore.setCloudReasoningForAllScopes({
+        cleanupCloudMode: mode,
+        cleanupProvider: settingsStore.chatAgentProvider,
+        cleanupModel: settingsStore.chatAgentModel,
+        useCleanupModel: true,
+        useDictationAgent: true,
+      });
+    },
+    [settingsStore]
+  );
 
   const handleSetupSelection = useCallback(
     async (mode: Exclude<OnboardingSetupMode, null>) => {
@@ -307,15 +310,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         cloudTranscriptionMode: "byok",
       });
     } else if (currentStepId === "byok-assistant") {
-      applyReasoningSelectionToAllScopes();
+      applyReasoningSelectionToAllScopes("byok");
     } else if (currentStepId === "local-dictation") {
       settingsStore.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
     } else if (currentStepId === "local-assistant") {
-      applyReasoningSelectionToAllScopes();
-    } else if (currentStepId === "enterprise-dictation") {
-      settingsStore.setDictationAgentMode("enterprise");
-    } else if (currentStepId === "enterprise-assistant") {
-      applyReasoningSelectionToAllScopes();
+      applyReasoningSelectionToAllScopes("local");
     }
 
     const next = getNextOnboardingStep(currentStepId, route);
@@ -665,12 +664,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "enterprise-dictation":
       case "enterprise-assistant":
         return (
-          <div className="w-full">
+          <div className="h-full w-full pt-6">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.enterprise.title")}
               description={t("onboarding.rehaul.enterprise.description")}
+              descriptionLines={[
+                t("onboarding.rehaul.enterprise.descriptionLineOne"),
+                t("onboarding.rehaul.enterprise.descriptionLineTwo"),
+              ]}
+              wideTitle
             />
-            <EnterpriseSetupStep stepId={currentStepId} onConnectionChange={onStageReady} />
+            <EnterpriseSetupStep
+              stepId={currentStepId}
+              onConnectionChange={onStageReady}
+              onProceed={() => void continueFromCurrentStep()}
+            />
           </div>
         );
     }
@@ -685,7 +693,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     currentStepId === "byok-dictation" ||
     currentStepId === "byok-assistant" ||
     currentStepId === "local-dictation" ||
-    currentStepId === "local-assistant";
+    currentStepId === "local-assistant" ||
+    currentStepId === "enterprise-dictation" ||
+    currentStepId === "enterprise-assistant";
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
 
   return (
