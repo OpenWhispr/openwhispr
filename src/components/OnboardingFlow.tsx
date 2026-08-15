@@ -317,7 +317,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     const next = getNextOnboardingStep(currentStepId, route);
     if (next) {
       goTo(next);
-      if (next === "dictation-demo") window.electronAPI?.showDictationPanel?.();
       return;
     }
 
@@ -560,6 +559,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               )}
               listeningLabel={t("onboarding.rehaul.demo.listening")}
               processingLabel={t("onboarding.rehaul.demo.processing")}
+              stopLabel={t("onboarding.rehaul.demo.stop")}
               retryLabel={t("common.retry")}
               assistantResponse={t("onboarding.rehaul.assistantDemo.response")}
               assistantSenderName={t("onboarding.rehaul.assistantDemo.senderName")}

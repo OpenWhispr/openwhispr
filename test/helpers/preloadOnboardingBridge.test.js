@@ -47,11 +47,13 @@ test("onboarding demo bridge invokes only its allowlisted channels", async () =>
 
   await api.beginOnboardingDemo(session);
   await api.publishOnboardingDemoEvent(event);
+  await api.stopOnboardingDemo(session.id);
   await api.endOnboardingDemo(session.id);
 
   assert.deepEqual(invocations, [
     ["onboarding-demo-begin", session],
     ["onboarding-demo-publish", event],
+    ["onboarding-demo-stop", session.id],
     ["onboarding-demo-end", session.id],
   ]);
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Loader2, Mic, RefreshCw, UserRound } from "lucide-react";
+import { ChevronDown, Loader2, Mic, RefreshCw, Square, UserRound } from "lucide-react";
 import { Button } from "../ui/button";
 import type { OnboardingDemoEvent, OnboardingDemoKind } from "../../types/electron";
 import emailSenderAvatar from "../../assets/onboarding-email-sender.webp";
@@ -66,6 +66,7 @@ interface DemoStepProps {
   placeholder: string;
   listeningLabel: string;
   processingLabel: string;
+  stopLabel: string;
   retryLabel: string;
   assistantResponse?: string;
   assistantSenderName?: string;
@@ -81,6 +82,7 @@ export default function DemoStep({
   placeholder,
   listeningLabel,
   processingLabel,
+  stopLabel,
   retryLabel,
   assistantResponse,
   assistantSenderName,
@@ -170,8 +172,10 @@ export default function DemoStep({
               event={event}
               listeningLabel={listeningLabel}
               processingLabel={processingLabel}
+              stopLabel={stopLabel}
               retryLabel={retryLabel}
               onRetry={retry}
+              onStop={() => void window.electronAPI?.stopOnboardingDemo?.(demoId)}
             />
           )}
         </div>
@@ -208,8 +212,10 @@ export default function DemoStep({
               event={event}
               listeningLabel={listeningLabel}
               processingLabel={processingLabel}
+              stopLabel={stopLabel}
               retryLabel={retryLabel}
               onRetry={retry}
+              onStop={() => void window.electronAPI?.stopOnboardingDemo?.(demoId)}
               embedded
             />
           </div>
@@ -227,8 +233,10 @@ function VoiceSurface({
   event,
   listeningLabel,
   processingLabel,
+  stopLabel,
   retryLabel,
   onRetry,
+  onStop,
   embedded = false,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -238,8 +246,10 @@ function VoiceSurface({
   event: OnboardingDemoEvent | null;
   listeningLabel: string;
   processingLabel: string;
+  stopLabel: string;
   retryLabel: string;
   onRetry: () => void;
+  onStop: () => void;
   embedded?: boolean;
 }) {
   return (
@@ -253,13 +263,22 @@ function VoiceSurface({
         placeholder={placeholder}
         className="input-inline min-h-28 w-full resize-none bg-transparent pr-10 text-sm leading-5 text-neutral-950 outline-none placeholder:text-neutral-300"
       />
-      <div className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full bg-neutral-950 text-white">
+      <button
+        type="button"
+        disabled={event?.status !== "listening"}
+        onClick={onStop}
+        aria-label={stopLabel}
+        title={event?.status === "listening" ? stopLabel : undefined}
+        className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full bg-neutral-950 text-white transition-colors hover:bg-neutral-800 disabled:cursor-default disabled:hover:bg-neutral-950"
+      >
         {event?.status === "processing" ? (
           <Loader2 className="size-4 animate-spin" />
+        ) : event?.status === "listening" ? (
+          <Square className="size-3.5 fill-current" />
         ) : (
-          <Mic className={`size-4 ${event?.status === "listening" ? "animate-pulse" : ""}`} />
+          <Mic className="size-4" />
         )}
-      </div>
+      </button>
       <div
         className="absolute bottom-3 left-3 max-w-[15rem] text-xs text-neutral-500"
         aria-live="polite"
