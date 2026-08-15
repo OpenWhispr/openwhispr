@@ -908,6 +908,8 @@
       "enterPasswordPlaceholder": "Inserisci la password",
       "forgotPassword": "Password dimenticata?",
       "fullNamePlaceholder": "Nome completo",
+      "nameLabel": "Nome",
+      "passwordLabel": "Password",
       "haveAccount": "Hai già un account?",
       "newHere": "Nuovo qui?",
       "passwordMinLength": "La password deve essere di almeno 8 caratteri",

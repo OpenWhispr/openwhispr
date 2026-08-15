@@ -876,7 +876,7 @@
     },
     "emailStep": {
       "continueWithEmail": "Continue with email",
-      "continueWithoutAccount": "Continue without account",
+      "continueWithoutAccount": "Use OpenWhispr without an account",
       "emailPlaceholder": "you@example.com"
     },
     "errors": {
@@ -900,17 +900,19 @@
     },
     "passwordForm": {
       "createAccount": "Create an account",
-      "createAccountButton": "Create Account",
+      "createAccountButton": "Continue with email",
       "createAccountLink": "Create account",
       "createPasswordPlaceholder": "Create a password",
       "creatingAccount": "Creating account...",
       "enterPasswordPlaceholder": "Enter your password",
       "forgotPassword": "Forgot password?",
-      "fullNamePlaceholder": "Full name",
+      "fullNamePlaceholder": "Add your name",
+      "nameLabel": "Name",
+      "passwordLabel": "Password",
       "haveAccount": "Already have an account?",
       "newHere": "New here?",
       "passwordMinLength": "Password must be at least 8 characters",
-      "signIn": "Sign In",
+      "signIn": "Continue with email",
       "signInLink": "Sign in",
       "signingIn": "Signing in...",
       "welcomeBack": "Welcome back"
@@ -936,7 +938,7 @@
       "continueWithMicrosoft": "Continue with Microsoft",
       "protocolUnavailable": "Browser sign-in unavailable — re-register the openwhispr:// protocol in your system's Default Apps settings."
     },
-    "welcomeSubtitle": "Dictate anywhere using your voice",
+    "welcomeSubtitle": "Use voice for everything",
     "welcomeTitle": "Welcome to OpenWhispr",
     "sessionExpired": "Session expired. Please restart the sign-up process."
   },
@@ -1096,8 +1098,8 @@
   },
   "dictionarySuffix": "Dictionary Suffix",
   "emailVerification": {
-    "checkEmailDescription": "We sent a verification link to",
-    "checkEmailTitle": "Check your email",
+    "checkEmailDescription": "We have sent a verification link to your email at",
+    "checkEmailTitle": "Verification email sent",
     "errors": {
       "resendFailed": "We couldn't resend the email. Please try again.",
       "serverUnreachable": "Couldn't reach the server. Check your connection and try again."
@@ -1105,8 +1107,8 @@
     "resendButton": "Resend verification email",
     "resendIn": "Resend in {{seconds}}s",
     "verifiedDescription": "Your account is all set.",
-    "verifiedTitle": "Email verified",
-    "waiting": "Waiting for verification...",
+    "verifiedTitle": "Verified",
+    "waiting": "Waiting for verification",
     "backToSignIn": "Back to sign in"
   },
   "errorBoundary": {

@@ -406,33 +406,29 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     switch (currentStepId) {
       case "auth":
         return (
-          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-border bg-card shadow-xl">
+          <div className="min-h-full w-full">
             {pendingVerificationEmail ? (
-              <div className="p-6">
-                <EmailVerificationStep
-                  email={pendingVerificationEmail}
-                  onVerified={() => {
-                    setPendingVerificationEmail(null);
-                    setAuthPath("account");
-                    goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
-                  }}
-                  onBack={() => setPendingVerificationEmail(null)}
-                />
-              </div>
+              <EmailVerificationStep
+                email={pendingVerificationEmail}
+                onVerified={() => {
+                  setPendingVerificationEmail(null);
+                  setAuthPath("account");
+                  goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
+                }}
+                onBack={() => setPendingVerificationEmail(null)}
+              />
             ) : (
-              <div className="p-6">
-                <AuthenticationStep
-                  onContinueWithoutAccount={() => {
-                    setAuthPath("guest");
-                    goTo("setup-choice");
-                  }}
-                  onAuthComplete={() => {
-                    setAuthPath("account");
-                    goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
-                  }}
-                  onNeedsVerification={setPendingVerificationEmail}
-                />
-              </div>
+              <AuthenticationStep
+                onContinueWithoutAccount={() => {
+                  setAuthPath("guest");
+                  goTo("setup-choice");
+                }}
+                onAuthComplete={() => {
+                  setAuthPath("account");
+                  goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
+                }}
+                onNeedsVerification={setPendingVerificationEmail}
+              />
             )}
           </div>
         );
