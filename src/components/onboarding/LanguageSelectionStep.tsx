@@ -1,21 +1,11 @@
 import { useMemo, useState } from "react";
 import { Check, Search, X } from "lucide-react";
-import registry from "../../config/languageRegistry.json";
-
-const NATIVE_LABELS: Record<string, string> = {
-  ar: "العربية",
-  de: "Deutsch",
-  en: "English",
-  es: "Español",
-  fr: "Français",
-  hi: "हिन्दी",
-  it: "Italiano",
-  ja: "日本語",
-  ko: "한국어",
-  pt: "Português",
-  ru: "Русский",
-  zh: "简体中文",
-};
+import {
+  displayOnboardingLanguageLabel,
+  getOnboardingLanguageByCode,
+  getOnboardingLanguageNativeLabel,
+  getOnboardingLanguageOptions,
+} from "./languageOptions";
 
 interface LanguageSelectionStepProps {
   selected: string[];
@@ -33,15 +23,7 @@ export default function LanguageSelectionStep({
   selectedLabel,
 }: LanguageSelectionStepProps) {
   const [query, setQuery] = useState("");
-  const languages = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
-    if (!normalized) return registry.languages;
-    return registry.languages.filter(({ code, label }) =>
-      [code, label, NATIVE_LABELS[code]]
-        .filter(Boolean)
-        .some((value) => value?.toLocaleLowerCase().includes(normalized))
-    );
-  }, [query]);
+  const languages = useMemo(() => getOnboardingLanguageOptions(query, selected), [query, selected]);
 
   const toggle = (code: string) => {
     onChange(
@@ -50,42 +32,41 @@ export default function LanguageSelectionStep({
   };
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-2xl space-y-4">
+    <div className="mx-auto mt-6 w-full max-w-[26.25rem] space-y-2.5">
       <label className="relative block">
-        <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-neutral-400" />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={searchPlaceholder}
-          className="h-12 w-full rounded-xl border border-border bg-card pl-11 pr-4 text-sm text-foreground shadow-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/15"
+          className="onboarding-light-input onboarding-light-input-bordered h-10 w-full rounded-full! border border-neutral-200 bg-white pl-10 pr-4 text-sm text-neutral-950 shadow-none! outline-none placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
         />
       </label>
 
       {selected.length > 0 && (
-        <div className="flex flex-wrap gap-2" aria-label={selectedLabel}>
+        <div className="flex min-h-8 flex-wrap gap-2" aria-label={selectedLabel}>
           {selected.map((code) => {
-            const language = registry.languages.find((item) => item.code === code);
+            const language = getOnboardingLanguageByCode(code);
             if (!language) return null;
             return (
               <button
                 type="button"
                 key={code}
                 onClick={() => toggle(code)}
-                className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/15"
+                className="inline-flex h-8 items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 text-sm font-normal text-neutral-950 hover:bg-neutral-50"
               >
-                <span aria-hidden="true">{language.flag}</span>
-                {language.label}
-                <X className="size-3" />
+                {displayOnboardingLanguageLabel(language)}
+                <X className="size-4" strokeWidth={1.8} />
               </button>
             );
           })}
         </div>
       )}
 
-      <div className="max-h-80 overflow-y-auto rounded-2xl border border-border bg-card p-2 shadow-sm">
+      <div className="max-h-[15.5rem] overflow-y-auto rounded-2xl border border-neutral-200 bg-white px-3">
         {languages.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">{noResultsLabel}</p>
+          <p className="px-4 py-8 text-center text-sm text-neutral-500">{noResultsLabel}</p>
         ) : (
           languages.map((language) => {
             const checked = selected.includes(language.code);
@@ -96,30 +77,25 @@ export default function LanguageSelectionStep({
                 role="checkbox"
                 aria-checked={checked}
                 onClick={() => toggle(language.code)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
-                  checked ? "bg-primary/8" : "hover:bg-muted"
-                }`}
+                className="flex h-12 w-full items-center gap-3 border-b border-neutral-200 text-left transition-colors last:border-b-0 hover:bg-neutral-50"
               >
-                <span className="text-lg" aria-hidden="true">
-                  {language.flag}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-foreground">
-                    {language.label}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground" dir="auto">
-                    {NATIVE_LABELS[language.code] ?? language.label}
-                  </span>
-                </span>
                 <span
-                  className={`flex size-5 items-center justify-center rounded-md border ${
+                  className={`flex size-5 shrink-0 items-center justify-center rounded-[0.3rem] border ${
                     checked
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background"
+                      ? "border-blue-500 bg-blue-500 text-white"
+                      : "border-neutral-200 bg-white"
                   }`}
                   aria-hidden="true"
                 >
-                  {checked && <Check className="size-3.5" />}
+                  {checked && <Check className="size-3.5" strokeWidth={2.5} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-neutral-950">
+                    {displayOnboardingLanguageLabel(language)}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-neutral-500" dir="auto">
+                    {getOnboardingLanguageNativeLabel(language)}
+                  </span>
                 </span>
               </button>
             );

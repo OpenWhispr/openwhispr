@@ -28,8 +28,8 @@ export function OnboardingProgress({ index }: { index: number }) {
       {[0, 1, 2, 3].map((item) => (
         <span
           key={item}
-          className={`h-1.5 rounded-full transition-[width,background-color] ${
-            item === index ? "w-8 bg-foreground" : item < index ? "w-5 bg-primary" : "w-5 bg-border"
+          className={`h-1.5 w-4 rounded-full transition-colors ${
+            item === index ? "bg-neutral-950" : "bg-neutral-200"
           }`}
         />
       ))}
@@ -45,10 +45,10 @@ export function OnboardingStepHeader({
   description?: string;
 }) {
   return (
-    <header className="mx-auto max-w-2xl space-y-3 text-center">
-      <h1 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl">{title}</h1>
+    <header className="mx-auto w-full max-w-lg space-y-3 text-center">
+      <h1 className="onboarding-display-title mx-auto max-w-xs text-neutral-950">{title}</h1>
       {description && (
-        <p className="text-sm leading-6 text-muted-foreground md:text-base">{description}</p>
+        <p className="mx-auto max-w-md text-sm leading-5 text-neutral-500">{description}</p>
       )}
     </header>
   );
@@ -90,22 +90,27 @@ export default function OnboardingShell({
       </div>
 
       {hasFooter && (
-        <footer className="shrink-0 px-6 pb-5 pt-3 md:px-12">
-          <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4">
-            <div>
+        <footer className="shrink-0 px-6 pb-[4.75rem] pt-3 md:px-12">
+          <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-4">
+            <div className="flex items-center justify-center gap-2">
               {onBack && (
-                <Button type="button" variant="ghost" onClick={onBack} className="rounded-full">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={onBack}
+                  className="h-9 min-w-[5.5rem] rounded-full px-4 text-sm"
+                >
                   <ChevronLeft className="size-4" />
                   {t("common.back")}
                 </Button>
               )}
-            </div>
-
-            {progressIndex !== undefined ? <OnboardingProgress index={progressIndex} /> : <div />}
-
-            <div className="flex justify-end gap-2">
               {onSkip && (
-                <Button type="button" variant="ghost" onClick={onSkip} className="rounded-full">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={onSkip}
+                  className="h-9 min-w-[5.5rem] rounded-full px-4 text-sm"
+                >
                   {skipLabel ?? t("common.skip")}
                 </Button>
               )}
@@ -114,12 +119,14 @@ export default function OnboardingShell({
                   type="button"
                   onClick={onContinue}
                   disabled={continueDisabled || continueLoading}
-                  className="min-w-28 rounded-full"
+                  className="h-9 min-w-[5.5rem] rounded-full bg-blue-500 px-4 text-sm text-white hover:bg-blue-600 disabled:bg-blue-300 disabled:text-white"
                 >
                   {continueLoading ? t("common.loading") : (continueLabel ?? t("common.continue"))}
                 </Button>
               )}
             </div>
+
+            {progressIndex !== undefined && <OnboardingProgress index={progressIndex} />}
           </div>
         </footer>
       )}
