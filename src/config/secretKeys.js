@@ -44,6 +44,13 @@ const BYOK_API_KEYS = [
     storeKey: "mistralApiKey",
   },
   {
+    base: "sarvam",
+    env: "SARVAM_API_KEY",
+    get: "getSarvamKey",
+    save: "saveSarvamKey",
+    storeKey: "sarvamApiKey",
+  },
+  {
     base: "openrouter",
     env: "OPENROUTER_API_KEY",
     get: "getOpenrouterKey",

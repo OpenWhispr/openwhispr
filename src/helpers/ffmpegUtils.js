@@ -273,6 +273,118 @@ function parseFfmpegDuration(stderr) {
   return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 }
 
+// Reads the elapsed time off ffmpeg's progress output, which reports how much
+// input it has actually processed. The last line wins: earlier ones are
+// intermediate progress, and the final one is emitted at end of stream.
+function parseFfmpegProgressTime(stderr) {
+  if (!stderr) return null;
+  const pattern = /time=\s*(\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)/g;
+  let last = null;
+  let match;
+  while ((match = pattern.exec(stderr)) !== null) last = match;
+  if (!last) return null;
+  return Number(last[1]) * 3600 + Number(last[2]) * 60 + Number(last[3]);
+}
+
+// Runs ffmpeg purely for its stderr. Resolves null instead of rejecting on any
+// failure, including a non-zero exit: several probe invocations are *expected*
+// to exit non-zero, and only the parsed output matters.
+function runFfmpegForStderr(args, signal) {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve(null);
+      return;
+    }
+
+    const ffmpegPath = getFFmpegPath();
+    if (!ffmpegPath) {
+      debugLogger.debug("FFmpeg not found - skipping duration probe");
+      resolve(null);
+      return;
+    }
+
+    let proc;
+    try {
+      proc = spawn(ffmpegPath, args, {
+        stdio: ["ignore", "ignore", "pipe"],
+        windowsHide: true,
+      });
+    } catch (error) {
+      debugLogger.debug("FFmpeg duration probe failed to spawn", { error: error.message });
+      resolve(null);
+      return;
+    }
+
+    let stderr = "";
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      resolve(value);
+    };
+
+    function onAbort() {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        // an uncaught throw here would escape the abort dispatch
+      }
+      finish(null);
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    proc.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+    proc.on("error", (error) => {
+      debugLogger.debug("FFmpeg duration probe error", { error: error.message });
+      finish(null);
+    });
+    proc.on("close", () => finish(stderr));
+  });
+}
+
+// Measures how long the audio actually is. ffprobe is not bundled (ffmpeg-static
+// ships the one binary), so this reads ffmpeg's own stderr in two stages.
+//
+// The header stage is the cheap one and answers for any container that records
+// its duration up front. It cannot answer for the recordings that matter most
+// here: MediaRecorder writes streaming WebM, whose header carries no duration at
+// all, and ffmpeg reports "Duration: N/A" for every dictation the app produces.
+//
+// The fallback decodes to the null muxer and reads the elapsed time off the
+// final progress line. That is a full pass over the audio, but audio-only decode
+// runs on the order of 1000x realtime, so a minute of dictation costs tens of
+// milliseconds and nothing is re-encoded or written.
+//
+// Resolves null rather than rejecting when neither stage can tell — a caller
+// sizing a request against an API limit should fall back to sending the audio
+// unmodified, not fail outright because the probe was inconclusive.
+async function probeAudioDuration(inputPath, options = {}) {
+  const { signal } = options;
+
+  const fromHeader = parseFfmpegDuration(await runFfmpegForStderr(["-i", inputPath], signal));
+  if (fromHeader !== null) {
+    debugLogger.debug("FFmpeg duration probe complete", {
+      inputPath,
+      durationSeconds: fromHeader,
+      source: "header",
+    });
+    return fromHeader;
+  }
+
+  const fromDecode = parseFfmpegProgressTime(
+    await runFfmpegForStderr(["-i", inputPath, "-f", "null", "-"], signal)
+  );
+  debugLogger.debug("FFmpeg duration probe complete", {
+    inputPath,
+    durationSeconds: fromDecode,
+    source: "decode",
+  });
+  return fromDecode;
+}
+
 function splitAudioFile(inputPath, outputDir, options = {}) {
   const { segmentDuration = 600, audioBitrate = "128k", signal } = options;
 
@@ -461,6 +573,8 @@ module.exports = {
   convertToWav,
   splitAudioFile,
   parseFfmpegDuration,
+  parseFfmpegProgressTime,
+  probeAudioDuration,
   wavToFloat32Samples,
   computeFloat32RMS,
   mergeAudioSegments,

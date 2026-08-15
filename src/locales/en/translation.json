@@ -2261,7 +2261,9 @@
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
-        "tinfoil_voxtral": "Verifiably private transcription"
+        "tinfoil_voxtral": "Verifiably private transcription",
+        "sarvam_saaras_v3": "Multilingual speech recognition for Indian languages",
+        "sarvam_saaras_v4": "Latest multilingual speech recognition from Sarvam"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",

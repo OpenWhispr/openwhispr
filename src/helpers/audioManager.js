@@ -256,6 +256,7 @@ const PLACEHOLDER_KEYS = {
   groq: "your_groq_api_key_here",
   xai: "your_xai_api_key_here",
   mistral: "your_mistral_api_key_here",
+  sarvam: "your_sarvam_api_key_here",
 };
 
 const isValidApiKey = (key, provider = "openai") => {
@@ -355,6 +356,17 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (tokens.length > 0) payload.contextBias = tokens;
       return payload;
     },
+  },
+  sarvam: {
+    displayName: "Sarvam",
+    ipc: () => window.electronAPI?.proxySarvamTranscription,
+    // Sarvam's speech-to-text form takes no prompt/keyterm field, so the custom
+    // dictionary can't be biased into the request the way Tinfoil/Mistral/xAI allow.
+    buildPayload: ({ audioBuffer, model, language }) => ({
+      audioBuffer,
+      model,
+      language,
+    }),
   },
   xai: {
     displayName: "xAI",
@@ -2099,6 +2111,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!isValidApiKey(apiKey, "mistral")) {
         const err = new Error(
           "Mistral API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "sarvam") {
+      // Sarvam authenticates through the main-process proxy with its
+      // api-subscription-key header, so the renderer only checks availability.
+      apiKey = s.sarvamApiKey;
+      if (!isValidApiKey(apiKey, "sarvam")) {
+        apiKey = await window.electronAPI.getSarvamKey?.();
+      }
+      if (!isValidApiKey(apiKey, "sarvam")) {
+        const err = new Error(
+          "Sarvam API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

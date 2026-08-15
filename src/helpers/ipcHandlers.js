@@ -3706,6 +3706,20 @@ class IPCHandlers {
       })
     );
 
+    ipcMain.handle(
+      "proxy-sarvam-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language }) => {
+        // transcribeWithSarvam segments anything past the endpoint's 30s limit.
+        const { transcribeWithSarvam } = require("./sarvamTranscription");
+        return await transcribeWithSarvam({
+          apiKey: this.environmentManager.getSarvamKey(),
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          language,
+        });
+      })
+    );
+
     ipcMain.handle("get-corti-client-id", async () => {
       return this.environmentManager.getCortiClientId();
     });
@@ -5311,6 +5325,17 @@ class IPCHandlers {
             language: route.language,
           });
           if (text) result = { text, source: "corti", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "sarvam") {
+          // Segments past the endpoint's 30s limit, so it can't use the generic
+          // single-request fetch below.
+          const { transcribeWithSarvam } = require("./sarvamTranscription");
+          const { text, model } = await transcribeWithSarvam({
+            apiKey: this.environmentManager.getSarvamKey(),
+            audioBuffer: buffer,
+            model: route.model,
+            language: route.language,
+          });
+          if (text) result = { text, source: "sarvam", model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -8347,6 +8372,26 @@ class IPCHandlers {
               apiKey: this.environmentManager.getTinfoilKey(),
             });
             return { success: true, text };
+          }
+
+          if (route.transport === "proxied" && route.provider === "sarvam") {
+            const ext = path.extname(realByok).toLowerCase().replace(".", "");
+            // Uploaded recordings are the case most likely to run long, so the
+            // segmenting inside transcribeWithSarvam matters most here.
+            const { transcribeWithSarvam } = require("./sarvamTranscription");
+            try {
+              const { text } = await transcribeWithSarvam({
+                apiKey: this.environmentManager.getSarvamKey(),
+                audioBuffer: fs.readFileSync(realByok),
+                fileName: path.basename(realByok),
+                contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+                model: route.model,
+                language: route.language,
+              });
+              return { success: true, text };
+            } catch (error) {
+              return { success: false, error: error.message };
+            }
           }
 
           if (!apiKey && route.provider !== "custom") {

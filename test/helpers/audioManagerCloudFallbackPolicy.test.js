@@ -309,11 +309,12 @@ test("self-hosted mode is never hijacked by a leftover proxied provider", async 
     settingsKey: "__hijackSettings",
   });
 
-  const proxyCalls = { mistral: 0, xai: 0, corti: 0 };
+  const proxyCalls = { mistral: 0, xai: 0, corti: 0, sarvam: 0 };
   for (const [provider, channel] of [
     ["mistral", "proxyMistralTranscription"],
     ["xai", "proxyXaiTranscription"],
     ["corti", "proxyCortiTranscription"],
+    ["sarvam", "proxySarvamTranscription"],
   ]) {
     window.electronAPI[channel] = async () => {
       proxyCalls[provider] += 1;
@@ -327,7 +328,7 @@ test("self-hosted mode is never hijacked by a leftover proxied provider", async 
   });
 
   const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
-  for (const provider of ["mistral", "xai", "corti"]) {
+  for (const provider of ["mistral", "xai", "corti", "sarvam"]) {
     setSettings({
       allowLocalFallback: false,
       cloudTranscriptionProvider: provider,
@@ -339,7 +340,7 @@ test("self-hosted mode is never hijacked by a leftover proxied provider", async 
     assert.equal(result.success, true);
   }
 
-  assert.deepEqual(proxyCalls, { mistral: 0, xai: 0, corti: 0 });
+  assert.deepEqual(proxyCalls, { mistral: 0, xai: 0, corti: 0, sarvam: 0 });
   assert.equal(
     fetched.every((e) => e.startsWith("https://stt.internal.example.com")),
     true,
@@ -438,6 +439,7 @@ test("proxied providers dispatch through the registry", async (t) => {
     ["mistral", "proxyMistralTranscription"],
     ["xai", "proxyXaiTranscription"],
     ["corti", "proxyCortiTranscription"],
+    ["sarvam", "proxySarvamTranscription"],
   ]) {
     window.electronAPI[channel] = async (payload) => {
       payloads[provider] = payload;
@@ -464,7 +466,7 @@ test("proxied providers dispatch through the registry", async (t) => {
   });
 
   await t.test("each provider gets its own payload shape and source label", async () => {
-    for (const provider of ["tinfoil", "mistral", "xai", "corti"]) {
+    for (const provider of ["tinfoil", "mistral", "xai", "corti", "sarvam"]) {
       setSettings(settingsFor(provider));
       const result = await manager.processWithOpenAIAPI(audioBlob);
       assert.equal(result.success, true);
@@ -479,6 +481,9 @@ test("proxied providers dispatch through the registry", async (t) => {
     assert.equal(payloads.corti.language, "en");
     assert.equal(payloads.corti.environment, "eu");
     assert.equal(payloads.corti.tenant, "acme");
+    // Sarvam's form has no prompt/keyterm field, so the dictionary must not ride along.
+    assert.equal(payloads.sarvam.prompt, undefined);
+    assert.equal(payloads.sarvam.keyterms, undefined);
     assert.equal(fetched.length, 0);
   });
 
@@ -511,6 +516,7 @@ test("proxied providers dispatch through the registry", async (t) => {
       ["mistral", "proxyMistralTranscription", "Mistral"],
       ["xai", "proxyXaiTranscription", "xAI"],
       ["corti", "proxyCortiTranscription", "Corti"],
+      ["sarvam", "proxySarvamTranscription", "Sarvam"],
     ]) {
       delete window.electronAPI[channel];
       setSettings(settingsFor(provider));
