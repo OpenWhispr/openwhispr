@@ -626,7 +626,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "byok-dictation":
       case "byok-assistant":
         return (
-          <div className="h-full w-full pt-10">
+          <div className="h-full w-full pt-6">
             <div>
               <OnboardingStepHeader
                 title={t("onboarding.rehaul.provider.title")}
