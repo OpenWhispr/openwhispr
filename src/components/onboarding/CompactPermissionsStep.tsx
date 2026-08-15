@@ -12,6 +12,7 @@ interface CompactPermissionsStepProps {
     request: () => Promise<boolean>;
   };
   onContinue: () => void;
+  onSkip: () => void;
 }
 
 type PermissionRowId = "microphone" | "accessibility" | "system-audio";
@@ -63,7 +64,7 @@ function PermissionRow({
         type="button"
         disabled={busy || disabled || (granted && !canContinue)}
         onClick={() => (canContinue ? onContinue() : void onRequest())}
-        className={`inline-flex h-9 min-w-[5.15rem] shrink-0 items-center justify-center rounded-full px-4 text-base font-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 disabled:cursor-default ${
+        className={`inline-flex h-9 w-24 shrink-0 items-center justify-center rounded-full px-2 text-sm font-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 disabled:cursor-default ${
           canContinue
             ? "bg-blue-500 text-white hover:bg-blue-600"
             : "bg-neutral-200 text-neutral-500 hover:bg-neutral-300 disabled:bg-neutral-200 disabled:text-neutral-500"
@@ -85,6 +86,7 @@ export default function CompactPermissionsStep({
   permissions,
   systemAudio,
   onContinue,
+  onSkip,
 }: CompactPermissionsStepProps) {
   const { t } = useTranslation();
   const [busyPermission, setBusyPermission] = useState<PermissionRowId | null>(null);
@@ -101,6 +103,14 @@ export default function CompactPermissionsStep({
 
   return (
     <CompactOnboardingFrame showLegalNotice={false}>
+      <button
+        type="button"
+        onClick={onSkip}
+        className="absolute right-5 top-5 z-20 h-8 rounded-full bg-white/20 px-3 text-sm font-medium text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      >
+        {t("common.skip")}
+      </button>
+
       <div className="px-6 pt-48 text-center">
         <h1 className="onboarding-display-title mx-auto max-w-72">
           {t("onboarding.rehaul.permissions.title")}
