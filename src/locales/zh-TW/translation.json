@@ -1792,7 +1792,7 @@
       "lastSynced": "上次同步 {{time}}",
       "minutesAgo": "{{count}}分鐘前",
       "audioRetention": "音訊保留",
-      "audioRetentionDescription": "將音訊錄製檔案儲存在本機以便重新轉錄和下載。檔案會在保留期限過後自動刪除。",
+      "audioRetentionDescription": "將語音輸入音訊儲存在本機以便重新轉錄和下載。檔案會在保留期限過後自動刪除。會議音訊絕不會被儲存。",
       "audioRetentionDisabled": "已停用",
       "retentionDays_one": "{{count}} 天",
       "retentionDays_other": "{{count}} 天",

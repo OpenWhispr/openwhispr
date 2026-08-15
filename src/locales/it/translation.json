@@ -1792,7 +1792,7 @@
       "lastSynced": "Ultima sincronizzazione {{time}}",
       "minutesAgo": "{{count}}m fa",
       "audioRetention": "Conservazione audio",
-      "audioRetentionDescription": "Salva le registrazioni audio localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione.",
+      "audioRetentionDescription": "Salva l'audio di dettatura localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione. L'audio delle riunioni non viene mai salvato.",
       "audioRetentionDisabled": "Disattivato",
       "retentionDays_one": "{{count}} giorno",
       "retentionDays_other": "{{count}} giorni",

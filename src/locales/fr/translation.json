@@ -2066,7 +2066,7 @@
       "usageAnalytics": "Analyse d'utilisation",
       "usageAnalyticsDescription": "Aidez-nous à améliorer OpenWhispr en partageant des métriques de performance anonymes. Nous n'envoyons jamais le contenu de vos transcriptions — uniquement des données de performance et d'erreurs.",
       "audioRetention": "Conservation de l'audio",
-      "audioRetentionDescription": "Stocke les enregistrements audio localement pour la retranscription et le téléchargement. Les fichiers sont automatiquement supprimés après la période de conservation.",
+      "audioRetentionDescription": "Stocke l'audio de dictée localement pour la retranscription et le téléchargement. Les fichiers sont automatiquement supprimés après la période de conservation. L'audio des réunions n'est jamais stocké.",
       "audioRetentionDisabled": "Désactivé",
       "retentionDays_one": "{{count}} jour",
       "retentionDays_other": "{{count}} jours",

@@ -1840,7 +1840,7 @@
       "lastSynced": "Última sincronización {{time}}",
       "minutesAgo": "hace {{count}}m",
       "audioRetention": "Retención de audio",
-      "audioRetentionDescription": "Almacena grabaciones de audio localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención.",
+      "audioRetentionDescription": "Almacena el audio de dictado localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención. El audio de las reuniones nunca se almacena.",
       "saveDiscarded": "Guardar dictados descartados",
       "saveDiscardedDescription": "Cuando cancelas un dictado con Escape, conserva su audio en el historial para poder recuperarlo. Requiere tener activadas la retención de datos y de audio.",
       "audioRetentionDisabled": "Desactivado",

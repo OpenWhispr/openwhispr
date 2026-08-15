@@ -2066,7 +2066,7 @@
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
       "audioRetention": "Audio Retention",
-      "audioRetentionDescription": "Store audio recordings locally for re-transcription and download. Files are automatically deleted after the retention period.",
+      "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
       "retentionDays_one": "{{count}} day",
       "retentionDays_other": "{{count}} days",

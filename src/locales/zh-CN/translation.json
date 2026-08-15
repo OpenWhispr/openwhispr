@@ -1792,7 +1792,7 @@
       "lastSynced": "上次同步 {{time}}",
       "minutesAgo": "{{count}}分钟前",
       "audioRetention": "音频保留",
-      "audioRetentionDescription": "在本地存储音频录制文件以便重新转录和下载。文件会在保留期过后自动删除。",
+      "audioRetentionDescription": "在本地存储听写音频以便重新转录和下载。文件会在保留期过后自动删除。会议音频绝不会被存储。",
       "audioRetentionDisabled": "已禁用",
       "retentionDays_one": "{{count}} 天",
       "retentionDays_other": "{{count}} 天",
