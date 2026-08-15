@@ -13,11 +13,10 @@ import { OPENWHISPR_API_URL } from "../config/constants";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
-import logoIcon from "../assets/icon.png";
 import logger from "../utils/logger";
 import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
-import { BrandMark } from "./onboarding/OnboardingShell";
+import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
 
 interface AuthenticationStepProps {
   onContinueWithoutAccount?: () => void;
@@ -54,14 +53,14 @@ function ProviderTile({
       disabled={disabled}
       title={title}
       aria-label={label}
-      className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-secondary px-2 py-3 transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:text-muted-foreground"
+      className="flex h-[3.8rem] min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-xl bg-neutral-100 px-2 text-neutral-950 transition-colors hover:bg-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40 disabled:pointer-events-none disabled:text-neutral-500 dark:bg-neutral-100 dark:text-neutral-950 dark:hover:bg-neutral-200"
     >
       {loading ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : (
         <Icon className="size-4" />
       )}
-      <span className="truncate text-xs font-medium">{label}</span>
+      <span className="truncate text-sm font-normal">{label}</span>
     </button>
   );
 }
@@ -355,270 +354,239 @@ export default function AuthenticationStep({
   // Auth not configured state
   if (!AUTH_URL || !authClient) {
     return (
-      <div className="space-y-3">
-        <div className="text-center mb-4">
-          <img
-            src={logoIcon}
-            alt="OpenWhispr"
-            className="w-12 h-12 mx-auto mb-2.5 rounded-lg shadow-sm"
-          />
-          <p className="text-lg font-semibold text-foreground tracking-tight leading-tight">
+      <CompactOnboardingFrame>
+        <div className="px-5 pt-48 text-center">
+          <h1 className="text-[2rem] font-medium leading-tight tracking-[-0.035em]">
             {t("auth.welcomeTitle")}
-          </p>
-          <p className="text-muted-foreground text-sm mt-1 leading-tight">
-            {t("auth.welcomeSubtitle")}
-          </p>
-        </div>
-
-        <div className="bg-warning/5 p-2.5 rounded border border-warning/20">
-          <p className="text-xs text-warning text-center leading-snug">
+          </h1>
+          <p className="mt-4 text-base text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
+          <div className="mt-8 rounded-xl border border-warning/20 bg-warning/5 p-3 text-sm text-warning">
             {t("auth.cloudNotConfigured")}
-          </p>
+          </div>
+          {onContinueWithoutAccount && (
+            <Button onClick={onContinueWithoutAccount} className="mt-3 h-12 w-full rounded-full">
+              {t("auth.getStarted")}
+              <ArrowRight className="size-4" />
+            </Button>
+          )}
         </div>
-
-        {onContinueWithoutAccount && (
-          <Button onClick={onContinueWithoutAccount} className="w-full h-9">
-            <span className="text-sm font-medium">{t("auth.getStarted")}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Button>
-        )}
-      </div>
+      </CompactOnboardingFrame>
     );
   }
 
   // Already signed in state
   if (isLoaded && isSignedIn) {
     return (
-      <div className="space-y-3">
-        <div className="text-center mb-4">
-          <img
-            src={logoIcon}
-            alt="OpenWhispr"
-            className="w-12 h-12 mx-auto mb-2.5 rounded-lg shadow-sm"
-          />
-          <div className="w-5 h-5 mx-auto bg-success/10 rounded-full flex items-center justify-center mb-2">
-            <Check className="w-3 h-3 text-success" />
+      <CompactOnboardingFrame>
+        <div className="px-5 pt-48 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-border bg-card shadow-sm">
+            <Check className="size-5 text-success" />
           </div>
-          <p className="text-lg font-semibold text-foreground tracking-tight leading-tight">
+          <p className="mt-6 text-2xl font-medium leading-tight tracking-tight">
             {user?.name
               ? t("auth.signedIn.welcomeBackName", { name: user.name })
               : t("auth.signedIn.welcomeBack")}
           </p>
-          <p className="text-muted-foreground text-sm mt-1 leading-tight">
-            {t("auth.signedIn.ready")}
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{t("auth.signedIn.ready")}</p>
+          <Button onClick={onAuthComplete} className="mt-7 h-12 w-full rounded-full">
+            {t("auth.common.continue")}
+            <ArrowRight className="size-4" />
+          </Button>
         </div>
-        <Button onClick={onAuthComplete} className="w-full h-9">
-          <span className="text-sm font-medium">{t("auth.common.continue")}</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Button>
-      </div>
+      </CompactOnboardingFrame>
     );
   }
 
   if (forgotPasswordOpen) {
-    return <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />;
+    return (
+      <CompactOnboardingFrame>
+        <div className="px-5 pt-72">
+          <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />
+        </div>
+      </CompactOnboardingFrame>
+    );
   }
 
   if (ssoDiscovery && authMode === null) {
     return (
-      <div className="space-y-3">
-        <div className="onboarding-brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center text-primary-foreground">
-          <BrandMark className="mx-auto size-14" />
-          <p className="mt-4 text-xl font-medium">{t("auth.welcomeTitle")}</p>
-          <p className="mt-2 text-sm opacity-80">{t("auth.welcomeSubtitle")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleBack}
-          className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ChevronLeft className="h-3 w-3" />
-          {t("auth.common.back")}
-        </button>
+      <CompactOnboardingFrame>
+        <div className="space-y-3 px-5 pt-72">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="h-3 w-3" />
+            {t("auth.common.back")}
+          </button>
 
-        <div className="pb-1 text-center">
-          <p className="mb-2 text-sm leading-tight text-muted-foreground/70">{email}</p>
-          <p className="text-lg font-semibold leading-tight tracking-tight text-foreground">
-            {t("auth.sso.companySignInTitle")}
-          </p>
-          <p className="mt-1 text-xs leading-snug text-muted-foreground">
-            {ssoDiscovery.required
-              ? t("auth.sso.requiredDescription", { domain: ssoDiscovery.domain })
-              : t("auth.sso.availableDescription", { domain: ssoDiscovery.domain })}
-          </p>
-        </div>
+          <div className="pb-1 text-center">
+            <p className="mb-2 text-sm leading-tight text-muted-foreground/70">{email}</p>
+            <p className="text-lg font-semibold leading-tight tracking-tight text-foreground">
+              {t("auth.sso.companySignInTitle")}
+            </p>
+            <p className="mt-1 text-xs leading-snug text-muted-foreground">
+              {ssoDiscovery.required
+                ? t("auth.sso.requiredDescription", { domain: ssoDiscovery.domain })
+                : t("auth.sso.availableDescription", { domain: ssoDiscovery.domain })}
+            </p>
+          </div>
 
-        <Button
-          type="button"
-          onClick={handleSSOSignIn}
-          disabled={isSSOLoading || !oauthProtocolRegistered}
-          className="h-9 w-full"
-        >
-          {isSSOLoading ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span className="text-sm font-medium">{t("auth.social.completeInBrowser")}</span>
-            </>
-          ) : (
-            <span className="text-sm font-medium">{t("auth.sso.continueWithSSO")}</span>
-          )}
-        </Button>
-
-        {!ssoDiscovery.required && (
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full font-normal text-muted-foreground"
-            disabled={isSSOLoading}
-            onClick={() => {
-              setSsoDiscovery(null);
-              setAuthMode(ssoDiscovery.exists ? "sign-in" : "sign-up");
-            }}
+            onClick={handleSSOSignIn}
+            disabled={isSSOLoading || !oauthProtocolRegistered}
+            className="h-12 w-full rounded-full"
           >
-            {t("auth.sso.useEmailInstead")}
+            {isSSOLoading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span className="text-sm font-medium">{t("auth.social.completeInBrowser")}</span>
+              </>
+            ) : (
+              <span className="text-sm font-medium">{t("auth.sso.continueWithSSO")}</span>
+            )}
           </Button>
-        )}
 
-        {error && (
-          <div className="flex items-center gap-1.5 rounded border border-destructive/20 bg-destructive/5 px-2.5 py-1.5">
-            <AlertCircle className="h-3 w-3 shrink-0 text-destructive" />
-            <p className="text-xs leading-snug text-destructive">{error}</p>
-          </div>
-        )}
-      </div>
+          {!ssoDiscovery.required && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full font-normal text-muted-foreground"
+              disabled={isSSOLoading}
+              onClick={() => {
+                setSsoDiscovery(null);
+                setAuthMode(ssoDiscovery.exists ? "sign-in" : "sign-up");
+              }}
+            >
+              {t("auth.sso.useEmailInstead")}
+            </Button>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-1.5 rounded border border-destructive/20 bg-destructive/5 px-2.5 py-1.5">
+              <AlertCircle className="h-3 w-3 shrink-0 text-destructive" />
+              <p className="text-xs leading-snug text-destructive">{error}</p>
+            </div>
+          )}
+        </div>
+      </CompactOnboardingFrame>
     );
   }
 
   // Password form (after email is entered)
   if (authMode !== null) {
     return (
-      <div className="space-y-3">
-        <div className="onboarding-brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center text-primary-foreground">
-          <BrandMark className="mx-auto size-14" />
-          <p className="mt-4 text-xl font-medium">{t("auth.welcomeTitle")}</p>
-          <p className="mt-2 text-sm opacity-80">{t("auth.welcomeSubtitle")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleBack}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5"
-        >
-          <ChevronLeft className="w-3 h-3" />
-          {t("auth.common.back")}
-        </button>
+      <CompactOnboardingFrame showLegalNotice={false}>
+        <div className="px-5 pt-[18.3rem]">
+          <button type="button" onClick={handleBack} className="sr-only">
+            <ChevronLeft className="w-3 h-3" />
+            {t("auth.common.back")}
+          </button>
 
-        <div className="text-center mb-4">
-          <p className="text-sm text-muted-foreground/70 mb-2 leading-tight">{email}</p>
-          <p className="text-lg font-semibold text-foreground tracking-tight leading-tight">
-            {authMode === "sign-in"
-              ? t("auth.passwordForm.welcomeBack")
-              : t("auth.passwordForm.createAccount")}
-          </p>
-        </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {authMode === "sign-up" && (
+              <label className="block space-y-2">
+                <span className="text-xs text-neutral-500 dark:text-neutral-500">
+                  {t("auth.passwordForm.nameLabel")}
+                </span>
+                <Input
+                  type="text"
+                  placeholder={t("auth.passwordForm.fullNamePlaceholder")}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="onboarding-light-input onboarding-light-input-bordered h-11 rounded-xl px-3 text-sm"
+                  disabled={isSubmitting}
+                  autoFocus
+                />
+              </label>
+            )}
+            <label className="block space-y-2">
+              <span className="text-xs text-neutral-500 dark:text-neutral-500">
+                {t("auth.passwordForm.passwordLabel")}
+              </span>
+              <Input
+                type="password"
+                placeholder={t("auth.passwordForm.passwordLabel")}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="onboarding-light-input onboarding-light-input-bordered h-11 rounded-xl px-3 text-sm"
+                required
+                minLength={authMode === "sign-up" ? 8 : undefined}
+                disabled={isSubmitting}
+                autoFocus={authMode === "sign-in"}
+              />
+            </label>
 
-        <form onSubmit={handleSubmit} className="space-y-2">
-          {authMode === "sign-up" && (
-            <Input
-              type="text"
-              placeholder={t("auth.passwordForm.fullNamePlaceholder")}
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="h-11 rounded-full px-4 text-sm"
-              disabled={isSubmitting}
-              autoFocus
-            />
-          )}
-          <Input
-            type="password"
-            placeholder={
-              authMode === "sign-up"
-                ? t("auth.passwordForm.createPasswordPlaceholder")
-                : t("auth.passwordForm.enterPasswordPlaceholder")
-            }
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="h-11 rounded-full px-4 text-sm"
-            required
-            minLength={authMode === "sign-up" ? 8 : undefined}
-            disabled={isSubmitting}
-            autoFocus={authMode === "sign-in"}
-          />
+            {authMode === "sign-in" && (
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="block text-left text-xs text-primary transition-colors hover:text-primary/80"
+                disabled={isSubmitting}
+              >
+                {t("auth.passwordForm.forgotPassword")}
+              </button>
+            )}
 
-          {authMode === "sign-up" && (
-            <p className="text-xs text-muted-foreground/70 leading-tight">
-              {t("auth.passwordForm.passwordMinLength")}
-            </p>
-          )}
+            {error && (
+              <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
+                <p className="text-xs text-destructive leading-snug">{error}</p>
+              </div>
+            )}
 
-          {authMode === "sign-in" && (
-            <button
-              type="button"
-              onClick={handleForgotPassword}
-              className="text-xs text-primary hover:text-primary/80 transition-colors text-left"
-              disabled={isSubmitting}
+            <Button
+              type="submit"
+              disabled={isSubmitting || !password}
+              className="h-[2.875rem] w-full rounded-full border-transparent bg-blue-600 text-base font-normal shadow-none hover:bg-blue-500 disabled:border-transparent disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-neutral-200 dark:disabled:text-neutral-500"
             >
-              {t("auth.passwordForm.forgotPassword")}
-            </button>
-          )}
-
-          {error && (
-            <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
-              <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
-              <p className="text-xs text-destructive leading-snug">{error}</p>
-            </div>
-          )}
-
-          <Button
-            type="submit"
-            disabled={isSubmitting || !password}
-            className="h-11 w-full rounded-full"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span className="text-sm font-medium">
+                    {authMode === "sign-in"
+                      ? t("auth.passwordForm.signingIn")
+                      : t("auth.passwordForm.creatingAccount")}
+                  </span>
+                </>
+              ) : (
                 <span className="text-sm font-medium">
                   {authMode === "sign-in"
-                    ? t("auth.passwordForm.signingIn")
-                    : t("auth.passwordForm.creatingAccount")}
+                    ? t("auth.passwordForm.signIn")
+                    : t("auth.passwordForm.createAccountButton")}
                 </span>
-              </>
-            ) : (
-              <span className="text-sm font-medium">
-                {authMode === "sign-in"
-                  ? t("auth.passwordForm.signIn")
-                  : t("auth.passwordForm.createAccountButton")}
-              </span>
-            )}
-          </Button>
-        </form>
+              )}
+            </Button>
+          </form>
 
-        <div className="text-center">
-          <button
-            type="button"
-            onClick={toggleAuthMode}
-            className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
-            disabled={isSubmitting}
-          >
-            {authMode === "sign-in" ? (
-              <>
-                {t("auth.passwordForm.newHere")}{" "}
-                <span className="font-medium text-primary">
-                  {t("auth.passwordForm.createAccountLink")}
-                </span>
-              </>
-            ) : (
-              <>
-                {t("auth.passwordForm.haveAccount")}{" "}
-                <span className="font-medium text-primary">
-                  {t("auth.passwordForm.signInLink")}
-                </span>
-              </>
-            )}
-          </button>
+          <div className="sr-only">
+            <button
+              type="button"
+              onClick={toggleAuthMode}
+              className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+              disabled={isSubmitting}
+            >
+              {authMode === "sign-in" ? (
+                <>
+                  {t("auth.passwordForm.newHere")}{" "}
+                  <span className="font-medium text-primary">
+                    {t("auth.passwordForm.createAccountLink")}
+                  </span>
+                </>
+              ) : (
+                <>
+                  {t("auth.passwordForm.haveAccount")}{" "}
+                  <span className="font-medium text-primary">
+                    {t("auth.passwordForm.signInLink")}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      </CompactOnboardingFrame>
     );
   }
 
@@ -654,106 +622,85 @@ export default function AuthenticationStep({
   ];
 
   return (
-    <div className="overflow-hidden rounded-[inherit]">
-      <div className="onboarding-brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center text-primary-foreground">
-        <BrandMark className="mx-auto size-16" />
-        <p className="mt-4 text-2xl font-medium tracking-tight">{t("auth.welcomeTitle")}</p>
-        <p className="mt-2 text-sm opacity-80">{t("auth.welcomeSubtitle")}</p>
-      </div>
-
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          handleEmailContinue();
-        }}
-        className="space-y-3"
-      >
-        <Input
-          type="email"
-          placeholder={t("auth.emailStep.emailPlaceholder")}
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="h-11 rounded-full px-4 text-sm"
-          required
-          disabled={busy}
-        />
-        <Button type="submit" disabled={!email.trim() || busy} className="h-11 w-full rounded-full">
-          {isCheckingEmail ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <ArrowRight className="size-4" />
-          )}
-          {t("auth.emailStep.continueWithEmail")}
-        </Button>
-      </form>
-
-      <p className="py-4 text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
-        {t("auth.common.or")}
-      </p>
-
-      <div className="flex gap-2">
-        {providers.map((provider) => (
-          <ProviderTile
-            key={provider.id}
-            label={provider.label}
-            icon={provider.icon}
-            loading={provider.loading}
-            disabled={busy || !oauthProtocolRegistered}
-            title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
-            onClick={provider.onClick}
-          />
-        ))}
-      </div>
-
-      {!oauthProtocolRegistered && (
-        <p className="text-xs text-muted-foreground/80 leading-tight text-center">
-          {t("auth.social.protocolUnavailable")}
+    <CompactOnboardingFrame>
+      <div className="px-5 pt-48 text-center">
+        <h1 className="onboarding-display-title">{t("auth.welcomeTitle")}</h1>
+        <p className="mt-3 text-base text-neutral-500 dark:text-neutral-500">
+          {t("auth.welcomeSubtitle")}
         </p>
-      )}
 
-      {error && (
-        <div className="px-3 py-2 rounded-md bg-destructive/5 border border-destructive/20 flex items-center gap-2">
-          <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
-          <p className="text-xs text-destructive">{error}</p>
-        </div>
-      )}
-
-      {onContinueWithoutAccount && (
-        <div className="pt-3">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleEmailContinue();
+          }}
+          className="mt-6 space-y-3"
+        >
+          <Input
+            type="email"
+            placeholder={t("auth.emailStep.emailPlaceholder")}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="onboarding-light-input h-11 rounded-xl px-3 text-sm"
+            required
+            disabled={busy}
+          />
           <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onContinueWithoutAccount}
-            className="w-full rounded-full font-normal text-muted-foreground hover:text-foreground"
-            disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
+            type="submit"
+            disabled={!email.trim() || busy}
+            className="h-[2.875rem] w-full rounded-full border-transparent bg-blue-600 text-base font-normal shadow-none hover:bg-blue-500 disabled:border-transparent disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-neutral-200 dark:disabled:text-neutral-500"
           >
-            {t("auth.emailStep.continueWithoutAccount")}
+            {isCheckingEmail ? <Loader2 className="size-4 animate-spin" /> : null}
+            {t("auth.emailStep.continueWithEmail")}
           </Button>
-        </div>
-      )}
+        </form>
 
-      <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">
-        {t("auth.legal.prefix")}{" "}
-        <a
-          href="https://openwhispr.com/terms"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-link underline decoration-link/30 hover:decoration-link/60 transition-colors"
-        >
-          {t("auth.legal.terms")}
-        </a>{" "}
-        {t("auth.legal.and")}{" "}
-        <a
-          href="https://openwhispr.com/privacy"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-link underline decoration-link/30 hover:decoration-link/60 transition-colors"
-        >
-          {t("auth.legal.privacy")}
-        </a>
-        {t("auth.legal.suffix")}
-      </p>
-    </div>
+        <p className="pb-3 pt-4 text-sm font-normal uppercase text-neutral-500 dark:text-neutral-500">
+          {t("auth.common.or")}
+        </p>
+
+        <div className="flex gap-3">
+          {providers.map((provider) => (
+            <ProviderTile
+              key={provider.id}
+              label={provider.label}
+              icon={provider.icon}
+              loading={provider.loading}
+              disabled={busy || !oauthProtocolRegistered}
+              title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
+              onClick={provider.onClick}
+            />
+          ))}
+        </div>
+
+        {!oauthProtocolRegistered && (
+          <p className="mt-2 text-center text-xs leading-tight text-muted-foreground/80">
+            {t("auth.social.protocolUnavailable")}
+          </p>
+        )}
+
+        {error && (
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-left">
+            <AlertCircle className="size-3.5 shrink-0 text-destructive" />
+            <p className="text-xs text-destructive">{error}</p>
+          </div>
+        )}
+
+        {onContinueWithoutAccount && (
+          <div className="pt-5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onContinueWithoutAccount}
+              className="w-full rounded-full text-base font-normal text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950 dark:text-neutral-600 dark:hover:bg-neutral-100 dark:hover:text-neutral-950"
+              disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
+            >
+              {t("auth.emailStep.continueWithoutAccount")}
+            </Button>
+          </div>
+        )}
+      </div>
+    </CompactOnboardingFrame>
   );
 }

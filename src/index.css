@@ -204,7 +204,25 @@
 }
 
 .onboarding-canvas.compact {
+  background-color: var(--color-white);
   background-image: none;
+}
+
+.onboarding-compact-hero {
+  isolation: isolate;
+}
+
+.onboarding-compact-hero::after {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--color-primary-foreground) 36%, transparent) 0.55px,
+    transparent 0.85px
+  );
+  background-size: 5px 5px;
+  content: "";
+  mask-image: linear-gradient(to bottom, var(--color-foreground) 0%, transparent 91%);
 }
 
 .onboarding-brand-hero {
@@ -305,6 +323,29 @@ h6 {
 h1 {
   font-size: 2.5rem;
   font-weight: 700;
+}
+
+.onboarding-display-title {
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
+}
+
+.onboarding-light-input,
+.onboarding-light-input:hover,
+.onboarding-light-input:focus-visible {
+  border-color: transparent !important;
+  background-color: var(--color-neutral-100) !important;
+  color: var(--color-neutral-950) !important;
+}
+
+.onboarding-light-input::placeholder {
+  color: var(--color-neutral-400);
+}
+
+.onboarding-light-input.onboarding-light-input-bordered {
+  border-color: var(--color-neutral-200) !important;
 }
 
 /* Modern Button Styling - handled by button component */

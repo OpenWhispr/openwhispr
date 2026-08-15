@@ -16,6 +16,12 @@ interface OnboardingShellProps {
   progressIndex?: number;
 }
 
+interface CompactOnboardingFrameProps {
+  children: ReactNode;
+  showBrandMark?: boolean;
+  showLegalNotice?: boolean;
+}
+
 export function OnboardingProgress({ index }: { index: number }) {
   return (
     <div className="flex items-center justify-center gap-2" aria-hidden="true">
@@ -65,10 +71,10 @@ export default function OnboardingShell({
 
   return (
     <main
-      className={`onboarding-canvas flex h-screen flex-col overflow-hidden ${compact ? "compact" : ""}`}
+      className={`onboarding-canvas relative flex h-screen flex-col overflow-hidden ${compact ? "compact rounded-[2rem]" : ""}`}
     >
       <div
-        className="h-3 shrink-0"
+        className="absolute inset-x-0 top-0 z-50 h-4"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         aria-hidden="true"
       />
@@ -118,6 +124,49 @@ export default function OnboardingShell({
         </footer>
       )}
     </main>
+  );
+}
+
+export function CompactOnboardingFrame({
+  children,
+  showBrandMark = true,
+  showLegalNotice = true,
+}: CompactOnboardingFrameProps) {
+  const { t } = useTranslation();
+
+  return (
+    <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden rounded-[2rem] bg-white text-neutral-950 dark:bg-white dark:text-neutral-950">
+      <div className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-60 bg-gradient-to-b from-indigo-400 via-indigo-300 to-white" />
+      {showBrandMark && (
+        <BrandMark className="pointer-events-none absolute left-1/2 top-13 z-10 size-28 -translate-x-1/2 text-white" />
+      )}
+
+      <div className="relative z-10 flex flex-1 flex-col">{children}</div>
+
+      {showLegalNotice && (
+        <p className="relative z-10 mx-auto mt-auto w-full max-w-xs shrink-0 px-2 pb-6 pt-5 text-center text-sm leading-5 text-neutral-500 dark:text-neutral-500">
+          {t("auth.legal.prefix")}{" "}
+          <a
+            href="https://openwhispr.com/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 transition-colors hover:text-blue-500 dark:text-blue-600 dark:hover:text-blue-500"
+          >
+            {t("auth.legal.terms")}
+          </a>{" "}
+          {t("auth.legal.and")}{" "}
+          <a
+            href="https://openwhispr.com/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 transition-colors hover:text-blue-500 dark:text-blue-600 dark:hover:text-blue-500"
+          >
+            {t("auth.legal.privacy")}
+          </a>
+          {t("auth.legal.suffix")}
+        </p>
+      )}
+    </section>
   );
 }
 

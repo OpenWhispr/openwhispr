@@ -903,6 +903,8 @@
       "enterPasswordPlaceholder": "Введите пароль",
       "forgotPassword": "Забыли пароль?",
       "fullNamePlaceholder": "Полное имя",
+      "nameLabel": "Имя",
+      "passwordLabel": "Пароль",
       "haveAccount": "Уже есть аккаунт?",
       "newHere": "Впервые здесь?",
       "passwordMinLength": "Пароль должен содержать не менее 8 символов",

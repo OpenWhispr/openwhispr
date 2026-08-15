@@ -903,6 +903,8 @@
       "enterPasswordPlaceholder": "輸入你的密碼",
       "forgotPassword": "忘記密碼？",
       "fullNamePlaceholder": "姓名",
+      "nameLabel": "姓名",
+      "passwordLabel": "密碼",
       "haveAccount": "已經有帳號了？",
       "newHere": "第一次來？",
       "passwordMinLength": "密碼至少需要 8 個字元",
