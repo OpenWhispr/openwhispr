@@ -622,7 +622,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <TranscriptionModelPicker
               selectedCloudProvider={cloudTranscriptionProvider}
               onCloudProviderSelect={(provider) =>
-                updateTranscriptionSettings({ cloudTranscriptionProvider: provider })
+                updateTranscriptionSettings({
+                  cloudTranscriptionProvider: provider,
+                  // Picking a BYOK provider while signed out must also leave
+                  // OpenWhispr Cloud mode, or dictation still routes there.
+                  ...(!isSignedIn ? { cloudTranscriptionMode: "byok" } : {}),
+                })
               }
               selectedCloudModel={cloudTranscriptionModel}
               onCloudModelSelect={(model) =>
