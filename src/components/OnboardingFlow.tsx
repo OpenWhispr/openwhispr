@@ -444,7 +444,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "languages":
         return (
-          <div className="w-full">
+          <div className="min-h-full w-full">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.languages.title")}
               description={t("onboarding.rehaul.languages.description")}
@@ -634,7 +634,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     <>
       <OnboardingShell
         compact={compact}
-        onBack={hasShellNavigation && session.history.length > 0 ? goBack : undefined}
+        onBack={
+          hasShellNavigation && currentStepId !== "languages" && session.history.length > 0
+            ? goBack
+            : undefined
+        }
         onContinue={hasShellNavigation ? () => void continueFromCurrentStep() : undefined}
         onSkip={
           localSetup

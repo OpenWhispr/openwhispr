@@ -191,7 +191,7 @@
       },
       "languages": {
         "title": "Which languages do you speak?",
-        "description": "Select all that apply. Multiple selections use automatic language detection."
+        "description": "Select all that apply. This helps OpenWhispr recognize language switches more accurately."
       },
       "dictationHotkey": {
         "title": "Set up your keyboard shortcut",
@@ -1202,7 +1202,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",
-    "searchPlaceholder": "Search..."
+    "searchPlaceholder": "Search languages"
   },
   "microphoneSettings": {
     "builtIn": "(Built-in)",
