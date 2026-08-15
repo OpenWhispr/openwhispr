@@ -452,6 +452,7 @@ export const useAudioRecording = (toast, options = {}) => {
     });
 
     const handleNoAudioDetected = () => {
+      window.electronAPI?.hideDictationPreview?.();
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }
