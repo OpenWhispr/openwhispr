@@ -88,10 +88,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     title: string;
     description: string;
   } | null>(null);
-  const [, setAccessibilitySkipped] = useLocalStorage(ACCESSIBILITY_SKIPPED_KEY, false, {
-    serialize: String,
-    deserialize: (value) => value === "true",
-  });
+  const [, setAccessibilitySkipped] = useLocalStorage(ACCESSIBILITY_SKIPPED_KEY, false);
 
   const permissions = usePermissions((dialog) =>
     setPermissionAlert({ title: dialog.title, description: dialog.description })
@@ -418,6 +415,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             permissions={permissions}
             systemAudio={systemAudio}
             onContinue={() => void continueFromCurrentStep()}
+            onSkip={() => void continueFromCurrentStep()}
           />
         );
 
