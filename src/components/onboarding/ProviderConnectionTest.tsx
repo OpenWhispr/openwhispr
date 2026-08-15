@@ -6,11 +6,13 @@ import { Button } from "../ui/button";
 interface ProviderConnectionTestProps {
   config: Parameters<NonNullable<Window["electronAPI"]["testProviderConnection"]>>[0];
   onSuccessChange: (connected: boolean) => void;
+  variant?: "default" | "inline";
 }
 
 export default function ProviderConnectionTest({
   config,
   onSuccessChange,
+  variant = "default",
 }: ProviderConnectionTestProps) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
@@ -20,7 +22,17 @@ export default function ProviderConnectionTest({
     setStatus("idle");
     setError(null);
     onSuccessChange(false);
-  }, [config.apiKey, config.baseUrl, config.provider, config.scope, onSuccessChange]);
+  }, [
+    config.apiKey,
+    config.baseUrl,
+    config.clientId,
+    config.clientSecret,
+    config.environment,
+    config.provider,
+    config.scope,
+    config.tenant,
+    onSuccessChange,
+  ]);
 
   const testConnection = async () => {
     setStatus("testing");
@@ -40,6 +52,38 @@ export default function ProviderConnectionTest({
       setError(t("onboarding.rehaul.provider.connectionFailed"));
     }
   };
+
+  if (variant === "inline") {
+    return (
+      <div>
+        <div className="flex h-11 items-center justify-between rounded-xl border border-neutral-200 bg-white px-3">
+          <span className="text-xs font-medium text-neutral-950">
+            {t("onboarding.rehaul.provider.testConnection")}
+          </span>
+          <Button
+            type="button"
+            onClick={() => void testConnection()}
+            disabled={status === "testing"}
+            className="h-7 gap-1 rounded-full border-neutral-950! bg-neutral-950 px-2 text-[0.5625rem] font-normal text-white shadow-none! hover:bg-neutral-800 focus-visible:ring-0 disabled:opacity-70"
+          >
+            {status === "testing" && <Loader2 className="size-3 animate-spin" />}
+            {status === "success" && <CheckCircle className="size-3" />}
+            {status === "error" && <XCircle className="size-3" />}
+            {status === "testing"
+              ? t("onboarding.rehaul.provider.testing")
+              : status === "success"
+                ? t("onboarding.rehaul.provider.connected")
+                : t("onboarding.rehaul.provider.runTest")}
+          </Button>
+        </div>
+        {error && (
+          <p role="alert" className="mt-1 px-1 text-xs text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">

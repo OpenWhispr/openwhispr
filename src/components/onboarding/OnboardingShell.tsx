@@ -42,14 +42,20 @@ export function OnboardingStepHeader({
   title,
   titleLines,
   description,
+  descriptionLines,
+  wideTitle = false,
 }: {
   title: string;
   titleLines?: string[];
   description?: string;
+  descriptionLines?: string[];
+  wideTitle?: boolean;
 }) {
   return (
     <header className="mx-auto w-full max-w-lg space-y-3 text-center">
-      <h1 className="onboarding-display-title mx-auto max-w-xs text-neutral-950">
+      <h1
+        className={`onboarding-display-title mx-auto text-neutral-950 ${wideTitle ? "max-w-none" : "max-w-xs"}`}
+      >
         {titleLines ? (
           <>
             <span className="sr-only">{title}</span>
@@ -65,8 +71,23 @@ export function OnboardingStepHeader({
           title
         )}
       </h1>
-      {description && (
-        <p className="mx-auto max-w-md text-sm leading-5 text-neutral-500">{description}</p>
+      {(description || descriptionLines) && (
+        <p className="mx-auto max-w-md text-sm leading-5 text-neutral-500">
+          {descriptionLines ? (
+            <>
+              <span className="sr-only">{description}</span>
+              <span aria-hidden="true">
+                {descriptionLines.map((line) => (
+                  <span key={line} className="block">
+                    {line}
+                  </span>
+                ))}
+              </span>
+            </>
+          ) : (
+            description
+          )}
+        </p>
       )}
     </header>
   );

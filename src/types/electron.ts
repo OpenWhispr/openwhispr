@@ -890,6 +890,8 @@ declare global {
         provider: string;
         apiKey?: string;
         baseUrl?: string;
+        clientId?: string;
+        clientSecret?: string;
         environment?: string;
         tenant?: string;
       }) => Promise<{ success: boolean; error?: string }>;

@@ -56,6 +56,8 @@ function progressForStep(stepId: OnboardingStepId): number {
   if (["use-cases", "dictation-demo"].includes(stepId)) return 1;
   if (["dictation-hotkey", "assistant-hotkey"].includes(stepId)) return 2;
   if (stepId === "notes") return 0;
+  if (stepId.startsWith("byok-") || stepId.startsWith("local-") || stepId.startsWith("enterprise-"))
+    return 0;
   return stepId.endsWith("assistant") ? 1 : 0;
 }
 
@@ -624,12 +626,23 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "byok-dictation":
       case "byok-assistant":
         return (
-          <div className="w-full">
-            <OnboardingStepHeader
-              title={t("onboarding.rehaul.provider.title")}
-              description={t("onboarding.rehaul.provider.description")}
+          <div className="h-full w-full pt-10">
+            <div>
+              <OnboardingStepHeader
+                title={t("onboarding.rehaul.provider.title")}
+                description={t("onboarding.rehaul.provider.description")}
+                descriptionLines={[
+                  t("onboarding.rehaul.provider.descriptionLineOne"),
+                  t("onboarding.rehaul.provider.descriptionLineTwo"),
+                ]}
+                wideTitle
+              />
+            </div>
+            <ByokProviderStep
+              stepId={currentStepId}
+              onConnectionChange={onStageReady}
+              onProceed={() => void continueFromCurrentStep()}
             />
-            <ByokProviderStep stepId={currentStepId} onConnectionChange={onStageReady} />
           </div>
         );
 
@@ -664,6 +677,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const demoStep = currentStepId === "dictation-demo" || currentStepId === "assistant-demo";
   const inlineGatedStep = hotkeyStep || demoStep;
   const choiceStep = currentStepId === "setup-choice";
+  const inlineProviderStep =
+    currentStepId === "byok-dictation" || currentStepId === "byok-assistant";
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
 
   return (
@@ -674,12 +689,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           hasShellNavigation &&
           currentStepId !== "languages" &&
           !choiceStep &&
+          !inlineProviderStep &&
           session.history.length > 0
             ? goBack
             : undefined
         }
         onContinue={
-          hasShellNavigation && !choiceStep && (!inlineGatedStep || canContinue)
+          hasShellNavigation &&
+          !choiceStep &&
+          !inlineProviderStep &&
+          (!inlineGatedStep || canContinue)
             ? () => void continueFromCurrentStep()
             : undefined
         }
