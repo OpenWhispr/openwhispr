@@ -149,6 +149,7 @@ export interface HotkeyInputProps {
   disabled?: boolean;
   autoFocus?: boolean;
   validate?: (hotkey: string) => string | null | undefined;
+  onValidationError?: (message: string | null) => void;
 }
 
 function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
@@ -179,7 +180,7 @@ function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
 }
 
 export interface HotkeyInputVariant {
-  variant?: "default" | "hero";
+  variant?: "default" | "hero" | "capture-overlay";
 }
 
 export function HotkeyInput({
@@ -191,6 +192,7 @@ export function HotkeyInput({
   autoFocus = false,
   variant = "default",
   validate,
+  onValidationError,
 }: HotkeyInputProps & HotkeyInputVariant) {
   const { t } = useTranslation();
   const [isCapturing, setIsCapturing] = useState(false);
@@ -274,6 +276,7 @@ export function HotkeyInput({
         const errorMsg = validate(hotkey);
         if (errorMsg) {
           setValidationWarning(errorMsg);
+          onValidationError?.(errorMsg);
           warningTimeoutRef.current = setTimeout(() => setValidationWarning(null), 4000);
           heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
           modifierCodesRef.current = {};
@@ -285,13 +288,14 @@ export function HotkeyInput({
       }
 
       setValidationWarning(null);
+      onValidationError?.(null);
       onChange(hotkey);
       setIsCapturing(false);
       setActiveModifiers(new Set());
       clearFnHeld();
       containerRef.current?.blur();
     },
-    [validate, onChange, clearFnHeld]
+    [validate, onValidationError, onChange, clearFnHeld]
   );
 
   const handleKeyDown = useCallback(
@@ -415,10 +419,11 @@ export function HotkeyInput({
     if (!disabled) {
       setIsCapturing(true);
       setValidationWarning(null);
+      onValidationError?.(null);
       clearFnHeld();
       window.electronAPI?.setHotkeyListeningMode?.(true);
     }
-  }, [disabled, clearFnHeld]);
+  }, [disabled, clearFnHeld, onValidationError]);
 
   const handleBlur = useCallback(() => {
     setIsCapturing(false);
@@ -495,6 +500,29 @@ export function HotkeyInput({
         <Trash2 className="w-3.5 h-3.5" />
       </button>
     ) : null;
+
+  if (variant === "capture-overlay") {
+    return (
+      <div
+        ref={containerRef}
+        tabIndex={disabled ? -1 : 0}
+        role="button"
+        aria-label={t("hotkeyInput.ariaLabel")}
+        data-capturing={isCapturing || undefined}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
+        onMouseDown={handleMouseDown}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        className="absolute inset-0 z-10 cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20"
+      >
+        <span className="sr-only">
+          {validationWarning ??
+            (isCapturing ? t("hotkeyInput.listening") : t("hotkeyInput.clickToSet"))}
+        </span>
+      </div>
+    );
+  }
 
   // Hero variant: large centered key display for onboarding
   if (variant === "hero") {

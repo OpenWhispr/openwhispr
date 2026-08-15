@@ -180,6 +180,8 @@
       },
       "dictationHotkey": {
         "title": "Set up your keyboard shortcut",
+        "titleLineOne": "Configure seu",
+        "titleLineTwo": "atalho de teclado",
         "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
       },
       "assistantHotkey": {
@@ -189,7 +191,8 @@
       "hotkey": {
         "capture": "Press the keys you want to use",
         "confirm": "Press {{hotkey}} again to confirm",
-        "chooseAnother": "Choose another shortcut"
+        "chooseAnother": "Choose another shortcut",
+        "inUse": "Esse atalho já está em uso. Escolha outro."
       },
       "dictationDemo": {
         "title": "Try your first dictation",

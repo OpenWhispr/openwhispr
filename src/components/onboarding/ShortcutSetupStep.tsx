@@ -1,23 +1,25 @@
 import { useState } from "react";
-import { AlertCircle, Check } from "lucide-react";
 import { HotkeyInput } from "../ui/HotkeyInput";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
+import { formatHotkeyInstruction, getHotkeyKeycaps } from "./hotkeyPresentation";
 
 export function HotkeyChord({ value, compact = false }: { value: string; compact?: boolean }) {
-  const parts = formatHotkeyLabel(value).split("+");
+  const keycaps = getHotkeyKeycaps(value);
+
   return (
     <div
-      className="flex flex-wrap items-center justify-center gap-2"
+      className={`flex flex-wrap items-center justify-center ${compact ? "gap-1.5" : "gap-5"}`}
       aria-label={formatHotkeyLabel(value)}
     >
-      {parts.map((part) => (
+      {keycaps.map(({ id, label, symbol }) => (
         <kbd
-          key={part}
-          className={`flex items-center justify-center rounded-xl border border-border bg-card font-medium text-foreground shadow-[var(--shadow-card)] ${
-            compact ? "min-w-10 px-3 py-2 text-xs" : "min-w-20 px-6 py-5 text-sm"
+          key={id}
+          className={`onboarding-keycap relative flex flex-col justify-between rounded-lg border border-neutral-300 bg-neutral-200 text-neutral-950 ${
+            compact ? "h-8 min-w-12 px-2 py-1 text-xs" : "h-20 w-26 px-2.5 py-2 text-sm"
           }`}
         >
-          {part}
+          <span className="self-end text-base font-semibold leading-none">{symbol}</span>
+          <span className="self-start font-medium leading-none">{label}</span>
         </kbd>
       ))}
     </div>
@@ -33,6 +35,7 @@ interface ShortcutSetupStepProps {
   confirmLabel: (label: string) => string;
   chooseAnotherLabel: string;
   validate?: (value: string) => string | null;
+  onConfirm?: (value: string) => Promise<string | null>;
 }
 
 export default function ShortcutSetupStep({
@@ -44,22 +47,24 @@ export default function ShortcutSetupStep({
   confirmLabel,
   chooseAnotherLabel,
   validate,
+  onConfirm,
 }: ShortcutSetupStepProps) {
   const [candidate, setCandidate] = useState(value);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
-  const handleChange = (next: string) => {
-    const validationError = validate?.(next) ?? null;
-    if (validationError) {
-      setError(validationError);
-      setCandidate("");
-      setConfirmed(false);
-      return;
-    }
-
+  const handleChange = async (next: string) => {
     setError(null);
     if (candidate === next && !confirmed) {
+      setIsConfirming(true);
+      const confirmationError = (await onConfirm?.(next)) ?? null;
+      setIsConfirming(false);
+      if (confirmationError) {
+        setError(confirmationError);
+        setCandidate("");
+        return;
+      }
       setConfirmed(true);
       onChange(next);
       return;
@@ -75,51 +80,55 @@ export default function ShortcutSetupStep({
   };
 
   return (
-    <div className="mx-auto mt-10 w-full max-w-2xl space-y-5">
-      <div className="overflow-hidden rounded-3xl border border-dashed border-border bg-card p-8 text-center shadow-sm">
+    <div className="mx-auto mt-8 w-full max-w-[22.25rem] text-center">
+      <div
+        className={`relative flex h-32 items-center justify-center rounded-2xl bg-white px-6 ${
+          candidate ? "border border-transparent" : "border border-dashed border-neutral-300"
+        }`}
+      >
         <HotkeyInput
           value={candidate}
-          onChange={handleChange}
+          onChange={(next) => void handleChange(next)}
           onClear={reset}
-          variant="hero"
+          variant="capture-overlay"
           validate={validate}
+          onValidationError={setError}
+          disabled={isConfirming}
         />
 
-        {!candidate && !error && (
-          <div className="pointer-events-none mt-4 flex flex-col items-center gap-1">
-            <span className="text-xs text-muted-foreground">{captureLabel}</span>
-            <span className="text-xs font-medium text-foreground">
-              {recommendedLabel}: {formatHotkeyLabel(recommended)}
-            </span>
+        {error ? (
+          <p role="alert" className="max-w-60 text-sm leading-5 text-red-500">
+            {error}
+          </p>
+        ) : candidate ? (
+          <HotkeyChord value={candidate} />
+        ) : (
+          <div className="pointer-events-none flex flex-col items-center">
+            <p className="text-base text-neutral-400">{captureLabel}</p>
+            <p className="mt-10 flex items-center gap-2 text-sm text-neutral-400">
+              {recommendedLabel}
+              <span className="rounded-full bg-neutral-200 px-2.5 py-1 text-xs text-neutral-600">
+                {formatHotkeyInstruction(recommended)}
+              </span>
+            </p>
           </div>
         )}
       </div>
 
       {candidate && !error && (
-        <div className="space-y-4 text-center" aria-live="polite">
-          <p className="text-sm text-muted-foreground">
-            {confirmed ? (
-              <span className="inline-flex items-center gap-2 text-success">
-                <Check className="size-4" />
-                {formatHotkeyLabel(candidate)}
-              </span>
-            ) : (
-              confirmLabel(formatHotkeyLabel(candidate))
-            )}
+        <div className="mt-8 space-y-2 text-center" aria-live="polite">
+          <p className="mx-auto w-fit rounded-full bg-neutral-200 px-5 py-2 text-sm text-neutral-600">
+            {confirmed
+              ? formatHotkeyInstruction(candidate)
+              : confirmLabel(formatHotkeyInstruction(candidate))}
           </p>
-          <button type="button" onClick={reset} className="text-sm text-primary hover:underline">
+          <button
+            type="button"
+            onClick={reset}
+            className="rounded-full border border-neutral-200 bg-white px-5 py-2 text-sm text-neutral-950 hover:bg-neutral-50"
+          >
             {chooseAnotherLabel}
           </button>
-        </div>
-      )}
-
-      {error && (
-        <div
-          role="alert"
-          className="flex items-center justify-center gap-2 rounded-2xl border border-destructive/20 bg-destructive/8 px-4 py-5 text-sm text-destructive"
-        >
-          <AlertCircle className="size-4" />
-          {error}
         </div>
       )}
     </div>

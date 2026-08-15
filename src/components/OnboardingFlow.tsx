@@ -202,6 +202,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [dictationHotkey, t, withExtraDictationHotkeys]
   );
 
+  const confirmDictationHotkey = useCallback(
+    async (value: string) => {
+      const registered = await registerHotkey(withExtraDictationHotkeys(value));
+      return registered ? null : t("onboarding.rehaul.hotkey.inUse");
+    },
+    [registerHotkey, t, withExtraDictationHotkeys]
+  );
+
   const syncUseCases = useCallback(() => {
     if (!isSignedIn || session.authPath === "guest") return;
     cloudPost("/api/onboarding-intent", {
@@ -447,7 +455,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "languages":
         return (
-          <div className="min-h-full w-full">
+          <div className="h-full w-full pt-2">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.languages.title")}
               titleLines={[
@@ -468,7 +476,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "use-cases":
         return (
-          <div className="relative top-2 min-h-full w-full">
+          <div className="h-full w-full pt-2">
             <UseCaseStep
               useCases={settings.onboardingUseCases}
               onUseCasesChange={settings.setOnboardingUseCases}
@@ -482,7 +490,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "assistant-hotkey": {
         const assistant = currentStepId === "assistant-hotkey";
         return (
-          <div className="w-full">
+          <div className="h-full w-full pt-5">
             {assistant && <AssistantPreview hotkey={assistantHotkey} />}
             <OnboardingStepHeader
               title={t(
@@ -490,6 +498,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantHotkey.title"
                   : "onboarding.rehaul.dictationHotkey.title"
               )}
+              titleLines={
+                assistant
+                  ? undefined
+                  : [
+                      t("onboarding.rehaul.dictationHotkey.titleLineOne"),
+                      t("onboarding.rehaul.dictationHotkey.titleLineTwo"),
+                    ]
+              }
               description={t(
                 assistant
                   ? "onboarding.rehaul.assistantHotkey.description"
@@ -519,6 +535,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               confirmLabel={(label) => t("onboarding.rehaul.hotkey.confirm", { hotkey: label })}
               chooseAnotherLabel={t("onboarding.rehaul.hotkey.chooseAnother")}
               validate={assistant ? validateAssistantHotkey : validateDictationHotkey}
+              onConfirm={assistant ? undefined : confirmDictationHotkey}
             />
           </div>
         );
@@ -634,6 +651,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   const hasShellNavigation = !COMPACT_STEPS.has(currentStepId);
+  const hotkeyStep = currentStepId === "dictation-hotkey" || currentStepId === "assistant-hotkey";
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
   const skippable = currentStepId === "notes";
 
@@ -646,7 +664,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             ? goBack
             : undefined
         }
-        onContinue={hasShellNavigation ? () => void continueFromCurrentStep() : undefined}
+        onContinue={
+          hasShellNavigation && (!hotkeyStep || canContinue)
+            ? () => void continueFromCurrentStep()
+            : undefined
+        }
         onSkip={
           localSetup
             ? () => void skipLocalSetup()
@@ -665,6 +687,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         continueDisabled={!canContinue}
         continueLoading={isFinishing || isRegistering}
         progressIndex={compact ? undefined : progressForStep(currentStepId)}
+        showBackLabel={hotkeyStep}
       >
         {fatalError && (
           <div

@@ -14,6 +14,7 @@ interface OnboardingShellProps {
   continueDisabled?: boolean;
   continueLoading?: boolean;
   progressIndex?: number;
+  showBackLabel?: boolean;
 }
 
 interface CompactOnboardingFrameProps {
@@ -82,6 +83,7 @@ export default function OnboardingShell({
   continueDisabled = false,
   continueLoading = false,
   progressIndex,
+  showBackLabel = false,
 }: OnboardingShellProps) {
   const { t } = useTranslation();
   const hasFooter = onBack || onContinue || onSkip || progressIndex !== undefined;
@@ -100,7 +102,9 @@ export default function OnboardingShell({
         className={`min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-6 py-8 md:px-12"}`}
       >
         <div
-          className={`mx-auto flex min-h-full w-full items-center justify-center ${compact ? "max-w-none" : "max-w-6xl"}`}
+          className={`mx-auto flex min-h-full w-full justify-center ${
+            compact ? "max-w-none items-center" : "max-w-6xl items-start"
+          }`}
         >
           {children}
         </div>
@@ -114,12 +118,15 @@ export default function OnboardingShell({
                 <Button
                   type="button"
                   variant="outline-flat"
-                  size="icon"
+                  size={showBackLabel ? "default" : "icon"}
                   onClick={onBack}
-                  className="size-9 rounded-full! border! border-neutral-200! bg-white! p-0 text-neutral-950 hover:bg-neutral-50!"
+                  className={`h-9 rounded-full! border! border-neutral-200! bg-white! text-neutral-950 hover:bg-neutral-50! ${
+                    showBackLabel ? "min-w-[5.5rem] px-4" : "w-9 p-0"
+                  }`}
                   aria-label={t("common.back")}
                 >
                   <Undo2 className="size-4" />
+                  {showBackLabel && t("common.back")}
                 </Button>
               )}
               {onSkip && (

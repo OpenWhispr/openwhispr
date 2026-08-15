@@ -201,6 +201,8 @@
       },
       "dictationHotkey": {
         "title": "Set up your keyboard shortcut",
+        "titleLineOne": "Set up your",
+        "titleLineTwo": "keyboard shortcut",
         "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
       },
       "assistantHotkey": {
@@ -210,7 +212,8 @@
       "hotkey": {
         "capture": "Press the keys you want to use",
         "confirm": "Press {{hotkey}} again to confirm",
-        "chooseAnother": "Choose another shortcut"
+        "chooseAnother": "Choose another shortcut",
+        "inUse": "That shortcut is already in use. Choose another one."
       },
       "dictationDemo": {
         "title": "Try your first dictation",
