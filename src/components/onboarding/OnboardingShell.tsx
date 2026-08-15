@@ -136,7 +136,7 @@ export function CompactOnboardingFrame({
 
   return (
     <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden rounded-[2rem] bg-white text-neutral-950 dark:bg-white dark:text-neutral-950">
-      <div className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-60 bg-gradient-to-b from-indigo-400 via-indigo-300 to-white" />
+      <div className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-indigo-400 via-indigo-300 to-white" />
       {showBrandMark && (
         <BrandMark className="pointer-events-none absolute left-1/2 top-13 z-10 size-28 -translate-x-1/2 text-white" />
       )}
