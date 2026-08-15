@@ -2389,7 +2389,6 @@
       "description": "Ein Workspace bündelt die Mitglieder und Abrechnung Ihrer Organisation. Darin erstellen Sie Team-Bereiche für gemeinsame Notizen.",
       "nameLabel": "Workspace-Name",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Neue Workspaces starten im Free-Tarif. Team-Bereiche erfordern einen Workspace-Tarif.",
       "submit": "Workspace erstellen",
       "submitting": "Erstelle…",
       "errorTitle": "Workspace konnte nicht erstellt werden"

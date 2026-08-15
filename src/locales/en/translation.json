@@ -2389,7 +2389,6 @@
       "description": "A workspace brings your organization's members and billing together. Create team spaces inside it for shared notes.",
       "nameLabel": "Workspace name",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "New workspaces start on the Free plan. Team spaces require a workspace plan.",
       "submit": "Create workspace",
       "submitting": "Creating…",
       "errorTitle": "Couldn't create workspace"

@@ -3416,7 +3416,6 @@
       "description": "Un'area di lavoro riunisce membri e fatturazione della tua organizzazione. Crea al suo interno spazi del team per le note condivise.",
       "nameLabel": "Nome dell'area di lavoro",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Le nuove aree di lavoro partono dal piano Free. Gli spazi del team richiedono un piano dell'area di lavoro.",
       "submit": "Crea area di lavoro",
       "submitting": "Creazione…",
       "errorTitle": "Impossibile creare l'area di lavoro"

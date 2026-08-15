@@ -3416,7 +3416,6 @@
       "description": "工作區集中管理組織的成員和帳單。你可以在其中建立團隊空間來分享筆記。",
       "nameLabel": "工作區名稱",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "新工作區預設使用 Free 方案。團隊空間需要工作區方案。",
       "submit": "建立工作區",
       "submitting": "建立中…",
       "errorTitle": "無法建立工作區"

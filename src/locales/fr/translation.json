@@ -2389,7 +2389,6 @@
       "description": "Un espace de travail réunit les membres et la facturation de votre organisation. Créez-y des espaces d'équipe pour les notes partagées.",
       "nameLabel": "Nom de l'espace de travail",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Les nouveaux espaces de travail démarrent sur le forfait Free. Les espaces d'équipe nécessitent un forfait d'espace de travail.",
       "submit": "Créer l'espace",
       "submitting": "Création…",
       "errorTitle": "Impossible de créer l'espace"

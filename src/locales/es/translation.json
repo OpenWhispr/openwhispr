@@ -3416,7 +3416,6 @@
       "description": "Un espacio de trabajo reúne a los miembros y la facturación de tu organización. Crea dentro espacios de equipo para notas compartidas.",
       "nameLabel": "Nombre del espacio de trabajo",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Los espacios de trabajo nuevos empiezan en el plan Free. Los espacios de equipo requieren un plan del espacio de trabajo.",
       "submit": "Crear espacio de trabajo",
       "submitting": "Creando…",
       "errorTitle": "No se pudo crear el espacio de trabajo"
