@@ -42,7 +42,7 @@ test("self-hosted routes to the configured server and wins over stale flags", as
 });
 
 test("self-hosted mode without a URL fails closed unless the provider is custom", async () => {
-  for (const provider of ["openai", "groq", "mistral", "xai", "corti", "tinfoil"]) {
+  for (const provider of ["openai", "groq", "gemini", "mistral", "xai", "corti", "tinfoil"]) {
     const route = await resolve({
       transcriptionMode: "self-hosted",
       remoteTranscriptionUrl: "",
@@ -115,6 +115,23 @@ test("proxied providers carry their quirks as route data", async () => {
   assert.equal(corti.language, "en", "Corti needs a concrete language even on auto");
   assert.equal(corti.cortiEnvironment, "us");
   assert.equal(corti.cortiTenant, "acme");
+
+  const gemini = await resolve({
+    cloudTranscriptionProvider: "gemini",
+    cloudTranscriptionModel: "gemini-2.5-flash-lite",
+    preferredLanguage: "de-DE",
+  });
+  assert.equal(gemini.transport, "proxied");
+  assert.equal(gemini.provider, "gemini");
+  assert.equal(gemini.model, "gemini-2.5-flash-lite");
+  assert.equal(gemini.language, "de");
+  assert.equal(gemini.sizeCapBytes, 25 * 1024 * 1024);
+
+  const geminiStale = await resolve({
+    cloudTranscriptionProvider: "gemini",
+    cloudTranscriptionModel: "whisper-large-v3-turbo", // stale from a groq era
+  });
+  assert.equal(geminiStale.model, "gemini-3-flash-preview", "mismatched model degrades to default");
 });
 
 test("custom requires a configured secure endpoint (empty, sentinel, garbage all fail)", async () => {

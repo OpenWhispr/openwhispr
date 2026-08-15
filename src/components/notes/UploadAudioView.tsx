@@ -246,6 +246,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const {
     openaiApiKey,
     groqApiKey,
+    geminiApiKey,
     xaiApiKey,
     mistralApiKey,
     tinfoilApiKey,
@@ -399,13 +400,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               ? openaiApiKey
               : cloudTranscriptionProvider === "groq"
                 ? groqApiKey
-                : cloudTranscriptionProvider === "xai"
-                  ? xaiApiKey
-                  : cloudTranscriptionProvider === "mistral"
-                    ? mistralApiKey
-                    : cloudTranscriptionProvider === "tinfoil"
-                      ? tinfoilApiKey
-                      : customTranscriptionApiKey;
+                : cloudTranscriptionProvider === "gemini"
+                  ? geminiApiKey
+                  : cloudTranscriptionProvider === "xai"
+                    ? xaiApiKey
+                    : cloudTranscriptionProvider === "mistral"
+                      ? mistralApiKey
+                      : cloudTranscriptionProvider === "tinfoil"
+                        ? tinfoilApiKey
+                        : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -438,6 +441,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    geminiApiKey,
     xaiApiKey,
     mistralApiKey,
     tinfoilApiKey,
@@ -471,6 +475,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return openaiApiKey;
       case "groq":
         return groqApiKey;
+      case "gemini":
+        return geminiApiKey;
       case "xai":
         return xaiApiKey;
       case "mistral":

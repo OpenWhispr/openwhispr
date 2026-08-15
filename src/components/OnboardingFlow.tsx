@@ -109,6 +109,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    geminiApiKey,
     xaiApiKey,
     mistralApiKey,
     tinfoilApiKey,
@@ -920,6 +921,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return openaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "groq") {
             return groqApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "gemini") {
+            return geminiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "xai") {
             return xaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {

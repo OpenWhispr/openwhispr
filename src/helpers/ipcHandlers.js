@@ -3706,6 +3706,27 @@ class IPCHandlers {
       })
     );
 
+    // Gemini has no OpenAI-compatible /audio/transcriptions endpoint — it needs
+    // a JSON generateContent call plus an ffmpeg conversion, both main-only.
+    ipcMain.handle(
+      "proxy-gemini-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language, prompt }) => {
+        const apiKey = this.environmentManager.getGeminiKey();
+        if (!apiKey) {
+          throw new Error("Gemini API key not configured");
+        }
+
+        const { transcribeAudio } = require("./geminiTranscription");
+        return await transcribeAudio({
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          language,
+          prompt,
+          apiKey,
+        });
+      })
+    );
+
     ipcMain.handle("get-corti-client-id", async () => {
       return this.environmentManager.getCortiClientId();
     });
@@ -5311,6 +5332,17 @@ class IPCHandlers {
             language: route.language,
           });
           if (text) result = { text, source: "corti", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "gemini") {
+          // Gemini uses a JSON generateContent call, so it can't use the
+          // generic multipart fetch below.
+          const { transcribeAudio } = require("./geminiTranscription");
+          const { text, model } = await transcribeAudio({
+            audioBuffer: buffer,
+            model: route.model,
+            language: route.language,
+            apiKey: this.environmentManager.getGeminiKey(),
+          });
+          if (text) result = { text, source: "gemini", model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -8345,6 +8377,19 @@ class IPCHandlers {
               contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
               language: route.language,
               apiKey: this.environmentManager.getTinfoilKey(),
+            });
+            return { success: true, text };
+          }
+
+          if (route.transport === "proxied" && route.provider === "gemini") {
+            // ffmpeg converts whatever the user picked (mp3/m4a/wav/...) to wav.
+            // No language hint: an uploaded file is often not in the dictation
+            // language, matching the multipart branch below.
+            const { transcribeAudio } = require("./geminiTranscription");
+            const { text } = await transcribeAudio({
+              audioBuffer: fs.readFileSync(realByok),
+              model: route.model,
+              apiKey: apiKey || this.environmentManager.getGeminiKey(),
             });
             return { success: true, text };
           }

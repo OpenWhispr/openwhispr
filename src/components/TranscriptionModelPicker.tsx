@@ -218,6 +218,7 @@ interface TranscriptionModelPickerProps {
 const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq" },
+  { id: "gemini", name: "Gemini" },
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
   { id: "corti", name: "Corti" },
@@ -229,6 +230,7 @@ interface ProviderCredentialField {
   key:
     | "openaiApiKey"
     | "groqApiKey"
+    | "geminiApiKey"
     | "xaiApiKey"
     | "mistralApiKey"
     | "cortiClientId"
@@ -253,6 +255,10 @@ const PROVIDER_CREDENTIALS: Record<
   groq: {
     consoleUrl: "https://console.groq.com/keys",
     fields: [{ key: "groqApiKey", input: "secret" }],
+  },
+  gemini: {
+    consoleUrl: "https://aistudio.google.com/apikey",
+    fields: [{ key: "geminiApiKey", input: "secret" }],
   },
   xai: {
     consoleUrl: "https://console.x.ai",
@@ -360,6 +366,8 @@ export default function TranscriptionModelPicker({
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
+  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
@@ -850,6 +858,7 @@ export default function TranscriptionModelPicker({
   const credentialValues: Record<ProviderCredentialField["key"], string> = {
     openaiApiKey,
     groqApiKey,
+    geminiApiKey,
     xaiApiKey,
     mistralApiKey,
     cortiClientId,
@@ -861,6 +870,7 @@ export default function TranscriptionModelPicker({
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
     openaiApiKey: setOpenaiApiKey,
     groqApiKey: setGroqApiKey,
+    geminiApiKey: setGeminiApiKey,
     xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
     cortiClientId: setCortiClientId,
