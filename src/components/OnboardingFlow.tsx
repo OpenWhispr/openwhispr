@@ -55,7 +55,7 @@ function progressForStep(stepId: OnboardingStepId): number {
   if (["languages", "assistant-demo", "setup-choice"].includes(stepId)) return 0;
   if (["use-cases", "dictation-demo"].includes(stepId)) return 1;
   if (["dictation-hotkey", "assistant-hotkey"].includes(stepId)) return 2;
-  if (stepId === "notes") return 3;
+  if (stepId === "notes") return 0;
   return stepId.endsWith("assistant") ? 1 : 0;
 }
 
@@ -579,11 +579,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "notes":
         return (
-          <div className="w-full">
-            <OnboardingStepHeader
-              title={t("onboarding.rehaul.notes.title")}
-              description={t("onboarding.rehaul.notes.description")}
-            />
+          <div className="h-full w-full pt-2">
+            <header className="mx-auto w-full max-w-2xl text-center">
+              <h1 className="onboarding-display-title text-neutral-950">
+                <span className="block">{t("onboarding.rehaul.notes.titleLineOne")}</span>
+                <span className="block">
+                  {t("onboarding.rehaul.notes.titleLineTwoPrefix")}{" "}
+                  <span className="brand-script text-[1.15em]">
+                    {t("onboarding.rehaul.notes.titleLineTwoBrand")}
+                  </span>
+                </span>
+              </h1>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-5 text-neutral-500">
+                {t("onboarding.rehaul.notes.description")}
+              </p>
+            </header>
             <CalendarConnectionsStep />
           </div>
         );
@@ -650,7 +660,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const demoStep = currentStepId === "dictation-demo" || currentStepId === "assistant-demo";
   const inlineGatedStep = hotkeyStep || demoStep;
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
-  const skippable = currentStepId === "notes";
 
   return (
     <>
@@ -666,13 +675,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             ? () => void continueFromCurrentStep()
             : undefined
         }
-        onSkip={
-          localSetup
-            ? () => void skipLocalSetup()
-            : skippable
-              ? () => void continueFromCurrentStep()
-              : undefined
-        }
+        onSkip={localSetup ? () => void skipLocalSetup() : undefined}
         continueLabel={
           currentStepId === "use-cases"
             ? t("onboarding.useCase.proceedToSetup")
