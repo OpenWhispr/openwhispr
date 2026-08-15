@@ -191,6 +191,8 @@
       },
       "languages": {
         "title": "Which languages do you speak?",
+        "titleLineOne": "Which languages",
+        "titleLineTwo": "do you speak?",
         "description": "Select all that apply. This helps OpenWhispr recognize language switches more accurately."
       },
       "dictationHotkey": {
@@ -374,34 +376,37 @@
       "continue": "Continue anyway"
     },
     "useCase": {
-      "title": "Why are you here?",
-      "description": "We're a small team shipping every week. What you pick sets up the app for you — and tells us what to build next.",
+      "title": "How will you use OpenWhispr?",
+      "titleLineOne": "How will you",
+      "titleLineTwo": "use OpenWhispr?",
+      "description": "Choose all that apply. We’ll tailor your setup.",
       "noteLabel": "Anything else you'd like us to know?",
-      "notePlaceholder": "Optional",
+      "notePlaceholder": "Tell us how you plan to use OpenWhispr (Optional)",
+      "proceedToSetup": "Proceed to setup",
       "options": {
         "dictation": {
-          "title": "Writing faster",
-          "description": "Dictate into any app instead of typing"
+          "title": "Write faster",
+          "description": "Speak instead of typing in any app."
         },
         "meetings": {
-          "title": "Meeting notes & summaries",
-          "description": "Record, transcribe and summarize meetings"
+          "title": "Meeting notes",
+          "description": "Record, transcribe, and summarize meetings."
         },
         "healthcare": {
-          "title": "Medical, clinical & therapy transcription",
-          "description": "Dictate patient notes, session notes and reports"
+          "title": "Clinical documentation",
+          "description": "Create patient notes, session notes, and reports."
         },
         "translation": {
-          "title": "Translating languages",
-          "description": "Speak one language, type another"
+          "title": "Translate as you speak",
+          "description": "Speak one language and write in another."
         },
         "ai": {
-          "title": "Talking to my AI",
-          "description": "Voice-drive ChatGPT, Claude and other agents"
+          "title": "Talk to your AI",
+          "description": "Use your voice with ChatGPT, Claude, and other AI tools."
         },
         "upload": {
-          "title": "Uploading audio files",
-          "description": "Upload and transcribe MP3, OGG and more"
+          "title": "Transcribe audio files",
+          "description": "Upload audio files for transcription."
         }
       },
       "selectHint": "Select all that apply"

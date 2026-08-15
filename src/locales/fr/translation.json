@@ -191,6 +191,8 @@
       },
       "languages": {
         "title": "Which languages do you speak?",
+        "titleLineOne": "Quelles langues",
+        "titleLineTwo": "parlez-vous ?",
         "description": "Select all that apply. Multiple selections use automatic language detection."
       },
       "dictationHotkey": {
@@ -375,9 +377,12 @@
     },
     "useCase": {
       "title": "Qu'est-ce qui vous amène ?",
+      "titleLineOne": "Comment utiliserez-vous",
+      "titleLineTwo": "OpenWhispr ?",
       "description": "Nous sommes une petite équipe qui publie chaque semaine. Vos choix configurent l'application pour vous — et nous disent quoi construire ensuite.",
       "noteLabel": "Autre chose à nous dire ?",
       "notePlaceholder": "Facultatif",
+      "proceedToSetup": "Continuer la configuration",
       "options": {
         "dictation": {
           "title": "Écrire plus vite",

@@ -4,6 +4,7 @@ import { AlertCircle, Mail, Mic, Sparkles } from "lucide-react";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
 import UseCaseStep from "./onboarding/UseCaseStep";
+import { hasUseCaseIntent } from "./onboarding/useCases";
 import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingShell";
 import CompactPermissionsStep from "./onboarding/CompactPermissionsStep";
 import LanguageSelectionStep from "./onboarding/LanguageSelectionStep";
@@ -378,6 +379,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return areRequiredPermissionsMet(permissions.micPermissionGranted);
       case "languages":
         return settings.spokenLanguages.length > 0;
+      case "use-cases":
+        return hasUseCaseIntent(settings.onboardingUseCases, settings.onboardingUseCaseNote);
       case "dictation-hotkey":
         return dictationHotkeyConfirmed;
       case "dictation-demo":
@@ -447,6 +450,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <div className="min-h-full w-full">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.languages.title")}
+              titleLines={[
+                t("onboarding.rehaul.languages.titleLineOne"),
+                t("onboarding.rehaul.languages.titleLineTwo"),
+              ]}
               description={t("onboarding.rehaul.languages.description")}
             />
             <LanguageSelectionStep
@@ -461,7 +468,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "use-cases":
         return (
-          <div className="w-full max-w-3xl rounded-3xl border border-border bg-card p-6 shadow-lg md:p-8">
+          <div className="relative top-2 min-h-full w-full">
             <UseCaseStep
               useCases={settings.onboardingUseCases}
               onUseCasesChange={settings.setOnboardingUseCases}
@@ -628,7 +635,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const hasShellNavigation = !COMPACT_STEPS.has(currentStepId);
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
-  const skippable = currentStepId === "use-cases" || currentStepId === "notes";
+  const skippable = currentStepId === "notes";
 
   return (
     <>
@@ -647,7 +654,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               ? () => void continueFromCurrentStep()
               : undefined
         }
-        continueLabel={t("common.continue")}
+        continueLabel={
+          currentStepId === "use-cases"
+            ? t("onboarding.useCase.proceedToSetup")
+            : t("common.continue")
+        }
         skipLabel={
           localSetup ? t("onboarding.rehaul.local.downloadInBackground") : t("common.skip")
         }

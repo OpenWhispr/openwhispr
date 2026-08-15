@@ -191,6 +191,8 @@
       },
       "languages": {
         "title": "Which languages do you speak?",
+        "titleLineOne": "你会说",
+        "titleLineTwo": "哪些语言？",
         "description": "Select all that apply. Multiple selections use automatic language detection."
       },
       "dictationHotkey": {
@@ -375,9 +377,12 @@
     },
     "useCase": {
       "title": "你为什么来到这里？",
+      "titleLineOne": "你会如何使用",
+      "titleLineTwo": "OpenWhispr？",
       "description": "我们是一个小团队，每周发布更新。你的选择会为你配置应用，也告诉我们接下来该做什么。",
       "noteLabel": "还有什么想告诉我们的吗？",
       "notePlaceholder": "可选",
+      "proceedToSetup": "继续设置",
       "options": {
         "dictation": {
           "title": "更快地写作",
