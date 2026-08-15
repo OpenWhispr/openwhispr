@@ -6,9 +6,14 @@ import { CheckCircle, XCircle, Loader2, Copy } from "lucide-react";
 interface TestConnectionButtonProps {
   provider: string;
   getConfig: () => Record<string, unknown>;
+  onStatusChange?: (connected: boolean) => void;
 }
 
-export default function TestConnectionButton({ provider, getConfig }: TestConnectionButtonProps) {
+export default function TestConnectionButton({
+  provider,
+  getConfig,
+  onStatusChange,
+}: TestConnectionButtonProps) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [errorInfo, setErrorInfo] = useState<{
@@ -19,14 +24,17 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
 
   const handleTest = async () => {
     setStatus("testing");
+    onStatusChange?.(false);
     setErrorInfo(null);
     try {
       const result = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
       if (result?.success) {
         setStatus("success");
+        onStatusChange?.(true);
         setTimeout(() => setStatus("idle"), 8000);
       } else {
         setStatus("error");
+        onStatusChange?.(false);
         setErrorInfo({
           message: result?.error || "Connection failed",
           action: result?.action,
@@ -35,6 +43,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
       }
     } catch {
       setStatus("error");
+      onStatusChange?.(false);
       setErrorInfo({ message: "Connection test failed unexpectedly." });
     }
   };

@@ -28,6 +28,11 @@ export default function AgentOverlay() {
     setMessages,
     onStreamComplete: (_assistantId, content, toolCalls) => {
       persistence.saveAssistantMessage(content, toolCalls);
+      void window.electronAPI?.publishOnboardingDemoEvent?.({
+        kind: "assistant",
+        status: "success",
+        text: content,
+      });
     },
   });
 
@@ -86,9 +91,32 @@ export default function AgentOverlay() {
     am.setSkipReasoning(true);
     am.setContext("agent");
     am.setCallbacks({
-      onStateChange: () => {},
+      onStateChange: ({
+        isRecording,
+        isProcessing,
+      }: {
+        isRecording: boolean;
+        isProcessing: boolean;
+      }) => {
+        if (isRecording) {
+          void window.electronAPI?.publishOnboardingDemoEvent?.({
+            kind: "assistant",
+            status: "listening",
+          });
+        } else if (isProcessing) {
+          void window.electronAPI?.publishOnboardingDemoEvent?.({
+            kind: "assistant",
+            status: "processing",
+          });
+        }
+      },
       onError: (error: { message?: string }) => {
         const msg = error?.message || (typeof error === "string" ? error : "Transcription failed");
+        void window.electronAPI?.publishOnboardingDemoEvent?.({
+          kind: "assistant",
+          status: "error",
+          message: msg,
+        });
         addSystemMessage(`${t("agentMode.chat.errorPrefix")}: ${msg}`);
       },
       onTranscriptionComplete: (result: { text: string }) => {
@@ -96,6 +124,11 @@ export default function AgentOverlay() {
       },
       onPartialTranscript: (text: string) => {
         setPartialTranscript(text);
+        void window.electronAPI?.publishOnboardingDemoEvent?.({
+          kind: "assistant",
+          status: "partial",
+          text,
+        });
       },
       onStreamingCommit: undefined,
       onTranslationFallback: undefined,

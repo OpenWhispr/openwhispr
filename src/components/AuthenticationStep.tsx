@@ -12,11 +12,12 @@ import {
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { AlertCircle, ArrowRight, Check, Loader2, ChevronLeft } from "lucide-react";
+import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
 import logoIcon from "../assets/icon.png";
 import logger from "../utils/logger";
 import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
+import { BrandMark } from "./onboarding/OnboardingShell";
 
 interface AuthenticationStepProps {
   onContinueWithoutAccount?: () => void;
@@ -30,6 +31,40 @@ type SsoDiscovery = {
   domain: string;
   exists: boolean;
 };
+
+function ProviderTile({
+  label,
+  icon: Icon,
+  loading,
+  disabled,
+  title,
+  onClick,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  loading: boolean;
+  disabled: boolean;
+  title?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={label}
+      className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-secondary px-2 py-3 transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:text-muted-foreground"
+    >
+      {loading ? (
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      ) : (
+        <Icon className="size-4" />
+      )}
+      <span className="truncate text-xs font-medium">{label}</span>
+    </button>
+  );
+}
 
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -388,6 +423,11 @@ export default function AuthenticationStep({
   if (ssoDiscovery && authMode === null) {
     return (
       <div className="space-y-3">
+        <div className="onboarding-brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center text-primary-foreground">
+          <BrandMark className="mx-auto size-14" />
+          <p className="mt-4 text-xl font-medium">{t("auth.welcomeTitle")}</p>
+          <p className="mt-2 text-sm opacity-80">{t("auth.welcomeSubtitle")}</p>
+        </div>
         <button
           type="button"
           onClick={handleBack}
@@ -455,6 +495,11 @@ export default function AuthenticationStep({
   if (authMode !== null) {
     return (
       <div className="space-y-3">
+        <div className="onboarding-brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center text-primary-foreground">
+          <BrandMark className="mx-auto size-14" />
+          <p className="mt-4 text-xl font-medium">{t("auth.welcomeTitle")}</p>
+          <p className="mt-2 text-sm opacity-80">{t("auth.welcomeSubtitle")}</p>
+        </div>
         <button
           type="button"
           onClick={handleBack}
@@ -480,7 +525,7 @@ export default function AuthenticationStep({
               placeholder={t("auth.passwordForm.fullNamePlaceholder")}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="h-9 text-xs"
+              className="h-11 rounded-full px-4 text-sm"
               disabled={isSubmitting}
               autoFocus
             />
@@ -494,7 +539,7 @@ export default function AuthenticationStep({
             }
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="h-9 text-xs"
+            className="h-11 rounded-full px-4 text-sm"
             required
             minLength={authMode === "sign-up" ? 8 : undefined}
             disabled={isSubmitting}
@@ -525,7 +570,11 @@ export default function AuthenticationStep({
             </div>
           )}
 
-          <Button type="submit" disabled={isSubmitting || !password} className="w-full h-9">
+          <Button
+            type="submit"
+            disabled={isSubmitting || !password}
+            className="h-11 w-full rounded-full"
+          >
             {isSubmitting ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -574,163 +623,93 @@ export default function AuthenticationStep({
   }
 
   // Main welcome view
+  const busy = isSocialLoading !== null || isCheckingEmail || isSSOLoading;
+  const providers = [
+    {
+      id: "google",
+      label: "Google",
+      icon: GoogleIcon,
+      onClick: () => handleSocialSignIn("google"),
+      loading: isSocialLoading === "google",
+    },
+    ...(isMacOS
+      ? [
+          {
+            id: "apple",
+            label: "Apple",
+            icon: AppleIcon,
+            onClick: () => handleSocialSignIn("apple"),
+            loading: isSocialLoading === "apple",
+          },
+        ]
+      : []),
+    {
+      id: "microsoft",
+      label: "Microsoft",
+      icon: MicrosoftIcon,
+      onClick: () => handleSocialSignIn("microsoft"),
+      loading: isSocialLoading === "microsoft",
+    },
+    { id: "sso", label: "SSO", icon: Building2, onClick: handleSSOSignIn, loading: isSSOLoading },
+  ];
+
   return (
-    <div className="space-y-3">
-      <div className="text-center mb-4">
-        <img
-          src={logoIcon}
-          alt="OpenWhispr"
-          className="w-12 h-12 mx-auto mb-2.5 rounded-lg shadow-sm"
-        />
-        <p className="text-lg font-semibold text-foreground tracking-tight leading-tight">
-          {t("auth.welcomeTitle")}
-        </p>
-        <p className="text-muted-foreground text-sm mt-1 leading-tight">
-          {t("auth.welcomeSubtitle")}
-        </p>
+    <div className="overflow-hidden rounded-[inherit]">
+      <div className="onboarding-brand-hero -mx-6 -mt-6 mb-6 px-6 pb-7 pt-8 text-center text-primary-foreground">
+        <BrandMark className="mx-auto size-16" />
+        <p className="mt-4 text-2xl font-medium tracking-tight">{t("auth.welcomeTitle")}</p>
+        <p className="mt-2 text-sm opacity-80">{t("auth.welcomeSubtitle")}</p>
       </div>
 
-      {isMacOS && (
-        <Button
-          type="button"
-          variant="social"
-          onClick={() => handleSocialSignIn("apple")}
-          disabled={
-            isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
-          }
-          title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
-          className="w-full h-9"
-        >
-          {isSocialLoading === "apple" ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">
-                {t("auth.social.completeInBrowser")}
-              </span>
-            </>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleEmailContinue();
+        }}
+        className="space-y-3"
+      >
+        <Input
+          type="email"
+          placeholder={t("auth.emailStep.emailPlaceholder")}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          className="h-11 rounded-full px-4 text-sm"
+          required
+          disabled={busy}
+        />
+        <Button type="submit" disabled={!email.trim() || busy} className="h-11 w-full rounded-full">
+          {isCheckingEmail ? (
+            <Loader2 className="size-4 animate-spin" />
           ) : (
-            <>
-              <AppleIcon className="w-4 h-4" />
-              <span className="text-sm font-medium">{t("auth.social.continueWithApple")}</span>
-            </>
+            <ArrowRight className="size-4" />
           )}
+          {t("auth.emailStep.continueWithEmail")}
         </Button>
-      )}
+      </form>
 
-      <Button
-        type="button"
-        variant="social"
-        onClick={() => handleSocialSignIn("google")}
-        disabled={
-          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
-        }
-        title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
-        className="w-full h-9"
-      >
-        {isSocialLoading === "google" ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">
-              {t("auth.social.completeInBrowser")}
-            </span>
-          </>
-        ) : (
-          <>
-            <GoogleIcon className="w-4 h-4" />
-            <span className="text-sm font-medium">{t("auth.social.continueWithGoogle")}</span>
-          </>
-        )}
-      </Button>
+      <p className="py-4 text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        {t("auth.common.or")}
+      </p>
 
-      <Button
-        type="button"
-        variant="social"
-        onClick={() => handleSocialSignIn("microsoft")}
-        disabled={
-          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
-        }
-        title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
-        className="w-full h-9"
-      >
-        {isSocialLoading === "microsoft" ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">
-              {t("auth.social.completeInBrowser")}
-            </span>
-          </>
-        ) : (
-          <>
-            <MicrosoftIcon className="w-4 h-4" />
-            <span className="text-sm font-medium">{t("auth.social.continueWithMicrosoft")}</span>
-          </>
-        )}
-      </Button>
+      <div className="flex gap-2">
+        {providers.map((provider) => (
+          <ProviderTile
+            key={provider.id}
+            label={provider.label}
+            icon={provider.icon}
+            loading={provider.loading}
+            disabled={busy || !oauthProtocolRegistered}
+            title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
+            onClick={provider.onClick}
+          />
+        ))}
+      </div>
 
       {!oauthProtocolRegistered && (
         <p className="text-xs text-muted-foreground/80 leading-tight text-center">
           {t("auth.social.protocolUnavailable")}
         </p>
       )}
-
-      <div className="flex items-center gap-2">
-        <div className="flex-1 h-px bg-border/50" />
-        <span className="text-xs font-medium text-muted-foreground/40 uppercase tracking-widest px-1">
-          {t("auth.common.or")}
-        </span>
-        <div className="flex-1 h-px bg-border/50" />
-      </div>
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleEmailContinue();
-        }}
-        className="space-y-2"
-      >
-        <Input
-          type="email"
-          placeholder={t("auth.emailStep.emailPlaceholder")}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="h-9 text-sm"
-          required
-          disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
-        />
-        <Button
-          type="submit"
-          variant="outline"
-          disabled={!email.trim() || isSocialLoading !== null || isCheckingEmail || isSSOLoading}
-          className="w-full h-9"
-        >
-          {isCheckingEmail ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <>
-              <span className="text-sm font-medium">{t("auth.emailStep.continueWithEmail")}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </>
-          )}
-        </Button>
-      </form>
-
-      <button
-        type="button"
-        onClick={handleSSOSignIn}
-        disabled={
-          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
-        }
-        className="w-full text-center text-xs text-muted-foreground/85 hover:text-foreground transition-colors py-1.5 rounded hover:bg-muted/30 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-1.5"
-      >
-        {isSSOLoading ? (
-          <>
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            {t("auth.social.completeInBrowser")}
-          </>
-        ) : (
-          t("auth.sso.continueWithSSO")
-        )}
-      </button>
 
       {error && (
         <div className="px-3 py-2 rounded-md bg-destructive/5 border border-destructive/20 flex items-center gap-2">
@@ -740,13 +719,13 @@ export default function AuthenticationStep({
       )}
 
       {onContinueWithoutAccount && (
-        <div className="pt-1">
+        <div className="pt-3">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={onContinueWithoutAccount}
-            className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
+            className="w-full rounded-full font-normal text-muted-foreground hover:text-foreground"
             disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
           >
             {t("auth.emailStep.continueWithoutAccount")}
@@ -754,7 +733,7 @@ export default function AuthenticationStep({
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground/80 leading-tight text-center">
+      <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">
         {t("auth.legal.prefix")}{" "}
         <a
           href="https://openwhispr.com/terms"

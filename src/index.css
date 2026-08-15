@@ -198,6 +198,91 @@
   }
 }
 
+.onboarding-canvas {
+  background-color: var(--color-background);
+  background-image:
+    radial-gradient(
+      circle at 12% 35%,
+      color-mix(in oklch, var(--color-accent) 9%, transparent),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 88% 28%,
+      color-mix(in oklch, var(--color-info) 10%, transparent),
+      transparent 40%
+    );
+}
+
+.onboarding-canvas.compact {
+  background-image: none;
+}
+
+.onboarding-brand-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-image: linear-gradient(
+    205deg,
+    color-mix(in oklch, var(--color-primary) 68%, var(--color-primary-foreground)),
+    var(--color-primary) 48%,
+    color-mix(in oklch, var(--color-primary) 78%, var(--color-foreground))
+  );
+}
+
+.onboarding-brand-hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image:
+    radial-gradient(
+      circle,
+      color-mix(in oklch, var(--color-primary-foreground) 30%, transparent) 0.5px,
+      transparent 1px
+    ),
+    radial-gradient(
+      circle,
+      color-mix(in oklch, var(--color-primary-foreground) 30%, transparent) 0.5px,
+      transparent 1px
+    );
+  background-position:
+    0 0,
+    2px 2px;
+  background-size: 5px 5px;
+  content: "";
+  mask-image: linear-gradient(205deg, transparent 4%, var(--color-foreground) 88%);
+  pointer-events: none;
+}
+
+.onboarding-code-hero {
+  background-image:
+    radial-gradient(
+      circle at 28% 72%,
+      color-mix(in oklch, var(--color-success) 65%, transparent),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 72% 32%,
+      color-mix(in oklch, var(--color-info) 24%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(135deg, var(--color-surface-3), var(--color-surface-1));
+}
+
+@keyframes onboarding-confetti-fall {
+  from {
+    opacity: 1;
+    transform: translateY(-2rem) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(15rem) rotate(360deg);
+  }
+}
+
+.onboarding-confetti-piece {
+  animation: onboarding-confetti-fall 1.4s ease-out forwards;
+}
+
 /* OpenWhispr Brand Typography */
 .brand-heading {
   font-family: var(--font-family-sans);
