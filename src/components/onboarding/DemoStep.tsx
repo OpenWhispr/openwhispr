@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Mic, RefreshCw, UserRound } from "lucide-react";
+import { ChevronDown, Loader2, Mic, RefreshCw, UserRound } from "lucide-react";
 import { Button } from "../ui/button";
 import type { OnboardingDemoEvent, OnboardingDemoKind } from "../../types/electron";
+import emailSenderAvatar from "../../assets/onboarding-email-sender.webp";
+import assistantAvatar from "../../assets/onboarding-assistant-dog.webp";
 
 function ConfettiLayer() {
   const colors = ["bg-blue-500", "bg-emerald-500", "bg-amber-400", "bg-cyan-400", "bg-fuchsia-600"];
@@ -66,6 +68,9 @@ interface DemoStepProps {
   processingLabel: string;
   retryLabel: string;
   assistantResponse?: string;
+  assistantSenderName?: string;
+  assistantSenderEmail?: string;
+  assistantRecipientLabel?: string;
   onSuccessChange: (successful: boolean) => void;
 }
 
@@ -78,6 +83,9 @@ export default function DemoStep({
   processingLabel,
   retryLabel,
   assistantResponse,
+  assistantSenderName,
+  assistantSenderEmail,
+  assistantRecipientLabel,
   onSuccessChange,
 }: DemoStepProps) {
   const [messageCount, setMessageCount] = useState(0);
@@ -123,8 +131,10 @@ export default function DemoStep({
   const successful = status === "success";
 
   return (
-    <div className="relative mx-auto mt-8 w-full max-w-[26.5rem]">
-      {successful && <ConfettiLayer />}
+    <div
+      className={`relative mx-auto mt-8 w-full ${kind === "assistant" ? "max-w-[36rem]" : "max-w-[26.5rem]"}`}
+    >
+      {successful && kind === "dictation" && <ConfettiLayer />}
 
       {kind === "dictation" ? (
         <div className="space-y-2">
@@ -166,29 +176,44 @@ export default function DemoStep({
           )}
         </div>
       ) : (
-        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-lg md:p-8">
-          <div className="flex items-center gap-3 border-b border-neutral-200 pb-4">
-            <div className="flex size-10 items-center justify-center rounded-full bg-violet-100 font-medium text-violet-600">
-              E
-            </div>
-            <div>
-              <p className="text-sm font-medium text-neutral-950">Eren Lauren</p>
-              <p className="text-xs text-neutral-500">to you</p>
+        <article className="h-80 rounded-2xl border border-neutral-200 bg-white p-3.5 text-left shadow-sm">
+          <div className="flex items-center gap-3">
+            <img
+              src={emailSenderAvatar}
+              alt=""
+              className="size-9 shrink-0 rounded-full object-cover"
+            />
+            <div className="min-w-0 text-sm leading-5">
+              <p className="truncate font-medium text-neutral-950">
+                {assistantSenderName}{" "}
+                <span className="font-normal text-neutral-500">&lt;{assistantSenderEmail}&gt;</span>
+              </p>
+              <p className="flex items-center gap-1 text-neutral-500">
+                {assistantRecipientLabel} <ChevronDown className="size-3.5 text-neutral-950" />
+              </p>
             </div>
           </div>
-          <p className="py-5 text-sm leading-6 text-neutral-950">{firstMessage}</p>
-          <VoiceSurface
-            inputRef={inputRef}
-            value={draft || (successful ? (assistantResponse ?? "") : "")}
-            onChange={setDraft}
-            placeholder={secondMessage}
-            event={event}
-            listeningLabel={listeningLabel}
-            processingLabel={processingLabel}
-            retryLabel={retryLabel}
-            onRetry={retry}
-          />
-        </div>
+          <p className="ml-12 mt-5 text-sm leading-5 text-neutral-950">{firstMessage}</p>
+          <div className="mt-5 flex items-start gap-3">
+            <img
+              src={assistantAvatar}
+              alt=""
+              className="size-9 shrink-0 rounded-full object-cover"
+            />
+            <VoiceSurface
+              inputRef={inputRef}
+              value={draft || (successful ? (assistantResponse ?? "") : "")}
+              onChange={setDraft}
+              placeholder={secondMessage}
+              event={event}
+              listeningLabel={listeningLabel}
+              processingLabel={processingLabel}
+              retryLabel={retryLabel}
+              onRetry={retry}
+              embedded
+            />
+          </div>
+        </article>
       )}
     </div>
   );
@@ -204,6 +229,7 @@ function VoiceSurface({
   processingLabel,
   retryLabel,
   onRetry,
+  embedded = false,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -214,9 +240,12 @@ function VoiceSurface({
   processingLabel: string;
   retryLabel: string;
   onRetry: () => void;
+  embedded?: boolean;
 }) {
   return (
-    <div className="relative mt-8 min-h-36 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+    <div
+      className={`relative min-h-36 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm ${embedded ? "min-w-0 flex-1" : "mt-8"}`}
+    >
       <textarea
         ref={inputRef}
         value={value}

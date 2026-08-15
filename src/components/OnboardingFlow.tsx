@@ -531,7 +531,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               )}
               titleLines={
                 assistant
-                  ? undefined
+                  ? [
+                      t("onboarding.rehaul.assistantDemo.titleLineOne"),
+                      t("onboarding.rehaul.assistantDemo.titleLineTwo"),
+                    ]
                   : [
                       t("onboarding.rehaul.dictationDemo.titleLineOne"),
                       t("onboarding.rehaul.dictationDemo.titleLineTwo"),
@@ -565,6 +568,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               processingLabel={t("onboarding.rehaul.demo.processing")}
               retryLabel={t("common.retry")}
               assistantResponse={t("onboarding.rehaul.assistantDemo.response")}
+              assistantSenderName={t("onboarding.rehaul.assistantDemo.senderName")}
+              assistantSenderEmail={t("onboarding.rehaul.assistantDemo.senderEmail")}
+              assistantRecipientLabel={t("onboarding.rehaul.assistantDemo.recipientLabel")}
               onSuccessChange={assistant ? onAssistantDemoSuccess : onDictationDemoSuccess}
             />
           </div>

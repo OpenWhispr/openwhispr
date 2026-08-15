@@ -13,6 +13,7 @@ import {
   isTranscriptionContextAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { getOnboardingDemoKind } from "../utils/onboardingDemo";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -37,6 +38,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const stopLockRef = useRef(false);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
+  const demoKindRef = useRef("dictation");
   const { onToggle, onDemoEvent } = options;
 
   const performStartRecording = useCallback(
@@ -68,6 +70,7 @@ export const useAudioRecording = (toast, options = {}) => {
           logger.warn("Failed to refresh dictation target", { error: error?.message });
         }
 
+        demoKindRef.current = getOnboardingDemoKind(voiceAgentRequested);
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
         audioManagerRef.current.setTranslationRequested(translationRequested);
         if (voiceAgentRequested) {
@@ -179,8 +182,10 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
-        if (isRecording) onDemoEvent?.({ status: "listening" });
-        else if (isProcessing) onDemoEvent?.({ status: "processing" });
+        if (isRecording) onDemoEvent?.({ kind: demoKindRef.current, status: "listening" });
+        else if (isProcessing) {
+          onDemoEvent?.({ kind: demoKindRef.current, status: "processing" });
+        }
         if (!isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Resume media the instant recording ends, not after transcription.
@@ -218,7 +223,11 @@ export const useAudioRecording = (toast, options = {}) => {
         }
       },
       onError: (error) => {
-        onDemoEvent?.({ status: "error", message: error?.message });
+        onDemoEvent?.({
+          kind: demoKindRef.current,
+          status: "error",
+          message: error?.message,
+        });
         if (error?.title !== "Paste Error") {
           window.electronAPI?.hideDictationPreview?.();
         }
@@ -235,7 +244,11 @@ export const useAudioRecording = (toast, options = {}) => {
         }
       },
       onNoAudio: () => {
-        onDemoEvent?.({ status: "error", message: t("hooks.audioRecording.noAudio.title") });
+        onDemoEvent?.({
+          kind: demoKindRef.current,
+          status: "error",
+          message: t("hooks.audioRecording.noAudio.title"),
+        });
         window.electronAPI?.hideDictationPreview?.();
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
@@ -247,7 +260,7 @@ export const useAudioRecording = (toast, options = {}) => {
         });
       },
       onPartialTranscript: (text) => {
-        onDemoEvent?.({ status: "partial", text });
+        onDemoEvent?.({ kind: demoKindRef.current, status: "partial", text });
         setPartialTranscript(text);
       },
       onTranscriptionComplete: async (result) => {
@@ -272,7 +285,7 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
-          onDemoEvent?.({ status: "success", text: result.text });
+          onDemoEvent?.({ kind: demoKindRef.current, status: "success", text: result.text });
           window.electronAPI?.completeDictationPreview?.({ text: result.text });
 
           if (result.warning) {

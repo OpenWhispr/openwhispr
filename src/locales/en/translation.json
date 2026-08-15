@@ -239,10 +239,15 @@
       },
       "assistantDemo": {
         "title": "Meet OpenWhispr Assistant",
+        "titleLineOne": "Meet",
+        "titleLineTwo": "OpenWhispr Assistant",
         "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "senderName": "Eren Lauren",
+        "senderEmail": "eren32@gmail.com",
+        "recipientLabel": "to John Doe",
         "email": "Hey! Want to grab coffee next week? Let me know what works for you.",
         "prompt": "Reply that Tuesday at 3 works. Send an invite.",
-        "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
+        "response": "Hi Eren,\n\nI’d love to catch up. Tuesday at 3 PM works well for me. If that suits you, I’ll send over a calendar invite.\nLooking forward to it,\nJohn"
       },
       "demo": {
         "listening": "Listening…",
