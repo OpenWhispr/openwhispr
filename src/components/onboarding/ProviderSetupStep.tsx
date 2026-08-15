@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import EnterpriseProviderConfig from "../EnterpriseProviderConfig";
+import TestConnectionButton from "../TestConnectionButton";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ProviderIcon } from "../ui/ProviderIcon";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useModelDownload } from "../../hooks/useModelDownload";
 import { LLM_ENTERPRISE_POLICY_PROVIDER_IDS, useSettingsStore } from "../../stores/settingsStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
@@ -21,16 +21,18 @@ import {
   getParakeetModels,
   getWhisperModels,
   modelRegistry,
+  REASONING_PROVIDERS,
   type CloudProviderData,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
 import type { OnboardingStepId } from "./flow";
 import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
+import { adjustBedrockModelForRegion, BEDROCK_REGIONS } from "../../utils/bedrockRegions";
+import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
   const { t } = useTranslation();
   const assistant = stepId.endsWith("assistant");
-  const enterprise = stepId.startsWith("enterprise");
   const local = stepId.startsWith("local");
   return (
     <div
@@ -54,11 +56,7 @@ export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
             <AudioLines className="size-3.5" />
           )}
         </span>
-        <span className="text-[0.6875rem]">
-          {enterprise
-            ? t("onboarding.rehaul.enterprise.dictationIntelligence")
-            : t("onboarding.rehaul.provider.dictation")}
-        </span>
+        <span className="text-[0.6875rem]">{t("onboarding.rehaul.provider.dictation")}</span>
       </div>
       <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-neutral-500">
         <span
@@ -743,84 +741,317 @@ export function LocalModelSetupStep({
 export function EnterpriseSetupStep({
   stepId,
   onConnectionChange,
+  onProceed,
 }: {
   stepId: "enterprise-dictation" | "enterprise-assistant";
   onConnectionChange: (connected: boolean) => void;
+  onProceed: () => void;
 }) {
+  const { t } = useTranslation();
   const store = useSettingsStore();
   const policy = usePolicySnapshot();
   const assistant = stepId === "enterprise-assistant";
-  const setChatAgentMode = store.setChatAgentMode;
-  const setChatAgentProvider = store.setChatAgentProvider;
-  const setDictationAgentMode = store.setDictationAgentMode;
-  const setDictationAgentProvider = store.setDictationAgentProvider;
-  const [provider, setProvider] = useState<"bedrock" | "azure" | "vertex">("bedrock");
-  const providers = useMemo(
+  const scope = assistant ? "chatIntelligence" : "dictationAgent";
+  const managed = useManagedScopeResolution(scope, store.enterpriseSetupMode);
+  const lockedToManaged =
+    managed.kind === "managed" &&
+    (managed.mode === "managed_required" || !managed.allowManualSetup);
+  const manualAllowed =
+    LLM_ENTERPRISE_POLICY_PROVIDER_IDS.includes("bedrock") &&
+    isEnterpriseProviderAllowed(policy, "bedrock");
+  const [authMode, setAuthMode] = useState<"sso" | "keys">("sso");
+  const [profile, setProfile] = useState("");
+  const [accessKeyId, setAccessKeyId] = useState("");
+  const [secretAccessKey, setSecretAccessKey] = useState("");
+  const [region, setRegion] = useState("");
+  const [model, setModel] = useState("");
+  const [connected, setConnected] = useState(false);
+
+  const models = useMemo(
     () =>
-      (["bedrock", "azure", "vertex"] as const).filter(
-        (item) =>
-          LLM_ENTERPRISE_POLICY_PROVIDER_IDS.includes(
-            item as (typeof LLM_ENTERPRISE_POLICY_PROVIDER_IDS)[number]
-          ) && isEnterpriseProviderAllowed(policy, item)
-      ),
-    [policy]
+      (REASONING_PROVIDERS.bedrock?.models ?? []).map((item) => ({
+        ...item,
+        value: region ? adjustBedrockModelForRegion(item.value, region) : item.value,
+      })),
+    [region]
   );
-  const model = assistant ? store.chatAgentModel : store.dictationAgentModel;
-  const setModel = assistant ? store.setChatAgentModel : store.setDictationAgentModel;
 
-  useEffect(() => {
-    if (!providers.includes(provider) && providers[0]) setProvider(providers[0]);
-  }, [provider, providers]);
-
-  useEffect(() => {
-    if (assistant) {
-      setChatAgentMode("enterprise");
-      setChatAgentProvider(provider);
-    } else {
-      setDictationAgentMode("enterprise");
-      setDictationAgentProvider(provider);
-    }
+  const resetConnection = useCallback(() => {
+    setConnected(false);
     onConnectionChange(false);
-  }, [
-    assistant,
-    onConnectionChange,
-    provider,
-    setChatAgentMode,
-    setChatAgentProvider,
-    setDictationAgentMode,
-    setDictationAgentProvider,
-  ]);
+  }, [onConnectionChange]);
+
+  useEffect(() => {
+    setAuthMode("sso");
+    setProfile("");
+    setAccessKeyId("");
+    setSecretAccessKey("");
+    setRegion("");
+    setModel("");
+    setConnected(lockedToManaged);
+    onConnectionChange(lockedToManaged);
+  }, [lockedToManaged, onConnectionChange, stepId]);
+
+  const handleStatusChange = useCallback(
+    (success: boolean) => {
+      setConnected(success);
+      onConnectionChange(success);
+    },
+    [onConnectionChange]
+  );
+
+  const chooseAuthMode = (nextMode: "sso" | "keys") => {
+    setAuthMode(nextMode);
+    resetConnection();
+  };
+
+  const chooseRegion = (nextRegion: string) => {
+    setRegion(nextRegion);
+    setModel((current) => (current ? adjustBedrockModelForRegion(current, nextRegion) : ""));
+    resetConnection();
+  };
+
+  const chooseModel = (nextModel: string) => {
+    setModel(nextModel);
+    resetConnection();
+  };
+
+  const getTestConfig = useCallback(
+    () => ({
+      bedrockRegion: region,
+      bedrockProfile: authMode === "sso" ? profile : "",
+      bedrockAccessKeyId: authMode === "keys" ? accessKeyId : "",
+      bedrockSecretAccessKey: authMode === "keys" ? secretAccessKey : "",
+      bedrockSessionToken: "",
+      model,
+    }),
+    [accessKeyId, authMode, model, profile, region, secretAccessKey]
+  );
+
+  const commitAndProceed = () => {
+    if (lockedToManaged && managed.kind === "managed") {
+      store.setEnterpriseSetupMode("managed");
+      if (assistant) {
+        store.setChatAgentMode("enterprise");
+        store.setChatAgentProvider(managed.provider);
+        store.setChatAgentModel(managed.model);
+      } else {
+        store.setDictationAgentMode("enterprise");
+        store.setDictationAgentProvider(managed.provider);
+        store.setDictationAgentModel(managed.model);
+      }
+      onProceed();
+      return;
+    }
+
+    if (!connected) return;
+    store.setEnterpriseSetupMode("manual");
+    store.setBedrockAuthMode(authMode);
+    store.setBedrockRegion(region);
+    if (authMode === "sso") {
+      store.setBedrockProfile(profile);
+    } else {
+      store.setBedrockAccessKeyId(accessKeyId);
+      store.setBedrockSecretAccessKey(secretAccessKey);
+    }
+    if (assistant) {
+      store.setChatAgentMode("enterprise");
+      store.setChatAgentProvider("bedrock");
+      store.setChatAgentModel(model);
+    } else {
+      store.setDictationAgentMode("enterprise");
+      store.setDictationAgentProvider("bedrock");
+      store.setDictationAgentModel(model);
+    }
+    onProceed();
+  };
+
+  const inputClass =
+    "onboarding-provider-input h-[2.125rem] rounded-xl! border px-3 text-xs shadow-none! focus:ring-2 focus:ring-blue-500/15";
+  const resetKey = [authMode, profile, accessKeyId, secretAccessKey, region, model].join("|");
+
+  if (managed.kind === "error" || (!manualAllowed && !lockedToManaged)) {
+    return (
+      <section className="mx-auto mt-8 w-full max-w-[23.75rem] rounded-[1.125rem] border border-neutral-200 bg-white px-3 py-[1.125rem] text-neutral-950">
+        <SetupStageStepper stepId={stepId} />
+        <div className="mt-7 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          {managed.kind === "error"
+            ? managed.message
+            : t("onboarding.rehaul.enterprise.unavailable")}
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <ProviderCard stepId={stepId}>
-      {providers.length > 1 && (
-        <select
-          value={provider}
-          onChange={(event) => setProvider(event.target.value as typeof provider)}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        >
-          {providers.map((item) => (
-            <option key={item} value={item}>
-              {item === "bedrock" ? "AWS Bedrock" : item === "azure" ? "Azure OpenAI" : "Vertex AI"}
-            </option>
-          ))}
-        </select>
+    <section className="mx-auto mt-[2.125rem] w-full max-w-[23.75rem] rounded-[1.125rem] border border-neutral-200 bg-white px-3 py-[1.125rem] text-neutral-950">
+      <SetupStageStepper stepId={stepId} />
+
+      {lockedToManaged && managed.kind === "managed" ? (
+        <div className="mt-7 rounded-xl border border-neutral-200 bg-neutral-100 p-4 text-center">
+          <p className="text-sm font-medium text-neutral-950">
+            {t("onboarding.rehaul.enterprise.managedTitle")}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-neutral-500">
+            {t("onboarding.rehaul.enterprise.managedDescription")}
+          </p>
+          <Button
+            type="button"
+            onClick={commitAndProceed}
+            className="mt-5 h-8 w-full rounded-full border-neutral-950! bg-neutral-950 text-sm font-normal text-white shadow-none! hover:bg-neutral-800"
+          >
+            {t("onboarding.rehaul.provider.proceed")}
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 grid h-10 grid-cols-2 rounded-xl border border-neutral-200 bg-neutral-100 p-1">
+            {(["sso", "keys"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => chooseAuthMode(mode)}
+                className={`rounded-lg text-xs transition-colors ${
+                  authMode === mode
+                    ? "border border-neutral-200 bg-white text-neutral-950"
+                    : "text-neutral-400 hover:text-neutral-700"
+                }`}
+              >
+                {mode === "sso"
+                  ? t("onboarding.rehaul.enterprise.ssoProfile")
+                  : t("onboarding.rehaul.enterprise.accessKeys")}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 space-y-[0.875rem]">
+            {authMode === "sso" ? (
+              <>
+                <label className="block">
+                  <FieldLabel>{t("onboarding.rehaul.enterprise.profileName")}</FieldLabel>
+                  <Input
+                    value={profile}
+                    onChange={(event) => {
+                      setProfile(event.target.value);
+                      resetConnection();
+                    }}
+                    placeholder={t("onboarding.rehaul.enterprise.profilePlaceholder")}
+                    className={inputClass}
+                  />
+                </label>
+
+                <EnterpriseSelectField
+                  label={t("onboarding.rehaul.enterprise.region")}
+                  value={region}
+                  placeholder={t("onboarding.rehaul.enterprise.regionPlaceholder")}
+                  onValueChange={chooseRegion}
+                  options={BEDROCK_REGIONS.map((item) => ({ value: item, label: item }))}
+                />
+                <EnterpriseSelectField
+                  label={t("onboarding.rehaul.enterprise.model")}
+                  value={model}
+                  placeholder={t("onboarding.rehaul.enterprise.modelPlaceholder")}
+                  onValueChange={chooseModel}
+                  options={models}
+                />
+              </>
+            ) : (
+              <>
+                <label className="block">
+                  <FieldLabel>{t("onboarding.rehaul.enterprise.accessKeyId")}</FieldLabel>
+                  <Input
+                    value={accessKeyId}
+                    onChange={(event) => {
+                      setAccessKeyId(event.target.value);
+                      resetConnection();
+                    }}
+                    placeholder={t("onboarding.rehaul.enterprise.profilePlaceholder")}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="block">
+                  <FieldLabel>{t("onboarding.rehaul.enterprise.secretAccessKey")}</FieldLabel>
+                  <Input
+                    type="password"
+                    value={secretAccessKey}
+                    onChange={(event) => {
+                      setSecretAccessKey(event.target.value);
+                      resetConnection();
+                    }}
+                    placeholder={t("onboarding.rehaul.enterprise.profilePlaceholder")}
+                    className={inputClass}
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <EnterpriseSelectField
+                    label={t("onboarding.rehaul.enterprise.region")}
+                    value={region}
+                    placeholder={t("onboarding.rehaul.enterprise.regionPlaceholder")}
+                    onValueChange={chooseRegion}
+                    options={BEDROCK_REGIONS.map((item) => ({ value: item, label: item }))}
+                  />
+                  <EnterpriseSelectField
+                    label={t("onboarding.rehaul.enterprise.model")}
+                    value={model}
+                    placeholder={t("onboarding.rehaul.enterprise.modelPlaceholder")}
+                    onValueChange={chooseModel}
+                    options={models}
+                  />
+                </div>
+              </>
+            )}
+
+            <TestConnectionButton
+              provider="bedrock"
+              getConfig={getTestConfig}
+              onStatusChange={handleStatusChange}
+              variant="inline"
+              resetKey={resetKey}
+            />
+          </div>
+
+          <Button
+            type="button"
+            onClick={commitAndProceed}
+            disabled={!connected}
+            className="mt-6 h-8 w-full rounded-full border-neutral-200! bg-neutral-950 text-sm font-normal text-white shadow-none! hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100!"
+          >
+            {t("onboarding.rehaul.provider.proceed")}
+          </Button>
+        </>
       )}
-      <EnterpriseProviderConfig
-        provider={provider}
-        reasoningModel={model}
-        setReasoningModel={setModel}
-        onConnectionChange={onConnectionChange}
-      />
-    </ProviderCard>
+    </section>
   );
 }
 
-function ProviderCard({ children, stepId }: { children: ReactNode; stepId: OnboardingStepId }) {
+function EnterpriseSelectField({
+  label,
+  value,
+  placeholder,
+  options,
+  onValueChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: { value: string; label: string }[];
+  onValueChange: (value: string) => void;
+}) {
   return (
-    <div className="mx-auto mt-8 w-full max-w-2xl rounded-3xl border border-border bg-card p-6 shadow-lg md:p-8">
-      <SetupStageStepper stepId={stepId} />
-      <div className="mt-8 space-y-5">{children}</div>
-    </div>
+    <label className="block min-w-0">
+      <FieldLabel>{label}</FieldLabel>
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger className="onboarding-provider-input h-[2.125rem] w-full rounded-xl border-neutral-200 bg-neutral-100 px-3 text-xs text-neutral-950 shadow-none dark:border-neutral-200 dark:bg-neutral-100 dark:text-neutral-950 [&>svg]:text-neutral-400">
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent className="border-neutral-200 bg-white text-neutral-950 dark:border-neutral-200 dark:bg-white dark:text-neutral-950">
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </label>
   );
 }
