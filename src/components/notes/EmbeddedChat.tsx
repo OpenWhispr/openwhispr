@@ -144,7 +144,7 @@ export default function EmbeddedChat({
     return (
       <div
         className={cn(
-          "absolute bottom-4 left-5 right-5 z-20",
+          "absolute bottom-4 left-5 right-5 z-20 mx-auto max-w-[600px]",
           "max-h-[calc(100%-2rem)] min-h-50",
           "flex flex-col",
           "bg-background/95 dark:bg-surface-2/95",

@@ -1184,7 +1184,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     setSettingsSection(section);
                     setShowSettings(true);
                   }}
-                  onOpenSearch={() => setShowSearch(true)}
                   meetingRecordingRequest={meetingRecordingRequest}
                   onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                   invitationEntry={invitationNotesEntry}

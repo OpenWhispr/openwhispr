@@ -146,7 +146,11 @@ export function ChatInput({
             className="flex items-center gap-2.5 w-full py-1.5"
             style={{ animation: "fade-in-content 0.3s ease-out backwards" }}
           >
-            <LiveWaveform readLevel={voice.readLevel} className="flex-1 overflow-hidden" />
+            <LiveWaveform
+              readLevel={voice.readLevel}
+              bars="auto"
+              className="flex-1 overflow-hidden"
+            />
             <span className="text-[13px] font-semibold tabular-nums tracking-[0.08em] text-foreground/85 shrink-0">
               {formatMmSs(voice.elapsed)}
             </span>
@@ -225,9 +229,7 @@ export function ChatInput({
                 onClick={handleSubmit}
                 disabled={!inputText.trim()}
                 aria-label={t("agentMode.input.send")}
-                style={
-                  voiceDraft ? { animation: "scale-in 0.15s ease-out backwards" } : undefined
-                }
+                style={voiceDraft ? { animation: "scale-in 0.15s ease-out backwards" } : undefined}
                 className={cn(
                   "rounded-full shrink-0",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
