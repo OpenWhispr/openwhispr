@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "../ui/button";
-import WindowControls from "../WindowControls";
-import { getCachedPlatform } from "../../utils/platform";
 import { useTranslation } from "react-i18next";
 
 interface OnboardingShellProps {
@@ -63,7 +61,6 @@ export default function OnboardingShell({
   progressIndex,
 }: OnboardingShellProps) {
   const { t } = useTranslation();
-  const platform = getCachedPlatform();
   const hasFooter = onBack || onContinue || onSkip || progressIndex !== undefined;
 
   return (
@@ -71,15 +68,10 @@ export default function OnboardingShell({
       className={`onboarding-canvas flex h-screen flex-col overflow-hidden ${compact ? "compact" : ""}`}
     >
       <div
-        className="flex h-10 shrink-0 items-center justify-end"
+        className="h-3 shrink-0"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-      >
-        {platform !== "darwin" && (
-          <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-            <WindowControls />
-          </div>
-        )}
-      </div>
+        aria-hidden="true"
+      />
 
       <div
         className={`min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-6 py-8 md:px-12"}`}
