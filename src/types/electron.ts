@@ -1617,7 +1617,7 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{ success: boolean; text?: string; error?: string; stopReason?: string }>;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (
@@ -1635,6 +1635,8 @@ declare global {
         actionKey?: string;
         copyCommand?: string;
         retryable?: boolean;
+        finishReason?: string;
+        truncated?: boolean;
         technicalDetails?: {
           status?: number;
           exceptionType?: string;

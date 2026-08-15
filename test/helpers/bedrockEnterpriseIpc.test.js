@@ -330,7 +330,12 @@ test("dictation cleanup uses the Bedrock retry policy and returns the eventual t
       }
     );
 
-    assert.deepEqual(result, { success: true, text: "cleaned dictation" });
+    assert.deepEqual(result, {
+      success: true,
+      text: "cleaned dictation",
+      finishReason: "stop",
+      truncated: false,
+    });
     assert.equal(generateCalls.length, 2);
     assert.ok(generateCalls.every((call) => call.maxRetries === 0));
   } finally {
