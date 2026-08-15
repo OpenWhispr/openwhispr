@@ -381,6 +381,18 @@ h1 {
   color: var(--color-neutral-500) !important;
 }
 
+.onboarding-provider-icon-monochrome {
+  filter: grayscale(1) brightness(0) !important;
+}
+
+.onboarding-shell-scroll {
+  scrollbar-width: none;
+}
+
+.onboarding-shell-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* Modern Button Styling - handled by button component */
 button {
   font-family: var(--font-family-sans);

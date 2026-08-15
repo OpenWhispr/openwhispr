@@ -346,14 +346,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   ]);
 
   const skipLocalSetup = useCallback(async () => {
-    const next = getNextOnboardingStep(currentStepId, route);
-    if (next) {
-      localStorage.setItem("localSetupPending", "true");
-      goTo(next);
-      return;
-    }
+    localStorage.setItem("localSetupPending", "true");
     await finalizeOnboarding("local", { localPending: true });
-  }, [currentStepId, finalizeOnboarding, goTo, route]);
+  }, [finalizeOnboarding]);
 
   const canContinue = (() => {
     switch (currentStepId) {
@@ -649,12 +644,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "local-dictation":
       case "local-assistant":
         return (
-          <div className="w-full">
+          <div className="h-full w-full pt-6">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.local.title")}
               description={t("onboarding.rehaul.local.description")}
+              descriptionLines={[
+                t("onboarding.rehaul.local.descriptionLineOne"),
+                t("onboarding.rehaul.local.descriptionLineTwo"),
+              ]}
             />
-            <LocalModelSetupStep stepId={currentStepId} onReadinessChange={onStageReady} />
+            <LocalModelSetupStep
+              stepId={currentStepId}
+              onReadinessChange={onStageReady}
+              onProceed={() => void continueFromCurrentStep()}
+              onSkip={() => void skipLocalSetup()}
+            />
           </div>
         );
 
@@ -678,7 +682,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const inlineGatedStep = hotkeyStep || demoStep;
   const choiceStep = currentStepId === "setup-choice";
   const inlineProviderStep =
-    currentStepId === "byok-dictation" || currentStepId === "byok-assistant";
+    currentStepId === "byok-dictation" ||
+    currentStepId === "byok-assistant" ||
+    currentStepId === "local-dictation" ||
+    currentStepId === "local-assistant";
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
 
   return (
@@ -702,7 +709,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             ? () => void continueFromCurrentStep()
             : undefined
         }
-        onSkip={localSetup ? () => void skipLocalSetup() : undefined}
+        onSkip={localSetup && !inlineProviderStep ? () => void skipLocalSetup() : undefined}
         continueLabel={
           currentStepId === "use-cases"
             ? t("onboarding.useCase.proceedToSetup")
