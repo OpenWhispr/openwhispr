@@ -296,6 +296,7 @@ const ARRAY_SETTINGS = new Set([
 
 const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
+  "reasoningTimeoutMs",
   "audioRetentionDays",
   "transcriptRetentionDays",
   "whisperVadThreshold",
@@ -597,6 +598,8 @@ export interface SettingsState
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
   meetingSileroEnabled: boolean;
+  /** Non-streaming reasoning request timeout override in ms; 0 = built-in default (#1479). */
+  reasoningTimeoutMs: number;
   whisperVadThreshold: number;
   whisperVadMinSpeechDurationMs: number;
   whisperVadMinSilenceDurationMs: number;
@@ -873,6 +876,7 @@ export interface SettingsState
   setTheme: (value: "light" | "dark" | "auto") => void;
   setCloudBackupEnabled: (value: boolean) => void;
   setTelemetryEnabled: (value: boolean) => void;
+  setReasoningTimeoutMs: (ms: number) => void;
   setAudioRetentionDays: (days: number) => void;
   setTranscriptRetentionDays: (days: number) => void;
   setDataRetentionEnabled: (value: boolean) => void;
@@ -1271,6 +1275,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   cloudBackupEnabled: readBoolean("cloudBackupEnabled", false),
   telemetryEnabled: readBoolean("telemetryEnabled", false),
+  reasoningTimeoutMs: readNumber("reasoningTimeoutMs", 0),
   audioRetentionDays: readNumber("audioRetentionDays", 30),
   transcriptRetentionDays: readNumber("transcriptRetentionDays", 0),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
@@ -2006,6 +2011,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("micWarmHoldSeconds", String(snapped));
     set({ micWarmHoldSeconds: snapped });
   },
+  setReasoningTimeoutMs: createNumberSetter("reasoningTimeoutMs"),
   setAudioRetentionDays: createNumberSetter("audioRetentionDays"),
   setTranscriptRetentionDays: createNumberSetter("transcriptRetentionDays"),
   setDataRetentionEnabled: (value: boolean) => {

@@ -141,6 +141,13 @@ export const MODEL_CONSTRAINTS = {
 // List length above which pickers switch to a searchable variant.
 export const LIST_SEARCH_THRESHOLD = 12;
 
+// Reasoning request timeouts (ms). REASONING is the non-streaming default and
+// can be overridden per-install via the reasoningTimeoutMs setting (0 = default).
+export const REQUEST_TIMEOUTS = {
+  REASONING: 30000,
+  REASONING_STREAMING: 60000,
+} as const;
+
 // Token Limits
 export const TOKEN_LIMITS = {
   MIN_TOKENS: 512,

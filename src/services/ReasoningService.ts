@@ -9,7 +9,14 @@ import {
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
-import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
+import {
+  API_ENDPOINTS,
+  REQUEST_TIMEOUTS,
+  TOKEN_LIMITS,
+  buildApiUrl,
+  ensureV1Suffix,
+} from "../config/constants";
+import { resolveReasoningTimeoutMs } from "../utils/reasoningTimeout";
 import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
@@ -308,9 +315,10 @@ class ReasoningService extends BaseReasoningService {
       requestBody: JSON.stringify(requestBody).substring(0, 200),
     });
 
+    const timeoutMs = resolveReasoningTimeoutMs(getSettings().reasoningTimeoutMs);
     const response = await withRetry(async () => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -369,7 +377,7 @@ class ReasoningService extends BaseReasoningService {
         return jsonResponse;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          throw new Error("Request timed out after 30s");
+          throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`);
         }
         throw error;
       } finally {
@@ -587,7 +595,7 @@ class ReasoningService extends BaseReasoningService {
 
     this.streamAbortController = new AbortController();
     const controller = this.streamAbortController;
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUTS.REASONING_STREAMING);
 
     let response: Response;
     try {
