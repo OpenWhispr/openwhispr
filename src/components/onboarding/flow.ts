@@ -2,6 +2,8 @@ export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
 export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
 export const ONBOARDING_FLOW_VERSION = 2;
 
+type OnboardingStorage = Pick<Storage, "setItem" | "removeItem">;
+
 export type OnboardingStepId =
   | "auth"
   | "permissions"
@@ -92,6 +94,16 @@ export function createOnboardingSession(): OnboardingSession {
     setupMode: null,
     completedStepIds: [],
   };
+}
+
+export function resetOnboardingProgress(storage: OnboardingStorage): void {
+  storage.removeItem(ONBOARDING_SESSION_KEY);
+  storage.removeItem("onboardingCompleted");
+  storage.removeItem("authenticationSkipped");
+  storage.removeItem("skipAuth");
+  // AppRouter uses this marker to distinguish an explicit restart from a
+  // returning signed-in user, while useOnboardingSession migrates it to auth.
+  storage.setItem(LEGACY_ONBOARDING_STEP_KEY, "0");
 }
 
 export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingStepId[] {

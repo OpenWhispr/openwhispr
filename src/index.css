@@ -176,6 +176,14 @@
   body:has(.meeting-notification-window) #root {
     background: transparent;
   }
+
+  /* Compact onboarding is intentionally light in both themes. Match the page
+     backing to the rounded canvas so the theme background cannot show through
+     as a second, differently rounded border around States 1 and 2. */
+  body:has(.onboarding-canvas.compact),
+  body:has(.onboarding-canvas.compact) #root {
+    background-color: var(--color-white);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
