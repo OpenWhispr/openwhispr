@@ -185,7 +185,13 @@
   "onboarding": {
     "rehaul": {
       "permissions": {
-        "title": "Set up OpenWhispr in 3 minutes"
+        "title": "Set up OpenWhispr in 3 minutes",
+        "microphoneDescription": "Convierte la voz en texto.",
+        "accessibilityDescription": "Pega texto en tu aplicación activa.",
+        "systemAudioTitle": "Audio de pantalla",
+        "systemAudioDescription": "Captura audio de otras aplicaciones.",
+        "enable": "Activar",
+        "enabled": "Activado"
       },
       "languages": {
         "title": "Which languages do you speak?",

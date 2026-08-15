@@ -185,7 +185,13 @@
   "onboarding": {
     "rehaul": {
       "permissions": {
-        "title": "Set up OpenWhispr in 3 minutes"
+        "title": "Set up OpenWhispr in 3 minutes",
+        "microphoneDescription": "將語音轉換為文字。",
+        "accessibilityDescription": "將文字貼到目前的 App。",
+        "systemAudioTitle": "螢幕音訊",
+        "systemAudioDescription": "擷取其他 App 的音訊。",
+        "enable": "啟用",
+        "enabled": "已啟用"
       },
       "languages": {
         "title": "Which languages do you speak?",

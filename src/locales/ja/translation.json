@@ -185,7 +185,13 @@
   "onboarding": {
     "rehaul": {
       "permissions": {
-        "title": "Set up OpenWhispr in 3 minutes"
+        "title": "Set up OpenWhispr in 3 minutes",
+        "microphoneDescription": "音声をテキストに変換します。",
+        "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
+        "systemAudioTitle": "画面オーディオ",
+        "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
+        "enable": "有効にする",
+        "enabled": "有効"
       },
       "languages": {
         "title": "Which languages do you speak?",

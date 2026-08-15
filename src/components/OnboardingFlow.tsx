@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { AlertCircle, Mail, Mic, Sparkles } from "lucide-react";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
-import PermissionsSection from "./ui/PermissionsSection";
 import UseCaseStep from "./onboarding/UseCaseStep";
-import OnboardingShell, { BrandMark, OnboardingStepHeader } from "./onboarding/OnboardingShell";
+import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingShell";
+import CompactPermissionsStep from "./onboarding/CompactPermissionsStep";
 import LanguageSelectionStep from "./onboarding/LanguageSelectionStep";
 import ShortcutSetupStep from "./onboarding/ShortcutSetupStep";
 import DemoStep from "./onboarding/DemoStep";
@@ -435,18 +435,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "permissions":
         return (
-          <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-xl">
-            <div className="text-center">
-              <BrandMark className="mx-auto size-14 text-primary" />
-              <h1 className="mt-4 text-2xl font-medium text-foreground">
-                {t("onboarding.rehaul.permissions.title")}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
-            </div>
-            <div className="mt-6 rounded-2xl bg-muted/50 p-2">
-              <PermissionsSection permissions={permissions} systemAudio={systemAudio} />
-            </div>
-          </div>
+          <CompactPermissionsStep
+            permissions={permissions}
+            systemAudio={systemAudio}
+            onContinue={() => void continueFromCurrentStep()}
+          />
         );
 
       case "languages":
@@ -633,7 +626,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   };
 
-  const hasShellNavigation = currentStepId !== "auth";
+  const hasShellNavigation = !COMPACT_STEPS.has(currentStepId);
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
   const skippable = currentStepId === "use-cases" || currentStepId === "notes";
 
@@ -656,7 +649,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         continueDisabled={!canContinue}
         continueLoading={isFinishing || isRegistering}
-        progressIndex={currentStepId === "auth" ? undefined : progressForStep(currentStepId)}
+        progressIndex={compact ? undefined : progressForStep(currentStepId)}
       >
         {fatalError && (
           <div
