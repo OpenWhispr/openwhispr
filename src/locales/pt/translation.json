@@ -1102,7 +1102,7 @@
     "sections": {
       "account": {
         "description": "Perfil e login",
-        "label": "Conta"
+        "label": "Perfil"
       },
       "plansBilling": {
         "description": "Planos, uso e cobrança",
@@ -1217,7 +1217,6 @@
         "signOut": "Sair",
         "signingOut": "Saindo..."
       },
-      "signedIn": "Conectado",
       "title": "Conta",
       "toasts": {
         "approachingLimit": {

@@ -1123,7 +1123,7 @@
     "sections": {
       "account": {
         "description": "Профиль и вход",
-        "label": "Аккаунт"
+        "label": "Профиль"
       },
       "plansBilling": {
         "description": "Тарифы, использование и оплата",
@@ -1242,7 +1242,6 @@
         "signOut": "Выйти",
         "signingOut": "Выход..."
       },
-      "signedIn": "Вы вошли",
       "title": "Аккаунт",
       "toasts": {
         "approachingLimit": {

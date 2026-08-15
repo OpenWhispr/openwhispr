@@ -1211,7 +1211,7 @@
     "sections": {
       "account": {
         "description": "Profil & connexion",
-        "label": "Compte"
+        "label": "Profil"
       },
       "plansBilling": {
         "description": "Forfaits, utilisation & facturation",
@@ -1619,7 +1619,6 @@
         "signOut": "Se déconnecter",
         "signingOut": "Déconnexion..."
       },
-      "signedIn": "Connecté",
       "title": "Compte",
       "toasts": {
         "approachingLimit": {

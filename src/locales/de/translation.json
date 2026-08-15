@@ -1211,7 +1211,7 @@
     "sections": {
       "account": {
         "description": "Profil & Anmeldung",
-        "label": "Konto"
+        "label": "Profil"
       },
       "plansBilling": {
         "description": "Tarife, Nutzung & Abrechnung",
@@ -1619,7 +1619,6 @@
         "signOut": "Abmelden",
         "signingOut": "Abmeldung läuft..."
       },
-      "signedIn": "Angemeldet",
       "title": "Konto",
       "toasts": {
         "approachingLimit": {

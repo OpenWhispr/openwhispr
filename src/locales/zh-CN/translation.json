@@ -1123,7 +1123,7 @@
     "sections": {
       "account": {
         "description": "个人资料与登录",
-        "label": "账户"
+        "label": "个人资料"
       },
       "plansBilling": {
         "description": "套餐、用量与账单",
@@ -1238,7 +1238,6 @@
         "signOut": "退出登录",
         "signingOut": "正在退出..."
       },
-      "signedIn": "已登录",
       "title": "账户",
       "toasts": {
         "approachingLimit": {

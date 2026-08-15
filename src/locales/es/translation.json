@@ -1171,7 +1171,7 @@
     "sections": {
       "account": {
         "description": "Perfil e inicio de sesión",
-        "label": "Cuenta"
+        "label": "Perfil"
       },
       "plansBilling": {
         "description": "Planes, uso y facturación",
@@ -1381,7 +1381,6 @@
         "signOut": "Cerrar sesión",
         "signingOut": "Cerrando sesión..."
       },
-      "signedIn": "Sesión iniciada",
       "signedOutPlans": {
         "button": "Crear cuenta gratuita"
       },

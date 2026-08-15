@@ -1123,7 +1123,7 @@
     "sections": {
       "account": {
         "description": "個人資料與登入",
-        "label": "帳號"
+        "label": "個人資料"
       },
       "plansBilling": {
         "description": "方案、用量與帳單",
@@ -1238,7 +1238,6 @@
         "signOut": "登出",
         "signingOut": "登出中..."
       },
-      "signedIn": "已登入",
       "title": "帳號",
       "toasts": {
         "approachingLimit": {

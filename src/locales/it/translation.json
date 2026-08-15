@@ -1123,7 +1123,7 @@
     "sections": {
       "account": {
         "description": "Profilo e accesso",
-        "label": "Account"
+        "label": "Profilo"
       },
       "plansBilling": {
         "description": "Piani, utilizzo e fatturazione",
@@ -1238,7 +1238,6 @@
         "signOut": "Disconnetti",
         "signingOut": "Disconnessione..."
       },
-      "signedIn": "Accesso effettuato",
       "title": "Account",
       "toasts": {
         "approachingLimit": {

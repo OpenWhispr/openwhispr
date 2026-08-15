@@ -1211,7 +1211,7 @@
     "sections": {
       "account": {
         "description": "Profile & sign in",
-        "label": "Account"
+        "label": "Profile"
       },
       "plansBilling": {
         "description": "Plans, usage & billing",
@@ -1619,7 +1619,6 @@
         "signOut": "Sign Out",
         "signingOut": "Signing out..."
       },
-      "signedIn": "Signed in",
       "title": "Account",
       "toasts": {
         "approachingLimit": {

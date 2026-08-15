@@ -1123,7 +1123,7 @@
     "sections": {
       "account": {
         "description": "プロフィールとサインイン",
-        "label": "アカウント"
+        "label": "プロフィール"
       },
       "plansBilling": {
         "description": "プラン、使用状況、請求",
@@ -1333,7 +1333,6 @@
         "signOut": "サインアウト",
         "signingOut": "サインアウト中..."
       },
-      "signedIn": "サインイン済み",
       "signedOutPlans": {
         "button": "無料アカウントを作成"
       },
