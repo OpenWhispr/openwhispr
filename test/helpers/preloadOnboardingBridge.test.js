@@ -58,6 +58,18 @@ test("onboarding demo bridge invokes only its allowlisted channels", async () =>
   ]);
 });
 
+test("onboarding active bridge invokes only its allowlisted channel", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.setOnboardingActive(true);
+  await api.setOnboardingActive(false);
+
+  assert.deepEqual(invocations, [
+    ["onboarding-set-active", true],
+    ["onboarding-set-active", false],
+  ]);
+});
+
 test("onboarding demo listener strips the Electron event and disposes cleanly", () => {
   const { api, listeners } = loadPreloadApi();
   const payload = {

@@ -117,6 +117,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }, [currentStepId, session.currentStepId, setSession]);
 
   useEffect(() => {
+    void window.electronAPI?.setOnboardingActive?.(true);
+  }, []);
+
+  useEffect(() => {
     void window.electronAPI?.setOnboardingWindowMode?.(compact ? "compact" : "expanded");
   }, [compact]);
 
@@ -209,6 +213,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         await window.electronAPI?.saveAllKeysToEnv?.();
         await window.electronAPI?.markBundleMigrated?.();
         clearSession();
+        await window.electronAPI?.setOnboardingActive?.(false);
         await window.electronAPI?.setOnboardingWindowMode?.("restore");
         onComplete();
       } catch (error) {

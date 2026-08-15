@@ -62,6 +62,7 @@ const registerListener = (channel, handlerFactory) => {
 
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
+  setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
   beginOnboardingDemo: (session) => ipcRenderer.invoke("onboarding-demo-begin", session),
   endOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-end", id),
   stopOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-stop", id),

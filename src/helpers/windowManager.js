@@ -23,6 +23,7 @@ const {
   WindowPositionUtil,
 } = require("./windowConfig");
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
+const { isOnboardingInputAllowed } = require("./onboardingInputPolicy");
 
 class WindowManager {
   constructor() {
@@ -31,7 +32,8 @@ class WindowManager {
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
-    this._onboardingDemoActive = false;
+    this._onboardingActive = false;
+    this._onboardingDemoKind = null;
     this.agentWindow = null;
     this.notificationWindow = null;
     this._notificationLoadTimeout = null;
@@ -284,6 +286,7 @@ class WindowManager {
   }
 
   startMacCompoundPushToTalk(hotkey) {
+    if (!this._isOnboardingInputAllowed("dictation")) return;
     if (this.macCompoundPushState?.active) {
       return;
     }
@@ -419,6 +422,7 @@ class WindowManager {
   }
 
   startWindowsPushToTalk(key) {
+    if (!this._isOnboardingInputAllowed("dictation")) return;
     if (this.winPushState?.active) {
       return;
     }
@@ -477,7 +481,12 @@ class WindowManager {
     this.handleWindowsPushKeyUp();
   }
 
-  _sendDictationToggle(channel) {
+  _isOnboardingInputAllowed(inputKind) {
+    return isOnboardingInputAllowed(this._onboardingActive, this._onboardingDemoKind, inputKind);
+  }
+
+  _sendDictationToggle(channel, inputKind) {
+    if (!this._isOnboardingInputAllowed(inputKind)) return;
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -504,21 +513,23 @@ class WindowManager {
   }
 
   sendToggleDictation() {
-    this._sendDictationToggle("toggle-dictation");
+    this._sendDictationToggle("toggle-dictation", "dictation");
   }
 
   sendToggleVoiceAgent() {
-    this._sendDictationToggle("toggle-voice-agent");
+    this._sendDictationToggle("toggle-voice-agent", "assistant");
   }
 
   sendToggleTranslation() {
+    if (!this._isOnboardingInputAllowed("translation")) return;
     // Same PID-capture need as the voice agent: translation hotkeys don't
     // capture the target at their call sites.
     if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
-    this._sendDictationToggle("toggle-translation");
+    this._sendDictationToggle("toggle-translation", "translation");
   }
 
   sendStartDictation() {
+    if (!this._isOnboardingInputAllowed("dictation")) return;
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -543,6 +554,7 @@ class WindowManager {
   }
 
   sendPrepareDictation() {
+    if (!this._isOnboardingInputAllowed("dictation")) return;
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -827,6 +839,7 @@ class WindowManager {
   }
 
   toggleAgentOverlay() {
+    if (!this._isOnboardingInputAllowed("agent")) return;
     if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
 
     if (this.agentWindow.isVisible()) {
@@ -837,6 +850,7 @@ class WindowManager {
   }
 
   showAgentOverlay() {
+    if (!this._isOnboardingInputAllowed("agent")) return;
     if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
 
     this._clearAgentAnimation();
@@ -1161,7 +1175,7 @@ class WindowManager {
   }
 
   showDictationPanel(options = {}) {
-    if (this._onboardingDemoActive) {
+    if (this._onboardingActive) {
       return;
     }
     const { focus = false } = options;
@@ -1187,27 +1201,53 @@ class WindowManager {
     }
   }
 
-  beginOnboardingDemo() {
-    this._onboardingDemoActive = true;
+  setOnboardingActive(active) {
+    const nextActive = active === true;
+    if (nextActive === this._onboardingActive) {
+      if (nextActive) this.hideDictationPanel();
+      return true;
+    }
+
+    if (nextActive) {
+      this._onboardingActive = true;
+      this.sendCancelDictation();
+      this.hideDictationPanel();
+      this.hideAgentOverlay();
+      return true;
+    }
+
+    this.endOnboardingDemo();
+    this.sendCancelDictation();
+    this.hideDictationPanel();
+    this._onboardingActive = false;
+    if (!this._floatingIconAutoHide) this.showDictationPanel();
+    return true;
+  }
+
+  beginOnboardingDemo(kind) {
+    if (!["dictation", "assistant"].includes(kind)) return false;
+    this._onboardingActive = true;
+    this._onboardingDemoKind = kind;
     // A prior recording must not leak into a new correlated demo session.
     this.sendCancelDictation();
     this.hideDictationPanel();
+    return true;
   }
 
   stopOnboardingDemoRecording() {
-    if (!this._onboardingDemoActive) return false;
+    if (!this._onboardingDemoKind) return false;
     this.sendStopDictation();
     this.hideDictationPanel();
     return true;
   }
 
   endOnboardingDemo() {
-    if (!this._onboardingDemoActive) return false;
+    if (!this._onboardingDemoKind) return false;
     // Leaving/retrying is cancellation, not a transcription request. The
     // overlay owns AudioManager, so route cleanup must be delivered there.
     this.sendCancelDictation();
     this.hideDictationPanel();
-    this._onboardingDemoActive = false;
+    this._onboardingDemoKind = null;
     return true;
   }
 
