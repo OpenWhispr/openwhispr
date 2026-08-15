@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChevronLeft } from "lucide-react";
+import { Undo2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { useTranslation } from "react-i18next";
 
@@ -29,7 +29,7 @@ export function OnboardingProgress({ index }: { index: number }) {
         <span
           key={item}
           className={`h-1.5 w-4 rounded-full transition-colors ${
-            item === index ? "bg-neutral-950" : "bg-neutral-200"
+            item <= index ? "bg-neutral-950" : "bg-neutral-200"
           }`}
         />
       ))}
@@ -39,14 +39,31 @@ export function OnboardingProgress({ index }: { index: number }) {
 
 export function OnboardingStepHeader({
   title,
+  titleLines,
   description,
 }: {
   title: string;
+  titleLines?: string[];
   description?: string;
 }) {
   return (
     <header className="mx-auto w-full max-w-lg space-y-3 text-center">
-      <h1 className="onboarding-display-title mx-auto max-w-xs text-neutral-950">{title}</h1>
+      <h1 className="onboarding-display-title mx-auto max-w-xs text-neutral-950">
+        {titleLines ? (
+          <>
+            <span className="sr-only">{title}</span>
+            <span aria-hidden="true">
+              {titleLines.map((line) => (
+                <span key={line} className="block">
+                  {line}
+                </span>
+              ))}
+            </span>
+          </>
+        ) : (
+          title
+        )}
+      </h1>
       {description && (
         <p className="mx-auto max-w-md text-sm leading-5 text-neutral-500">{description}</p>
       )}
@@ -96,12 +113,13 @@ export default function OnboardingShell({
               {onBack && (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline-flat"
+                  size="icon"
                   onClick={onBack}
-                  className="h-9 min-w-[5.5rem] rounded-full px-4 text-sm"
+                  className="size-9 rounded-full! border! border-neutral-200! bg-white! p-0 text-neutral-950 hover:bg-neutral-50!"
+                  aria-label={t("common.back")}
                 >
-                  <ChevronLeft className="size-4" />
-                  {t("common.back")}
+                  <Undo2 className="size-4" />
                 </Button>
               )}
               {onSkip && (
@@ -119,7 +137,7 @@ export default function OnboardingShell({
                   type="button"
                   onClick={onContinue}
                   disabled={continueDisabled || continueLoading}
-                  className="h-9 min-w-[5.5rem] rounded-full bg-blue-500 px-4 text-sm text-white hover:bg-blue-600 disabled:bg-blue-300 disabled:text-white"
+                  className="h-9 min-w-[5.5rem] rounded-full bg-blue-500 px-4 text-sm text-white hover:bg-blue-600 disabled:border-neutral-200 disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100!"
                 >
                   {continueLoading ? t("common.loading") : (continueLabel ?? t("common.continue"))}
                 </Button>

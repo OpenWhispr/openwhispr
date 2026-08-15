@@ -195,6 +195,8 @@
       },
       "languages": {
         "title": "Which languages do you speak?",
+        "titleLineOne": "どの言語を",
+        "titleLineTwo": "話しますか？",
         "description": "Select all that apply. Multiple selections use automatic language detection."
       },
       "dictationHotkey": {
@@ -379,9 +381,12 @@
     },
     "useCase": {
       "title": "どんな目的でお使いですか？",
+      "titleLineOne": "OpenWhisprを",
+      "titleLineTwo": "どう使いますか？",
       "description": "私たちは小さなチームで、毎週リリースしています。選んだ内容に合わせてアプリを設定し、次に何を作るかの参考にします。",
       "noteLabel": "他に伝えておきたいことはありますか？",
       "notePlaceholder": "任意",
+      "proceedToSetup": "設定に進む",
       "options": {
         "dictation": {
           "title": "より速く書く",

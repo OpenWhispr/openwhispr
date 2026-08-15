@@ -367,6 +367,7 @@ h1 {
 
 .onboarding-light-input.onboarding-light-input-bordered {
   border-color: var(--color-neutral-200) !important;
+  background-color: var(--color-white) !important;
 }
 
 /* Modern Button Styling - handled by button component */
