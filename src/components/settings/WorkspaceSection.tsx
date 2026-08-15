@@ -191,7 +191,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
             </DropdownMenuContent>
           </DropdownMenu>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {t(`settingsPage.workspace.role.${workspace.role}`)} · {workspace.slug}
+            {t(`settingsPage.workspace.role.${workspace.role}`)}
           </p>
         </div>
       </div>
@@ -231,8 +231,6 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
   );
 }
 
-const SLUG_PATTERN = /^[a-z0-9-]+$/;
-
 function GeneralTab({ workspace }: { workspace: Workspace }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -241,24 +239,21 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
   const refresh = useWorkspaceStore((s) => s.refresh);
   const setActive = useWorkspaceStore((s) => s.setActiveWorkspaceId);
   const [name, setName] = useState(workspace.name);
-  const [slug, setSlug] = useState(workspace.slug);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const isOwner = workspace.role === "owner";
   const canEdit = canManageWorkspace(workspace.role);
-  const dirty = name !== workspace.name || slug !== workspace.slug;
-  const slugInvalid = slug.length > 0 && !SLUG_PATTERN.test(slug);
+  const dirty = name !== workspace.name;
 
   useEffect(() => {
     setName(workspace.name);
-    setSlug(workspace.slug);
-  }, [workspace.id, workspace.name, workspace.slug]);
+  }, [workspace.id, workspace.name]);
 
   async function handleSave() {
     setSaving(true);
     try {
-      await WorkspacesService.update(workspace.id, { name, slug });
+      await WorkspacesService.update(workspace.id, { name });
       await refresh();
       toast({ title: t("settingsPage.workspace.general.saved") });
     } catch (error) {
@@ -340,34 +335,12 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
             maxLength={80}
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="ws-slug" className="text-xs font-medium">
-            {t("settingsPage.workspace.general.slugLabel")}
-          </Label>
-          <Input
-            id="ws-slug"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            disabled={!canEdit}
-            maxLength={48}
-            aria-invalid={slugInvalid}
-          />
-          {slugInvalid ? (
-            <p className="text-[11px] text-destructive">
-              {t("settingsPage.workspace.general.slugInvalid")}
-            </p>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">
-              {t("settingsPage.workspace.general.slugHint")}
-            </p>
-          )}
-        </div>
         {canEdit && (
           <div className="pt-1">
             <Button
               onClick={handleSave}
               size="sm"
-              disabled={!dirty || !name.trim() || !slug || slugInvalid || saving}
+              disabled={!dirty || !name.trim() || saving}
             >
               {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               {saving ? t("common.saving") : t("common.save")}

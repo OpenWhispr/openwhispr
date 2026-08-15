@@ -1275,9 +1275,6 @@
       },
       "general": {
         "nameLabel": "Workspace name",
-        "slugLabel": "Short name",
-        "slugHint": "Used in URLs and invite links. Lowercase letters, digits, and dashes only.",
-        "slugInvalid": "Only lowercase letters, digits, and dashes.",
         "saved": "Workspace updated",
         "dangerTitle": "Delete workspace",
         "dangerDescription": "All shared notes, folders, and integrations will be deleted. This cannot be undone.",

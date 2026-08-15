@@ -1275,9 +1275,6 @@
       },
       "general": {
         "nameLabel": "Nom",
-        "slugLabel": "Nom court",
-        "slugHint": "Utilisé dans les URL. Minuscules, chiffres et tirets uniquement.",
-        "slugInvalid": "Minuscules, chiffres et tirets uniquement.",
         "saved": "Espace mis à jour",
         "dangerTitle": "Supprimer l'espace",
         "dangerDescription": "Toutes les notes, dossiers et intégrations partagés seront supprimés. Cette action est irréversible.",

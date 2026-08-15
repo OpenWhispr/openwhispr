@@ -1275,9 +1275,6 @@
       },
       "general": {
         "nameLabel": "Workspace-Name",
-        "slugLabel": "Kurzname",
-        "slugHint": "Wird in URLs verwendet. Nur Kleinbuchstaben, Ziffern und Bindestriche.",
-        "slugInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche.",
         "saved": "Workspace aktualisiert",
         "dangerTitle": "Workspace löschen",
         "dangerDescription": "Alle geteilten Notizen, Ordner und Integrationen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
