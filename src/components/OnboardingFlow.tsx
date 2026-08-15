@@ -545,13 +545,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "assistant-demo": {
         const assistant = currentStepId === "assistant-demo";
         return (
-          <div className="w-full">
+          <div className="h-full w-full pt-5">
             <OnboardingStepHeader
               title={t(
                 assistant
                   ? "onboarding.rehaul.assistantDemo.title"
                   : "onboarding.rehaul.dictationDemo.title"
               )}
+              titleLines={
+                assistant
+                  ? undefined
+                  : [
+                      t("onboarding.rehaul.dictationDemo.titleLineOne"),
+                      t("onboarding.rehaul.dictationDemo.titleLineTwo"),
+                    ]
+              }
               description={t(
                 assistant
                   ? "onboarding.rehaul.assistantDemo.description"
@@ -571,7 +579,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantDemo.prompt"
                   : "onboarding.rehaul.dictationDemo.prompt"
               )}
-              placeholder={t("onboarding.rehaul.dictationDemo.placeholder")}
+              placeholder={t(
+                assistant
+                  ? "onboarding.rehaul.dictationDemo.placeholder"
+                  : "onboarding.rehaul.dictationDemo.prompt"
+              )}
               listeningLabel={t("onboarding.rehaul.demo.listening")}
               processingLabel={t("onboarding.rehaul.demo.processing")}
               retryLabel={t("common.retry")}
@@ -652,6 +664,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const hasShellNavigation = !COMPACT_STEPS.has(currentStepId);
   const hotkeyStep = currentStepId === "dictation-hotkey" || currentStepId === "assistant-hotkey";
+  const demoStep = currentStepId === "dictation-demo" || currentStepId === "assistant-demo";
+  const inlineGatedStep = hotkeyStep || demoStep;
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
   const skippable = currentStepId === "notes";
 
@@ -665,7 +679,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             : undefined
         }
         onContinue={
-          hasShellNavigation && (!hotkeyStep || canContinue)
+          hasShellNavigation && (!inlineGatedStep || canContinue)
             ? () => void continueFromCurrentStep()
             : undefined
         }
@@ -687,7 +701,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         continueDisabled={!canContinue}
         continueLoading={isFinishing || isRegistering}
         progressIndex={compact ? undefined : progressForStep(currentStepId)}
-        showBackLabel={hotkeyStep}
+        showBackLabel={hotkeyStep || (demoStep && !canContinue)}
       >
         {fatalError && (
           <div
