@@ -79,8 +79,10 @@ function findEditedRegion(originalText, fieldValue) {
   return fieldWords.slice(bestStart, bestStart + windowSize).join(" ");
 }
 
-/** Word-level LCS to find [originalWord, editedWord] substitution pairs. */
-function findSubstitutions(origWords, editedWords) {
+/** Word-level LCS to find substitution blocks: arrays of [originalWord, editedWord].
+ * A mismatched span often aligns as N deletes then N inserts; those are zipped
+ * into one block so multi-word name fixes stay paired. */
+function findSubstitutionBlocks(origWords, editedWords) {
   const m = origWords.length;
   const n = editedWords.length;
 
@@ -112,18 +114,35 @@ function findSubstitutions(origWords, editedWords) {
     }
   }
 
-  // Consecutive [origWord, null] + [null, editedWord] = substitution
-  const subs = [];
-  for (let k = 0; k < aligned.length - 1; k++) {
+  const blocks = [];
+  let k = 0;
+  while (k < aligned.length) {
     const [origW, editW] = aligned[k];
-    const [nextOrigW, nextEditW] = aligned[k + 1];
-
-    if (origW !== null && editW === null && nextOrigW === null && nextEditW !== null) {
-      subs.push([origW, nextEditW]);
+    if (origW !== null && editW !== null) {
+      k++;
+      continue;
     }
+
+    const deletes = [];
+    const inserts = [];
+    while (k < aligned.length) {
+      const [o, e] = aligned[k];
+      if (o !== null && e !== null) break;
+      if (o !== null && e === null) deletes.push(o);
+      else if (o === null && e !== null) inserts.push(e);
+      k++;
+    }
+
+    const paired = Math.min(deletes.length, inserts.length);
+    if (paired === 0) continue;
+    const block = [];
+    for (let p = 0; p < paired; p++) {
+      block.push([deletes[p], inserts[p]]);
+    }
+    blocks.push(block);
   }
 
-  return subs;
+  return blocks;
 }
 
 /**
@@ -146,8 +165,9 @@ function extractCorrections(originalText, fieldValue, existingDictionary) {
 
   if (origWords.length === 0 || editedWords.length === 0) return [];
 
+  const blocks = findSubstitutionBlocks(origWords, editedWords);
+  const subs = blocks.flat();
   // If more than 50% of words changed, this is a rewrite, not corrections
-  const subs = findSubstitutions(origWords, editedWords);
   if (subs.length > origWords.length * 0.5) return [];
 
   const safeDict = Array.isArray(existingDictionary) ? existingDictionary : [];
@@ -155,22 +175,32 @@ function extractCorrections(originalText, fieldValue, existingDictionary) {
   const seenCorrections = new Set();
   const results = [];
 
-  for (const [origWord, correctedWord] of subs) {
-    const normalizedCorrected = correctedWord.toLowerCase();
-
-    if (dictSet.has(normalizedCorrected)) continue;
-    if (seenCorrections.has(normalizedCorrected)) continue;
-    if (origWord.toLowerCase() === normalizedCorrected) continue;
-    if (correctedWord.length < 3) continue;
-
+  for (const block of blocks) {
+    const ratios = block.map(([origWord, correctedWord]) => {
+      const dist = editDistance(origWord.toLowerCase(), correctedWord.toLowerCase());
+      const maxLen = Math.max(origWord.length, correctedWord.length);
+      return maxLen === 0 ? 1 : dist / maxLen;
+    });
+    // Single-word: keep the strict phonetic gate. Multi-word name fixes often
+    // have one close pair and one looser pair — gate on the block average so
+    // "Shunade Byrn" → "Sinead Byrne" can learn both.
+    const gate =
+      block.length === 1 ? ratios[0] : ratios.reduce((a, b) => a + b, 0) / ratios.length;
     // 0.65 threshold allows phonetic corrections like "Shunade" → "Sinead" (dist 4/7 = 0.57)
     // while filtering out unrelated word replacements.
-    const dist = editDistance(origWord.toLowerCase(), correctedWord.toLowerCase());
-    const maxLen = Math.max(origWord.length, correctedWord.length);
-    if (dist / maxLen > 0.65) continue;
+    if (gate > 0.65) continue;
 
-    results.push(correctedWord);
-    seenCorrections.add(normalizedCorrected);
+    for (const [origWord, correctedWord] of block) {
+      const normalizedCorrected = correctedWord.toLowerCase();
+
+      if (dictSet.has(normalizedCorrected)) continue;
+      if (seenCorrections.has(normalizedCorrected)) continue;
+      if (origWord.toLowerCase() === normalizedCorrected) continue;
+      if (correctedWord.length < 3) continue;
+
+      results.push(correctedWord);
+      seenCorrections.add(normalizedCorrected);
+    }
   }
 
   return results;
