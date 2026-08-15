@@ -1148,14 +1148,21 @@ class IPCHandlers {
         kind: session.kind,
         startedAt: Date.now(),
       };
+      this.windowManager.beginOnboardingDemo();
       return true;
     });
 
     ipcMain.handle("onboarding-demo-end", (_event, id) => {
       if (this._onboardingDemoSession?.id === id) {
         this._onboardingDemoSession = null;
+        this.windowManager.endOnboardingDemo();
       }
       return true;
+    });
+
+    ipcMain.handle("onboarding-demo-stop", (_event, id) => {
+      if (this._onboardingDemoSession?.id !== id) return false;
+      return this.windowManager.stopOnboardingDemoRecording();
     });
 
     ipcMain.handle("onboarding-demo-publish", (_event, event) => {

@@ -230,7 +230,8 @@
       },
       "demo": {
         "listening": "Listening…",
-        "processing": "Turning your voice into text…"
+        "processing": "Turning your voice into text…",
+        "stop": "Stop"
       },
       "notes": {
         "title": "Record meetings without a bot with OpenWhispr Notes",

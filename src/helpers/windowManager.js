@@ -31,6 +31,7 @@ class WindowManager {
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
+    this._onboardingDemoActive = false;
     this.agentWindow = null;
     this.notificationWindow = null;
     this._notificationLoadTimeout = null;
@@ -745,6 +746,7 @@ class WindowManager {
 
     this.controlPanelWindow.on("closed", () => {
       clearVisibilityTimer();
+      this.endOnboardingDemo();
       this.controlPanelWindow = null;
       this._onboardingRestoreBounds = null;
       this._onboardingWindowMode = null;
@@ -1159,6 +1161,9 @@ class WindowManager {
   }
 
   showDictationPanel(options = {}) {
+    if (this._onboardingDemoActive) {
+      return;
+    }
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       // Reading the target's window costs a helper spawn, so show now and move
@@ -1180,6 +1185,30 @@ class WindowManager {
         this.mainWindow.focus();
       }
     }
+  }
+
+  beginOnboardingDemo() {
+    this._onboardingDemoActive = true;
+    // A prior recording must not leak into a new correlated demo session.
+    this.sendCancelDictation();
+    this.hideDictationPanel();
+  }
+
+  stopOnboardingDemoRecording() {
+    if (!this._onboardingDemoActive) return false;
+    this.sendStopDictation();
+    this.hideDictationPanel();
+    return true;
+  }
+
+  endOnboardingDemo() {
+    if (!this._onboardingDemoActive) return false;
+    // Leaving/retrying is cancellation, not a transcription request. The
+    // overlay owns AudioManager, so route cleanup must be delivered there.
+    this.sendCancelDictation();
+    this.hideDictationPanel();
+    this._onboardingDemoActive = false;
+    return true;
   }
 
   _showControlPanelAfterModeApplied(win) {
