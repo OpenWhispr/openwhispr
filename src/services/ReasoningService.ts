@@ -388,7 +388,8 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const choice = response.choices[0];
-    if (config.requireCompleteOutput && isTruncatedFinishReason(choice?.finish_reason)) {
+    const finishReason = choice?.finish_reason;
+    if (config.requireCompleteOutput && isTruncatedFinishReason(finishReason)) {
       throw new Error("Model output was truncated before the selection edit completed");
     }
     // Reasoning models leak <think> blocks into non-streamed output; strip them
@@ -400,7 +401,7 @@ class ReasoningService extends BaseReasoningService {
     if (!responseText) {
       logger.logReasoning(`${providerName.toUpperCase()}_EMPTY_RESPONSE`, {
         model,
-        finishReason: choice.finish_reason,
+        finishReason,
         hasMessage: !!choice.message,
         response: JSON.stringify(choice).substring(0, 500),
       });
@@ -411,6 +412,8 @@ class ReasoningService extends BaseReasoningService {
       model,
       responseLength: responseText.length,
       tokensUsed: response.usage?.total_tokens || 0,
+      finishReason,
+      truncated: isTruncatedFinishReason(finishReason),
       success: true,
     });
 

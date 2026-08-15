@@ -315,14 +315,17 @@ export const openaiProvider: InferenceProvider = {
     const isResponsesApi = Array.isArray(response?.output);
     const isChatCompletions = Array.isArray(response?.choices);
 
-    if (config.requireCompleteOutput) {
-      const responseIncomplete =
-        response?.status === "incomplete" ||
-        !!response?.incomplete_details ||
-        response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
-      if (responseIncomplete) {
-        throw new Error("Model output was truncated before the selection edit completed");
-      }
+    // Both API shapes report an incomplete generation differently; fold them
+    // into one answer so the selection-edit guard and the success log can never
+    // disagree about what counts as truncated.
+    const responseIncomplete =
+      response?.status === "incomplete" ||
+      !!response?.incomplete_details ||
+      (response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason)) ??
+        false);
+
+    if (config.requireCompleteOutput && responseIncomplete) {
+      throw new Error("Model output was truncated before the selection edit completed");
     }
 
     logger.logReasoning("OPENAI_RAW_RESPONSE", {
@@ -390,6 +393,10 @@ export const openaiProvider: InferenceProvider = {
       model,
       responseLength: responseText.length,
       tokensUsed: response.usage?.total_tokens || 0,
+      finishReason: isResponsesApi
+        ? response?.incomplete_details?.reason
+        : response?.choices?.[0]?.finish_reason,
+      truncated: responseIncomplete,
       success: true,
       isEmpty: responseText.length === 0,
     });

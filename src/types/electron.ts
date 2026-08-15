@@ -1439,7 +1439,7 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{ success: boolean; text?: string; error?: string; stopReason?: string }>;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (
@@ -1447,7 +1447,14 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        retryable?: boolean;
+        finishReason?: string;
+        truncated?: boolean;
+      }>;
       enterpriseStreamStart?: (payload: {
         streamId: string;
         provider: string;
