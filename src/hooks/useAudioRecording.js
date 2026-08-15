@@ -40,6 +40,11 @@ export const useAudioRecording = (toast, options = {}) => {
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
   const { onToggle, onDemoEvent } = options;
+  const onDemoEventRef = useRef(onDemoEvent);
+
+  useEffect(() => {
+    onDemoEventRef.current = onDemoEvent;
+  }, [onDemoEvent]);
 
   const performStartRecording = useCallback(
     async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
@@ -182,9 +187,10 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
-        if (isRecording) onDemoEvent?.({ kind: demoKindRef.current, status: "listening" });
-        else if (isProcessing) {
-          onDemoEvent?.({ kind: demoKindRef.current, status: "processing" });
+        if (isRecording) {
+          onDemoEventRef.current?.({ kind: demoKindRef.current, status: "listening" });
+        } else if (isProcessing) {
+          onDemoEventRef.current?.({ kind: demoKindRef.current, status: "processing" });
         }
         if (!isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
@@ -223,7 +229,7 @@ export const useAudioRecording = (toast, options = {}) => {
         }
       },
       onError: (error) => {
-        onDemoEvent?.({
+        onDemoEventRef.current?.({
           kind: demoKindRef.current,
           status: "error",
           message: error?.message,
@@ -244,7 +250,7 @@ export const useAudioRecording = (toast, options = {}) => {
         }
       },
       onNoAudio: () => {
-        onDemoEvent?.({
+        onDemoEventRef.current?.({
           kind: demoKindRef.current,
           status: "error",
           message: t("hooks.audioRecording.noAudio.title"),
@@ -260,7 +266,7 @@ export const useAudioRecording = (toast, options = {}) => {
         });
       },
       onPartialTranscript: (text) => {
-        onDemoEvent?.({ kind: demoKindRef.current, status: "partial", text });
+        onDemoEventRef.current?.({ kind: demoKindRef.current, status: "partial", text });
         setPartialTranscript(text);
       },
       onTranscriptionComplete: async (result) => {
@@ -285,7 +291,11 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
-          onDemoEvent?.({ kind: demoKindRef.current, status: "success", text: result.text });
+          onDemoEventRef.current?.({
+            kind: demoKindRef.current,
+            status: "success",
+            text: result.text,
+          });
           window.electronAPI?.completeDictationPreview?.({ text: result.text });
 
           if (result.warning) {
@@ -498,7 +508,7 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current.cleanup();
       }
     };
-  }, [toast, onToggle, onDemoEvent, performStartRecording, performStopRecording, t]);
+  }, [toast, onToggle, performStartRecording, performStopRecording, t]);
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {
