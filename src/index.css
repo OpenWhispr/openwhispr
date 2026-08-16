@@ -670,50 +670,10 @@ a:hover {
 }
 
 .agent-thinking-beam[data-agent-mode="true"] {
-  --beam-hue-base: 14deg;
-  --beam-stroke-opacity: 1.12;
-  --beam-inner-opacity: 1.08;
-  --beam-bloom-opacity: 1.06;
-}
-
-/* Agent Mode keeps a softened purple echo across the entire waveform. The
-   crisp foreground is a narrower traveling window, so white passes over the
-   purple layer instead of being painted underneath it. */
-.agent-waveform-background {
-  opacity: 0.52;
-  filter: drop-shadow(0 0 1px color-mix(in oklch, var(--color-agent-brand) 38%, transparent));
-  transition: opacity 180ms ease-out;
-}
-
-.agent-waveform-background[data-active="true"] {
-  opacity: 0.6;
-}
-
-.agent-waveform-foreground[data-agent-mode="true"] {
-  mask-image: linear-gradient(
-    90deg,
-    transparent 6%,
-    rgb(0 0 0 / 0.12) 18%,
-    black 34%,
-    black 56%,
-    rgb(0 0 0 / 0.12) 72%,
-    transparent 86%
-  );
-  mask-position: 125% 0;
-  mask-size: 220% 100%;
-}
-
-.agent-waveform-foreground[data-agent-mode="true"][data-active="true"] {
-  animation: agent-waveform-highlight 2.4s linear infinite;
-}
-
-@keyframes agent-waveform-highlight {
-  from {
-    mask-position: 125% 0;
-  }
-  to {
-    mask-position: -125% 0;
-  }
+  --beam-hue-base: 18deg;
+  --beam-stroke-opacity: 1.18;
+  --beam-inner-opacity: 0;
+  --beam-bloom-opacity: 0;
 }
 
 .expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
@@ -893,11 +853,6 @@ a:hover {
   .voice-identity-svg {
     transition-duration: 1ms !important;
     transition-delay: 0ms !important;
-  }
-
-  .agent-waveform-foreground[data-agent-mode="true"][data-active="true"] {
-    animation: none;
-    mask-position: 50% 0;
   }
 
   .assistant-response-actions,

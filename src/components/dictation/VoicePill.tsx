@@ -64,6 +64,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isThinking = state === "thinking";
   const showThinkingBeam = beamActive ?? isThinking;
   const isUnavailable = state === "unavailable";
+  const showBorderBeam = agentMode ? !isUnavailable : showThinkingBeam;
   const isPanel = variant === "panel";
   const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =
@@ -149,7 +150,6 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         <LiveWaveform
           getLevel={getAudioLevel}
           active={isRecording}
-          agentMode={agentMode}
           className={cn(
             "absolute inset-0 transition-opacity duration-200 ease-out",
             showCompactPill && waveformVisible && isRecording ? "opacity-100" : "opacity-0"
@@ -169,9 +169,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       theme="auto"
       duration={1.6}
       colorVariant={agentMode ? "ocean" : "colorful"}
-      brightness={agentMode ? 1.45 : 1.3}
-      strength={agentMode ? 0.95 : 0.85}
-      active={showThinkingBeam}
+      brightness={agentMode ? 1.35 : 1.3}
+      saturation={agentMode ? 1.35 : undefined}
+      hueRange={agentMode ? 8 : undefined}
+      strength={agentMode ? 0.9 : 0.85}
+      active={showBorderBeam}
       borderRadius={20}
       className="agent-thinking-beam inline-flex rounded-full"
       data-agent-mode={agentMode || undefined}

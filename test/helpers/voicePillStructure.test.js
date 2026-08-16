@@ -77,12 +77,8 @@ test("the waveform pill keeps the normal compact logo footprint", async () => {
 
 test("the waveform uses foreground contrast, rounded caps, and a pronounced height range", async () => {
   const recording = await renderPill("recording", true);
-  const {
-    WAVEFORM_BAR_MIN_PX,
-    WAVEFORM_BAR_MAX_PX,
-    resolveAgentWaveformBarHeight,
-    resolveWaveformBarHeight,
-  } = await import("../../src/components/dictation/waveformMath.ts");
+  const { WAVEFORM_BAR_MIN_PX, WAVEFORM_BAR_MAX_PX, resolveWaveformBarHeight } =
+    await import("../../src/components/dictation/waveformMath.ts");
 
   assert.match(recording, /relative shrink-0 overflow-hidden text-foreground/);
   assert.equal((recording.match(/w-0\.5 rounded-full bg-current/g) || []).length, 22);
@@ -91,11 +87,6 @@ test("the waveform uses foreground contrast, rounded caps, and a pronounced heig
   assert.equal(resolveWaveformBarHeight(0), WAVEFORM_BAR_MIN_PX);
   assert.equal(resolveWaveformBarHeight(1), WAVEFORM_BAR_MAX_PX);
   assert.ok(resolveWaveformBarHeight(0.15) > 20);
-  assert.equal(resolveAgentWaveformBarHeight(new Array(11).fill(0), 5), WAVEFORM_BAR_MIN_PX);
-  assert.notEqual(
-    resolveAgentWaveformBarHeight([0, 0.04, 0.15, 0.02, 0.08, 0.2, 0.01, 0, 0.06, 0.03, 0], 5),
-    resolveWaveformBarHeight(0.2)
-  );
 });
 
 test("Live Transcript hands visual border ownership to the shared panel", async () => {
@@ -110,7 +101,7 @@ test("Live Transcript hands visual border ownership to the shared panel", async 
   assert.doesNotMatch(standalone, /data-integrated-with-panel/);
 });
 
-test("Agent Mode uses the supplied mark, neutral border, ocean beam, and layered waveform", async () => {
+test("Agent Mode uses the supplied mark, a purple perimeter beam, and a neutral waveform", async () => {
   const agentRecording = await renderPill("recording", true, "right", {
     agentMode: true,
   });
@@ -122,20 +113,17 @@ test("Agent Mode uses the supplied mark, neutral border, ocean beam, and layered
   assert.match(asset, /fill="#8787FF"/);
   assert.match(styles, /--color-agent-brand: #8787ff/);
   assert.doesNotMatch(styles, /\.voice-pill-control\[data-agent-mode="true"\]\s*\{/);
-  assert.match(styles, /animation: agent-waveform-highlight 2\.4s linear infinite/);
+  assert.match(styles, /--beam-hue-base: 18deg/);
+  assert.match(styles, /--beam-inner-opacity: 0/);
+  assert.match(styles, /--beam-bloom-opacity: 0/);
+  assert.doesNotMatch(styles, /agent-waveform-background|agent-waveform-highlight/);
   assert.match(agentRecording, /^<div [^>]*class="agent-thinking-beam/);
   assert.match(agentRecording, /^<div [^>]*data-beam="[^"]+"/);
+  assert.match(agentRecording, /^<div [^>]*data-active=""/);
   assert.match(agentRecording, /data-agent-mode="true"/);
   assert.match(agentRecording, /voice-identity-final-agent agent-mode-mark/);
-  assert.match(
-    agentRecording,
-    /agent-waveform-background[^>]*text-agent-brand" data-active="true"/
-  );
-  assert.match(
-    agentRecording,
-    /agent-waveform-foreground[^>]*data-agent-mode="true" data-active="true"/
-  );
-  assert.equal((agentRecording.match(/w-0\.5 rounded-full bg-current/g) || []).length, 33);
+  assert.doesNotMatch(agentRecording, /agent-waveform-background|text-agent-brand/);
+  assert.equal((agentRecording.match(/w-0\.5 rounded-full bg-current/g) || []).length, 22);
   assert.doesNotMatch(normalRecording, /agent-waveform-background/);
 });
 
