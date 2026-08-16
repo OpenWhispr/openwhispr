@@ -145,7 +145,10 @@ export function resolveTranslationDisplayProvider({ translationMode, translation
 // a finished dictation takes. A recording started via the voice agent hotkey
 // always takes the agent path — no wake word needed — and never falls back to
 // cleanup. A translation recording degrades to cleanup instead: the transcript
-// is still a useful dictation without the translation step.
+// is still a useful dictation without the translation step. A transcript that
+// arrived already cleaned (fused Gemini transcription+cleanup) skips the
+// separate cleanup call — agent and voice-agent routes are checked first, so
+// the flag can never divert them.
 export function resolveDictationRouteKind({
   cleanupReachable,
   agentReachable,
@@ -153,6 +156,7 @@ export function resolveDictationRouteKind({
   voiceAgentRequested,
   translationRequested,
   translationReachable,
+  alreadyCleaned,
 }) {
   if (translationRequested) {
     if (translationReachable) return "translation";
@@ -164,7 +168,7 @@ export function resolveDictationRouteKind({
   if (agentReachable && agentInvoked) {
     return "agent";
   }
-  if (cleanupReachable) {
+  if (cleanupReachable && !alreadyCleaned) {
     return "cleanup";
   }
   return "skip";

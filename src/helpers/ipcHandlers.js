@@ -3710,7 +3710,7 @@ class IPCHandlers {
     // a JSON generateContent call plus an ffmpeg conversion, both main-only.
     ipcMain.handle(
       "proxy-gemini-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, prompt }) => {
+      serializeIpcError(async (event, { audioBuffer, model, language, prompt, cleanupPrompt }) => {
         const apiKey = this.environmentManager.getGeminiKey();
         if (!apiKey) {
           throw new Error("Gemini API key not configured");
@@ -3722,6 +3722,7 @@ class IPCHandlers {
           model,
           language,
           prompt,
+          cleanupPrompt,
           apiKey,
         });
       })

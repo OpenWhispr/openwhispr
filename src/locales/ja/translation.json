@@ -2164,11 +2164,11 @@
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "gemini_3_flash_preview": "高速かつ高精度な文字起こし",
-        "gemini_2_5_flash_lite": "最小のレイテンシとコスト",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
-        "tinfoil_voxtral": "検証可能なプライベート文字起こし"
+        "tinfoil_voxtral": "検証可能なプライベート文字起こし",
+        "gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -2185,7 +2185,6 @@
         "gemini_gemini_3_5_flash": "最新の高速で高性能な Gemini モデル",
         "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
-        "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
         "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
         "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
         "groq_qwen_qwen3_32b": "強力な推論モデル、131K コンテキスト",
@@ -2213,7 +2212,8 @@
         "corti_corti_s1_instant": "高速なヘルスケアモデル、推論トレースなし",
         "corti_corti_s1": "推論対応の最も高性能な臨床モデル",
         "corti_corti_s1_mini_instant": "コンパクトなヘルスケアモデル、最速かつ最も低コスト",
-        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で"
+        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で",
+        "gemini_gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいエージェントモードのタスクに最適です。",

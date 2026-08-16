@@ -73,7 +73,7 @@ test("gemini: posts converted wav as inlineData to generateContent with x-goog-a
 
   assert.equal(convertCalls.length, 1, "audio is converted before upload");
   assert.deepEqual(convertCalls[0].input, Buffer.from([1, 2, 3]));
-  assert.deepEqual(convertCalls[0].options, { sampleRate: 16000, channels: 1 });
+  assert.deepEqual(convertCalls[0].options, { sampleRate: 16000, channels: 1, codec: "libopus", bitrate: "24k" });
 
   assert.equal(fetches.length, 1);
   assert.equal(
@@ -90,8 +90,42 @@ test("gemini: posts converted wav as inlineData to generateContent with x-goog-a
   assert.match(parts[0].text, /verbatim/i, "instruction demands a verbatim transcript");
   assert.match(parts[0].text, /"es"/, "language hint rides the instruction");
   assert.match(parts[0].text, /OpenWhispr, Zellij/, "dictionary terms ride the instruction");
-  assert.equal(parts[1].inlineData.mimeType, "audio/wav");
+  assert.equal(parts[1].inlineData.mimeType, "audio/ogg");
   assert.equal(parts[1].inlineData.data, Buffer.from("RIFF-fake-wav").toString("base64"));
+  assert.ok(!result.alreadyCleaned, "plain transcription is not marked cleaned");
+});
+
+test("gemini: a cleanupPrompt fuses cleanup into the instruction and marks the result cleaned", async () => {
+  fetches.length = 0;
+
+  const cleanupPrompt =
+    "You are a transcript cleanup engine. Fix punctuation.\n\n" +
+    "Custom Dictionary (use these exact spellings when they appear in the text): OpenWhispr, Zellij";
+  const result = await transcribeAudio({
+    audioBuffer: Buffer.from([1, 2, 3]),
+    model: "gemini-3-flash-preview",
+    language: "es",
+    prompt: "OpenWhispr, Zellij",
+    cleanupPrompt,
+    apiKey: "gk-gemini",
+  });
+
+  assert.equal(result.alreadyCleaned, true);
+
+  const instruction = JSON.parse(fetches[0].init.body).contents[0].parts[0].text;
+  assert.ok(instruction.startsWith(cleanupPrompt), "cleanup rules lead the instruction");
+  assert.doesNotMatch(instruction, /verbatim/i, "the verbatim directive is replaced");
+  assert.match(
+    instruction,
+    /Output ONLY the final cleaned text/,
+    "output-only directive bridges audio to the cleanup rules"
+  );
+  assert.match(instruction, /"es"/, "language hint still rides the instruction");
+  // The cleanup prompt already carries the dictionary suffix; the separate
+  // spellings line must not restate it.
+  assert.doesNotMatch(instruction, /Prefer these spellings/);
+  const dictionaryMentions = instruction.split("OpenWhispr, Zellij").length - 1;
+  assert.equal(dictionaryMentions, 1, "dictionary appears exactly once");
 });
 
 test("gemini: defaults the model and omits language/dictionary lines when absent", async () => {
@@ -155,4 +189,34 @@ test("gemini: an empty candidate yields empty text for the caller's empty-transc
   });
   const result = await transcribeAudio({ audioBuffer: Buffer.from([1]), apiKey: "gk" });
   assert.equal(result.text, "");
+});
+
+test("gemini: a transient 503 is retried once and the retry's transcript is returned", async () => {
+  fetches.length = 0;
+  let calls = 0;
+  fetchResponse = () => {
+    calls += 1;
+    if (calls === 1) {
+      return { ok: false, status: 503, text: async () => "high demand" };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: "recovered" }] } }] }),
+      text: async () => "",
+    };
+  };
+  const result = await transcribeAudio({ audioBuffer: Buffer.from([1]), apiKey: "gk" });
+  assert.equal(result.text, "recovered", "retry result is used after a 503");
+  assert.equal(fetches.length, 2, "exactly one retry after the 503");
+
+  // A second consecutive 503 surfaces as SERVER_ERROR — no retry loop.
+  fetches.length = 0;
+  fetchResponse = () => ({ ok: false, status: 503, text: async () => "still busy" });
+  await assert.rejects(
+    () => transcribeAudio({ audioBuffer: Buffer.from([1]), apiKey: "gk" }),
+    (err) => err.code === "SERVER_ERROR" && /503/.test(err.message)
+  );
+  assert.equal(fetches.length, 3, "retry, then one fallback-model attempt, then fail");
+  assert.match(fetches[2].url, /gemini-3\.5-flash-lite/, "third attempt hits the sibling model");
 });

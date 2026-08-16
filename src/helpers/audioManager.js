@@ -74,7 +74,11 @@ import {
   resolveDictationAgentVisionInference,
 } from "./dictationAgentInference";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
-import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
+import {
+  resolvePrompt,
+  appendScreenContextSuffix,
+  getCleanupSystemPrompt,
+} from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
@@ -144,7 +148,8 @@ function resolveReasoningRoute(
   agentName,
   voiceAgentRequested,
   translationRequested,
-  screenContext
+  screenContext,
+  alreadyCleaned
 ) {
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
   const cleanupReachable =
@@ -164,10 +169,12 @@ function resolveReasoningRoute(
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
+    alreadyCleaned,
   });
   logger.logReasoning("ROUTE_RESOLVED", {
     kind,
     voiceAgentRequested,
+    alreadyCleaned: !!alreadyCleaned,
     agentReachable: agent.reachable,
     agentMode: settings.dictationAgentMode,
     agentProvider: agent.displayProvider,
@@ -360,11 +367,12 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   gemini: {
     displayName: "Gemini",
     ipc: () => window.electronAPI?.proxyGeminiTranscription,
-    buildPayload: ({ audioBuffer, model, language, dictionaryPrompt }) => ({
+    buildPayload: ({ audioBuffer, model, language, dictionaryPrompt, cleanupPrompt }) => ({
       audioBuffer,
       model,
       language,
       prompt: dictionaryPrompt || undefined,
+      cleanupPrompt: cleanupPrompt || undefined,
     }),
   },
   xai: {
@@ -2499,12 +2507,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async processTranscription(text, source) {
-    const result = await this.processTranscriptionCore(text, source);
+  async processTranscription(text, source, opts) {
+    const result = await this.processTranscriptionCore(text, source, opts);
     return this.finalizeChineseScript(result);
   }
 
-  async processTranscriptionCore(text, source) {
+  async processTranscriptionCore(text, source, opts) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
     if (!normalizedText) {
@@ -2570,7 +2578,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           agentName,
           this.voiceAgentRequested,
           this.translationRequested,
-          screenContext
+          screenContext,
+          !!opts?.alreadyCleaned
         );
         if (this.translationRequested && route.kind !== "translation") {
           this.notifyTranslationFallback("unreachable");
@@ -2992,6 +3001,35 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return getSettings().customPrompts.cleanup || undefined;
   }
 
+  // Fuses transcription and cleanup into one Gemini call: returns the same
+  // effective cleanup system prompt the separate cleanup step would use, or
+  // undefined when this dictation must keep the two-step path. Only plain
+  // dictations whose resolved cleanup provider is BYOK Gemini qualify —
+  // voice-agent, translation, and cloud-cleanup recordings never fuse.
+  getFusedGeminiCleanupPrompt(settings) {
+    if (
+      !settings.useCleanupModel ||
+      this.skipReasoning ||
+      this.voiceAgentRequested ||
+      this.translationRequested ||
+      isCloudCleanupMode()
+    ) {
+      return undefined;
+    }
+    const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+    // Match two-step reachability: without a configured cleanup model the
+    // two-step pipeline leaves the transcript raw, so fusion must too.
+    if (cleanup.mode !== "providers" || cleanup.provider !== "gemini" || !cleanup.model?.trim()) {
+      return undefined;
+    }
+    return getCleanupSystemPrompt(
+      localStorage.getItem("agentName") || null,
+      getDictionaryHintWords(settings),
+      resolveCleanupLanguage(settings.preferredLanguage),
+      settings.uiLanguage || "en"
+    );
+  }
+
   getKeyterms() {
     return this.getCustomDictionaryArray();
   }
@@ -3033,6 +3071,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
         }
         const apiCallStart = performance.now();
+        const cleanupPrompt =
+          provider === "gemini" ? this.getFusedGeminiCleanupPrompt(apiSettings) : undefined;
         const result = await call(
           proxySpec.buildPayload({
             audioBuffer: await optimizedAudio.arrayBuffer(),
@@ -3040,6 +3080,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             language,
             apiSettings,
             dictionaryPrompt: this.getWhisperPrompt(apiSettings),
+            cleanupPrompt,
             keyterms: this.getKeyterms()
               .map((t) => t.trim().slice(0, 50))
               .filter(Boolean)
@@ -3061,10 +3102,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(proxyText, provider);
+        const text = await this.processTranscription(proxyText, provider, {
+          alreadyCleaned: !!result?.alreadyCleaned,
+        });
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
-        const source = (await this.isReasoningAvailable()) ? `${provider}-reasoned` : provider;
+        const source = result?.alreadyCleaned
+          ? `${provider}-fused`
+          : (await this.isReasoningAvailable())
+            ? `${provider}-reasoned`
+            : provider;
         return { success: true, text, rawText: proxyText, source, timings };
       }
 

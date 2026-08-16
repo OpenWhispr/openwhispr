@@ -89,6 +89,48 @@ test("wake word with unreachable agent falls back to cleanup", async () => {
   );
 });
 
+test("already-cleaned transcript skips cleanup", async () => {
+  const { resolveDictationRouteKind } = await load();
+
+  // A fused Gemini transcription arrives already cleaned; running the
+  // separate cleanup call again would clean twice.
+  assert.equal(
+    resolveDictationRouteKind({
+      cleanupReachable: true,
+      agentReachable: false,
+      agentInvoked: false,
+      voiceAgentRequested: false,
+      alreadyCleaned: true,
+    }),
+    "skip"
+  );
+});
+
+test("alreadyCleaned never diverts agent or voice-agent routes", async () => {
+  const { resolveDictationRouteKind } = await load();
+
+  assert.equal(
+    resolveDictationRouteKind({
+      cleanupReachable: true,
+      agentReachable: true,
+      agentInvoked: true,
+      voiceAgentRequested: false,
+      alreadyCleaned: true,
+    }),
+    "agent"
+  );
+  assert.equal(
+    resolveDictationRouteKind({
+      cleanupReachable: true,
+      agentReachable: true,
+      agentInvoked: true,
+      voiceAgentRequested: true,
+      alreadyCleaned: true,
+    }),
+    "agent"
+  );
+});
+
 test("skips reasoning when nothing is reachable", async () => {
   const { resolveDictationRouteKind } = await load();
 
