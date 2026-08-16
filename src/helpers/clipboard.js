@@ -1440,13 +1440,14 @@ class ClipboardManager {
     };
 
     const preDetectWindowClass = (windowId) => {
-      if (!xdotoolExists || (isWayland && !xwaylandAvailable)) return null;
+      if (!windowId) return null;
+      // xprop never crashes on windows without WM_CLASS (xdotool getwindowclassname
+      // aborts with a double free on such windows — see jordansissel/xdotool#517).
       try {
-        const args = windowId
-          ? ["getwindowclassname", windowId]
-          : ["getactivewindow", "getwindowclassname"];
-        const result = spawnSync("xdotool", args);
-        return result.status === 0 ? result.stdout.toString().toLowerCase().trim() || null : null;
+        const result = spawnSync("xprop", ["-id", windowId, "WM_CLASS"], { timeout: 1000 });
+        if (result.status !== 0) return null;
+        const match = result.stdout.toString().match(/"([^"]+)"/);
+        return match ? match[1].toLowerCase().trim() || null : null;
       } catch {
         return null;
       }
@@ -1828,8 +1829,10 @@ class ClipboardManager {
     // Compositor-aware priority ordering
     let candidates;
     if (!isWayland) {
-      // X11: xdotool is native and needs no daemon; ydotool as fallback
-      candidates = [...xdotoolEntry, ...ydotoolEntry];
+      // X11: prefer ydotool (uinput) when its daemon is running — xdotool's
+      // getwindowclassname aborts on windows without WM_CLASS (jordansissel/xdotool#517)
+      // and XTest injection is flaky on KDE. xdotool remains the fallback.
+      candidates = [...ydotoolEntry, ...xdotoolEntry];
     } else if (isWlroots) {
       // wlroots (Sway, Hyprland, etc.): wtype is native; then xdotool for XWayland; ydotool last
       candidates = [...wtypeEntry, ...xdotoolEntry, ...ydotoolEntry];
