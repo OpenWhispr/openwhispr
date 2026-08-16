@@ -13,6 +13,7 @@ import { formatHotkeyListLabel } from "../../utils/hotkeys";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
   resolveAssistantFooterPresentation,
+  resolveAssistantResponseReady,
 } from "../../helpers/voicePillPresentation";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 
@@ -136,9 +137,17 @@ export function AssistantPanel({
   const displayedResponseRef = useRef("");
   if (responseContent) displayedResponseRef.current = responseContent;
   const displayedResponse = responseContent || displayedResponseRef.current;
-  const isResponseReady = Boolean(
-    responseContent && !isBusy && !latestAssistantMessage?.isStreaming && voiceState === "idle"
-  );
+  // Keep the previous response ineligible throughout a follow-up request. Audio
+  // processing can return voiceState to idle one render before the chat stream
+  // reports busy; without this latch, the old response briefly restores the
+  // Close/Copy actions and reverses the footer animation.
+  const isResponseReady = resolveAssistantResponseReady({
+    responseContent,
+    isBusy,
+    isStreaming: Boolean(latestAssistantMessage?.isStreaming),
+    voiceState,
+    requestPending: thinking || pendingCommand != null,
+  });
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

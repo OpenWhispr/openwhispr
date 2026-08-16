@@ -47,6 +47,18 @@ export function resolveAssistantFooterPresentation(phase) {
   };
 }
 
+export function resolveAssistantResponseReady({
+  responseContent,
+  isBusy,
+  isStreaming,
+  voiceState,
+  requestPending,
+}) {
+  return Boolean(
+    responseContent && !isBusy && !isStreaming && voiceState === "idle" && !requestPending
+  );
+}
+
 export const LIVE_TRANSCRIPT_ENTRANCE_TIMING = Object.freeze({
   encapsulateMs: 180,
   encapsulateHoldMs: 140,

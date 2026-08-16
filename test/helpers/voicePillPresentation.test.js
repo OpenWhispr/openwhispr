@@ -334,6 +334,37 @@ test("Agent footer phases never mount actions and the pill together", async () =
   });
 });
 
+test("an old Agent response stays ineligible during the follow-up handoff gap", async () => {
+  const { resolveAssistantResponseReady } = await load();
+
+  assert.equal(
+    resolveAssistantResponseReady({
+      responseContent: "The previous completed response",
+      isBusy: false,
+      isStreaming: false,
+      voiceState: "idle",
+      requestPending: true,
+    }),
+    false
+  );
+});
+
+test("Agent response actions return only after the follow-up request settles", async () => {
+  const { resolveAssistantResponseReady } = await load();
+  const presentation = {
+    responseContent: "The new completed response",
+    isBusy: false,
+    isStreaming: false,
+    voiceState: "idle",
+    requestPending: false,
+  };
+
+  assert.equal(resolveAssistantResponseReady(presentation), true);
+  assert.equal(resolveAssistantResponseReady({ ...presentation, isBusy: true }), false);
+  assert.equal(resolveAssistantResponseReady({ ...presentation, isStreaming: true }), false);
+  assert.equal(resolveAssistantResponseReady({ ...presentation, voiceState: "listening" }), false);
+});
+
 test("stopping during the entrance cancels the staged recording presentation", async () => {
   const { resolveListeningEntrancePresentation } = await load();
   assert.deepEqual(
