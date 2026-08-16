@@ -7,6 +7,7 @@ interface ExpandingPanelShellProps extends Omit<HTMLAttributes<HTMLElement>, "ch
   stabilizeHeight?: boolean;
   animateHeight?: boolean;
   fillAvailableHeight?: boolean;
+  preferredHeightCap?: number;
   measurementKey?: string | null;
   onPreferredHeightChange?: (height: number) => void;
   children: ReactNode;
@@ -19,6 +20,7 @@ export function ExpandingPanelShell({
   stabilizeHeight = false,
   animateHeight = false,
   fillAvailableHeight = false,
+  preferredHeightCap,
   measurementKey = null,
   onPreferredHeightChange,
   children,
@@ -35,13 +37,12 @@ export function ExpandingPanelShell({
   useLayoutEffect(() => {
     lastPreferredHeightRef.current = 0;
     heightFloorRef.current = 0;
-    // Voice modes mount only after the native window has grown to its maximum
-    // responsive assistant footprint. Preserve that ceiling while the native
-    // window later shrinks to content; using the current viewport as the cap
-    // would prevent the panel from ever growing again.
-    heightCapRef.current = Math.max(0, window.innerHeight - 24);
+    // Adaptive modes can enter in a compact native window. Preserve their
+    // configured ceiling so content measurement can grow that window again;
+    // otherwise the initial compact viewport becomes an accidental hard cap.
+    heightCapRef.current = Math.max(0, preferredHeightCap ?? window.innerHeight - 24);
     setHeightFloor(null);
-  }, [measurementKey]);
+  }, [measurementKey, preferredHeightCap]);
 
   useLayoutEffect(() => {
     if (stabilizeHeight) {

@@ -21,6 +21,16 @@ test("Live Transcript stages footer growth, controls, then content", async () =>
     controlsVisible: true,
     contentVisible: false,
   });
+  assert.deepEqual(resolveLiveTranscriptEntrancePresentation("prepare"), {
+    coreStage: "footer",
+    controlsVisible: true,
+    contentVisible: false,
+  });
+  assert.deepEqual(resolveLiveTranscriptEntrancePresentation("panel"), {
+    coreStage: "content",
+    controlsVisible: true,
+    contentVisible: false,
+  });
   assert.deepEqual(resolveLiveTranscriptEntrancePresentation("content"), {
     coreStage: "content",
     controlsVisible: true,
@@ -38,6 +48,10 @@ test("Live Transcript holds the encapsulated state before the remaining visual b
   assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs > 0);
   assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsRevealMs > 0);
   assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentDelayMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.measurementSettleMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.panelExpansionMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentRevealDelayMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentSettleMs > 0);
   assert.equal(
     timeline.horizontalAtMs,
     LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs +
@@ -50,11 +64,35 @@ test("Live Transcript holds the encapsulated state before the remaining visual b
       LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs
   );
   assert.equal(
-    timeline.contentAtMs,
+    timeline.prepareAtMs,
     timeline.controlsAtMs +
       LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsRevealMs +
       LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentDelayMs
   );
+  assert.equal(
+    timeline.panelAtMs,
+    timeline.prepareAtMs + LIVE_TRANSCRIPT_ENTRANCE_TIMING.measurementSettleMs
+  );
+  assert.equal(
+    timeline.contentAtMs,
+    timeline.panelAtMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.panelExpansionMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentRevealDelayMs
+  );
+  assert.equal(
+    timeline.streamAtMs,
+    timeline.contentAtMs + LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentSettleMs
+  );
+});
+
+test("Live Transcript keeps an adaptive surface instead of entering at Agent height", async () => {
+  const { LIVE_TRANSCRIPT_SURFACE_LIMITS } = await load();
+
+  assert.deepEqual(LIVE_TRANSCRIPT_SURFACE_LIMITS, {
+    minHeight: 152,
+    maxHeight: 538,
+  });
+  assert.ok(LIVE_TRANSCRIPT_SURFACE_LIMITS.minHeight < LIVE_TRANSCRIPT_SURFACE_LIMITS.maxHeight);
 });
 
 test("voice mode direction mirrors the right baseline only for bottom-left", async () => {

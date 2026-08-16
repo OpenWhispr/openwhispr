@@ -20,6 +20,7 @@ import {
   getLiveTranscriptEntranceTimeline,
   getListeningEntranceTimeline,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+  LIVE_TRANSCRIPT_SURFACE_LIMITS,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantThinkingTransition,
   resolveListeningEntrancePresentation,
@@ -212,6 +213,7 @@ export default function App() {
   const liveTranscriptOpenPromiseRef = useRef(null);
   const liveTranscriptEntranceTimersRef = useRef([]);
   const liveTranscriptSourceTextRef = useRef("");
+  const liveTranscriptContentReadyRef = useRef(false);
   const liveTranscriptTextSchedulerRef = useRef(null);
   const commandIdRef = useRef(0);
 
@@ -224,12 +226,27 @@ export default function App() {
 
   const updateLiveTranscriptText = React.useCallback((text, { immediate = false } = {}) => {
     liveTranscriptSourceTextRef.current = text;
-    liveTranscriptTextSchedulerRef.current.push(text, { immediate });
+    if (liveTranscriptContentReadyRef.current) {
+      liveTranscriptTextSchedulerRef.current.push(text, { immediate });
+    }
+  }, []);
+
+  const prepareBufferedLiveTranscriptText = React.useCallback(() => {
+    liveTranscriptTextSchedulerRef.current.cancel();
+    setLiveTranscriptText(liveTranscriptSourceTextRef.current);
+  }, []);
+
+  const resumeLiveTranscriptText = React.useCallback(() => {
+    liveTranscriptContentReadyRef.current = true;
+    liveTranscriptTextSchedulerRef.current.push(liveTranscriptSourceTextRef.current, {
+      immediate: true,
+    });
   }, []);
 
   const resetLiveTranscriptText = React.useCallback(() => {
     liveTranscriptTextSchedulerRef.current.cancel();
     liveTranscriptSourceTextRef.current = "";
+    liveTranscriptContentReadyRef.current = false;
     setLiveTranscriptText("");
   }, []);
 
@@ -432,6 +449,8 @@ export default function App() {
       liveTranscriptPanelOpenRef.current = false;
       setLiveTranscriptPanelOpen(false);
       setLiveTranscriptEntrancePhase("idle");
+      liveTranscriptContentReadyRef.current = false;
+      liveTranscriptTextSchedulerRef.current.cancel();
       clearTimeout(liveTranscriptCloseTimerRef.current);
       liveTranscriptCloseTimerRef.current = setTimeout(() => {
         setLiveTranscriptPanelMounted(false);
@@ -457,11 +476,18 @@ export default function App() {
     clearTimeout(liveTranscriptCloseTimerRef.current);
     clearLiveTranscriptEntranceTimers();
     liveTranscriptOpenPromiseRef.current = (async () => {
-      await window.electronAPI?.resizeMainWindow?.("ASSISTANT");
+      // Live Transcript owns an adaptive footprint. Enter at its footer-sized
+      // surface instead of flashing the full Agent window before measurement.
+      await window.electronAPI?.resizeAssistantWindowToContent?.(
+        LIVE_TRANSCRIPT_SURFACE_LIMITS.minHeight
+      );
       if (liveTranscriptSuppressedRef.current || assistantPanelOpenRef.current) return;
       // Reserve the mode before the next frame so repeated preview chunks
-      // cannot restart the three-stage entrance while its first frame waits.
+      // cannot restart the staged entrance while its first frame waits.
       liveTranscriptPanelOpenRef.current = true;
+      liveTranscriptContentReadyRef.current = false;
+      liveTranscriptTextSchedulerRef.current.cancel();
+      setLiveTranscriptText("");
       setLiveTranscriptEntrancePhase("encapsulate");
       setLiveTranscriptPanelMounted(true);
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
@@ -471,13 +497,23 @@ export default function App() {
         liveTranscriptEntranceTimersRef.current = [
           setTimeout(() => setLiveTranscriptEntrancePhase("horizontal"), timeline.horizontalAtMs),
           setTimeout(() => setLiveTranscriptEntrancePhase("controls"), timeline.controlsAtMs),
+          setTimeout(() => {
+            prepareBufferedLiveTranscriptText();
+            setLiveTranscriptEntrancePhase("prepare");
+          }, timeline.prepareAtMs),
+          setTimeout(() => setLiveTranscriptEntrancePhase("panel"), timeline.panelAtMs),
           setTimeout(() => setLiveTranscriptEntrancePhase("content"), timeline.contentAtMs),
+          setTimeout(() => resumeLiveTranscriptText(), timeline.streamAtMs),
         ];
       });
     })().finally(() => {
       liveTranscriptOpenPromiseRef.current = null;
     });
-  }, [clearLiveTranscriptEntranceTimers]);
+  }, [
+    clearLiveTranscriptEntranceTimers,
+    prepareBufferedLiveTranscriptText,
+    resumeLiveTranscriptText,
+  ]);
 
   useEffect(() => {
     const reveal = () => {

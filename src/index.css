@@ -481,7 +481,7 @@ a:hover {
   transform: none;
 }
 
-/* Live Transcript enters in three beats: speaking pill -> footer -> controls -> content. */
+/* Live Transcript stages its empty surface before buffered text becomes visible. */
 .expanding-panel-surface[data-panel-mode="live-transcript"] {
   --live-transcript-footer-height: 4rem;
   --live-transcript-speaking-pill-width: 5.75rem;

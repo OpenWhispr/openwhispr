@@ -15,26 +15,50 @@ export const LIVE_TRANSCRIPT_ENTRANCE_TIMING = Object.freeze({
   controlsDelayMs: 70,
   controlsRevealMs: 200,
   contentDelayMs: 110,
+  measurementSettleMs: 220,
+  panelExpansionMs: 320,
+  contentRevealDelayMs: 80,
+  contentSettleMs: 280,
+});
+
+// Keep the renderer's adaptive shell in lockstep with the native assistant
+// window limits. Live Transcript enters at its smallest useful surface and may
+// then grow with the transcript, while Agent Mode continues to use the full
+// fixed footprint.
+export const LIVE_TRANSCRIPT_SURFACE_LIMITS = Object.freeze({
+  minHeight: 152,
+  maxHeight: 538,
 });
 
 export function getLiveTranscriptEntranceTimeline(timing = LIVE_TRANSCRIPT_ENTRANCE_TIMING) {
   const horizontalAtMs = timing.encapsulateMs + timing.encapsulateHoldMs;
   const controlsAtMs = horizontalAtMs + timing.horizontalMs + timing.controlsDelayMs;
+  const prepareAtMs = controlsAtMs + timing.controlsRevealMs + timing.contentDelayMs;
+  const panelAtMs = prepareAtMs + timing.measurementSettleMs;
+  const contentAtMs = panelAtMs + timing.panelExpansionMs + timing.contentRevealDelayMs;
   return {
     horizontalAtMs,
     controlsAtMs,
-    contentAtMs: controlsAtMs + timing.controlsRevealMs + timing.contentDelayMs,
+    prepareAtMs,
+    panelAtMs,
+    contentAtMs,
+    streamAtMs: contentAtMs + timing.contentSettleMs,
   };
 }
 
 export function resolveLiveTranscriptEntrancePresentation(phase) {
   const effectivePhase = phase === "idle" ? "encapsulate" : phase;
   const encapsulating = effectivePhase === "encapsulate";
-  const controlsVisible = effectivePhase === "controls" || effectivePhase === "content";
+  const panelExpanded = effectivePhase === "panel" || effectivePhase === "content";
+  const controlsVisible =
+    effectivePhase === "controls" ||
+    effectivePhase === "prepare" ||
+    effectivePhase === "panel" ||
+    effectivePhase === "content";
   const contentVisible = effectivePhase === "content";
 
   return {
-    coreStage: encapsulating ? "encapsulated" : contentVisible ? "content" : "footer",
+    coreStage: encapsulating ? "encapsulated" : panelExpanded ? "content" : "footer",
     controlsVisible,
     contentVisible,
   };

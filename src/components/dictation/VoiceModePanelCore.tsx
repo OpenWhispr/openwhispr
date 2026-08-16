@@ -1,5 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
-import { LIVE_TRANSCRIPT_ENTRANCE_TIMING } from "../../helpers/voicePillPresentation";
+import {
+  LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+  LIVE_TRANSCRIPT_SURFACE_LIMITS,
+} from "../../helpers/voicePillPresentation";
 import { ExpandingPanelShell } from "./ExpandingPanelShell";
 
 export type VoiceModePanel = "assistant" | "live-transcript";
@@ -42,6 +45,7 @@ export function VoiceModePanelCore({
       stabilizeHeight={isLiveTranscript && open}
       animateHeight={isLiveTranscript}
       fillAvailableHeight={mode === "assistant"}
+      preferredHeightCap={isLiveTranscript ? LIVE_TRANSCRIPT_SURFACE_LIMITS.maxHeight : undefined}
       measurementKey={mode}
       onPreferredHeightChange={isLiveTranscript ? onPreferredHeightChange : undefined}
       aria-label={label}
