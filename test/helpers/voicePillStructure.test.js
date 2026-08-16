@@ -38,3 +38,9 @@ test("the persistent pill mirrors its content order for a left-origin interactio
   assert.match(left, /flex-row-reverse/);
   assert.match(left, /data-horizontal-direction="left"/);
 });
+
+test("the idle pill keeps the logo at normal foreground strength", async () => {
+  const idle = await renderPill("idle", false);
+
+  assert.match(idle, /shrink-0 transition-\[color,width,height\] duration-200 text-foreground/);
+});

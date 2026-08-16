@@ -98,6 +98,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         size={showCompactPill ? 16 : isThinking ? 22 : state === "hover" ? 24 : 22}
         className={cn(
           "shrink-0 transition-[color,width,height] duration-200",
+          state === "idle" && "text-foreground",
           (isUnavailable || isProcessing) && "animate-pulse"
         )}
       />

@@ -39,10 +39,11 @@ export function VoiceModePanelCore({
       open={open && mode !== null}
       anchor={anchor}
       className={isLiveTranscript ? "live-transcript-panel" : undefined}
-      stabilizeHeight={open && mode !== null}
+      stabilizeHeight={isLiveTranscript && open}
       animateHeight={isLiveTranscript}
+      fillAvailableHeight={mode === "assistant"}
       measurementKey={mode}
-      onPreferredHeightChange={onPreferredHeightChange}
+      onPreferredHeightChange={isLiveTranscript ? onPreferredHeightChange : undefined}
       aria-label={label}
       data-panel-mode={mode ?? undefined}
       data-panel-stage={isLiveTranscript ? stage : "content"}

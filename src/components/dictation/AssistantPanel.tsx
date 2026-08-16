@@ -217,7 +217,7 @@ export function AssistantPanel({
 
       <main
         data-panel-scroll-region
-        className="agent-chat-scroll min-h-0 flex-auto overflow-y-auto px-5 pb-3 pt-2"
+        className="agent-chat-scroll mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner"
         aria-busy={thinking || isBusy}
       >
         <div data-panel-size-source>
@@ -259,14 +259,14 @@ export function AssistantPanel({
             <Button
               type="button"
               size="sm"
-              className="rounded-full px-4"
+              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
             >
               {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
               {copied ? t("common.copied") : t("assistant.panel.copyToClipboard")}
               {!copied && (
-                <kbd className="ml-1 rounded bg-primary-foreground/15 px-1.5 py-0.5 font-mono text-[10px] font-medium">
+                <kbd className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10">
                   C
                 </kbd>
               )}

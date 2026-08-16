@@ -343,6 +343,14 @@ export default function App() {
     window.electronAPI?.resizeAssistantWindowToContent?.(height);
   }, []);
 
+  // Agent Mode owns the fixed assistant footprint. Reassert it while open so
+  // a preceding adaptive Live Transcript measurement (or a hot reload during
+  // development) cannot leave the shared native window at a content height.
+  useLayoutEffect(() => {
+    if (!assistantPanelOpen) return;
+    void window.electronAPI?.resizeMainWindow?.("ASSISTANT");
+  }, [assistantPanelOpen]);
+
   const handleDictationError = React.useCallback(() => {
     // Errors replace the live transcript surface, so unmount it immediately
     // and suppress late preview events until the next recording begins.

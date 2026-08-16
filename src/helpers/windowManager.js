@@ -224,6 +224,12 @@ class WindowManager {
       return { success: false, message: "Window not available" };
     }
 
+    // Content-height resizing belongs to Live Transcript. Agent Mode keeps the
+    // shared modal at its normal responsive footprint and scrolls its center.
+    if (this._assistantPanelOpen) {
+      return this.resizeMainWindow("ASSISTANT");
+    }
+
     const currentBounds = this.mainWindow.getBounds();
     const display = screen.getDisplayNearestPoint({
       x: currentBounds.x + currentBounds.width / 2,
