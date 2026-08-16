@@ -57,7 +57,15 @@ test("Live Transcript holds the encapsulated state before the remaining visual b
   );
 });
 
-test("the speaking pill resolves every mode onto one interpolable dock system", async () => {
+test("voice mode direction mirrors the right baseline only for bottom-left", async () => {
+  const { resolveVoiceHorizontalDirection } = await load();
+
+  assert.equal(resolveVoiceHorizontalDirection("bottom-right"), "right");
+  assert.equal(resolveVoiceHorizontalDirection("bottom-left"), "left");
+  assert.equal(resolveVoiceHorizontalDirection("center"), "right");
+});
+
+test("the speaking pill resolves right-origin modes onto one interpolable dock system", async () => {
   const { resolveVoicePillDock } = await load();
 
   assert.equal(
@@ -67,7 +75,7 @@ test("the speaking pill resolves every mode onto one interpolable dock system", 
       assistantOpen: false,
       panelStartPosition: "bottom-right",
     }),
-    "live-transcript"
+    "live-transcript-bottom-left"
   );
   assert.equal(
     resolveVoicePillDock({
@@ -76,8 +84,42 @@ test("the speaking pill resolves every mode onto one interpolable dock system", 
       assistantOpen: false,
       panelStartPosition: "bottom-right",
     }),
-    "live-transcript-encapsulated"
+    "live-transcript-encapsulated-bottom-right"
   );
+  assert.equal(
+    resolveVoicePillDock({
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+      assistantOpen: true,
+      panelStartPosition: "bottom-right",
+    }),
+    "assistant-bottom-right"
+  );
+});
+
+test("a left-origin session keeps the speaking pill left while surfaces grow right", async () => {
+  const { resolveVoicePillDock } = await load();
+
+  assert.equal(
+    resolveVoicePillDock({
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "encapsulate",
+      assistantOpen: false,
+      panelStartPosition: "bottom-left",
+    }),
+    "live-transcript-encapsulated-bottom-left"
+  );
+  for (const liveTranscriptEntrancePhase of ["horizontal", "controls", "content"]) {
+    assert.equal(
+      resolveVoicePillDock({
+        liveTranscriptOpen: true,
+        liveTranscriptEntrancePhase,
+        assistantOpen: false,
+        panelStartPosition: "bottom-left",
+      }),
+      "live-transcript-bottom-left"
+    );
+  }
   assert.equal(
     resolveVoicePillDock({
       liveTranscriptOpen: false,
@@ -85,8 +127,13 @@ test("the speaking pill resolves every mode onto one interpolable dock system", 
       assistantOpen: true,
       panelStartPosition: "bottom-left",
     }),
-    "assistant"
+    "assistant-bottom-left"
   );
+});
+
+test("the idle pill keeps its configured resting dock", async () => {
+  const { resolveVoicePillDock } = await load();
+
   assert.equal(
     resolveVoicePillDock({
       liveTranscriptOpen: false,
@@ -95,6 +142,31 @@ test("the speaking pill resolves every mode onto one interpolable dock system", 
       panelStartPosition: "center",
     }),
     "center"
+  );
+});
+
+test("the actual window side overrides a stale edge preference", async () => {
+  const { resolveVoicePillDock } = await load();
+
+  assert.equal(
+    resolveVoicePillDock({
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+      assistantOpen: false,
+      panelStartPosition: "bottom-right",
+      horizontalDirection: "left",
+    }),
+    "bottom-left"
+  );
+  assert.equal(
+    resolveVoicePillDock({
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+      assistantOpen: false,
+      panelStartPosition: "bottom-left",
+      horizontalDirection: "right",
+    }),
+    "bottom-right"
   );
 });
 

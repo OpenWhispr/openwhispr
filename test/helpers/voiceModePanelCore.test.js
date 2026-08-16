@@ -5,7 +5,7 @@ const { renderToStaticMarkup } = require("react-dom/server");
 
 globalThis.React = React;
 
-const renderCore = async (mode, open, stage = "content") => {
+const renderCore = async (mode, open, stage = "content", horizontalDirection = "right") => {
   const { VoiceModePanelCore } =
     await import("../../src/components/dictation/VoiceModePanelCore.tsx");
   return renderToStaticMarkup(
@@ -15,6 +15,7 @@ const renderCore = async (mode, open, stage = "content") => {
         mode,
         open,
         stage,
+        horizontalDirection,
         onPreferredHeightChange: () => {},
       },
       React.createElement("main", { "data-mode-content": mode ?? "idle" })
@@ -35,7 +36,7 @@ test("Agent and live transcript use the same expanded panel core", async () => {
   assert.match(assistant, /expanding-panel-anchor-bottom-right/);
   assert.match(liveTranscriptCapsule, /expanding-panel-anchor-bottom-right/);
   assert.match(liveTranscriptFooter, /expanding-panel-anchor-bottom-right/);
-  assert.match(liveTranscriptContent, /expanding-panel-anchor-bottom-left/);
+  assert.match(liveTranscriptContent, /expanding-panel-anchor-bottom-right/);
   assert.match(assistant, /data-panel-mode="assistant"/);
   assert.doesNotMatch(assistant, /data-panel-height-animated/);
   assert.match(liveTranscriptCapsule, /data-panel-stage="encapsulated"/);
@@ -47,6 +48,24 @@ test("Agent and live transcript use the same expanded panel core", async () => {
   assert.equal((liveTranscriptCapsule.match(/<section/g) || []).length, 1);
   assert.equal((liveTranscriptFooter.match(/<section/g) || []).length, 1);
   assert.equal((liveTranscriptContent.match(/<section/g) || []).length, 1);
+});
+
+test("Agent and live transcript keep a left origin through every panel stage", async () => {
+  const assistant = await renderCore("assistant", true, "content", "left");
+  const liveTranscriptCapsule = await renderCore("live-transcript", true, "encapsulated", "left");
+  const liveTranscriptFooter = await renderCore("live-transcript", true, "footer", "left");
+  const liveTranscriptContent = await renderCore("live-transcript", true, "content", "left");
+
+  for (const markup of [
+    assistant,
+    liveTranscriptCapsule,
+    liveTranscriptFooter,
+    liveTranscriptContent,
+  ]) {
+    assert.match(markup, /expanding-panel-anchor-bottom-left/);
+    assert.match(markup, /data-panel-direction="left"/);
+    assert.doesNotMatch(markup, /expanding-panel-anchor-bottom-right/);
+  }
 });
 
 test("the shared core keeps its surface mounted while no mode is active", async () => {

@@ -429,6 +429,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getHyprlandConfigStatus: () => ipcRenderer.invoke("get-hyprland-config-status"),
   startWindowDrag: () => ipcRenderer.invoke("start-window-drag"),
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),
+  getMainWindowHorizontalDirection: () =>
+    ipcRenderer.invoke("get-main-window-horizontal-direction"),
+  onMainWindowHorizontalDirectionChanged: registerListener(
+    "main-window-horizontal-direction-changed",
+    (callback) => (_event, direction) => callback(direction)
+  ),
   setMainWindowInteractivity: (interactive) =>
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
   setNotificationInteractivity: (interactive) =>

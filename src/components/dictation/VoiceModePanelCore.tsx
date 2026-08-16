@@ -9,6 +9,7 @@ interface VoiceModePanelCoreProps {
   mode: VoiceModePanel | null;
   open: boolean;
   stage?: VoiceModePanelStage;
+  horizontalDirection?: "left" | "right";
   label?: string;
   onPreferredHeightChange: (height: number) => void;
   children?: ReactNode;
@@ -23,15 +24,15 @@ export function VoiceModePanelCore({
   mode,
   open,
   stage = "content",
+  horizontalDirection = "right",
   label,
   onPreferredHeightChange,
   children,
 }: VoiceModePanelCoreProps) {
   const isLiveTranscript = mode === "live-transcript";
-  // The live footer first encapsulates the speaking pill at the right edge,
-  // then grows leftward. Once that footprint exists, the full panel owns the
-  // final bottom-left pill anchor without replacing the surface.
-  const anchor = isLiveTranscript && stage === "content" ? "bottom-left" : "bottom-right";
+  // Keep one origin for the complete lifecycle. Swapping transform origins
+  // once content appears makes the closing motion disagree with the entrance.
+  const anchor = horizontalDirection === "left" ? "bottom-left" : "bottom-right";
 
   return (
     <ExpandingPanelShell
@@ -45,6 +46,7 @@ export function VoiceModePanelCore({
       aria-label={label}
       data-panel-mode={mode ?? undefined}
       data-panel-stage={isLiveTranscript ? stage : "content"}
+      data-panel-direction={horizontalDirection}
       style={
         {
           "--live-transcript-horizontal-duration": `${LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs}ms`,

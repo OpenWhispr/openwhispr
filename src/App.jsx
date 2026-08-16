@@ -24,6 +24,7 @@ import {
   resolveAssistantThinkingTransition,
   resolveListeningEntrancePresentation,
   resolveVoiceActivityPresentation,
+  resolveVoiceHorizontalDirection,
   resolveVoicePanelCorePresentation,
   resolveVoicePillDock,
 } from "./helpers/voicePillPresentation";
@@ -79,6 +80,10 @@ export default function App() {
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
+  const [voiceHorizontalDirection, setVoiceHorizontalDirection] = useState(() =>
+    resolveVoiceHorizontalDirection(panelStartPosition)
+  );
+  const [mainWindowHorizontalDirection, setMainWindowHorizontalDirection] = useState(null);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
     window.electronAPI?.setMainWindowInteractivity?.(shouldCapture);
@@ -92,6 +97,23 @@ export default function App() {
     setWindowInteractivity(false);
     return () => setWindowInteractivity(false);
   }, [setWindowInteractivity]);
+
+  useEffect(() => {
+    let disposed = false;
+    const applyDirection = (direction) => {
+      if (!disposed && (direction === "left" || direction === "right")) {
+        setMainWindowHorizontalDirection(direction);
+      }
+    };
+    const unsubscribe =
+      window.electronAPI?.onMainWindowHorizontalDirectionChanged?.(applyDirection);
+    const initialDirection = window.electronAPI?.getMainWindowHorizontalDirection?.();
+    initialDirection?.then(applyDirection).catch(() => {});
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribeFallback = window.electronAPI?.onHotkeyFallbackUsed?.((data) => {
@@ -355,6 +377,18 @@ export default function App() {
     dismissDictationError,
     onDictationError: handleDictationError,
   });
+
+  // Direction is part of the interaction's geometry, not a live decoration.
+  // Hold the origin through processing and panel exit so every close animation
+  // returns to the same side from which that voice session started.
+  const voiceDirectionLocked =
+    isRecording || isProcessing || assistantPanelMounted || liveTranscriptPanelMounted;
+  useLayoutEffect(() => {
+    if (voiceDirectionLocked) return;
+    setVoiceHorizontalDirection(
+      mainWindowHorizontalDirection ?? resolveVoiceHorizontalDirection(panelStartPosition)
+    );
+  }, [mainWindowHorizontalDirection, panelStartPosition, voiceDirectionLocked]);
 
   useEffect(() => {
     if (isAssistantVoice && isProcessing && assistantPanelOpenRef.current) {
@@ -761,6 +795,7 @@ export default function App() {
     liveTranscriptEntrancePhase,
     assistantOpen: assistantPanelOpen,
     panelStartPosition,
+    horizontalDirection: voiceHorizontalDirection,
   });
   const voicePillTravelDuration =
     liveTranscriptPanelOpen && liveTranscriptEntrancePhase === "encapsulate"
@@ -795,13 +830,7 @@ export default function App() {
             <Tooltip
               content={micTooltip}
               disabled={anyPanelMounted}
-              align={
-                panelStartPosition === "bottom-left"
-                  ? "left"
-                  : panelStartPosition === "center"
-                    ? "center"
-                    : "right"
-              }
+              align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
             >
               <VoicePill
                 ref={buttonRef}
@@ -814,6 +843,7 @@ export default function App() {
                 waveformOnlyWhileRecording={liveTranscriptPanelMounted}
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}
+                horizontalDirection={voiceHorizontalDirection}
                 role={anyPanelMounted ? "status" : "button"}
                 aria-label={
                   assistantPanelMounted
@@ -925,6 +955,7 @@ export default function App() {
         stage={
           activeVoicePanelMode === "live-transcript" ? liveTranscriptEntrance.coreStage : "content"
         }
+        horizontalDirection={voiceHorizontalDirection}
         label={activeVoicePanelLabel}
         onPreferredHeightChange={handlePanelPreferredHeight}
       >

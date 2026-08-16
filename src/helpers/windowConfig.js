@@ -134,6 +134,26 @@ const WINDOW_SIZES = {
   ASSISTANT: ASSISTANT_WINDOW_SIZE,
 };
 
+/**
+ * Resolve the horizontal voice-animation origin from where the native overlay
+ * actually sits. The saved preference is only a fallback for an exact center
+ * or unavailable geometry; dragging the pill must be able to override it.
+ */
+function resolveHorizontalWindowDirection(bounds, display, preferredPosition = "bottom-right") {
+  if (preferredPosition === "center") return "right";
+
+  const workArea = display?.workArea || display?.bounds;
+  const windowCenter = Number(bounds?.x) + Number(bounds?.width) / 2;
+  const displayCenter = Number(workArea?.x) + Number(workArea?.width) / 2;
+  if (!Number.isFinite(windowCenter) || !Number.isFinite(displayCenter)) {
+    return preferredPosition === "bottom-left" ? "left" : "right";
+  }
+  if (windowCenter === displayCenter) {
+    return preferredPosition === "bottom-left" ? "left" : "right";
+  }
+  return windowCenter < displayCenter ? "left" : "right";
+}
+
 // Main dictation window configuration
 const MAIN_WINDOW_CONFIG = {
   width: WINDOW_SIZES.BASE.width,
@@ -308,6 +328,7 @@ module.exports = {
   fitAssistantWindowToWorkArea,
   fitDictationErrorContentWindowToWorkArea,
   fitDictationErrorWindowToWorkArea,
+  resolveHorizontalWindowDirection,
   WINDOW_SIZES,
   WindowPositionUtil,
 };

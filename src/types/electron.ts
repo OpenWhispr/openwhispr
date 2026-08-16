@@ -1771,6 +1771,10 @@ declare global {
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
       notifyPanelStartPositionChanged?: (position: string) => void;
+      getMainWindowHorizontalDirection?: () => Promise<"left" | "right">;
+      onMainWindowHorizontalDirectionChanged?: (
+        callback: (direction: "left" | "right") => void
+      ) => () => void;
 
       // Auto-start at login. requiresApproval is macOS-only: SMAppService can
       // register the login item and still leave it awaiting approval in System

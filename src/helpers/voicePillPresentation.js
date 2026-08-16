@@ -40,21 +40,35 @@ export function resolveLiveTranscriptEntrancePresentation(phase) {
   };
 }
 
+/**
+ * Expanded voice modes only animate horizontally from the two supported edge
+ * docks. Keep center on the established right-origin choreography until a
+ * dedicated centered transition is designed.
+ */
+export function resolveVoiceHorizontalDirection(panelStartPosition) {
+  return panelStartPosition === "bottom-left" ? "left" : "right";
+}
+
 export function resolveVoicePillDock({
   liveTranscriptOpen,
   liveTranscriptEntrancePhase,
   assistantOpen,
   panelStartPosition,
+  horizontalDirection = resolveVoiceHorizontalDirection(panelStartPosition),
 }) {
   if (liveTranscriptOpen) {
-    return liveTranscriptEntrancePhase === "encapsulate"
-      ? "live-transcript-encapsulated"
-      : "live-transcript";
+    if (liveTranscriptEntrancePhase === "encapsulate") {
+      return `live-transcript-encapsulated-bottom-${horizontalDirection}`;
+    }
+
+    // The established right-origin flow carries the pill to the left side as
+    // the footer grows leftward. A left-origin flow already occupies that
+    // anchor, so keep it fixed while the footer grows rightward around it.
+    return "live-transcript-bottom-left";
   }
-  if (assistantOpen) return "assistant";
-  if (panelStartPosition === "bottom-left") return "bottom-left";
+  if (assistantOpen) return `assistant-bottom-${horizontalDirection}`;
   if (panelStartPosition === "center") return "center";
-  return "bottom-right";
+  return `bottom-${horizontalDirection}`;
 }
 
 export function getListeningEntranceTimeline(timing = LISTENING_ENTRANCE_TIMING) {

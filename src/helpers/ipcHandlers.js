@@ -1174,6 +1174,10 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("get-main-window-horizontal-direction", () => {
+      return this.windowManager.getMainWindowHorizontalDirection();
+    });
+
     ipcMain.handle("set-notification-interactivity", (event, interactive) => {
       this.windowManager.setNotificationInteractivity(event.sender, Boolean(interactive));
       return { success: true };

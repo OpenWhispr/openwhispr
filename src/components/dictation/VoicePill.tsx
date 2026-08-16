@@ -18,6 +18,7 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   isDragging?: boolean;
+  horizontalDirection?: "left" | "right";
 }
 
 const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
@@ -46,6 +47,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
     isDragging = false,
+    horizontalDirection = "right",
     className,
     style,
     ...props
@@ -68,6 +70,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       ref={ref}
       className={cn(
         "relative flex items-center justify-center overflow-hidden rounded-full border",
+        horizontalDirection === "left" && "flex-row-reverse",
         "shadow-[var(--shadow-card)]",
         STATE_APPEARANCE[state],
         className
@@ -83,6 +86,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
         ...style,
       }}
+      data-horizontal-direction={horizontalDirection}
       {...props}
     >
       <div

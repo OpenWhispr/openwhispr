@@ -17,6 +17,7 @@ const {
   fitAssistantWindowToWorkArea,
   fitDictationErrorContentWindowToWorkArea,
   fitDictationErrorWindowToWorkArea,
+  resolveHorizontalWindowDirection,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -50,6 +51,7 @@ class WindowManager {
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
     this._panelStartPosition = "bottom-right";
+    this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
@@ -104,6 +106,7 @@ class WindowManager {
     this.mainWindow.webContents.on("did-finish-load", () => {
       this.mainWindow.setTitle(i18nMain.t("window.voiceRecorderTitle"));
       this.enforceMainWindowOnTop();
+      this._notifyMainWindowHorizontalDirection();
     });
 
     await this.loadMainWindow();
@@ -252,6 +255,10 @@ class WindowManager {
 
   _resizeMainWindowTo(newSize, sizeKey) {
     const currentBounds = this.mainWindow.getBounds();
+    const display = screen.getDisplayNearestPoint({
+      x: currentBounds.x + currentBounds.width / 2,
+      y: currentBounds.y + currentBounds.height,
+    });
 
     // A window moved since the last resize (dragged) means the captured BASE
     // bounds no longer describe where the user wants the pill — drop them.
@@ -264,6 +271,7 @@ class WindowManager {
         Math.abs(currentBounds.y - this._lastResizeBounds.y) > MOVE_TOLERANCE_PX)
     ) {
       this._baseBoundsBeforeResize = null;
+      this._activeHorizontalDirection = null;
     }
 
     // Returning to BASE restores the exact pre-grow bounds. Anchoring the
@@ -275,6 +283,8 @@ class WindowManager {
       this._baseBoundsBeforeResize = null;
       this._lastResizeBounds = restored;
       this.mainWindow.setBounds(restored);
+      this._activeHorizontalDirection = null;
+      this._notifyMainWindowHorizontalDirection();
       return { success: true, bounds: restored };
     }
 
@@ -285,14 +295,24 @@ class WindowManager {
       currentBounds.height === WINDOW_SIZES.BASE.height
     ) {
       this._baseBoundsBeforeResize = { ...currentBounds };
+      this._activeHorizontalDirection = resolveHorizontalWindowDirection(
+        currentBounds,
+        display,
+        this._panelStartPosition
+      );
     }
 
-    const position = this._panelStartPosition;
-
-    const display = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height,
-    });
+    if (sizeKey !== "BASE" && !this._activeHorizontalDirection) {
+      this._activeHorizontalDirection = resolveHorizontalWindowDirection(
+        currentBounds,
+        display,
+        this._panelStartPosition
+      );
+    }
+    const position =
+      this._panelStartPosition === "center"
+        ? "center"
+        : `bottom-${this._activeHorizontalDirection || this.getMainWindowHorizontalDirection()}`;
 
     let newX, newY;
 
@@ -325,11 +345,19 @@ class WindowManager {
       currentBounds.height === newBounds.height
     ) {
       this._lastResizeBounds = { ...currentBounds };
+      if (sizeKey === "BASE") {
+        this._activeHorizontalDirection = null;
+        this._notifyMainWindowHorizontalDirection();
+      }
       return { success: true, bounds: currentBounds };
     }
 
     this.mainWindow.setBounds(newBounds);
     this._lastResizeBounds = newBounds;
+    if (sizeKey === "BASE") {
+      this._activeHorizontalDirection = null;
+      this._notifyMainWindowHorizontalDirection();
+    }
 
     return { success: true, bounds: newBounds };
   }
@@ -722,8 +750,29 @@ class WindowManager {
     this._floatingIconAutoHide = Boolean(enabled);
   }
 
+  getMainWindowHorizontalDirection() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return this._panelStartPosition === "bottom-left" ? "left" : "right";
+    }
+    const bounds = this.mainWindow.getBounds();
+    const display = screen.getDisplayNearestPoint({
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2,
+    });
+    return resolveHorizontalWindowDirection(bounds, display, this._panelStartPosition);
+  }
+
+  _notifyMainWindowHorizontalDirection() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send(
+      "main-window-horizontal-direction-changed",
+      this.getMainWindowHorizontalDirection()
+    );
+  }
+
   setPanelStartPosition(position) {
     this._panelStartPosition = position || "bottom-right";
+    this._activeHorizontalDirection = null;
     // Reposition the window immediately
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       const currentBounds = this.mainWindow.getBounds();
@@ -737,6 +786,7 @@ class WindowManager {
         this._panelStartPosition
       );
       this.mainWindow.setBounds(newPos);
+      this._notifyMainWindowHorizontalDirection();
     }
   }
 
@@ -777,7 +827,10 @@ class WindowManager {
   }
 
   async stopWindowDrag() {
-    return await this.dragManager.stopWindowDrag();
+    const result = await this.dragManager.stopWindowDrag();
+    this._activeHorizontalDirection = null;
+    this._notifyMainWindowHorizontalDirection();
+    return result;
   }
 
   openExternalUrl(url, showError = true) {
