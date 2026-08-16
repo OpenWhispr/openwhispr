@@ -38,6 +38,16 @@ export function buildStreamingSessionOptions({ providerName, settings, language,
     environment: settings.cortiEnvironment,
     tenant: settings.cortiTenant,
   };
+  // The Custom provider shares the OpenAI-compatible realtime client, but its
+  // endpoint and credential must travel together through the main-process
+  // token boundary so neither can silently fall back to OpenAI.
+  if (
+    providerName === "openai-realtime" &&
+    settings.cloudTranscriptionProvider === "custom" &&
+    settings.cloudTranscriptionMode === "byok"
+  ) {
+    options.baseUrl = settings.cloudTranscriptionBaseUrl;
+  }
   // Tinfoil realtime always shows the live preview window (#1120); OpenAI
   // realtime deliberately does not — its partials render in the dictation pill.
   if (providerName === "tinfoil-realtime") {
