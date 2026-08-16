@@ -2164,11 +2164,11 @@
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
         "gemini_3_flash_preview": "Trascrizione rapida e ad alta precisione",
-        "gemini_2_5_flash_lite": "Latenza e costi minimi",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
-        "tinfoil_voxtral": "Trascrizione verificabilmente privata"
+        "tinfoil_voxtral": "Trascrizione verificabilmente privata",
+        "gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",
@@ -2185,7 +2185,6 @@
         "gemini_gemini_3_5_flash": "Ultimo modello Gemini veloce e ad alta capacità",
         "gemini_gemini_3_1_pro_preview": "Modello di punta di nuova generazione per ragionamento complesso",
         "gemini_gemini_3_flash_preview": "Modello di nuova generazione ultra-veloce e ad alta capacità",
-        "gemini_gemini_2_5_flash_lite": "Latenza e costo minimi",
         "gemini_gemma_4_31b_it": "Il più grande Gemma 4 di Google, 31B denso, contesto 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE di Google, 4B parametri attivi, contesto 256K",
         "groq_qwen_qwen3_32b": "Potente modello di ragionamento, contesto 131K",
@@ -2213,7 +2212,8 @@
         "corti_corti_s1_instant": "Modello sanitario veloce, senza traccia di ragionamento",
         "corti_corti_s1": "Modello clinico più capace con ragionamento",
         "corti_corti_s1_mini_instant": "Modello sanitario compatto, il più veloce ed economico",
-        "corti_corti_s1_mini": "Modello clinico compatto con ragionamento a metà prezzo"
+        "corti_corti_s1_mini": "Modello clinico compatto con ragionamento a metà prezzo",
+        "gemini_gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Il modello Claude più capace. Ideale per i compiti più difficili della Modalità Agente.",

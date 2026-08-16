@@ -2256,11 +2256,11 @@
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
         "gemini_3_flash_preview": "Transcription rapide et de haute précision",
-        "gemini_2_5_flash_lite": "Latence et coût les plus faibles",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
         "corti_transcribe": "Transcription médicale de qualité clinique",
         "xai_grok_stt": "Reconnaissance vocale haute précision par xAI",
-        "tinfoil_voxtral": "Transcription vérifiablement privée"
+        "tinfoil_voxtral": "Transcription vérifiablement privée",
+        "gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "cloud": {
         "openai_gpt_5_2": "Modèle de raisonnement performant",
@@ -2277,7 +2277,6 @@
         "gemini_gemini_3_5_flash": "Dernier modèle Gemini rapide et très performant",
         "gemini_gemini_3_1_pro_preview": "Modèle phare nouvelle génération pour le raisonnement complexe",
         "gemini_gemini_3_flash_preview": "Modèle nouvelle génération ultra-rapide et très performant",
-        "gemini_gemini_2_5_flash_lite": "Latence et coût les plus faibles",
         "gemini_gemma_4_31b_it": "Le plus grand Gemma 4 de Google, 31B dense, contexte 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE de Google, 4B paramètres actifs, contexte 256K",
         "groq_qwen_qwen3_32b": "Modèle de raisonnement puissant, contexte 131K",
@@ -2305,7 +2304,8 @@
         "corti_corti_s1_instant": "Modèle de santé rapide, sans trace de raisonnement",
         "corti_corti_s1": "Modèle clinique le plus performant avec raisonnement",
         "corti_corti_s1_mini_instant": "Modèle de santé compact, le plus rapide et le moins cher",
-        "corti_corti_s1_mini": "Modèle clinique compact avec raisonnement à moitié prix"
+        "corti_corti_s1_mini": "Modèle clinique compact avec raisonnement à moitié prix",
+        "gemini_gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Le modèle Claude le plus performant. Idéal pour les tâches les plus difficiles du Mode Agent.",

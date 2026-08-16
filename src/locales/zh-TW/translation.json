@@ -2164,11 +2164,11 @@
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
         "gemini_3_flash_preview": "快速且高精度的轉錄",
-        "gemini_2_5_flash_lite": "延遲和成本最低",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "corti_transcribe": "臨床級醫療轉錄",
         "xai_grok_stt": "xAI 高精度語音辨識",
-        "tinfoil_voxtral": "可驗證的私密轉錄"
+        "tinfoil_voxtral": "可驗證的私密轉錄",
+        "gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",
@@ -2185,7 +2185,6 @@
         "gemini_gemini_3_5_flash": "最新、快速且高性能的 Gemini 模型",
         "gemini_gemini_3_1_pro_preview": "新一代旗艦模型，擅長複雜推理",
         "gemini_gemini_3_flash_preview": "超快速、高性能的新一代模型",
-        "gemini_gemini_2_5_flash_lite": "最低延遲和成本",
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活躍參數，256K 上下文",
         "groq_qwen_qwen3_32b": "強大推理模型，131K 上下文",
@@ -2213,7 +2212,8 @@
         "corti_corti_s1_instant": "快速醫療模型，無推理過程",
         "corti_corti_s1": "功能最強的臨床模型，帶推理",
         "corti_corti_s1_mini_instant": "精簡型醫療模型，最快且成本最低",
-        "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理"
+        "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理",
+        "gemini_gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最強大的 Claude 模型。最適合最具挑戰性的智慧助手模式任務。",

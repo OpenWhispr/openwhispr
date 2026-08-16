@@ -2178,11 +2178,11 @@
         "groq_whisper_large_v3_turbo": "Скорость в 216 раз быстрее реального времени",
         "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
         "gemini_3_flash_preview": "Быстрая и точная транскрипция",
-        "gemini_2_5_flash_lite": "Минимальная задержка и стоимость",
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
         "corti_transcribe": "Медицинская транскрипция клинического уровня",
         "xai_grok_stt": "Высокоточное распознавание речи от xAI",
-        "tinfoil_voxtral": "Проверяемо приватная транскрипция"
+        "tinfoil_voxtral": "Проверяемо приватная транскрипция",
+        "gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",
@@ -2199,7 +2199,6 @@
         "gemini_gemini_3_5_flash": "Новейшая быстрая высокопроизводительная модель Gemini",
         "gemini_gemini_3_1_pro_preview": "Флагманская модель нового поколения для сложных рассуждений",
         "gemini_gemini_3_flash_preview": "Сверхбыстрая высокопроизводительная модель нового поколения",
-        "gemini_gemini_2_5_flash_lite": "Минимальная задержка и стоимость",
         "gemini_gemma_4_31b_it": "Крупнейшая Gemma 4 от Google, 31B плотная, контекст 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE от Google, 4B активных параметров, контекст 256K",
         "groq_qwen_qwen3_32b": "Мощная модель с рассуждением, контекст 131K",
@@ -2227,7 +2226,8 @@
         "corti_corti_s1_instant": "Быстрая медицинская модель, без цепочки рассуждений",
         "corti_corti_s1": "Самая мощная клиническая модель с рассуждением",
         "corti_corti_s1_mini_instant": "Компактная медицинская модель, самая быстрая и дешёвая",
-        "corti_corti_s1_mini": "Компактная клиническая модель с рассуждением за полцены"
+        "corti_corti_s1_mini": "Компактная клиническая модель с рассуждением за полцены",
+        "gemini_gemini_3_5_flash_lite": "Low latency, highest free-tier daily quota"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Самая мощная модель Claude. Лучше всего для самых сложных задач режима агента.",
