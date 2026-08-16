@@ -1930,6 +1930,30 @@
             "info": "Audio esteso da un segmento al successivo per evitare tagli netti nella concatenazione."
           }
         }
+      },
+      "idleUnload": {
+        "title": "Scaricamento per inattività",
+        "description": "Arresta automaticamente il server Whisper locale dopo un periodo di inattività per liberare RAM e VRAM",
+        "label": "Scarica dopo",
+        "options": {
+          "0": "Mai",
+          "300000": "5 minuti",
+          "900000": "15 minuti",
+          "1800000": "30 minuti",
+          "3600000": "60 minuti"
+        }
+      },
+      "idleUnloadParakeet": {
+        "title": "Scaricamento per inattività",
+        "description": "Arresta automaticamente il server Parakeet locale dopo un periodo di inattività per liberare RAM e VRAM",
+        "label": "Scarica dopo",
+        "options": {
+          "0": "Mai",
+          "300000": "5 minuti",
+          "900000": "15 minuti",
+          "1800000": "30 minuti",
+          "3600000": "60 minuti"
+        }
       }
     },
     "intelligence": {

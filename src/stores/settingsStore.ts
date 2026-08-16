@@ -179,6 +179,21 @@ function snapMicWarmHold(value: number): number {
   return (MIC_WARM_HOLD_CHOICES as readonly number[]).includes(value) ? value : 0;
 }
 
+// Durations offered by the whisper idle-unload select (ms); unknown values snap to 0
+// (never) so a hand-edited localStorage entry can never unexpectedly start unloading.
+export const WHISPER_IDLE_TIMEOUT_CHOICES = [0, 300000, 900000, 1800000, 3600000] as const;
+
+function snapWhisperIdleTimeout(value: number): number {
+  return (WHISPER_IDLE_TIMEOUT_CHOICES as readonly number[]).includes(value) ? value : 0;
+}
+
+// Same choices, same snap-to-Never-on-garbage-input rationale, for the Parakeet server.
+export const PARAKEET_IDLE_TIMEOUT_CHOICES = [0, 300000, 900000, 1800000, 3600000] as const;
+
+function snapParakeetIdleTimeout(value: number): number {
+  return (PARAKEET_IDLE_TIMEOUT_CHOICES as readonly number[]).includes(value) ? value : 0;
+}
+
 function readStringArray(key: string, fallback: string[]): string[] {
   if (!isBrowser) return fallback;
   const stored = localStorage.getItem(key);
@@ -603,6 +618,8 @@ export interface SettingsState
   whisperVadMaxSpeechDurationS: number;
   whisperVadSpeechPadMs: number;
   whisperVadSamplesOverlap: number;
+  whisperIdleTimeoutMs: number;
+  parakeetIdleTimeoutMs: number;
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
   showTranscriptionPreview: boolean;
   autoPasteEnabled: boolean;
@@ -901,6 +918,8 @@ export interface SettingsState
   setWhisperVadMaxSpeechDurationS: (value: number) => void;
   setWhisperVadSpeechPadMs: (value: number) => void;
   setWhisperVadSamplesOverlap: (value: number) => void;
+  setWhisperIdleTimeoutMs: (ms: number) => void;
+  setParakeetIdleTimeoutMs: (ms: number) => void;
   setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => void;
   setShowTranscriptionPreview: (value: boolean) => void;
   setAutoPasteEnabled: (value: boolean) => void;
@@ -1338,6 +1357,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "samplesOverlap",
     readString("whisperVadSamplesOverlap", "0.5")
   ),
+  whisperIdleTimeoutMs: snapWhisperIdleTimeout(readNumber("whisperIdleTimeoutMs", 0)),
+  parakeetIdleTimeoutMs: snapParakeetIdleTimeout(readNumber("parakeetIdleTimeoutMs", 0)),
   panelStartPosition: (() => {
     const v = readString("panelStartPosition", "bottom-right");
     if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
@@ -2005,6 +2026,38 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const snapped = snapMicWarmHold(value);
     if (isBrowser) localStorage.setItem("micWarmHoldSeconds", String(snapped));
     set({ micWarmHoldSeconds: snapped });
+  },
+  setWhisperIdleTimeoutMs: (value: number) => {
+    const snapped = snapWhisperIdleTimeout(value);
+    if (isBrowser) localStorage.setItem("whisperIdleTimeoutMs", String(snapped));
+    set({ whisperIdleTimeoutMs: snapped });
+    if (isBrowser) {
+      window.electronAPI
+        ?.saveWhisperIdleTimeoutMs?.(snapped)
+        .catch((err: unknown) =>
+          logger.warn(
+            "Failed to persist whisper idle timeout",
+            { error: (err as Error).message },
+            "settings"
+          )
+        );
+    }
+  },
+  setParakeetIdleTimeoutMs: (value: number) => {
+    const snapped = snapParakeetIdleTimeout(value);
+    if (isBrowser) localStorage.setItem("parakeetIdleTimeoutMs", String(snapped));
+    set({ parakeetIdleTimeoutMs: snapped });
+    if (isBrowser) {
+      window.electronAPI
+        ?.saveParakeetIdleTimeoutMs?.(snapped)
+        .catch((err: unknown) =>
+          logger.warn(
+            "Failed to persist parakeet idle timeout",
+            { error: (err as Error).message },
+            "settings"
+          )
+        );
+    }
   },
   setAudioRetentionDays: createNumberSetter("audioRetentionDays"),
   setTranscriptRetentionDays: createNumberSetter("transcriptRetentionDays"),
@@ -3054,6 +3107,43 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync activation mode on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync whisper idle-unload timeout from main process (0 is a valid "Never" value,
+    // so check for a number explicitly rather than truthiness)
+    try {
+      const envIdleTimeoutMs = await window.electronAPI.getWhisperIdleTimeoutMs?.();
+      const snapped =
+        typeof envIdleTimeoutMs === "number" ? snapWhisperIdleTimeout(envIdleTimeoutMs) : undefined;
+      if (snapped !== undefined && snapped !== state.whisperIdleTimeoutMs) {
+        if (isBrowser) localStorage.setItem("whisperIdleTimeoutMs", String(snapped));
+        useSettingsStore.setState({ whisperIdleTimeoutMs: snapped });
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync whisper idle timeout on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync parakeet idle-unload timeout from main process, same rationale as whisper's above.
+    try {
+      const envParakeetIdleTimeoutMs = await window.electronAPI.getParakeetIdleTimeoutMs?.();
+      const snappedParakeet =
+        typeof envParakeetIdleTimeoutMs === "number"
+          ? snapParakeetIdleTimeout(envParakeetIdleTimeoutMs)
+          : undefined;
+      if (snappedParakeet !== undefined && snappedParakeet !== state.parakeetIdleTimeoutMs) {
+        if (isBrowser) localStorage.setItem("parakeetIdleTimeoutMs", String(snappedParakeet));
+        useSettingsStore.setState({ parakeetIdleTimeoutMs: snappedParakeet });
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync parakeet idle timeout on startup",
         { error: (err as Error).message },
         "settings"
       );

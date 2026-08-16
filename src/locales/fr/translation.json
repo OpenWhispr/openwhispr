@@ -2213,6 +2213,30 @@
             "info": "Audio prolongé d'un segment au suivant pour éviter les coupures brusques lors de la concaténation."
           }
         }
+      },
+      "idleUnload": {
+        "title": "Déchargement en cas d'inactivité",
+        "description": "Arrête automatiquement le serveur Whisper local après une période d'inactivité pour libérer la RAM et la VRAM",
+        "label": "Décharger après",
+        "options": {
+          "0": "Jamais",
+          "300000": "5 minutes",
+          "900000": "15 minutes",
+          "1800000": "30 minutes",
+          "3600000": "60 minutes"
+        }
+      },
+      "idleUnloadParakeet": {
+        "title": "Déchargement en cas d'inactivité",
+        "description": "Arrête automatiquement le serveur Parakeet local après une période d'inactivité pour libérer la RAM et la VRAM",
+        "label": "Décharger après",
+        "options": {
+          "0": "Jamais",
+          "300000": "5 minutes",
+          "900000": "15 minutes",
+          "1800000": "30 minutes",
+          "3600000": "60 minutes"
+        }
       }
     },
     "intelligence": {

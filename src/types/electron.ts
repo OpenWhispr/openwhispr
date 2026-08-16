@@ -1719,6 +1719,18 @@ declare global {
       getActivationMode?: () => Promise<"tap" | "push">;
       saveActivationMode?: (mode: "tap" | "push") => Promise<void>;
 
+      // Whisper server idle-unload timeout persistence (file-based for reliable startup)
+      getWhisperIdleTimeoutMs?: () => Promise<number>;
+      saveWhisperIdleTimeoutMs?: (
+        ms: number
+      ) => Promise<{ success: boolean; idleTimeoutMs: number }>;
+
+      // Parakeet server idle-unload timeout persistence, same pattern as whisper's above
+      getParakeetIdleTimeoutMs?: () => Promise<number>;
+      saveParakeetIdleTimeoutMs?: (
+        ms: number
+      ) => Promise<{ success: boolean; idleTimeoutMs: number }>;
+
       // Debug logging
       getLogLevel?: () => Promise<string>;
       log?: (entry: {
