@@ -69,6 +69,7 @@ import {
 } from "./translationChain";
 import { detectAgentName } from "../config/agentDetection";
 import { resolveDictationRouteKind, resolveAgentImageTarget } from "./dictationRouting";
+import { looksUncleaned, cleanupEscalationModel } from "./transcriptCleanliness";
 import {
   resolveDictationAgentInference,
   resolveDictationAgentVisionInference,
@@ -2621,7 +2622,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           disableThinking: reasoningConfig?.disableThinking,
         });
 
-        const result =
+        let result =
           route.kind === "agent"
             ? await this.processAgentCommand(normalizedText, targetModel, agentName, {
                 ...reasoningConfig,
@@ -2633,6 +2634,34 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 agentName,
                 reasoningConfig
               );
+
+        if (route.kind === "cleanup" && looksUncleaned(result)) {
+          // A Lite cleanup pass that still reads like a raw transcript gets
+          // exactly one escalation to the stronger sibling, re-cleaning the
+          // original text. If the stronger model fails (e.g. daily quota),
+          // the first pass stands.
+          const escalationModel = cleanupEscalationModel(targetModel);
+          if (escalationModel) {
+            logger.logReasoning("CLEANUP_ESCALATION", {
+              from: targetModel,
+              to: escalationModel,
+            });
+            try {
+              result = await this.processWithReasoningModel(
+                normalizedText,
+                escalationModel,
+                agentName,
+                reasoningConfig
+              );
+            } catch (escalationError) {
+              logger.warn(
+                "Cleanup escalation failed, keeping first-pass result",
+                { error: escalationError.message },
+                "notes"
+              );
+            }
+          }
+        }
 
         logger.logReasoning("REASONING_SUCCESS", {
           resultLength: result.length,
@@ -3102,8 +3131,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
+        // A fused result that still carries fillers or word repetitions is not
+        // trusted as cleaned: dropping the flag routes it through the existing
+        // text-to-text cleanup pass.
+        const fusedStillDirty = !!result?.alreadyCleaned && looksUncleaned(proxyText);
+        if (fusedStillDirty) {
+          logger.info(
+            "Fused output looks uncleaned; routing through cleanup re-pass",
+            { provider },
+            "transcription"
+          );
+        }
         const text = await this.processTranscription(proxyText, provider, {
-          alreadyCleaned: !!result?.alreadyCleaned,
+          alreadyCleaned: !!result?.alreadyCleaned && !fusedStillDirty,
         });
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
