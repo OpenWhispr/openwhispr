@@ -59,6 +59,20 @@ test("the waveform pill keeps the normal compact logo footprint", async () => {
   }
 });
 
+test("the waveform uses foreground contrast, rounded caps, and a pronounced height range", async () => {
+  const recording = await renderPill("recording", true);
+  const { WAVEFORM_BAR_MIN_PX, WAVEFORM_BAR_MAX_PX, resolveWaveformBarHeight } =
+    await import("../../src/components/dictation/LiveWaveform.tsx");
+
+  assert.match(recording, /relative shrink-0 overflow-hidden text-foreground/);
+  assert.equal((recording.match(/w-0\.5 rounded-full bg-current/g) || []).length, 22);
+  assert.equal(WAVEFORM_BAR_MIN_PX, 4);
+  assert.equal(WAVEFORM_BAR_MAX_PX, 22);
+  assert.equal(resolveWaveformBarHeight(0), WAVEFORM_BAR_MIN_PX);
+  assert.equal(resolveWaveformBarHeight(1), WAVEFORM_BAR_MAX_PX);
+  assert.ok(resolveWaveformBarHeight(0.15) > 20);
+});
+
 test("Live Transcript hands visual border ownership to the shared panel", async () => {
   const integrated = await renderPill("recording", true, "right", {
     variant: "panel",

@@ -11,12 +11,15 @@ interface LiveWaveformProps {
 
 const BAR_COUNT = 11;
 const SAMPLE_INTERVAL_MS = 60;
-const BAR_MIN_PX = 6;
-const BAR_MAX_PX = 16;
+export const WAVEFORM_BAR_MIN_PX = 4;
+export const WAVEFORM_BAR_MAX_PX = 22;
 // Conversational speech RMS sits around 0.02–0.15; a square-root curve lifts
 // quiet speech into the visible range while loud peaks still cap out.
 const LEVEL_GAIN = 6;
-const toBarLevel = (rms: number) => Math.min(1, Math.sqrt(rms * LEVEL_GAIN));
+const toBarLevel = (rms: number) => Math.min(1, Math.sqrt(Math.max(0, rms) * LEVEL_GAIN));
+
+export const resolveWaveformBarHeight = (rms: number) =>
+  WAVEFORM_BAR_MIN_PX + toBarLevel(rms) * (WAVEFORM_BAR_MAX_PX - WAVEFORM_BAR_MIN_PX);
 
 /**
  * Level-driven waveform: bars scroll right-to-left with the live input signal.
@@ -35,7 +38,7 @@ export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps)
     // session's frozen wave.
     levelsRef.current = new Array(BAR_COUNT).fill(0);
     for (const bar of barRefs.current) {
-      if (bar) bar.style.height = `${BAR_MIN_PX}px`;
+      if (bar) bar.style.height = `${WAVEFORM_BAR_MIN_PX}px`;
     }
 
     let frame = 0;
@@ -46,11 +49,11 @@ export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps)
         const level = getLevel();
         const levels = levelsRef.current;
         levels.shift();
-        levels.push(level === null ? 0 : toBarLevel(level));
+        levels.push(level === null ? 0 : level);
         for (let i = 0; i < levels.length; i++) {
           const bar = barRefs.current[i];
           if (bar) {
-            bar.style.height = `${BAR_MIN_PX + levels[i] * (BAR_MAX_PX - BAR_MIN_PX)}px`;
+            bar.style.height = `${resolveWaveformBarHeight(levels[i])}px`;
           }
         }
       }
@@ -72,7 +75,7 @@ export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps)
             barRefs.current[i] = el;
           }}
           className="w-0.5 rounded-full bg-current transition-[height] duration-75 ease-out motion-reduce:transition-none"
-          style={{ height: BAR_MIN_PX }}
+          style={{ height: WAVEFORM_BAR_MIN_PX }}
         />
       ))}
     </div>

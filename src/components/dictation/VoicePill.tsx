@@ -23,9 +23,10 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
 }
 
 const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
-// Matches the reference's eleven-bar rhythm. The exact same silhouette and
-// footprint is used in dictation, Agent Mode, and live transcript.
-const RESTING_WAVE_HEIGHTS = [7, 11, 7, 7, 7, 16, 16, 7, 16, 11, 16];
+// A pronounced eleven-bar rhythm keeps rounded short bars readable while tall
+// peaks use nearly the full lane. The same silhouette and footprint is shared
+// by dictation, Agent Mode, and Live Transcript.
+const RESTING_WAVE_HEIGHTS = [6, 12, 5, 9, 7, 22, 18, 5, 20, 12, 17];
 
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
   idle: "border-border/50 bg-surface-1 text-muted-foreground",
@@ -119,7 +120,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <div
-        className="relative shrink-0 overflow-hidden text-muted-foreground"
+        className="relative shrink-0 overflow-hidden text-foreground"
         style={{
           width: showCompactPill ? 52 : 0,
           height: showCompactPill ? 24 : 32,
