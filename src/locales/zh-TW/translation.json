@@ -2805,6 +2805,7 @@
     "wordsReady_other": "{{count}} 個詞語就緒",
     "import": "匯入",
     "yourDictionary": "你的詞典",
+    "promptLimitNotice": "字典目前共 {{chars}} 個字元。Groq 與 Whisper 模型僅使用前約 900 個字元，清單較前面的詞優先生效；其他模型會收到完整清單。",
     "exportDictionary": "匯出詞典",
     "exportFailed": "匯出失敗",
     "editWord": "編輯 {{word}}",

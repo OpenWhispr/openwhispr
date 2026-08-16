@@ -3079,13 +3079,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const endpoint = this.getTranscriptionEndpoint(model);
 
-      // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
-      // 890 leaves margin for UTF-16 vs codepoint counting drift.
+      // Prompt caps follow each provider's real limit, not a blanket one. Groq
+      // rejects prompts > 896 chars (incl. when reached via "custom" provider);
+      // 890 leaves margin for UTF-16 vs codepoint counting drift. Whisper-family
+      // decoders read at most 224 prompt tokens (~900 chars), so longer prompts
+      // are dead weight — trimming here keeps the head of the list, matching the
+      // words-at-the-top-win order users see in the dictionary. The 4o transcribe
+      // models take a 16k-token context and get the dictionary whole.
       const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
-      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
+      const isWhisperModel = (model || "").toLowerCase().includes("whisper");
+      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : isWhisperModel ? 900 : null;
       let dictionaryPrompt = this.getWhisperPrompt(apiSettings);
       if (dictionaryPrompt) {
-        if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
+        if (MAX_PROMPT_CHARS !== null && dictionaryPrompt.length > MAX_PROMPT_CHARS) {
           const originalLength = dictionaryPrompt.length;
           const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
           const lastComma = truncated.lastIndexOf(",");

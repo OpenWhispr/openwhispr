@@ -3014,6 +3014,7 @@
     "wordsReady_other": "{{count}} Wörter bereit",
     "import": "Importieren",
     "yourDictionary": "Dein Wörterbuch",
+    "promptLimitNotice": "Dein Wörterbuch umfasst {{chars}} Zeichen. Groq- und Whisper-Modelle nutzen nur etwa die ersten 900 – Wörter weiter oben haben dort Vorrang. Andere Modelle erhalten die vollständige Liste.",
     "exportDictionary": "Wörterbuch exportieren",
     "exportFailed": "Export fehlgeschlagen",
     "editWord": "{{word}} bearbeiten",

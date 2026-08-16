@@ -20,10 +20,15 @@ import SnippetsView from "./SnippetsView";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
+import { getDictionaryHintWords } from "../utils/snippets";
+
+// Groq caps STT prompts at 896 chars and Whisper-family models read ~900; past
+// that, those providers only see the head of the list (audioManager truncation).
+const STT_PROMPT_CHAR_LIMIT = 890;
 
 export default function DictionaryView() {
   const { t } = useTranslation();
-  const { customDictionary, updateCustomDictionary } = useSettings();
+  const { customDictionary, updateCustomDictionary, snippets } = useSettings();
   const agentName = getAgentName();
   const { toast } = useToast();
 
@@ -36,6 +41,13 @@ export default function DictionaryView() {
   const addInputRef = useRef<HTMLInputElement>(null);
 
   const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
+
+  // Length of the exact prompt string the STT request builds (words + snippet
+  // triggers, comma-joined), so the warning fires on real request size.
+  const promptChars = useMemo(
+    () => getDictionaryHintWords({ customDictionary, snippets }).join(", ").length,
+    [customDictionary, snippets]
+  );
 
   const userWords = useMemo(
     () => customDictionary.filter((w) => w !== agentName),
@@ -326,6 +338,13 @@ export default function DictionaryView() {
               </ul>
             )}
           </div>
+
+          {/* ─── Provider prompt-limit notice ─── */}
+          {promptChars > STT_PROMPT_CHAR_LIMIT && (
+            <p className="px-1 text-xs text-foreground/30">
+              {t("dictionary.promptLimitNotice", { chars: promptChars })}
+            </p>
+          )}
         </div>
       </TabsContent>
 
