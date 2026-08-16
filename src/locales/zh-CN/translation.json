@@ -3367,6 +3367,7 @@
     "ready": "就绪",
     "copy": "复制",
     "copied": "已复制",
+    "collapse": "折叠转录",
     "waitingForInput": "说点什么..."
   },
   "transcript": {

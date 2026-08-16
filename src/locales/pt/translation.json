@@ -3367,6 +3367,7 @@
     "ready": "Pronto",
     "copy": "Copiar",
     "copied": "Copiado",
+    "collapse": "Recolher transcrição",
     "waitingForInput": "Diga algo..."
   },
   "transcript": {

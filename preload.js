@@ -908,6 +908,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   startDictationPreview: (opts) => ipcRenderer.invoke("start-dictation-preview", opts),
   stopDictationPreview: (opts) => ipcRenderer.invoke("stop-dictation-preview", opts),
   dismissDictationPreview: () => ipcRenderer.invoke("dismiss-dictation-preview"),
+  updateDictationPreview: (text) => ipcRenderer.invoke("update-dictation-preview", text),
   completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),
   hideDictationPreview: () => ipcRenderer.invoke("hide-dictation-preview"),
   resizeTranscriptionPreviewWindow: (width, height) =>

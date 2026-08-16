@@ -6856,6 +6856,19 @@ class IPCHandlers {
     let dictationPreviewDisplay = true;
     // Bumped on every reset so async preview work can detect a stale session.
     let dictationPreviewGen = 0;
+    // Cloud partials can arrive faster than the preview window is created. Keep
+    // preview updates, completion, and dismissal ordered so a late partial can
+    // never overwrite the final result or reopen a dismissed window.
+    let dictationPreviewOperation = Promise.resolve();
+
+    const queueDictationPreviewOperation = (operation) => {
+      const result = dictationPreviewOperation.catch(() => {}).then(operation);
+      dictationPreviewOperation = result.then(
+        () => undefined,
+        () => undefined
+      );
+      return result;
+    };
 
     const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
       dictationPreviewGen++;
@@ -7036,6 +7049,14 @@ class IPCHandlers {
     };
 
     const connectDictationStreaming = async (event, options) => {
+      // Older renderers did not label the OpenAI dictation adapter. Dictation
+      // realtime was OpenAI-only before Tinfoil support, so preserve that
+      // established default while requiring new adapters to be explicit.
+      options = {
+        ...options,
+        provider: options?.provider || "openai-realtime",
+      };
+
       if (this._dictationConnectPromise) {
         await this._dictationConnectPromise.catch(() => {});
       }
@@ -7670,30 +7691,51 @@ class IPCHandlers {
       dictationPreviewBuffer.push(pcm);
     });
 
-    ipcMain.handle("dismiss-dictation-preview", async () => {
-      resetDictationPreviewState();
-      this.windowManager.hideTranscriptionPreview();
-      return { success: true };
-    });
-
-    ipcMain.handle("complete-dictation-preview", async (_event, { text } = {}) => {
-      if (!dictationPreviewSessionActive) {
-        return { success: true };
-      }
-      if (typeof text === "string" && text.trim()) {
-        this.windowManager.completeTranscriptionPreview(text);
-      } else {
+    ipcMain.handle("dismiss-dictation-preview", () =>
+      queueDictationPreviewOperation(async () => {
         resetDictationPreviewState();
         this.windowManager.hideTranscriptionPreview();
-      }
-      return { success: true };
-    });
+        return { success: true };
+      })
+    );
 
-    ipcMain.handle("hide-dictation-preview", async () => {
-      resetDictationPreviewState();
-      this.windowManager.hideTranscriptionPreview();
-      return { success: true };
-    });
+    ipcMain.handle("update-dictation-preview", (_event, text) =>
+      queueDictationPreviewOperation(async () => {
+        if (typeof text !== "string" || !text.trim()) {
+          return { success: true };
+        }
+        if (!dictationPreviewSessionActive) {
+          resetDictationPreviewState();
+          dictationPreviewSessionActive = true;
+          dictationPreviewDisplay = true;
+        }
+        await this.windowManager.showTranscriptionPreview(text);
+        return { success: true };
+      })
+    );
+
+    ipcMain.handle("complete-dictation-preview", (_event, { text } = {}) =>
+      queueDictationPreviewOperation(async () => {
+        if (!dictationPreviewSessionActive) {
+          return { success: true };
+        }
+        if (typeof text === "string" && text.trim()) {
+          this.windowManager.completeTranscriptionPreview(text);
+        } else {
+          resetDictationPreviewState();
+          this.windowManager.hideTranscriptionPreview();
+        }
+        return { success: true };
+      })
+    );
+
+    ipcMain.handle("hide-dictation-preview", () =>
+      queueDictationPreviewOperation(async () => {
+        resetDictationPreviewState();
+        this.windowManager.hideTranscriptionPreview();
+        return { success: true };
+      })
+    );
 
     ipcMain.handle("resize-transcription-preview-window", async (_event, width, height) => {
       if (!dictationPreviewSessionActive) {

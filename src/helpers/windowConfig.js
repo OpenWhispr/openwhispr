@@ -162,37 +162,6 @@ const NOTIFICATION_WINDOW_CONFIG = {
   type: FLOATING_OVERLAY_TYPE,
 };
 
-const TRANSCRIPTION_PREVIEW_SIZE_LIMITS = {
-  minWidth: 400,
-  defaultWidth: 460,
-  maxWidth: 640,
-  minHeight: 96,
-  defaultHeight: 132,
-  maxHeight: 520,
-};
-
-const TRANSCRIPTION_PREVIEW_CONFIG = {
-  width: TRANSCRIPTION_PREVIEW_SIZE_LIMITS.defaultWidth,
-  height: TRANSCRIPTION_PREVIEW_SIZE_LIMITS.defaultHeight,
-  frame: false,
-  transparent: true,
-  alwaysOnTop: true,
-  skipTaskbar: true,
-  resizable: false,
-  focusable: false,
-  hasShadow: false,
-  show: false,
-  acceptsFirstMouse: true,
-  webPreferences: {
-    preload: path.join(__dirname, "..", "..", "preload.js"),
-    nodeIntegration: false,
-    contextIsolation: true,
-    sandbox: true,
-  },
-  visibleOnAllWorkspaces: process.platform !== "win32",
-  type: FLOATING_OVERLAY_TYPE,
-};
-
 class WindowPositionUtil {
   static getMainWindowPosition(display, customSize = null, position = "bottom-right") {
     const { width, height } = customSize || WINDOW_SIZES.BASE;
@@ -248,27 +217,6 @@ class WindowPositionUtil {
     return { ...WindowPositionUtil.clampToWorkArea(bounds, display), width, height };
   }
 
-  static getTranscriptionPreviewPosition(display, mainWindowBounds, size = {}) {
-    const width =
-      size.width ||
-      TRANSCRIPTION_PREVIEW_CONFIG.width ||
-      TRANSCRIPTION_PREVIEW_SIZE_LIMITS.defaultWidth;
-    const height =
-      size.height ||
-      TRANSCRIPTION_PREVIEW_CONFIG.height ||
-      TRANSCRIPTION_PREVIEW_SIZE_LIMITS.defaultHeight;
-    const GAP = 8;
-    const workArea = display.workArea || display.bounds;
-
-    let x = Math.round(mainWindowBounds.x + (mainWindowBounds.width - width) / 2);
-    let y = mainWindowBounds.y - height - GAP;
-
-    x = Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width));
-    y = Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - height));
-
-    return { x, y, width, height };
-  }
-
   static setupAlwaysOnTop(window) {
     if (process.platform === "darwin") {
       // macOS: Use panel level for proper floating behavior
@@ -298,8 +246,6 @@ module.exports = {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
-  TRANSCRIPTION_PREVIEW_CONFIG,
-  TRANSCRIPTION_PREVIEW_SIZE_LIMITS,
   ASSISTANT_PANEL_SIZE_LIMITS,
   fitAssistantWindowToWorkArea,
   WINDOW_SIZES,

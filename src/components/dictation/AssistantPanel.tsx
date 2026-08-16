@@ -12,6 +12,7 @@ import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
+import { ExpandingPanelShell } from "./ExpandingPanelShell";
 
 export interface AssistantCommand {
   id: number;
@@ -193,15 +194,7 @@ export function AssistantPanel({
   }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, handleCopy]);
 
   return (
-    <div
-      className={cn(
-        "assistant-panel-surface absolute inset-3 flex flex-col overflow-hidden",
-        "rounded-3xl border border-border/50 bg-surface-0 backdrop-blur-xl",
-        "shadow-[var(--shadow-modal)]",
-        open && "assistant-panel-surface-open"
-      )}
-      aria-hidden={!open}
-    >
+    <ExpandingPanelShell open={open} anchor="bottom-right">
       <header
         className="flex h-16 shrink-0 cursor-grab items-center gap-3 px-5 active:cursor-grabbing"
         onMouseDown={handleMouseDown}
@@ -277,6 +270,6 @@ export function AssistantPanel({
           </>
         )}
       </footer>
-    </div>
+    </ExpandingPanelShell>
   );
 }

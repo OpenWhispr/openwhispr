@@ -130,6 +130,8 @@ import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
+import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
 export type SettingsSectionType =
   | "account"
@@ -360,6 +362,16 @@ function TranscriptionSection({
     [localTranscriptionProvider, setParakeetModel, setWhisperModel]
   );
 
+  const selectedCloudModelStreams = Boolean(
+    getTranscriptionProvider(cloudTranscriptionProvider)?.models.some(
+      (model) => model.id === cloudTranscriptionModel && model.streaming
+    )
+  );
+  const previewAvailable = supportsLiveTranscriptionPreview(
+    effectiveTranscriptionMode,
+    selectedCloudModelStreams
+  );
+
   const renderPreviewToggle = () => (
     <SettingsPanel>
       <SettingsPanelRow>
@@ -409,12 +421,8 @@ function TranscriptionSection({
       />
 
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && (
-        <>
-          {renderTranscriptionPicker("local")}
-          {renderPreviewToggle()}
-        </>
-      )}
+      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+      {previewAvailable && renderPreviewToggle()}
 
       {effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel

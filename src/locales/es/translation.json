@@ -3367,6 +3367,7 @@
     "ready": "Listo",
     "copy": "Copiar",
     "copied": "Copiado",
+    "collapse": "Contraer transcripción",
     "waitingForInput": "Di algo..."
   },
   "transcript": {

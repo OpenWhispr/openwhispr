@@ -3444,6 +3444,7 @@
     "ready": "Bereit",
     "copy": "Kopieren",
     "copied": "Kopiert",
+    "collapse": "Transkript einklappen",
     "waitingForInput": "Sag etwas..."
   },
   "transcript": {

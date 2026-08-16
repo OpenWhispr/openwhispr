@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
 import AuthenticationStep from "./components/AuthenticationStep.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
-import TranscriptionPreviewOverlay from "./components/TranscriptionPreviewOverlay.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
 import WindowControls from "./components/WindowControls.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
@@ -25,10 +24,6 @@ export default function AppRouter() {
 
   if (params.includes("update-notification=true")) {
     return <UpdateNotificationOverlay />;
-  }
-
-  if (params.includes("transcription-preview=true")) {
-    return <TranscriptionPreviewOverlay />;
   }
 
   return <MainApp />;

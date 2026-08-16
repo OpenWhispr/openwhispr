@@ -2443,10 +2443,12 @@ declare global {
 
       // Dictation realtime streaming
       dictationRealtimeWarmup?: (options: {
+        provider: "openai-realtime" | "tinfoil-realtime";
         model?: string;
         mode?: "byok" | "openwhispr";
       }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeStart?: (options: {
+        provider: "openai-realtime" | "tinfoil-realtime";
         model?: string;
         mode?: "byok" | "openwhispr";
       }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
@@ -2568,6 +2570,7 @@ declare global {
         flushed?: boolean;
       }) => Promise<{ success: boolean; streamed?: boolean; text?: string }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
+      updateDictationPreview?: (text: string) => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
       hideDictationPreview?: () => Promise<{ success: boolean }>;
       resizeTranscriptionPreviewWindow?: (

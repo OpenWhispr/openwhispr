@@ -298,8 +298,16 @@ const STREAMING_PROVIDERS = {
   },
   "openai-realtime": {
     awaitsFinalTranscript: true,
-    warmup: (opts) => window.electronAPI.dictationRealtimeWarmup(opts),
-    start: (opts) => window.electronAPI.dictationRealtimeStart(opts),
+    warmup: (opts) =>
+      window.electronAPI.dictationRealtimeWarmup({
+        ...opts,
+        provider: "openai-realtime",
+      }),
+    start: (opts) =>
+      window.electronAPI.dictationRealtimeStart({
+        ...opts,
+        provider: "openai-realtime",
+      }),
     send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
     stop: () => window.electronAPI.dictationRealtimeStop(),
     onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
@@ -325,13 +333,11 @@ const STREAMING_PROVIDERS = {
       window.electronAPI.dictationRealtimeWarmup({
         ...opts,
         provider: "tinfoil-realtime",
-        preview: true,
       }),
     start: (opts) =>
       window.electronAPI.dictationRealtimeStart({
         ...opts,
         provider: "tinfoil-realtime",
-        preview: true,
       }),
     send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
     stop: () => window.electronAPI.dictationRealtimeStop(),
@@ -1301,7 +1307,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             provider,
             model,
             language,
-            display: showTranscriptionPreview,
+            display: showTranscriptionPreview && !this.voiceAgentRequested,
           });
           this._streamingCommitActive = streamingCommit;
         } catch (e) {
@@ -3612,9 +3618,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return !!model?.streaming && !!s.tinfoilApiKey;
     }
 
-    // Respect sttConfig mode from the API — this allows batch mode even for
-    // realtime-capable models (e.g. gpt-4o-mini-transcribe).
-    if (this.sttConfig?.dictation?.mode === "batch") {
+    // The managed-cloud bootstrap only controls OpenWhispr Cloud. A user's
+    // BYOK realtime model must not be downgraded because managed dictation is
+    // configured for batch processing.
+    if (s.cloudTranscriptionMode === "openwhispr" && this.sttConfig?.dictation?.mode === "batch") {
       return false;
     }
 

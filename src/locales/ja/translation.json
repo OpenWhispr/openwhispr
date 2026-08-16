@@ -3367,6 +3367,7 @@
     "ready": "準備完了",
     "copy": "コピー",
     "copied": "コピー済み",
+    "collapse": "文字起こしを折りたたむ",
     "waitingForInput": "何か話してください..."
   },
   "transcript": {

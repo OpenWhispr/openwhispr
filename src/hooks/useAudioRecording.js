@@ -13,6 +13,10 @@ import {
   isTranscriptionContextAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import {
+  buildLiveTranscriptionPreview,
+  shouldShowByokStreamingPreview,
+} from "../utils/transcriptionPreview";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -256,6 +260,24 @@ export const useAudioRecording = (toast, options = {}) => {
       },
       onPartialTranscript: (text) => {
         setPartialTranscript(text);
+        const settings = getSettings();
+        if (
+          shouldShowByokStreamingPreview(
+            settings.showTranscriptionPreview,
+            settings.cloudTranscriptionMode
+          ) &&
+          !audioManagerRef.current?.voiceAgentRequested
+        ) {
+          const previewText = buildLiveTranscriptionPreview(
+            audioManagerRef.current?.streamingFinalText,
+            text
+          );
+          window.electronAPI
+            ?.updateDictationPreview?.(previewText)
+            .catch((error) =>
+              logger.warn("Failed to update transcription preview", { error: error?.message })
+            );
+        }
       },
       onTranscriptionComplete: async (result) => {
         if (result.success) {

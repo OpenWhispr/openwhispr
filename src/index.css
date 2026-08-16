@@ -442,13 +442,11 @@ a:hover {
   }
 }
 
-/* The panel grows around the persistent pill at its bottom-right anchor. */
-.assistant-panel-surface {
+/* Shared pill-to-panel surface. Each mode chooses the pill corner it grows from. */
+.expanding-panel-surface {
   clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
   opacity: 0;
   pointer-events: none;
-  transform: translate(4px, 4px);
-  transform-origin: bottom right;
   transition:
     clip-path 360ms cubic-bezier(0.2, 0, 0, 1),
     opacity 180ms ease-out,
@@ -456,11 +454,44 @@ a:hover {
   will-change: clip-path, opacity, transform;
 }
 
-.assistant-panel-surface-open {
+.expanding-panel-anchor-bottom-right {
+  transform: translate(4px, 4px);
+  transform-origin: bottom right;
+}
+
+.expanding-panel-anchor-bottom-left {
+  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);
+  transform: translate(-4px, 4px);
+  transform-origin: bottom left;
+}
+
+.expanding-panel-surface-open {
   clip-path: inset(0 round 24px);
   opacity: 1;
   pointer-events: auto;
   transform: none;
+}
+
+.live-transcript-line-shimmer {
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--color-foreground) 62%, transparent) 0%,
+    var(--color-foreground) 42%,
+    color-mix(in oklch, var(--color-foreground) 62%, transparent) 76%
+  );
+  background-position: 160% 0;
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: live-transcript-line-shimmer 1.7s ease-in-out infinite;
+}
+
+@keyframes live-transcript-line-shimmer {
+  to {
+    background-position: -120% 0;
+  }
 }
 
 .agent-thinking-text-window {
@@ -482,7 +513,7 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant-panel-surface {
+  .expanding-panel-surface {
     transition-duration: 1ms;
   }
 
@@ -494,6 +525,12 @@ a:hover {
   .agent-thinking-text-window::after {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .live-transcript-line-shimmer {
+    animation: none;
+    color: var(--color-foreground);
+    -webkit-text-fill-color: currentColor;
   }
 }
 

@@ -1816,9 +1816,6 @@ function performSyncTeardown() {
     cliBridge.stop().catch(() => {});
     cliBridge = null;
   }
-  if (windowManager && isLiveWindow(windowManager.transcriptionPreviewWindow)) {
-    windowManager.transcriptionPreviewWindow.destroy();
-  }
   if (hotkeyManager) {
     hotkeyManager.unregisterAll();
   } else {
