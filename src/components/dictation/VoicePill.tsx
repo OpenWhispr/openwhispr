@@ -17,6 +17,7 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   beamActive?: boolean;
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
+  integratedWithPanel?: boolean;
   isDragging?: boolean;
   horizontalDirection?: "left" | "right";
 }
@@ -46,6 +47,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     beamActive,
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
+    integratedWithPanel = false,
     isDragging = false,
     horizontalDirection = "right",
     className,
@@ -69,7 +71,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     <div
       ref={ref}
       className={cn(
-        "relative flex items-center justify-center overflow-hidden rounded-full border",
+        "voice-pill-control relative flex items-center justify-center overflow-hidden rounded-full border",
         horizontalDirection === "left" && "flex-row-reverse",
         "shadow-[var(--shadow-card)]",
         STATE_APPEARANCE[state],
@@ -83,10 +85,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         height: showCompactPill ? 36 : 40,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
         transform: !isPanel && state === "hover" ? "scale(1.05)" : "scale(1)",
-        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
+        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out`,
         ...style,
       }}
       data-horizontal-direction={horizontalDirection}
+      data-integrated-with-panel={integratedWithPanel || undefined}
       {...props}
     >
       <div
@@ -95,7 +98,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <BrandMarkIcon
-        size={showCompactPill ? 16 : isThinking ? 22 : state === "hover" ? 24 : 22}
+        size={state === "hover" ? 24 : 22}
         className={cn(
           "shrink-0 transition-[color,width,height] duration-200",
           state === "idle" && "text-foreground",

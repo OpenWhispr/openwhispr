@@ -485,6 +485,7 @@ a:hover {
 .expanding-panel-surface[data-panel-mode="live-transcript"] {
   --live-transcript-footer-height: 4rem;
   --live-transcript-speaking-pill-width: 5.75rem;
+  --live-transcript-speaking-pill-height: 2.25rem;
   --live-transcript-footer-inline-padding: 1rem;
   --live-transcript-encapsulated-width: calc(
     var(--live-transcript-speaking-pill-width) + var(--live-transcript-footer-inline-padding) +
@@ -495,6 +496,92 @@ a:hover {
     clip-path var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
     opacity 140ms ease-out,
     transform var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
+  border-color: transparent;
+}
+
+/* The panel border begins exactly on top of the waveform pill, then becomes
+   the single border for the held capsule, footer, and content surface. The
+   control itself turns headless at the same handoff, so two outlines never
+   compete during the horizontal expansion. */
+.expanding-panel-surface[data-panel-mode="live-transcript"]::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  width: var(--live-transcript-speaking-pill-width);
+  height: var(--live-transcript-speaking-pill-height);
+  right: var(--live-transcript-footer-inline-padding);
+  bottom: calc(
+    (var(--live-transcript-footer-height) - var(--live-transcript-speaking-pill-height)) / 2
+  );
+  border: 1px solid var(--color-border-hover);
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    width var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    height var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    right var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    bottom var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    border-radius var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    border-color 180ms ease-out,
+    opacity 140ms ease-out;
+}
+
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-direction="left"]::before {
+  right: auto;
+  left: var(--live-transcript-footer-inline-padding);
+  transition-property: width, height, left, bottom, border-radius, border-color, opacity;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"]::before {
+  opacity: 1;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"]::before {
+  width: var(--live-transcript-encapsulated-width);
+  height: var(--live-transcript-footer-height);
+  right: 0;
+  bottom: 0;
+  border-radius: 24px;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"][data-panel-direction="left"]::before {
+  right: auto;
+  left: 0;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="footer"]::before {
+  width: 100%;
+  height: var(--live-transcript-footer-height);
+  right: 0;
+  bottom: 0;
+  border-color: color-mix(in oklch, var(--color-border) 50%, transparent);
+  border-radius: 24px;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="footer"][data-panel-direction="left"]::before {
+  right: auto;
+  left: 0;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="content"]::before {
+  width: 100%;
+  height: 100%;
+  right: 0;
+  bottom: 0;
+  border-color: color-mix(in oklch, var(--color-border) 50%, transparent);
+  border-radius: 24px;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="content"][data-panel-direction="left"]::before {
+  right: auto;
+  left: 0;
+}
+
+.voice-pill-control[data-integrated-with-panel="true"] {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
 }
 
 .expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
@@ -610,6 +697,11 @@ a:hover {
 @media (prefers-reduced-motion: reduce) {
   .expanding-panel-surface {
     transition-duration: 1ms;
+  }
+
+  .expanding-panel-surface[data-panel-mode="live-transcript"]::before,
+  .voice-pill-control[data-integrated-with-panel="true"] {
+    transition-duration: 1ms !important;
   }
 
   .agent-thinking-beam[data-active] {

@@ -885,6 +885,7 @@ export default function App() {
                 beamActive={listeningEntrance.beamActive ?? undefined}
                 waveformVisible={listeningEntrance.waveformVisible}
                 waveformOnlyWhileRecording={liveTranscriptPanelMounted}
+                integratedWithPanel={liveTranscriptPanelOpen}
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}
                 horizontalDirection={voiceHorizontalDirection}

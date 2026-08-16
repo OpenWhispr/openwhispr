@@ -5,7 +5,7 @@ const { renderToStaticMarkup } = require("react-dom/server");
 
 globalThis.React = React;
 
-const renderPill = async (state, expanded, horizontalDirection = "right") => {
+const renderPill = async (state, expanded, horizontalDirection = "right", overrides = {}) => {
   const { VoicePill } = await import("../../src/components/dictation/VoicePill.tsx");
   const markup = renderToStaticMarkup(
     React.createElement(VoicePill, {
@@ -14,6 +14,7 @@ const renderPill = async (state, expanded, horizontalDirection = "right") => {
       expanded,
       horizontalDirection,
       getAudioLevel: () => 0,
+      ...overrides,
     })
   );
   return markup.slice(markup.indexOf("</style>") + "</style>".length);
@@ -43,4 +44,29 @@ test("the idle pill keeps the logo at normal foreground strength", async () => {
   const idle = await renderPill("idle", false);
 
   assert.match(idle, /shrink-0 transition-\[color,width,height\] duration-200 text-foreground/);
+});
+
+test("the waveform pill keeps the normal compact logo footprint", async () => {
+  const idle = await renderPill("idle", false);
+  const recording = await renderPill("recording", true);
+  const liveTranscript = await renderPill("recording", true, "right", {
+    variant: "panel",
+    integratedWithPanel: true,
+  });
+
+  for (const markup of [idle, recording, liveTranscript]) {
+    assert.match(markup, /<svg width="22" height="22"/);
+  }
+});
+
+test("Live Transcript hands visual border ownership to the shared panel", async () => {
+  const integrated = await renderPill("recording", true, "right", {
+    variant: "panel",
+    integratedWithPanel: true,
+  });
+  const standalone = await renderPill("recording", true);
+
+  assert.match(integrated, /voice-pill-control/);
+  assert.match(integrated, /data-integrated-with-panel="true"/);
+  assert.doesNotMatch(standalone, /data-integrated-with-panel/);
 });
