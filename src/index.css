@@ -407,6 +407,15 @@ a:hover {
   }
 }
 
+@keyframes toast-border-progress {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 1;
+  }
+}
+
 /* Model picker LED pulse animation */
 @keyframes pulse-glow {
   0%,

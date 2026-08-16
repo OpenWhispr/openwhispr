@@ -11,6 +11,7 @@ interface DictationErrorCardProps {
   onPreferredHeightChange?: (height: number) => void;
   progressDuration?: number;
   progressPaused?: boolean;
+  ready?: boolean;
 }
 
 const ACTION_ICONS = {
@@ -27,6 +28,7 @@ export function DictationErrorCard({
   onPreferredHeightChange,
   progressDuration = 0,
   progressPaused = false,
+  ready = true,
 }: DictationErrorCardProps) {
   const cardRef = useRef<HTMLElement | null>(null);
   const lastPreferredHeightRef = useRef(0);
@@ -39,6 +41,11 @@ export function DictationErrorCard({
     let frame = 0;
     const measure = () => {
       frame = 0;
+      // The card first mounts inside the compact pill window. Wait until the
+      // native window has established its final error width so wrapping is
+      // measured once at the width the user will actually see.
+      const expectedWidth = Math.min(336, Math.max(1, window.screen.availWidth - 24));
+      if (Math.abs(card.getBoundingClientRect().width - expectedWidth) > 1) return;
       const preferredHeight = Math.ceil(Math.max(card.offsetHeight, card.scrollHeight));
       if (Math.abs(preferredHeight - lastPreferredHeightRef.current) < 1) return;
       lastPreferredHeightRef.current = preferredHeight;
@@ -104,22 +111,32 @@ export function DictationErrorCard({
       data-action-count={actions.length}
       className={cn(
         "relative max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-3xl border border-border/50 bg-surface-0",
-        "shadow-[var(--shadow-modal)]"
+        "shadow-[var(--shadow-modal)] transition-[opacity,transform] duration-200 ease-out",
+        ready ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"
       )}
     >
       {progressDuration > 0 && (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px overflow-hidden rounded-t-3xl"
+        <svg
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 w-full overflow-visible text-foreground"
+          viewBox="0 0 336 25"
+          preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <div
-            className="h-full bg-foreground"
+          <path
+            d="M 1 24 A 23 23 0 0 1 24 1 H 312 A 23 23 0 0 1 335 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+            strokeLinecap="butt"
+            pathLength="1"
+            strokeDasharray="1"
             style={{
-              animation: `toast-progress ${progressDuration}ms linear forwards`,
+              animation: `toast-border-progress ${progressDuration}ms linear forwards`,
               animationPlayState: progressPaused ? "paused" : "running",
             }}
           />
-        </div>
+        </svg>
       )}
       {hasSecondaryAction ? (
         <div className="p-4">

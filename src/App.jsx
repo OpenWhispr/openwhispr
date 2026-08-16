@@ -459,11 +459,17 @@ export default function App() {
     lastSizeKeyRef.current = target;
     if (target === prev) return;
     if (
-      prev === "ASSISTANT" &&
       (target === "DICTATION_ERROR" || target === "DICTATION_ERROR_WITH_TRANSCRIPT")
     ) {
-      // The mounted error card reports its exact height immediately. A delayed
-      // fixed shrink here would overwrite that measurement and clip long copy.
+      // Establish the final width immediately. The hidden error card then
+      // measures wrapping at that width and performs one content-height resize.
+      window.electronAPI?.resizeMainWindow?.(target);
+      return;
+    }
+    if (prev === "DICTATION_ERROR" || prev === "DICTATION_ERROR_WITH_TRANSCRIPT") {
+      // The card has already completed its exit animation and been removed;
+      // skip another delayed intermediate footprint.
+      window.electronAPI?.resizeMainWindow?.(target);
       return;
     }
     if (!prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {

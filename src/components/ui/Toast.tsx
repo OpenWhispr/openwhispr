@@ -135,8 +135,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         dictationErrorActionCount:
           [...toasts]
             .reverse()
-            .find((item) => item.presentation === "dictation-error" && !item.isExiting)?.actions
-            ?.length ?? 0,
+            .find((item) => item.presentation === "dictation-error")?.actions?.length ?? 0,
         dismissByPresentation,
       }}
     >
@@ -229,6 +228,7 @@ const Toast: React.FC<
   const timerStartedAtRef = React.useRef(createdAt);
   const [copied, setCopied] = React.useState(false);
   const [timerPaused, setTimerPaused] = React.useState(false);
+  const [errorSurfaceReady, setErrorSurfaceReady] = React.useState(false);
   const isDestructive = variant === "destructive";
 
   const handleStructuredAction = (structuredAction: ToastActionConfig) => {
@@ -236,8 +236,10 @@ const Toast: React.FC<
     void structuredAction.onClick();
   };
 
-  const handleErrorHeightChange = React.useCallback((height: number) => {
-    void window.electronAPI?.resizeDictationErrorWindowToContent?.(height);
+  const handleErrorHeightChange = React.useCallback(async (height: number) => {
+    const result = await window.electronAPI?.resizeDictationErrorWindowToContent?.(height);
+    if (result?.success === false) return;
+    requestAnimationFrame(() => setErrorSurfaceReady(true));
   }, []);
 
   const handleMouseEnter = () => {
@@ -281,7 +283,7 @@ const Toast: React.FC<
           "pointer-events-auto w-full transition-[opacity,transform] duration-200 ease-out",
           isExiting
             ? "translate-y-2 scale-[0.98] opacity-0"
-            : "translate-y-0 scale-100 opacity-100 animate-in fade-in-0 slide-in-from-bottom-3 duration-300"
+            : "translate-y-0 scale-100 opacity-100"
         )}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -294,6 +296,7 @@ const Toast: React.FC<
           onPreferredHeightChange={handleErrorHeightChange}
           progressDuration={!isExiting ? duration : 0}
           progressPaused={timerPaused}
+          ready={errorSurfaceReady}
         />
       </div>
     );
