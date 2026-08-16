@@ -16,7 +16,9 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
 }
 
 const GROW_TRANSITION = "320ms cubic-bezier(0.2, 0, 0, 1)";
-const RESTING_WAVE_HEIGHTS = [5, 10, 14, 8, 16, 11, 7, 13];
+// Matches the reference's eleven-bar rhythm. The exact same silhouette and
+// footprint is used in dictation, Agent Mode, and live transcript.
+const RESTING_WAVE_HEIGHTS = [7, 11, 7, 7, 7, 16, 16, 7, 16, 11, 16];
 
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
   idle: "border-border/50 bg-surface-1 text-muted-foreground",
@@ -49,8 +51,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isPanelThinking = isPanel && isThinking;
   const showCompactPill = isPanel || expanded;
   const showDivider = showCompactPill && !isRecording;
-  const dividerMargin = showCompactPill ? (isRecording ? 3 : isPanel ? 4 : 6) : 0;
-  const restingWaveHeights = isPanel ? RESTING_WAVE_HEIGHTS.slice(0, 6) : RESTING_WAVE_HEIGHTS;
+  const dividerMargin = showCompactPill ? (isRecording ? 3 : 4) : 0;
 
   const pill = (
     <div
@@ -65,8 +66,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         // Listening uses the same compact pill as the assistant panel. The
         // previous wide recording bar made the control feel like a different
         // surface and forced an unnecessary large window resize.
-        width: isThinking && !isPanel ? 40 : isPanel ? 92 : showCompactPill ? 112 : 40,
-        height: isPanel ? 36 : 40,
+        width: isThinking && !isPanel ? 40 : showCompactPill ? 92 : 40,
+        height: showCompactPill ? 36 : 40,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
         transform: !isPanel && state === "hover" ? "scale(1.05)" : "scale(1)",
         transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms ease-out`,
@@ -80,7 +81,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <BrandMarkIcon
-        size={isThinking && !isPanel ? 22 : isPanel ? 16 : showCompactPill ? 20 : state === "hover" ? 24 : 22}
+        size={isThinking && !isPanel ? 22 : showCompactPill ? 16 : state === "hover" ? 24 : 22}
         className={cn(
           "shrink-0 transition-[color,width,height] duration-200",
           (isUnavailable || isProcessing) && "animate-pulse"
@@ -90,7 +91,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       <div
         className="shrink-0 overflow-hidden bg-border/60"
         style={{
-          height: isPanel ? 16 : 20,
+          height: showCompactPill ? 16 : 20,
           width: showDivider ? 1 : 0,
           marginLeft: dividerMargin,
           marginRight: dividerMargin,
@@ -100,23 +101,17 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <div
-        className="shrink-0 overflow-hidden text-current"
+        className="shrink-0 overflow-hidden text-muted-foreground"
         style={{
-          width: showCompactPill ? (isPanel ? 52 : 64) : 0,
-          height: isPanel ? 24 : 32,
+          width: showCompactPill ? 52 : 0,
+          height: showCompactPill ? 24 : 32,
           opacity: showCompactPill ? 1 : 0,
           transition: `width ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
         }}
       >
         {showCompactPill && !isRecording ? (
-          <div
-            className={cn(
-              "flex h-full items-center justify-center gap-0.5",
-              isProcessing && "animate-pulse"
-            )}
-            aria-hidden="true"
-          >
-            {restingWaveHeights.map((height, index) => (
+          <div className="flex h-full items-center justify-center gap-0.75" aria-hidden="true">
+            {RESTING_WAVE_HEIGHTS.map((height, index) => (
               <span
                 key={`${height}-${index}`}
                 className="w-0.5 rounded-full bg-current"
@@ -128,7 +123,6 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
           <LiveWaveform
             getLevel={getAudioLevel}
             active={isRecording}
-            barCount={isPanel ? 6 : 8}
             className={isRecording ? "" : "opacity-60"}
           />
         )}
