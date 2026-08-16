@@ -44,6 +44,7 @@ import {
   serializeHotkeyList,
 } from "../utils/hotkeys";
 import { useAuth } from "../hooks/useAuth";
+import { AUTH_URL } from "../lib/auth";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
@@ -149,7 +150,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     () => parseHotkeyList(dictationKey)[0] || getDefaultHotkey()
   );
   const [agentName, setAgentName] = useState("OpenWhispr");
-  const [skipAuth, setSkipAuth] = useState(false);
+  // No auth server configured — behave as "continue without account" from the start.
+  const [skipAuth, setSkipAuth] = useState(!AUTH_URL);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
@@ -219,11 +221,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const showMeetingStep = false;
 
   const steps = useMemo(() => {
-    const list = [
-      { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
+    const list = [];
+    // The welcome step is the sign-in step — drop it when no auth server is configured.
+    if (AUTH_URL) {
+      list.push({ id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle });
+    }
+    list.push(
       { id: "usecase", title: t("onboarding.steps.useCase"), icon: Sparkles },
-      { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
-    ];
+      { id: "setup", title: t("onboarding.steps.setup"), icon: Settings }
+    );
     if (!(isSignedIn && !skipAuth)) {
       list.push({ id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield });
     }
@@ -249,8 +255,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   }, [currentStep, steps.length, setCurrentStep]);
 
-  // Only show progress for signed-up users after account creation step
-  const showProgress = currentStep > 0;
+  // The welcome/sign-in step hides the chrome; every other step shows it.
+  // Keyed on the step id, not the index — the welcome step may not exist.
+  const showProgress = currentStepId !== "welcome";
+  const progressOffset = steps[0]?.id === "welcome" ? 1 : 0;
 
   useEffect(() => {
     if (isUsingNativeShortcut && !supportsPushToTalk) {
@@ -1038,7 +1046,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             actions={isSignedIn ? <SupportDropdown /> : undefined}
             center={
               onboardingPlatform === "darwin" ? (
-                <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />
+                <StepProgress
+                  steps={steps.slice(progressOffset)}
+                  currentStep={currentStep - progressOffset}
+                />
               ) : undefined
             }
           ></TitleBar>
@@ -1049,18 +1060,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       {showProgress && onboardingPlatform !== "darwin" && (
         <div className="shrink-0 bg-background/80 backdrop-blur-2xl border-b border-white/5 px-6 md:px-12 py-3 z-10">
           <div className="max-w-3xl mx-auto">
-            <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />
+            <StepProgress
+              steps={steps.slice(progressOffset)}
+              currentStep={currentStep - progressOffset}
+            />
           </div>
         </div>
       )}
 
       {/* Content - This will grow to fill available space */}
       <div
-        className={`flex-1 px-6 md:px-12 overflow-y-auto ${currentStep === 0 ? "flex items-center" : "py-6"}`}
+        className={`flex-1 px-6 md:px-12 overflow-y-auto ${currentStepId === "welcome" ? "flex items-center" : "py-6"}`}
       >
-        <div className={`w-full ${currentStep === 0 ? "max-w-sm" : "max-w-3xl"} mx-auto`}>
+        <div className={`w-full ${currentStepId === "welcome" ? "max-w-sm" : "max-w-3xl"} mx-auto`}>
           <Card className="bg-card/90 backdrop-blur-2xl border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
-            <CardContent className={currentStep === 0 ? "p-6" : "p-6 md:p-8"}>
+            <CardContent className={currentStepId === "welcome" ? "p-6" : "p-6 md:p-8"}>
               {renderStep()}
             </CardContent>
           </Card>

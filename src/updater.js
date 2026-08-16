@@ -1,5 +1,9 @@
 const { autoUpdater } = require("electron-updater");
 
+// Own build: auto-update is hard-disabled — no feed, no startup/periodic
+// checks, no install-on-quit. IPC handlers still work and report "no update".
+const UPDATES_DISABLED = true;
+
 class UpdateManager {
   constructor() {
     this.updateAvailable = false;
@@ -22,6 +26,12 @@ class UpdateManager {
   }
 
   setupAutoUpdater() {
+    if (UPDATES_DISABLED) {
+      // electron-updater defaults autoInstallOnAppQuit to true — force it off.
+      autoUpdater.autoDownload = false;
+      autoUpdater.autoInstallOnAppQuit = false;
+      return;
+    }
     if (process.env.NODE_ENV === "development") {
       return;
     }
@@ -163,6 +173,12 @@ class UpdateManager {
 
   async checkForUpdates() {
     try {
+      if (UPDATES_DISABLED) {
+        return {
+          updateAvailable: false,
+          message: "Updates are disabled in this build",
+        };
+      }
       if (process.env.NODE_ENV === "development") {
         return {
           updateAvailable: false,
@@ -198,6 +214,12 @@ class UpdateManager {
 
   async downloadUpdate() {
     try {
+      if (UPDATES_DISABLED) {
+        return {
+          success: false,
+          message: "Updates are disabled in this build",
+        };
+      }
       if (process.env.NODE_ENV === "development") {
         return {
           success: false,
@@ -302,6 +324,7 @@ class UpdateManager {
   }
 
   checkForUpdatesOnStartup() {
+    if (UPDATES_DISABLED) return;
     if (process.env.NODE_ENV !== "development") {
       setTimeout(() => {
         console.log("🔄 Checking for updates on startup...");
