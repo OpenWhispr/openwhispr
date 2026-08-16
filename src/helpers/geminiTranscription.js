@@ -99,7 +99,8 @@ async function transcribeAudio({ audioBuffer, model, language, prompt, cleanupPr
       body: buildBody(withThinking),
     });
 
-  let response = await doFetch(true);
+  let withThinking = true;
+  let response = await doFetch(withThinking);
   if (response.status === 400 && thinking) {
     // The thinking knob varies across model generations — retry without it
     // rather than failing the dictation on an INVALID_ARGUMENT.
@@ -108,7 +109,19 @@ async function transcribeAudio({ audioBuffer, model, language, prompt, cleanupPr
       { model: resolvedModel },
       "transcription"
     );
-    response = await doFetch(false);
+    withThinking = false;
+    response = await doFetch(withThinking);
+  }
+  if (response.status === 503) {
+    // Transient "model overloaded" spikes — one short-backoff retry so a
+    // long dictation isn't lost to a momentary capacity blip.
+    debugLogger.debug(
+      "Gemini returned 503, retrying once after backoff",
+      { model: resolvedModel },
+      "transcription"
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    response = await doFetch(withThinking);
   }
 
   if (response.status === 401 || response.status === 403) {

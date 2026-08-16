@@ -190,3 +190,32 @@ test("gemini: an empty candidate yields empty text for the caller's empty-transc
   const result = await transcribeAudio({ audioBuffer: Buffer.from([1]), apiKey: "gk" });
   assert.equal(result.text, "");
 });
+
+test("gemini: a transient 503 is retried once and the retry's transcript is returned", async () => {
+  fetches.length = 0;
+  let calls = 0;
+  fetchResponse = () => {
+    calls += 1;
+    if (calls === 1) {
+      return { ok: false, status: 503, text: async () => "high demand" };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: "recovered" }] } }] }),
+      text: async () => "",
+    };
+  };
+  const result = await transcribeAudio({ audioBuffer: Buffer.from([1]), apiKey: "gk" });
+  assert.equal(result.text, "recovered", "retry result is used after a 503");
+  assert.equal(fetches.length, 2, "exactly one retry after the 503");
+
+  // A second consecutive 503 surfaces as SERVER_ERROR — no retry loop.
+  fetches.length = 0;
+  fetchResponse = () => ({ ok: false, status: 503, text: async () => "still busy" });
+  await assert.rejects(
+    () => transcribeAudio({ audioBuffer: Buffer.from([1]), apiKey: "gk" }),
+    (err) => err.code === "SERVER_ERROR" && /503/.test(err.message)
+  );
+  assert.equal(fetches.length, 2, "only the single retry, then fail");
+});
