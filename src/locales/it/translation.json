@@ -2163,6 +2163,8 @@
         "openai_whisper_1": "Modello Whisper originale",
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
+        "gemini_3_flash_preview": "Trascrizione rapida e ad alta precisione",
+        "gemini_2_5_flash_lite": "Latenza e costi minimi",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",

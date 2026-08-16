@@ -58,6 +58,7 @@ const electronStub = {
 
 const cortiCalls = [];
 const tinfoilCalls = [];
+const geminiCalls = [];
 let cortiBehavior = async () => ({ text: "corti text" });
 
 // Kept installed for the whole file: the corti client is require()d lazily at
@@ -80,6 +81,14 @@ Module._load = function loadWithMocks(request, parent, isMain) {
           return { text: "tinfoil text", model: "tinfoil-model" };
         },
         getTinfoilChatModels: () => [],
+      };
+    }
+    if (request === "./geminiTranscription") {
+      return {
+        transcribeAudio: async (opts) => {
+          geminiCalls.push(opts);
+          return { text: "gemini text", model: opts.model || "gemini-3-flash-preview" };
+        },
       };
     }
     if (request === "./windowBroadcast") {
@@ -117,6 +126,7 @@ function buildFakeThis() {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
       getMistralKey: () => "mk-mistral",
+      getGeminiKey: () => "gk-gemini",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
       getCustomTranscriptionKey: () => "ck-custom",
@@ -238,6 +248,24 @@ test("retry: a custom URL on Tinfoil's host is refused in the main process", asy
   assert.equal(tinfoilCalls.length, 0);
 });
 
+test("retry: gemini routes to the gemini client with the resolved model, never OpenAI", async () => {
+  fetches.length = 0;
+  geminiCalls.length = 0;
+  const result = await invoke({
+    cloudTranscriptionProvider: "gemini",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    cloudTranscriptionModel: "voxtral-mini-latest", // stale from a mistral era — must degrade
+    preferredLanguage: "de-DE",
+  });
+  assert.equal(result.success, true);
+  assert.equal(geminiCalls.length, 1);
+  assert.equal(geminiCalls[0].model, "gemini-3-flash-preview");
+  assert.equal(geminiCalls[0].language, "de");
+  assert.equal(geminiCalls[0].apiKey, "gk-gemini");
+  assert.equal(fetches.length, 0, "gemini retry must not touch the generic multipart path");
+});
+
 test("retry: mistral goes to Mistral with x-api-key", async () => {
   fetches.length = 0;
   const result = await invoke({
@@ -332,6 +360,26 @@ test("upload: openai diarization fields ride the route, Bearer auth", async () =
   const body = fetches[0].init.body.toString();
   assert.match(body, /gpt-4o-transcribe-diarize/);
   assert.match(body, /diarized_json/);
+});
+
+test("upload: gemini routes to the gemini client without a language hint", async () => {
+  fetches.length = 0;
+  geminiCalls.length = 0;
+  const result = await invokeUpload({
+    apiKey: "gk-from-renderer",
+    baseUrl: "",
+    model: "gemini-2.5-flash-lite",
+    provider: "gemini",
+    language: "de",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.text, "gemini text");
+  assert.equal(geminiCalls.length, 1);
+  assert.equal(geminiCalls[0].model, "gemini-2.5-flash-lite");
+  assert.equal(geminiCalls[0].apiKey, "gk-from-renderer");
+  assert.equal(geminiCalls[0].language, undefined, "uploads auto-detect language");
+  assert.equal(fetches.length, 0, "gemini upload must not touch the generic multipart path");
 });
 
 test("upload: sentinel custom URL fails closed before any request", async () => {

@@ -220,6 +220,25 @@
       ]
     },
     {
+      "id": "gemini",
+      "name": "Gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+      "models": [
+        {
+          "id": "gemini-3-flash-preview",
+          "name": "Gemini 3 Flash",
+          "description": "Fast, high-accuracy transcription",
+          "descriptionKey": "models.descriptions.transcription.gemini_3_flash_preview"
+        },
+        {
+          "id": "gemini-2.5-flash-lite",
+          "name": "Gemini 2.5 Flash Lite",
+          "description": "Lowest latency and cost",
+          "descriptionKey": "models.descriptions.transcription.gemini_2_5_flash_lite"
+        }
+      ]
+    },
+    {
       "id": "xai",
       "name": "xAI",
       "baseUrl": "https://api.x.ai/v1",

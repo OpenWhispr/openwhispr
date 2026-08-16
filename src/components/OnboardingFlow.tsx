@@ -109,6 +109,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    geminiApiKey,
     xaiApiKey,
     mistralApiKey,
     tinfoilApiKey,
@@ -131,6 +132,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+  const cloudTranscriptionMode = useSettingsStore((s) => s.cloudTranscriptionMode);
+
+  // Non-signed-in users in cloud mode must default to BYOK immediately, not
+  // only at completeOnboarding: the dictation test step runs before finish,
+  // and OpenWhispr Cloud without a session fails it with "Session Expired".
+  useEffect(() => {
+    if (!isSignedIn && !useLocalWhisper && cloudTranscriptionMode !== "byok") {
+      updateTranscriptionSettings({ cloudTranscriptionMode: "byok" });
+    }
+  }, [isSignedIn, useLocalWhisper, cloudTranscriptionMode, updateTranscriptionSettings]);
 
   // Onboarding edits only the primary dictation hotkey; extra bindings are
   // preserved via withExtraDictationHotkeys.
@@ -621,7 +632,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <TranscriptionModelPicker
               selectedCloudProvider={cloudTranscriptionProvider}
               onCloudProviderSelect={(provider) =>
-                updateTranscriptionSettings({ cloudTranscriptionProvider: provider })
+                updateTranscriptionSettings({
+                  cloudTranscriptionProvider: provider,
+                  // Picking a BYOK provider while signed out must also leave
+                  // OpenWhispr Cloud mode, or dictation still routes there.
+                  ...(!isSignedIn ? { cloudTranscriptionMode: "byok" } : {}),
+                })
               }
               selectedCloudModel={cloudTranscriptionModel}
               onCloudModelSelect={(model) =>
@@ -920,6 +936,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return openaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "groq") {
             return groqApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "gemini") {
+            return geminiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "xai") {
             return xaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {

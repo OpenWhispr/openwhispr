@@ -256,6 +256,7 @@ const PLACEHOLDER_KEYS = {
   groq: "your_groq_api_key_here",
   xai: "your_xai_api_key_here",
   mistral: "your_mistral_api_key_here",
+  gemini: "your_gemini_api_key_here",
 };
 
 const isValidApiKey = (key, provider = "openai") => {
@@ -355,6 +356,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (tokens.length > 0) payload.contextBias = tokens;
       return payload;
     },
+  },
+  gemini: {
+    displayName: "Gemini",
+    ipc: () => window.electronAPI?.proxyGeminiTranscription,
+    buildPayload: ({ audioBuffer, model, language, dictionaryPrompt }) => ({
+      audioBuffer,
+      model,
+      language,
+      prompt: dictionaryPrompt || undefined,
+    }),
   },
   xai: {
     displayName: "xAI",
@@ -2142,6 +2153,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!isValidApiKey(apiKey, "groq")) {
         const err = new Error(
           "Groq API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "gemini") {
+      // Prefer store value (user-entered via UI) over main process (.env)
+      apiKey = s.geminiApiKey;
+      if (!isValidApiKey(apiKey, "gemini")) {
+        apiKey = await window.electronAPI.getGeminiKey?.();
+      }
+      if (!isValidApiKey(apiKey, "gemini")) {
+        const err = new Error(
+          "Gemini API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

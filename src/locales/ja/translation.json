@@ -2163,6 +2163,8 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
+        "gemini_3_flash_preview": "高速かつ高精度な文字起こし",
+        "gemini_2_5_flash_lite": "最小のレイテンシとコスト",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
