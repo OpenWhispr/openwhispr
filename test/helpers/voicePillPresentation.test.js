@@ -28,16 +28,21 @@ test("Live Transcript stages footer growth, controls, then content", async () =>
   });
 });
 
-test("Live Transcript timing leaves a gap between all three visual beats", async () => {
+test("Live Transcript holds the encapsulated state before the remaining visual beats", async () => {
   const { getLiveTranscriptEntranceTimeline, LIVE_TRANSCRIPT_ENTRANCE_TIMING } = await load();
   const timeline = getLiveTranscriptEntranceTimeline();
 
   assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs > 0);
   assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs > 0);
   assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs > 0);
   assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsRevealMs > 0);
   assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentDelayMs > 0);
-  assert.equal(timeline.horizontalAtMs, LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs);
+  assert.equal(
+    timeline.horizontalAtMs,
+    LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs
+  );
   assert.equal(
     timeline.controlsAtMs,
     timeline.horizontalAtMs +

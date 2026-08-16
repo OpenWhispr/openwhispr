@@ -10,6 +10,7 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
 
 export const LIVE_TRANSCRIPT_ENTRANCE_TIMING = Object.freeze({
   encapsulateMs: 180,
+  encapsulateHoldMs: 140,
   horizontalMs: 320,
   controlsDelayMs: 70,
   controlsRevealMs: 200,
@@ -17,7 +18,7 @@ export const LIVE_TRANSCRIPT_ENTRANCE_TIMING = Object.freeze({
 });
 
 export function getLiveTranscriptEntranceTimeline(timing = LIVE_TRANSCRIPT_ENTRANCE_TIMING) {
-  const horizontalAtMs = timing.encapsulateMs;
+  const horizontalAtMs = timing.encapsulateMs + timing.encapsulateHoldMs;
   const controlsAtMs = horizontalAtMs + timing.horizontalMs + timing.controlsDelayMs;
   return {
     horizontalAtMs,
