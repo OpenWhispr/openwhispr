@@ -4892,10 +4892,7 @@ class IPCHandlers {
       "";
 
     const getAuthUrl = () =>
-      process.env.AUTH_URL ||
-      process.env.VITE_AUTH_URL ||
-      runtimeEnv.VITE_AUTH_URL ||
-      "https://auth.openwhispr.com";
+      process.env.AUTH_URL || process.env.VITE_AUTH_URL || runtimeEnv.VITE_AUTH_URL || "";
 
     const getSessionCookiesFromWindow = async (win) => {
       const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);

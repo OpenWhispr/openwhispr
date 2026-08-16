@@ -11,20 +11,24 @@ import {
   prepareAuthRequest,
 } from "./authRequestContext";
 
-export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
-export const authClient = createAuthClient({
-  baseURL: AUTH_URL,
-  plugins: [ssoClient()],
-  fetchOptions: {
-    credentials: "omit",
-    customFetchImpl: authContextFetch,
-    headers: { "x-openwhispr-source": "desktop" },
-    onRequest: prepareAuthRequest,
-    onResponse: handleAuthRequestResponse,
-    onSuccess: handleAuthRequestSuccess,
-    onError: handleAuthRequestError,
-  },
-});
+export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "";
+// No auth server configured — export a null client so the existing
+// "auth not configured" branches (!AUTH_URL / !authClient) activate.
+export const authClient = AUTH_URL
+  ? createAuthClient({
+      baseURL: AUTH_URL,
+      plugins: [ssoClient()],
+      fetchOptions: {
+        credentials: "omit",
+        customFetchImpl: authContextFetch,
+        headers: { "x-openwhispr-source": "desktop" },
+        onRequest: prepareAuthRequest,
+        onResponse: handleAuthRequestResponse,
+        onSuccess: handleAuthRequestSuccess,
+        onError: handleAuthRequestError,
+      },
+    })
+  : null;
 
 let authRefetchTimer: ReturnType<typeof setTimeout> | null = null;
 window.electronAPI?.onAuthTokenStateChanged?.((state) => {
@@ -35,7 +39,7 @@ window.electronAPI?.onAuthTokenStateChanged?.((state) => {
   if (authRefetchTimer) clearTimeout(authRefetchTimer);
   authRefetchTimer = setTimeout(() => {
     authRefetchTimer = null;
-    authClient.$store.notify("$sessionSignal");
+    authClient?.$store.notify("$sessionSignal");
   }, 0);
 });
 
