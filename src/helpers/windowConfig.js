@@ -42,6 +42,12 @@ const ASSISTANT_WINDOW_SIZE = {
   height: ASSISTANT_PANEL_SIZE_LIMITS.ratioHeight + ASSISTANT_PANEL_SIZE_LIMITS.gutter,
 };
 
+const DICTATION_ERROR_WINDOW_LIMITS = {
+  width: 360,
+  gutter: 24,
+  minSurfaceHeight: 88,
+};
+
 function fitAssistantWindowToWorkArea(requestedSize, workArea) {
   const limits = ASSISTANT_PANEL_SIZE_LIMITS;
   const ratio = limits.ratioWidth / limits.ratioHeight;
@@ -86,11 +92,31 @@ function fitAssistantContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
   };
 }
 
+function fitDictationErrorContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
+  const limits = DICTATION_ERROR_WINDOW_LIMITS;
+  const width = Math.max(1, Math.min(limits.width, workArea.width));
+  const maximumSurfaceHeight = Math.max(1, workArea.height - limits.gutter);
+  const minimumSurfaceHeight = Math.min(limits.minSurfaceHeight, maximumSurfaceHeight);
+  const numericHeight = Number(requestedSurfaceHeight);
+  const safeHeight = Number.isFinite(numericHeight)
+    ? Math.round(numericHeight)
+    : minimumSurfaceHeight;
+  const surfaceHeight = Math.max(minimumSurfaceHeight, Math.min(safeHeight, maximumSurfaceHeight));
+
+  return {
+    width,
+    height: Math.min(workArea.height, surfaceHeight + limits.gutter),
+  };
+}
+
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
   RECORDING: { width: 128, height: 96 },
-  DICTATION_ERROR: { width: 360, height: 112 },
-  DICTATION_ERROR_WITH_TRANSCRIPT: { width: 360, height: 168 },
+  DICTATION_ERROR: { width: DICTATION_ERROR_WINDOW_LIMITS.width, height: 112 },
+  DICTATION_ERROR_WITH_TRANSCRIPT: {
+    width: DICTATION_ERROR_WINDOW_LIMITS.width,
+    height: 168,
+  },
   WITH_MENU: { width: 240, height: 280 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },
@@ -269,6 +295,7 @@ module.exports = {
   ASSISTANT_PANEL_SIZE_LIMITS,
   fitAssistantContentWindowToWorkArea,
   fitAssistantWindowToWorkArea,
+  fitDictationErrorContentWindowToWorkArea,
   WINDOW_SIZES,
   WindowPositionUtil,
 };

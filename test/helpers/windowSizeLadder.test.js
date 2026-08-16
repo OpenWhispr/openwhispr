@@ -14,6 +14,18 @@ test("dictation error windows match the one-action and transcript-action footpri
   assert.deepEqual(WINDOW_SIZES.DICTATION_ERROR_WITH_TRANSCRIPT, { width: 360, height: 168 });
 });
 
+test("dictation error windows grow to their full content and stay within the work area", () => {
+  const { fitDictationErrorContentWindowToWorkArea } = require("../../src/helpers/windowConfig");
+  assert.deepEqual(fitDictationErrorContentWindowToWorkArea(132, { width: 1440, height: 900 }), {
+    width: 360,
+    height: 156,
+  });
+  assert.deepEqual(fitDictationErrorContentWindowToWorkArea(1200, { width: 320, height: 240 }), {
+    width: 320,
+    height: 240,
+  });
+});
+
 test("assistant edit and normal responses share one fixed modal size", () => {
   const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
   assert.deepEqual(WINDOW_SIZES.ASSISTANT, { width: 466, height: 562 });

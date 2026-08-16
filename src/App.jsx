@@ -282,6 +282,19 @@ export default function App() {
     window.electronAPI?.resizeAssistantWindowToContent?.(height);
   }, []);
 
+  const handleDictationError = React.useCallback(() => {
+    // Errors replace the live transcript surface, so unmount it immediately
+    // and suppress late preview events until the next recording begins.
+    liveTranscriptSuppressedRef.current = true;
+    cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
+    clearTimeout(liveTranscriptCloseTimerRef.current);
+    liveTranscriptPanelOpenRef.current = false;
+    setLiveTranscriptPanelOpen(false);
+    setLiveTranscriptPanelMounted(false);
+    setLiveTranscriptText("");
+    setLiveTranscriptPhase("listening");
+  }, []);
+
   const {
     isRecording,
     isProcessing,
@@ -295,6 +308,7 @@ export default function App() {
     onToggle: handleDictationToggle,
     onAssistantCommand: handleAssistantCommand,
     dismissDictationError,
+    onDictationError: handleDictationError,
   });
 
   useEffect(() => {
@@ -444,6 +458,14 @@ export default function App() {
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
     if (target === prev) return;
+    if (
+      prev === "ASSISTANT" &&
+      (target === "DICTATION_ERROR" || target === "DICTATION_ERROR_WITH_TRANSCRIPT")
+    ) {
+      // The mounted error card reports its exact height immediately. A delayed
+      // fixed shrink here would overwrite that measurement and clip long copy.
+      return;
+    }
     if (!prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {
       window.electronAPI?.resizeMainWindow?.(target);
       return;

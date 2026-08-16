@@ -46,7 +46,7 @@ export const useAudioRecording = (toast, options = {}) => {
     voiceAgentRequested: false,
     translationRequested: false,
   });
-  const { onToggle, onAssistantCommand, dismissDictationError } = options;
+  const { onToggle, onAssistantCommand, dismissDictationError, onDictationError } = options;
 
   // Read through a ref so a re-render never tears down the AudioManager
   // (the mount effect below must not depend on this callback).
@@ -202,6 +202,7 @@ export const useAudioRecording = (toast, options = {}) => {
       ).trim() || fallback.trim();
 
     const showDictationError = ({ title, description, transcript = "" }) => {
+      onDictationError?.();
       const recoverableTranscript = getRecoverableTranscript(transcript);
       const actions = [
         {
@@ -568,7 +569,15 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current.cleanup();
       }
     };
-  }, [toast, onToggle, performStartRecording, performStopRecording, dismissDictationError, t]);
+  }, [
+    toast,
+    onToggle,
+    performStartRecording,
+    performStopRecording,
+    dismissDictationError,
+    onDictationError,
+    t,
+  ]);
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {

@@ -1187,6 +1187,10 @@ class IPCHandlers {
       return this.windowManager.resizeAssistantWindowToContent(surfaceHeight);
     });
 
+    ipcMain.handle("resize-dictation-error-window-to-content", (event, surfaceHeight) => {
+      return this.windowManager.resizeDictationErrorWindowToContent(surfaceHeight);
+    });
+
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));

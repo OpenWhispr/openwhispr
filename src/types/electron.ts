@@ -1504,6 +1504,9 @@ declare global {
       resizeAssistantWindowToContent: (
         surfaceHeight: number
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
+      resizeDictationErrorWindowToContent: (
+        surfaceHeight: number
+      ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
       setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
 
       // App management

@@ -232,6 +232,10 @@ const Toast: React.FC<
     void structuredAction.onClick();
   };
 
+  const handleErrorHeightChange = React.useCallback((height: number) => {
+    void window.electronAPI?.resizeDictationErrorWindowToContent?.(height);
+  }, []);
+
   const handleMouseEnter = () => {
     pausedAtRef.current = Date.now();
     onPauseTimer();
@@ -275,6 +279,7 @@ const Toast: React.FC<
           description={description}
           actions={actions ?? []}
           onAction={handleStructuredAction}
+          onPreferredHeightChange={handleErrorHeightChange}
         />
       </div>
     );

@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { RotateCcw, ScrollText } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { ToastActionConfig } from "../ui/useToast";
@@ -7,6 +8,7 @@ interface DictationErrorCardProps {
   description?: string;
   actions: ToastActionConfig[];
   onAction: (action: ToastActionConfig) => void;
+  onPreferredHeightChange?: (height: number) => void;
 }
 
 const ACTION_ICONS = {
@@ -20,16 +22,46 @@ export function DictationErrorCard({
   description,
   actions,
   onAction,
+  onPreferredHeightChange,
 }: DictationErrorCardProps) {
+  const cardRef = useRef<HTMLElement | null>(null);
+  const lastPreferredHeightRef = useRef(0);
   const hasSecondaryAction = actions.length > 1;
 
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card || !onPreferredHeightChange) return;
+
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const preferredHeight = Math.ceil(Math.max(card.offsetHeight, card.scrollHeight));
+      if (Math.abs(preferredHeight - lastPreferredHeightRef.current) < 1) return;
+      lastPreferredHeightRef.current = preferredHeight;
+      onPreferredHeightChange(preferredHeight);
+    };
+    const scheduleMeasure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleMeasure);
+    resizeObserver.observe(card);
+    scheduleMeasure();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+    };
+  }, [onPreferredHeightChange]);
+
   const text = (
-    <div className="min-w-0 flex-1">
+    <div className="min-w-0 flex-1 break-words">
       {title && (
-        <h2 className="line-clamp-2 text-base font-medium leading-snug text-foreground">{title}</h2>
+        <h2 className="text-base font-medium leading-snug text-foreground">{title}</h2>
       )}
       {description && (
-        <p className="mt-1 line-clamp-2 text-sm leading-snug text-muted-foreground">
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-snug text-muted-foreground">
           {description}
         </p>
       )}
@@ -62,11 +94,12 @@ export function DictationErrorCard({
 
   return (
     <section
+      ref={cardRef}
       role="alert"
       aria-live="assertive"
       data-action-count={actions.length}
       className={cn(
-        "w-full overflow-hidden rounded-3xl border border-border/50 bg-surface-0",
+        "max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-3xl border border-border/50 bg-surface-0",
         "shadow-[var(--shadow-modal)]"
       )}
     >
@@ -76,9 +109,9 @@ export function DictationErrorCard({
           <div className="mt-4 grid grid-cols-2 gap-3">{actions.map(renderAction)}</div>
         </div>
       ) : (
-        <div className="flex items-center gap-4 p-4">
+        <div className="p-4">
           {text}
-          <div className="shrink-0">{actions.slice(0, 1).map(renderAction)}</div>
+          <div className="mt-4 flex justify-end">{actions.slice(0, 1).map(renderAction)}</div>
         </div>
       )}
     </section>

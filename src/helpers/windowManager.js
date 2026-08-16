@@ -15,6 +15,7 @@ const {
   NOTIFICATION_WINDOW_CONFIG,
   fitAssistantContentWindowToWorkArea,
   fitAssistantWindowToWorkArea,
+  fitDictationErrorContentWindowToWorkArea,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -221,6 +222,23 @@ class WindowManager {
       display.workArea || display.bounds
     );
     return this._resizeMainWindowTo(newSize, "ASSISTANT_CONTENT");
+  }
+
+  resizeDictationErrorWindowToContent(surfaceHeight) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return { success: false, message: "Window not available" };
+    }
+
+    const currentBounds = this.mainWindow.getBounds();
+    const display = screen.getDisplayNearestPoint({
+      x: currentBounds.x + currentBounds.width / 2,
+      y: currentBounds.y + currentBounds.height,
+    });
+    const newSize = fitDictationErrorContentWindowToWorkArea(
+      surfaceHeight,
+      display.workArea || display.bounds
+    );
+    return this._resizeMainWindowTo(newSize, "DICTATION_ERROR_CONTENT");
   }
 
   _resizeMainWindowTo(newSize, sizeKey) {

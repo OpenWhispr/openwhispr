@@ -436,6 +436,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   resizeMainWindow: (sizeKey) => ipcRenderer.invoke("resize-main-window", sizeKey),
   resizeAssistantWindowToContent: (surfaceHeight) =>
     ipcRenderer.invoke("resize-assistant-window-to-content", surfaceHeight),
+  resizeDictationErrorWindowToContent: (surfaceHeight) =>
+    ipcRenderer.invoke("resize-dictation-error-window-to-content", surfaceHeight),
   setAssistantPanelOpen: (open) => ipcRenderer.invoke("set-assistant-panel-open", open),
 
   // Update functions
