@@ -11,7 +11,6 @@ import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
-import { ExpandingPanelShell } from "./ExpandingPanelShell";
 
 export interface AssistantCommand {
   id: number;
@@ -34,7 +33,6 @@ interface AssistantPanelProps {
   onClose: () => void;
   onResponseReadyChange: (ready: boolean) => void;
   onResponseContent: () => void;
-  onPreferredHeightChange: (height: number) => void;
 }
 
 const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
@@ -50,7 +48,6 @@ export function AssistantPanel({
   onClose,
   onResponseReadyChange,
   onResponseContent,
-  onPreferredHeightChange,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
@@ -198,12 +195,7 @@ export function AssistantPanel({
   }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, handleCopy]);
 
   return (
-    <ExpandingPanelShell
-      open={open}
-      anchor="bottom-right"
-      stabilizeHeight={thinking || isBusy || voiceState !== "idle"}
-      onPreferredHeightChange={onPreferredHeightChange}
-    >
+    <>
       <header
         className="flex h-16 shrink-0 cursor-grab items-center gap-3 px-5 active:cursor-grabbing"
         onMouseDown={handleMouseDown}
@@ -282,6 +274,6 @@ export function AssistantPanel({
           </>
         )}
       </footer>
-    </ExpandingPanelShell>
+    </>
   );
 }

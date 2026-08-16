@@ -481,6 +481,87 @@ a:hover {
   transform: none;
 }
 
+/* Live Transcript enters in three beats: speaking pill -> footer -> controls -> content. */
+.expanding-panel-surface[data-panel-mode="live-transcript"] {
+  --live-transcript-footer-height: 4rem;
+  --live-transcript-speaking-pill-width: 5.75rem;
+  --live-transcript-footer-inline-padding: 1rem;
+  --live-transcript-encapsulated-width: calc(
+    var(--live-transcript-speaking-pill-width) + var(--live-transcript-footer-inline-padding) +
+      var(--live-transcript-footer-inline-padding)
+  );
+  transition:
+    clip-path var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms ease-out,
+    transform var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
+}
+
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
+  --live-transcript-stage-duration: var(--live-transcript-encapsulation-duration, 180ms);
+}
+
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="footer"],
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="content"] {
+  --live-transcript-stage-duration: var(--live-transcript-horizontal-duration, 320ms);
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
+  clip-path: inset(
+    calc(100% - var(--live-transcript-footer-height)) 0 0
+      calc(100% - var(--live-transcript-encapsulated-width)) round 24px
+  );
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="footer"] {
+  clip-path: inset(calc(100% - var(--live-transcript-footer-height)) 0 0 0 round 24px);
+}
+
+/* One interpolable coordinate system lets the speaking pill genuinely travel
+   from any resting dock into either panel footer; no left/right auto jump. */
+.voice-pill-position {
+  transition:
+    left var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    bottom var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    transform var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
+  will-change: left, bottom, transform;
+}
+
+.voice-pill-position-bottom-right {
+  bottom: 0.25rem;
+  left: calc(100% - 0.25rem);
+  transform: translateX(-100%);
+}
+
+.voice-pill-position-bottom-left {
+  bottom: 0.25rem;
+  left: 0.25rem;
+  transform: none;
+}
+
+.voice-pill-position-center {
+  bottom: 0.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.voice-pill-position-assistant {
+  bottom: 1.75rem;
+  left: calc(100% - 1.75rem);
+  transform: translateX(-100%);
+}
+
+.voice-pill-position-live-transcript {
+  bottom: 1.625rem;
+  left: 1.75rem;
+  transform: none;
+}
+
+.voice-pill-position-live-transcript-encapsulated {
+  bottom: 1.625rem;
+  left: calc(100% - 1.75rem);
+  transform: translateX(-100%);
+}
+
 .inline-response-shimmer {
   color: transparent;
   background: linear-gradient(

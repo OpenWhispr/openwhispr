@@ -12,13 +12,19 @@ import { usePolicyStore } from "./stores/policyStore";
 import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
+import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
 import {
+  getLiveTranscriptEntranceTimeline,
   getListeningEntranceTimeline,
+  LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+  resolveLiveTranscriptEntrancePresentation,
   resolveAssistantThinkingTransition,
   resolveListeningEntrancePresentation,
   resolveVoiceActivityPresentation,
+  resolveVoicePanelCorePresentation,
+  resolveVoicePillDock,
 } from "./helpers/voicePillPresentation";
 
 const ASSISTANT_TRANSITION_MS = 280;
@@ -171,6 +177,7 @@ export default function App() {
   const [liveTranscriptPanelMounted, setLiveTranscriptPanelMounted] = useState(false);
   const [liveTranscriptText, setLiveTranscriptText] = useState("");
   const [liveTranscriptPhase, setLiveTranscriptPhase] = useState("listening");
+  const [liveTranscriptEntrancePhase, setLiveTranscriptEntrancePhase] = useState("idle");
   const assistantPanelOpenRef = useRef(assistantPanelOpen);
   const assistantCloseTimerRef = useRef(null);
   const assistantOpenFrameRef = useRef(null);
@@ -179,7 +186,13 @@ export default function App() {
   const liveTranscriptCloseTimerRef = useRef(null);
   const liveTranscriptOpenFrameRef = useRef(null);
   const liveTranscriptOpenPromiseRef = useRef(null);
+  const liveTranscriptEntranceTimersRef = useRef([]);
   const commandIdRef = useRef(0);
+
+  const clearLiveTranscriptEntranceTimers = React.useCallback(() => {
+    for (const timer of liveTranscriptEntranceTimersRef.current) clearTimeout(timer);
+    liveTranscriptEntranceTimersRef.current = [];
+  }, []);
 
   useLayoutEffect(() => {
     assistantPanelOpenRef.current = assistantPanelOpen;
@@ -211,8 +224,9 @@ export default function App() {
       cancelAnimationFrame(assistantOpenFrameRef.current);
       clearTimeout(liveTranscriptCloseTimerRef.current);
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
+      clearLiveTranscriptEntranceTimers();
     },
-    []
+    [clearLiveTranscriptEntranceTimers]
   );
 
   const beginAssistantThinking = React.useCallback(() => {
@@ -290,12 +304,14 @@ export default function App() {
     liveTranscriptSuppressedRef.current = true;
     cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
     clearTimeout(liveTranscriptCloseTimerRef.current);
+    clearLiveTranscriptEntranceTimers();
     liveTranscriptPanelOpenRef.current = false;
     setLiveTranscriptPanelOpen(false);
     setLiveTranscriptPanelMounted(false);
     setLiveTranscriptText("");
     setLiveTranscriptPhase("listening");
-  }, []);
+    setLiveTranscriptEntrancePhase("idle");
+  }, [clearLiveTranscriptEntranceTimers]);
 
   const {
     isRecording,
@@ -338,20 +354,25 @@ export default function App() {
     }, ASSISTANT_TRANSITION_MS);
   }, [isAssistantVoice, isRecording, isProcessing, cancelRecording, cancelProcessing]);
 
-  const closeLiveTranscriptPanel = React.useCallback(({ suppress = false, clear = false } = {}) => {
-    if (suppress) liveTranscriptSuppressedRef.current = true;
-    cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
-    liveTranscriptPanelOpenRef.current = false;
-    setLiveTranscriptPanelOpen(false);
-    clearTimeout(liveTranscriptCloseTimerRef.current);
-    liveTranscriptCloseTimerRef.current = setTimeout(() => {
-      setLiveTranscriptPanelMounted(false);
-      if (clear) {
-        setLiveTranscriptText("");
-        setLiveTranscriptPhase("listening");
-      }
-    }, ASSISTANT_TRANSITION_MS);
-  }, []);
+  const closeLiveTranscriptPanel = React.useCallback(
+    ({ suppress = false, clear = false } = {}) => {
+      if (suppress) liveTranscriptSuppressedRef.current = true;
+      cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
+      clearLiveTranscriptEntranceTimers();
+      liveTranscriptPanelOpenRef.current = false;
+      setLiveTranscriptPanelOpen(false);
+      setLiveTranscriptEntrancePhase("idle");
+      clearTimeout(liveTranscriptCloseTimerRef.current);
+      liveTranscriptCloseTimerRef.current = setTimeout(() => {
+        setLiveTranscriptPanelMounted(false);
+        if (clear) {
+          setLiveTranscriptText("");
+          setLiveTranscriptPhase("listening");
+        }
+      }, ASSISTANT_TRANSITION_MS);
+    },
+    [clearLiveTranscriptEntranceTimers]
+  );
 
   const openLiveTranscriptPanel = React.useCallback(() => {
     if (
@@ -364,19 +385,29 @@ export default function App() {
     if (liveTranscriptOpenPromiseRef.current) return;
 
     clearTimeout(liveTranscriptCloseTimerRef.current);
+    clearLiveTranscriptEntranceTimers();
     liveTranscriptOpenPromiseRef.current = (async () => {
       await window.electronAPI?.resizeMainWindow?.("ASSISTANT");
       if (liveTranscriptSuppressedRef.current || assistantPanelOpenRef.current) return;
+      // Reserve the mode before the next frame so repeated preview chunks
+      // cannot restart the three-stage entrance while its first frame waits.
+      liveTranscriptPanelOpenRef.current = true;
+      setLiveTranscriptEntrancePhase("encapsulate");
       setLiveTranscriptPanelMounted(true);
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
       liveTranscriptOpenFrameRef.current = requestAnimationFrame(() => {
-        liveTranscriptPanelOpenRef.current = true;
         setLiveTranscriptPanelOpen(true);
+        const timeline = getLiveTranscriptEntranceTimeline();
+        liveTranscriptEntranceTimersRef.current = [
+          setTimeout(() => setLiveTranscriptEntrancePhase("horizontal"), timeline.horizontalAtMs),
+          setTimeout(() => setLiveTranscriptEntrancePhase("controls"), timeline.controlsAtMs),
+          setTimeout(() => setLiveTranscriptEntrancePhase("content"), timeline.contentAtMs),
+        ];
       });
     })().finally(() => {
       liveTranscriptOpenPromiseRef.current = null;
     });
-  }, []);
+  }, [clearLiveTranscriptEntranceTimers]);
 
   useEffect(() => {
     const reveal = () => {
@@ -479,9 +510,7 @@ export default function App() {
     isRecording,
     phase: listeningEntrancePhase,
   });
-  const isCompactPill = isRecording
-    ? listeningEntrance.compactPill
-    : voiceActivity.compactPill;
+  const isCompactPill = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
   const lastSizeKeyRef = useRef(null);
   useEffect(() => {
     const target = resolveMainWindowSizeKey({
@@ -494,9 +523,7 @@ export default function App() {
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
     if (target === prev) return;
-    if (
-      (target === "DICTATION_ERROR" || target === "DICTATION_ERROR_WITH_TRANSCRIPT")
-    ) {
+    if (target === "DICTATION_ERROR" || target === "DICTATION_ERROR_WITH_TRANSCRIPT") {
       // Establish the final width immediately. The hidden error card then
       // measures wrapping at that width and performs one content-height resize.
       window.electronAPI?.resizeMainWindow?.(target);
@@ -669,28 +696,50 @@ export default function App() {
         : "idle";
   const anyPanelOpen = assistantPanelOpen || liveTranscriptPanelOpen;
   const anyPanelMounted = assistantPanelMounted || liveTranscriptPanelMounted;
+  // Prefer a currently open mode over a sibling finishing its exit. The core
+  // itself never unmounts; only these inner sections change ownership.
+  const activeVoicePanel = resolveVoicePanelCorePresentation({
+    assistantOpen: assistantPanelOpen,
+    assistantMounted: assistantPanelMounted,
+    liveTranscriptOpen: liveTranscriptPanelOpen,
+    liveTranscriptMounted: liveTranscriptPanelMounted,
+  });
+  const activeVoicePanelMode = activeVoicePanel.mode;
+  const liveTranscriptEntrance = resolveLiveTranscriptEntrancePresentation(
+    liveTranscriptEntrancePhase
+  );
+  const activeVoicePanelLabel =
+    activeVoicePanelMode === "assistant"
+      ? t("settingsPage.agentConfig.title")
+      : activeVoicePanelMode === "live-transcript"
+        ? t("transcriptionPreview.label")
+        : undefined;
   const commonPillState =
     micState === "unavailable"
       ? "unavailable"
       : listeningEntrance.activeState ||
         voiceActivity.activeState ||
         (assistantPanelOpen ? "idle" : micState);
-  const pillPositionClass = liveTranscriptPanelOpen
-    ? "bottom-7 left-7"
-    : assistantPanelOpen
-      ? "bottom-7 right-7"
-      : panelStartPosition === "bottom-left"
-        ? "bottom-1 left-1"
-        : panelStartPosition === "center"
-          ? "bottom-1 left-1/2 -translate-x-1/2"
-          : "right-1 bottom-1";
+  const voicePillDock = resolveVoicePillDock({
+    liveTranscriptOpen: liveTranscriptPanelOpen,
+    liveTranscriptEntrancePhase,
+    assistantOpen: assistantPanelOpen,
+    panelStartPosition,
+  });
+  const voicePillTravelDuration =
+    liveTranscriptPanelOpen && liveTranscriptEntrancePhase === "encapsulate"
+      ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
+      : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs;
 
   return (
     <div className="dictation-window">
       {/* The panel footer owns this pill until final-response actions replace it. */}
       {dictationErrorActionCount === 0 && (!assistantPanelOpen || !assistantResponseReady) && (
         <div
-          className={`fixed z-50 transition-[bottom,right,left,transform] duration-300 ease-out ${pillPositionClass}`}
+          className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50`}
+          style={{
+            "--voice-pill-travel-duration": `${voicePillTravelDuration}ms`,
+          }}
         >
           <div
             className="relative flex items-center gap-2"
@@ -834,32 +883,41 @@ export default function App() {
         </div>
       )}
 
-      {assistantPanelMounted && (
-        <AssistantPanel
-          pendingCommand={pendingCommand}
-          onCommandConsumed={handleCommandConsumed}
-          initialConversationId={panelConversationId}
-          onConversationIdChange={setPanelConversationId}
-          voiceState={assistantVoiceState}
-          thinking={assistantThinking && assistantPanelOpen}
-          open={assistantPanelOpen}
-          onClose={handleAssistantPanelClose}
-          onResponseReadyChange={setAssistantResponseReady}
-          onResponseContent={handleAssistantResponseContent}
-          onPreferredHeightChange={handlePanelPreferredHeight}
-        />
-      )}
+      <VoiceModePanelCore
+        mode={activeVoicePanelMode}
+        open={activeVoicePanel.open}
+        stage={
+          activeVoicePanelMode === "live-transcript" ? liveTranscriptEntrance.coreStage : "content"
+        }
+        label={activeVoicePanelLabel}
+        onPreferredHeightChange={handlePanelPreferredHeight}
+      >
+        {activeVoicePanelMode === "assistant" && assistantPanelMounted && (
+          <AssistantPanel
+            pendingCommand={pendingCommand}
+            onCommandConsumed={handleCommandConsumed}
+            initialConversationId={panelConversationId}
+            onConversationIdChange={setPanelConversationId}
+            voiceState={assistantVoiceState}
+            thinking={assistantThinking && assistantPanelOpen}
+            open={assistantPanelOpen}
+            onClose={handleAssistantPanelClose}
+            onResponseReadyChange={setAssistantResponseReady}
+            onResponseContent={handleAssistantResponseContent}
+          />
+        )}
 
-      {liveTranscriptPanelMounted && (
-        <LiveTranscriptPanel
-          open={liveTranscriptPanelOpen}
-          text={liveTranscriptText}
-          phase={liveTranscriptPhase}
-          processing={isProcessing && !isAssistantVoice}
-          onCollapse={() => closeLiveTranscriptPanel({ suppress: true })}
-          onPreferredHeightChange={handlePanelPreferredHeight}
-        />
-      )}
+        {activeVoicePanelMode === "live-transcript" && liveTranscriptPanelMounted && (
+          <LiveTranscriptPanel
+            text={liveTranscriptText}
+            phase={liveTranscriptPhase}
+            processing={isProcessing && !isAssistantVoice}
+            controlsVisible={liveTranscriptEntrance.controlsVisible}
+            contentVisible={liveTranscriptEntrance.contentVisible}
+            onCollapse={() => closeLiveTranscriptPanel({ suppress: true })}
+          />
+        )}
+      </VoiceModePanelCore>
     </div>
   );
 }

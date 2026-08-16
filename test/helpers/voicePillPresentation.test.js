@@ -3,18 +3,105 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/helpers/voicePillPresentation.js");
 
+test("Live Transcript stages footer growth, controls, then content", async () => {
+  const { resolveLiveTranscriptEntrancePresentation } = await load();
+
+  assert.deepEqual(resolveLiveTranscriptEntrancePresentation("encapsulate"), {
+    coreStage: "encapsulated",
+    controlsVisible: false,
+    contentVisible: false,
+  });
+  assert.deepEqual(resolveLiveTranscriptEntrancePresentation("horizontal"), {
+    coreStage: "footer",
+    controlsVisible: false,
+    contentVisible: false,
+  });
+  assert.deepEqual(resolveLiveTranscriptEntrancePresentation("controls"), {
+    coreStage: "footer",
+    controlsVisible: true,
+    contentVisible: false,
+  });
+  assert.deepEqual(resolveLiveTranscriptEntrancePresentation("content"), {
+    coreStage: "content",
+    controlsVisible: true,
+    contentVisible: true,
+  });
+});
+
+test("Live Transcript timing leaves a gap between all three visual beats", async () => {
+  const { getLiveTranscriptEntranceTimeline, LIVE_TRANSCRIPT_ENTRANCE_TIMING } = await load();
+  const timeline = getLiveTranscriptEntranceTimeline();
+
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsRevealMs > 0);
+  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentDelayMs > 0);
+  assert.equal(timeline.horizontalAtMs, LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs);
+  assert.equal(
+    timeline.controlsAtMs,
+    timeline.horizontalAtMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs
+  );
+  assert.equal(
+    timeline.contentAtMs,
+    timeline.controlsAtMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsRevealMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentDelayMs
+  );
+});
+
+test("the speaking pill resolves every mode onto one interpolable dock system", async () => {
+  const { resolveVoicePillDock } = await load();
+
+  assert.equal(
+    resolveVoicePillDock({
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "horizontal",
+      assistantOpen: false,
+      panelStartPosition: "bottom-right",
+    }),
+    "live-transcript"
+  );
+  assert.equal(
+    resolveVoicePillDock({
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "encapsulate",
+      assistantOpen: false,
+      panelStartPosition: "bottom-right",
+    }),
+    "live-transcript-encapsulated"
+  );
+  assert.equal(
+    resolveVoicePillDock({
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+      assistantOpen: true,
+      panelStartPosition: "bottom-left",
+    }),
+    "assistant"
+  );
+  assert.equal(
+    resolveVoicePillDock({
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+      assistantOpen: false,
+      panelStartPosition: "center",
+    }),
+    "center"
+  );
+});
+
 test("listening entrance starts in the thinking circle before expanding", async () => {
   const { resolveListeningEntrancePresentation } = await load();
-  assert.deepEqual(
-    resolveListeningEntrancePresentation({ isRecording: true, phase: "idle" }),
-    {
-      activeState: "recording",
-      beamActive: true,
-      collapseToLogo: true,
-      compactPill: false,
-      waveformVisible: false,
-    }
-  );
+  assert.deepEqual(resolveListeningEntrancePresentation({ isRecording: true, phase: "idle" }), {
+    activeState: "recording",
+    beamActive: true,
+    collapseToLogo: true,
+    compactPill: false,
+    waveformVisible: false,
+  });
 });
 
 test("listening entrance expands before revealing the waveform", async () => {
@@ -54,16 +141,13 @@ test("listening entrance settles at full width before revealing the waveform", a
 
 test("listening entrance reveals the recording waveform last", async () => {
   const { resolveListeningEntrancePresentation } = await load();
-  assert.deepEqual(
-    resolveListeningEntrancePresentation({ isRecording: true, phase: "waveform" }),
-    {
-      activeState: "recording",
-      beamActive: false,
-      collapseToLogo: false,
-      compactPill: true,
-      waveformVisible: true,
-    }
-  );
+  assert.deepEqual(resolveListeningEntrancePresentation({ isRecording: true, phase: "waveform" }), {
+    activeState: "recording",
+    beamActive: false,
+    collapseToLogo: false,
+    compactPill: true,
+    waveformVisible: true,
+  });
 });
 
 test("listening entrance timers preserve the visual order", async () => {
@@ -73,10 +157,7 @@ test("listening entrance timers preserve the visual order", async () => {
   assert.ok(LISTENING_ENTRANCE_TIMING.expansionMs > 0);
   assert.ok(LISTENING_ENTRANCE_TIMING.waveformDelayMs > 0);
   assert.equal(timeline.expandAtMs, LISTENING_ENTRANCE_TIMING.thinkingMs);
-  assert.equal(
-    timeline.settleAtMs,
-    timeline.expandAtMs + LISTENING_ENTRANCE_TIMING.expansionMs
-  );
+  assert.equal(timeline.settleAtMs, timeline.expandAtMs + LISTENING_ENTRANCE_TIMING.expansionMs);
   assert.equal(
     timeline.waveformAtMs,
     timeline.settleAtMs + LISTENING_ENTRANCE_TIMING.waveformDelayMs
@@ -146,6 +227,57 @@ test("regular dictation transcription contracts to the rotating thinking circle"
       assistantThinking: false,
     }),
     { activeState: "thinking", compactPill: false, isAgentThinking: false }
+  );
+});
+
+test("one voice panel core hosts each expanded mode", async () => {
+  const { resolveVoicePanelCorePresentation } = await load();
+
+  assert.deepEqual(
+    resolveVoicePanelCorePresentation({
+      assistantOpen: true,
+      assistantMounted: true,
+      liveTranscriptOpen: false,
+      liveTranscriptMounted: false,
+    }),
+    { mode: "assistant", open: true }
+  );
+  assert.deepEqual(
+    resolveVoicePanelCorePresentation({
+      assistantOpen: false,
+      assistantMounted: false,
+      liveTranscriptOpen: true,
+      liveTranscriptMounted: true,
+    }),
+    { mode: "live-transcript", open: true }
+  );
+});
+
+test("an opening mode outranks a sibling that is only finishing its exit", async () => {
+  const { resolveVoicePanelCorePresentation } = await load();
+
+  assert.deepEqual(
+    resolveVoicePanelCorePresentation({
+      assistantOpen: false,
+      assistantMounted: true,
+      liveTranscriptOpen: true,
+      liveTranscriptMounted: true,
+    }),
+    { mode: "live-transcript", open: true }
+  );
+});
+
+test("the voice panel core stays mounted but contentless while idle", async () => {
+  const { resolveVoicePanelCorePresentation } = await load();
+
+  assert.deepEqual(
+    resolveVoicePanelCorePresentation({
+      assistantOpen: false,
+      assistantMounted: false,
+      liveTranscriptOpen: false,
+      liveTranscriptMounted: false,
+    }),
+    { mode: null, open: false }
   );
 });
 
