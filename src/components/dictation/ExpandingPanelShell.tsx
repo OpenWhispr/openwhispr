@@ -104,7 +104,13 @@ export function ExpandingPanelShell({
         className
       )}
       aria-hidden={!open}
-      style={{ minHeight: heightFloor ?? undefined, ...style }}
+      style={{
+        // A long streaming response can make the natural-content floor taller
+        // than the native window. Keep the floor within the same viewport cap
+        // as max-height so the middle flex child shrinks and becomes scrollable.
+        minHeight: heightFloor === null ? undefined : `min(${heightFloor}px, calc(100% - 1.5rem))`,
+        ...style,
+      }}
       {...props}
     >
       {children}

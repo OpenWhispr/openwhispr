@@ -16,6 +16,7 @@ interface LiveTranscriptPanelProps {
 }
 
 const COPIED_RESET_MS = 1600;
+const PIN_THRESHOLD_PX = 40;
 
 export function LiveTranscriptPanel({
   open,
@@ -27,6 +28,7 @@ export function LiveTranscriptPanel({
 }: LiveTranscriptPanelProps) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pinnedToBottomRef = useRef(true);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copied, setCopied] = useState(false);
   const shouldShimmer = Boolean(text) && (phase === "live" || phase === "cleanup" || processing);
@@ -38,8 +40,20 @@ export function LiveTranscriptPanel({
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
-    node.scrollTop = node.scrollHeight;
+    if (!text) {
+      pinnedToBottomRef.current = true;
+      node.scrollTop = 0;
+      return;
+    }
+    if (pinnedToBottomRef.current) node.scrollTop = node.scrollHeight;
   }, [text]);
+
+  const handleScroll = useCallback(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    pinnedToBottomRef.current =
+      node.scrollHeight - node.scrollTop - node.clientHeight < PIN_THRESHOLD_PX;
+  }, []);
 
   useEffect(() => {
     setCopied(false);
@@ -85,8 +99,9 @@ export function LiveTranscriptPanel({
     >
       <main
         ref={scrollRef}
+        onScroll={handleScroll}
         data-panel-scroll-region
-        className="agent-chat-scroll min-h-0 flex-auto overflow-y-auto px-5 pb-3 pt-8"
+        className="agent-chat-scroll min-h-0 flex-auto overflow-y-auto overscroll-contain px-5 pb-3 pt-8"
         aria-live="polite"
         aria-atomic="true"
       >

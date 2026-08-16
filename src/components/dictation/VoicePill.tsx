@@ -140,12 +140,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   return (
     <BorderBeam
       size="sm"
-      colorVariant="mono"
+      colorVariant="colorful"
       theme="auto"
-      duration={2.2}
-      brightness={1}
-      strength={0.55}
-      staticColors
+      duration={1.6}
+      brightness={1.3}
+      strength={0.85}
       borderRadius={showCompactPill ? 18 : 20}
       className="agent-thinking-beam inline-flex rounded-full"
     >
