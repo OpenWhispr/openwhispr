@@ -1186,10 +1186,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ),
   transcriptionModelByProvider: readModelMemory("transcriptionModelByProvider"),
   reasoningModelByProvider: readModelMemory("reasoningModelByProvider"),
-  // Secrets aren't hydrated yet at construction; the BYOK default is set
-  // post-hydration in initializeSettings.
-  cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
-  cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
+  // This build ships without the creators' cloud — default to BYOK.
+  cloudTranscriptionMode: readString("cloudTranscriptionMode", "byok"),
+  cleanupCloudMode: readString("cleanupCloudMode", "byok"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
