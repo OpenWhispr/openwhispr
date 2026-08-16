@@ -1,8 +1,8 @@
 import { forwardRef, type HTMLAttributes } from "react";
 import { BorderBeam } from "border-beam";
 import { cn } from "../lib/utils";
-import { BrandMarkIcon } from "./BrandMarkIcon";
 import { LiveWaveform } from "./LiveWaveform";
+import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
 import { LISTENING_ENTRANCE_TIMING } from "../../helpers/voicePillPresentation";
 
 export type VoicePillState =
@@ -18,6 +18,7 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
+  agentMode?: boolean;
   isDragging?: boolean;
   horizontalDirection?: "left" | "right";
 }
@@ -49,6 +50,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
+    agentMode = false,
     isDragging = false,
     horizontalDirection = "right",
     className,
@@ -91,6 +93,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       }}
       data-horizontal-direction={horizontalDirection}
       data-integrated-with-panel={integratedWithPanel || undefined}
+      data-agent-mode={agentMode || undefined}
+      data-agent-beam-active={(agentMode && showThinkingBeam) || undefined}
       {...props}
     >
       <div
@@ -98,10 +102,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         style={{ opacity: state === "hover" ? 0.8 : 0 }}
       />
 
-      <BrandMarkIcon
+      <VoiceIdentityIcon
         size={state === "hover" ? 24 : 22}
+        agentMode={agentMode}
         className={cn(
-          "shrink-0 transition-[color,width,height] duration-200",
+          "transition-[color,width,height] duration-200",
           state === "idle" && "text-foreground",
           (isUnavailable || isProcessing) && "animate-pulse"
         )}
@@ -143,6 +148,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         <LiveWaveform
           getLevel={getAudioLevel}
           active={isRecording}
+          agentMode={agentMode}
           className={cn(
             "absolute inset-0 transition-opacity duration-200 ease-out",
             showCompactPill && waveformVisible && isRecording ? "opacity-100" : "opacity-0"
@@ -159,14 +165,15 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   return (
     <BorderBeam
       size="sm"
-      colorVariant="colorful"
       theme="auto"
       duration={1.6}
-      brightness={1.3}
-      strength={0.85}
+      colorVariant={agentMode ? "ocean" : "colorful"}
+      brightness={agentMode ? 1.45 : 1.3}
+      strength={agentMode ? 0.95 : 0.85}
       active={showThinkingBeam}
       borderRadius={20}
       className="agent-thinking-beam inline-flex rounded-full"
+      data-agent-mode={agentMode || undefined}
     >
       {pill}
     </BorderBeam>

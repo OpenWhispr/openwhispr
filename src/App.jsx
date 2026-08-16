@@ -23,6 +23,7 @@ import {
   LIVE_TRANSCRIPT_SURFACE_LIMITS,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantThinkingTransition,
+  resolveAgentModeActive,
   resolveListeningEntrancePresentation,
   resolveVoiceActivityPresentation,
   resolveVoiceHorizontalDirection,
@@ -810,6 +811,12 @@ export default function App() {
         : "idle";
   const anyPanelOpen = assistantPanelOpen || liveTranscriptPanelOpen;
   const anyPanelMounted = assistantPanelMounted || liveTranscriptPanelMounted;
+  const agentModeActive = resolveAgentModeActive({
+    isAssistantVoice,
+    isRecording,
+    isProcessing,
+    assistantPanelMounted,
+  });
   // Prefer a currently open mode over a sibling finishing its exit. The core
   // itself never unmounts; only these inner sections change ownership.
   const activeVoicePanel = resolveVoicePanelCorePresentation({
@@ -886,6 +893,7 @@ export default function App() {
                 waveformVisible={listeningEntrance.waveformVisible}
                 waveformOnlyWhileRecording={liveTranscriptPanelMounted}
                 integratedWithPanel={liveTranscriptPanelOpen}
+                agentMode={agentModeActive}
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}
                 horizontalDirection={voiceHorizontalDirection}

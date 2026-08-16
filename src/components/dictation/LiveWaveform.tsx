@@ -6,6 +6,8 @@ interface LiveWaveformProps {
   getLevel: () => number | null;
   /** While true the bars scroll with live levels; false freezes the captured wave. */
   active: boolean;
+  /** Adds the Agent brand sweep above the neutral live bars. */
+  agentMode?: boolean;
   className?: string;
 }
 
@@ -27,8 +29,14 @@ export const resolveWaveformBarHeight = (rms: number) =>
  * pays React re-render cost. With no signal (getLevel → null) the bars rest at
  * minimum height; when `active` goes false the last captured wave stays frozen.
  */
-export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps) {
+export function LiveWaveform({
+  getLevel,
+  active,
+  agentMode = false,
+  className,
+}: LiveWaveformProps) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const agentBarRefs = useRef<(HTMLDivElement | null)[]>([]);
   const levelsRef = useRef<number[]>([]);
 
   useEffect(() => {
@@ -37,8 +45,10 @@ export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps)
     // A new recording starts from silence — never replay the previous
     // session's frozen wave.
     levelsRef.current = new Array(BAR_COUNT).fill(0);
-    for (const bar of barRefs.current) {
-      if (bar) bar.style.height = `${WAVEFORM_BAR_MIN_PX}px`;
+    for (let index = 0; index < BAR_COUNT; index += 1) {
+      const height = `${WAVEFORM_BAR_MIN_PX}px`;
+      if (barRefs.current[index]) barRefs.current[index].style.height = height;
+      if (agentBarRefs.current[index]) agentBarRefs.current[index].style.height = height;
     }
 
     let frame = 0;
@@ -52,9 +62,10 @@ export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps)
         levels.push(level === null ? 0 : level);
         for (let i = 0; i < levels.length; i++) {
           const bar = barRefs.current[i];
-          if (bar) {
-            bar.style.height = `${resolveWaveformBarHeight(levels[i])}px`;
-          }
+          const agentBar = agentBarRefs.current[i];
+          const height = `${resolveWaveformBarHeight(levels[i])}px`;
+          if (bar) bar.style.height = height;
+          if (agentBar) agentBar.style.height = height;
         }
       }
       frame = requestAnimationFrame(paint);
@@ -65,7 +76,7 @@ export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps)
 
   return (
     <div
-      className={cn("flex h-full items-center justify-center gap-0.75", className)}
+      className={cn("relative isolate flex h-full items-center justify-center gap-0.75", className)}
       aria-hidden="true"
     >
       {Array.from({ length: BAR_COUNT }, (_, i) => (
@@ -78,6 +89,24 @@ export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps)
           style={{ height: WAVEFORM_BAR_MIN_PX }}
         />
       ))}
+
+      {agentMode && (
+        <div
+          className="agent-waveform-sweep pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-0.75 text-agent-brand"
+          data-active={active || undefined}
+        >
+          {Array.from({ length: BAR_COUNT }, (_, i) => (
+            <div
+              key={i}
+              ref={(el) => {
+                agentBarRefs.current[i] = el;
+              }}
+              className="w-0.5 rounded-full bg-current transition-[height] duration-75 ease-out motion-reduce:transition-none"
+              style={{ height: WAVEFORM_BAR_MIN_PX }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

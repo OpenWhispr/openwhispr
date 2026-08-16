@@ -189,6 +189,19 @@ export function resolveVoiceActivityPresentation({
 }
 
 /**
+ * Keep Agent identity for the complete request/panel lifecycle, but do not let
+ * the audio manager's last routing flag brand a later idle dictation pill.
+ */
+export function resolveAgentModeActive({
+  isAssistantVoice,
+  isRecording,
+  isProcessing,
+  assistantPanelMounted,
+}) {
+  return Boolean((isAssistantVoice && (isRecording || isProcessing)) || assistantPanelMounted);
+}
+
+/**
  * Select the content hosted by the persistent expanded voice surface. An open
  * mode outranks a sibling that is only mounted to finish its exit animation,
  * which lets the same core hand off without flashing the stale mode.

@@ -306,6 +306,47 @@ test("Agent listening keeps the existing expanded recording pill", async () => {
   );
 });
 
+test("Agent identity follows active requests and the complete panel lifecycle", async () => {
+  const { resolveAgentModeActive } = await load();
+
+  assert.equal(
+    resolveAgentModeActive({
+      isAssistantVoice: true,
+      isRecording: true,
+      isProcessing: false,
+      assistantPanelMounted: false,
+    }),
+    true
+  );
+  assert.equal(
+    resolveAgentModeActive({
+      isAssistantVoice: true,
+      isRecording: false,
+      isProcessing: true,
+      assistantPanelMounted: false,
+    }),
+    true
+  );
+  assert.equal(
+    resolveAgentModeActive({
+      isAssistantVoice: false,
+      isRecording: false,
+      isProcessing: false,
+      assistantPanelMounted: true,
+    }),
+    true
+  );
+  assert.equal(
+    resolveAgentModeActive({
+      isAssistantVoice: true,
+      isRecording: false,
+      isProcessing: false,
+      assistantPanelMounted: false,
+    }),
+    false
+  );
+});
+
 test("Agent transcription contracts to the rotating thinking circle", async () => {
   const { resolveVoiceActivityPresentation } = await load();
   assert.deepEqual(

@@ -13,6 +13,8 @@
   --color-muted-foreground: #525252;
   --color-accent: oklch(0.55 0.22 285);
   --color-accent-foreground: #ffffff;
+  /* Agent Mode identity, sourced from the supplied sparkle/leaf mark. */
+  --color-agent-brand: #8787ff;
   --color-destructive: #dc2626;
   --color-destructive-foreground: #ffffff;
   --color-border: #e5e5e5;
@@ -584,6 +586,92 @@ a:hover {
   box-shadow: none;
 }
 
+/* Agent Mode keeps the pill node stable while its neutral brand mark folds
+   away and the supplied sparkle/leaf mark resolves in the same icon box. */
+.voice-identity-glyph {
+  transform-origin: center;
+  transition:
+    opacity 220ms ease-out,
+    transform 320ms cubic-bezier(0.2, 0, 0, 1),
+    filter 220ms ease-out;
+}
+
+.voice-identity-glyph-default {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  filter: blur(0);
+}
+
+.voice-identity-glyph-agent {
+  opacity: 0;
+  transform: scale(0.68) rotate(18deg);
+  filter: blur(1px);
+}
+
+.voice-identity-icon[data-agent-mode="true"] .voice-identity-glyph-default {
+  opacity: 0;
+  transform: scale(0.68) rotate(-18deg);
+  filter: blur(1px);
+}
+
+.voice-identity-icon[data-agent-mode="true"] .voice-identity-glyph-agent {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  filter: blur(0);
+}
+
+.voice-pill-control[data-agent-mode="true"] {
+  border-color: color-mix(in oklch, var(--color-agent-brand) 48%, var(--color-border-hover));
+}
+
+.voice-pill-control[data-agent-beam-active="true"] {
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px color-mix(in oklch, var(--color-agent-brand) 28%, transparent),
+    0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
+}
+
+.agent-thinking-beam[data-agent-mode="true"] {
+  --beam-hue-base: 14deg;
+  --beam-stroke-opacity: 1.12;
+  --beam-inner-opacity: 1.08;
+  --beam-bloom-opacity: 1.06;
+}
+
+/* The neutral bars remain the live signal. A narrow Agent-colored band uses
+   the same sampled heights above them, so purple visibly wins wherever the
+   two wave layers overlap, matching the supplied reference. */
+.agent-waveform-sweep {
+  opacity: 0;
+  filter: drop-shadow(0 0 2px color-mix(in oklch, var(--color-agent-brand) 58%, transparent));
+  mask-image: linear-gradient(
+    90deg,
+    transparent 4%,
+    rgb(0 0 0 / 0.24) 18%,
+    black 34%,
+    black 62%,
+    rgb(0 0 0 / 0.24) 76%,
+    transparent 92%
+  );
+  mask-position: 130% 0;
+  mask-size: 230% 100%;
+  transition: opacity 180ms ease-out;
+}
+
+.agent-waveform-sweep[data-active="true"] {
+  opacity: 1;
+  animation: agent-waveform-sweep 1.45s linear infinite;
+}
+
+@keyframes agent-waveform-sweep {
+  from {
+    mask-position: 130% 0;
+  }
+  to {
+    mask-position: -130% 0;
+  }
+}
+
 .expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
   --live-transcript-stage-duration: var(--live-transcript-encapsulation-duration, 180ms);
 }
@@ -700,8 +788,14 @@ a:hover {
   }
 
   .expanding-panel-surface[data-panel-mode="live-transcript"]::before,
-  .voice-pill-control[data-integrated-with-panel="true"] {
+  .voice-pill-control[data-integrated-with-panel="true"],
+  .voice-identity-glyph {
     transition-duration: 1ms !important;
+  }
+
+  .agent-waveform-sweep[data-active="true"] {
+    animation: none;
+    mask-position: 50% 0;
   }
 
   .agent-thinking-beam[data-active] {

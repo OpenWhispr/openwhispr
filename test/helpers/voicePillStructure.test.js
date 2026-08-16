@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 
@@ -43,7 +45,10 @@ test("the persistent pill mirrors its content order for a left-origin interactio
 test("the idle pill keeps the logo at normal foreground strength", async () => {
   const idle = await renderPill("idle", false);
 
-  assert.match(idle, /shrink-0 transition-\[color,width,height\] duration-200 text-foreground/);
+  assert.match(
+    idle,
+    /voice-identity-icon relative inline-block shrink-0 transition-\[color,width,height\] duration-200 text-foreground/
+  );
 });
 
 test("the waveform pill keeps the normal compact logo footprint", async () => {
@@ -83,4 +88,36 @@ test("Live Transcript hands visual border ownership to the shared panel", async 
   assert.match(integrated, /voice-pill-control/);
   assert.match(integrated, /data-integrated-with-panel="true"/);
   assert.doesNotMatch(standalone, /data-integrated-with-panel/);
+});
+
+test("Agent Mode uses the supplied mark, brand token, ocean beam, and purple wave overlay", async () => {
+  const agentRecording = await renderPill("recording", true, "right", {
+    agentMode: true,
+  });
+  const normalRecording = await renderPill("recording", true);
+  const sourceRoot = path.resolve(__dirname, "../..");
+  const asset = fs.readFileSync(path.join(sourceRoot, "src/assets/icons/agent-mode.svg"), "utf8");
+  const styles = fs.readFileSync(path.join(sourceRoot, "src/index.css"), "utf8");
+
+  assert.match(asset, /fill="#8787FF"/);
+  assert.match(styles, /--color-agent-brand: #8787ff/);
+  assert.match(agentRecording, /^<div [^>]*class="agent-thinking-beam/);
+  assert.match(agentRecording, /^<div [^>]*data-beam="[^"]+"/);
+  assert.match(agentRecording, /data-agent-mode="true"/);
+  assert.match(agentRecording, /voice-identity-glyph-agent[^>]*text-agent-brand/);
+  assert.match(agentRecording, /agent-waveform-sweep[^>]*text-agent-brand" data-active="true"/);
+  assert.equal((agentRecording.match(/w-0\.5 rounded-full bg-current/g) || []).length, 33);
+  assert.doesNotMatch(normalRecording, /agent-waveform-sweep/);
+});
+
+test("Agent thinking keeps the purple beam on the same persistent pill root", async () => {
+  const agentThinking = await renderPill("thinking", false, "right", {
+    agentMode: true,
+  });
+
+  assert.match(agentThinking, /^<div [^>]*class="agent-thinking-beam/);
+  assert.match(agentThinking, /^<div [^>]*data-beam="[^"]+"/);
+  assert.match(agentThinking, /^<div [^>]*data-active=""/);
+  assert.match(agentThinking, /^<div [^>]*data-agent-mode="true"/);
+  assert.match(agentThinking, /data-agent-beam-active="true"/);
 });
