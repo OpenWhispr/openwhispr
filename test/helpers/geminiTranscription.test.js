@@ -92,6 +92,40 @@ test("gemini: posts converted wav as inlineData to generateContent with x-goog-a
   assert.match(parts[0].text, /OpenWhispr, Zellij/, "dictionary terms ride the instruction");
   assert.equal(parts[1].inlineData.mimeType, "audio/wav");
   assert.equal(parts[1].inlineData.data, Buffer.from("RIFF-fake-wav").toString("base64"));
+  assert.ok(!result.alreadyCleaned, "plain transcription is not marked cleaned");
+});
+
+test("gemini: a cleanupPrompt fuses cleanup into the instruction and marks the result cleaned", async () => {
+  fetches.length = 0;
+
+  const cleanupPrompt =
+    "You are a transcript cleanup engine. Fix punctuation.\n\n" +
+    "Custom Dictionary (use these exact spellings when they appear in the text): OpenWhispr, Zellij";
+  const result = await transcribeAudio({
+    audioBuffer: Buffer.from([1, 2, 3]),
+    model: "gemini-3-flash-preview",
+    language: "es",
+    prompt: "OpenWhispr, Zellij",
+    cleanupPrompt,
+    apiKey: "gk-gemini",
+  });
+
+  assert.equal(result.alreadyCleaned, true);
+
+  const instruction = JSON.parse(fetches[0].init.body).contents[0].parts[0].text;
+  assert.ok(instruction.startsWith(cleanupPrompt), "cleanup rules lead the instruction");
+  assert.doesNotMatch(instruction, /verbatim/i, "the verbatim directive is replaced");
+  assert.match(
+    instruction,
+    /Output ONLY the cleaned transcript text/,
+    "output-only directive bridges audio to the cleanup rules"
+  );
+  assert.match(instruction, /"es"/, "language hint still rides the instruction");
+  // The cleanup prompt already carries the dictionary suffix; the separate
+  // spellings line must not restate it.
+  assert.doesNotMatch(instruction, /Prefer these spellings/);
+  const dictionaryMentions = instruction.split("OpenWhispr, Zellij").length - 1;
+  assert.equal(dictionaryMentions, 1, "dictionary appears exactly once");
 });
 
 test("gemini: defaults the model and omits language/dictionary lines when absent", async () => {

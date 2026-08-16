@@ -12,14 +12,26 @@ const DEFAULT_GEMINI_TRANSCRIPTION_MODEL = "gemini-3-flash-preview";
 // instruction text carries what Whisper's fields carry: a strict
 // transcribe-verbatim directive (or Gemini chats instead of transcribing),
 // the target language, and the custom-dictionary spellings.
-function buildInstruction({ language, prompt }) {
-  const lines = [
-    "Transcribe the audio verbatim. Output ONLY the transcript text, with no commentary, labels, or extra formatting. If the audio contains no speech, output nothing.",
-  ];
+//
+// When a cleanupPrompt is provided (dictation with Gemini cleanup), the call
+// is fused: the cleanup rules lead, a bridging directive maps "the transcript"
+// onto the attached audio, and the result is the already-cleaned text. The
+// cleanup prompt carries the custom-dictionary suffix itself, so the separate
+// spellings line is skipped to avoid stating the dictionary twice.
+function buildInstruction({ language, prompt, cleanupPrompt }) {
+  const cleanup = cleanupPrompt?.trim();
+  const lines = cleanup
+    ? [
+        cleanup,
+        "The transcript to clean arrives as the attached audio: transcribe it accurately, then apply the rules above. Output ONLY the cleaned transcript text, no commentary. If the audio contains no speech, output nothing.",
+      ]
+    : [
+        "Transcribe the audio verbatim. Output ONLY the transcript text, with no commentary, labels, or extra formatting. If the audio contains no speech, output nothing.",
+      ];
   if (language && language !== "auto") {
     lines.push(`The audio is in the language with ISO 639-1 code "${language}".`);
   }
-  if (prompt?.trim()) {
+  if (!cleanup && prompt?.trim()) {
     lines.push(`Prefer these spellings when the corresponding words occur: ${prompt.trim()}`);
   }
   return lines.join("\n");
@@ -37,7 +49,7 @@ function thinkingConfigFor(model) {
 // Gemini's inlineData audio formats do not include webm/Opus (the dictation
 // recording format), so every input is converted to 16 kHz mono wav first —
 // ffmpeg accepts whatever the dictation or upload paths hand over.
-async function transcribeAudio({ audioBuffer, model, language, prompt, apiKey }) {
+async function transcribeAudio({ audioBuffer, model, language, prompt, cleanupPrompt, apiKey }) {
   if (!apiKey?.trim()) {
     const error = new Error("Gemini API key not configured. Add your key in Settings.");
     error.code = "API_KEY_MISSING";
@@ -70,7 +82,7 @@ async function transcribeAudio({ audioBuffer, model, language, prompt, apiKey })
       contents: [
         {
           parts: [
-            { text: buildInstruction({ language, prompt }) },
+            { text: buildInstruction({ language, prompt, cleanupPrompt }) },
             { inlineData: { mimeType: "audio/wav", data: wavBase64 } },
           ],
         },
@@ -121,7 +133,7 @@ async function transcribeAudio({ audioBuffer, model, language, prompt, apiKey })
     .map((part) => part?.text || "")
     .join("")
     .trim();
-  return { text, model: resolvedModel };
+  return { text, model: resolvedModel, alreadyCleaned: !!cleanupPrompt?.trim() };
 }
 
 module.exports = { transcribeAudio, DEFAULT_GEMINI_TRANSCRIPTION_MODEL };
