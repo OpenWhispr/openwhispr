@@ -15,7 +15,9 @@ import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel"
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
 import {
+  getListeningEntranceTimeline,
   resolveAssistantThinkingTransition,
+  resolveListeningEntrancePresentation,
   resolveVoiceActivityPresentation,
 } from "./helpers/voicePillPresentation";
 
@@ -445,7 +447,36 @@ export default function App() {
     isAssistantVoice,
     assistantThinking,
   });
-  const isCompactPill = voiceActivity.compactPill;
+  const [listeningEntrancePhase, setListeningEntrancePhase] = useState("idle");
+  useLayoutEffect(() => {
+    if (!isRecording) {
+      setListeningEntrancePhase("idle");
+      return;
+    }
+
+    setListeningEntrancePhase("thinking");
+    const timeline = getListeningEntranceTimeline();
+    const expansionTimer = setTimeout(
+      () => setListeningEntrancePhase("expanding"),
+      timeline.expandAtMs
+    );
+    const waveformTimer = setTimeout(
+      () => setListeningEntrancePhase("waveform"),
+      timeline.waveformAtMs
+    );
+
+    return () => {
+      clearTimeout(expansionTimer);
+      clearTimeout(waveformTimer);
+    };
+  }, [isRecording]);
+  const listeningEntrance = resolveListeningEntrancePresentation({
+    isRecording,
+    phase: listeningEntrancePhase,
+  });
+  const isCompactPill = isRecording
+    ? listeningEntrance.compactPill
+    : voiceActivity.compactPill;
   const lastSizeKeyRef = useRef(null);
   useEffect(() => {
     const target = resolveMainWindowSizeKey({
@@ -636,7 +667,9 @@ export default function App() {
   const commonPillState =
     micState === "unavailable"
       ? "unavailable"
-      : voiceActivity.activeState || (assistantPanelOpen ? "idle" : micState);
+      : listeningEntrance.activeState ||
+        voiceActivity.activeState ||
+        (assistantPanelOpen ? "idle" : micState);
   const pillPositionClass = liveTranscriptPanelOpen
     ? "bottom-7 left-7"
     : assistantPanelOpen
@@ -685,6 +718,8 @@ export default function App() {
                 variant={anyPanelOpen ? "panel" : "floating"}
                 state={commonPillState}
                 expanded={!anyPanelOpen && isCompactPill}
+                collapseToLogo={listeningEntrance.collapseToLogo}
+                waveformVisible={listeningEntrance.waveformVisible}
                 waveformOnlyWhileRecording={liveTranscriptPanelMounted}
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}

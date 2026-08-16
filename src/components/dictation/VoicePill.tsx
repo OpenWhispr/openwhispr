@@ -3,6 +3,7 @@ import { BorderBeam } from "border-beam";
 import { cn } from "../lib/utils";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { LiveWaveform } from "./LiveWaveform";
+import { LISTENING_ENTRANCE_TIMING } from "../../helpers/voicePillPresentation";
 
 export type VoicePillState =
   "idle" | "hover" | "recording" | "processing" | "thinking" | "unavailable";
@@ -12,11 +13,13 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   state: VoicePillState;
   getAudioLevel: () => number | null;
   expanded?: boolean;
+  collapseToLogo?: boolean;
+  waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   isDragging?: boolean;
 }
 
-const GROW_TRANSITION = "320ms cubic-bezier(0.2, 0, 0, 1)";
+const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
 // Matches the reference's eleven-bar rhythm. The exact same silhouette and
 // footprint is used in dictation, Agent Mode, and live transcript.
 const RESTING_WAVE_HEIGHTS = [7, 11, 7, 7, 7, 16, 16, 7, 16, 11, 16];
@@ -37,6 +40,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     state,
     getAudioLevel,
     expanded = false,
+    collapseToLogo = false,
+    waveformVisible = true,
     waveformOnlyWhileRecording = false,
     isDragging = false,
     className,
@@ -50,9 +55,10 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isThinking = state === "thinking";
   const isUnavailable = state === "unavailable";
   const isPanel = variant === "panel";
-  const showCompactPill = isRecording || expanded || (isPanel && !waveformOnlyWhileRecording);
-  const showDivider = showCompactPill && !isRecording;
-  const dividerMargin = showCompactPill ? (isRecording ? 3 : 4) : 0;
+  const showCompactPill =
+    !collapseToLogo && (isRecording || expanded || (isPanel && !waveformOnlyWhileRecording));
+  const showDivider = showCompactPill && waveformVisible && !isRecording;
+  const dividerMargin = showCompactPill ? (showDivider ? 4 : 3) : 0;
 
   const pill = (
     <div
@@ -82,7 +88,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <BrandMarkIcon
-        size={isThinking && !isPanel ? 22 : showCompactPill ? 16 : state === "hover" ? 24 : 22}
+        size={showCompactPill ? 16 : isThinking ? 22 : state === "hover" ? 24 : 22}
         className={cn(
           "shrink-0 transition-[color,width,height] duration-200",
           (isUnavailable || isProcessing) && "animate-pulse"
@@ -102,31 +108,34 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <div
-        className="shrink-0 overflow-hidden text-muted-foreground"
+        className="relative shrink-0 overflow-hidden text-muted-foreground"
         style={{
           width: showCompactPill ? 52 : 0,
           height: showCompactPill ? 24 : 32,
-          opacity: showCompactPill ? 1 : 0,
-          transition: `width ${GROW_TRANSITION}, opacity 200ms ease-out 80ms`,
+          transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}`,
         }}
       >
-        {showCompactPill && !isRecording ? (
-          <div className="flex h-full items-center justify-center gap-0.75" aria-hidden="true">
-            {RESTING_WAVE_HEIGHTS.map((height, index) => (
-              <span
-                key={`${height}-${index}`}
-                className="w-0.5 rounded-full bg-current"
-                style={{ height }}
-              />
-            ))}
-          </div>
-        ) : (
-          <LiveWaveform
-            getLevel={getAudioLevel}
-            active={isRecording}
-            className={isRecording ? "" : "opacity-60"}
-          />
-        )}
+        <div
+          className="absolute inset-0 flex items-center justify-center gap-0.75 transition-opacity duration-200 ease-out"
+          style={{ opacity: showCompactPill && waveformVisible && !isRecording ? 1 : 0 }}
+          aria-hidden="true"
+        >
+          {RESTING_WAVE_HEIGHTS.map((height, index) => (
+            <span
+              key={`${height}-${index}`}
+              className="w-0.5 rounded-full bg-current"
+              style={{ height }}
+            />
+          ))}
+        </div>
+        <LiveWaveform
+          getLevel={getAudioLevel}
+          active={isRecording}
+          className={cn(
+            "absolute inset-0 transition-opacity duration-200 ease-out",
+            showCompactPill && waveformVisible && isRecording ? "opacity-100" : "opacity-0"
+          )}
+        />
       </div>
 
       {isUnavailable && (
@@ -134,8 +143,6 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       )}
     </div>
   );
-
-  if (!isThinking) return pill;
 
   return (
     <BorderBeam
@@ -145,7 +152,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       duration={1.6}
       brightness={1.3}
       strength={0.85}
-      borderRadius={showCompactPill ? 18 : 20}
+      active={isThinking}
+      borderRadius={20}
       className="agent-thinking-beam inline-flex rounded-full"
     >
       {pill}

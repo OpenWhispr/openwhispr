@@ -3,6 +3,73 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/helpers/voicePillPresentation.js");
 
+test("listening entrance starts in the thinking circle before expanding", async () => {
+  const { resolveListeningEntrancePresentation } = await load();
+  assert.deepEqual(
+    resolveListeningEntrancePresentation({ isRecording: true, phase: "idle" }),
+    {
+      activeState: "thinking",
+      collapseToLogo: true,
+      compactPill: false,
+      waveformVisible: false,
+    }
+  );
+});
+
+test("listening entrance expands before revealing the waveform", async () => {
+  const { resolveListeningEntrancePresentation } = await load();
+  assert.deepEqual(
+    resolveListeningEntrancePresentation({ isRecording: true, phase: "expanding" }),
+    {
+      activeState: "thinking",
+      collapseToLogo: false,
+      compactPill: true,
+      waveformVisible: false,
+    }
+  );
+});
+
+test("listening entrance reveals the recording waveform last", async () => {
+  const { resolveListeningEntrancePresentation } = await load();
+  assert.deepEqual(
+    resolveListeningEntrancePresentation({ isRecording: true, phase: "waveform" }),
+    {
+      activeState: "recording",
+      collapseToLogo: false,
+      compactPill: true,
+      waveformVisible: true,
+    }
+  );
+});
+
+test("listening entrance timers preserve the visual order", async () => {
+  const { getListeningEntranceTimeline, LISTENING_ENTRANCE_TIMING } = await load();
+  const timeline = getListeningEntranceTimeline();
+  assert.ok(LISTENING_ENTRANCE_TIMING.thinkingMs > 0);
+  assert.ok(LISTENING_ENTRANCE_TIMING.expansionMs > 0);
+  assert.ok(LISTENING_ENTRANCE_TIMING.waveformDelayMs > 0);
+  assert.equal(timeline.expandAtMs, LISTENING_ENTRANCE_TIMING.thinkingMs);
+  assert.equal(
+    timeline.waveformAtMs,
+    timeline.expandAtMs +
+      LISTENING_ENTRANCE_TIMING.expansionMs +
+      LISTENING_ENTRANCE_TIMING.waveformDelayMs
+  );
+});
+
+test("stopping during the entrance cancels the staged recording presentation", async () => {
+  const { resolveListeningEntrancePresentation } = await load();
+  assert.deepEqual(
+    resolveListeningEntrancePresentation({ isRecording: false, phase: "expanding" }),
+    {
+      activeState: null,
+      collapseToLogo: false,
+      compactPill: false,
+      waveformVisible: true,
+    }
+  );
+});
+
 test("Agent listening keeps the existing expanded recording pill", async () => {
   const { resolveVoiceActivityPresentation } = await load();
   assert.deepEqual(
