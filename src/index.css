@@ -601,6 +601,67 @@ a:hover {
   color: var(--color-agent-brand);
 }
 
+/* Agent response controls and the persistent pill share the footer anchor.
+   Right-origin sessions retreat right and grow leftward; left-origin sessions
+   mirror the same choreography without swapping DOM order mid-transition. */
+.assistant-response-actions,
+.assistant-pill-presence {
+  --assistant-footer-shift: 0.875rem;
+  --assistant-footer-origin: right center;
+  transform-origin: var(--assistant-footer-origin);
+}
+
+.assistant-response-actions[data-horizontal-direction="left"],
+.assistant-pill-presence[data-horizontal-direction="left"] {
+  --assistant-footer-shift: -0.875rem;
+  --assistant-footer-origin: left center;
+}
+
+.assistant-response-actions[data-assistant-footer-phase="actions-entering"] {
+  pointer-events: none;
+  animation: assistant-footer-enter var(--assistant-actions-entrance-duration, 220ms)
+    cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.assistant-response-actions[data-assistant-footer-phase="actions-exiting"] {
+  pointer-events: none;
+  animation: assistant-footer-retreat var(--assistant-actions-retreat-duration, 220ms)
+    cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.assistant-pill-presence[data-assistant-footer-phase="pill-entering"] {
+  animation: assistant-footer-enter var(--assistant-pill-entrance-duration, 180ms)
+    cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.assistant-pill-presence[data-assistant-footer-phase="pill-exiting"] {
+  pointer-events: none;
+  animation: assistant-footer-retreat var(--assistant-pill-retreat-duration, 180ms)
+    cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes assistant-footer-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--assistant-footer-shift)) scale(0.68);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes assistant-footer-retreat {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(var(--assistant-footer-shift)) scale(0.68);
+  }
+}
+
 .voice-pill-control[data-agent-beam-active="true"] {
   box-shadow:
     var(--shadow-card),
@@ -780,6 +841,11 @@ a:hover {
   .agent-waveform-foreground[data-agent-mode="true"][data-active="true"] {
     animation: none;
     mask-position: 50% 0;
+  }
+
+  .assistant-response-actions,
+  .assistant-pill-presence {
+    animation-duration: 1ms !important;
   }
 
   .agent-thinking-beam[data-active] {

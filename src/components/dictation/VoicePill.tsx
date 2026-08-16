@@ -65,8 +65,9 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const showThinkingBeam = beamActive ?? isThinking;
   const isUnavailable = state === "unavailable";
   const isPanel = variant === "panel";
+  const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =
-    !collapseToLogo && (isRecording || expanded || (isPanel && !waveformOnlyWhileRecording));
+    !collapseToIdentity && (isRecording || expanded || (isPanel && !waveformOnlyWhileRecording));
   const showDivider = showCompactPill && waveformVisible && !isRecording;
   const dividerMargin = showCompactPill ? (showDivider ? 4 : 3) : 0;
 
@@ -84,7 +85,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         // Listening uses the same compact pill as the assistant panel. The
         // previous wide recording bar made the control feel like a different
         // surface and forced an unnecessary large window resize.
-        width: isThinking && !isPanel ? 40 : showCompactPill ? 92 : 40,
+        width: showCompactPill ? 92 : 40,
         height: showCompactPill ? 36 : 40,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
         transform: !isPanel && state === "hover" ? "scale(1.05)" : "scale(1)",

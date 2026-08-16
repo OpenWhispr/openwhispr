@@ -17,12 +17,15 @@ import { createLatestValueScheduler } from "./utils/latestValueScheduler";
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
 import {
+  ASSISTANT_FOOTER_TRANSITION_TIMING,
+  getAssistantFooterTransitionTimeline,
   getLiveTranscriptEntranceTimeline,
   getListeningEntranceTimeline,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   LIVE_TRANSCRIPT_SURFACE_LIMITS,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantThinkingTransition,
+  resolveAssistantFooterPresentation,
   resolveAgentModeActive,
   resolveListeningEntrancePresentation,
   resolveVoiceActivityPresentation,
@@ -197,6 +200,8 @@ export default function App() {
   const [assistantPanelMounted, setAssistantPanelMounted] = useState(false);
   const [assistantResponseReady, setAssistantResponseReady] = useState(false);
   const [assistantThinking, setAssistantThinking] = useState(false);
+  const [assistantBusy, setAssistantBusy] = useState(false);
+  const [assistantFooterPhase, setAssistantFooterPhase] = useState("pill");
   const [pendingCommand, setPendingCommand] = useState(null);
   const [panelConversationId, setPanelConversationId] = useState(null);
   const [liveTranscriptPanelOpen, setLiveTranscriptPanelOpen] = useState(false);
@@ -207,6 +212,8 @@ export default function App() {
   const assistantPanelOpenRef = useRef(assistantPanelOpen);
   const assistantCloseTimerRef = useRef(null);
   const assistantOpenFrameRef = useRef(null);
+  const assistantFooterTimersRef = useRef([]);
+  const previousAssistantResponseReadyRef = useRef(false);
   const liveTranscriptPanelOpenRef = useRef(liveTranscriptPanelOpen);
   const liveTranscriptSuppressedRef = useRef(false);
   const liveTranscriptCloseTimerRef = useRef(null);
@@ -256,6 +263,11 @@ export default function App() {
     liveTranscriptEntranceTimersRef.current = [];
   }, []);
 
+  const clearAssistantFooterTimers = React.useCallback(() => {
+    for (const timer of assistantFooterTimersRef.current) clearTimeout(timer);
+    assistantFooterTimersRef.current = [];
+  }, []);
+
   useLayoutEffect(() => {
     assistantPanelOpenRef.current = assistantPanelOpen;
   }, [assistantPanelOpen]);
@@ -263,6 +275,33 @@ export default function App() {
   useLayoutEffect(() => {
     liveTranscriptPanelOpenRef.current = liveTranscriptPanelOpen;
   }, [liveTranscriptPanelOpen]);
+
+  useEffect(() => {
+    clearAssistantFooterTimers();
+
+    if (!assistantPanelMounted || !assistantPanelOpen) {
+      previousAssistantResponseReadyRef.current = false;
+      setAssistantFooterPhase("pill");
+      return;
+    }
+
+    if (assistantResponseReady === previousAssistantResponseReadyRef.current) return;
+    previousAssistantResponseReadyRef.current = assistantResponseReady;
+
+    const timeline = getAssistantFooterTransitionTimeline(assistantResponseReady);
+    setAssistantFooterPhase(timeline.initialPhase);
+    assistantFooterTimersRef.current = [
+      setTimeout(() => setAssistantFooterPhase(timeline.handoffPhase), timeline.handoffAtMs),
+      setTimeout(() => setAssistantFooterPhase(timeline.settledPhase), timeline.settledAtMs),
+    ];
+
+    return clearAssistantFooterTimers;
+  }, [
+    assistantPanelMounted,
+    assistantPanelOpen,
+    assistantResponseReady,
+    clearAssistantFooterTimers,
+  ]);
 
   const openAssistantPanel = React.useCallback(async () => {
     setAssistantThinking(false);
@@ -284,12 +323,13 @@ export default function App() {
     () => () => {
       clearTimeout(assistantCloseTimerRef.current);
       cancelAnimationFrame(assistantOpenFrameRef.current);
+      clearAssistantFooterTimers();
       clearTimeout(liveTranscriptCloseTimerRef.current);
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
       clearLiveTranscriptEntranceTimers();
       liveTranscriptTextSchedulerRef.current.cancel();
     },
-    [clearLiveTranscriptEntranceTimers]
+    [clearAssistantFooterTimers, clearLiveTranscriptEntranceTimers]
   );
 
   const beginAssistantThinking = React.useCallback(() => {
@@ -434,6 +474,7 @@ export default function App() {
     setAssistantPanelOpen(false);
     setAssistantResponseReady(false);
     setAssistantThinking(false);
+    setAssistantBusy(false);
     setPendingCommand(null);
     clearTimeout(assistantCloseTimerRef.current);
     assistantCloseTimerRef.current = setTimeout(() => {
@@ -591,7 +632,7 @@ export default function App() {
     isRecording,
     isProcessing,
     isAssistantVoice,
-    assistantThinking,
+    assistantThinking: assistantThinking || assistantBusy,
   });
   const [listeningEntrancePhase, setListeningEntrancePhase] = useState("idle");
   useLayoutEffect(() => {
@@ -817,6 +858,7 @@ export default function App() {
     isProcessing,
     assistantPanelMounted,
   });
+  const assistantFooter = resolveAssistantFooterPresentation(assistantFooterPhase);
   // Prefer a currently open mode over a sibling finishing its exit. The core
   // itself never unmounts; only these inner sections change ownership.
   const activeVoicePanel = resolveVoicePanelCorePresentation({
@@ -856,7 +898,7 @@ export default function App() {
   return (
     <div className="dictation-window">
       {/* The panel footer owns this pill until final-response actions replace it. */}
-      {dictationErrorActionCount === 0 && (!assistantPanelOpen || !assistantResponseReady) && (
+      {dictationErrorActionCount === 0 && (!assistantPanelOpen || assistantFooter.pillVisible) && (
         <div
           className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50`}
           style={{
@@ -864,7 +906,13 @@ export default function App() {
           }}
         >
           <div
-            className="relative flex items-center gap-2"
+            className="assistant-pill-presence relative flex items-center gap-2"
+            data-assistant-footer-phase={assistantPanelOpen ? assistantFooterPhase : undefined}
+            data-horizontal-direction={voiceHorizontalDirection}
+            style={{
+              "--assistant-pill-retreat-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillRetreatMs}ms`,
+              "--assistant-pill-entrance-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillEntranceMs}ms`,
+            }}
             onMouseEnter={() => {
               if (anyPanelMounted) return;
               setIsHovered(true);
@@ -888,7 +936,9 @@ export default function App() {
                 variant={anyPanelOpen ? "panel" : "floating"}
                 state={commonPillState}
                 expanded={!anyPanelOpen && isCompactPill}
-                collapseToLogo={listeningEntrance.collapseToLogo}
+                collapseToLogo={
+                  listeningEntrance.collapseToLogo || assistantFooter.collapsePillToLogo
+                }
                 beamActive={listeningEntrance.beamActive ?? undefined}
                 waveformVisible={listeningEntrance.waveformVisible}
                 waveformOnlyWhileRecording={liveTranscriptPanelMounted}
@@ -1021,7 +1071,10 @@ export default function App() {
             voiceState={assistantVoiceState}
             thinking={assistantThinking && assistantPanelOpen}
             open={assistantPanelOpen}
+            footerPhase={assistantFooterPhase}
+            horizontalDirection={voiceHorizontalDirection}
             onClose={handleAssistantPanelClose}
+            onBusyChange={setAssistantBusy}
             onResponseReadyChange={setAssistantResponseReady}
             onResponseContent={handleAssistantResponseContent}
           />

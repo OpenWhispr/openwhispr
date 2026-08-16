@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, X } from "lucide-react";
 import { BrandMarkIcon } from "./BrandMarkIcon";
@@ -10,6 +10,10 @@ import { useChatMessageSender } from "../chat/useChatMessageSender";
 import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
+import {
+  ASSISTANT_FOOTER_TRANSITION_TIMING,
+  resolveAssistantFooterPresentation,
+} from "../../helpers/voicePillPresentation";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 
 export interface AssistantCommand {
@@ -17,6 +21,9 @@ export interface AssistantCommand {
   text: string;
   attachment: ChatImageAttachment | null;
 }
+
+type AssistantFooterPhase =
+  "pill" | "pill-entering" | "pill-exiting" | "actions-entering" | "actions" | "actions-exiting";
 
 interface AssistantPanelProps {
   /** Voice command waiting to be sent into the conversation (consumed on mount and on change). */
@@ -30,7 +37,10 @@ interface AssistantPanelProps {
   /** Keeps follow-up thinking feedback inside an already-open panel. */
   thinking: boolean;
   open: boolean;
+  footerPhase: AssistantFooterPhase;
+  horizontalDirection: "left" | "right";
   onClose: () => void;
+  onBusyChange: (busy: boolean) => void;
   onResponseReadyChange: (ready: boolean) => void;
   onResponseContent: () => void;
 }
@@ -45,7 +55,10 @@ export function AssistantPanel({
   voiceState,
   thinking,
   open,
+  footerPhase,
+  horizontalDirection,
   onClose,
+  onBusyChange,
   onResponseReadyChange,
   onResponseContent,
 }: AssistantPanelProps) {
@@ -109,6 +122,12 @@ export function AssistantPanel({
   }, [historyReady, pendingCommand, onCommandConsumed, sendMessage]);
 
   const isBusy = BUSY_STATES.includes(streaming.agentState);
+  const footerPresentation = resolveAssistantFooterPresentation(footerPhase);
+
+  useEffect(() => {
+    onBusyChange(isBusy);
+    return () => onBusyChange(false);
+  }, [isBusy, onBusyChange]);
 
   const latestAssistantMessage = [...messages]
     .reverse()
@@ -180,6 +199,7 @@ export function AssistantPanel({
         target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
       if (
         isResponseReady &&
+        footerPhase === "actions" &&
         e.key.toLowerCase() === "c" &&
         !e.metaKey &&
         !e.ctrlKey &&
@@ -192,7 +212,7 @@ export function AssistantPanel({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, handleCopy]);
+  }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, footerPhase, handleCopy]);
 
   return (
     <>
@@ -243,15 +263,34 @@ export function AssistantPanel({
         </div>
       </main>
 
-      <footer className="flex h-16 shrink-0 items-center justify-end gap-2 px-4">
-        {isResponseReady && (
-          <>
+      <footer
+        className={`flex h-16 shrink-0 items-center px-4 ${
+          horizontalDirection === "left" ? "justify-start" : "justify-end"
+        }`}
+        data-assistant-footer-direction={horizontalDirection}
+      >
+        {footerPresentation.actionsMounted && (
+          <div
+            className={`assistant-response-actions flex items-center gap-2 ${
+              horizontalDirection === "left" ? "flex-row-reverse" : ""
+            }`}
+            data-assistant-footer-phase={footerPhase}
+            data-horizontal-direction={horizontalDirection}
+            aria-hidden={footerPhase !== "actions"}
+            style={
+              {
+                "--assistant-actions-retreat-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs}ms`,
+                "--assistant-actions-entrance-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.actionsEntranceMs}ms`,
+              } as CSSProperties
+            }
+          >
             <Button
               type="button"
               variant="secondary"
               size="sm"
               className="rounded-full px-4"
               onClick={onClose}
+              tabIndex={footerPhase === "actions" ? 0 : -1}
             >
               <X aria-hidden="true" />
               {t("common.close")}
@@ -262,6 +301,7 @@ export function AssistantPanel({
               className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
+              tabIndex={footerPhase === "actions" ? 0 : -1}
             >
               {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
               {copied ? t("common.copied") : t("assistant.panel.copyToClipboard")}
@@ -271,7 +311,7 @@ export function AssistantPanel({
                 </kbd>
               )}
             </Button>
-          </>
+          </div>
         )}
       </footer>
     </>

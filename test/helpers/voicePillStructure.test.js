@@ -32,6 +32,17 @@ test("thinking and recording keep the same persistent Beam and pill roots", asyn
   assert.equal((recording.match(/rounded-full bg-current/g) || []).length, 22);
 });
 
+test("panel thinking contracts to the identity circle instead of freezing a waveform", async () => {
+  const panelThinking = await renderPill("thinking", false, "right", {
+    variant: "panel",
+    agentMode: true,
+  });
+
+  assert.match(panelThinking, /style="width:40px;height:40px/);
+  assert.match(panelThinking, /data-agent-beam-active="true"/);
+  assert.doesNotMatch(panelThinking, /style="width:92px;height:36px/);
+});
+
 test("the persistent pill mirrors its content order for a left-origin interaction", async () => {
   const right = await renderPill("recording", true, "right");
   const left = await renderPill("recording", true, "left");

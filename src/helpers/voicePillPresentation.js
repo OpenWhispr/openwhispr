@@ -8,6 +8,45 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   waveformDelayMs: 100,
 });
 
+export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
+  pillRetreatMs: 180,
+  actionsRetreatMs: 220,
+  pillEntranceMs: 180,
+  actionsEntranceMs: 220,
+});
+
+export function getAssistantFooterTransitionTimeline(
+  responseReady,
+  timing = ASSISTANT_FOOTER_TRANSITION_TIMING
+) {
+  if (responseReady) {
+    return {
+      initialPhase: "pill-exiting",
+      handoffPhase: "actions-entering",
+      settledPhase: "actions",
+      handoffAtMs: timing.pillRetreatMs,
+      settledAtMs: timing.pillRetreatMs + timing.actionsEntranceMs,
+    };
+  }
+
+  return {
+    initialPhase: "actions-exiting",
+    handoffPhase: "pill-entering",
+    settledPhase: "pill",
+    handoffAtMs: timing.actionsRetreatMs,
+    settledAtMs: timing.actionsRetreatMs + timing.pillEntranceMs,
+  };
+}
+
+export function resolveAssistantFooterPresentation(phase) {
+  return {
+    pillVisible: phase === "pill" || phase === "pill-entering" || phase === "pill-exiting",
+    actionsMounted:
+      phase === "actions" || phase === "actions-entering" || phase === "actions-exiting",
+    collapsePillToLogo: phase === "pill-exiting",
+  };
+}
+
 export const LIVE_TRANSCRIPT_ENTRANCE_TIMING = Object.freeze({
   encapsulateMs: 180,
   encapsulateHoldMs: 140,

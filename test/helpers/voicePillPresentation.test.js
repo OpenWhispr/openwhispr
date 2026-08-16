@@ -279,6 +279,61 @@ test("listening entrance timers preserve the visual order", async () => {
   );
 });
 
+test("Agent footer retreats actions before the compact pill enters", async () => {
+  const {
+    ASSISTANT_FOOTER_TRANSITION_TIMING,
+    getAssistantFooterTransitionTimeline,
+    getListeningEntranceTimeline,
+  } = await load();
+  const timeline = getAssistantFooterTransitionTimeline(false);
+
+  assert.deepEqual(timeline, {
+    initialPhase: "actions-exiting",
+    handoffPhase: "pill-entering",
+    settledPhase: "pill",
+    handoffAtMs: ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs,
+    settledAtMs:
+      ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs +
+      ASSISTANT_FOOTER_TRANSITION_TIMING.pillEntranceMs,
+  });
+  assert.ok(timeline.settledAtMs < getListeningEntranceTimeline().expandAtMs);
+});
+
+test("Agent footer retreats the pill before final actions grow from its anchor", async () => {
+  const { ASSISTANT_FOOTER_TRANSITION_TIMING, getAssistantFooterTransitionTimeline } = await load();
+  const timeline = getAssistantFooterTransitionTimeline(true);
+
+  assert.deepEqual(timeline, {
+    initialPhase: "pill-exiting",
+    handoffPhase: "actions-entering",
+    settledPhase: "actions",
+    handoffAtMs: ASSISTANT_FOOTER_TRANSITION_TIMING.pillRetreatMs,
+    settledAtMs:
+      ASSISTANT_FOOTER_TRANSITION_TIMING.pillRetreatMs +
+      ASSISTANT_FOOTER_TRANSITION_TIMING.actionsEntranceMs,
+  });
+});
+
+test("Agent footer phases never mount actions and the pill together", async () => {
+  const { resolveAssistantFooterPresentation } = await load();
+
+  assert.deepEqual(resolveAssistantFooterPresentation("actions-exiting"), {
+    pillVisible: false,
+    actionsMounted: true,
+    collapsePillToLogo: false,
+  });
+  assert.deepEqual(resolveAssistantFooterPresentation("pill-entering"), {
+    pillVisible: true,
+    actionsMounted: false,
+    collapsePillToLogo: false,
+  });
+  assert.deepEqual(resolveAssistantFooterPresentation("pill-exiting"), {
+    pillVisible: true,
+    actionsMounted: false,
+    collapsePillToLogo: true,
+  });
+});
+
 test("stopping during the entrance cancels the staged recording presentation", async () => {
   const { resolveListeningEntrancePresentation } = await load();
   assert.deepEqual(
