@@ -111,6 +111,7 @@ test("Agent Mode uses the supplied mark, neutral border, ocean beam, and layered
   assert.match(asset, /fill="#8787FF"/);
   assert.match(styles, /--color-agent-brand: #8787ff/);
   assert.doesNotMatch(styles, /\.voice-pill-control\[data-agent-mode="true"\]\s*\{/);
+  assert.match(styles, /animation: agent-waveform-highlight 2\.4s linear infinite/);
   assert.match(agentRecording, /^<div [^>]*class="agent-thinking-beam/);
   assert.match(agentRecording, /^<div [^>]*data-beam="[^"]+"/);
   assert.match(agentRecording, /data-agent-mode="true"/);

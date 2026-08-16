@@ -643,7 +643,7 @@ a:hover {
 }
 
 .agent-waveform-foreground[data-agent-mode="true"][data-active="true"] {
-  animation: agent-waveform-highlight 1.55s linear infinite;
+  animation: agent-waveform-highlight 2.4s linear infinite;
 }
 
 @keyframes agent-waveform-highlight {
