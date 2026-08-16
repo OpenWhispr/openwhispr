@@ -8,7 +8,8 @@ test("listening entrance starts in the thinking circle before expanding", async 
   assert.deepEqual(
     resolveListeningEntrancePresentation({ isRecording: true, phase: "idle" }),
     {
-      activeState: "thinking",
+      activeState: "recording",
+      beamActive: true,
       collapseToLogo: true,
       compactPill: false,
       waveformVisible: false,
@@ -21,12 +22,34 @@ test("listening entrance expands before revealing the waveform", async () => {
   assert.deepEqual(
     resolveListeningEntrancePresentation({ isRecording: true, phase: "expanding" }),
     {
-      activeState: "thinking",
+      activeState: "recording",
+      beamActive: false,
       collapseToLogo: false,
       compactPill: true,
       waveformVisible: false,
     }
   );
+});
+
+test("listening entrance settles at full width before revealing the waveform", async () => {
+  const { resolveListeningEntrancePresentation } = await load();
+  const settled = resolveListeningEntrancePresentation({
+    isRecording: true,
+    phase: "settled",
+  });
+  const waveform = resolveListeningEntrancePresentation({
+    isRecording: true,
+    phase: "waveform",
+  });
+
+  assert.deepEqual(settled, {
+    activeState: "recording",
+    beamActive: false,
+    collapseToLogo: false,
+    compactPill: true,
+    waveformVisible: false,
+  });
+  assert.deepEqual(waveform, { ...settled, waveformVisible: true });
 });
 
 test("listening entrance reveals the recording waveform last", async () => {
@@ -35,6 +58,7 @@ test("listening entrance reveals the recording waveform last", async () => {
     resolveListeningEntrancePresentation({ isRecording: true, phase: "waveform" }),
     {
       activeState: "recording",
+      beamActive: false,
       collapseToLogo: false,
       compactPill: true,
       waveformVisible: true,
@@ -50,10 +74,12 @@ test("listening entrance timers preserve the visual order", async () => {
   assert.ok(LISTENING_ENTRANCE_TIMING.waveformDelayMs > 0);
   assert.equal(timeline.expandAtMs, LISTENING_ENTRANCE_TIMING.thinkingMs);
   assert.equal(
+    timeline.settleAtMs,
+    timeline.expandAtMs + LISTENING_ENTRANCE_TIMING.expansionMs
+  );
+  assert.equal(
     timeline.waveformAtMs,
-    timeline.expandAtMs +
-      LISTENING_ENTRANCE_TIMING.expansionMs +
-      LISTENING_ENTRANCE_TIMING.waveformDelayMs
+    timeline.settleAtMs + LISTENING_ENTRANCE_TIMING.waveformDelayMs
   );
 });
 
@@ -63,6 +89,7 @@ test("stopping during the entrance cancels the staged recording presentation", a
     resolveListeningEntrancePresentation({ isRecording: false, phase: "expanding" }),
     {
       activeState: null,
+      beamActive: null,
       collapseToLogo: false,
       compactPill: false,
       waveformVisible: true,

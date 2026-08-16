@@ -1,13 +1,19 @@
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
-  thinkingMs: 240,
-  expansionMs: 320,
-  waveformDelayMs: 80,
+  // Give the Beam enough time to read as an intentional thinking state before
+  // the persistent control begins changing shape.
+  thinkingMs: 420,
+  expansionMs: 300,
+  // Hold the finished footprint briefly so the waveform reveal cannot be
+  // perceived as part of the width animation.
+  waveformDelayMs: 100,
 });
 
 export function getListeningEntranceTimeline(timing = LISTENING_ENTRANCE_TIMING) {
+  const settleAtMs = timing.thinkingMs + timing.expansionMs;
   return {
     expandAtMs: timing.thinkingMs,
-    waveformAtMs: timing.thinkingMs + timing.expansionMs + timing.waveformDelayMs,
+    settleAtMs,
+    waveformAtMs: settleAtMs + timing.waveformDelayMs,
   };
 }
 
@@ -20,6 +26,7 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
   if (!isRecording) {
     return {
       activeState: null,
+      beamActive: null,
       collapseToLogo: false,
       compactPill: false,
       waveformVisible: true,
@@ -29,7 +36,11 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
   const effectivePhase = phase === "idle" ? "thinking" : phase;
   if (effectivePhase === "thinking") {
     return {
-      activeState: "thinking",
+      // Keep the actual recording state stable across every visual phase. The
+      // waveform can sample audio while hidden and its reveal changes opacity
+      // only; it never remounts or changes the pill's layout.
+      activeState: "recording",
+      beamActive: true,
       collapseToLogo: true,
       compactPill: false,
       waveformVisible: false,
@@ -38,7 +49,18 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
 
   if (effectivePhase === "expanding") {
     return {
-      activeState: "thinking",
+      activeState: "recording",
+      beamActive: false,
+      collapseToLogo: false,
+      compactPill: true,
+      waveformVisible: false,
+    };
+  }
+
+  if (effectivePhase === "settled") {
+    return {
+      activeState: "recording",
+      beamActive: false,
       collapseToLogo: false,
       compactPill: true,
       waveformVisible: false,
@@ -47,6 +69,7 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
 
   return {
     activeState: "recording",
+    beamActive: false,
     collapseToLogo: false,
     compactPill: true,
     waveformVisible: true,

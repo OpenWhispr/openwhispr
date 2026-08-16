@@ -460,6 +460,10 @@ export default function App() {
       () => setListeningEntrancePhase("expanding"),
       timeline.expandAtMs
     );
+    const settledTimer = setTimeout(
+      () => setListeningEntrancePhase("settled"),
+      timeline.settleAtMs
+    );
     const waveformTimer = setTimeout(
       () => setListeningEntrancePhase("waveform"),
       timeline.waveformAtMs
@@ -467,6 +471,7 @@ export default function App() {
 
     return () => {
       clearTimeout(expansionTimer);
+      clearTimeout(settledTimer);
       clearTimeout(waveformTimer);
     };
   }, [isRecording]);
@@ -719,6 +724,7 @@ export default function App() {
                 state={commonPillState}
                 expanded={!anyPanelOpen && isCompactPill}
                 collapseToLogo={listeningEntrance.collapseToLogo}
+                beamActive={listeningEntrance.beamActive ?? undefined}
                 waveformVisible={listeningEntrance.waveformVisible}
                 waveformOnlyWhileRecording={liveTranscriptPanelMounted}
                 getAudioLevel={getAudioLevel}

@@ -14,6 +14,7 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   getAudioLevel: () => number | null;
   expanded?: boolean;
   collapseToLogo?: boolean;
+  beamActive?: boolean;
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   isDragging?: boolean;
@@ -41,6 +42,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     getAudioLevel,
     expanded = false,
     collapseToLogo = false,
+    beamActive,
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
     isDragging = false,
@@ -53,6 +55,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isRecording = state === "recording";
   const isProcessing = state === "processing";
   const isThinking = state === "thinking";
+  const showThinkingBeam = beamActive ?? isThinking;
   const isUnavailable = state === "unavailable";
   const isPanel = variant === "panel";
   const showCompactPill =
@@ -152,7 +155,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       duration={1.6}
       brightness={1.3}
       strength={0.85}
-      active={isThinking}
+      active={showThinkingBeam}
       borderRadius={20}
       className="agent-thinking-beam inline-flex rounded-full"
     >
