@@ -220,7 +220,7 @@ export function AssistantPanel({
         className="agent-chat-scroll min-h-0 flex-auto overflow-y-auto px-5 pb-3 pt-2"
         aria-busy={thinking || isBusy}
       >
-        <div>
+        <div data-panel-size-source>
           {displayedResponse ? (
             <div style={{ animation: "agent-message-in 160ms ease-out both" }}>
               <MarkdownRenderer

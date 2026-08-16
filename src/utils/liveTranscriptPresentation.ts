@@ -10,18 +10,31 @@ export interface ShimmerTranscriptParts {
  */
 export function splitTranscriptForShimmer(
   text: string,
-  activeWordCount = 8
+  activeWordCount = 6
 ): ShimmerTranscriptParts {
   const normalized = text.trim();
   if (!normalized) return { settled: "", active: "" };
 
-  const words = normalized.split(/\s+/);
-  if (words.length <= activeWordCount) {
+  const wordLimit = Math.max(0, Math.floor(activeWordCount));
+  if (wordLimit === 0) return { settled: normalized, active: "" };
+
+  // Walk only the trailing phrase instead of splitting and rebuilding the
+  // entire transcript on every realtime delta. Long sessions therefore keep
+  // the same bounded presentation cost as short ones.
+  let activeStart = normalized.length;
+  let wordsFound = 0;
+  while (activeStart > 0 && wordsFound < wordLimit) {
+    while (activeStart > 0 && /\s/.test(normalized[activeStart - 1])) activeStart--;
+    while (activeStart > 0 && !/\s/.test(normalized[activeStart - 1])) activeStart--;
+    wordsFound++;
+  }
+
+  if (activeStart === 0) {
     return { settled: "", active: normalized };
   }
 
   return {
-    settled: words.slice(0, -activeWordCount).join(" ") + " ",
-    active: words.slice(-activeWordCount).join(" "),
+    settled: `${normalized.slice(0, activeStart).trimEnd()} `,
+    active: normalized.slice(activeStart).trimStart(),
   };
 }

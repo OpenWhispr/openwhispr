@@ -491,6 +491,7 @@ a:hover {
       var(--live-transcript-footer-inline-padding)
   );
   transition:
+    height 200ms cubic-bezier(0.2, 0, 0, 1),
     clip-path var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
     opacity 140ms ease-out,
     transform var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
@@ -575,8 +576,10 @@ a:hover {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: inline-response-shimmer 2.2s linear infinite;
-  will-change: background-position;
+  /* Background-clipped text must be repainted when its background moves. A
+     stepped sweep preserves the shimmer while reducing that work from every
+     display frame to a small, bounded number of paints per cycle. */
+  animation: inline-response-shimmer 2.2s steps(24, end) infinite;
 }
 
 @keyframes inline-response-shimmer {

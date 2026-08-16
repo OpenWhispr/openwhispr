@@ -315,6 +315,19 @@ class WindowManager {
     const clamped = WindowPositionUtil.clampToWorkArea({ x: newX, y: newY, ...newSize }, display);
     const newBounds = { ...clamped, ...newSize };
 
+    // Opening a voice mode and the size-priority effect can request the same
+    // footprint in adjacent ticks. Avoid asking the OS compositor to rebuild
+    // an unchanged transparent window surface.
+    if (
+      currentBounds.x === newBounds.x &&
+      currentBounds.y === newBounds.y &&
+      currentBounds.width === newBounds.width &&
+      currentBounds.height === newBounds.height
+    ) {
+      this._lastResizeBounds = { ...currentBounds };
+      return { success: true, bounds: currentBounds };
+    }
+
     this.mainWindow.setBounds(newBounds);
     this._lastResizeBounds = newBounds;
 

@@ -37,8 +37,10 @@ test("Agent and live transcript use the same expanded panel core", async () => {
   assert.match(liveTranscriptFooter, /expanding-panel-anchor-bottom-right/);
   assert.match(liveTranscriptContent, /expanding-panel-anchor-bottom-left/);
   assert.match(assistant, /data-panel-mode="assistant"/);
+  assert.doesNotMatch(assistant, /data-panel-height-animated/);
   assert.match(liveTranscriptCapsule, /data-panel-stage="encapsulated"/);
   assert.match(liveTranscriptFooter, /data-panel-mode="live-transcript"/);
+  assert.match(liveTranscriptContent, /data-panel-height-animated="true"/);
   assert.match(assistant, /data-panel-stage="content"/);
   assert.match(liveTranscriptFooter, /data-panel-stage="footer"/);
   assert.equal((assistant.match(/<section/g) || []).length, 1);

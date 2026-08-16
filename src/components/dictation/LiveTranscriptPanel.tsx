@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { splitTranscriptForShimmer } from "../../utils/liveTranscriptPresentation";
@@ -36,7 +36,7 @@ export function LiveTranscriptPanel({
     [shouldShimmer, text]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
     if (!text) {
@@ -44,7 +44,10 @@ export function LiveTranscriptPanel({
       node.scrollTop = 0;
       return;
     }
-    if (pinnedToBottomRef.current) node.scrollTop = node.scrollHeight;
+    if (pinnedToBottomRef.current) {
+      const bottom = node.scrollHeight - node.clientHeight;
+      if (bottom > 0 && Math.abs(node.scrollTop - bottom) > 1) node.scrollTop = bottom;
+    }
   }, [text]);
 
   const handleScroll = useCallback(() => {
@@ -101,20 +104,21 @@ export function LiveTranscriptPanel({
         aria-busy={shouldShimmer}
         aria-hidden={!contentVisible}
         aria-live="polite"
-        aria-atomic="true"
       >
-        {text ? (
-          <p className="select-text whitespace-pre-wrap break-words text-base leading-relaxed text-foreground [text-wrap:pretty]">
-            <span>{shimmerParts.settled}</span>
-            {shimmerParts.active && (
-              <span className="inline-response-shimmer">{shimmerParts.active}</span>
-            )}
-          </p>
-        ) : (
-          <p className="text-base leading-relaxed text-muted-foreground/55">
-            {t("transcriptionPreview.waitingForInput")}
-          </p>
-        )}
+        <div data-panel-size-source>
+          {text ? (
+            <p className="select-text whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
+              <span>{shimmerParts.settled}</span>
+              {shimmerParts.active && (
+                <span className="inline-response-shimmer">{shimmerParts.active}</span>
+              )}
+            </p>
+          ) : (
+            <p className="text-base leading-relaxed text-muted-foreground/55">
+              {t("transcriptionPreview.waitingForInput")}
+            </p>
+          )}
+        </div>
       </main>
 
       <footer className="flex h-16 shrink-0 items-center justify-end px-4">

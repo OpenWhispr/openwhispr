@@ -5,6 +5,8 @@ interface ExpandingPanelShellProps extends Omit<HTMLAttributes<HTMLElement>, "ch
   open: boolean;
   anchor?: "bottom-left" | "bottom-right";
   stabilizeHeight?: boolean;
+  animateHeight?: boolean;
+  measurementKey?: string | null;
   onPreferredHeightChange?: (height: number) => void;
   children: ReactNode;
 }
@@ -14,6 +16,8 @@ export function ExpandingPanelShell({
   open,
   anchor = "bottom-right",
   stabilizeHeight = false,
+  animateHeight = false,
+  measurementKey = null,
   onPreferredHeightChange,
   children,
   className,
@@ -23,7 +27,19 @@ export function ExpandingPanelShell({
   const shellRef = useRef<HTMLElement | null>(null);
   const lastPreferredHeightRef = useRef(0);
   const heightFloorRef = useRef(0);
+  const heightCapRef = useRef(0);
   const [heightFloor, setHeightFloor] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    lastPreferredHeightRef.current = 0;
+    heightFloorRef.current = 0;
+    // Voice modes mount only after the native window has grown to its maximum
+    // responsive assistant footprint. Preserve that ceiling while the native
+    // window later shrinks to content; using the current viewport as the cap
+    // would prevent the panel from ever growing again.
+    heightCapRef.current = Math.max(0, window.innerHeight - 24);
+    setHeightFloor(null);
+  }, [measurementKey]);
 
   useLayoutEffect(() => {
     if (stabilizeHeight) {
@@ -40,25 +56,25 @@ export function ExpandingPanelShell({
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
-    if (!shell || !onPreferredHeightChange) return;
+    if (!shell || !open || (!onPreferredHeightChange && !animateHeight)) return;
 
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const shellStyle = window.getComputedStyle(shell);
-      let preferredHeight =
-        Number.parseFloat(shellStyle.borderTopWidth) +
-        Number.parseFloat(shellStyle.borderBottomWidth);
+      // All spacing belongs inside the shell's direct flex children, so their
+      // box metrics are enough here. Avoid getComputedStyle on every transcript
+      // update: it synchronously flushes style calculation before layout reads.
+      let preferredHeight = shell.offsetHeight - shell.clientHeight;
 
       for (const child of Array.from(shell.children)) {
         if (!(child instanceof HTMLElement)) continue;
-        const childStyle = window.getComputedStyle(child);
-        const verticalMargins =
-          Number.parseFloat(childStyle.marginTop) + Number.parseFloat(childStyle.marginBottom);
-        preferredHeight += Math.max(child.offsetHeight, child.scrollHeight) + verticalMargins;
+        preferredHeight += Math.max(child.offsetHeight, child.scrollHeight);
       }
 
-      preferredHeight = Math.ceil(preferredHeight);
+      // The shell has a 12px outer gutter on each side. Once the available
+      // height is reached, the middle flex child owns scrolling and further
+      // transcript lines must not keep changing the panel target.
+      preferredHeight = Math.min(Math.ceil(preferredHeight), heightCapRef.current);
       if (stabilizeHeight && preferredHeight > heightFloorRef.current) {
         heightFloorRef.current = preferredHeight;
         setHeightFloor(preferredHeight);
@@ -69,7 +85,7 @@ export function ExpandingPanelShell({
         : preferredHeight;
       if (Math.abs(reportedHeight - lastPreferredHeightRef.current) < 1) return;
       lastPreferredHeightRef.current = reportedHeight;
-      onPreferredHeightChange(reportedHeight);
+      onPreferredHeightChange?.(reportedHeight);
     };
     const scheduleMeasure = () => {
       cancelAnimationFrame(frame);
@@ -77,10 +93,27 @@ export function ExpandingPanelShell({
     };
 
     const resizeObserver = new ResizeObserver(scheduleMeasure);
-    resizeObserver.observe(shell);
-    for (const child of Array.from(shell.children)) resizeObserver.observe(child);
-    const mutationObserver = new MutationObserver(scheduleMeasure);
-    mutationObserver.observe(shell, { childList: true, characterData: true, subtree: true });
+    const observeSizeSources = () => {
+      for (const source of shell.querySelectorAll("[data-panel-size-source]")) {
+        resizeObserver.observe(source);
+      }
+    };
+
+    if (!animateHeight) {
+      resizeObserver.observe(shell);
+      for (const child of Array.from(shell.children)) resizeObserver.observe(child);
+    }
+    observeSizeSources();
+
+    // React normally updates transcript text through characterData mutations.
+    // The observed size source already reports the only mutations relevant to
+    // panel geometry: actual line-height changes. Watch child replacement only
+    // so a mode/content swap can register its new size source.
+    const mutationObserver = new MutationObserver(() => {
+      observeSizeSources();
+      scheduleMeasure();
+    });
+    mutationObserver.observe(shell, { childList: true, subtree: true });
     scheduleMeasure();
 
     return () => {
@@ -88,7 +121,7 @@ export function ExpandingPanelShell({
       resizeObserver.disconnect();
       mutationObserver.disconnect();
     };
-  }, [onPreferredHeightChange, stabilizeHeight]);
+  }, [animateHeight, onPreferredHeightChange, open, stabilizeHeight, measurementKey]);
 
   return (
     <section
@@ -104,11 +137,16 @@ export function ExpandingPanelShell({
         className
       )}
       aria-hidden={!open}
+      data-panel-height-animated={animateHeight ? "true" : undefined}
       style={{
         // A long streaming response can make the natural-content floor taller
         // than the native window. Keep the floor within the same viewport cap
         // as max-height so the middle flex child shrinks and becomes scrollable.
-        minHeight: heightFloor === null ? undefined : `min(${heightFloor}px, calc(100% - 1.5rem))`,
+        height: animateHeight && heightFloor !== null ? `${heightFloor}px` : undefined,
+        minHeight:
+          !animateHeight && heightFloor !== null
+            ? `min(${heightFloor}px, calc(100% - 1.5rem))`
+            : undefined,
         ...style,
       }}
       {...props}

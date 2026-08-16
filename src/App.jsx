@@ -13,6 +13,7 @@ import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
 import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
+import { createLatestValueScheduler } from "./utils/latestValueScheduler";
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
 import {
@@ -28,6 +29,7 @@ import {
 } from "./helpers/voicePillPresentation";
 
 const ASSISTANT_TRANSITION_MS = 280;
+const LIVE_TRANSCRIPT_RENDER_INTERVAL_MS = 50;
 
 // Tooltip Component
 const Tooltip = ({ children, content, emoji, align = "center", disabled = false }) => {
@@ -187,7 +189,27 @@ export default function App() {
   const liveTranscriptOpenFrameRef = useRef(null);
   const liveTranscriptOpenPromiseRef = useRef(null);
   const liveTranscriptEntranceTimersRef = useRef([]);
+  const liveTranscriptSourceTextRef = useRef("");
+  const liveTranscriptTextSchedulerRef = useRef(null);
   const commandIdRef = useRef(0);
+
+  if (liveTranscriptTextSchedulerRef.current === null) {
+    liveTranscriptTextSchedulerRef.current = createLatestValueScheduler(
+      setLiveTranscriptText,
+      LIVE_TRANSCRIPT_RENDER_INTERVAL_MS
+    );
+  }
+
+  const updateLiveTranscriptText = React.useCallback((text, { immediate = false } = {}) => {
+    liveTranscriptSourceTextRef.current = text;
+    liveTranscriptTextSchedulerRef.current.push(text, { immediate });
+  }, []);
+
+  const resetLiveTranscriptText = React.useCallback(() => {
+    liveTranscriptTextSchedulerRef.current.cancel();
+    liveTranscriptSourceTextRef.current = "";
+    setLiveTranscriptText("");
+  }, []);
 
   const clearLiveTranscriptEntranceTimers = React.useCallback(() => {
     for (const timer of liveTranscriptEntranceTimersRef.current) clearTimeout(timer);
@@ -225,6 +247,7 @@ export default function App() {
       clearTimeout(liveTranscriptCloseTimerRef.current);
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
       clearLiveTranscriptEntranceTimers();
+      liveTranscriptTextSchedulerRef.current.cancel();
     },
     [clearLiveTranscriptEntranceTimers]
   );
@@ -308,10 +331,10 @@ export default function App() {
     liveTranscriptPanelOpenRef.current = false;
     setLiveTranscriptPanelOpen(false);
     setLiveTranscriptPanelMounted(false);
-    setLiveTranscriptText("");
+    resetLiveTranscriptText();
     setLiveTranscriptPhase("listening");
     setLiveTranscriptEntrancePhase("idle");
-  }, [clearLiveTranscriptEntranceTimers]);
+  }, [clearLiveTranscriptEntranceTimers, resetLiveTranscriptText]);
 
   useEffect(() => {
     if (dictationErrorActionCount > 0) handleDictationError();
@@ -361,6 +384,7 @@ export default function App() {
   const closeLiveTranscriptPanel = React.useCallback(
     ({ suppress = false, clear = false } = {}) => {
       if (suppress) liveTranscriptSuppressedRef.current = true;
+      if (clear) liveTranscriptTextSchedulerRef.current.flush();
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
       clearLiveTranscriptEntranceTimers();
       liveTranscriptPanelOpenRef.current = false;
@@ -370,12 +394,12 @@ export default function App() {
       liveTranscriptCloseTimerRef.current = setTimeout(() => {
         setLiveTranscriptPanelMounted(false);
         if (clear) {
-          setLiveTranscriptText("");
+          resetLiveTranscriptText();
           setLiveTranscriptPhase("listening");
         }
       }, ASSISTANT_TRANSITION_MS);
     },
-    [clearLiveTranscriptEntranceTimers]
+    [clearLiveTranscriptEntranceTimers, resetLiveTranscriptText]
   );
 
   const openLiveTranscriptPanel = React.useCallback(() => {
@@ -420,18 +444,20 @@ export default function App() {
 
     const disposeText = window.electronAPI?.onPreviewText?.((incoming) => {
       const text = incoming?.trim?.() || "";
-      setLiveTranscriptText(text);
+      updateLiveTranscriptText(text);
       setLiveTranscriptPhase(text ? "live" : "listening");
       reveal();
     });
     const disposeAppend = window.electronAPI?.onPreviewAppend?.((chunk) => {
       const text = chunk?.trim?.();
       if (!text) return;
-      setLiveTranscriptText((current) => (current ? `${current} ${text}` : text));
+      const current = liveTranscriptSourceTextRef.current;
+      updateLiveTranscriptText(current ? `${current} ${text}` : text);
       setLiveTranscriptPhase("live");
       reveal();
     });
     const disposeHold = window.electronAPI?.onPreviewHold?.((payload) => {
+      liveTranscriptTextSchedulerRef.current.flush();
       setLiveTranscriptPhase(payload?.showCleanup ? "cleanup" : "final");
       reveal();
     });
@@ -441,7 +467,7 @@ export default function App() {
         closeLiveTranscriptPanel({ clear: true });
         return;
       }
-      setLiveTranscriptText(text);
+      updateLiveTranscriptText(text, { immediate: true });
       setLiveTranscriptPhase("final");
       reveal();
     });
@@ -456,14 +482,14 @@ export default function App() {
       disposeResult?.();
       disposeHide?.();
     };
-  }, [closeLiveTranscriptPanel, openLiveTranscriptPanel]);
+  }, [closeLiveTranscriptPanel, openLiveTranscriptPanel, updateLiveTranscriptText]);
 
   const previousNormalRecordingRef = useRef(false);
   useEffect(() => {
     const normalRecording = isRecording && !isAssistantVoice;
     if (normalRecording && !previousNormalRecordingRef.current) {
       liveTranscriptSuppressedRef.current = false;
-      setLiveTranscriptText("");
+      resetLiveTranscriptText();
       setLiveTranscriptPhase("listening");
     }
     previousNormalRecordingRef.current = normalRecording;
@@ -471,7 +497,13 @@ export default function App() {
     if (isRecording && isAssistantVoice && liveTranscriptPanelMounted) {
       closeLiveTranscriptPanel({ clear: true });
     }
-  }, [isAssistantVoice, isRecording, liveTranscriptPanelMounted, closeLiveTranscriptPanel]);
+  }, [
+    isAssistantVoice,
+    isRecording,
+    liveTranscriptPanelMounted,
+    closeLiveTranscriptPanel,
+    resetLiveTranscriptText,
+  ]);
 
   // Single owner of the window size: panel > menu > toast > compact pill > base.
   // Grows apply immediately so content never clips; shrinks wait for the

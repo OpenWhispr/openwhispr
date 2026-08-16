@@ -27,3 +27,12 @@ test("empty live transcript has no shimmer parts", async () => {
 
   assert.deepEqual(splitTranscriptForShimmer("   "), { settled: "", active: "" });
 });
+
+test("default shimmer work stays bounded to the newest six words", async () => {
+  const { splitTranscriptForShimmer } = await load();
+
+  assert.deepEqual(splitTranscriptForShimmer("one two three four five six seven eight"), {
+    settled: "one two ",
+    active: "three four five six seven eight",
+  });
+});
