@@ -601,10 +601,6 @@ a:hover {
   color: var(--color-agent-brand);
 }
 
-.voice-pill-control[data-agent-mode="true"] {
-  border-color: color-mix(in oklch, var(--color-agent-brand) 48%, var(--color-border-hover));
-}
-
 .voice-pill-control[data-agent-beam-active="true"] {
   box-shadow:
     var(--shadow-card),
@@ -619,37 +615,43 @@ a:hover {
   --beam-bloom-opacity: 1.06;
 }
 
-/* The neutral bars remain the live signal. A narrow Agent-colored band uses
-   the same sampled heights above them, so purple visibly wins wherever the
-   two wave layers overlap, matching the supplied reference. */
-.agent-waveform-sweep {
-  opacity: 0;
-  filter: drop-shadow(0 0 2px color-mix(in oklch, var(--color-agent-brand) 58%, transparent));
-  mask-image: linear-gradient(
-    90deg,
-    transparent 4%,
-    rgb(0 0 0 / 0.24) 18%,
-    black 34%,
-    black 62%,
-    rgb(0 0 0 / 0.24) 76%,
-    transparent 92%
-  );
-  mask-position: 130% 0;
-  mask-size: 230% 100%;
+/* Agent Mode keeps a softened purple echo across the entire waveform. The
+   crisp foreground is a narrower traveling window, so white passes over the
+   purple layer instead of being painted underneath it. */
+.agent-waveform-background {
+  opacity: 0.52;
+  filter: drop-shadow(0 0 1px color-mix(in oklch, var(--color-agent-brand) 38%, transparent));
   transition: opacity 180ms ease-out;
 }
 
-.agent-waveform-sweep[data-active="true"] {
-  opacity: 1;
-  animation: agent-waveform-sweep 1.45s linear infinite;
+.agent-waveform-background[data-active="true"] {
+  opacity: 0.6;
 }
 
-@keyframes agent-waveform-sweep {
+.agent-waveform-foreground[data-agent-mode="true"] {
+  mask-image: linear-gradient(
+    90deg,
+    transparent 6%,
+    rgb(0 0 0 / 0.12) 18%,
+    black 34%,
+    black 56%,
+    rgb(0 0 0 / 0.12) 72%,
+    transparent 86%
+  );
+  mask-position: 125% 0;
+  mask-size: 220% 100%;
+}
+
+.agent-waveform-foreground[data-agent-mode="true"][data-active="true"] {
+  animation: agent-waveform-highlight 1.55s linear infinite;
+}
+
+@keyframes agent-waveform-highlight {
   from {
-    mask-position: 130% 0;
+    mask-position: 125% 0;
   }
   to {
-    mask-position: -130% 0;
+    mask-position: -125% 0;
   }
 }
 
@@ -775,7 +777,7 @@ a:hover {
     transition-delay: 0ms !important;
   }
 
-  .agent-waveform-sweep[data-active="true"] {
+  .agent-waveform-foreground[data-agent-mode="true"][data-active="true"] {
     animation: none;
     mask-position: 50% 0;
   }
