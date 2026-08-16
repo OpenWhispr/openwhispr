@@ -230,11 +230,9 @@ export function AssistantPanel({
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
       >
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-surface-1 text-muted-foreground shadow-[var(--shadow-card)]">
-          <BrandMarkIcon size={16} />
-        </div>
+        <BrandMarkIcon size={20} className="shrink-0 text-muted-foreground" />
 
-        <div className="min-w-0 flex-1 text-right font-mono text-xs tracking-wide text-muted-foreground/70">
+        <div className="min-w-0 flex-1 text-right text-xs text-muted-foreground/70">
           <span className="truncate">{t("assistant.panel.selectionHint")}</span>
           {readableVoiceHotkey && (
             <kbd className="ml-2 inline-flex rounded-md border border-border/40 bg-foreground/5 px-2 py-1 font-mono text-[11px] tracking-normal text-foreground/65 shadow-sm">
@@ -244,33 +242,47 @@ export function AssistantPanel({
         </div>
       </header>
 
-      <main
-        data-panel-scroll-region
-        className="agent-chat-scroll mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner"
-        aria-busy={thinking || isBusy}
-      >
-        <div data-panel-size-source>
-          {displayedResponse ? (
-            <div style={{ animation: "agent-message-in 160ms ease-out both" }}>
-              <MarkdownRenderer
-                content={displayedResponse}
-                className="text-[15px] leading-relaxed text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
-              />
-              {latestAssistantMessage?.isStreaming && (
-                <span
-                  className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
-                  style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+      <div className="relative mx-4 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/40 bg-surface-1 shadow-inner">
+        <main
+          data-panel-scroll-region
+          className="agent-chat-scroll h-full overflow-y-auto px-5 py-4"
+          aria-busy={thinking || isBusy}
+        >
+          <div
+            data-panel-size-source
+            className={`assistant-response-content ${
+              thinking ? "assistant-response-content-updating" : ""
+            }`}
+          >
+            {displayedResponse ? (
+              <div style={{ animation: "agent-message-in 160ms ease-out both" }}>
+                <MarkdownRenderer
+                  content={displayedResponse}
+                  className="text-[15px] leading-relaxed text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
                 />
-              )}
-            </div>
-          ) : null}
-          {thinking && (
-            <p className="mt-3 text-sm text-muted-foreground" aria-live="polite">
-              <span className="inline-response-shimmer">{t("agentMode.input.thinking")}</span>
-            </p>
-          )}
-        </div>
-      </main>
+                {latestAssistantMessage?.isStreaming && (
+                  <span
+                    className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
+                    style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+                  />
+                )}
+              </div>
+            ) : null}
+            {thinking && (
+              <div role="status">
+                <span className="sr-only">{t("agentMode.input.thinking")}</span>
+              </div>
+            )}
+          </div>
+        </main>
+
+        {thinking && (
+          <div
+            className="assistant-content-area-shimmer pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-2xl"
+            aria-hidden="true"
+          />
+        )}
+      </div>
 
       <footer
         className={`flex h-16 shrink-0 items-center px-4 ${

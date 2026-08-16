@@ -826,6 +826,63 @@ a:hover {
   }
 }
 
+/* Let the retained answer recede before the surface sweep begins. The filter
+   transitions once and then stays still; only the lightweight sweep repeats. */
+.assistant-response-content {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity 260ms ease-out,
+    filter 260ms ease-out;
+}
+
+.assistant-response-content-updating {
+  opacity: 0.42;
+  filter: blur(4px);
+  transition:
+    opacity 480ms ease-in-out,
+    filter 480ms ease-in-out;
+  will-change: opacity, filter;
+}
+
+.assistant-content-area-shimmer {
+  background: color-mix(in oklch, var(--color-surface-1) 58%, transparent);
+  animation: assistant-content-area-enter 260ms ease-out 220ms both;
+}
+
+.assistant-content-area-shimmer::after {
+  position: absolute;
+  inset-block: 0;
+  left: -60%;
+  width: 60%;
+  content: "";
+  background: linear-gradient(
+    100deg,
+    transparent 18%,
+    color-mix(in oklch, var(--color-surface-3) 44%, transparent) 50%,
+    transparent 82%
+  );
+  transform: translateX(0);
+  animation: assistant-content-area-sweep 2.1s cubic-bezier(0.4, 0, 0.2, 1) 440ms infinite both;
+  will-change: transform;
+}
+
+@keyframes assistant-content-area-enter {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes assistant-content-area-sweep {
+  0% {
+    transform: translateX(0);
+  }
+  68%,
+  100% {
+    transform: translateX(270%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .expanding-panel-surface {
     transition-duration: 1ms;
@@ -857,6 +914,23 @@ a:hover {
     animation: none;
     color: var(--color-foreground);
     -webkit-text-fill-color: currentColor;
+  }
+
+  .assistant-content-area-shimmer::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .assistant-content-area-shimmer {
+    animation: none;
+  }
+
+  .assistant-response-content {
+    transition: opacity 1ms;
+  }
+
+  .assistant-response-content-updating {
+    filter: none;
   }
 }
 
