@@ -73,7 +73,7 @@ test("gemini: posts converted wav as inlineData to generateContent with x-goog-a
 
   assert.equal(convertCalls.length, 1, "audio is converted before upload");
   assert.deepEqual(convertCalls[0].input, Buffer.from([1, 2, 3]));
-  assert.deepEqual(convertCalls[0].options, { sampleRate: 16000, channels: 1 });
+  assert.deepEqual(convertCalls[0].options, { sampleRate: 16000, channels: 1, codec: "libopus", bitrate: "24k" });
 
   assert.equal(fetches.length, 1);
   assert.equal(
@@ -90,7 +90,7 @@ test("gemini: posts converted wav as inlineData to generateContent with x-goog-a
   assert.match(parts[0].text, /verbatim/i, "instruction demands a verbatim transcript");
   assert.match(parts[0].text, /"es"/, "language hint rides the instruction");
   assert.match(parts[0].text, /OpenWhispr, Zellij/, "dictionary terms ride the instruction");
-  assert.equal(parts[1].inlineData.mimeType, "audio/wav");
+  assert.equal(parts[1].inlineData.mimeType, "audio/ogg");
   assert.equal(parts[1].inlineData.data, Buffer.from("RIFF-fake-wav").toString("base64"));
   assert.ok(!result.alreadyCleaned, "plain transcription is not marked cleaned");
 });
@@ -217,5 +217,6 @@ test("gemini: a transient 503 is retried once and the retry's transcript is retu
     () => transcribeAudio({ audioBuffer: Buffer.from([1]), apiKey: "gk" }),
     (err) => err.code === "SERVER_ERROR" && /503/.test(err.message)
   );
-  assert.equal(fetches.length, 2, "only the single retry, then fail");
+  assert.equal(fetches.length, 3, "retry, then one fallback-model attempt, then fail");
+  assert.match(fetches[2].url, /gemini-3\.5-flash-lite/, "third attempt hits the sibling model");
 });

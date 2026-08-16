@@ -111,7 +111,10 @@ function isWavFormat(buffer) {
 }
 
 function convertToWav(inputPath, outputPath, options = {}) {
-  const { sampleRate = 16000, channels = 1 } = options;
+  // Despite the name this is a general audio converter: `codec` (and the
+  // output path's extension) picks the target format — e.g. libopus in .ogg
+  // for compressed uploads. Defaults preserve the original wav behavior.
+  const { sampleRate = 16000, channels = 1, codec = "pcm_s16le", bitrate } = options;
 
   return new Promise((resolve, reject) => {
     const ffmpegPath = getFFmpegPath();
@@ -132,7 +135,8 @@ function convertToWav(inputPath, outputPath, options = {}) {
       "-ac",
       String(channels),
       "-c:a",
-      "pcm_s16le",
+      codec,
+      ...(bitrate ? ["-b:a", bitrate] : []),
       "-y", // Overwrite output file
       outputPath,
     ];
