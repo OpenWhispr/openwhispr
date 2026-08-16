@@ -117,7 +117,7 @@ test("gemini: a cleanupPrompt fuses cleanup into the instruction and marks the r
   assert.doesNotMatch(instruction, /verbatim/i, "the verbatim directive is replaced");
   assert.match(
     instruction,
-    /Output ONLY the cleaned transcript text/,
+    /Output ONLY the final cleaned text/,
     "output-only directive bridges audio to the cleanup rules"
   );
   assert.match(instruction, /"es"/, "language hint still rides the instruction");
