@@ -104,7 +104,7 @@ test("Agent Mode uses the supplied mark, brand token, ocean beam, and purple wav
   assert.match(agentRecording, /^<div [^>]*class="agent-thinking-beam/);
   assert.match(agentRecording, /^<div [^>]*data-beam="[^"]+"/);
   assert.match(agentRecording, /data-agent-mode="true"/);
-  assert.match(agentRecording, /voice-identity-glyph-agent[^>]*text-agent-brand/);
+  assert.match(agentRecording, /voice-identity-final-agent agent-mode-mark/);
   assert.match(agentRecording, /agent-waveform-sweep[^>]*text-agent-brand" data-active="true"/);
   assert.equal((agentRecording.match(/w-0\.5 rounded-full bg-current/g) || []).length, 33);
   assert.doesNotMatch(normalRecording, /agent-waveform-sweep/);
@@ -120,4 +120,36 @@ test("Agent thinking keeps the purple beam on the same persistent pill root", as
   assert.match(agentThinking, /^<div [^>]*data-active=""/);
   assert.match(agentThinking, /^<div [^>]*data-agent-mode="true"/);
   assert.match(agentThinking, /data-agent-beam-active="true"/);
+});
+
+test("the stable identity box stages the sound-bars into the Agent mark", async () => {
+  const idle = await renderPill("idle", false);
+  const agentThinking = await renderPill("thinking", false, "right", {
+    agentMode: true,
+  });
+
+  assert.match(idle, /data-agent-mode="false"/);
+  assert.match(idle, /voice-identity-morph-shell/);
+  assert.match(idle, /voice-identity-morph-bar-left/);
+  assert.match(idle, /voice-identity-morph-bar-center/);
+  assert.match(idle, /voice-identity-morph-bar-right/);
+  assert.match(agentThinking, /data-agent-mode="true"/);
+  assert.match(agentThinking, /agent-mode-mark/);
+});
+
+test("the voice identity performs an actual SVG geometry morph", async () => {
+  const { resolveVoiceIdentityMorphPaths } =
+    await import("../../src/components/dictation/voiceIdentityMorph.ts");
+  const listening = resolveVoiceIdentityMorphPaths(0);
+  const midpoint = resolveVoiceIdentityMorphPaths(0.5);
+  const agent = resolveVoiceIdentityMorphPaths(1);
+
+  assert.notEqual(listening.shell, midpoint.shell);
+  assert.notEqual(midpoint.shell, agent.shell);
+  assert.notEqual(listening.centerBar, midpoint.centerBar);
+  assert.notEqual(midpoint.centerBar, agent.centerBar);
+  assert.equal(listening.agentOpacity, 0);
+  assert.ok(midpoint.sparkOpacity > 0);
+  assert.equal(agent.agentOpacity, 1);
+  assert.equal(agent.constructionOpacity, 0);
 });

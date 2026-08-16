@@ -586,38 +586,19 @@ a:hover {
   box-shadow: none;
 }
 
-/* Agent Mode keeps the pill node stable while its neutral brand mark folds
-   away and the supplied sparkle/leaf mark resolves in the same icon box. */
-.voice-identity-glyph {
-  transform-origin: center;
-  transition:
-    opacity 220ms ease-out,
-    transform 320ms cubic-bezier(0.2, 0, 0, 1),
-    filter 220ms ease-out;
+/* The SVG geometry itself moves between identities: the listening ring opens
+   into the leaf contour, while its bars bend into the leaf spine and spark. */
+.voice-identity-svg {
+  color: inherit;
+  transition: color 220ms ease-out;
 }
 
-.voice-identity-glyph-default {
-  opacity: 1;
-  transform: scale(1) rotate(0deg);
-  filter: blur(0);
+.voice-identity-icon[data-agent-mode="true"] .voice-identity-svg {
+  color: var(--color-agent-brand);
 }
 
-.voice-identity-glyph-agent {
-  opacity: 0;
-  transform: scale(0.68) rotate(18deg);
-  filter: blur(1px);
-}
-
-.voice-identity-icon[data-agent-mode="true"] .voice-identity-glyph-default {
-  opacity: 0;
-  transform: scale(0.68) rotate(-18deg);
-  filter: blur(1px);
-}
-
-.voice-identity-icon[data-agent-mode="true"] .voice-identity-glyph-agent {
-  opacity: 1;
-  transform: scale(1) rotate(0deg);
-  filter: blur(0);
+.voice-identity-final-agent {
+  color: var(--color-agent-brand);
 }
 
 .voice-pill-control[data-agent-mode="true"] {
@@ -789,8 +770,9 @@ a:hover {
 
   .expanding-panel-surface[data-panel-mode="live-transcript"]::before,
   .voice-pill-control[data-integrated-with-panel="true"],
-  .voice-identity-glyph {
+  .voice-identity-svg {
     transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
   }
 
   .agent-waveform-sweep[data-active="true"] {
