@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, X } from "lucide-react";
-import { cn } from "../lib/utils";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { Button } from "../ui/button";
@@ -35,6 +34,7 @@ interface AssistantPanelProps {
   onClose: () => void;
   onResponseReadyChange: (ready: boolean) => void;
   onResponseContent: () => void;
+  onPreferredHeightChange: (height: number) => void;
 }
 
 const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
@@ -50,6 +50,7 @@ export function AssistantPanel({
   onClose,
   onResponseReadyChange,
   onResponseContent,
+  onPreferredHeightChange,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
@@ -116,6 +117,9 @@ export function AssistantPanel({
     .reverse()
     .find((message) => message.role === "assistant");
   const responseContent = latestAssistantMessage?.content ?? "";
+  const displayedResponseRef = useRef("");
+  if (responseContent) displayedResponseRef.current = responseContent;
+  const displayedResponse = responseContent || displayedResponseRef.current;
   const isResponseReady = Boolean(
     responseContent && !isBusy && !latestAssistantMessage?.isStreaming && voiceState === "idle"
   );
@@ -194,7 +198,12 @@ export function AssistantPanel({
   }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, handleCopy]);
 
   return (
-    <ExpandingPanelShell open={open} anchor="bottom-right">
+    <ExpandingPanelShell
+      open={open}
+      anchor="bottom-right"
+      stabilizeHeight={thinking || isBusy || voiceState !== "idle"}
+      onPreferredHeightChange={onPreferredHeightChange}
+    >
       <header
         className="flex h-16 shrink-0 cursor-grab items-center gap-3 px-5 active:cursor-grabbing"
         onMouseDown={handleMouseDown}
@@ -215,17 +224,15 @@ export function AssistantPanel({
       </header>
 
       <main
-        className={cn(
-          "mx-4 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border/40 bg-surface-1 px-5 py-4 shadow-inner agent-chat-scroll",
-          thinking && "agent-thinking-text-window"
-        )}
-        aria-busy={thinking}
+        data-panel-scroll-region
+        className="agent-chat-scroll min-h-0 flex-auto overflow-y-auto px-5 pb-3 pt-2"
+        aria-busy={thinking || isBusy}
       >
         <div>
-          {responseContent ? (
-            <div style={{ animation: "agent-message-in 200ms ease-out both" }}>
+          {displayedResponse ? (
+            <div style={{ animation: "agent-message-in 160ms ease-out both" }}>
               <MarkdownRenderer
-                content={responseContent}
+                content={displayedResponse}
                 className="text-[15px] leading-relaxed text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
               />
               {latestAssistantMessage?.isStreaming && (
@@ -236,6 +243,11 @@ export function AssistantPanel({
               )}
             </div>
           ) : null}
+          {thinking && (
+            <p className="mt-3 text-sm text-muted-foreground" aria-live="polite">
+              <span className="inline-response-shimmer">{t("agentMode.input.thinking")}</span>
+            </p>
+          )}
         </div>
       </main>
 

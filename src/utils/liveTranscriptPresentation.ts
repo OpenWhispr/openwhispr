@@ -10,7 +10,7 @@ export interface ShimmerTranscriptParts {
  */
 export function splitTranscriptForShimmer(
   text: string,
-  activeWordCount = 12
+  activeWordCount = 8
 ): ShimmerTranscriptParts {
   const normalized = text.trim();
   if (!normalized) return { settled: "", active: "" };

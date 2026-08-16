@@ -12,6 +12,7 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   state: VoicePillState;
   getAudioLevel: () => number | null;
   expanded?: boolean;
+  waveformOnlyWhileRecording?: boolean;
   isDragging?: boolean;
 }
 
@@ -36,6 +37,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     state,
     getAudioLevel,
     expanded = false,
+    waveformOnlyWhileRecording = false,
     isDragging = false,
     className,
     style,
@@ -48,8 +50,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isThinking = state === "thinking";
   const isUnavailable = state === "unavailable";
   const isPanel = variant === "panel";
-  const isPanelThinking = isPanel && isThinking;
-  const showCompactPill = isPanel || expanded;
+  const showCompactPill = isRecording || expanded || (isPanel && !waveformOnlyWhileRecording);
   const showDivider = showCompactPill && !isRecording;
   const dividerMargin = showCompactPill ? (isRecording ? 3 : 4) : 0;
 
@@ -139,11 +140,13 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   return (
     <BorderBeam
       size="sm"
-      colorVariant="colorful"
+      colorVariant="mono"
       theme="auto"
-      duration={1.6}
-      strength={0.85}
-      borderRadius={isPanelThinking ? 18 : 20}
+      duration={2.2}
+      brightness={1}
+      strength={0.55}
+      staticColors
+      borderRadius={showCompactPill ? 18 : 20}
       className="agent-thinking-beam inline-flex rounded-full"
     >
       {pill}

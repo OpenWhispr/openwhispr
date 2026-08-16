@@ -19,7 +19,7 @@ import {
   resolveVoiceActivityPresentation,
 } from "./helpers/voicePillPresentation";
 
-const ASSISTANT_TRANSITION_MS = 360;
+const ASSISTANT_TRANSITION_MS = 280;
 
 // Tooltip Component
 const Tooltip = ({ children, content, emoji, align = "center", disabled = false }) => {
@@ -273,6 +273,10 @@ export default function App() {
     }
   }, [setWindowInteractivity]);
 
+  const handlePanelPreferredHeight = React.useCallback((height) => {
+    window.electronAPI?.resizeAssistantWindowToContent?.(height);
+  }, []);
+
   const {
     isRecording,
     isProcessing,
@@ -432,6 +436,7 @@ export default function App() {
     });
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
+    if (target === prev) return;
     if (!prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {
       window.electronAPI?.resizeMainWindow?.(target);
       return;
@@ -632,6 +637,7 @@ export default function App() {
                 variant={anyPanelOpen ? "panel" : "floating"}
                 state={commonPillState}
                 expanded={!anyPanelOpen && isCompactPill}
+                waveformOnlyWhileRecording={liveTranscriptPanelMounted}
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}
                 role={anyPanelMounted ? "status" : "button"}
@@ -751,6 +757,7 @@ export default function App() {
           onClose={handleAssistantPanelClose}
           onResponseReadyChange={setAssistantResponseReady}
           onResponseContent={handleAssistantResponseContent}
+          onPreferredHeightChange={handlePanelPreferredHeight}
         />
       )}
 
@@ -761,6 +768,7 @@ export default function App() {
           phase={liveTranscriptPhase}
           processing={isProcessing && !isAssistantVoice}
           onCollapse={() => closeLiveTranscriptPanel({ suppress: true })}
+          onPreferredHeightChange={handlePanelPreferredHeight}
         />
       )}
     </div>

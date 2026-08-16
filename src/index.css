@@ -448,9 +448,9 @@ a:hover {
   opacity: 0;
   pointer-events: none;
   transition:
-    clip-path 360ms cubic-bezier(0.2, 0, 0, 1),
-    opacity 180ms ease-out,
-    transform 360ms cubic-bezier(0.2, 0, 0, 1);
+    clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms ease-out,
+    transform 280ms cubic-bezier(0.2, 0, 0, 1);
   will-change: clip-path, opacity, transform;
 }
 
@@ -472,7 +472,7 @@ a:hover {
   transform: none;
 }
 
-.live-transcript-line-shimmer {
+.inline-response-shimmer {
   color: transparent;
   background: linear-gradient(
     90deg,
@@ -485,31 +485,14 @@ a:hover {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: live-transcript-line-shimmer 1.7s ease-in-out infinite;
+  animation: inline-response-shimmer 2.2s linear infinite;
+  will-change: background-position;
 }
 
-@keyframes live-transcript-line-shimmer {
+@keyframes inline-response-shimmer {
   to {
     background-position: -120% 0;
   }
-}
-
-.agent-thinking-text-window {
-  position: relative;
-}
-
-.agent-thinking-text-window::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in oklch, currentColor 10%, transparent) 50%,
-    transparent 100%
-  );
-  animation: shimmer-slide 1.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -522,12 +505,7 @@ a:hover {
     animation-iteration-count: 1, 1 !important;
   }
 
-  .agent-thinking-text-window::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-  }
-
-  .live-transcript-line-shimmer {
+  .inline-response-shimmer {
     animation: none;
     color: var(--color-foreground);
     -webkit-text-fill-color: currentColor;
@@ -606,15 +584,6 @@ a:hover {
   50% {
     transform: scale(1.02);
     opacity: 0.7;
-  }
-}
-
-@keyframes shimmer-slide {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100%);
   }
 }
 

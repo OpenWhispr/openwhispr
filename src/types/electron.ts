@@ -1493,6 +1493,9 @@ declare global {
       resizeMainWindow: (
         sizeKey: "BASE" | "RECORDING" | "WITH_MENU" | "WITH_TOAST" | "EXPANDED" | "ASSISTANT"
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
+      resizeAssistantWindowToContent: (
+        surfaceHeight: number
+      ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
       setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
 
       // App management

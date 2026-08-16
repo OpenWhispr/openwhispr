@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronUp, Copy } from "lucide-react";
+import { Check, ChevronDown, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ExpandingPanelShell } from "./ExpandingPanelShell";
 import { splitTranscriptForShimmer } from "../../utils/liveTranscriptPresentation";
@@ -12,6 +12,7 @@ interface LiveTranscriptPanelProps {
   phase: LiveTranscriptPhase;
   processing: boolean;
   onCollapse: () => void;
+  onPreferredHeightChange: (height: number) => void;
 }
 
 const COPIED_RESET_MS = 1600;
@@ -22,6 +23,7 @@ export function LiveTranscriptPanel({
   phase,
   processing,
   onCollapse,
+  onPreferredHeightChange,
 }: LiveTranscriptPanelProps) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -78,10 +80,13 @@ export function LiveTranscriptPanel({
       className="live-transcript-panel"
       aria-label={t("transcriptionPreview.label")}
       aria-busy={shouldShimmer}
+      stabilizeHeight={shouldShimmer}
+      onPreferredHeightChange={onPreferredHeightChange}
     >
       <main
         ref={scrollRef}
-        className="agent-chat-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-8"
+        data-panel-scroll-region
+        className="agent-chat-scroll min-h-0 flex-auto overflow-y-auto px-5 pb-3 pt-8"
         aria-live="polite"
         aria-atomic="true"
       >
@@ -89,7 +94,7 @@ export function LiveTranscriptPanel({
           <p className="select-text whitespace-pre-wrap break-words text-base leading-relaxed text-foreground [text-wrap:pretty]">
             <span>{shimmerParts.settled}</span>
             {shimmerParts.active && (
-              <span className="live-transcript-line-shimmer">{shimmerParts.active}</span>
+              <span className="inline-response-shimmer">{shimmerParts.active}</span>
             )}
           </p>
         ) : (
@@ -115,7 +120,7 @@ export function LiveTranscriptPanel({
           className="inline-flex size-10 items-center justify-center rounded-full border border-border/35 bg-surface-1 text-foreground shadow-[var(--shadow-card)] transition-colors hover:border-border/60 hover:bg-surface-2"
           aria-label={t("transcriptionPreview.collapse", { defaultValue: "Collapse transcript" })}
         >
-          <ChevronUp className="size-5" />
+          <ChevronDown className="size-5" />
         </button>
       </footer>
     </ExpandingPanelShell>

@@ -33,6 +33,7 @@ const ASSISTANT_PANEL_SIZE_LIMITS = {
   ratioHeight: 538,
   gutter: 24,
   minSurfaceWidth: 360,
+  minSurfaceHeight: 152,
   maxSurfaceWidth: 600,
 };
 
@@ -64,6 +65,23 @@ function fitAssistantWindowToWorkArea(requestedSize, workArea) {
 
   return {
     width: surfaceWidth + limits.gutter,
+    height: surfaceHeight + limits.gutter,
+  };
+}
+
+function fitAssistantContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
+  const limits = ASSISTANT_PANEL_SIZE_LIMITS;
+  const maximumWindow = fitAssistantWindowToWorkArea(ASSISTANT_WINDOW_SIZE, workArea);
+  const maximumSurfaceHeight = maximumWindow.height - limits.gutter;
+  const minimumSurfaceHeight = Math.min(limits.minSurfaceHeight, maximumSurfaceHeight);
+  const numericHeight = Number(requestedSurfaceHeight);
+  const safeHeight = Number.isFinite(numericHeight)
+    ? Math.round(numericHeight)
+    : minimumSurfaceHeight;
+  const surfaceHeight = Math.max(minimumSurfaceHeight, Math.min(safeHeight, maximumSurfaceHeight));
+
+  return {
+    width: maximumWindow.width,
     height: surfaceHeight + limits.gutter,
   };
 }
@@ -247,6 +265,7 @@ module.exports = {
   CONTROL_PANEL_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
   ASSISTANT_PANEL_SIZE_LIMITS,
+  fitAssistantContentWindowToWorkArea,
   fitAssistantWindowToWorkArea,
   WINDOW_SIZES,
   WindowPositionUtil,
