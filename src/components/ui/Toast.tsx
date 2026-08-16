@@ -1,8 +1,14 @@
 import * as React from "react";
 import { X, Copy, Check } from "lucide-react";
 import { cn } from "../lib/utils";
-import { ToastContext, type ToastProps } from "./useToast";
+import {
+  ToastContext,
+  type ToastActionConfig,
+  type ToastPresentation,
+  type ToastProps,
+} from "./useToast";
 import { isDictationPanelWindow } from "../../utils/windowContext";
+import { DictationErrorCard } from "../dictation/DictationErrorCard";
 
 interface ToastState extends ToastProps {
   id: string;
@@ -12,7 +18,12 @@ interface ToastState extends ToastProps {
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = React.useState<ToastState[]>([]);
+  const toastsRef = React.useRef<ToastState[]>([]);
   const timersRef = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  React.useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
 
   const clearTimer = React.useCallback((id: string) => {
     const timer = timersRef.current[id];
@@ -32,11 +43,21 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const toast = React.useCallback(
     (props: Omit<ToastProps, "id">): string => {
       const id = Math.random().toString(36).substring(2, 11);
-      const newToast: ToastState = { ...props, id, createdAt: Date.now() };
+      const duration =
+        props.duration ??
+        (props.presentation === "dictation-error"
+          ? 0
+          : props.variant === "destructive"
+            ? 6000
+            : 3500);
+      const newToast: ToastState = { ...props, duration, id, createdAt: Date.now() };
 
-      setToasts((prev) => [...prev, newToast]);
+      setToasts((prev) =>
+        props.presentation === "dictation-error"
+          ? [...prev.filter((item) => item.presentation !== "dictation-error"), newToast]
+          : [...prev, newToast]
+      );
 
-      const duration = props.duration ?? (props.variant === "destructive" ? 6000 : 3500);
       if (duration > 0) {
         const timer = setTimeout(() => {
           startExitAnimation(id);
@@ -47,6 +68,17 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return id;
     },
     [startExitAnimation]
+  );
+
+  const dismissByPresentation = React.useCallback(
+    (presentation: ToastPresentation) => {
+      for (const item of toastsRef.current) {
+        if (item.presentation !== presentation) continue;
+        clearTimer(item.id);
+        startExitAnimation(item.id);
+      }
+    },
+    [clearTimer, startExitAnimation]
   );
 
   const dismiss = React.useCallback(
@@ -94,7 +126,19 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   return (
-    <ToastContext.Provider value={{ toast, dismiss, toastCount: toasts.length }}>
+    <ToastContext.Provider
+      value={{
+        toast,
+        dismiss,
+        toastCount: toasts.length,
+        dictationErrorActionCount:
+          [...toasts]
+            .reverse()
+            .find((item) => item.presentation === "dictation-error" && !item.isExiting)?.actions
+            ?.length ?? 0,
+        dismissByPresentation,
+      }}
+    >
       {children}
       <ToastViewport
         toasts={toasts}
@@ -113,6 +157,9 @@ const ToastViewport: React.FC<{
   onResumeTimer: (id: string, remainingTime: number) => void;
 }> = ({ toasts, onDismiss, onPauseTimer, onResumeTimer }) => {
   const isDictationPanel = React.useMemo(isDictationPanelWindow, []);
+  // Keep the error viewport anchored through its exit animation so the card
+  // does not jump back to the standard toast position while fading out.
+  const hasDictationError = toasts.some((toast) => toast.presentation === "dictation-error");
 
   if (toasts.length === 0) return null;
 
@@ -120,7 +167,11 @@ const ToastViewport: React.FC<{
     <div
       className={cn(
         "fixed z-[100] flex flex-col gap-1.5 pointer-events-none",
-        isDictationPanel ? "bottom-20 right-6" : "bottom-5 right-5"
+        isDictationPanel
+          ? hasDictationError
+            ? "inset-x-3 bottom-3"
+            : "bottom-20 right-6"
+          : "bottom-5 right-5"
       )}
     >
       {toasts.map((toast) => (
@@ -161,6 +212,8 @@ const Toast: React.FC<
   title,
   description,
   action,
+  actions,
+  presentation = "standard",
   variant = "default",
   duration = 3500,
   isExiting,
@@ -173,6 +226,11 @@ const Toast: React.FC<
   const pausedAtRef = React.useRef<number | null>(null);
   const [copied, setCopied] = React.useState(false);
   const isDestructive = variant === "destructive";
+
+  const handleStructuredAction = (structuredAction: ToastActionConfig) => {
+    if (structuredAction.dismissOnClick !== false) onClose?.();
+    void structuredAction.onClick();
+  };
 
   const handleMouseEnter = () => {
     pausedAtRef.current = Date.now();
@@ -199,6 +257,28 @@ const Toast: React.FC<
 
   const message = title || description;
   const detail = title && description ? description : undefined;
+
+  if (presentation === "dictation-error") {
+    return (
+      <div
+        className={cn(
+          "pointer-events-auto w-full transition-[opacity,transform] duration-200 ease-out",
+          isExiting
+            ? "translate-y-2 scale-[0.98] opacity-0"
+            : "translate-y-0 scale-100 opacity-100 animate-in fade-in-0 slide-in-from-bottom-3 duration-300"
+        )}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <DictationErrorCard
+          title={title}
+          description={description}
+          actions={actions ?? []}
+          onAction={handleStructuredAction}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

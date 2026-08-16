@@ -1491,7 +1491,15 @@ declare global {
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
       resizeMainWindow: (
-        sizeKey: "BASE" | "RECORDING" | "WITH_MENU" | "WITH_TOAST" | "EXPANDED" | "ASSISTANT"
+        sizeKey:
+          | "BASE"
+          | "RECORDING"
+          | "DICTATION_ERROR"
+          | "DICTATION_ERROR_WITH_TRANSCRIPT"
+          | "WITH_MENU"
+          | "WITH_TOAST"
+          | "EXPANDED"
+          | "ASSISTANT"
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
       resizeAssistantWindowToContent: (
         surfaceHeight: number

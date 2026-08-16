@@ -56,7 +56,8 @@ export default function App() {
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
   const commandMenuRef = useRef(null);
   const buttonRef = useRef(null);
-  const { toast, dismiss, toastCount } = useToast();
+  const { toast, dismiss, toastCount, dictationErrorActionCount, dismissByPresentation } =
+    useToast();
   const { t } = useTranslation();
   const { hotkey } = useHotkey();
   const { isDragging, handleMouseDown, handleMouseUp } = useWindowDrag();
@@ -72,6 +73,10 @@ export default function App() {
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
     window.electronAPI?.setMainWindowInteractivity?.(shouldCapture);
   }, []);
+  const dismissDictationError = React.useCallback(
+    () => dismissByPresentation("dictation-error"),
+    [dismissByPresentation]
+  );
 
   useEffect(() => {
     setWindowInteractivity(false);
@@ -289,6 +294,7 @@ export default function App() {
   } = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
     onAssistantCommand: handleAssistantCommand,
+    dismissDictationError,
   });
 
   useEffect(() => {
@@ -433,6 +439,7 @@ export default function App() {
       menuOpen: isCommandMenuOpen,
       toastCount,
       compactPill: isCompactPill,
+      dictationErrorActionCount,
     });
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
@@ -444,7 +451,20 @@ export default function App() {
     const shrinkDelay = prev === "ASSISTANT" ? ASSISTANT_TRANSITION_MS : 340;
     const timeout = setTimeout(() => window.electronAPI?.resizeMainWindow?.(target), shrinkDelay);
     return () => clearTimeout(timeout);
-  }, [assistantPanelOpen, liveTranscriptPanelOpen, isCommandMenuOpen, toastCount, isCompactPill]);
+  }, [
+    assistantPanelOpen,
+    liveTranscriptPanelOpen,
+    isCommandMenuOpen,
+    toastCount,
+    isCompactPill,
+    dictationErrorActionCount,
+  ]);
+
+  useEffect(() => {
+    if (isRecording && dictationErrorActionCount > 0) {
+      dismissByPresentation("dictation-error");
+    }
+  }, [isRecording, dictationErrorActionCount, dismissByPresentation]);
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -602,7 +622,7 @@ export default function App() {
   return (
     <div className="dictation-window">
       {/* The panel footer owns this pill until final-response actions replace it. */}
-      {(!assistantPanelOpen || !assistantResponseReady) && (
+      {dictationErrorActionCount === 0 && (!assistantPanelOpen || !assistantResponseReady) && (
         <div
           className={`fixed z-50 transition-[bottom,right,left,transform] duration-300 ease-out ${pillPositionClass}`}
         >

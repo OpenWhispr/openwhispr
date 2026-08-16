@@ -581,9 +581,12 @@
         "title": "Fallback Mode",
         "description": "Local Whisper failed. Used OpenAI API instead."
       },
+      "errorActions": {
+        "viewTranscript": "View Transcript"
+      },
       "noAudio": {
-        "title": "No Audio Detected",
-        "description": "The recording contained no detectable audio. Please try again."
+        "title": "We didn’t catch that",
+        "description": "Check your microphone and try again."
       },
       "micDisconnected": {
         "title": "Microphone disconnected",

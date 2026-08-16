@@ -581,9 +581,12 @@
         "title": "回退模式",
         "description": "本地 Whisper 失败，已改用 OpenAI API。"
       },
+      "errorActions": {
+        "viewTranscript": "查看转录"
+      },
       "noAudio": {
-        "title": "未检测到音频",
-        "description": "录音中未检测到音频，请重试。"
+        "title": "我们没听清",
+        "description": "请检查麦克风后重试。"
       },
       "micDisconnected": {
         "title": "麦克风已断开",

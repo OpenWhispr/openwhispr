@@ -581,9 +581,12 @@
         "title": "Mode de secours",
         "description": "Whisper local a échoué. L'API OpenAI a pris le relais."
       },
+      "errorActions": {
+        "viewTranscript": "Voir la transcription"
+      },
       "noAudio": {
-        "title": "Aucun audio détecté",
-        "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."
+        "title": "Nous n’avons pas compris",
+        "description": "Vérifiez votre microphone et réessayez."
       },
       "micDisconnected": {
         "title": "Microphone déconnecté",

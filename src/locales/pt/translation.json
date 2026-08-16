@@ -560,9 +560,12 @@
         "title": "Modo de fallback",
         "description": "O Whisper local falhou. A API da OpenAI foi usada no lugar."
       },
+      "errorActions": {
+        "viewTranscript": "Ver transcrição"
+      },
       "noAudio": {
-        "title": "Nenhum áudio detectado",
-        "description": "A gravação não contém áudio detectável. Tente novamente."
+        "title": "Não conseguimos entender",
+        "description": "Verifique o microfone e tente novamente."
       },
       "micDisconnected": {
         "title": "Microfone desconectado",

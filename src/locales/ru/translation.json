@@ -581,9 +581,12 @@
         "title": "Резервный режим",
         "description": "Локальный Whisper не сработал. Использован OpenAI API."
       },
+      "errorActions": {
+        "viewTranscript": "Показать расшифровку"
+      },
       "noAudio": {
-        "title": "Звук не обнаружен",
-        "description": "В записи не обнаружен звук. Попробуйте ещё раз."
+        "title": "Мы не расслышали",
+        "description": "Проверьте микрофон и попробуйте ещё раз."
       },
       "micDisconnected": {
         "title": "Микрофон отключён",

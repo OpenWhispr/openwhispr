@@ -42,7 +42,11 @@ export const useAudioRecording = (toast, options = {}) => {
   const stopLockRef = useRef(false);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
-  const { onToggle, onAssistantCommand } = options;
+  const lastStartOptionsRef = useRef({
+    voiceAgentRequested: false,
+    translationRequested: false,
+  });
+  const { onToggle, onAssistantCommand, dismissDictationError } = options;
 
   // Read through a ref so a re-render never tears down the AudioManager
   // (the mount effect below must not depend on this callback).
@@ -54,6 +58,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const performStartRecording = useCallback(
     async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
       if (startLockRef.current) return false;
+      lastStartOptionsRef.current = { voiceAgentRequested, translationRequested };
       startLockRef.current = true;
       stopRequestedDuringStartRef.current = false;
       try {
@@ -118,6 +123,7 @@ export const useAudioRecording = (toast, options = {}) => {
         const didStart = audioManagerRef.current.shouldUseStreaming()
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
+        if (didStart) dismissDictationError?.();
 
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
@@ -151,7 +157,7 @@ export const useAudioRecording = (toast, options = {}) => {
         stopRequestedDuringStartRef.current = false;
       }
     },
-    [t, toast]
+    [t, toast, dismissDictationError]
   );
 
   const performStopRecording = useCallback(async () => {
@@ -188,6 +194,43 @@ export const useAudioRecording = (toast, options = {}) => {
 
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
+
+    const getRecoverableTranscript = (fallback = "") =>
+      buildLiveTranscriptionPreview(
+        audioManagerRef.current?.streamingFinalText,
+        audioManagerRef.current?.streamingPartialText
+      ).trim() || fallback.trim();
+
+    const showDictationError = ({ title, description, transcript = "" }) => {
+      const recoverableTranscript = getRecoverableTranscript(transcript);
+      const actions = [
+        {
+          label: t("common.retry"),
+          icon: "retry",
+          dismissOnClick: false,
+          onClick: () => performStartRecording(lastStartOptionsRef.current),
+        },
+      ];
+
+      if (recoverableTranscript) {
+        actions.push({
+          label: t("hooks.audioRecording.errorActions.viewTranscript"),
+          icon: "transcript",
+          onClick: () => {
+            window.electronAPI?.completeDictationPreview?.({ text: recoverableTranscript });
+          },
+        });
+      }
+
+      toast({
+        title,
+        description,
+        variant: "destructive",
+        presentation: "dictation-error",
+        duration: 0,
+        actions,
+      });
+    };
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
@@ -237,11 +280,9 @@ export const useAudioRecording = (toast, options = {}) => {
         }
         const title = getRecordingErrorTitle(error, t);
         const description = getRecordingErrorDescription(error, t);
-        toast({
+        showDictationError({
           title,
           description,
-          variant: error.variant || "destructive",
-          duration: error.code === "AUTH_EXPIRED" ? 8000 : undefined,
         });
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
@@ -252,10 +293,9 @@ export const useAudioRecording = (toast, options = {}) => {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
-        toast({
+        showDictationError({
           title: t("hooks.audioRecording.noAudio.title"),
           description: t("hooks.audioRecording.noAudio.description"),
-          variant: "default",
         });
       },
       onPartialTranscript: (text) => {
@@ -281,14 +321,14 @@ export const useAudioRecording = (toast, options = {}) => {
       },
       onTranscriptionComplete: async (result) => {
         if (result.success) {
+          dismissDictationError?.();
           const transcribedText = result.text?.trim();
 
           if (!transcribedText) {
             window.electronAPI?.hideDictationPreview?.();
-            toast({
+            showDictationError({
               title: t("hooks.audioRecording.noAudio.title"),
               description: t("hooks.audioRecording.noAudio.description"),
-              variant: "default",
             });
             return;
           }
@@ -344,15 +384,16 @@ export const useAudioRecording = (toast, options = {}) => {
               );
               pasteSucceeded = replacement?.success === true;
               if (!pasteSucceeded) {
+                window.electronAPI?.hideDictationPreview?.();
                 if (keepTranscriptionInClipboard) {
                   await navigator.clipboard.writeText(result.text);
                 }
                 const detailKey =
                   SELECTION_EDIT_DETAIL_KEY_BY_CODE[replacement?.code] || "unavailable";
-                toast({
+                showDictationError({
                   title: t("hooks.audioRecording.selectionEditing.notAppliedTitle"),
                   description: t(`hooks.audioRecording.selectionEditing.${detailKey}`),
-                  variant: "destructive",
+                  transcript: result.rawText ?? result.text,
                 });
               }
             } else {
@@ -504,10 +545,9 @@ export const useAudioRecording = (toast, options = {}) => {
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }
-      toast({
+      showDictationError({
         title: t("hooks.audioRecording.noAudio.title"),
         description: t("hooks.audioRecording.noAudio.description"),
-        variant: "default",
       });
     };
 
@@ -528,7 +568,7 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current.cleanup();
       }
     };
-  }, [toast, onToggle, performStartRecording, performStopRecording, t]);
+  }, [toast, onToggle, performStartRecording, performStopRecording, dismissDictationError, t]);
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {

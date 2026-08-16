@@ -581,9 +581,12 @@
         "title": "Fallback-Modus",
         "description": "Lokales Whisper ist fehlgeschlagen. Stattdessen wurde die OpenAI API verwendet."
       },
+      "errorActions": {
+        "viewTranscript": "Transkript anzeigen"
+      },
       "noAudio": {
-        "title": "Kein Audio erkannt",
-        "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
+        "title": "Das haben wir nicht verstanden",
+        "description": "Überprüfe dein Mikrofon und versuche es erneut."
       },
       "micDisconnected": {
         "title": "Mikrofon getrennt",

@@ -5,14 +5,24 @@
 export const SIZE_RANK = {
   BASE: 0,
   RECORDING: 1,
-  WITH_MENU: 2,
-  WITH_TOAST: 3,
-  EXPANDED: 4,
-  ASSISTANT: 5,
+  DICTATION_ERROR: 2,
+  DICTATION_ERROR_WITH_TRANSCRIPT: 3,
+  WITH_MENU: 4,
+  WITH_TOAST: 5,
+  EXPANDED: 6,
+  ASSISTANT: 7,
 };
 
-export function resolveMainWindowSizeKey({ panelOpen, menuOpen, toastCount, compactPill }) {
+export function resolveMainWindowSizeKey({
+  panelOpen,
+  menuOpen,
+  toastCount,
+  compactPill,
+  dictationErrorActionCount = 0,
+}) {
   if (panelOpen) return "ASSISTANT";
+  if (dictationErrorActionCount > 1) return "DICTATION_ERROR_WITH_TRANSCRIPT";
+  if (dictationErrorActionCount === 1) return "DICTATION_ERROR";
   if (menuOpen && (toastCount > 0 || compactPill)) return "EXPANDED";
   if (menuOpen) return "WITH_MENU";
   if (toastCount > 0) return "WITH_TOAST";

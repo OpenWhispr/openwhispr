@@ -581,9 +581,12 @@
         "title": "Modalità fallback",
         "description": "Whisper locale non riuscito. Utilizzata l'API OpenAI."
       },
+      "errorActions": {
+        "viewTranscript": "Visualizza trascrizione"
+      },
       "noAudio": {
-        "title": "Nessun audio rilevato",
-        "description": "La registrazione non contiene audio rilevabile. Riprova."
+        "title": "Non abbiamo capito",
+        "description": "Controlla il microfono e riprova."
       },
       "micDisconnected": {
         "title": "Microfono disconnesso",

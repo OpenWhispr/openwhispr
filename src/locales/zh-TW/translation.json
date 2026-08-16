@@ -581,9 +581,12 @@
         "title": "備援模式",
         "description": "本機 Whisper 失敗，已改用 OpenAI API。"
       },
+      "errorActions": {
+        "viewTranscript": "查看轉錄"
+      },
       "noAudio": {
-        "title": "未偵測到音訊",
-        "description": "錄音中未偵測到聲音。請再試一次。"
+        "title": "我們沒聽清楚",
+        "description": "請檢查麥克風後再試一次。"
       },
       "micDisconnected": {
         "title": "麥克風已中斷",

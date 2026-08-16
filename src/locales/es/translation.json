@@ -581,9 +581,12 @@
         "title": "Modo de respaldo",
         "description": "Whisper local falló. Se usó la API de OpenAI."
       },
+      "errorActions": {
+        "viewTranscript": "Ver transcripción"
+      },
       "noAudio": {
-        "title": "No se detectó audio",
-        "description": "La grabación no contiene audio detectable. Inténtalo de nuevo."
+        "title": "No hemos entendido eso",
+        "description": "Comprueba el micrófono e inténtalo de nuevo."
       },
       "micDisconnected": {
         "title": "Micrófono desconectado",
