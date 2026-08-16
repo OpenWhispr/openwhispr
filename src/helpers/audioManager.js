@@ -3017,7 +3017,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return undefined;
     }
     const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
-    if (cleanup.mode !== "providers" || cleanup.provider !== "gemini") {
+    // Match two-step reachability: without a configured cleanup model the
+    // two-step pipeline leaves the transcript raw, so fusion must too.
+    if (cleanup.mode !== "providers" || cleanup.provider !== "gemini" || !cleanup.model?.trim()) {
       return undefined;
     }
     return getCleanupSystemPrompt(
