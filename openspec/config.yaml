@@ -1,0 +1,74 @@
+schema: spec-driven
+execution_mode: auto
+
+context: |
+  Electron 41 + React 19 + TypeScript + Vite + Tailwind v4 desktop dictation app (OpenWhispr fork).
+  Main process: main.js, preload.js, src/helpers/*.js. Renderer: src/ (React, Vite).
+  Storage: better-sqlite3. i18n: 10 locales (src/locales/{de,en,es,fr,it,ja,pt,ru,zh-CN,zh-TW}).
+  Node pinned to 24 (.nvmrc, engine-strict) -- never regenerate package-lock.json with another major.
+  Fork of OpenWhispr/openwhispr; origin=andres03b/openwhispr, upstream=OpenWhispr/openwhispr.
+  Work convention: one slice/branch, atomic conventional commits (no AI attribution), live dictation
+  test before closing, PR -> merge -> tag -> update BITACORA.md (../BITACORA.md, lives outside repo).
+  gentle-ai review-driven development is ON (native 4R review + gates at PR time).
+
+strict_tdd: true
+
+testing:
+  runner: "node --import tsx --test"
+  full_suite_command: "npm test"
+  full_suite_caveat: >
+    FAILS on this Windows dev machine: 761/2099 pre-existing failures, identical on clean main
+    (import-time TypeErrors from native/Electron-only APIs under the plain node test runner).
+    Environmental, NOT a regression signal -- never block a phase on full-suite red.
+  targeted_command: "node --import tsx --test <file...>"
+  targeted_note: >
+    Usable verification path (script equivalent: npm test runs the full glob, use targeted files
+    directly for phase verification). Individual files importing native/Electron-only modules
+    (e.g. mic listeners) may still fail even in isolation for the same environmental reason --
+    confirm on clean main before treating any targeted failure as a regression.
+  typecheck: "npm run typecheck" # cd src && tsc --noEmit -- verified working
+  lint: "npm run lint"
+  format_check: "npm run format:check"
+  format_caveat: >
+    prettier --check flags the whole working tree due to CRLF (core.autocrlf=true) vs configured
+    endOfLine lf in .prettierrc. False positive -- committed blobs are LF. Never run repo-wide
+    `prettier --write`.
+  i18n_check: "node scripts/check-i18n.js"
+  coverage:
+    available: false
+    command: ""
+
+review:
+  delivery_strategy: ask-on-risk
+  budget_lines: 400
+  gentle_ai: enabled
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Follow BITACORA.md conventions (../BITACORA.md, outside repo -- never move/copy/duplicate it)
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Document architecture decisions with rationale
+    - Call out cross-process concerns explicitly (main vs renderer vs preload vs ONNX worker)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - One slice at a time, new branch per slice (per BITACORA.md)
+    - Forecast the 400-line review budget; recommend chained PRs if exceeded
+  apply:
+    guidelines:
+      - Follow existing code patterns
+      - Never regenerate package-lock.json with a Node major other than 24
+      - Never run repo-wide `prettier --write` (CRLF/LF false-positive risk)
+      - Run a live dictation test before closing a slice (per BITACORA.md)
+    tdd: true
+    test_command: "node --import tsx --test <files>"
+  verify:
+    test_command: "node --import tsx --test <files>"
+    build_command: "npm run typecheck"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
+    - Update BITACORA.md after PR merge + tag (per project convention)
