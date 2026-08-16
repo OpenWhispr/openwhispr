@@ -9,6 +9,8 @@ interface DictationErrorCardProps {
   actions: ToastActionConfig[];
   onAction: (action: ToastActionConfig) => void;
   onPreferredHeightChange?: (height: number) => void;
+  progressDuration?: number;
+  progressPaused?: boolean;
 }
 
 const ACTION_ICONS = {
@@ -23,6 +25,8 @@ export function DictationErrorCard({
   actions,
   onAction,
   onPreferredHeightChange,
+  progressDuration = 0,
+  progressPaused = false,
 }: DictationErrorCardProps) {
   const cardRef = useRef<HTMLElement | null>(null);
   const lastPreferredHeightRef = useRef(0);
@@ -99,10 +103,24 @@ export function DictationErrorCard({
       aria-live="assertive"
       data-action-count={actions.length}
       className={cn(
-        "max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-3xl border border-border/50 bg-surface-0",
+        "relative max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-3xl border border-border/50 bg-surface-0",
         "shadow-[var(--shadow-modal)]"
       )}
     >
+      {progressDuration > 0 && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px overflow-hidden rounded-t-3xl"
+          aria-hidden="true"
+        >
+          <div
+            className="h-full bg-foreground"
+            style={{
+              animation: `toast-progress ${progressDuration}ms linear forwards`,
+              animationPlayState: progressPaused ? "paused" : "running",
+            }}
+          />
+        </div>
+      )}
       {hasSecondaryAction ? (
         <div className="p-4">
           {text}

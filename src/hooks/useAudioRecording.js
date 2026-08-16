@@ -228,7 +228,6 @@ export const useAudioRecording = (toast, options = {}) => {
         description,
         variant: "destructive",
         presentation: "dictation-error",
-        duration: 0,
         actions,
       });
     };

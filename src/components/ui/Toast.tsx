@@ -8,6 +8,7 @@ import {
   type ToastProps,
 } from "./useToast";
 import { isDictationPanelWindow } from "../../utils/windowContext";
+import { getDictationErrorDuration } from "../../helpers/dictationErrorDuration";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
 
 interface ToastState extends ToastProps {
@@ -46,7 +47,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const duration =
         props.duration ??
         (props.presentation === "dictation-error"
-          ? 0
+          ? getDictationErrorDuration(props.title, props.description)
           : props.variant === "destructive"
             ? 6000
             : 3500);
@@ -224,7 +225,10 @@ const Toast: React.FC<
 }) => {
   const config = variantConfig[variant];
   const pausedAtRef = React.useRef<number | null>(null);
+  const remainingDurationRef = React.useRef(duration);
+  const timerStartedAtRef = React.useRef(createdAt);
   const [copied, setCopied] = React.useState(false);
+  const [timerPaused, setTimerPaused] = React.useState(false);
   const isDestructive = variant === "destructive";
 
   const handleStructuredAction = (structuredAction: ToastActionConfig) => {
@@ -237,14 +241,22 @@ const Toast: React.FC<
   }, []);
 
   const handleMouseEnter = () => {
-    pausedAtRef.current = Date.now();
+    if (pausedAtRef.current !== null || duration <= 0) return;
+    const now = Date.now();
+    remainingDurationRef.current = Math.max(
+      0,
+      remainingDurationRef.current - (now - timerStartedAtRef.current)
+    );
+    pausedAtRef.current = now;
+    setTimerPaused(true);
     onPauseTimer();
   };
 
   const handleMouseLeave = () => {
-    if (pausedAtRef.current && duration > 0) {
-      const elapsed = pausedAtRef.current - createdAt;
-      const remaining = Math.max(duration - elapsed, 500);
+    if (pausedAtRef.current !== null && duration > 0) {
+      const remaining = Math.max(remainingDurationRef.current, 500);
+      timerStartedAtRef.current = Date.now();
+      setTimerPaused(false);
       onResumeTimer(remaining);
     }
     pausedAtRef.current = null;
@@ -280,6 +292,8 @@ const Toast: React.FC<
           actions={actions ?? []}
           onAction={handleStructuredAction}
           onPreferredHeightChange={handleErrorHeightChange}
+          progressDuration={!isExiting ? duration : 0}
+          progressPaused={timerPaused}
         />
       </div>
     );
@@ -362,6 +376,7 @@ const Toast: React.FC<
             className={cn("h-full", config.progressClass)}
             style={{
               animation: `toast-progress ${duration}ms linear forwards`,
+              animationPlayState: timerPaused ? "paused" : "running",
             }}
           />
         </div>
