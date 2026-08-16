@@ -257,7 +257,7 @@ export const useAudioRecording = (toast, options = {}) => {
             toast({
               title: t("hooks.audioRecording.micDisconnected.title"),
               description: t("hooks.audioRecording.micDisconnected.description"),
-              variant: "default",
+              variant: "destructive",
             });
           } else if (micCaptureStatus === "active" && wasMicUnavailableRef.current) {
             wasMicUnavailableRef.current = false;
@@ -458,7 +458,7 @@ export const useAudioRecording = (toast, options = {}) => {
             reason === "unreachable"
               ? t("hooks.audioRecording.translationFallback.unreachableDescription")
               : t("hooks.audioRecording.translationFallback.failedDescription"),
-          variant: "default",
+          variant: "destructive",
         });
       },
     });

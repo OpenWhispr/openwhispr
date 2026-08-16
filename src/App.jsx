@@ -107,7 +107,7 @@ export default function App() {
       toast({
         title: t("app.toasts.hotkeyUnavailable.title"),
         description: t("app.toasts.hotkeyUnavailable.description"),
-        duration: 10000,
+        variant: "destructive",
       });
     });
 
@@ -115,7 +115,7 @@ export default function App() {
       toast({
         title: t("app.toasts.gpuFallback.title"),
         description: t("app.toasts.gpuFallback.description"),
-        duration: 10000,
+        variant: "destructive",
       });
     };
     const unsubscribeCudaFallback =
@@ -312,6 +312,10 @@ export default function App() {
     setLiveTranscriptPhase("listening");
     setLiveTranscriptEntrancePhase("idle");
   }, [clearLiveTranscriptEntranceTimers]);
+
+  useEffect(() => {
+    if (dictationErrorActionCount > 0) handleDictationError();
+  }, [dictationErrorActionCount, handleDictationError]);
 
   const {
     isRecording,

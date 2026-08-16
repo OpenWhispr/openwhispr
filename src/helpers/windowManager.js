@@ -16,6 +16,7 @@ const {
   fitAssistantContentWindowToWorkArea,
   fitAssistantWindowToWorkArea,
   fitDictationErrorContentWindowToWorkArea,
+  fitDictationErrorWindowToWorkArea,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -196,13 +197,21 @@ class WindowManager {
     }
 
     let newSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
-    if (sizeKey === "ASSISTANT") {
+    if (
+      sizeKey === "ASSISTANT" ||
+      sizeKey === "DICTATION_ERROR" ||
+      sizeKey === "DICTATION_ERROR_WITH_TRANSCRIPT"
+    ) {
       const currentBounds = this.mainWindow.getBounds();
       const display = screen.getDisplayNearestPoint({
         x: currentBounds.x + currentBounds.width / 2,
         y: currentBounds.y + currentBounds.height,
       });
-      newSize = fitAssistantWindowToWorkArea(newSize, display.workArea || display.bounds);
+      const workArea = display.workArea || display.bounds;
+      newSize =
+        sizeKey === "ASSISTANT"
+          ? fitAssistantWindowToWorkArea(newSize, workArea)
+          : fitDictationErrorWindowToWorkArea(newSize, workArea);
     }
     return this._resizeMainWindowTo(newSize, sizeKey);
   }

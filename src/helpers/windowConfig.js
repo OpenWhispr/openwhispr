@@ -43,7 +43,7 @@ const ASSISTANT_WINDOW_SIZE = {
 };
 
 const DICTATION_ERROR_WINDOW_LIMITS = {
-  width: 360,
+  width: ASSISTANT_WINDOW_SIZE.width,
   gutter: 24,
   minSurfaceHeight: 88,
 };
@@ -94,7 +94,7 @@ function fitAssistantContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
 
 function fitDictationErrorContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
   const limits = DICTATION_ERROR_WINDOW_LIMITS;
-  const width = Math.max(1, Math.min(limits.width, workArea.width));
+  const width = fitAssistantWindowToWorkArea(ASSISTANT_WINDOW_SIZE, workArea).width;
   const maximumSurfaceHeight = Math.max(1, workArea.height - limits.gutter);
   const minimumSurfaceHeight = Math.min(limits.minSurfaceHeight, maximumSurfaceHeight);
   const numericHeight = Number(requestedSurfaceHeight);
@@ -106,6 +106,17 @@ function fitDictationErrorContentWindowToWorkArea(requestedSurfaceHeight, workAr
   return {
     width,
     height: Math.min(workArea.height, surfaceHeight + limits.gutter),
+  };
+}
+
+function fitDictationErrorWindowToWorkArea(requestedSize, workArea) {
+  const width = fitAssistantWindowToWorkArea(ASSISTANT_WINDOW_SIZE, workArea).width;
+  const numericHeight = Number(requestedSize.height);
+  const safeHeight = Number.isFinite(numericHeight) ? Math.round(numericHeight) : 1;
+
+  return {
+    width,
+    height: Math.max(1, Math.min(safeHeight, workArea.height)),
   };
 }
 
@@ -296,6 +307,7 @@ module.exports = {
   fitAssistantContentWindowToWorkArea,
   fitAssistantWindowToWorkArea,
   fitDictationErrorContentWindowToWorkArea,
+  fitDictationErrorWindowToWorkArea,
   WINDOW_SIZES,
   WindowPositionUtil,
 };

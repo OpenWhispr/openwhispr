@@ -9,6 +9,10 @@ import {
 } from "./useToast";
 import { isDictationPanelWindow } from "../../utils/windowContext";
 import { getDictationErrorDuration } from "../../helpers/dictationErrorDuration";
+import {
+  getDictationErrorActionCount,
+  resolveToastPresentation,
+} from "../../helpers/toastPresentation";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
 
 interface ToastState extends ToastProps {
@@ -44,17 +48,28 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const toast = React.useCallback(
     (props: Omit<ToastProps, "id">): string => {
       const id = Math.random().toString(36).substring(2, 11);
+      const presentation = resolveToastPresentation({
+        presentation: props.presentation,
+        variant: props.variant,
+        isDictationPanel: isDictationPanelWindow(),
+      });
       const duration =
         props.duration ??
-        (props.presentation === "dictation-error"
+        (presentation === "dictation-error"
           ? getDictationErrorDuration(props.title, props.description)
           : props.variant === "destructive"
             ? 6000
             : 3500);
-      const newToast: ToastState = { ...props, duration, id, createdAt: Date.now() };
+      const newToast: ToastState = {
+        ...props,
+        presentation,
+        duration,
+        id,
+        createdAt: Date.now(),
+      };
 
       setToasts((prev) =>
-        props.presentation === "dictation-error"
+        presentation === "dictation-error"
           ? [...prev.filter((item) => item.presentation !== "dictation-error"), newToast]
           : [...prev, newToast]
       );
@@ -126,16 +141,15 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
+  const dictationErrorActionCount = getDictationErrorActionCount(toasts);
+
   return (
     <ToastContext.Provider
       value={{
         toast,
         dismiss,
         toastCount: toasts.length,
-        dictationErrorActionCount:
-          [...toasts]
-            .reverse()
-            .find((item) => item.presentation === "dictation-error")?.actions?.length ?? 0,
+        dictationErrorActionCount,
         dismissByPresentation,
       }}
     >
@@ -281,9 +295,7 @@ const Toast: React.FC<
       <div
         className={cn(
           "pointer-events-auto w-full transition-[opacity,transform] duration-200 ease-out",
-          isExiting
-            ? "translate-y-2 scale-[0.98] opacity-0"
-            : "translate-y-0 scale-100 opacity-100"
+          isExiting ? "translate-y-2 scale-[0.98] opacity-0" : "translate-y-0 scale-100 opacity-100"
         )}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}

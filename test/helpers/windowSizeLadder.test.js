@@ -10,20 +10,33 @@ test("recording window only grows enough for the compact listening pill", () => 
 
 test("dictation error windows match the one-action and transcript-action footprints", () => {
   const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
-  assert.deepEqual(WINDOW_SIZES.DICTATION_ERROR, { width: 360, height: 112 });
-  assert.deepEqual(WINDOW_SIZES.DICTATION_ERROR_WITH_TRANSCRIPT, { width: 360, height: 168 });
+  assert.deepEqual(WINDOW_SIZES.DICTATION_ERROR, { width: 466, height: 112 });
+  assert.deepEqual(WINDOW_SIZES.DICTATION_ERROR_WITH_TRANSCRIPT, { width: 466, height: 168 });
+  assert.equal(WINDOW_SIZES.DICTATION_ERROR.width, WINDOW_SIZES.ASSISTANT.width);
 });
 
 test("dictation error windows grow to their full content and stay within the work area", () => {
   const { fitDictationErrorContentWindowToWorkArea } = require("../../src/helpers/windowConfig");
   assert.deepEqual(fitDictationErrorContentWindowToWorkArea(132, { width: 1440, height: 900 }), {
-    width: 360,
+    width: 466,
     height: 156,
   });
   assert.deepEqual(fitDictationErrorContentWindowToWorkArea(1200, { width: 320, height: 240 }), {
-    width: 320,
+    width: 201,
     height: 240,
   });
+});
+
+test("initial dictation error windows use the responsive live-transcript width", () => {
+  const { fitDictationErrorWindowToWorkArea } = require("../../src/helpers/windowConfig");
+  assert.deepEqual(
+    fitDictationErrorWindowToWorkArea({ width: 466, height: 112 }, { width: 1440, height: 900 }),
+    { width: 466, height: 112 }
+  );
+  assert.deepEqual(
+    fitDictationErrorWindowToWorkArea({ width: 466, height: 168 }, { width: 320, height: 240 }),
+    { width: 201, height: 168 }
+  );
 });
 
 test("assistant edit and normal responses share one fixed modal size", () => {
