@@ -44,6 +44,7 @@ import {
   serializeHotkeyList,
 } from "../utils/hotkeys";
 import { useAuth } from "../hooks/useAuth";
+import { AUTH_URL } from "../lib/auth";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
@@ -149,7 +150,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     () => parseHotkeyList(dictationKey)[0] || getDefaultHotkey()
   );
   const [agentName, setAgentName] = useState("OpenWhispr");
-  const [skipAuth, setSkipAuth] = useState(false);
+  // No auth server configured — behave as "continue without account" from the start.
+  const [skipAuth, setSkipAuth] = useState(!AUTH_URL);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
@@ -219,11 +221,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const showMeetingStep = false;
 
   const steps = useMemo(() => {
-    const list = [
-      { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
+    const list = [];
+    // The welcome step is the sign-in step — drop it when no auth server is configured.
+    if (AUTH_URL) {
+      list.push({ id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle });
+    }
+    list.push(
       { id: "usecase", title: t("onboarding.steps.useCase"), icon: Sparkles },
-      { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
-    ];
+      { id: "setup", title: t("onboarding.steps.setup"), icon: Settings }
+    );
     if (!(isSignedIn && !skipAuth)) {
       list.push({ id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield });
     }

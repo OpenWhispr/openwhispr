@@ -8,6 +8,7 @@ import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.ts
 import WindowControls from "./components/WindowControls.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
 import { useAuth } from "./hooks/useAuth";
+import { AUTH_URL } from "./lib/auth";
 import { useTheme } from "./hooks/useTheme";
 import { usePolicyStore } from "./stores/policyStore";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
@@ -81,7 +82,10 @@ function MainApp() {
     if (!authLoaded) return;
 
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
+    // No auth server configured — the sign-in wall can never be satisfied,
+    // so treat auth as permanently skipped.
     const authSkipped =
+      !AUTH_URL ||
       localStorage.getItem("authenticationSkipped") === "true" ||
       localStorage.getItem("skipAuth") === "true";
     const onboardingInProgress = localStorage.getItem("onboardingCurrentStep") !== null;
