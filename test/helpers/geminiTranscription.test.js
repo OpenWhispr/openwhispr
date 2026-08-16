@@ -120,6 +120,16 @@ test("gemini: a cleanupPrompt fuses cleanup into the instruction and marks the r
     /Output ONLY the final cleaned text/,
     "output-only directive bridges audio to the cleanup rules"
   );
+  assert.match(
+    instruction,
+    /<transcript> tags/,
+    "custom prompts referencing <transcript> tags are mapped onto the audio"
+  );
+  assert.match(
+    instruction,
+    /nearly unchanged is a failure/,
+    "returning the raw transcript is explicitly declared a failure"
+  );
   assert.match(instruction, /"es"/, "language hint still rides the instruction");
   // The cleanup prompt already carries the dictionary suffix; the separate
   // spellings line must not restate it.

@@ -30,7 +30,7 @@ function buildInstruction({ language, prompt, cleanupPrompt }) {
   const lines = cleanup
     ? [
         cleanup,
-        "The transcript to clean arrives as the attached audio. Work in two strict steps: (1) transcribe the speech accurately; (2) apply EVERY rule above to that transcript — removing fillers, resolving self-corrections, and restructuring are mandatory, never optional. Output ONLY the final cleaned text, no commentary. If the audio contains no speech, output nothing.",
+        'The transcript to clean arrives as the attached audio — wherever the rules above mention text between <transcript> tags or a provided transcript, they refer to this audio\'s speech. Work in two strict steps: (1) transcribe the speech accurately; (2) apply EVERY rule above to that transcript — removing fillers (e.g. "eh", "o sea", "um"), resolving self-corrections, deleting immediate word repetitions, and restructuring are mandatory, never optional. Returning the transcript unchanged or nearly unchanged is a failure. Output ONLY the final cleaned text, no commentary. If the audio contains no speech, output nothing.',
       ]
     : [
         "Transcribe the audio verbatim. Output ONLY the transcript text, with no commentary, labels, or extra formatting. If the audio contains no speech, output nothing.",
