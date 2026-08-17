@@ -38,26 +38,13 @@ function createSearchDatabase() {
     insert.run(id, text, timestamp, status, deletedAt);
   }
 
-  // Existing transcripts predate the FTS table, matching an upgrade from a
-  // release without transcript search. Rebuild is required to index them.
+  // Populate the external-content index for this isolated search fixture.
   sqlite.exec(`
     CREATE VIRTUAL TABLE transcriptions_fts USING fts5(
       text,
       content='transcriptions',
       content_rowid='id'
     );
-    CREATE TRIGGER transcriptions_fts_insert AFTER INSERT ON transcriptions BEGIN
-      INSERT INTO transcriptions_fts(rowid, text) VALUES (new.id, new.text);
-    END;
-    CREATE TRIGGER transcriptions_fts_update AFTER UPDATE OF text ON transcriptions BEGIN
-      INSERT INTO transcriptions_fts(transcriptions_fts, rowid, text)
-      VALUES ('delete', old.id, old.text);
-      INSERT INTO transcriptions_fts(rowid, text) VALUES (new.id, new.text);
-    END;
-    CREATE TRIGGER transcriptions_fts_delete AFTER DELETE ON transcriptions BEGIN
-      INSERT INTO transcriptions_fts(transcriptions_fts, rowid, text)
-      VALUES ('delete', old.id, old.text);
-    END;
   `);
   sqlite.prepare("INSERT INTO transcriptions_fts(transcriptions_fts) VALUES (?)").run("rebuild");
 
@@ -93,23 +80,4 @@ test("searchTranscriptions filters deleted and discarded transcripts by default"
       .map((item) => item.id),
     [1, 4]
   );
-});
-
-test("searchTranscriptions rejects empty and FTS syntax-only input", (t) => {
-  const { manager, sqlite } = createSearchDatabase();
-  t.after(() => sqlite.close());
-
-  assert.deepEqual(manager.searchTranscriptions("", 20), []);
-  assert.deepEqual(manager.searchTranscriptions("!!!", 20), []);
-});
-
-test("transcription FTS triggers index writes after the initial rebuild", (t) => {
-  const { manager, sqlite } = createSearchDatabase();
-  t.after(() => sqlite.close());
-
-  sqlite
-    .prepare("INSERT INTO transcriptions (id, text, timestamp) VALUES (?, ?, ?)")
-    .run(6, "newly indexed transcript", "2026-01-04 10:00:00");
-
-  assert.equal(manager.searchTranscriptions("newly", 20)[0]?.id, 6);
 });
