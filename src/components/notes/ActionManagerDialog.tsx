@@ -4,6 +4,7 @@ import { Sparkles, Trash2, Loader2, Plus, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { EmptyState } from "../ui/EmptyState";
 import { cn } from "../lib/utils";
 import { useActions, initializeActions, getActionName } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
@@ -307,28 +308,25 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
               </>
             ) : (
               /* Empty state — no action selected */
-              <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-                <div className="w-10 h-10 rounded-xl bg-accent/5 dark:bg-accent/8 flex items-center justify-center mb-3">
-                  <Sparkles size={18} className="text-accent/30" />
-                </div>
-                <p className="text-sm font-medium text-foreground/40 mb-1">
-                  {t("notes.actions.emptyEditorTitle", { defaultValue: "Select an action" })}
-                </p>
-                <p className="text-xs text-muted-foreground/30 mb-4 max-w-52 leading-relaxed">
-                  {t("notes.actions.emptyEditorDescription", {
-                    defaultValue: "Choose an action from the list or create a new one",
-                  })}
-                </p>
-                <Button
-                  variant="outline-flat"
-                  size="sm"
-                  onClick={handleNewAction}
-                  className="h-7 text-xs gap-1.5"
-                >
-                  <Plus size={12} />
-                  {t("notes.actions.addAction")}
-                </Button>
-              </div>
+              <EmptyState
+                icon={Sparkles}
+                title={t("notes.actions.emptyEditorTitle", { defaultValue: "Select an action" })}
+                description={t("notes.actions.emptyEditorDescription", {
+                  defaultValue: "Choose an action from the list or create a new one",
+                })}
+                actions={
+                  <Button
+                    variant="outline-flat"
+                    size="sm"
+                    onClick={handleNewAction}
+                    className="h-7 text-xs gap-1.5"
+                  >
+                    <Plus size={12} />
+                    {t("notes.actions.addAction")}
+                  </Button>
+                }
+                className="flex-1 px-8"
+              />
             )}
           </div>
         </div>

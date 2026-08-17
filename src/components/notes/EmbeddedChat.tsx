@@ -2,6 +2,7 @@ import { useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { X, PanelRight, PanelRightClose } from "lucide-react";
 import { cn } from "../lib/utils";
+import { EmptyState } from "../ui/EmptyState";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
 import type { Message, AgentState } from "../chat/types";
@@ -24,14 +25,10 @@ interface EmbeddedChatProps {
   onNewChat?: () => void;
 }
 
-function EmptyState() {
+function EmbeddedChatEmptyState() {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center justify-center h-full select-none">
-      <p className="text-xs text-foreground/30 dark:text-foreground/20 text-center max-w-44">
-        {t("embeddedChat.emptyState")}
-      </p>
-    </div>
+    <EmptyState compact description={t("embeddedChat.emptyState")} className="h-full select-none" />
   );
 }
 
@@ -128,7 +125,11 @@ export default function EmbeddedChat({
     <>
       {header}
       <div className="flex-1 min-h-0 flex flex-col **:data-chat-bubble:max-w-full">
-        <ChatMessages messages={messages} emptyState={<EmptyState />} onOpenNote={handleOpenNote} />
+        <ChatMessages
+          messages={messages}
+          emptyState={<EmbeddedChatEmptyState />}
+          onOpenNote={handleOpenNote}
+        />
       </div>
       <ChatInput
         agentState={agentState}

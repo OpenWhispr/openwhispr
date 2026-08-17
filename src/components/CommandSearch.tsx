@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { EmptyState } from "./ui/EmptyState";
 import {
   Search,
   FileText,
@@ -405,15 +406,17 @@ export default function CommandSearch({
           {/* Results list */}
           <div ref={listRef} className="overflow-y-auto max-h-[340px] p-1.5">
             {!hasResults ? (
-              <div className="flex items-center justify-center py-10">
-                <p className="text-xs text-muted-foreground/50">
-                  {query.trim()
+              <EmptyState
+                compact
+                description={
+                  query.trim()
                     ? t("commandSearch.noResults")
                     : isConversationsMode
                       ? t("chat.noConversations")
-                      : t("commandSearch.emptyState")}
-                </p>
-              </div>
+                      : t("commandSearch.emptyState")
+                }
+                className="py-10"
+              />
             ) : isConversationsMode ? (
               conversations.map((conv, idx) => (
                 <button

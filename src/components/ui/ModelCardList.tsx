@@ -1,6 +1,7 @@
 import { Globe, Download, Trash2, X, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
+import { EmptyState } from "./EmptyState";
 import { cn } from "../lib/utils";
 import type { ColorScheme } from "../../utils/modelPickerStyles";
 import { createExternalLinkHandler, withUtm } from "../../utils/externalLinks";
@@ -257,7 +258,7 @@ export default function ModelCardList({
   const { t } = useTranslation();
 
   if (models.length === 0) {
-    return <p className="text-sm text-muted-foreground py-2">{t("models.noneAvailable")}</p>;
+    return <EmptyState compact description={t("models.noneAvailable")} className="py-4" />;
   }
 
   return (

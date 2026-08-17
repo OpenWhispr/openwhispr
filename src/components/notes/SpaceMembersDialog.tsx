@@ -5,6 +5,7 @@ import { ChevronRight, Info, Loader2, Plus, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, ConfirmDialog } from "../ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "../ui/select";
 import { Button } from "../ui/button";
+import { EmptyState } from "../ui/EmptyState";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
@@ -271,9 +272,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
           )}
 
           {space.teams.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              {t("notes.spaces.teamsMembers.noTeams")}
-            </p>
+            <EmptyState compact description={t("notes.spaces.teamsMembers.noTeams")} />
           )}
 
           {space.teams.map((teamRef) => {

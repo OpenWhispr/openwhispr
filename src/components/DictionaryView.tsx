@@ -15,6 +15,7 @@ import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
+import { EmptyState } from "./ui/EmptyState";
 import { useToast } from "./ui/useToast";
 import SnippetsView from "./SnippetsView";
 import { useSettings } from "../hooks/useSettings";
@@ -113,26 +114,24 @@ export default function DictionaryView() {
   }, [customDictionary, toast, t]);
 
   const emptyState = (
-    <div className="flex flex-col items-center text-center py-8">
-      <div className="w-10 h-10 rounded-[10px] bg-gradient-to-b from-primary/8 to-primary/4 dark:from-primary/12 dark:to-primary/6 border border-primary/10 dark:border-primary/15 flex items-center justify-center mb-3.5">
-        <BookOpen size={17} strokeWidth={1.5} className="text-primary/50 dark:text-primary/60" />
-      </div>
-      <h4 className="text-xs font-semibold text-foreground mb-1">{t("dictionary.emptyTitle")}</h4>
-      <p className="text-xs text-foreground/30 leading-relaxed max-w-[240px] mb-4">
-        {t("dictionary.emptyDescription", { agentName })}
-      </p>
-      <Button size="sm" onClick={() => addInputRef.current?.focus()}>
-        <Plus size={12} />
-        {t("dictionary.addFirstWord")}
-      </Button>
-      <button
-        onClick={() => setShowBulkImport(true)}
-        className="mt-3 flex items-center gap-1.5 text-xs text-foreground/30 hover:text-foreground/60 transition-colors"
-      >
-        <Upload size={11} />
-        {t("dictionary.importList")}
-      </button>
-    </div>
+    <EmptyState
+      icon={BookOpen}
+      title={t("dictionary.emptyTitle")}
+      description={t("dictionary.emptyDescription", { agentName })}
+      actions={
+        <>
+          <Button size="sm" onClick={() => addInputRef.current?.focus()}>
+            <Plus size={12} />
+            {t("dictionary.addFirstWord")}
+          </Button>
+          <Button variant="outline-flat" size="sm" onClick={() => setShowBulkImport(true)}>
+            <Upload size={11} />
+            {t("dictionary.importList")}
+          </Button>
+        </>
+      }
+      className="py-8"
+    />
   );
 
   return (
@@ -277,9 +276,10 @@ export default function DictionaryView() {
             {userWords.length === 0 ? (
               emptyState
             ) : visibleWords.length === 0 ? (
-              <p className="py-6 text-xs text-foreground/20 text-center">
-                {t("dictionary.noMatches", { word: newWord.trim() })}
-              </p>
+              <EmptyState
+                compact
+                description={t("dictionary.noMatches", { word: newWord.trim() })}
+              />
             ) : (
               <ul>
                 {visibleWords.map((word) => {

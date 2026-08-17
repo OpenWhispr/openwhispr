@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Search, FileText, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { EmptyState } from "../ui/EmptyState";
 import { cn } from "../lib/utils";
 import { formatDateGroup } from "../../utils/dateFormatting";
 import type { NoteItem } from "../../types/electron";
@@ -107,13 +108,13 @@ export default function AddNotesToFolderDialog({
 
         <div className="max-h-80 overflow-y-auto px-2 pb-2">
           {grouped.length === 0 ? (
-            <div className="flex items-center justify-center py-10">
-              <p className="text-xs text-foreground/20">
-                {search
-                  ? t("notes.addToFolder.noResults")
-                  : t("notes.addToFolder.noNotesAvailable")}
-              </p>
-            </div>
+            <EmptyState
+              compact
+              description={
+                search ? t("notes.addToFolder.noResults") : t("notes.addToFolder.noNotesAvailable")
+              }
+              className="py-10"
+            />
           ) : (
             grouped.map(([dateLabel, notes]) => (
               <div key={dateLabel}>

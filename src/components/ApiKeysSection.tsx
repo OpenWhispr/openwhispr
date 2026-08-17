@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle } from "lucide-react";
 import { Button } from "./ui/button";
+import { EmptyState } from "./ui/EmptyState";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
@@ -114,14 +115,18 @@ export default function ApiKeysSection() {
       ) : keys.length === 0 ? (
         <SettingsPanel>
           <SettingsPanelRow>
-            <div className="flex flex-col items-center py-4 text-center">
-              <Key className="h-5 w-5 text-muted-foreground/40 mb-2" />
-              <p className="text-xs text-muted-foreground mb-3">{t("apiKeysSection.empty")}</p>
-              <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                {t("apiKeysSection.createButton")}
-              </Button>
-            </div>
+            <EmptyState
+              compact
+              icon={Key}
+              description={t("apiKeysSection.empty")}
+              actions={
+                <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  {t("apiKeysSection.createButton")}
+                </Button>
+              }
+              className="py-4"
+            />
           </SettingsPanelRow>
         </SettingsPanel>
       ) : (

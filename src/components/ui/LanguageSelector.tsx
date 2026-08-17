@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { ChevronDown, Search, X, Check } from "lucide-react";
 import registry from "../../config/languageRegistry.json";
+import { EmptyState } from "./EmptyState";
 import { LIST_SEARCH_THRESHOLD } from "../../config/constants";
 
 export interface LanguageOption {
@@ -236,9 +237,11 @@ export default function LanguageSelector({
             {/* Language list - tight, premium with smart scrollbar */}
             <div className="max-h-48 overflow-y-auto px-1 pb-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border">
               {filteredLanguages.length === 0 ? (
-                <div className="px-2.5 py-2 text-xs text-muted-foreground">
-                  {t("languageSelector.noLanguagesFound")}
-                </div>
+                <EmptyState
+                  compact
+                  description={t("languageSelector.noLanguagesFound")}
+                  className="px-2.5 py-4"
+                />
               ) : (
                 <div role="listbox" className="space-y-0.5 pt-1">
                   {filteredLanguages.map((language, index) => {
