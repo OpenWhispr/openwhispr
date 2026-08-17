@@ -6733,6 +6733,9 @@ class IPCHandlers {
 
     const sendMeetingAudio = (audioBuffer, source) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      // Auto-end judges "is anyone audible" from the raw chunk of either
+      // channel, before AEC/holdback/muting can swallow it.
+      this.meetingDetectionEngine?.recordMeetingAudioChunk(source, outboundBuffer);
 
       if (source === "system") {
         const receivedAt = Date.now();

@@ -48,15 +48,22 @@ test("auto-end dimensions fit every supported localized title, body, and action"
   const actionWidth = longestActionColumns * 6 + 20;
   const textWidth = AUTO_END_NOTIFICATION_WINDOW_SIZE.width - 24 - 20 - 26 - 20 - actionWidth;
   const columnsPerLine = Math.floor(textWidth / 6);
-  const maximumTextLines = Math.max(
-    ...translations.map(
-      ({ title, body }) =>
+  // Every reason-specific body must fit, not just the longest per locale.
+  const worstCase = translations.flatMap(({ title, body }, index) =>
+    Object.entries(body).map(([reason, text]) => ({
+      locale: locales[index],
+      reason,
+      lines:
         Math.ceil(displayColumns(title) / columnsPerLine) +
-        Math.ceil(displayColumns(body) / columnsPerLine)
-    )
+        Math.ceil(displayColumns(text) / columnsPerLine),
+    }))
   );
+  const maximumTextLines = Math.max(...worstCase.map(({ lines }) => lines));
   const requiredHeight = 24 + 20 + maximumTextLines * 14;
 
   assert.ok(columnsPerLine > 0);
-  assert.ok(requiredHeight <= AUTO_END_NOTIFICATION_WINDOW_SIZE.height);
+  assert.ok(
+    requiredHeight <= AUTO_END_NOTIFICATION_WINDOW_SIZE.height,
+    `overflow: ${JSON.stringify(worstCase.filter(({ lines }) => lines === maximumTextLines))}`
+  );
 });

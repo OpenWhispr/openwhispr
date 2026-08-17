@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identify and label speakers",
         "description": "When off, transcripts show \"You\" and \"Others\""
+      },
+      "autoEnd": {
+        "title": "Auto-end forgotten recordings",
+        "description": "Stop meeting recordings automatically when the call seems over, after a countdown you can cancel"
       }
     }
   },
@@ -3401,7 +3405,11 @@
     "join": "Join & transcribe",
     "autoEnd": {
       "title": "Meeting may have ended",
-      "body": "No other app is using your microphone. Recording will stop in {{seconds}}s.",
+      "body": {
+        "micReleased": "No other app is using your microphone. Recording will stop in {{seconds}}s.",
+        "silence": "No audio detected. Recording will stop in {{seconds}}s.",
+        "processExit": "Your meeting app closed. Recording will stop in {{seconds}}s."
+      },
       "keep": "Keep recording"
     }
   }

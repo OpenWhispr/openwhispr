@@ -8,12 +8,12 @@ test("auto-end presentation has countdown copy, Keep action, and no dismissal", 
 
   assert.deepEqual(
     getMeetingNotificationPresentation(
-      { kind: "auto-end", sessionId: "meeting-2", expiresAt: 40_001 },
+      { kind: "auto-end", sessionId: "meeting-2", expiresAt: 40_001, reason: "mic-released" },
       30
     ),
     {
       titleKey: "meetingNotification.autoEnd.title",
-      bodyKey: "meetingNotification.autoEnd.body",
+      bodyKey: "meetingNotification.autoEnd.body.micReleased",
       bodyValues: { seconds: 30 },
       actionKey: "meetingNotification.autoEnd.keep",
       action: "keep",
@@ -21,6 +21,20 @@ test("auto-end presentation has countdown copy, Keep action, and no dismissal", 
       allowTitleWrap: true,
     }
   );
+});
+
+test("auto-end presentation picks body copy by reason and defaults to mic-released", async () => {
+  const { getMeetingNotificationPresentation } = await load();
+  const bodyFor = (reason) =>
+    getMeetingNotificationPresentation(
+      { kind: "auto-end", sessionId: "meeting-2", expiresAt: 40_001, reason },
+      5
+    ).bodyKey;
+
+  assert.equal(bodyFor("silence"), "meetingNotification.autoEnd.body.silence");
+  assert.equal(bodyFor("process-exit"), "meetingNotification.autoEnd.body.processExit");
+  assert.equal(bodyFor(undefined), "meetingNotification.autoEnd.body.micReleased");
+  assert.equal(bodyFor("unknown-reason"), "meetingNotification.autoEnd.body.micReleased");
 });
 
 test("detection presentation preserves event title, join action, and dismissal", async () => {

@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identificar y etiquetar participantes",
         "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
+      },
+      "autoEnd": {
+        "title": "Finalizar grabaciones olvidadas",
+        "description": "Detiene las grabaciones de reuniones automáticamente cuando la llamada parece haber terminado, tras una cuenta atrás que puedes cancelar"
       }
     }
   },
@@ -3401,7 +3405,11 @@
     "join": "Unirse y transcribir",
     "autoEnd": {
       "title": "Es posible que la reunión haya terminado",
-      "body": "Ninguna otra aplicación está usando el micrófono. La grabación se detendrá en {{seconds}} s.",
+      "body": {
+        "micReleased": "Ninguna otra app está usando el micrófono. La grabación se detendrá en {{seconds}}s.",
+        "silence": "No se detecta audio. La grabación se detendrá en {{seconds}}s.",
+        "processExit": "La app de reuniones se cerró. La grabación se detendrá en {{seconds}}s."
+      },
       "keep": "Seguir grabando"
     }
   }

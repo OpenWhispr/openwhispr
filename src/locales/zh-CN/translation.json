@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
+      },
+      "autoEnd": {
+        "title": "自动结束遗忘的录音",
+        "description": "当通话似乎已结束时，在可取消的倒计时后自动停止会议录音"
       }
     }
   },
@@ -3401,7 +3405,11 @@
     "join": "加入并转录",
     "autoEnd": {
       "title": "会议可能已结束",
-      "body": "没有其他应用正在使用麦克风。录音将在 {{seconds}} 秒后停止。",
+      "body": {
+        "micReleased": "没有其他应用在使用麦克风。录音将在 {{seconds}} 秒后停止。",
+        "silence": "未检测到音频。录音将在 {{seconds}} 秒后停止。",
+        "processExit": "会议应用已关闭。录音将在 {{seconds}} 秒后停止。"
+      },
       "keep": "继续录音"
     }
   }

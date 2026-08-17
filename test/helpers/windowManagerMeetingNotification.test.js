@@ -161,6 +161,7 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
     const showPromise = manager.showMeetingAutoEndCountdown({
       sessionId: "meeting-1",
       expiresAt: 70_000,
+      reason: "silence",
     });
     const notificationWindow = createdWindows[0];
 
@@ -174,6 +175,13 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
       },
       { acceptFirstMouse: true, width: 620, height: 116, x: 380, y: 16 }
     );
+    // The reason rides along in the pending payload the overlay will fetch.
+    assert.deepEqual(manager._pendingNotificationData, {
+      kind: "auto-end",
+      sessionId: "meeting-1",
+      expiresAt: 70_000,
+      reason: "silence",
+    });
 
     notificationWindow.loadDeferred.resolve();
     await showPromise;

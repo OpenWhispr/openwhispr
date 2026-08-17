@@ -25,6 +25,21 @@ export function MeetingSpeakerDetectionRow() {
   );
 }
 
+export function MeetingAutoEndRow() {
+  const { t } = useTranslation();
+  const meetingAutoEndEnabled = useSettingsStore((s) => s.meetingAutoEndEnabled);
+  const setMeetingAutoEndEnabled = useSettingsStore((s) => s.setMeetingAutoEndEnabled);
+
+  return (
+    <SettingsRow
+      label={t("settings.meeting.autoEnd.title")}
+      description={t("settings.meeting.autoEnd.description")}
+    >
+      <Toggle checked={meetingAutoEndEnabled} onChange={setMeetingAutoEndEnabled} />
+    </SettingsRow>
+  );
+}
+
 const noop = () => {};
 
 export function MeetingTranscriptionPanel() {
@@ -149,6 +164,7 @@ export function MeetingTranscriptionPanel() {
         </>
       )}
       <MeetingSpeakerDetectionRow />
+      <MeetingAutoEndRow />
     </div>
   );
 }

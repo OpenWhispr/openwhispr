@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identifier et étiqueter les intervenants",
         "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
+      },
+      "autoEnd": {
+        "title": "Terminer les enregistrements oubliés",
+        "description": "Arrête automatiquement les enregistrements de réunion quand l'appel semble terminé, après un compte à rebours annulable"
       }
     }
   },
@@ -3401,7 +3405,11 @@
     "join": "Rejoindre et transcrire",
     "autoEnd": {
       "title": "La réunion est peut-être terminée",
-      "body": "Aucune autre application n’utilise votre microphone. L’enregistrement s’arrêtera dans {{seconds}} s.",
+      "body": {
+        "micReleased": "Aucune autre app n'utilise votre micro. L'enregistrement s'arrêtera dans {{seconds}}s.",
+        "silence": "Aucun son détecté. L'enregistrement s'arrêtera dans {{seconds}}s.",
+        "processExit": "Votre app de réunion s'est fermée. L'enregistrement s'arrêtera dans {{seconds}}s."
+      },
       "keep": "Continuer l’enregistrement"
     }
   }

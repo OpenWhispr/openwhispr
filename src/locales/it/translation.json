@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
+      },
+      "autoEnd": {
+        "title": "Termina le registrazioni dimenticate",
+        "description": "Interrompe automaticamente le registrazioni delle riunioni quando la chiamata sembra finita, dopo un conto alla rovescia annullabile"
       }
     }
   },
@@ -3401,7 +3405,11 @@
     "join": "Partecipa e trascrivi",
     "autoEnd": {
       "title": "La riunione potrebbe essere finita",
-      "body": "Nessun'altra app sta usando il microfono. La registrazione si interromperà tra {{seconds}} s.",
+      "body": {
+        "micReleased": "Nessun'altra app sta usando il microfono. La registrazione si fermerà tra {{seconds}}s.",
+        "silence": "Nessun audio rilevato. La registrazione si fermerà tra {{seconds}}s.",
+        "processExit": "L'app della riunione è stata chiusa. La registrazione si fermerà tra {{seconds}}s."
+      },
       "keep": "Continua a registrare"
     }
   }

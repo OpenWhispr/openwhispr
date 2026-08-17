@@ -1,8 +1,19 @@
-import type { MeetingNotificationData } from "../types/electron";
+import type { MeetingAutoEndReason, MeetingNotificationData } from "../types/electron";
+
+type AutoEndBodyKey =
+  | "meetingNotification.autoEnd.body.micReleased"
+  | "meetingNotification.autoEnd.body.silence"
+  | "meetingNotification.autoEnd.body.processExit";
+
+const AUTO_END_BODY_KEYS: Record<MeetingAutoEndReason, AutoEndBodyKey> = {
+  "mic-released": "meetingNotification.autoEnd.body.micReleased",
+  silence: "meetingNotification.autoEnd.body.silence",
+  "process-exit": "meetingNotification.autoEnd.body.processExit",
+};
 
 interface AutoEndPresentation {
   titleKey: "meetingNotification.autoEnd.title";
-  bodyKey: "meetingNotification.autoEnd.body";
+  bodyKey: AutoEndBodyKey;
   bodyValues: { seconds: number };
   actionKey: "meetingNotification.autoEnd.keep";
   action: "keep";
@@ -32,7 +43,8 @@ export function getMeetingNotificationPresentation(
   if (data?.kind === "auto-end") {
     return {
       titleKey: "meetingNotification.autoEnd.title",
-      bodyKey: "meetingNotification.autoEnd.body",
+      bodyKey:
+        AUTO_END_BODY_KEYS[data.reason ?? "mic-released"] ?? AUTO_END_BODY_KEYS["mic-released"],
       bodyValues: { seconds: secondsRemaining },
       actionKey: "meetingNotification.autoEnd.keep",
       action: "keep",

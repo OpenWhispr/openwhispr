@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "辨識並標記發言者",
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
+      },
+      "autoEnd": {
+        "title": "自動結束遺忘的錄音",
+        "description": "當通話似乎已結束時，在可取消的倒數後自動停止會議錄音"
       }
     }
   },
@@ -3401,7 +3405,11 @@
     "join": "加入並轉錄",
     "autoEnd": {
       "title": "會議可能已結束",
-      "body": "沒有其他應用程式正在使用麥克風。錄音將在 {{seconds}} 秒後停止。",
+      "body": {
+        "micReleased": "沒有其他應用程式在使用麥克風。錄音將在 {{seconds}} 秒後停止。",
+        "silence": "未偵測到音訊。錄音將在 {{seconds}} 秒後停止。",
+        "processExit": "會議應用程式已關閉。錄音將在 {{seconds}} 秒後停止。"
+      },
       "keep": "繼續錄音"
     }
   }

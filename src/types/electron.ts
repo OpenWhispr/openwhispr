@@ -38,10 +38,14 @@ export interface MeetingDetectionNotificationData {
   joinUrl: string | null;
 }
 
+/** Why auto-end concluded the meeting is over. */
+export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
+
 export interface MeetingAutoEndNotificationData {
   kind: "auto-end";
   sessionId: string;
   expiresAt: number;
+  reason?: MeetingAutoEndReason;
 }
 
 export type MeetingNotificationData =
@@ -49,6 +53,7 @@ export type MeetingNotificationData =
 
 export interface MeetingAutoEndRequest {
   sessionId: string;
+  reason?: MeetingAutoEndReason;
 }
 
 export interface AuthTokenState {

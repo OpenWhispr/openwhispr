@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
+      },
+      "autoEnd": {
+        "title": "Vergessene Aufnahmen automatisch beenden",
+        "description": "Beendet Meeting-Aufnahmen automatisch, wenn das Gespräch beendet scheint – nach einem Countdown, den Sie abbrechen können"
       }
     }
   },
@@ -3401,7 +3405,11 @@
     "join": "Beitreten & transkribieren",
     "autoEnd": {
       "title": "Das Meeting könnte beendet sein",
-      "body": "Keine andere App verwendet dein Mikrofon. Die Aufnahme wird in {{seconds}} s beendet.",
+      "body": {
+        "micReleased": "Keine andere App nutzt Ihr Mikrofon. Die Aufnahme stoppt in {{seconds}} s.",
+        "silence": "Kein Ton erkannt. Die Aufnahme stoppt in {{seconds}} s.",
+        "processExit": "Ihre Meeting-App wurde geschlossen. Die Aufnahme stoppt in {{seconds}} s."
+      },
       "keep": "Aufnahme fortsetzen"
     }
   }

@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identificar e rotular participantes",
         "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
+      },
+      "autoEnd": {
+        "title": "Encerrar gravações esquecidas",
+        "description": "Para as gravações de reunião automaticamente quando a chamada parece ter terminado, após uma contagem regressiva que você pode cancelar"
       }
     }
   },
@@ -3401,7 +3405,11 @@
     "join": "Entrar e transcrever",
     "autoEnd": {
       "title": "A reunião pode ter terminado",
-      "body": "Nenhum outro aplicativo está usando seu microfone. A gravação será interrompida em {{seconds}} s.",
+      "body": {
+        "micReleased": "Nenhum outro app está usando o microfone. A gravação vai parar em {{seconds}}s.",
+        "silence": "Nenhum áudio detectado. A gravação vai parar em {{seconds}}s.",
+        "processExit": "Seu app de reunião foi fechado. A gravação vai parar em {{seconds}}s."
+      },
       "keep": "Continuar gravando"
     }
   }

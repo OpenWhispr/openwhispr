@@ -17,29 +17,47 @@ const MeetingDetectionEngine = require("../../src/helpers/meetingDetectionEngine
 const createMeetingAutoEndController = require("../../src/helpers/meetingAutoEndController");
 Module._load = originalLoad;
 
+const { COUNTDOWN_MS, SILENCE_WINDOW_MS, FAST_SILENCE_MS, OWNERSHIP_MIN_ACTIVE_MS } =
+  createMeetingAutoEndController;
+
+const TICK_MS = 1000;
+
+// Fake clock with a single interval slot: the engine's 1s auto-end ticker.
+// advance() steps the clock a second at a time and fires the interval so long
+// spans never look like a sleep gap.
 const createClock = () => {
   let now = 10_000;
-  let nextTimerId = 1;
-  const timers = new Map();
+  const intervals = new Map();
+  let nextIntervalId = 1;
 
   return {
     now: () => now,
-    setTimeout: (callback, delay) => {
-      const timerId = nextTimerId;
-      nextTimerId += 1;
-      timers.set(timerId, { callback, delay });
-      return timerId;
+    setInterval: (callback, delay) => {
+      const id = nextIntervalId;
+      nextIntervalId += 1;
+      intervals.set(id, { callback, delay });
+      return id;
     },
-    clearTimeout: (timerId) => timers.delete(timerId),
-    pendingTimers: () => [...timers.entries()],
-    run: (timerId) => {
-      const timer = timers.get(timerId);
-      if (!timer) return;
-      timers.delete(timerId);
-      timer.callback();
+    clearInterval: (id) => intervals.delete(id),
+    activeIntervals: () => intervals.size,
+    advance: (ms) => {
+      let remaining = ms;
+      while (remaining > 0) {
+        const step = Math.min(TICK_MS, remaining);
+        now += step;
+        remaining -= step;
+        for (const { callback } of [...intervals.values()]) callback();
+      }
     },
   };
 };
+
+// A buffer whose RMS is unmistakably above the activity thresholds.
+const LOUD_CHUNK = (() => {
+  const buffer = Buffer.alloc(1600);
+  for (let i = 0; i < 800; i += 1) buffer.writeInt16LE(3000, i * 2);
+  return buffer;
+})();
 
 class FakeAudioActivityDetector extends EventEmitter {
   constructor() {
@@ -72,13 +90,35 @@ class FakeAudioActivityDetector extends EventEmitter {
 }
 
 class FakeMeetingProcessDetector extends EventEmitter {
-  start() {}
-  stop() {}
+  constructor() {
+    super();
+    this.running = false;
+    this.detected = [];
+  }
+
+  start() {
+    this.running = true;
+  }
+
+  stop() {
+    this.running = false;
+  }
+
+  getDetectedProcesses() {
+    return this.detected.map((processKey) => ({ processKey, appName: processKey }));
+  }
+
+  // Mirrors the real detector: the ended key is removed before the event fires.
+  endProcess(processKey) {
+    this.detected = this.detected.filter((key) => key !== processKey);
+    this.emit("meeting-process-ended", { processKey, appName: processKey });
+  }
 }
 
 function createEngine() {
   const clock = createClock();
   const audioActivityDetector = new FakeAudioActivityDetector();
+  const meetingProcessDetector = new FakeMeetingProcessDetector();
   const shownCountdowns = [];
   const dismissedCountdowns = [];
   const shownNotifications = [];
@@ -90,28 +130,35 @@ function createEngine() {
   };
   const engine = new MeetingDetectionEngine(
     { getActiveMeetingState: () => ({ activeMeeting: null, upcomingEvents: [] }) },
-    new FakeMeetingProcessDetector(),
+    meetingProcessDetector,
     audioActivityDetector,
     windowManager,
     {},
     {
-      createAutoEndController: (callbacks) =>
-        createMeetingAutoEndController({
-          ...callbacks,
-          now: clock.now,
-          setTimeout: clock.setTimeout,
-          clearTimeout: clock.clearTimeout,
-        }),
+      now: clock.now,
+      setInterval: clock.setInterval,
+      clearInterval: clock.clearInterval,
     }
   );
 
+  const micState = (reliable, externalMicActive) =>
+    audioActivityDetector.emit("external-mic-state-changed", { reliable, externalMicActive });
+
+  const owner = (messages = []) => ({
+    isDestroyed: () => false,
+    send: (channel, payload) => messages.push({ channel, payload }),
+  });
+
   return {
     audioActivityDetector,
+    meetingProcessDetector,
     clock,
     dismissedCountdowns,
     engine,
     shownCountdowns,
     shownNotifications,
+    micState,
+    owner,
   };
 }
 
@@ -140,7 +187,7 @@ test("detection prompts retain their existing payload with a detection discrimin
 });
 
 test("keeps audio ownership detection running while an eligible recording is active", async () => {
-  const { audioActivityDetector, engine } = createEngine();
+  const { audioActivityDetector, engine, owner } = createEngine();
 
   engine.setPreferences({ audioDetection: false });
   assert.equal(audioActivityDetector.running, false);
@@ -148,7 +195,7 @@ test("keeps audio ownership detection running while an eligible recording is act
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
-    ownerWebContents: { isDestroyed: () => false, send: () => undefined },
+    ownerWebContents: owner(),
   });
   assert.equal(audioActivityDetector.running, true);
 
@@ -159,51 +206,150 @@ test("keeps audio ownership detection running while an eligible recording is act
   assert.equal(audioActivityDetector.running, false);
 });
 
-test("shows and dismisses the countdown from reliable external mic changes", async () => {
-  const { audioActivityDetector, dismissedCountdowns, engine, shownCountdowns } = createEngine();
+test("keeps the process detector running for an eligible session while processDetection is off", async () => {
+  const { meetingProcessDetector, engine, owner } = createEngine();
+
+  engine.setPreferences({ processDetection: false });
+  assert.equal(meetingProcessDetector.running, false);
 
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
-    ownerWebContents: { isDestroyed: () => false, send: () => undefined },
+    ownerWebContents: owner(),
   });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: true,
-  });
+  assert.equal(meetingProcessDetector.running, true);
 
-  assert.deepEqual(shownCountdowns, [{ sessionId: "meeting-1", expiresAt: 70_000 }]);
+  engine.endRecordingSession("meeting-1");
+  assert.equal(meetingProcessDetector.running, false);
+});
+
+test("shows and dismisses the countdown from reliable external mic changes", async () => {
+  const { clock, dismissedCountdowns, engine, micState, owner, shownCountdowns } = createEngine();
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+  });
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  micState(true, true);
+
+  assert.deepEqual(shownCountdowns, [
+    { sessionId: "meeting-1", expiresAt: clock.now() + COUNTDOWN_MS, reason: "mic-released" },
+  ]);
   assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
   engine.stop();
 });
 
+test("system activity from meeting chunks defers the ownership countdown until quiet", async () => {
+  const { clock, engine, micState, owner, shownCountdowns } = createEngine();
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+  });
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  engine.recordMeetingAudioChunk("system", LOUD_CHUNK);
+  clock.advance(TICK_MS);
+
+  micState(true, false);
+  clock.advance(TICK_MS);
+  assert.deepEqual(shownCountdowns, [], "remote audio still playing");
+
+  // The system channel ages out once no more loud chunks arrive.
+  clock.advance(5 * TICK_MS);
+  assert.equal(shownCountdowns.length, 1);
+  assert.equal(shownCountdowns[0].reason, "mic-released");
+  engine.stop();
+});
+
+test("meeting audio chunks are ignored before the controller session begins and after it ends", async () => {
+  const { clock, engine, micState, owner, shownCountdowns } = createEngine();
+
+  // Streaming starts before beginRecordingSession is reached in main.
+  engine.recordMeetingAudioChunk("system", LOUD_CHUNK);
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+  });
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  assert.equal(
+    shownCountdowns.length,
+    1,
+    "the pre-session chunk must not read as live system audio"
+  );
+
+  engine.endRecordingSession("meeting-1");
+  assert.doesNotThrow(() => engine.recordMeetingAudioChunk("mic", LOUD_CHUNK));
+  clock.advance(2 * SILENCE_WINDOW_MS);
+  assert.equal(shownCountdowns.length, 1);
+});
+
+test("fallback silence prompts and forwards the reason to the countdown and stop request", async () => {
+  const { audioActivityDetector, clock, engine, owner, shownCountdowns } = createEngine();
+  const messages = [];
+  audioActivityDetector.externalMicState = { reliable: true, externalMicActive: false };
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(messages),
+  });
+  clock.advance(SILENCE_WINDOW_MS);
+
+  assert.equal(shownCountdowns.length, 1);
+  assert.equal(shownCountdowns[0].reason, "silence");
+  clock.advance(COUNTDOWN_MS);
+  assert.deepEqual(messages, [
+    {
+      channel: "meeting-auto-end-requested",
+      payload: { sessionId: "meeting-1", reason: "silence" },
+    },
+  ]);
+  engine.stop();
+});
+
+test("meeting-process-ended tightens the silence window only when no tracked app remains", async () => {
+  const { audioActivityDetector, clock, engine, meetingProcessDetector, owner, shownCountdowns } =
+    createEngine();
+  audioActivityDetector.externalMicState = { reliable: false, externalMicActive: false };
+  meetingProcessDetector.detected = ["zoom", "teams"];
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+  });
+  meetingProcessDetector.endProcess("teams");
+  clock.advance(FAST_SILENCE_MS + TICK_MS);
+  assert.deepEqual(shownCountdowns, [], "Zoom is still running");
+
+  meetingProcessDetector.endProcess("zoom");
+  clock.advance(FAST_SILENCE_MS);
+  assert.equal(shownCountdowns.length, 1);
+  assert.equal(shownCountdowns[0].reason, "process-exit");
+  engine.stop();
+});
+
 test("reliability loss dismisses the countdown and prevents auto-stop", async () => {
-  const { audioActivityDetector, clock, dismissedCountdowns, engine } = createEngine();
+  const { clock, dismissedCountdowns, engine, micState, owner } = createEngine();
   const messages = [];
 
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
-    ownerWebContents: {
-      isDestroyed: () => false,
-      send: (channel, payload) => messages.push({ channel, payload }),
-    },
+    ownerWebContents: owner(messages),
   });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
-  const [[timerId]] = clock.pendingTimers();
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  clock.advance(30_000);
 
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: false,
-    externalMicActive: false,
-  });
-  clock.run(timerId);
+  micState(false, false);
+  clock.advance(COUNTDOWN_MS);
 
   assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
   assert.deepEqual(messages, []);
@@ -211,37 +357,29 @@ test("reliability loss dismisses the countdown and prevents auto-stop", async ()
 });
 
 test("expiry requests one stop from the renderer that owns the current session", async () => {
-  const { audioActivityDetector, clock, engine } = createEngine();
+  const { clock, engine, micState, owner } = createEngine();
   const messages = [];
-  const ownerWebContents = {
-    isDestroyed: () => false,
-    send: (channel, payload) => messages.push({ channel, payload }),
-  };
 
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
-    ownerWebContents,
+    ownerWebContents: owner(messages),
   });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
-  const [[timerId]] = clock.pendingTimers();
-  clock.run(timerId);
-  clock.run(timerId);
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  clock.advance(3 * COUNTDOWN_MS);
 
   assert.deepEqual(messages, [
     {
       channel: "meeting-auto-end-requested",
-      payload: { sessionId: "meeting-1" },
+      payload: { sessionId: "meeting-1", reason: "mic-released" },
     },
   ]);
   engine.stop();
 });
 
 test("replacement cancels the old countdown and stale end requests preserve the new session", async () => {
-  const { audioActivityDetector, clock, dismissedCountdowns, engine } = createEngine();
+  const { clock, dismissedCountdowns, engine, micState } = createEngine();
   const messages = [];
 
   await engine.beginRecordingSession({
@@ -249,11 +387,8 @@ test("replacement cancels the old countdown and stale end requests preserve the 
     autoEndEligible: true,
     ownerWebContents: { isDestroyed: () => false, send: () => messages.push("meeting-1") },
   });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
-  const [[oldTimerId]] = clock.pendingTimers();
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
 
   await engine.beginRecordingSession({
     sessionId: "meeting-2",
@@ -261,14 +396,9 @@ test("replacement cancels the old countdown and stale end requests preserve the 
     ownerWebContents: { isDestroyed: () => false, send: () => messages.push("meeting-2") },
   });
   assert.equal(engine.endRecordingSession("meeting-1"), false);
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
-  const [[newTimerId]] = clock.pendingTimers();
-
-  clock.run(oldTimerId);
-  clock.run(newTimerId);
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  clock.advance(2 * COUNTDOWN_MS);
 
   assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
   assert.deepEqual(messages, ["meeting-2"]);
@@ -276,79 +406,148 @@ test("replacement cancels the old countdown and stale end requests preserve the 
 });
 
 test("an ineligible recording does not retain the audio detector", async () => {
-  const { audioActivityDetector, engine, shownCountdowns } = createEngine();
+  const { audioActivityDetector, clock, engine, micState, owner, shownCountdowns } = createEngine();
 
   engine.setPreferences({ audioDetection: false });
   await engine.beginRecordingSession({
     sessionId: "personal-1",
     autoEndEligible: false,
-    ownerWebContents: { isDestroyed: () => false, send: () => undefined },
+    ownerWebContents: owner(),
   });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
+  micState(true, false);
+  clock.advance(2 * SILENCE_WINDOW_MS);
 
   assert.equal(audioActivityDetector.running, false);
   assert.deepEqual(shownCountdowns, []);
   assert.equal(engine.endRecordingSession("personal-1"), true);
 });
 
-test("keep recording disables auto-end only for the matching session", async () => {
-  const { audioActivityDetector, dismissedCountdowns, engine, shownCountdowns } = createEngine();
+test("keep recording suppresses prompts until fresh ownership evidence, only for the matching session", async () => {
+  const { clock, dismissedCountdowns, engine, micState, owner, shownCountdowns } = createEngine();
 
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
-    ownerWebContents: { isDestroyed: () => false, send: () => undefined },
+    ownerWebContents: owner(),
   });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
 
   assert.equal(engine.keepRecordingSession("stale-session"), false);
   assert.equal(engine.keepRecordingSession("meeting-1"), true);
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: true,
-  });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
-
-  assert.equal(shownCountdowns.length, 1);
   assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
+  clock.advance(2 * COUNTDOWN_MS);
+  assert.equal(shownCountdowns.length, 1, "no re-prompt without fresh evidence");
+
+  micState(true, true);
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  assert.equal(shownCountdowns.length, 1, "still inside the keep cooldown");
+  clock.advance(5 * 60_000);
+  assert.equal(shownCountdowns.length, 2, "cooldown passed and a new call was released");
   engine.stop();
 });
 
 test("keep recording after countdown expiry reports a stale session", async () => {
-  const { audioActivityDetector, clock, engine } = createEngine();
+  const { clock, engine, micState, owner } = createEngine();
 
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
-    ownerWebContents: { isDestroyed: () => false, send: () => undefined },
+    ownerWebContents: owner(),
   });
-  audioActivityDetector.emit("external-mic-state-changed", {
-    reliable: true,
-    externalMicActive: false,
-  });
-  const [[timerId]] = clock.pendingTimers();
-  clock.run(timerId);
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  clock.advance(COUNTDOWN_MS);
 
   assert.equal(engine.keepRecordingSession("meeting-1"), false);
   engine.stop();
 });
 
-test("ending with no tracked session allows teardown to proceed", async () => {
-  const { engine } = createEngine();
+test("the autoEnd preference disables the feature mid-recording and re-enabling arms a fresh session", async () => {
+  const {
+    audioActivityDetector,
+    clock,
+    dismissedCountdowns,
+    engine,
+    micState,
+    owner,
+    shownCountdowns,
+  } = createEngine();
 
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
-    ownerWebContents: { isDestroyed: () => false, send: () => undefined },
+    ownerWebContents: owner(),
+  });
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  assert.equal(shownCountdowns.length, 1);
+
+  engine.setPreferences({ autoEnd: false });
+  assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
+  assert.equal(clock.activeIntervals(), 0, "ticker released while disabled");
+  clock.advance(2 * COUNTDOWN_MS);
+  micState(true, true);
+  micState(true, false);
+  assert.equal(shownCountdowns.length, 1, "nothing prompts while disabled");
+
+  audioActivityDetector.externalMicState = { reliable: true, externalMicActive: false };
+  engine.setPreferences({ autoEnd: true });
+  await Promise.resolve();
+  clock.advance(SILENCE_WINDOW_MS);
+  assert.equal(shownCountdowns.length, 2, "re-enabled → fresh session in fallback mode");
+  assert.equal(shownCountdowns[1].reason, "silence");
+  engine.stop();
+});
+
+test("a session started while autoEnd is off does not arm and does not retain the detectors", async () => {
+  const { audioActivityDetector, clock, engine, micState, owner, shownCountdowns } = createEngine();
+  engine.setPreferences({ audioDetection: false, processDetection: false, autoEnd: false });
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+  });
+  micState(true, false);
+  clock.advance(2 * SILENCE_WINDOW_MS);
+
+  assert.equal(audioActivityDetector.running, false);
+  assert.deepEqual(shownCountdowns, []);
+  assert.equal(clock.activeIntervals(), 0);
+  engine.stop();
+});
+
+test("the auto-end ticker is cleared on session end and engine stop", async () => {
+  const { clock, engine, owner } = createEngine();
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+  });
+  assert.equal(clock.activeIntervals(), 1);
+  engine.endRecordingSession("meeting-1");
+  assert.equal(clock.activeIntervals(), 0);
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-2",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+  });
+  assert.equal(clock.activeIntervals(), 1);
+  engine.stop();
+  assert.equal(clock.activeIntervals(), 0);
+});
+
+test("ending with no tracked session allows teardown to proceed", async () => {
+  const { engine, owner } = createEngine();
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
   });
   // Quit-path engine stop clears the session while capture may still be live;
   // a scoped stop afterwards must not be treated as stale or streams leak.

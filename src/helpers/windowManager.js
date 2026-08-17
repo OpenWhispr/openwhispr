@@ -1310,9 +1310,9 @@ class WindowManager {
     if (notificationWindow && !notificationWindow.isDestroyed()) notificationWindow.close();
   }
 
-  showMeetingAutoEndCountdown({ sessionId, expiresAt }) {
+  showMeetingAutoEndCountdown({ sessionId, expiresAt, reason }) {
     return this.showMeetingNotification(
-      { kind: "auto-end", sessionId, expiresAt },
+      { kind: "auto-end", sessionId, expiresAt, reason },
       { autoDismiss: false }
     );
   }
