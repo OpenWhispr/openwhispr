@@ -669,6 +669,27 @@ a:hover {
     0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
 }
 
+/* The Beam package's compact light preset is deliberately faint. Keep its
+   darker light-theme palette visible against our pale surfaces without
+   changing the established dark-mode treatment. */
+:root:not(.dark) .agent-thinking-beam {
+  --beam-stroke-opacity: 5;
+  --beam-inner-opacity: 1.1;
+  --beam-bloom-opacity: 0.8;
+}
+
+:root:not(.dark) .agent-thinking-beam::before,
+:root:not(.dark) .agent-thinking-beam::after,
+:root:not(.dark) .agent-thinking-beam [data-beam-bloom] {
+  mix-blend-mode: multiply;
+}
+
+:root:not(.dark) .agent-thinking-beam[data-agent-mode="true"] {
+  --beam-stroke-opacity: 5.25;
+  --beam-inner-opacity: 0;
+  --beam-bloom-opacity: 0;
+}
+
 .agent-thinking-beam[data-agent-mode="true"] {
   --beam-hue-base: 18deg;
   --beam-stroke-opacity: 1.18;

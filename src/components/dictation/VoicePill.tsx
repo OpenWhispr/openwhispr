@@ -1,5 +1,5 @@
 import { forwardRef, type HTMLAttributes } from "react";
-import { BorderBeam } from "border-beam";
+import { BorderBeam, type BorderBeamTheme } from "border-beam";
 import { ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 import { LiveWaveform } from "./LiveWaveform";
@@ -20,6 +20,7 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
   agentMode?: boolean;
+  beamTheme?: BorderBeamTheme;
   showExpandChevron?: boolean;
   isDragging?: boolean;
   horizontalDirection?: "left" | "right";
@@ -53,6 +54,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
     agentMode = false,
+    beamTheme = "auto",
     showExpandChevron = false,
     isDragging = false,
     horizontalDirection = "right",
@@ -193,7 +195,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   return (
     <BorderBeam
       size="sm"
-      theme="auto"
+      theme={beamTheme}
       duration={1.6}
       colorVariant={agentMode ? "ocean" : "colorful"}
       brightness={agentMode ? 1.35 : 1.3}

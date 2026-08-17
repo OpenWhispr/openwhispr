@@ -90,6 +90,7 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
+  const beamTheme = useSettingsStore((s) => s.theme);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
   const [voiceHorizontalDirection, setVoiceHorizontalDirection] = useState(() =>
     resolveVoiceHorizontalDirection(panelStartPosition)
@@ -988,6 +989,7 @@ export default function App() {
                 waveformOnlyWhileRecording={liveTranscriptPanelMounted}
                 integratedWithPanel={liveTranscriptPanelOpen}
                 agentMode={agentModeActive}
+                beamTheme={beamTheme}
                 showExpandChevron={canReopenLiveTranscript && isHovered}
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}
