@@ -17,6 +17,10 @@ jobs:
         # --ignore-scripts skips the native build, so every DB-backed test
         # (snippetsDatabase, noteCloudUpsertGuard, …) silently skips without this.
         run: npm rebuild better-sqlite3
+      - name: Build Linux key listener
+        # The evdev hotkey parse tests (test/helpers/linuxKeyListener.test.js)
+        # silently skip when the binary isn't built.
+        run: npm run compile:linuxkeys
       - name: Typecheck
         run: npm run typecheck
       - name: Run tests

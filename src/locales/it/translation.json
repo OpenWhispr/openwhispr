@@ -2934,6 +2934,10 @@
         "title": "Scorciatoia non disponibile",
         "description": "Non è stato possibile registrare la scorciatoia selezionata. Scegline un’altra nelle impostazioni."
       },
+      "linuxInputPermission": {
+        "title": "Accesso alla tastiera necessario",
+        "description": "OpenWhispr non può rilevare questa scorciatoia senza accesso ai dispositivi di input. Esegui: sudo usermod -aG input $USER e poi esci e rientra dalla sessione."
+      },
       "addedToDict": "{{words}} aggiunto al tuo dizionario",
       "undo": "Annulla",
       "accessibilityMissing": {

@@ -692,15 +692,6 @@ export function validateHotkey(
         errorCode: "LEFT_MODIFIER_ONLY",
       };
     }
-    // Right-side single modifiers require native listeners (not available on Linux)
-    if (platform === "linux") {
-      return {
-        valid: false,
-        error:
-          "Right-side single modifier hotkeys are not supported on Linux. Use two modifiers (e.g., Control+Alt) instead.",
-        errorCode: "LEFT_MODIFIER_ONLY",
-      };
-    }
   }
 
   const normalizedHotkey = normalizeHotkey(hotkey, platform);

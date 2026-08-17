@@ -230,8 +230,12 @@ class KDEShortcutManager {
 
     const qtKey = KDEShortcutManager.convertToQtKeyCode(electronHotkey);
     if (qtKey === null) {
+      // Unconvertible hotkey (e.g. side-specific RightAlt — Qt key codes are
+      // side-agnostic). This is a property of the hotkey, not a KDE failure, so
+      // return a distinct value: the caller falls back to another hotkey via
+      // KGlobalAccel instead of abandoning the KDE backend entirely.
       debugLogger.log(`[KDEShortcut] Could not convert "${electronHotkey}" to Qt key code`);
-      return false;
+      return "unsupported-key";
     }
 
     // Modifier-only shortcuts (e.g. Control+Super) don't work on X11 —

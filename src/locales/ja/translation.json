@@ -2934,6 +2934,10 @@
         "title": "ホットキーが使用できません",
         "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
       },
+      "linuxInputPermission": {
+        "title": "キーボードへのアクセスが必要です",
+        "description": "入力デバイスへのアクセスがないため、このホットキーを検出できません。sudo usermod -aG input $USER を実行し、ログアウト後に再ログインしてください。"
+      },
       "addedToDict": "{{words}} を辞書に追加しました",
       "undo": "元に戻す",
       "accessibilityMissing": {

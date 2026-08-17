@@ -462,17 +462,28 @@ class GnomeShortcutManager {
     }
 
     const key = parts.pop();
-    const modifiers = parts
-      .map((mod) => {
-        const m = mod.toLowerCase();
-        if (m === "commandorcontrol" || m === "control" || m === "ctrl") return "<Control>";
-        if (m === "alt") return "<Alt>";
-        if (m === "shift") return "<Shift>";
-        if (m === "super" || m === "meta") return "<Super>";
-        return "";
-      })
-      .filter(Boolean)
-      .join("");
+    // A modifier key used as a bare trigger (RightAlt, LeftControl, ...) can't
+    // be bound by GNOME custom keybindings — refuse so the caller falls back to
+    // a safe hotkey instead of a silent no-op.
+    if (/^(Left|Right)?(Alt|Option|Control|Ctrl|Shift|Command|Cmd|Super|Meta|Win)$/i.test(key)) {
+      return "";
+    }
+    const modifierParts = parts.map((mod) => {
+      const m = mod.toLowerCase();
+      if (m === "commandorcontrol" || m === "control" || m === "ctrl") return "<Control>";
+      if (m === "alt") return "<Alt>";
+      if (m === "shift") return "<Shift>";
+      if (m === "super" || m === "meta") return "<Super>";
+      return null;
+    });
+    // Side-specific modifiers (RightAlt, LeftControl, ...) can't be expressed as
+    // a GNOME modifier mask — dropping them would silently bind the rest of the
+    // combo (e.g. "Control+RightAlt+Space" → Ctrl+Space, firing without the
+    // right Alt). Refuse so the caller falls back to a safe hotkey instead.
+    if (modifierParts.includes(null)) {
+      return "";
+    }
+    const modifiers = modifierParts.join("");
 
     const keyLower = key.toLowerCase();
 

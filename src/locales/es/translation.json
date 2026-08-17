@@ -2982,6 +2982,10 @@
         "title": "Atajo no disponible",
         "description": "No se pudo registrar el atajo seleccionado. Elige otro en la configuración."
       },
+      "linuxInputPermission": {
+        "title": "Se necesita acceso al teclado",
+        "description": "OpenWhispr no puede detectar este atajo sin acceso a los dispositivos de entrada. Ejecuta: sudo usermod -aG input $USER y luego cierra sesión y vuelve a entrar."
+      },
       "addedToDict": "{{words}} añadido a tu diccionario",
       "undo": "Deshacer",
       "accessibilityMissing": {

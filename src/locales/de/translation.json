@@ -3099,6 +3099,10 @@
         "title": "Tastenkombination nicht verfügbar",
         "description": "Die ausgewählte Tastenkombination konnte nicht registriert werden. Bitte wähle eine andere in den Einstellungen."
       },
+      "linuxInputPermission": {
+        "title": "Tastaturzugriff erforderlich",
+        "description": "OpenWhispr kann diese Tastenkombination ohne Zugriff auf Eingabegeräte nicht erkennen. Führe aus: sudo usermod -aG input $USER — und melde dich danach ab und wieder an."
+      },
       "addedToDict": "{{words}} zu deinem Wörterbuch hinzugefügt",
       "undo": "Rückgängig",
       "accessibilityMissing": {

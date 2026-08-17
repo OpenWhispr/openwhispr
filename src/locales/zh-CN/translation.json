@@ -2934,6 +2934,10 @@
         "title": "快捷键不可用",
         "description": "无法注册所选快捷键。请在设置中选择其他快捷键。"
       },
+      "linuxInputPermission": {
+        "title": "需要键盘访问权限",
+        "description": "没有输入设备访问权限，OpenWhispr 无法检测此快捷键。请运行 sudo usermod -aG input $USER，然后注销并重新登录。"
+      },
       "addedToDict": "已将 {{words}} 添加到你的词典",
       "undo": "撤消",
       "accessibilityMissing": {
