@@ -42,6 +42,34 @@ export interface FileTranscriptionConfig {
   remoteTranscriptionModel?: string;
 }
 
+export interface TranscriptionApiKeys {
+  openaiApiKey: string;
+  groqApiKey: string;
+  xaiApiKey: string;
+  mistralApiKey: string;
+  tinfoilApiKey: string;
+  customTranscriptionApiKey?: string;
+}
+
+export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiKeys): string {
+  switch (provider) {
+    case "openai":
+      return keys.openaiApiKey;
+    case "groq":
+      return keys.groqApiKey;
+    case "xai":
+      return keys.xaiApiKey;
+    case "mistral":
+      return keys.mistralApiKey;
+    case "tinfoil":
+      return keys.tinfoilApiKey;
+    case "custom":
+      return keys.customTranscriptionApiKey || "";
+    default:
+      return "";
+  }
+}
+
 // Single provider dispatch shared by the single-file flow and the batch queue,
 // so BYOK providers receive identical options in both.
 export async function transcribeFile(

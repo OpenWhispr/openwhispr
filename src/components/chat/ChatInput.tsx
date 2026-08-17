@@ -5,6 +5,7 @@ import { cn } from "../lib/utils";
 import { SendIcon } from "../ui/SendIcon";
 import { LiveWaveform } from "../ui/LiveWaveform";
 import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
+import { GLASS_SURFACE } from "../ui/glass";
 import { useToast } from "../ui/useToast";
 import { formatMmSs } from "../../utils/formatDuration";
 import { useVoiceDraft } from "./useVoiceDraft";
@@ -114,10 +115,8 @@ export function ChatInput({
       <div
         className={cn(
           "flex items-center gap-2 min-h-11 pl-4 pr-1.5 rounded-full",
-          "bg-white/55 dark:bg-white/6",
-          "backdrop-blur-xl backdrop-saturate-150 transform-gpu",
+          GLASS_SURFACE,
           "border border-black/10 dark:border-white/14",
-          "shadow-(--shadow-glass)",
           "transition-all duration-200",
           isIdle &&
             "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8"
@@ -142,10 +141,7 @@ export function ChatInput({
         )}
 
         {isVoiceRecording && (
-          <div
-            className="flex items-center gap-2.5 w-full py-1.5"
-            style={{ animation: "fade-in-content 0.3s ease-out backwards" }}
-          >
+          <div className="flex items-center gap-2.5 w-full py-1.5 animate-[fade-in-content_0.3s_ease-out_backwards]">
             <LiveWaveform
               readLevel={voice.readLevel}
               bars="auto"
@@ -171,9 +167,9 @@ export function ChatInput({
               onClick={voice.stop}
               aria-label={t("notes.editor.stop")}
               title={t("notes.editor.stop")}
-              style={{ animation: "scale-in 0.15s ease-out backwards" }}
               className={cn(
                 "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                "animate-[scale-in_0.15s_ease-out_backwards]",
                 GRADIENT_CIRCLE,
                 "hover:brightness-110 active:scale-95",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
@@ -229,9 +225,9 @@ export function ChatInput({
                 onClick={handleSubmit}
                 disabled={!inputText.trim()}
                 aria-label={t("agentMode.input.send")}
-                style={voiceDraft ? { animation: "scale-in 0.15s ease-out backwards" } : undefined}
                 className={cn(
                   "rounded-full shrink-0",
+                  voiceDraft && "animate-[scale-in_0.15s_ease-out_backwards]",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
                   inputText.trim()

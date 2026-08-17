@@ -3,7 +3,11 @@ import { useAuth } from "../../hooks/useAuth";
 import { useSettings } from "../../hooks/useSettings";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import { transcribeFile, type FileTranscriptionConfig } from "../../services/fileTranscription";
+import {
+  transcribeFile,
+  getTranscriptionApiKey,
+  type FileTranscriptionConfig,
+} from "../../services/fileTranscription";
 import { analyserRms } from "../../utils/audioLevel";
 
 export type VoiceDraftStatus = "idle" | "recording" | "transcribing";
@@ -20,6 +24,7 @@ interface UseVoiceDraftOptions {
  */
 export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
   const { isSignedIn } = useAuth();
+  const settings = useSettings();
   const {
     useLocalWhisper,
     whisperModel,
@@ -33,13 +38,7 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
     transcriptionMode,
     remoteTranscriptionUrl,
     remoteTranscriptionModel,
-    openaiApiKey,
-    groqApiKey,
-    xaiApiKey,
-    mistralApiKey,
-    tinfoilApiKey,
-    customTranscriptionApiKey,
-  } = useSettings();
+  } = settings;
   const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
   const cortiTenant = useSettingsStore((s) => s.cortiTenant);
 
@@ -60,24 +59,7 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
     whisperModel,
     parakeetModel,
     isOpenWhisprCloud: isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper,
-    getApiKey: () => {
-      switch (cloudTranscriptionProvider) {
-        case "openai":
-          return openaiApiKey;
-        case "groq":
-          return groqApiKey;
-        case "xai":
-          return xaiApiKey;
-        case "mistral":
-          return mistralApiKey;
-        case "tinfoil":
-          return tinfoilApiKey;
-        case "custom":
-          return customTranscriptionApiKey || "";
-        default:
-          return "";
-      }
-    },
+    getApiKey: () => getTranscriptionApiKey(cloudTranscriptionProvider as string, settings),
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,
     cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
     cloudTranscriptionModel,

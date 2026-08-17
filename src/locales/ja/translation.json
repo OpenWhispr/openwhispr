@@ -2664,13 +2664,14 @@
         "notLabeled": "話者ラベルなし",
         "finalizing": "話者を確定中…",
         "justYou": "あなたのみ",
-        "defaultingHint": "他の参加者を1人と想定 — 違う場合は変更してください",
+        "assumedHint": "2人と想定 — 違う場合は変更してください",
+        "speakersLabel": "話者数",
+        "labelToggle": "話者をラベル付け",
         "toggleAria": "この録音の話者識別を切り替える",
         "incAria": "想定する話者数を増やす",
-        "decAria": "想定する話者数を減らす",
-        "othersInCall_one": "他{{count}}人が通話中",
-        "othersInCall_other": "他{{count}}人が通話中"
+        "decAria": "想定する話者数を減らす"
       },
+      "consentNotice": "他の人を録音するときは必ず同意を得てください",
       "createNewPrefix": "作成",
       "emailPlaceholder": "name@example.com",
       "nameOrEmailPlaceholder": "名前またはメールを入力",

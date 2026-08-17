@@ -50,7 +50,11 @@ import {
 } from "../../stores/settingsStore";
 import { useBatchQueue } from "../../stores/batchQueueStore";
 import type { TranscribeOptions } from "../../stores/batchQueueStore";
-import { transcribeFileWithSpeakers, shouldUseByokDiarize } from "../../services/fileTranscription";
+import {
+  transcribeFileWithSpeakers,
+  shouldUseByokDiarize,
+  getTranscriptionApiKey,
+} from "../../services/fileTranscription";
 import type {
   FileTranscriptionConfig,
   FileTranscriptionResult,
@@ -243,6 +247,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   // entitlement should not block a payer's upload.
   const isProUser = usage?.hasPaidAccessOptimistic ?? false;
 
+  const apiKeys = useSettings();
   const {
     openaiApiKey,
     groqApiKey,
@@ -250,7 +255,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     mistralApiKey,
     tinfoilApiKey,
     customTranscriptionApiKey,
-  } = useSettings();
+  } = apiKeys;
   const policyState = usePolicySnapshot();
 
   const {
@@ -394,19 +399,17 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         } else if (cloudTranscriptionProvider === "corti") {
           if (!cancelled) setProviderReady(!!(cortiClientId && cortiClientSecret));
         } else {
-          const key =
-            cloudTranscriptionProvider === "openai"
-              ? openaiApiKey
-              : cloudTranscriptionProvider === "groq"
-                ? groqApiKey
-                : cloudTranscriptionProvider === "xai"
-                  ? xaiApiKey
-                  : cloudTranscriptionProvider === "mistral"
-                    ? mistralApiKey
-                    : cloudTranscriptionProvider === "tinfoil"
-                      ? tinfoilApiKey
-                      : customTranscriptionApiKey;
-          if (!cancelled) setProviderReady(!!key);
+          if (!cancelled)
+            setProviderReady(
+              !!getTranscriptionApiKey(cloudTranscriptionProvider, {
+                openaiApiKey,
+                groqApiKey,
+                xaiApiKey,
+                mistralApiKey,
+                tinfoilApiKey,
+                customTranscriptionApiKey,
+              })
+            );
         }
         return;
       }
@@ -465,32 +468,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     return `${name} · ${model}`;
   };
 
-  const getActiveApiKey = (): string => {
-    switch (cloudTranscriptionProvider) {
-      case "openai":
-        return openaiApiKey;
-      case "groq":
-        return groqApiKey;
-      case "xai":
-        return xaiApiKey;
-      case "mistral":
-        return mistralApiKey;
-      case "tinfoil":
-        return tinfoilApiKey;
-      case "custom":
-        return customTranscriptionApiKey || "";
-      default:
-        return "";
-    }
-  };
-
   const buildTranscriptionConfig = (): FileTranscriptionConfig => ({
     useLocalWhisper,
     localTranscriptionProvider: localTranscriptionProvider as string,
     whisperModel,
     parakeetModel,
     isOpenWhisprCloud,
-    getApiKey: getActiveApiKey,
+    getApiKey: () => getTranscriptionApiKey(cloudTranscriptionProvider, apiKeys),
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,
     cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
     cloudTranscriptionModel,

@@ -6,6 +6,7 @@ import { SendIcon } from "../ui/SendIcon";
 import { LiveWaveform } from "../ui/LiveWaveform";
 import { analyserRms } from "../../utils/audioLevel";
 import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
+import { GLASS_SURFACE } from "../ui/glass";
 import { formatMmSs } from "../../utils/formatDuration";
 import { getMicAnalyser, useMeetingRecordingStore } from "../../stores/meetingRecordingStore";
 
@@ -137,10 +138,8 @@ export default function NoteBottomBar({
                 title={t("notes.editor.stop")}
                 className={cn(
                   "group flex items-center gap-2.5 w-full h-11 pl-0.5 pr-3.5 rounded-full",
-                  "bg-white/55 dark:bg-white/6",
-                  "backdrop-blur-xl backdrop-saturate-150 transform-gpu",
+                  GLASS_SURFACE,
                   "border border-primary/15 dark:border-primary/25",
-                  "shadow-(--shadow-glass)",
                   "transition-[border-color] duration-200",
                   "hover:border-primary/30 dark:hover:border-primary/40"
                 )}
@@ -193,11 +192,9 @@ export default function NoteBottomBar({
         <div
           aria-hidden={hideInput}
           className={cn(
-            "flex-1 min-w-0 flex items-center h-11 gap-2",
-            "rounded-full",
-            "bg-white/55 dark:bg-white/6",
-            "backdrop-blur-xl backdrop-saturate-150",
-            "border shadow-(--shadow-glass) transform-gpu",
+            "flex-1 min-w-0 flex items-center h-11 gap-2 rounded-full",
+            GLASS_SURFACE,
+            "border",
             "transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
             hideInput
               ? "max-w-0 opacity-0 pl-0 pr-0 border-transparent shadow-none pointer-events-none"
@@ -228,9 +225,9 @@ export default function NoteBottomBar({
             <button
               onClick={handleSubmit}
               disabled={askDisabled}
-              style={{ animation: "scale-in 0.15s ease-out backwards" }}
               className={cn(
                 "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
+                "animate-[scale-in_0.15s_ease-out_backwards]",
                 "transition-all duration-150",
                 "hover:brightness-110",
                 "active:scale-90",
