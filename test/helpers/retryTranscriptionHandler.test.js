@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
+const sarvamModulePath = require.resolve("../../src/helpers/sarvamTranscription");
 const originalLoad = Module._load;
 
 // Captures every ipcMain.handle registration and every net.fetch request so the
@@ -86,6 +87,17 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return { broadcastToWindows: () => {} };
     }
   }
+  // Keeps the Sarvam path off FFmpeg: an unprobeable duration is the "send it
+  // unmodified" case, which is what these single-request assertions describe.
+  // Segmenting is covered in sarvamTranscription.test.js.
+  if (parent?.filename === sarvamModulePath && request === "./ffmpegUtils") {
+    return {
+      probeAudioDuration: async () => null,
+      splitAudioFile: async () => {
+        throw new Error("splitAudioFile must not run when the duration is unknown");
+      },
+    };
+  }
   return originalLoad.call(this, request, parent, isMain);
 };
 
@@ -117,6 +129,7 @@ function buildFakeThis() {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
       getMistralKey: () => "mk-mistral",
+      getSarvamKey: () => "sk-sarvam",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
       getCustomTranscriptionKey: () => "ck-custom",
@@ -250,6 +263,37 @@ test("retry: mistral goes to Mistral with x-api-key", async () => {
   assert.equal(fetches[0].init.headers["x-api-key"], "mk-mistral");
 });
 
+test("retry: sarvam posts to /speech-to-text with its subscription-key header", async () => {
+  fetches.length = 0;
+  fetchResponse = () => ({
+    ok: true,
+    status: 200,
+    // Sarvam names the transcript `transcript`, not `text`.
+    json: async () => ({ transcript: "नमस्ते", request_id: "r1", language_code: "hi-IN" }),
+    text: async () => "",
+  });
+  try {
+    const result = await invoke({
+      cloudTranscriptionProvider: "sarvam",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+      preferredLanguage: "hi",
+    });
+    assert.equal(result.success, true);
+    assert.equal(fetches.length, 1);
+    assert.equal(fetches[0].url, "https://api.sarvam.ai/speech-to-text");
+    assert.equal(fetches[0].init.headers["api-subscription-key"], "sk-sarvam");
+    assert.equal(fetches[0].init.headers.Authorization, undefined);
+  } finally {
+    fetchResponse = () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: "transcribed" }),
+      text: async () => JSON.stringify({ text: "transcribed" }),
+    });
+  }
+});
+
 test("proxy transcription handlers resolve to structured errors instead of rejecting", async () => {
   fetchResponse = () => ({
     ok: false,
@@ -267,6 +311,7 @@ test("proxy transcription handlers resolve to structured errors instead of rejec
       "proxy-mistral-transcription",
       "proxy-xai-transcription",
       "proxy-corti-transcription",
+      "proxy-sarvam-transcription",
     ]) {
       const fn = handlers.get(channel);
       assert.ok(fn, `${channel} must be registered`);
@@ -314,6 +359,77 @@ test("upload: mistral sends x-api-key with a provider-validated model and no lan
   const body = fetches[0].init.body.toString();
   assert.match(body, /voxtral-mini-latest/);
   assert.doesNotMatch(body, /name="language"/);
+});
+
+test("upload: sarvam maps language to a Sarvam code and drops unsupported ones", async () => {
+  const sarvamUpload = (language, model) =>
+    invokeUpload({
+      apiKey: "",
+      baseUrl: "https://api.sarvam.ai",
+      model,
+      provider: "sarvam",
+      language,
+      transcriptionMode: "providers",
+    });
+
+  fetches.length = 0;
+  await sarvamUpload("hi", "saaras:v3");
+  assert.equal(fetches[0].url, "https://api.sarvam.ai/speech-to-text");
+  assert.equal(fetches[0].init.headers["api-subscription-key"], "sk-sarvam");
+  let body = fetches[0].init.body;
+  assert.equal(body.get("language_code"), "hi-IN");
+  assert.equal(body.get("model"), "saaras:v3");
+  assert.equal(body.get("mode"), "transcribe");
+
+  // French is not a Sarvam language: it must fall through to auto-detect rather
+  // than be sent as an invented "fr-IN", which the API rejects with a 422.
+  fetches.length = 0;
+  await sarvamUpload("fr", "saaras:v3");
+  assert.equal(fetches[0].init.body.get("language_code"), null);
+
+  // `mode` is a v3-only parameter.
+  fetches.length = 0;
+  await sarvamUpload("", "saaras:v4");
+  body = fetches[0].init.body;
+  assert.equal(body.get("model"), "saaras:v4");
+  assert.equal(body.get("mode"), null);
+
+  // A model left over from another provider degrades to the Sarvam default.
+  fetches.length = 0;
+  await sarvamUpload("", "voxtral-mini-latest");
+  assert.equal(fetches[0].init.body.get("model"), "saaras:v3");
+});
+
+test("upload: a sarvam rejection surfaces Sarvam's own message", async () => {
+  fetchResponse = () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({ error: { message: "unsupported codec", code: "bad_request_error" } }),
+    text: async () => JSON.stringify({ error: { message: "unsupported codec" } }),
+  });
+  try {
+    fetches.length = 0;
+    const result = await invokeUpload({
+      apiKey: "",
+      baseUrl: "https://api.sarvam.ai",
+      model: "saaras:v3",
+      provider: "sarvam",
+      language: "",
+      transcriptionMode: "providers",
+    });
+    assert.equal(result.success, false);
+    // Every 400 used to be reported as an over-length recording, which sent
+    // users hunting for a duration problem they did not have.
+    assert.match(result.error, /unsupported codec/);
+    assert.doesNotMatch(result.error, /30 seconds/);
+  } finally {
+    fetchResponse = () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: "transcribed" }),
+      text: async () => JSON.stringify({ text: "transcribed" }),
+    });
+  }
 });
 
 test("upload: openai diarization fields ride the route, Bearer auth", async () => {

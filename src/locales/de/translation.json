@@ -2258,7 +2258,9 @@
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
-        "tinfoil_voxtral": "Nachweisbar private Transkription"
+        "tinfoil_voxtral": "Nachweisbar private Transkription",
+        "sarvam_saaras_v3": "Mehrsprachige Spracherkennung für indische Sprachen",
+        "sarvam_saaras_v4": "Neueste mehrsprachige Spracherkennung von Sarvam"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",

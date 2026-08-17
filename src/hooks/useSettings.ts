@@ -80,6 +80,7 @@ export interface ApiKeySettings {
   groqApiKey: string;
   xaiApiKey: string;
   mistralApiKey: string;
+  sarvamApiKey: string;
   openrouterApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
@@ -281,6 +282,7 @@ function useSettingsInternal() {
     groqApiKey: store.groqApiKey,
     xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
+    sarvamApiKey: store.sarvamApiKey,
     openrouterApiKey: store.openrouterApiKey,
     tinfoilApiKey: store.tinfoilApiKey,
     dictationKey: store.dictationKey,

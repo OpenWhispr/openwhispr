@@ -2214,7 +2214,9 @@
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "corti_transcribe": "Transcripción médica de nivel clínico",
         "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI",
-        "tinfoil_voxtral": "Transcripción verificablemente privada"
+        "tinfoil_voxtral": "Transcripción verificablemente privada",
+        "sarvam_saaras_v3": "Reconocimiento de voz multilingüe para idiomas indios",
+        "sarvam_saaras_v4": "Último reconocimiento de voz multilingüe de Sarvam"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",

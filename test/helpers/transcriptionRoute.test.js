@@ -115,6 +115,17 @@ test("proxied providers carry their quirks as route data", async () => {
   assert.equal(corti.language, "en", "Corti needs a concrete language even on auto");
   assert.equal(corti.cortiEnvironment, "us");
   assert.equal(corti.cortiTenant, "acme");
+
+  const sarvam = await resolve({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+    preferredLanguage: "hi-IN",
+  });
+  assert.equal(sarvam.transport, "proxied");
+  assert.equal(sarvam.provider, "sarvam");
+  assert.equal(sarvam.model, "saaras:v4");
+  assert.equal(sarvam.language, "hi");
+  assert.equal(sarvam.sizeCapBytes, 25 * 1024 * 1024);
 });
 
 test("custom requires a configured secure endpoint (empty, sentinel, garbage all fail)", async () => {

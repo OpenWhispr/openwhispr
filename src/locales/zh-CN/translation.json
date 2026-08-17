@@ -2166,7 +2166,9 @@
         "mistral_voxtral_mini_latest": "快速多语言转录",
         "corti_transcribe": "临床级医疗转录",
         "xai_grok_stt": "xAI 高精度语音识别",
-        "tinfoil_voxtral": "可验证的私密转录"
+        "tinfoil_voxtral": "可验证的私密转录",
+        "sarvam_saaras_v3": "面向印度语言的多语言语音识别",
+        "sarvam_saaras_v4": "Sarvam 最新多语言语音识别模型"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
