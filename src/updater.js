@@ -1,5 +1,5 @@
 const { autoUpdater } = require("electron-updater");
-const { shouldAutoCheckForUpdates } = require("./helpers/updateCheckPolicy");
+const { appUpdatesEnabled } = require("./helpers/updateCheckPolicy");
 
 class UpdateManager {
   constructor() {
@@ -87,9 +87,7 @@ class UpdateManager {
           };
         }
         this.notifyRenderers("update-available", info);
-        const nPrefs = this.windowManager?.notificationPrefs || {};
-        const notifAllowed =
-          nPrefs.notificationsEnabled !== false && nPrefs.notifyUpdates !== false;
+        const notifAllowed = appUpdatesEnabled(this.windowManager?.notificationPrefs);
         if (this.windowManager && info && !this._suppressNotification && notifAllowed) {
           this.windowManager.showUpdateNotification(info).catch((err) => {
             console.error("Failed to show update notification:", err);
@@ -305,7 +303,7 @@ class UpdateManager {
   // Prefs are read at fire time, not scheduling time, so flipping the
   // "App updates" toggle takes effect without a restart (#1605).
   _autoCheckForUpdates(label) {
-    if (!shouldAutoCheckForUpdates(this.windowManager?.notificationPrefs)) {
+    if (!appUpdatesEnabled(this.windowManager?.notificationPrefs)) {
       console.log(`⏭️ ${label} update check skipped (app updates disabled)`);
       return;
     }
