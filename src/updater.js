@@ -89,7 +89,11 @@ class UpdateManager {
         const nPrefs = this.windowManager?.notificationPrefs || {};
         const notifAllowed =
           nPrefs.notificationsEnabled !== false && nPrefs.notifyUpdates !== false;
-        if (this.windowManager && info && !this._suppressNotification && notifAllowed) {
+        if (nPrefs.autoUpdates !== false) {
+          this.downloadUpdate().catch((err) => {
+            console.error("Failed to download automatic update:", err);
+          });
+        } else if (this.windowManager && info && !this._suppressNotification && notifAllowed) {
           this.windowManager.showUpdateNotification(info).catch((err) => {
             console.error("Failed to show update notification:", err);
           });
@@ -130,6 +134,14 @@ class UpdateManager {
           };
         }
         this.notifyRenderers("update-downloaded", info);
+        const nPrefs = this.windowManager?.notificationPrefs || {};
+        const notifAllowed =
+          nPrefs.notificationsEnabled !== false && nPrefs.notifyUpdates !== false;
+        if (nPrefs.autoUpdates !== false && this.windowManager && info && notifAllowed) {
+          this.windowManager.showUpdateNotification(info, "ready").catch((err) => {
+            console.error("Failed to show update-ready notification:", err);
+          });
+        }
       },
     };
 

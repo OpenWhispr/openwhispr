@@ -40,6 +40,7 @@ class WindowManager {
       notifyMeetingDetection: true,
       notifyCalendarReminders: true,
       notifyUpdates: true,
+      autoUpdates: true,
     };
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
@@ -1333,7 +1334,7 @@ class WindowManager {
     this.notificationWindow = null;
   }
 
-  async showUpdateNotification(info) {
+  async showUpdateNotification(info, mode = "available") {
     if (this._updateNotificationDismissed) return;
     if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
       this.updateNotificationWindow.close();
@@ -1370,6 +1371,7 @@ class WindowManager {
     this._pendingUpdateNotificationData = {
       version: info?.version,
       releaseDate: info?.releaseDate,
+      mode,
     };
 
     this._updateNotificationReadyFallback = setTimeout(() => {

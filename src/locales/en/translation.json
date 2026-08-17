@@ -1982,6 +1982,8 @@
         },
         "checkForUpdates": "Check for Updates",
         "checking": "Checking...",
+        "autoUpdates": "Automatic updates",
+        "autoUpdatesDescription": "Download updates in the background and ask you to restart when they are ready",
         "currentVersion": "Current version",
         "devMode": "Running in development mode",
         "dialogs": {
@@ -3446,7 +3448,10 @@
   "updateNotification": {
     "title": "OpenWhispr Update Available",
     "body": "Version {{version}} is ready to download",
-    "cta": "Update Now"
+    "cta": "Update Now",
+    "readyTitle": "OpenWhispr Update Ready",
+    "readyBody": "Version {{version}} is ready. Restart to finish updating",
+    "restartCta": "Restart Now"
   },
   "permissionsGate": {
     "title": "Permissions Required",

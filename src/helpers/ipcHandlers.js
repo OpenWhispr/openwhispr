@@ -9666,6 +9666,7 @@ class IPCHandlers {
       "notifyMeetingDetection",
       "notifyCalendarReminders",
       "notifyUpdates",
+      "autoUpdates",
     ]);
 
     ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {
@@ -9792,6 +9793,12 @@ class IPCHandlers {
           await this.updateManager?.downloadUpdate();
         } catch (error) {
           console.error("Failed to start update download from notification:", error);
+        }
+      } else if (action === "restart") {
+        try {
+          await this.updateManager?.installUpdate();
+        } catch (error) {
+          console.error("Failed to install update from notification:", error);
         }
       }
       return { success: true };
