@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
+      },
+      "autoStop": {
+        "title": "Interrompi automaticamente le registrazioni",
+        "description": "Avvisa e interrompe la registrazione di una riunione dopo circa un minuto di silenzio o alla chiusura dell'app per riunioni."
       }
     }
   },
@@ -2618,7 +2622,9 @@
       "title": "Note delle riunioni",
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
-      "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione."
+      "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
+      "autoStopped": "Registrazione interrotta — non è stato rilevato audio per un po' di tempo.",
+      "autoStoppedProcessExit": "Registrazione interrotta — l'app per riunioni è stata chiusa."
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
@@ -3510,6 +3516,13 @@
       "underway": "Sembra che la tua riunione sia già in corso. Vuoi prendere appunti?"
     },
     "start": "Prendi appunti",
-    "join": "Partecipa e trascrivi"
+    "join": "Partecipa e trascrivi",
+    "autoStop": {
+      "titleSilence": "Nessun audio rilevato",
+      "titleProcessExit": "{{appName}} è stato chiuso",
+      "body": "La registrazione si fermerà tra {{seconds}} s",
+      "keep": "Continua a registrare",
+      "stopNow": "Interrompi ora"
+    }
   }
 }

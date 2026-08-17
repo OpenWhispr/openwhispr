@@ -21,6 +21,8 @@ export default function MeetingRecordingMount(): null {
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const error = useMeetingRecordingStore((s) => s.error);
   const errorNonce = useMeetingRecordingStore((s) => s.errorNonce);
+  const autoStopNotice = useMeetingRecordingStore((s) => s.autoStopNotice);
+  const autoStopNonce = useMeetingRecordingStore((s) => s.autoStopNonce);
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   const wasMicUnavailable = useRef(false);
 
@@ -37,6 +39,19 @@ export default function MeetingRecordingMount(): null {
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
   }, [error, errorNonce, toast, t]);
+
+  useEffect(() => {
+    if (!autoStopNotice) return;
+    toast({
+      title: t("notes.meeting.title"),
+      description:
+        autoStopNotice === "process-exit"
+          ? t("notes.meeting.autoStoppedProcessExit")
+          : t("notes.meeting.autoStopped"),
+      variant: "default",
+    });
+    // autoStopNonce re-fires this toast when the same reason repeats back-to-back.
+  }, [autoStopNotice, autoStopNonce, toast, t]);
 
   useEffect(() => {
     if (micCaptureStatus === "unavailable" && !wasMicUnavailable.current) {

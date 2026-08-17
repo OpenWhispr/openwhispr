@@ -782,6 +782,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-transcription-fatal-error",
     (callback) => (_event, data) => callback(data)
   ),
+  onMeetingAutoStop: registerListener(
+    "meeting-auto-stop",
+    (callback) => (_event, data) => callback(data)
+  ),
+  meetingSetAutoStopEnabled: (enabled) =>
+    ipcRenderer.invoke("meeting-set-auto-stop-enabled", { enabled }),
 
   // Dictation realtime streaming
   dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),

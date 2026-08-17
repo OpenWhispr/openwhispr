@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
+      },
+      "autoStop": {
+        "title": "録音の自動停止",
+        "description": "約1分間の無音が続いたとき、または会議アプリが終了したときに、警告してから会議の録音を停止します。"
       }
     }
   },
@@ -2602,7 +2606,9 @@
       "title": "議事録",
       "description": "文字起こしと構造化されたサマリー",
       "back": "戻る",
-      "restrictedByOrg": "会議の文字起こしは組織によって制限されています。"
+      "restrictedByOrg": "会議の文字起こしは組織によって制限されています。",
+      "autoStopped": "録音を停止しました — しばらく音声が検出されませんでした。",
+      "autoStoppedProcessExit": "録音を停止しました — 会議アプリが終了しました。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -3510,6 +3516,13 @@
       "underway": "会議はすでに進行中のようです。メモを取りますか？"
     },
     "start": "メモを取る",
-    "join": "参加して文字起こし"
+    "join": "参加して文字起こし",
+    "autoStop": {
+      "titleSilence": "音声が検出されません",
+      "titleProcessExit": "{{appName}}が終了しました",
+      "body": "あと{{seconds}}秒で録音を停止します",
+      "keep": "録音を続ける",
+      "stopNow": "今すぐ停止"
+    }
   }
 }

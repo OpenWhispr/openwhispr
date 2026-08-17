@@ -6,6 +6,9 @@ interface MeetingNotificationCardProps {
   startLabel: string;
   onStart?: () => void;
   onDismiss?: () => void;
+  /** Optional outline button rendered before the primary action. */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
   /** Controls the close button's hover fade. Ignored when `onDismiss` is absent. */
   closeVisible?: boolean;
   className?: string;
@@ -25,6 +28,8 @@ export function MeetingNotificationCard({
   startLabel,
   onStart,
   onDismiss,
+  secondaryLabel,
+  onSecondary,
   closeVisible = true,
   className = "",
   onMouseEnter,
@@ -75,6 +80,15 @@ export function MeetingNotificationCard({
           </p>
           <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{body}</p>
         </div>
+
+        {secondaryLabel && (
+          <button
+            onClick={onSecondary}
+            className="shrink-0 border border-border/60 dark:border-border-subtle/60 text-muted-foreground hover:text-foreground hover:bg-muted text-[11px] font-medium px-2.5 py-1 rounded-md transition-colors"
+          >
+            {secondaryLabel}
+          </button>
+        )}
 
         <button
           onClick={onStart}

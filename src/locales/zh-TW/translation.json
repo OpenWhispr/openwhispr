@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "辨識並標記發言者",
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
+      },
+      "autoStop": {
+        "title": "自動停止錄製",
+        "description": "在大約一分鐘無聲或會議應用程式關閉時，先發出提醒再停止會議錄製。"
       }
     }
   },
@@ -2618,7 +2622,9 @@
       "title": "會議筆記",
       "description": "轉錄與結構化摘要",
       "back": "返回",
-      "restrictedByOrg": "會議轉錄已被您的組織限制。"
+      "restrictedByOrg": "會議轉錄已被您的組織限制。",
+      "autoStopped": "錄製已停止——一段時間內未偵測到音訊。",
+      "autoStoppedProcessExit": "錄製已停止——會議應用程式已關閉。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
@@ -3510,6 +3516,13 @@
       "underway": "你的會議似乎已在進行中。要開始記錄嗎？"
     },
     "start": "開始記錄",
-    "join": "加入並轉錄"
+    "join": "加入並轉錄",
+    "autoStop": {
+      "titleSilence": "未偵測到音訊",
+      "titleProcessExit": "{{appName}}已關閉",
+      "body": "錄製將在 {{seconds}} 秒後停止",
+      "keep": "繼續錄製",
+      "stopNow": "立即停止"
+    }
   }
 }

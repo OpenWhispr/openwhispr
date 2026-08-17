@@ -27,7 +27,11 @@ class WindowManager {
     this.agentWindow = null;
     this.notificationWindow = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
-      if (this.meetingDetectionEngine) {
+      if (this._pendingNotificationData?.source === "auto-stop") {
+        // Auto-stop countdown ran out: this is the stop trigger, not a
+        // mere prompt expiry.
+        this.meetingAutoStopController?.handleCountdownExpired();
+      } else if (this.meetingDetectionEngine) {
         this.meetingDetectionEngine.handleNotificationTimeout();
       }
       this.dismissMeetingNotification();
@@ -1299,7 +1303,9 @@ class WindowManager {
       }
     }, 3000);
 
-    this._notificationDismissTimer.start(getNotificationTimeoutMs(promptData.source));
+    this._notificationDismissTimer.start(
+      promptData.timeoutMs ?? getNotificationTimeoutMs(promptData.source)
+    );
 
     // "closed" fires asynchronously, so a replaced prompt's window emits it
     // after the replacement already took over the reference and the countdown.
