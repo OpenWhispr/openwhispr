@@ -45,6 +45,29 @@ test("an unexpected helper exit schedules a restart while Apple Calendar is conn
   }
 });
 
+test("_mapEvent falls back to a meeting link found in location or notes", () => {
+  const AppleCalendarManager = loadManager();
+  const manager = new AppleCalendarManager({}, {});
+
+  const mapped = manager._mapEvent({
+    id: "evt-1:1755165600",
+    calendar_id: "calendar-1",
+    title: "External call",
+    start: "2026-08-14T10:00:00Z",
+    end: "2026-08-14T10:30:00Z",
+    is_all_day: false,
+    status: "confirmed",
+    location: "Zoom: https://example.zoom.us/j/123456789",
+    notes_urls: [],
+    attendees: [],
+  });
+
+  assert.equal(mapped.provider, "apple");
+  assert.equal(mapped.hangout_link, "https://example.zoom.us/j/123456789");
+  assert.equal(mapped.attendees_count, 0);
+  assert.equal(mapped.attendees, null);
+});
+
 test("a deliberate stop prevents the exited child from scheduling a restart", () => {
   const AppleCalendarManager = loadManager();
   const databaseManager = {

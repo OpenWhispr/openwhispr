@@ -7,8 +7,10 @@ function notificationKey(event) {
   return `${event.provider || "google"}:${event.id}`;
 }
 
+// A solo event with no invitees and no meeting link is a time block (focus
+// time, a personal reminder), not a meeting — every provider syncs those.
 function isReminderEligible(event) {
-  return event.provider !== "google" || event.attendees_count > 0 || getMeetingJoinUrl(event);
+  return event.attendees_count > 0 || getMeetingJoinUrl(event);
 }
 
 // Provider-agnostic meeting reminder scheduling. Reads only the shared
