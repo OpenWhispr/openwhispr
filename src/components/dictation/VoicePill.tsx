@@ -1,5 +1,6 @@
 import { forwardRef, type HTMLAttributes } from "react";
 import { BorderBeam } from "border-beam";
+import { ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 import { LiveWaveform } from "./LiveWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
@@ -19,6 +20,7 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
   agentMode?: boolean;
+  showExpandChevron?: boolean;
   isDragging?: boolean;
   horizontalDirection?: "left" | "right";
 }
@@ -51,6 +53,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
     agentMode = false,
+    showExpandChevron = false,
     isDragging = false,
     horizontalDirection = "right",
     className,
@@ -71,6 +74,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     !collapseToIdentity && (isRecording || expanded || (isPanel && !waveformOnlyWhileRecording));
   const showDivider = showCompactPill && waveformVisible && !isRecording;
   const dividerMargin = showCompactPill ? (showDivider ? 4 : 3) : 0;
+  const identitySize = state === "hover" ? 24 : 22;
 
   const pill = (
     <div
@@ -98,6 +102,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       data-integrated-with-panel={integratedWithPanel || undefined}
       data-agent-mode={agentMode || undefined}
       data-agent-beam-active={(agentMode && showThinkingBeam) || undefined}
+      data-expand-chevron={showExpandChevron || undefined}
       {...props}
     >
       <div
@@ -105,15 +110,37 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         style={{ opacity: state === "hover" ? 0.8 : 0 }}
       />
 
-      <VoiceIdentityIcon
-        size={state === "hover" ? 24 : 22}
-        agentMode={agentMode}
-        className={cn(
-          "transition-[color,width,height] duration-200",
-          state === "idle" && "text-foreground",
-          (isUnavailable || isProcessing) && "animate-pulse"
-        )}
-      />
+      <span
+        className="relative inline-block shrink-0 transition-[width,height] duration-200"
+        style={{ width: identitySize, height: identitySize }}
+        aria-hidden="true"
+      >
+        <span
+          className={cn(
+            "voice-pill-identity-logo absolute inset-0 transition-[opacity,transform] duration-200 ease-out",
+            showExpandChevron ? "translate-y-1 scale-75 opacity-0" : "scale-100 opacity-100"
+          )}
+        >
+          <VoiceIdentityIcon
+            size={identitySize}
+            agentMode={agentMode}
+            className={cn(
+              "transition-[color,width,height] duration-200",
+              state === "idle" && "text-foreground",
+              (isUnavailable || isProcessing) && "animate-pulse"
+            )}
+          />
+        </span>
+        <ChevronUp
+          className={cn(
+            "voice-pill-expand-chevron absolute inset-0 m-auto size-5 transition-[opacity,transform] duration-200 ease-out",
+            showExpandChevron
+              ? "scale-100 opacity-100"
+              : "translate-y-1 scale-75 opacity-0"
+          )}
+          strokeWidth={2}
+        />
+      </span>
 
       <div
         className="shrink-0 overflow-hidden bg-border/60"

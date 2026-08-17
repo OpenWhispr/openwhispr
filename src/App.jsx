@@ -209,6 +209,7 @@ export default function App() {
   const [liveTranscriptText, setLiveTranscriptText] = useState("");
   const [liveTranscriptPhase, setLiveTranscriptPhase] = useState("listening");
   const [liveTranscriptEntrancePhase, setLiveTranscriptEntrancePhase] = useState("idle");
+  const [liveTranscriptManuallyCollapsed, setLiveTranscriptManuallyCollapsed] = useState(false);
   const assistantPanelOpenRef = useRef(assistantPanelOpen);
   const assistantCloseTimerRef = useRef(null);
   const assistantOpenFrameRef = useRef(null);
@@ -413,6 +414,7 @@ export default function App() {
     // Errors replace the live transcript surface, so unmount it immediately
     // and suppress late preview events until the next recording begins.
     liveTranscriptSuppressedRef.current = true;
+    setLiveTranscriptManuallyCollapsed(false);
     cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
     clearTimeout(liveTranscriptCloseTimerRef.current);
     clearLiveTranscriptEntranceTimers();
@@ -484,7 +486,13 @@ export default function App() {
 
   const closeLiveTranscriptPanel = React.useCallback(
     ({ suppress = false, clear = false } = {}) => {
-      if (suppress) liveTranscriptSuppressedRef.current = true;
+      if (suppress) {
+        liveTranscriptSuppressedRef.current = true;
+        setLiveTranscriptManuallyCollapsed(true);
+      }
+      if (clear) {
+        setLiveTranscriptManuallyCollapsed(false);
+      }
       if (clear) liveTranscriptTextSchedulerRef.current.flush();
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
       clearLiveTranscriptEntranceTimers();
@@ -527,6 +535,8 @@ export default function App() {
       // Reserve the mode before the next frame so repeated preview chunks
       // cannot restart the staged entrance while its first frame waits.
       liveTranscriptPanelOpenRef.current = true;
+      setIsHovered(false);
+      setLiveTranscriptManuallyCollapsed(false);
       liveTranscriptContentReadyRef.current = false;
       liveTranscriptTextSchedulerRef.current.cancel();
       setLiveTranscriptText("");
@@ -556,6 +566,11 @@ export default function App() {
     prepareBufferedLiveTranscriptText,
     resumeLiveTranscriptText,
   ]);
+
+  const reopenLiveTranscriptPanel = React.useCallback(() => {
+    liveTranscriptSuppressedRef.current = false;
+    openLiveTranscriptPanel();
+  }, [openLiveTranscriptPanel]);
 
   useEffect(() => {
     const reveal = () => {
@@ -609,6 +624,7 @@ export default function App() {
     const normalRecording = isRecording && !isAssistantVoice;
     if (normalRecording && !previousNormalRecordingRef.current) {
       liveTranscriptSuppressedRef.current = false;
+      setLiveTranscriptManuallyCollapsed(false);
       resetLiveTranscriptText();
       setLiveTranscriptPhase("listening");
     }
@@ -852,6 +868,7 @@ export default function App() {
         : "idle";
   const anyPanelOpen = assistantPanelOpen || liveTranscriptPanelOpen;
   const anyPanelMounted = assistantPanelMounted || liveTranscriptPanelMounted;
+  const canReopenLiveTranscript = liveTranscriptManuallyCollapsed && !anyPanelMounted;
   const agentModeActive = resolveAgentModeActive({
     isAssistantVoice,
     isRecording,
@@ -927,7 +944,7 @@ export default function App() {
             }}
           >
             <Tooltip
-              content={micTooltip}
+              content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
               disabled={anyPanelMounted}
               align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
             >
@@ -944,12 +961,15 @@ export default function App() {
                 waveformOnlyWhileRecording={liveTranscriptPanelMounted}
                 integratedWithPanel={liveTranscriptPanelOpen}
                 agentMode={agentModeActive}
+                showExpandChevron={canReopenLiveTranscript && isHovered}
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}
                 horizontalDirection={voiceHorizontalDirection}
                 role={anyPanelMounted ? "status" : "button"}
                 aria-label={
-                  assistantPanelMounted
+                  canReopenLiveTranscript
+                    ? t("transcriptionPreview.label")
+                    : assistantPanelMounted
                     ? t("settingsPage.agentConfig.title")
                     : liveTranscriptPanelMounted
                       ? t("transcriptionPreview.label")
@@ -982,7 +1002,9 @@ export default function App() {
                 }}
                 onClick={(e) => {
                   if (anyPanelMounted) return;
-                  if (!hasDragged && micState !== "processing") {
+                  if (canReopenLiveTranscript) {
+                    reopenLiveTranscriptPanel();
+                  } else if (!hasDragged && micState !== "processing") {
                     setIsCommandMenuOpen(false);
                     toggleListening();
                   }
