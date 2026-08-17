@@ -37,6 +37,11 @@ import {
 
 const ASSISTANT_TRANSITION_MS = 280;
 const LIVE_TRANSCRIPT_RENDER_INTERVAL_MS = 50;
+const formatPillHotkeyLabel = (value) =>
+  formatHotkeyListLabel(value)
+    .replace(/\s*\+\s*/g, " + ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 // Tooltip Component
 const Tooltip = ({ children, content, emoji, align = "center", disabled = false }) => {
@@ -55,7 +60,7 @@ const Tooltip = ({ children, content, emoji, align = "center", disabled = false 
       </div>
       {isVisible && !disabled && (
         <div
-          className={`absolute bottom-full ${alignClass} mb-2 px-1.5 py-1 text-[10px] text-popover-foreground bg-popover border border-border rounded-md z-10 shadow-lg transition-opacity duration-150 whitespace-nowrap`}
+          className={`absolute bottom-full ${alignClass} mb-2 px-1.5 py-1 text-[10px] text-popover-foreground bg-popover border border-border rounded-full z-10 shadow-lg transition-opacity duration-150 whitespace-nowrap`}
         >
           {emoji && <span className="mr-1">{emoji}</span>}
           {content}
@@ -871,7 +876,7 @@ export default function App() {
       case "processing":
         return t("app.mic.processing");
       default:
-        return formatHotkeyListLabel(hotkey);
+        return formatPillHotkeyLabel(hotkey);
     }
   };
 
