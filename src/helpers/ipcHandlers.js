@@ -1207,10 +1207,6 @@ class IPCHandlers {
       return result;
     });
 
-    ipcMain.handle("db-get-transcriptions", async (event, limit = 50, options = {}) => {
-      return this.databaseManager.getTranscriptions(limit, options);
-    });
-
     ipcMain.handle("db-get-transcriptions-page", async (event, params = {}) => {
       return this.databaseManager.getTranscriptionsPage(params);
     });

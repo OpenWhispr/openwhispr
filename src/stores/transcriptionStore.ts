@@ -81,6 +81,8 @@ export async function initializeTranscriptions(
 ) {
   ensureIpcListeners();
   const generation = ++requestGeneration;
+  nextCursor = null;
+  useTranscriptionStore.setState({ hasMore: false, isLoadingMore: false });
   const page = await window.electronAPI.getTranscriptionsPage({ limit, includeDiscarded });
   if (generation !== requestGeneration) return useTranscriptionStore.getState().transcriptions;
   nextCursor = page.nextCursor;
@@ -107,21 +109,17 @@ export async function loadMoreTranscriptions() {
     });
     if (generation !== requestGeneration) return;
     nextCursor = page.nextCursor;
-    // Re-read state after the await: live events (add/update/delete) that
-    // landed while the page was in flight must not be clobbered. Live
-    // transcription-added events prepend rows that page fetches can overlap,
-    // so append by id only.
     const { transcriptions: current } = useTranscriptionStore.getState();
-    const existingIds = new Set(current.map((item) => item.id));
-    const appended = page.items.filter((item) => !existingIds.has(item.id));
     useTranscriptionStore.setState({
-      transcriptions: [...current, ...appended],
+      transcriptions: [...current, ...page.items],
       hasMore: page.hasMore,
     });
   } catch {
     // Keep hasMore so scrolling again retries the failed page.
   } finally {
-    useTranscriptionStore.setState({ isLoadingMore: false });
+    if (generation === requestGeneration) {
+      useTranscriptionStore.setState({ isLoadingMore: false });
+    }
   }
 }
 

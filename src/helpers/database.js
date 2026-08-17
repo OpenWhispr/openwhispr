@@ -1163,7 +1163,7 @@ class DatabaseManager {
       return {
         items,
         hasMore,
-        nextCursor: hasMore && last ? { timestamp: last.timestamp, id: last.id } : null,
+        nextCursor: hasMore ? { timestamp: last.timestamp, id: last.id } : null,
       };
     } catch (error) {
       debugLogger.error("Error getting transcription page", { error: error.message }, "database");

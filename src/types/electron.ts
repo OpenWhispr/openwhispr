@@ -967,10 +967,6 @@ declare global {
           clientTranscriptionId?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
-      getTranscriptions: (
-        limit?: number,
-        options?: { includeDiscarded?: boolean }
-      ) => Promise<TranscriptionItem[]>;
       getTranscriptionsPage: (params?: {
         limit?: number;
         cursor?: TranscriptionCursor | null;

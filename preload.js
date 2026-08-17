@@ -83,8 +83,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Database functions
   saveTranscription: (text, rawText, options) =>
     ipcRenderer.invoke("db-save-transcription", text, rawText, options),
-  getTranscriptions: (limit, options) =>
-    ipcRenderer.invoke("db-get-transcriptions", limit, options),
   getTranscriptionsPage: (params) => ipcRenderer.invoke("db-get-transcriptions-page", params),
   searchTranscriptions: (query, limit, options) =>
     ipcRenderer.invoke("db-search-transcriptions", query, limit, options),
