@@ -22,7 +22,9 @@ const EXPECTED_DIGESTS = {
 
 const BIN_SUBDIR = "whisper-vulkan";
 
-// Statically linked — no companion libs to copy
+// Statically linked against ggml-vulkan (no Vulkan companion libs), but the exe
+// still links the dynamic MSVC runtime — from release 0.0.10 the win32 zip bundles
+// those DLLs and they must be extracted beside the exe (CUS-113)
 class WhisperVulkanManager extends GpuBinaryManager {
   constructor() {
     super({
@@ -35,6 +37,7 @@ class WhisperVulkanManager extends GpuBinaryManager {
           assetName: "whisper-server-win32-x64-vulkan.zip",
           binaryName: "whisper-server-win32-x64-vulkan.exe",
           outputName: "whisper-server-win32-x64-vulkan.exe",
+          libPattern: /\.dll$/i,
         },
         "linux-x64": {
           assetName: "whisper-server-linux-x64-vulkan.zip",

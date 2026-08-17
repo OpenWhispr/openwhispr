@@ -6,6 +6,7 @@ const {
   cleanupFiles,
   downloadFile,
   findBinaryInDir,
+  findLibrariesInDir,
   parseArgs,
   setExecutable,
 } = require("./lib/download-utils");
@@ -82,40 +83,6 @@ function extractTarBz2(archivePath, destDir) {
     stdio: "inherit",
     cwd,
   });
-}
-
-function findLibrariesInDir(dir, pattern, maxDepth = 5, currentDepth = 0) {
-  if (currentDepth >= maxDepth) return [];
-
-  const results = [];
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-
-      if (entry.isDirectory()) {
-        results.push(...findLibrariesInDir(fullPath, pattern, maxDepth, currentDepth + 1));
-      } else if (matchesPattern(entry.name, pattern)) {
-        results.push(fullPath);
-      }
-    }
-  } catch {
-    // Ignore permission errors
-  }
-
-  return results;
-}
-
-function matchesPattern(filename, pattern) {
-  if (pattern === "*.dylib") {
-    return filename.endsWith(".dylib");
-  } else if (pattern === "*.dll") {
-    return filename.endsWith(".dll");
-  } else if (pattern === "*.so*") {
-    return /\.so(\.\d+)*$/.test(filename) || filename.endsWith(".so");
-  }
-  return false;
 }
 
 function copyBinary(extractDir, binaryName, outputPath, platformArch) {

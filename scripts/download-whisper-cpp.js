@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const {
+  copyLibraries,
   downloadFile,
   extractZip,
   fetchLatestRelease,
@@ -15,7 +16,8 @@ const WHISPER_CPP_REPO = "OpenWhispr/whisper.cpp";
 
 // Pinned to a tested build. Tracking the latest release let an upstream whisper.cpp bump
 // change transcription output between app releases with no diff to review. See #1348.
-const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.8";
+// 0.0.10 is the first release whose win32 zips bundle the MSVC runtime DLLs (CUS-113).
+const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.10";
 
 const BINARIES = {
   "darwin-arm64": {
@@ -32,6 +34,9 @@ const BINARIES = {
     zipName: "whisper-server-win32-x64-cpu.zip",
     binaryName: "whisper-server-win32-x64-cpu.exe",
     outputName: "whisper-server-win32-x64.exe",
+    // MSVC runtime DLLs the exe links dynamically; without them beside the exe,
+    // machines lacking the VC++ redistributable die at load with 0xC0000135 (CUS-113)
+    libPattern: "*.dll",
   },
   "linux-x64": {
     zipName: "whisper-server-linux-x64-cpu.zip",
@@ -91,6 +96,12 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
       fs.copyFileSync(binaryPath, outputPath);
       setExecutable(outputPath);
       console.log(`  [server] ${platformArch}: Extracted to ${config.outputName}`);
+
+      if (config.libPattern) {
+        for (const libName of copyLibraries(extractDir, BIN_DIR, config.libPattern)) {
+          console.log(`  [server] ${platformArch}: Copied library ${libName}`);
+        }
+      }
     } else {
       console.error(
         `  [server] ${platformArch}: Binary "${config.binaryName}" not found in archive`
@@ -170,4 +181,8 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+if (require.main === module) {
+  main().catch(console.error);
+}
+
+module.exports = { BINARIES, WHISPER_CPP_TAG };

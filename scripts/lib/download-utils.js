@@ -319,6 +319,52 @@ function setExecutable(filePath) {
   }
 }
 
+function matchesPattern(filename, pattern) {
+  if (pattern === "*.dylib") {
+    return filename.endsWith(".dylib");
+  } else if (pattern === "*.dll") {
+    return filename.endsWith(".dll");
+  } else if (pattern === "*.so*") {
+    return /\.so(\.\d+)*$/.test(filename) || filename.endsWith(".so");
+  }
+  return false;
+}
+
+function findLibrariesInDir(dir, pattern, maxDepth = 5, currentDepth = 0) {
+  if (currentDepth >= maxDepth) return [];
+
+  const results = [];
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        results.push(...findLibrariesInDir(fullPath, pattern, maxDepth, currentDepth + 1));
+      } else if (matchesPattern(entry.name, pattern)) {
+        results.push(fullPath);
+      }
+    }
+  } catch {
+    // Ignore permission errors
+  }
+
+  return results;
+}
+
+function copyLibraries(extractDir, destDir, pattern) {
+  const copied = [];
+  for (const libPath of findLibrariesInDir(extractDir, pattern)) {
+    const libName = path.basename(libPath);
+    const destPath = path.join(destDir, libName);
+    fs.copyFileSync(libPath, destPath);
+    setExecutable(destPath);
+    copied.push(libName);
+  }
+  return copied;
+}
+
 function cleanupFiles(binDir, prefix, keepPrefix) {
   const keepPrefixes = Array.isArray(keepPrefix) ? keepPrefix : [keepPrefix];
   // Never delete shared libraries; only platform binaries. The b9763 split ships
@@ -335,11 +381,14 @@ function cleanupFiles(binDir, prefix, keepPrefix) {
 }
 
 module.exports = {
+  copyLibraries,
   downloadFile,
   extractArchive,
   extractZip,
   fetchLatestRelease,
   findBinaryInDir,
+  findLibrariesInDir,
+  matchesPattern,
   parseArgs,
   setExecutable,
   cleanupFiles,
