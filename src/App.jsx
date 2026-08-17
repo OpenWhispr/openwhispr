@@ -32,6 +32,7 @@ import {
   resolveVoiceHorizontalDirection,
   resolveVoicePanelCorePresentation,
   resolveVoicePillDock,
+  shouldOfferLiveTranscriptReopen,
 } from "./helpers/voicePillPresentation";
 
 const ASSISTANT_TRANSITION_MS = 280;
@@ -217,6 +218,7 @@ export default function App() {
   const previousAssistantResponseReadyRef = useRef(false);
   const liveTranscriptPanelOpenRef = useRef(liveTranscriptPanelOpen);
   const liveTranscriptSuppressedRef = useRef(false);
+  const liveTranscriptReopenEligibleRef = useRef(false);
   const liveTranscriptCloseTimerRef = useRef(null);
   const liveTranscriptOpenFrameRef = useRef(null);
   const liveTranscriptOpenPromiseRef = useRef(null);
@@ -446,6 +448,15 @@ export default function App() {
     onDictationError: handleDictationError,
   });
 
+  useLayoutEffect(() => {
+    liveTranscriptReopenEligibleRef.current = shouldOfferLiveTranscriptReopen({
+      manuallyCollapsed: true,
+      isRecording,
+      isProcessing,
+      isAssistantVoice,
+    });
+  }, [isAssistantVoice, isProcessing, isRecording]);
+
   // Direction is part of the interaction's geometry, not a live decoration.
   // Hold the origin through processing and panel exit so every close animation
   // returns to the same side from which that voice session started.
@@ -488,7 +499,7 @@ export default function App() {
     ({ suppress = false, clear = false } = {}) => {
       if (suppress) {
         liveTranscriptSuppressedRef.current = true;
-        setLiveTranscriptManuallyCollapsed(true);
+        setLiveTranscriptManuallyCollapsed(liveTranscriptReopenEligibleRef.current);
       }
       if (clear) {
         setLiveTranscriptManuallyCollapsed(false);
@@ -640,6 +651,11 @@ export default function App() {
     closeLiveTranscriptPanel,
     resetLiveTranscriptText,
   ]);
+
+  useEffect(() => {
+    if (!isAssistantVoice && (isRecording || isProcessing)) return;
+    setLiveTranscriptManuallyCollapsed(false);
+  }, [isAssistantVoice, isProcessing, isRecording]);
 
   // Single owner of the window size: panel > menu > toast > compact pill > base.
   // Grows apply immediately so content never clips; shrinks wait for the
@@ -868,7 +884,13 @@ export default function App() {
         : "idle";
   const anyPanelOpen = assistantPanelOpen || liveTranscriptPanelOpen;
   const anyPanelMounted = assistantPanelMounted || liveTranscriptPanelMounted;
-  const canReopenLiveTranscript = liveTranscriptManuallyCollapsed && !anyPanelMounted;
+  const canReopenLiveTranscript =
+    shouldOfferLiveTranscriptReopen({
+      manuallyCollapsed: liveTranscriptManuallyCollapsed,
+      isRecording,
+      isProcessing,
+      isAssistantVoice,
+    }) && !anyPanelMounted;
   const agentModeActive = resolveAgentModeActive({
     isAssistantVoice,
     isRecording,

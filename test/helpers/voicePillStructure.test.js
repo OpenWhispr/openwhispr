@@ -43,23 +43,35 @@ test("panel thinking contracts to the identity circle instead of freezing a wave
   assert.doesNotMatch(panelThinking, /style="width:92px;height:36px/);
 });
 
-test("the persistent pill mirrors its content order for a left-origin interaction", async () => {
+test("the waveform stays to the right of the identity across docks and voice modes", async () => {
   const right = await renderPill("recording", true, "right");
   const left = await renderPill("recording", true, "left");
+  const leftAgent = await renderPill("recording", true, "left", {
+    agentMode: true,
+  });
+  const leftLiveTranscript = await renderPill("recording", true, "left", {
+    variant: "panel",
+    integratedWithPanel: true,
+  });
 
   assert.match(right, /data-horizontal-direction="right"/);
-  assert.doesNotMatch(right, /flex-row-reverse/);
-  assert.match(right, /voice-pill-control[^"\n]*pr-1/);
-  assert.doesNotMatch(right, /voice-pill-control[^"\n]*pl-1/);
-  assert.match(left, /flex-row-reverse/);
+  assert.match(right, /voice-pill-control[^"\n]*px-3/);
   assert.match(left, /data-horizontal-direction="left"/);
-  assert.match(left, /voice-pill-control[^"\n]*pl-1/);
-  assert.doesNotMatch(left, /voice-pill-control[^"\n]*pr-1/);
+  assert.match(left, /voice-pill-control[^"\n]*px-3/);
+
+  for (const markup of [right, left, leftAgent, leftLiveTranscript]) {
+    assert.doesNotMatch(markup, /flex-row-reverse/);
+    assert.ok(markup.indexOf("voice-pill-identity-slot") >= 0);
+    assert.ok(markup.indexOf("voice-pill-waveform") > markup.indexOf("voice-pill-identity-slot"));
+  }
 });
 
 test("the collapsed Live Transcript pill transitions its logo into an expand chevron", async () => {
   const resting = await renderPill("recording", true);
   const hovered = await renderPill("recording", true, "right", {
+    showExpandChevron: true,
+  });
+  const leftHovered = await renderPill("recording", true, "left", {
     showExpandChevron: true,
   });
 
@@ -69,6 +81,11 @@ test("the collapsed Live Transcript pill transitions its logo into an expand che
   assert.match(hovered, /data-expand-chevron="true"/);
   assert.match(hovered, /voice-pill-identity-logo[^"\n]*opacity-0/);
   assert.match(hovered, /voice-pill-expand-chevron[^"\n]*scale-100 opacity-100/);
+  assert.doesNotMatch(leftHovered, /flex-row-reverse/);
+  assert.ok(
+    leftHovered.indexOf("voice-pill-expand-chevron") <
+      leftHovered.indexOf("voice-pill-waveform")
+  );
 });
 
 test("the idle pill keeps the logo at normal foreground strength", async () => {

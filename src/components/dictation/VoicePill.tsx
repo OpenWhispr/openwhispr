@@ -81,8 +81,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       ref={ref}
       className={cn(
         "voice-pill-control relative flex items-center justify-center overflow-hidden rounded-full border",
-        horizontalDirection === "left" && "flex-row-reverse",
-        showCompactPill && (horizontalDirection === "left" ? "pl-1" : "pr-1"),
+        showCompactPill && "pr-1",
         "shadow-[var(--shadow-card)]",
         STATE_APPEARANCE[state],
         className
@@ -111,7 +110,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <span
-        className="relative inline-block shrink-0 transition-[width,height] duration-200"
+        className="voice-pill-identity-slot relative inline-block shrink-0 transition-[width,height] duration-200"
         style={{ width: identitySize, height: identitySize }}
         aria-hidden="true"
       >
@@ -155,7 +154,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <div
-        className="relative shrink-0 overflow-hidden text-foreground"
+        className="voice-pill-waveform relative shrink-0 overflow-hidden text-foreground"
         style={{
           width: showCompactPill ? 52 : 0,
           height: showCompactPill ? 24 : 32,

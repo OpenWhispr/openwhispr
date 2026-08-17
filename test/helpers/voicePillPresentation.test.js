@@ -523,6 +523,47 @@ test("the voice panel core stays mounted but contentless while idle", async () =
   );
 });
 
+test("Live Transcript reopen belongs only to an active normal dictation", async () => {
+  const { shouldOfferLiveTranscriptReopen } = await load();
+
+  assert.equal(
+    shouldOfferLiveTranscriptReopen({
+      manuallyCollapsed: true,
+      isRecording: true,
+      isProcessing: false,
+      isAssistantVoice: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldOfferLiveTranscriptReopen({
+      manuallyCollapsed: true,
+      isRecording: false,
+      isProcessing: true,
+      isAssistantVoice: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldOfferLiveTranscriptReopen({
+      manuallyCollapsed: true,
+      isRecording: false,
+      isProcessing: false,
+      isAssistantVoice: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldOfferLiveTranscriptReopen({
+      manuallyCollapsed: true,
+      isRecording: true,
+      isProcessing: false,
+      isAssistantVoice: true,
+    }),
+    false
+  );
+});
+
 test("a fresh Agent request thinks in the floating logo circle", async () => {
   const { resolveAssistantThinkingTransition } = await load();
   assert.deepEqual(resolveAssistantThinkingTransition(false), {

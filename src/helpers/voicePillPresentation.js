@@ -285,6 +285,22 @@ export function resolveVoicePanelCorePresentation({
 }
 
 /**
+ * A collapsed Live Transcript can be reopened only while its owning dictation
+ * is still recording or finalizing. Completed and Agent sessions must return
+ * the pill to its normal identity instead of inheriting a stale chevron.
+ */
+export function shouldOfferLiveTranscriptReopen({
+  manuallyCollapsed,
+  isRecording,
+  isProcessing,
+  isAssistantVoice,
+}) {
+  return Boolean(
+    manuallyCollapsed && !isAssistantVoice && (Boolean(isRecording) || Boolean(isProcessing))
+  );
+}
+
+/**
  * A fresh request thinks in the floating logo circle. A follow-up that starts
  * from an open response panel keeps that surface mounted so its footer pill
  * can own the thinking feedback without a close/reopen transition.
