@@ -67,6 +67,12 @@ const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const { partitionPendingMicFinals, isWithinRetractWindow } = require("./meetingMicHoldback");
+const {
+  MEETING_MIC_BLEED_RMS_CEILING,
+  MEETING_MIC_BLEED_PEAK_CEILING,
+  computeChunkStats,
+  resolveMicChunkAction,
+} = require("./meetingMicGate");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const {
@@ -6173,8 +6179,6 @@ class IPCHandlers {
 
     const MEETING_MIC_REFERENCE_ALIGNMENT_MS = 320;
     const MEETING_STARTUP_WARMUP_MS = 1500;
-    const MEETING_MIC_BLEED_RMS_CEILING = 0.018;
-    const MEETING_MIC_BLEED_PEAK_CEILING = 0.07;
     const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
     const MEETING_MIC_STATS_LOG_LIMIT = 200;
     let meetingMicStatsLogCount = 0;
@@ -6297,26 +6301,20 @@ class IPCHandlers {
 
       let outbound = buffer;
       if (source === "mic" && buffer.length >= 2) {
-        const samples = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length >> 1);
-        let sumSq = 0;
-        let peak = 0;
-        for (let i = 0; i < samples.length; i++) {
-          const n = samples[i] / 0x7fff;
-          sumSq += n * n;
-          const abs = n < 0 ? -n : n;
-          if (abs > peak) peak = abs;
-        }
-        const rms = Math.sqrt(sumSq / samples.length);
+        const { rms, peak, sampleCount } = computeChunkStats(buffer);
+        // Evaluated eagerly (as before) because the stats log reports it.
         const systemSpeaking = meetingEchoLeakDetector.isSystemSpeaking(
           Date.now() - MEETING_MIC_BLEED_LOOKBACK_MS
         );
-        if (rms < 0.0015 && peak < 0.05) {
-          outbound = Buffer.alloc(buffer.length);
-        } else if (
-          rms < MEETING_MIC_BLEED_RMS_CEILING &&
-          peak < MEETING_MIC_BLEED_PEAK_CEILING &&
-          systemSpeaking
-        ) {
+        const verdict = resolveMicChunkAction({
+          mode: "streaming",
+          source,
+          rms,
+          peak,
+          sampleCount,
+          isSystemSpeaking: () => systemSpeaking,
+        });
+        if (verdict.action === "zero") {
           outbound = Buffer.alloc(buffer.length);
         }
         if (
@@ -6567,36 +6565,27 @@ class IPCHandlers {
 
       const pcm16k = downsample24kTo16k(pcm24k);
 
-      const samples = new Int16Array(pcm16k.buffer, pcm16k.byteOffset, pcm16k.length / 2);
-      let sumSq = 0;
-      let peak = 0;
-      for (let i = 0; i < samples.length; i++) {
-        const n = samples[i] / 0x7fff;
-        sumSq += n * n;
-        const abs = n < 0 ? -n : n;
-        if (abs > peak) peak = abs;
-      }
-      const rms = Math.sqrt(sumSq / samples.length);
-      if (rms < 0.0015 && peak < 0.05) {
-        debugLogger.debug("Skipping silent meeting chunk", {
-          source,
-          rms: rms.toFixed(4),
-          peak: peak.toFixed(4),
-        });
-        return;
-      }
-
-      if (
-        source === "mic" &&
-        rms < MEETING_MIC_BLEED_RMS_CEILING &&
-        peak < MEETING_MIC_BLEED_PEAK_CEILING &&
-        meetingEchoLeakDetector.isSystemSpeaking(Date.now() - LOCAL_MEETING_CHUNK_INTERVAL_MS)
-      ) {
-        debugLogger.debug("Skipping system-dominant mic chunk", {
-          source,
-          rms: rms.toFixed(4),
-          peak: peak.toFixed(4),
-        });
+      const { rms, peak, sampleCount } = computeChunkStats(pcm16k);
+      const verdict = resolveMicChunkAction({
+        mode: "local",
+        source,
+        rms,
+        peak,
+        sampleCount,
+        isSystemSpeaking: () =>
+          meetingEchoLeakDetector.isSystemSpeaking(Date.now() - LOCAL_MEETING_CHUNK_INTERVAL_MS),
+      });
+      if (verdict.action === "skip") {
+        debugLogger.debug(
+          verdict.reason === "silence"
+            ? "Skipping silent meeting chunk"
+            : "Skipping system-dominant mic chunk",
+          {
+            source,
+            rms: rms.toFixed(4),
+            peak: peak.toFixed(4),
+          }
+        );
         return;
       }
 
