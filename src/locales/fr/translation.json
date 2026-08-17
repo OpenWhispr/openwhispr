@@ -366,6 +366,7 @@
     "history": {
       "couldNotLoadTitle": "Impossible de charger votre historique",
       "couldNotLoadDescription": "Un problème est survenu lors du chargement des transcriptions. Fermez puis rouvrez l'application.",
+      "loadingMore": "Chargement de transcriptions supplémentaires…",
       "copiedTitle": "Copié !",
       "copiedDescription": "Texte copié dans le presse-papiers",
       "couldNotCopyTitle": "Impossible de copier",

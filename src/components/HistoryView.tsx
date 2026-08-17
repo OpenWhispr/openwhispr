@@ -1,5 +1,6 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "./ui/button";
 import { Loader2, Sparkles, Cloud, X, Mic, Trash2, Archive } from "lucide-react";
 import TranscriptionItem from "./ui/TranscriptionItem";
@@ -30,7 +31,17 @@ interface HistoryViewProps {
   onRetryTranscription: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
   showDiscarded: boolean;
   onToggleDiscarded: () => void;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
 }
+
+type HistoryRow =
+  | { type: "header"; key: string; label: string; first: boolean }
+  | { type: "spacer"; key: string; size: number }
+  | { type: "item"; key: string; item: TranscriptionItemType }
+  | { type: "loading"; key: "loading" };
 
 export default function HistoryView({
   history,
@@ -49,6 +60,10 @@ export default function HistoryView({
   onRetryTranscription,
   showDiscarded,
   onToggleDiscarded,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  scrollContainerRef,
 }: HistoryViewProps) {
   const { t } = useTranslation();
   const personalDataRetentionEnabled = useSettingsStore((s) => s.dataRetentionEnabled);
@@ -76,6 +91,75 @@ export default function HistoryView({
 
     return groups;
   }, [history, t]);
+
+  const rows = useMemo(() => {
+    const out: HistoryRow[] = [];
+    groupedHistory.forEach((group, index) => {
+      if (index > 0) out.push({ type: "spacer", key: `g:${group.label}`, size: 16 });
+      out.push({ type: "header", key: `h:${group.label}`, label: group.label, first: index === 0 });
+      group.items.forEach((item, itemIndex) => {
+        if (itemIndex > 0) out.push({ type: "spacer", key: `s:${item.id}`, size: 6 });
+        out.push({ type: "item", key: `t:${item.id}`, item });
+      });
+    });
+    if (isLoadingMore) {
+      out.push({ type: "spacer", key: "loading-spacer", size: 6 });
+      out.push({ type: "loading", key: "loading" });
+    }
+    return out;
+  }, [groupedHistory, isLoadingMore]);
+
+  const [scrollMargin, setScrollMargin] = useState(0);
+  const stickyIndexes = useMemo(
+    () => rows.flatMap((row, index) => (row.type === "header" ? [index] : [])),
+    [rows]
+  );
+  const activeStickyIndex = useRef(0);
+  const rangeExtractor = useCallback(
+    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
+      activeStickyIndex.current =
+        [...stickyIndexes].reverse().find((index) => range.startIndex >= index) ?? 0;
+      return [...new Set([activeStickyIndex.current, ...defaultRangeExtractor(range)])].sort(
+        (a, b) => a - b
+      );
+    },
+    [stickyIndexes]
+  );
+
+  // This ref callback runs after every layout update, including banners above
+  // HistoryView changing height. The virtualizer needs that offset because the
+  // control panel remains the page's single scroll container.
+  const setListRef = (node: HTMLDivElement | null) => {
+    if (!node || !scrollContainerRef.current) return;
+    const scroller = scrollContainerRef.current;
+    const next =
+      node.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    setScrollMargin((current) => (current === next ? current : next));
+  };
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => {
+      const row = rows[index];
+      if (row.type === "spacer") return row.size;
+      return row.type === "header" ? 33 : 78;
+    },
+    getItemKey: (index) => rows[index].key,
+    rangeExtractor,
+    scrollMargin,
+    overscan: 8,
+  });
+
+  // Infinite scroll: fetch the next page when the last mounted row comes
+  // within 5 rows of the end of the loaded list.
+  const virtualItems = virtualizer.getVirtualItems();
+  const lastMountedIndex = virtualItems.length ? virtualItems[virtualItems.length - 1].index : -1;
+  useEffect(() => {
+    if (lastMountedIndex >= 0 && lastMountedIndex >= rows.length - 5 && hasMore && !isLoadingMore) {
+      onLoadMore();
+    }
+  }, [lastMountedIndex, rows.length, hasMore, isLoadingMore, onLoadMore]);
 
   const discardedToggle = (
     <button
@@ -302,40 +386,79 @@ export default function HistoryView({
               </div>
             ) : (
               <div className="group">
-                {groupedHistory.map((group, index) => (
-                  <div key={group.label} className={index > 0 ? "mt-4" : ""}>
-                    <div className="sticky -top-1 z-10 -mx-4 px-5 pt-2 pb-2 bg-background flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground uppercase tracking-wide">
-                        {group.label}
-                      </span>
-                      {index === 0 && (
-                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
-                          {discardedToggle}
-                          <button
-                            onClick={clearAllTranscriptions}
-                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/60 hover:!text-destructive hover:!bg-destructive/8 dark:hover:!bg-destructive/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
-                          >
-                            <Trash2 size={11} />
-                            <span>{t("controlPanel.history.clearAll")}</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-1.5 relative z-0">
-                      {group.items.map((item) => (
-                        <TranscriptionItem
-                          key={item.id}
-                          item={item}
-                          onCopy={copyToClipboard}
-                          onDelete={deleteTranscription}
-                          onShowAudioInFolder={onShowAudioInFolder}
-                          onRetryTranscription={onRetryTranscription}
-                          onOpenSettings={() => onOpenSettings("transcription")}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                <div
+                  ref={setListRef}
+                  style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+                >
+                  {virtualItems.map((virtualRow) => {
+                    const row = rows[virtualRow.index];
+                    return (
+                      <div
+                        key={row.key}
+                        data-index={virtualRow.index}
+                        ref={row.type === "spacer" ? undefined : virtualizer.measureElement}
+                        className={
+                          row.type === "header"
+                            ? "sticky -top-1 z-10 -mx-4 px-5 pt-2 pb-2 bg-background flex items-center justify-between"
+                            : undefined
+                        }
+                        style={{
+                          position:
+                            row.type === "header" && activeStickyIndex.current === virtualRow.index
+                              ? "sticky"
+                              : "absolute",
+                          top:
+                            row.type === "header" && activeStickyIndex.current === virtualRow.index
+                              ? undefined
+                              : 0,
+                          left: 0,
+                          width: "100%",
+                          height: row.type === "spacer" ? row.size : undefined,
+                          transform:
+                            row.type === "header" && activeStickyIndex.current === virtualRow.index
+                              ? undefined
+                              : `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
+                        }}
+                      >
+                        {row.type === "header" ? (
+                          <>
+                            <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground uppercase tracking-wide">
+                              {row.label}
+                            </span>
+                            {row.first && (
+                              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
+                                {discardedToggle}
+                                <button
+                                  onClick={clearAllTranscriptions}
+                                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/60 hover:!text-destructive hover:!bg-destructive/8 dark:hover:!bg-destructive/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
+                                >
+                                  <Trash2 size={11} />
+                                  <span>{t("controlPanel.history.clearAll")}</span>
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        ) : row.type === "loading" ? (
+                          <div className="flex items-center justify-center gap-2 py-4">
+                            <Loader2 size={14} className="animate-spin text-primary" />
+                            <span className="text-sm text-muted-foreground">
+                              {t("controlPanel.history.loadingMore")}
+                            </span>
+                          </div>
+                        ) : row.type === "item" ? (
+                          <TranscriptionItem
+                            item={row.item}
+                            onCopy={copyToClipboard}
+                            onDelete={deleteTranscription}
+                            onShowAudioInFolder={onShowAudioInFolder}
+                            onRetryTranscription={onRetryTranscription}
+                            onOpenSettings={() => onOpenSettings("transcription")}
+                          />
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

@@ -366,6 +366,7 @@
     "history": {
       "couldNotLoadTitle": "無法載入歷史記錄",
       "couldNotLoadDescription": "載入轉錄記錄時發生錯誤。請嘗試關閉並重新開啟應用程式。",
+      "loadingMore": "正在載入更多逐字稿…",
       "copiedTitle": "已複製！",
       "copiedDescription": "文字已複製到剪貼簿",
       "couldNotCopyTitle": "無法複製",

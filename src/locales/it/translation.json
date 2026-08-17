@@ -366,6 +366,7 @@
     "history": {
       "couldNotLoadTitle": "Impossibile caricare la cronologia",
       "couldNotLoadDescription": "Si è verificato un errore nel caricamento delle trascrizioni. Chiudi e riapri l'app.",
+      "loadingMore": "Caricamento di altre trascrizioni…",
       "copiedTitle": "Copiato!",
       "copiedDescription": "Testo copiato negli appunti",
       "couldNotCopyTitle": "Impossibile copiare",
