@@ -191,20 +191,18 @@ export default function CommandSearch({
       }
       setSearchedTranscripts([]);
       searchTimerRef.current = setTimeout(async () => {
-        try {
-          const results = await window.electronAPI.searchNotes(query, undefined, scopeSpaceId);
-          if (searchVersionRef.current === version) setNotes(results);
-        } catch {
-          /* keep current */
-        }
-        try {
-          const transcripts = await window.electronAPI.searchTranscriptions(query, 20, {
-            includeDiscarded,
-          });
-          if (searchVersionRef.current === version) setSearchedTranscripts(transcripts);
-        } catch {
-          /* keep current */
-        }
+        void window.electronAPI
+          .searchNotes(query, undefined, scopeSpaceId)
+          .then((results) => {
+            if (searchVersionRef.current === version) setNotes(results);
+          })
+          .catch(() => {});
+        void window.electronAPI
+          .searchTranscriptions(query, 20, { includeDiscarded })
+          .then((transcripts) => {
+            if (searchVersionRef.current === version) setSearchedTranscripts(transcripts);
+          })
+          .catch(() => {});
       }, 200);
     }
 
