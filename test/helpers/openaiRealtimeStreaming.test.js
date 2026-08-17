@@ -599,3 +599,37 @@ test("dictation-style connect (inputRate 16000, custom socket factory) declares 
   await connected;
   streaming.cleanup();
 });
+
+test("characterization: a final that lands during disconnect()'s commit window reaches onFinalTranscript WITHOUT its timestamp (Phase 1 forwards it)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectPreconfigured(streaming, socket);
+
+  const calls = [];
+  streaming.onFinalTranscript = (text, timestamp) => calls.push({ text, timestamp });
+  streaming.sendAudio(Buffer.alloc(1600, 1)); // audioBytesSent > 0 so disconnect() commits
+
+  const disconnecting = streaming.disconnect();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const commits = socket.sent
+    .filter((raw) => typeof raw === "string")
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "input_audio_buffer.commit");
+  assert.equal(commits.length, 1, "disconnect() commits the trailing buffer");
+
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  socket.emit(
+    "message",
+    JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: "tail words" })
+  );
+  const result = await disconnecting;
+
+  assert.equal(result.text, "tail words", "the tail is returned to the caller");
+  assert.equal(calls.length, 1, "the tail also reaches the live onFinalTranscript handler");
+  assert.equal(calls[0].text, "tail words");
+  // TODAY the commit wrapper at openaiRealtimeStreaming.js:467 forwards only `text`.
+  // Phase 1 changes this line to `typeof calls[0].timestamp === "number"`.
+  assert.equal(calls[0].timestamp, undefined);
+});
