@@ -120,7 +120,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
         <div className="min-w-0">
           <p className="text-xs font-semibold text-foreground truncate">{workspace.name}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            {t(`settingsPage.workspace.role.${workspace.role}`)} · {workspace.slug}
+            {t(`settingsPage.workspace.role.${workspace.role}`)}
           </p>
         </div>
         <span

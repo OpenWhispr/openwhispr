@@ -34,7 +34,7 @@ export async function executeTranslationChain({
   if (cleanupReachable) {
     try {
       const cleaned = await runCleanup(out);
-      if (cleaned) out = cleaned;
+      if (normalizeComparableText(cleaned)) out = cleaned;
       // Cloud cleanup counts as cloud reasoning once its call succeeds, even if it
       // returned empty text.
       if (cleanupIsCloud) usedCloudReasoning = true;
@@ -64,5 +64,5 @@ export async function executeTranslationChain({
 // Keep the chain result only when it produced text; an empty/missing result
 // preserves the input so a dictation is never overwritten with nothing.
 export function resolveTranslatedText(previousText, chainResult) {
-  return chainResult?.text ? chainResult.text : previousText;
+  return normalizeComparableText(chainResult?.text) ? chainResult.text : previousText;
 }

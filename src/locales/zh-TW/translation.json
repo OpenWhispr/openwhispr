@@ -1969,9 +1969,6 @@
       },
       "general": {
         "nameLabel": "工作區名稱",
-        "slugLabel": "簡短名稱",
-        "slugHint": "用於網址與邀請連結。僅限小寫字母、數字與連字號。",
-        "slugInvalid": "僅限小寫字母、數字與連字號。",
         "saved": "工作區已更新",
         "dangerTitle": "刪除工作區",
         "dangerDescription": "所有共享的筆記、資料夾與整合都會被刪除。此操作無法復原。",

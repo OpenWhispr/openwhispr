@@ -103,6 +103,7 @@ const {
   getMeetingStreamingClient,
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
+const { fetchRealtimeTokenForProvider } = require("./realtimeTokenProviders");
 
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
 // streaming providers must be told the true PCM rate or they misread the audio.
@@ -4736,10 +4737,12 @@ class IPCHandlers {
     // System audio is always capturable on Windows: via the native WASAPI
     // process-loopback helper when available (hears every output device),
     // otherwise via Chromium's default-device loopback in the renderer.
-    const getWindowsSystemAudioAccess = async () => {
-      const capability = await this.windowsLoopbackAudioManager?.getCapability().catch(() => ({
-        available: false,
-      }));
+    const getWindowsSystemAudioAccess = async ({ refreshCapability = false } = {}) => {
+      const capability = await this.windowsLoopbackAudioManager
+        ?.getCapability({ force: refreshCapability })
+        .catch(() => ({
+          available: false,
+        }));
       const helperAvailable = !!capability?.available;
 
       return buildSystemAudioAccess({
@@ -6042,88 +6045,17 @@ class IPCHandlers {
         return response.json();
       };
 
-      const dual = (factory) => (streams === 2 ? Promise.all([factory(), factory()]) : factory());
-
-      if (options.provider === "assemblyai-realtime") {
-        if (options.mode === "byok") {
-          const apiKey = this.environmentManager.getAssemblyAIKey();
-          if (!apiKey) {
-            throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
-          }
-          return dual(async () => {
-            const response = await proxyFetch(
-              "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
-              { headers: { Authorization: apiKey } }
-            );
-            if (!response.ok) {
-              const err = await response.json().catch(() => ({}));
-              throw new Error(err.error || `AssemblyAI token request failed: ${response.status}`);
-            }
-            const data = await response.json();
-            if (!data.token) throw new Error("No AssemblyAI token received");
-            return data.token;
-          });
-        }
-        return dual(async () => {
-          const data = await postServerToken("/api/streaming-token");
-          if (!data.token) throw new Error("No AssemblyAI token received");
-          return data.token;
-        });
-      }
-
-      if (options.provider === "deepgram-realtime") {
-        if (options.mode === "byok") {
-          const apiKey = this.environmentManager.getDeepgramKey();
-          if (!apiKey) {
-            throw new Error("No Deepgram API key configured. Add your key in Settings.");
-          }
-          return streams === 2 ? [apiKey, apiKey] : apiKey;
-        }
-        return dual(async () => {
-          const data = await postServerToken("/api/deepgram-streaming-token");
-          if (!data.token) throw new Error("No Deepgram token received");
-          return data.token;
-        });
-      }
-
-      if (options.provider === "corti-realtime") {
-        // One token covers both meeting streams; it's only used at the WSS handshake.
-        const { token } = await this._mintStoredCortiToken(options);
-        return streams === 2 ? [token, token] : token;
-      }
-      if (options.provider === "tinfoil-realtime") {
-        const apiKey = this.environmentManager.getTinfoilKey();
-        if (!apiKey) {
-          const err = new Error("No Tinfoil API key configured. Add your key in Settings.");
-          err.code = "NO_API";
-          throw err;
-        }
-        return streams === 2 ? [apiKey, apiKey] : apiKey;
-      }
-
-      if (options.provider !== "openai-realtime") {
-        throw new Error(`Unsupported realtime token provider: ${options.provider}`);
-      }
-
-      if (options.mode === "byok") {
-        const apiKey = this.environmentManager.getOpenAIKey();
-        if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
-        return streams === 2 ? [apiKey, apiKey] : apiKey;
-      }
-
-      const data = await postServerToken("/api/openai-realtime-token", {
-        model: options.model,
-        language: options.language,
-        streams: streams || 1,
-      });
-      if (streams === 2) {
-        if (!data.clientSecrets || data.clientSecrets.length < 2) {
-          throw new Error("Expected two client secrets for dual-stream");
-        }
-        return data.clientSecrets;
-      }
-      if (!data.clientSecret) throw new Error("No client secret received");
-      return data.clientSecret;
+      return fetchRealtimeTokenForProvider(
+        options.provider,
+        {
+          environmentManager: this.environmentManager,
+          proxyFetch,
+          postServerToken,
+          mintCortiToken: (tokenOptions) => this._mintStoredCortiToken(tokenOptions),
+        },
+        options,
+        { streams }
+      );
     };
 
     const getMeetingSystemAudioCapabilityMode = () => {
@@ -6135,7 +6067,7 @@ class IPCHandlers {
 
     const getMeetingSystemAudioMode = () => getMeetingSystemAudioCapabilityMode();
 
-    const getMeetingSystemAudioPlan = async () => {
+    const getMeetingSystemAudioPlan = async ({ refreshWindowsCapability = false } = {}) => {
       const mode = getMeetingSystemAudioMode();
       if (mode === "unsupported") {
         return { mode, strategy: "unsupported" };
@@ -6154,7 +6086,9 @@ class IPCHandlers {
       }
 
       if (process.platform === "win32") {
-        const windowsAccess = await getWindowsSystemAudioAccess();
+        const windowsAccess = await getWindowsSystemAudioAccess({
+          refreshCapability: refreshWindowsCapability,
+        });
         return { mode: windowsAccess.mode, strategy: windowsAccess.strategy };
       }
 
@@ -7069,6 +7003,10 @@ class IPCHandlers {
 
       const connectInner = async () => {
         const isCloud = options.mode !== "byok";
+        // Dictation renderers before 1.8.4 omit `provider` and mean OpenAI; the
+        // default lives here, at the boundary, so the token allowlist stays
+        // fail-closed for genuinely unknown providers (#1624).
+        const provider = options.provider ?? "openai-realtime";
         const streaming = new OpenAIRealtimeStreaming();
         setupDictationCallbacks(streaming, event);
         // Assign before the token fetch (a real network round trip) so
@@ -7079,9 +7017,9 @@ class IPCHandlers {
         try {
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
-            provider: options.provider,
+            provider,
           });
-          if (options.provider === "tinfoil-realtime") {
+          if (provider === "tinfoil-realtime") {
             const model = options.model || TINFOIL_REALTIME_MODEL;
             await streaming.connect({
               apiKey,
@@ -7194,7 +7132,7 @@ class IPCHandlers {
       meetingFatalErrorSent = false;
       this.meetingDetectionEngine?.setUserRecording(true);
       try {
-        const systemAudioPlan = await getMeetingSystemAudioPlan();
+        const systemAudioPlan = await getMeetingSystemAudioPlan({ refreshWindowsCapability: true });
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         const requestedConnectionKey = getMeetingConnectionKey(options);
         meetingEchoLeakDetector.reset();

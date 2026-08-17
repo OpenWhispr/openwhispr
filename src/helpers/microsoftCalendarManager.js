@@ -7,6 +7,9 @@ const { broadcastToWindows } = require("./windowBroadcast");
 
 const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 
+const SERIES_MASTER_FIELDS =
+  "subject,isAllDay,isCancelled,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees";
+
 // Graph's deltaLink permanently encodes the calendarView window it was created
 // with — it never rolls forward. Sync a 14-day window and discard the token
 // after 7 days so coverage never drops below the app's 7-day lookahead.
@@ -24,6 +27,13 @@ const RESPONSE_STATUS_BY_GRAPH = {
 // (Prefer: outlook.timezone), so trim the fraction and append "Z".
 function normalizeGraphDateTime({ dateTime }) {
   return `${dateTime.slice(0, 19)}Z`;
+}
+
+// calendarView/delta can return recurring-series occurrences as bare
+// { id, type, seriesMasterId, start, end } stubs — no subject, attendees,
+// or meeting link. Those fields live on the series master.
+function isStrippedOccurrence(item) {
+  return item.subject === undefined && Boolean(item.seriesMasterId);
 }
 
 class MicrosoftCalendarManager {
@@ -169,9 +179,8 @@ class MicrosoftCalendarManager {
   async _syncCalendar(calendar) {
     const accountEmail = calendar.account_email;
 
-    const toUpsert = [];
+    const items = [];
     const toRemove = [];
-    const contactsToUpsert = [];
     let deltaLink = null;
 
     const hasFreshToken = calendar.sync_token && calendar.sync_token_expires_at > Date.now();
@@ -197,23 +206,28 @@ class MicrosoftCalendarManager {
       }
 
       for (const item of data.value || []) {
-        if (item["@removed"]) {
-          toRemove.push(item.id);
-          continue;
-        }
-        toUpsert.push(this._mapEvent(item, calendar));
-        for (const a of item.attendees || []) {
-          if (a.emailAddress?.address) {
-            contactsToUpsert.push({
-              email: a.emailAddress.address,
-              displayName: a.emailAddress.name || null,
-            });
-          }
-        }
+        if (item["@removed"]) toRemove.push(item.id);
+        else items.push(item);
       }
 
       deltaLink = data["@odata.deltaLink"] || deltaLink;
       url = data["@odata.nextLink"] || null;
+    }
+
+    const events = await this._backfillStrippedOccurrences(items, accountEmail);
+
+    const toUpsert = [];
+    const contactsToUpsert = [];
+    for (const item of events) {
+      toUpsert.push(this._mapEvent(item, calendar));
+      for (const a of item.attendees || []) {
+        if (a.emailAddress?.address) {
+          contactsToUpsert.push({
+            email: a.emailAddress.address,
+            displayName: a.emailAddress.name || null,
+          });
+        }
+      }
     }
 
     // A full sync has no delta baseline, so deletions that happened while the
@@ -232,6 +246,38 @@ class MicrosoftCalendarManager {
       this.databaseManager.updateMicrosoftCalendarSyncToken(calendar.id, deltaLink, tokenExpiresAt);
     }
     if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
+  }
+
+  // Merges each stripped occurrence with its series master (fetched once per
+  // series); the occurrence's own id/start/end win. A failed master fetch
+  // leaves its occurrences bare instead of failing the calendar's sync.
+  async _backfillStrippedOccurrences(items, accountEmail) {
+    const masterIds = new Set(
+      items.filter(isStrippedOccurrence).map((item) => item.seriesMasterId)
+    );
+    if (masterIds.size === 0) return items;
+
+    const masters = new Map();
+    for (const id of masterIds) {
+      try {
+        const master = await this._apiGet(
+          `/me/events/${encodeURIComponent(id)}?$select=${SERIES_MASTER_FIELDS}`,
+          accountEmail
+        );
+        masters.set(id, master);
+      } catch (err) {
+        debugLogger.error(
+          "Error fetching series master",
+          { seriesMasterId: id, error: err.message },
+          "mcal"
+        );
+      }
+    }
+
+    return items.map((item) => {
+      const master = isStrippedOccurrence(item) ? masters.get(item.seriesMasterId) : null;
+      return master ? { ...master, ...item } : item;
+    });
   }
 
   _mapEvent(item, calendar) {
