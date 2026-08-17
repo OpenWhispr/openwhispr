@@ -53,8 +53,12 @@ test("extractMeetingUrl matches known meeting vendors", async () => {
   const urls = [
     "https://zoom.us/j/123456789",
     "https://us02web.zoom.us/j/123456789?pwd=abc",
+    "https://zoom.us/w/123456789",
+    "https://us02web.zoom.us/w/123456789?pwd=abc",
+    "https://zoom.us/my/alice",
     "https://meet.google.com/abc-defg-hij",
     "https://teams.microsoft.com/l/meetup-join/19%3ameeting_x/0",
+    "https://teams.microsoft.com/meet/1234567890?p=abc",
     "https://teams.live.com/meet/9876543210",
     "https://company.webex.com/meet/jdoe",
     "https://chime.aws/1234567890",

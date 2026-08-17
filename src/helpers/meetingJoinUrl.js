@@ -1,5 +1,5 @@
 const MEETING_URL_PATTERN =
-  /https?:\/\/[^\s<>"']*(?:zoom\.us\/j\/|meet\.google\.com\/|teams\.microsoft\.com\/l\/meetup-join|teams\.live\.com\/meet\/|\.webex\.com\/|chime\.aws\/)[^\s<>"']*/i;
+  /https?:\/\/[^\s<>"']*(?:zoom\.us\/(?:j|w|my)\/|meet\.google\.com\/|teams\.microsoft\.com\/(?:l\/meetup-join|meet\/)|teams\.live\.com\/meet\/|\.webex\.com\/|chime\.aws\/)[^\s<>"']*/i;
 
 export function getMeetingJoinUrl(event) {
   if (!event) return null;
