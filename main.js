@@ -1242,7 +1242,9 @@ async function startApp() {
       // Handle dictation if Globe/Fn is one of the dictation hotkeys
       const dictationUsesGlobe = hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey);
       if (dictationUsesGlobe) {
-        if (mainWindowLive) {
+        if (mainWindowLive && windowManager.isDictationProcessing()) {
+          debugLogger?.debug("[Globe] Ignored — dictation processing");
+        } else if (mainWindowLive) {
           // Capture target app PID BEFORE showing the overlay
           if (textEditMonitor) textEditMonitor.captureTargetPid();
           const activationMode = windowManager.getActivationMode();
@@ -1363,6 +1365,7 @@ async function startApp() {
 
       if (!hotkeyManager.slotHasHotkey("dictation", modifier)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
+      if (windowManager.isDictationProcessing()) return;
 
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();
@@ -1444,6 +1447,7 @@ async function startApp() {
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
+      if (windowManager.isDictationProcessing()) return;
 
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();

@@ -9,6 +9,12 @@ const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
 const { shouldBlockNonAgentDictation } = require("./assistantDictationGuard");
+const {
+  DICTATION_LIFECYCLE,
+  normalizeDictationLifecycle,
+  shouldIgnoreDictationHotkey,
+  isDictationRecording,
+} = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
 const {
   MAIN_WINDOW_CONFIG,
@@ -54,6 +60,7 @@ class WindowManager {
     this._panelStartPosition = "bottom-right";
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
+    this._dictationLifecycleState = DICTATION_LIFECYCLE.IDLE;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
 
@@ -403,6 +410,9 @@ class WindowManager {
       if (this.hotkeyManager.isInListeningMode()) {
         return;
       }
+      if (this.isDictationProcessing()) {
+        return;
+      }
 
       const activationMode = this.getActivationMode();
       const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
@@ -440,7 +450,7 @@ class WindowManager {
   }
 
   startMacCompoundPushToTalk(hotkey) {
-    if (this.macCompoundPushState?.active) {
+    if (this.macCompoundPushState?.active || this.isDictationProcessing()) {
       return;
     }
 
@@ -575,7 +585,7 @@ class WindowManager {
   }
 
   startWindowsPushToTalk(key) {
-    if (this.winPushState?.active) {
+    if (this.winPushState?.active || this.isDictationProcessing()) {
       return;
     }
 
@@ -646,6 +656,12 @@ class WindowManager {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
+    if (shouldIgnoreDictationHotkey(this._dictationLifecycleState)) {
+      debugLogger.debug("Ignoring dictation toggle while transcription is processing", {
+        channel,
+      });
+      return;
+    }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       // Capture the paste target and any selection on every toggle press,
       // before the overlay steals focus — the paste can't refocus the target
@@ -663,9 +679,20 @@ class WindowManager {
       // max-age expiry, and the renderer dedups its own prepare call.
       if (!this._isDictatingToggle) this.sendPrepareDictation({ voiceAgentRequested });
       this.mainWindow.webContents.send(channel);
-      this._isDictatingToggle = !this._isDictatingToggle;
-      this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
+  }
+
+  setDictationLifecycleState(state) {
+    const nextState = normalizeDictationLifecycle(state);
+    if (nextState === this._dictationLifecycleState) return;
+
+    this._dictationLifecycleState = nextState;
+    this._isDictatingToggle = isDictationRecording(nextState);
+    this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
+  }
+
+  isDictationProcessing() {
+    return shouldIgnoreDictationHotkey(this._dictationLifecycleState);
   }
 
   sendToggleDictation() {
@@ -677,9 +704,6 @@ class WindowManager {
   }
 
   sendToggleTranslation() {
-    // Same PID-capture need as the voice agent: translation hotkeys don't
-    // capture the target at their call sites.
-    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
     this._sendDictationToggle("toggle-translation");
   }
 
@@ -690,12 +714,14 @@ class WindowManager {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
+    if (shouldIgnoreDictationHotkey(this._dictationLifecycleState)) {
+      return;
+    }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
       void this.selectionManager?.captureTarget?.();
       this.showDictationPanel();
       this.mainWindow.webContents.send("start-dictation");
-      this.meetingDetectionEngine?.setUserRecording(true);
     }
   }
 
@@ -708,8 +734,6 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("stop-dictation");
-      this._isDictatingToggle = false;
-      this.meetingDetectionEngine?.setUserRecording(false);
     }
   }
 
@@ -723,6 +747,9 @@ class WindowManager {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (shouldIgnoreDictationHotkey(this._dictationLifecycleState)) {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
@@ -743,8 +770,6 @@ class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("cancel-dictation-preparation");
       this.mainWindow.webContents.send("cancel-hotkey-pressed");
-      this._isDictatingToggle = false;
-      this.meetingDetectionEngine?.setUserRecording(false);
     }
   }
 

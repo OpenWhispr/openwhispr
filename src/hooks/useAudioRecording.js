@@ -42,6 +42,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const stopLockRef = useRef(false);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
+  const reportedLifecycleRef = useRef(null);
   const lastStartOptionsRef = useRef({
     voiceAgentRequested: false,
     translationRequested: false,
@@ -73,7 +74,15 @@ export const useAudioRecording = (toast, options = {}) => {
         }
 
         const currentState = audioManagerRef.current.getState();
-        if (currentState.isRecording || currentState.isProcessing) return false;
+        if (
+          currentState.isRecording ||
+          currentState.isProcessing ||
+          currentState.isStreaming ||
+          currentState.isStreamingStartInProgress ||
+          currentState.isFinalizingStreaming
+        ) {
+          return false;
+        }
 
         // The floating dictation panel is non-focusable, so the foreground app is
         // still the user's actual editing target here. Refresh it for recordings
@@ -195,6 +204,14 @@ export const useAudioRecording = (toast, options = {}) => {
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
 
+    const reportLifecycle = (state) => {
+      if (reportedLifecycleRef.current === state) return;
+      reportedLifecycleRef.current = state;
+      window.electronAPI?.dictationLifecycleStateChanged?.(state);
+    };
+    // Reset stale main-process state after a renderer reload or crash recovery.
+    reportLifecycle("idle");
+
     const getRecoverableTranscript = (fallback = "") =>
       buildLiveTranscriptionPreview(
         audioManagerRef.current?.streamingFinalText,
@@ -234,6 +251,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
+        reportLifecycle(isRecording ? "recording" : isProcessing ? "processing" : "idle");
         if (!isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Resume media the instant recording ends, not after transcription.
@@ -491,7 +509,12 @@ export const useAudioRecording = (toast, options = {}) => {
       // the lock check this toggle-off would take the start branch and be lost.
       if (startLockRef.current || currentState.isRecording) {
         await performStopRecording();
-      } else if (!currentState.isProcessing) {
+      } else if (
+        !currentState.isProcessing &&
+        !currentState.isStreaming &&
+        !currentState.isStreamingStartInProgress &&
+        !currentState.isFinalizingStreaming
+      ) {
         // Fire-and-forget: startRecording's take() joins this same acquisition,
         // so the device is opened exactly once. See #845.
         audioManagerRef.current.prepareMicCapture?.();
@@ -555,6 +578,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Cleanup
     return () => {
+      reportLifecycle("idle");
       unsubscribePolicy();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();

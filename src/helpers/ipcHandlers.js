@@ -1362,6 +1362,22 @@ class IPCHandlers {
       this.meetingDetectionEngine?.setMicWarmHold(true);
     });
 
+    // Hotkey handlers run in main, while AudioManager owns the real lifecycle
+    // in the dictation renderer. Only confirmed renderer state may change the
+    // main-process recording gate; raw key presses are merely requests and can
+    // be declined while a transcript is still being finalized.
+    ipcMain.on("dictation-lifecycle-state-changed", (event, state) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      this.windowManager.setDictationLifecycleState(state);
+    });
+
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
       // Both renderer windows re-sync this on mount — ignore same-value updates (#1080).

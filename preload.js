@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
+  dictationLifecycleStateChanged: (state) =>
+    ipcRenderer.send("dictation-lifecycle-state-changed", state),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
