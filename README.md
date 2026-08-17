@@ -86,7 +86,7 @@ React 19, TypeScript, Tailwind CSS v4, Electron 41, better-sqlite3, whisper.cpp,
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=OpenWhispr/openwhispr&type=date&legend=top-left)](https://www.star-history.com/#OpenWhispr/openwhispr&type=date&legend=top-left)
+[![Star History Chart](https://star-history.dera.page/svg?repos=OpenWhispr/openwhispr&type=date&legend=top-left)](https://star-history.dera.page/#OpenWhispr/openwhispr&type=date&legend=top-left)
 
 ## Sponsors
 
