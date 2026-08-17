@@ -53,6 +53,7 @@ test("an unterminated block suppresses everything after it", async () => {
   const { createStreamingThinkFilter } = await load();
   const filter = createStreamingThinkFilter();
   assert.equal(filterAll(filter, ["Answer<think>never", " closes"]), "Answer");
+  assert.equal(filter.finish(), "");
 });
 
 test("a stray close tag with no open block passes through", async () => {
@@ -68,4 +69,26 @@ test("resumes normal output after a closed nested block", async () => {
     filterAll(filter, ["<think>a<think>b</think>", "c</think>First", " second"]),
     "First second"
   );
+});
+
+test("strips nested think blocks at every two-chunk boundary", async () => {
+  const { createStreamingThinkFilter } = await load();
+  const input = "<think>a<think>b</think>c</think>Answer";
+
+  for (let split = 1; split < input.length; split += 1) {
+    const filter = createStreamingThinkFilter();
+    assert.equal(
+      filterAll(filter, [input.slice(0, split), input.slice(split)]),
+      "Answer",
+      `split at character ${split}`
+    );
+  }
+});
+
+test("buffers a possible opening tag and flushes it when the stream ends", async () => {
+  const { createStreamingThinkFilter } = await load();
+  const filter = createStreamingThinkFilter();
+
+  assert.equal(filter("Answer<thi"), "Answer");
+  assert.equal(filter.finish(), "<thi");
 });
