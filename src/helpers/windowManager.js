@@ -8,6 +8,7 @@ const DevServerManager = require("./devServerManager");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
+const { shouldBlockNonAgentDictation } = require("./assistantDictationGuard");
 const { DEV_SERVER_PORT } = DevServerManager;
 const {
   MAIN_WINDOW_CONFIG,
@@ -633,6 +634,15 @@ class WindowManager {
   }
 
   _sendDictationToggle(channel) {
+    const voiceAgentRequested = channel === "toggle-voice-agent";
+    if (
+      shouldBlockNonAgentDictation({
+        assistantPanelOpen: this._assistantPanelOpen,
+        voiceAgentRequested,
+      })
+    ) {
+      return;
+    }
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -651,7 +661,7 @@ class WindowManager {
       // About-to-start guess: open the mic one IPC message ahead of the toggle.
       // A wrong guess (renderer declines) is bounded by the prepared capture's
       // max-age expiry, and the renderer dedups its own prepare call.
-      if (!this._isDictatingToggle) this.sendPrepareDictation();
+      if (!this._isDictatingToggle) this.sendPrepareDictation({ voiceAgentRequested });
       this.mainWindow.webContents.send(channel);
       this._isDictatingToggle = !this._isDictatingToggle;
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
@@ -674,6 +684,9 @@ class WindowManager {
   }
 
   sendStartDictation() {
+    if (shouldBlockNonAgentDictation({ assistantPanelOpen: this._assistantPanelOpen })) {
+      return;
+    }
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -687,6 +700,9 @@ class WindowManager {
   }
 
   sendStopDictation() {
+    if (shouldBlockNonAgentDictation({ assistantPanelOpen: this._assistantPanelOpen })) {
+      return;
+    }
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -697,7 +713,15 @@ class WindowManager {
     }
   }
 
-  sendPrepareDictation() {
+  sendPrepareDictation({ voiceAgentRequested = false } = {}) {
+    if (
+      shouldBlockNonAgentDictation({
+        assistantPanelOpen: this._assistantPanelOpen,
+        voiceAgentRequested,
+      })
+    ) {
+      return;
+    }
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -1066,6 +1090,7 @@ class WindowManager {
 
   showDictationPanel(options = {}) {
     const { focus = false } = options;
+    if (this._assistantPanelOpen) return;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       // Reading the target's window costs a helper spawn, so show now and move
       // when the answer lands: a visible hop only happens when the panel was on
@@ -1098,6 +1123,7 @@ class WindowManager {
   }
 
   hideDictationPanel() {
+    if (this._assistantPanelOpen) return;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.hide();
     }
