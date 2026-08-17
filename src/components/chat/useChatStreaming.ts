@@ -17,6 +17,7 @@ import {
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { createToolRegistry } from "../../services/tools";
 import type { ToolRegistry } from "../../services/tools/ToolRegistry";
+import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
 import type { ContainerScope } from "../../types/chat";
 
@@ -64,7 +65,7 @@ interface UseChatStreamingOptions {
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
-  /** Fires exactly once when displayable assistant content becomes available. */
+  /** Fires exactly once when displayable assistant content or tool activity becomes available. */
   onResponseContent?: () => void;
 }
 
@@ -108,6 +109,50 @@ export function useChatStreaming({
   const searchScopeRef = useRef(searchScope);
   searchScopeRef.current = searchScope;
   const toolRegistryRef = useRef<{ key: string; registry: ToolRegistry } | null>(null);
+  const toolActivityStartedAtRef = useRef<number | null>(null);
+  const toolActivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearToolActivityTimer = useCallback(() => {
+    if (toolActivityTimerRef.current) {
+      clearTimeout(toolActivityTimerRef.current);
+      toolActivityTimerRef.current = null;
+    }
+  }, []);
+
+  const clearToolActivity = useCallback(() => {
+    clearToolActivityTimer();
+    toolActivityStartedAtRef.current = null;
+    if (!mountedRef.current) return;
+    setToolStatus("");
+    setActiveToolName("");
+  }, [clearToolActivityTimer]);
+
+  const beginToolActivity = useCallback(
+    (name: string, status: string) => {
+      clearToolActivityTimer();
+      toolActivityStartedAtRef.current = Date.now();
+      setActiveToolName(name);
+      setToolStatus(status);
+    },
+    [clearToolActivityTimer]
+  );
+
+  const completeToolActivity = useCallback(() => {
+    const startedAt = toolActivityStartedAtRef.current;
+    if (startedAt == null) {
+      clearToolActivity();
+      return;
+    }
+
+    const remainingMs = getAgentToolActivityRemainingMs(startedAt);
+    clearToolActivityTimer();
+    if (remainingMs === 0) {
+      clearToolActivity();
+      return;
+    }
+
+    toolActivityTimerRef.current = setTimeout(clearToolActivity, remainingMs);
+  }, [clearToolActivity, clearToolActivityTimer]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -117,19 +162,20 @@ export function useChatStreaming({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      clearToolActivityTimer();
       ReasoningService.cancelActiveStream();
     };
-  }, []);
+  }, [clearToolActivityTimer]);
 
   const cancelStream = useCallback(() => {
     ReasoningService.cancelActiveStream();
     setAgentState("idle");
-    setToolStatus("");
-    setActiveToolName("");
-  }, []);
+    clearToolActivity();
+  }, [clearToolActivity]);
 
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
+      clearToolActivity();
       let responseAnnounced = false;
       const announceResponse = () => {
         if (responseAnnounced) return;
@@ -349,10 +395,11 @@ export function useChatStreaming({
               prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
             );
           } else if (chunk.type === "tool_calls") {
+            if (chunk.calls.length > 0) announceResponse();
             for (const call of chunk.calls) {
               setAgentState("tool-executing");
-              setActiveToolName(call.name);
-              setToolStatus(
+              beginToolActivity(
+                call.name,
                 t(`agentMode.tools.${call.name}Status`, { defaultValue: `Using ${call.name}...` })
               );
               setMessages((prev) =>
@@ -395,8 +442,7 @@ export function useChatStreaming({
               )
             );
             setAgentState("streaming");
-            setToolStatus("");
-            setActiveToolName("");
+            completeToolActivity();
           }
         }
 
@@ -422,10 +468,17 @@ export function useChatStreaming({
       }
 
       setAgentState("idle");
-      setToolStatus("");
-      setActiveToolName("");
+      completeToolActivity();
     },
-    [t, setMessages, onStreamComplete, onResponseContent]
+    [
+      t,
+      setMessages,
+      onStreamComplete,
+      onResponseContent,
+      clearToolActivity,
+      beginToolActivity,
+      completeToolActivity,
+    ]
   );
 
   return {

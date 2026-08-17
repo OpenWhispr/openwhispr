@@ -15,6 +15,11 @@ import {
   resolveAssistantFooterPresentation,
   resolveAssistantResponseReady,
 } from "../../helpers/voicePillPresentation";
+import {
+  AGENT_TOOL_ACTIVITY_ROTATION_MS,
+  AGENT_TOOL_ACTIVITY_VERBS,
+  formatAgentToolName,
+} from "../../helpers/agentToolPresentation";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 
 export interface AssistantCommand {
@@ -122,8 +127,21 @@ export function AssistantPanel({
     sendMessage(pendingCommand.text, { attachment: pendingCommand.attachment ?? undefined });
   }, [historyReady, pendingCommand, onCommandConsumed, sendMessage]);
 
-  const isBusy = BUSY_STATES.includes(streaming.agentState);
+  const isToolExecuting = Boolean(streaming.activeToolName);
+  const isBusy = BUSY_STATES.includes(streaming.agentState) || isToolExecuting;
+  const showContentFlourish = thinking || isToolExecuting;
+  const [toolVerbIndex, setToolVerbIndex] = useState(0);
   const footerPresentation = resolveAssistantFooterPresentation(footerPhase);
+
+  useEffect(() => {
+    setToolVerbIndex(0);
+    if (!isToolExecuting) return;
+
+    const timer = window.setInterval(() => {
+      setToolVerbIndex((current) => (current + 1) % AGENT_TOOL_ACTIVITY_VERBS.length);
+    }, AGENT_TOOL_ACTIVITY_ROTATION_MS);
+    return () => window.clearInterval(timer);
+  }, [isToolExecuting, streaming.activeToolName]);
 
   useEffect(() => {
     onBusyChange(isBusy);
@@ -251,7 +269,7 @@ export function AssistantPanel({
           <div
             data-panel-size-source
             className={`assistant-response-content ${
-              thinking ? "assistant-response-content-updating" : ""
+              showContentFlourish ? "assistant-response-content-updating" : ""
             }`}
           >
             {displayedResponse ? (
@@ -276,11 +294,38 @@ export function AssistantPanel({
           </div>
         </main>
 
-        {thinking && (
+        {showContentFlourish && (
           <div
             className="assistant-content-area-shimmer pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-2xl"
             aria-hidden="true"
           />
+        )}
+        {isToolExecuting && (
+          <div
+            className="assistant-tool-invocation pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-6"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            data-tool-invocation={streaming.activeToolName}
+          >
+            <span className="sr-only">{streaming.toolStatus}</span>
+            <div
+              className="assistant-tool-invocation-status inline-flex max-w-full items-center gap-2.5 rounded-xl border border-border/60 bg-surface-raised/80 px-4 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-md"
+              aria-hidden="true"
+            >
+              <span className="assistant-tool-invocation-pulse relative flex size-2 shrink-0 rounded-full bg-agent-brand" />
+              <span
+                key={`${streaming.activeToolName}-${toolVerbIndex}`}
+                className="assistant-tool-invocation-verb w-16 text-right text-sm text-muted-foreground"
+              >
+                {AGENT_TOOL_ACTIVITY_VERBS[toolVerbIndex]}
+              </span>
+              <span className="h-4 w-px shrink-0 bg-border/70" />
+              <span className="truncate text-sm font-medium text-foreground">
+                {formatAgentToolName(streaming.activeToolName)}
+              </span>
+            </div>
+          </div>
         )}
       </div>
 
