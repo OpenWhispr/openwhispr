@@ -310,7 +310,7 @@ export function AssistantPanel({
           >
             <span className="sr-only">{streaming.toolStatus}</span>
             <div
-              className="assistant-tool-invocation-status inline-flex max-w-full items-center gap-2.5 rounded-xl border border-border/60 bg-surface-raised/80 px-4 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-md"
+              className="assistant-tool-invocation-status inline-flex max-w-full items-center gap-2.5 rounded-xl border border-border/60 bg-surface-raised/60 px-4 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-md"
               aria-hidden="true"
             >
               <span className="assistant-tool-invocation-pulse relative flex size-2 shrink-0 rounded-full bg-agent-brand" />
