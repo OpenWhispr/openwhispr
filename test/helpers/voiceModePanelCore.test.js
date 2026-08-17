@@ -23,6 +23,24 @@ const renderCore = async (mode, open, stage = "content", horizontalDirection = "
   );
 };
 
+const renderClosingAssistant = async () => {
+  const { VoiceModePanelCore } =
+    await import("../../src/components/dictation/VoiceModePanelCore.tsx");
+  return renderToStaticMarkup(
+    React.createElement(
+      VoiceModePanelCore,
+      {
+        mode: "assistant",
+        open: true,
+        closing: true,
+        horizontalDirection: "right",
+        onPreferredHeightChange: () => {},
+      },
+      React.createElement("main", null, "Agent content")
+    )
+  );
+};
+
 test("Agent and live transcript use the same expanded panel core", async () => {
   const assistant = await renderCore("assistant", true);
   const liveTranscriptCapsule = await renderCore("live-transcript", true, "encapsulated");
@@ -38,10 +56,10 @@ test("Agent and live transcript use the same expanded panel core", async () => {
   assert.match(liveTranscriptFooter, /expanding-panel-anchor-bottom-right/);
   assert.match(liveTranscriptContent, /expanding-panel-anchor-bottom-right/);
   assert.match(assistant, /data-panel-mode="assistant"/);
-  assert.doesNotMatch(assistant, /data-panel-height-animated/);
+  assert.doesNotMatch(assistant, /data-panel-height-stabilized/);
   assert.match(liveTranscriptCapsule, /data-panel-stage="encapsulated"/);
   assert.match(liveTranscriptFooter, /data-panel-mode="live-transcript"/);
-  assert.match(liveTranscriptContent, /data-panel-height-animated="true"/);
+  assert.match(liveTranscriptContent, /data-panel-height-stabilized="true"/);
   assert.match(assistant, /h-\[calc\(100%-1\.5rem\)\]/);
   assert.doesNotMatch(assistant, /h-fit/);
   assert.match(liveTranscriptContent, /h-fit/);
@@ -77,4 +95,13 @@ test("the shared core keeps its surface mounted while no mode is active", async 
   assert.match(idle, /^<section class="expanding-panel-surface/);
   assert.match(idle, /aria-hidden="true"/);
   assert.equal((idle.match(/<section/g) || []).length, 1);
+});
+
+test("Agent close keeps the same surface mounted while its expensive content fades", async () => {
+  const closing = await renderClosingAssistant();
+
+  assert.match(closing, /expanding-panel-surface-open/);
+  assert.match(closing, /data-panel-mode="assistant"/);
+  assert.match(closing, /data-panel-closing="true"/);
+  assert.equal((closing.match(/<section/g) || []).length, 1);
 });

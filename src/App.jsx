@@ -14,6 +14,10 @@ import { AssistantPanel } from "./components/dictation/AssistantPanel";
 import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
 import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 import { createLatestValueScheduler } from "./utils/latestValueScheduler";
+import {
+  calculateWindowAnchorCompensation,
+  createMainWindowResizeCoordinator,
+} from "./utils/mainWindowResizeCoordinator";
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
 import {
@@ -35,8 +39,9 @@ import {
   shouldOfferLiveTranscriptReopen,
 } from "./helpers/voicePillPresentation";
 
-const ASSISTANT_TRANSITION_MS = 280;
+const ASSISTANT_TRANSITION_MS = 320;
 const LIVE_TRANSCRIPT_RENDER_INTERVAL_MS = 50;
+const LIVE_TRANSCRIPT_SHELL_GROW_MS = 180;
 const formatPillHotkeyLabel = (value) =>
   formatHotkeyListLabel(value)
     .replace(/\s*\+\s*/g, " + ")
@@ -128,6 +133,92 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const root = document.querySelector(".dictation-window");
+    if (!(root instanceof HTMLElement)) return undefined;
+
+    let frame = 0;
+    let plan = null;
+    const clearCompensation = () => {
+      root.style.setProperty("--window-resize-compensation-x", "0px");
+      root.style.setProperty("--window-resize-compensation-y", "0px");
+    };
+    const currentBounds = () => ({
+      x: window.screenX,
+      y: window.screenY,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
+    const differsFrom = (left, right) =>
+      Math.abs(left.x - right.x) > 1 ||
+      Math.abs(left.y - right.y) > 1 ||
+      Math.abs(left.width - right.width) > 1 ||
+      Math.abs(left.height - right.height) > 1;
+
+    const applyCompensation = (current) => {
+      if (!plan) return;
+      const compensation = calculateWindowAnchorCompensation(plan.bounds, current, plan.anchor);
+      root.style.setProperty("--window-resize-compensation-x", `${compensation.x}px`);
+      root.style.setProperty("--window-resize-compensation-y", `${compensation.y}px`);
+    };
+
+    // Chromium dispatches resize before painting the new viewport. Update the
+    // anchor synchronously there so the first split setBounds frame is masked,
+    // rather than waiting until the following animation frame.
+    const handleRendererResize = () => {
+      if (!plan) return;
+      const current = currentBounds();
+      plan.started = true;
+      applyCompensation(current);
+    };
+
+    const sample = () => {
+      frame = 0;
+      if (!plan) return;
+      const current = currentBounds();
+      if (!plan.started && differsFrom(current, plan.initial)) plan.started = true;
+
+      if (plan.started) {
+        applyCompensation(current);
+
+        if (!differsFrom(current, plan.bounds)) {
+          plan.stableFrames += 1;
+          if (plan.stableFrames >= 2) {
+            plan = null;
+            clearCompensation();
+            return;
+          }
+        } else {
+          plan.stableFrames = 0;
+        }
+      }
+      frame = requestAnimationFrame(sample);
+    };
+
+    const unsubscribe = window.electronAPI?.onMainWindowWillResize?.((resize) => {
+      if (!resize?.bounds || !resize?.anchor) return;
+      plan = {
+        bounds: resize.bounds,
+        anchor: resize.anchor,
+        initial: currentBounds(),
+        started: false,
+        stableFrames: 0,
+      };
+      cancelAnimationFrame(frame);
+      clearCompensation();
+      frame = requestAnimationFrame(sample);
+    });
+    window.addEventListener("resize", handleRendererResize);
+
+    return () => {
+      plan = null;
+      cancelAnimationFrame(frame);
+      clearCompensation();
+      window.removeEventListener("resize", handleRendererResize);
+      unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
     const unsubscribeFallback = window.electronAPI?.onHotkeyFallbackUsed?.((data) => {
       toast({
         title: t("app.toasts.hotkeyChanged.title"),
@@ -205,6 +296,7 @@ export default function App() {
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
   const [assistantPanelMounted, setAssistantPanelMounted] = useState(false);
+  const [assistantPanelClosing, setAssistantPanelClosing] = useState(false);
   const [assistantResponseReady, setAssistantResponseReady] = useState(false);
   const [assistantThinking, setAssistantThinking] = useState(false);
   const [assistantBusy, setAssistantBusy] = useState(false);
@@ -214,10 +306,13 @@ export default function App() {
   const [liveTranscriptPanelOpen, setLiveTranscriptPanelOpen] = useState(false);
   const [liveTranscriptPanelMounted, setLiveTranscriptPanelMounted] = useState(false);
   const [liveTranscriptText, setLiveTranscriptText] = useState("");
+  const [liveTranscriptMeasurementText, setLiveTranscriptMeasurementText] = useState("");
   const [liveTranscriptPhase, setLiveTranscriptPhase] = useState("listening");
   const [liveTranscriptEntrancePhase, setLiveTranscriptEntrancePhase] = useState("idle");
   const [liveTranscriptManuallyCollapsed, setLiveTranscriptManuallyCollapsed] = useState(false);
   const assistantPanelOpenRef = useRef(assistantPanelOpen);
+  const assistantPanelClosingRef = useRef(false);
+  const assistantContentFadeCompletedRef = useRef(false);
   const assistantCloseTimerRef = useRef(null);
   const assistantOpenFrameRef = useRef(null);
   const assistantFooterTimersRef = useRef([]);
@@ -228,15 +323,45 @@ export default function App() {
   const liveTranscriptCloseTimerRef = useRef(null);
   const liveTranscriptOpenFrameRef = useRef(null);
   const liveTranscriptOpenPromiseRef = useRef(null);
+  const liveTranscriptOpenGenerationRef = useRef(0);
   const liveTranscriptEntranceTimersRef = useRef([]);
   const liveTranscriptSourceTextRef = useRef("");
   const liveTranscriptContentReadyRef = useRef(false);
   const liveTranscriptTextSchedulerRef = useRef(null);
+  const liveTranscriptResizePromiseRef = useRef(Promise.resolve({ success: true }));
+  const liveTranscriptMeasurementResizeRef = useRef({
+    revision: null,
+    promise: Promise.resolve({ success: true }),
+  });
+  const liveTranscriptPresentationGenerationRef = useRef(0);
+  const assistantOpenGenerationRef = useRef(0);
+  const mainWindowResizeCoordinatorRef = useRef(null);
   const commandIdRef = useRef(0);
+
+  if (mainWindowResizeCoordinatorRef.current === null) {
+    mainWindowResizeCoordinatorRef.current = createMainWindowResizeCoordinator({
+      resizeMainWindow: (sizeKey) => window.electronAPI?.resizeMainWindow?.(sizeKey),
+      resizeAssistantWindowToContent: (height) =>
+        window.electronAPI?.resizeAssistantWindowToContent?.(height),
+    });
+  }
+
+  const requestMainWindowSize = React.useCallback(
+    (sizeKey) => mainWindowResizeCoordinatorRef.current.resizeMainWindow(sizeKey),
+    []
+  );
+  const requestLiveTranscriptHeight = React.useCallback((height, revision = null) => {
+    const resize = mainWindowResizeCoordinatorRef.current.resizeAssistantWindowToContent(height);
+    liveTranscriptResizePromiseRef.current = resize;
+    if (revision !== null) {
+      liveTranscriptMeasurementResizeRef.current = { revision, promise: resize };
+    }
+    return resize;
+  }, []);
 
   if (liveTranscriptTextSchedulerRef.current === null) {
     liveTranscriptTextSchedulerRef.current = createLatestValueScheduler(
-      setLiveTranscriptText,
+      setLiveTranscriptMeasurementText,
       LIVE_TRANSCRIPT_RENDER_INTERVAL_MS
     );
   }
@@ -250,22 +375,69 @@ export default function App() {
 
   const prepareBufferedLiveTranscriptText = React.useCallback(() => {
     liveTranscriptTextSchedulerRef.current.cancel();
-    setLiveTranscriptText(liveTranscriptSourceTextRef.current);
+    setLiveTranscriptMeasurementText(liveTranscriptSourceTextRef.current);
   }, []);
 
   const resumeLiveTranscriptText = React.useCallback(() => {
     liveTranscriptContentReadyRef.current = true;
-    liveTranscriptTextSchedulerRef.current.push(liveTranscriptSourceTextRef.current, {
-      immediate: true,
-    });
+    setLiveTranscriptMeasurementText(liveTranscriptSourceTextRef.current);
+    setLiveTranscriptText(liveTranscriptSourceTextRef.current);
   }, []);
 
   const resetLiveTranscriptText = React.useCallback(() => {
     liveTranscriptTextSchedulerRef.current.cancel();
     liveTranscriptSourceTextRef.current = "";
     liveTranscriptContentReadyRef.current = false;
+    liveTranscriptPresentationGenerationRef.current += 1;
+    liveTranscriptMeasurementResizeRef.current = {
+      revision: null,
+      promise: Promise.resolve({ success: true }),
+    };
     setLiveTranscriptText("");
+    setLiveTranscriptMeasurementText("");
   }, []);
+
+  // Pending transcript text is rendered invisibly first. Its real wrapping is
+  // measured at the final panel width, the native window settles to that
+  // height, and only then does the visible line update. This prevents a new
+  // line from pushing the panel upward before its BrowserWindow catches up.
+  useLayoutEffect(() => {
+    if (!liveTranscriptPanelOpen || !liveTranscriptContentReadyRef.current) return undefined;
+
+    const generation = ++liveTranscriptPresentationGenerationRef.current;
+    let firstFrame = 0;
+    let measurementFrame = 0;
+    let revealFrame = 0;
+    firstFrame = requestAnimationFrame(() => {
+      measurementFrame = requestAnimationFrame(async () => {
+        let measurementResize = null;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const pending = liveTranscriptMeasurementResizeRef.current;
+          if (pending.revision === liveTranscriptMeasurementText) {
+            measurementResize = pending.promise;
+            break;
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+        const resizeResult = await (measurementResize ?? liveTranscriptResizePromiseRef.current);
+        if (resizeResult?.changed) {
+          await new Promise((resolve) => setTimeout(resolve, LIVE_TRANSCRIPT_SHELL_GROW_MS));
+        }
+        if (generation !== liveTranscriptPresentationGenerationRef.current) return;
+        revealFrame = requestAnimationFrame(() => {
+          if (generation === liveTranscriptPresentationGenerationRef.current) {
+            setLiveTranscriptText(liveTranscriptMeasurementText);
+          }
+        });
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(measurementFrame);
+      cancelAnimationFrame(revealFrame);
+    };
+  }, [liveTranscriptMeasurementText, liveTranscriptPanelOpen]);
 
   const clearLiveTranscriptEntranceTimers = React.useCallback(() => {
     for (const timer of liveTranscriptEntranceTimersRef.current) clearTimeout(timer);
@@ -315,18 +487,28 @@ export default function App() {
   const openAssistantPanel = React.useCallback(async () => {
     setAssistantThinking(false);
     if (assistantPanelOpenRef.current) return;
+    const generation = ++assistantOpenGenerationRef.current;
     assistantPanelOpenRef.current = true;
+    assistantPanelClosingRef.current = false;
+    assistantContentFadeCompletedRef.current = false;
+    setAssistantPanelClosing(false);
     setAssistantResponseReady(false);
     clearTimeout(assistantCloseTimerRef.current);
     // Grow the window before the panel mounts so its entrance never paints
     // clipped inside the compact pill bounds.
-    await window.electronAPI?.resizeMainWindow?.("ASSISTANT");
+    await requestMainWindowSize("ASSISTANT");
+    if (generation !== assistantOpenGenerationRef.current || !assistantPanelOpenRef.current) {
+      return;
+    }
     setAssistantPanelMounted(true);
     cancelAnimationFrame(assistantOpenFrameRef.current);
     assistantOpenFrameRef.current = requestAnimationFrame(() => {
-      setAssistantPanelOpen(true);
+      assistantOpenFrameRef.current = requestAnimationFrame(() => {
+        if (generation !== assistantOpenGenerationRef.current) return;
+        setAssistantPanelOpen(true);
+      });
     });
-  }, []);
+  }, [requestMainWindowSize]);
 
   useEffect(
     () => () => {
@@ -337,12 +519,16 @@ export default function App() {
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
       clearLiveTranscriptEntranceTimers();
       liveTranscriptTextSchedulerRef.current.cancel();
+      mainWindowResizeCoordinatorRef.current?.dispose();
     },
     [clearAssistantFooterTimers, clearLiveTranscriptEntranceTimers]
   );
 
   const beginAssistantThinking = React.useCallback(() => {
     clearTimeout(assistantCloseTimerRef.current);
+    assistantPanelClosingRef.current = false;
+    assistantContentFadeCompletedRef.current = false;
+    setAssistantPanelClosing(false);
     cancelAnimationFrame(assistantOpenFrameRef.current);
     const transition = resolveAssistantThinkingTransition(assistantPanelOpenRef.current);
     assistantPanelOpenRef.current = transition.panelOpen;
@@ -406,22 +592,16 @@ export default function App() {
     }
   }, [setWindowInteractivity]);
 
-  const handlePanelPreferredHeight = React.useCallback((height) => {
-    window.electronAPI?.resizeAssistantWindowToContent?.(height);
-  }, []);
-
-  // Agent Mode owns the fixed assistant footprint. Reassert it while open so
-  // a preceding adaptive Live Transcript measurement (or a hot reload during
-  // development) cannot leave the shared native window at a content height.
-  useLayoutEffect(() => {
-    if (!assistantPanelOpen) return;
-    void window.electronAPI?.resizeMainWindow?.("ASSISTANT");
-  }, [assistantPanelOpen]);
+  const handlePanelPreferredHeight = React.useCallback(
+    (height, revision) => requestLiveTranscriptHeight(height, revision),
+    [requestLiveTranscriptHeight]
+  );
 
   const handleDictationError = React.useCallback(() => {
     // Errors replace the live transcript surface, so unmount it immediately
     // and suppress late preview events until the next recording begins.
     liveTranscriptSuppressedRef.current = true;
+    liveTranscriptOpenGenerationRef.current += 1;
     setLiveTranscriptManuallyCollapsed(false);
     cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
     clearTimeout(liveTranscriptCloseTimerRef.current);
@@ -442,6 +622,8 @@ export default function App() {
     isRecording,
     isProcessing,
     isAssistantVoice,
+    isPreparing,
+    isStopping,
     micCaptureStatus,
     toggleListening,
     cancelRecording,
@@ -453,6 +635,7 @@ export default function App() {
     dismissDictationError,
     onDictationError: handleDictationError,
   });
+  const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
   useLayoutEffect(() => {
     liveTranscriptReopenEligibleRef.current = shouldOfferLiveTranscriptReopen({
@@ -467,7 +650,7 @@ export default function App() {
   // Hold the origin through processing and panel exit so every close animation
   // returns to the same side from which that voice session started.
   const voiceDirectionLocked =
-    isRecording || isProcessing || assistantPanelMounted || liveTranscriptPanelMounted;
+    isRecording || isVisuallyProcessing || assistantPanelMounted || liveTranscriptPanelMounted;
   useLayoutEffect(() => {
     if (voiceDirectionLocked) return;
     setVoiceHorizontalDirection(
@@ -481,14 +664,9 @@ export default function App() {
     }
   }, [isAssistantVoice, isProcessing, beginAssistantThinking]);
 
-  const handleAssistantPanelClose = React.useCallback(() => {
-    // Dismissing the panel mid-command must also abandon the command, or its
-    // completion reopens the panel and answers a question the user withdrew.
-    if (isAssistantVoice) {
-      if (isRecording) cancelRecording();
-      else if (isProcessing) cancelProcessing();
-    }
-    cancelAnimationFrame(assistantOpenFrameRef.current);
+  const completeAssistantContentFade = React.useCallback(() => {
+    if (!assistantPanelClosingRef.current || assistantContentFadeCompletedRef.current) return;
+    assistantContentFadeCompletedRef.current = true;
     assistantPanelOpenRef.current = false;
     setAssistantPanelOpen(false);
     setAssistantResponseReady(false);
@@ -497,9 +675,26 @@ export default function App() {
     setPendingCommand(null);
     clearTimeout(assistantCloseTimerRef.current);
     assistantCloseTimerRef.current = setTimeout(() => {
+      assistantPanelClosingRef.current = false;
+      setAssistantPanelClosing(false);
       setAssistantPanelMounted(false);
     }, ASSISTANT_TRANSITION_MS);
-  }, [isAssistantVoice, isRecording, isProcessing, cancelRecording, cancelProcessing]);
+  }, []);
+
+  const handleAssistantPanelClose = React.useCallback(() => {
+    // Dismissing the panel mid-command must also abandon the command, or its
+    // completion reopens the panel and answers a question the user withdrew.
+    if (isAssistantVoice) {
+      if (isRecording || isPreparing) cancelRecording();
+      else if (isProcessing) cancelProcessing();
+    }
+    cancelAnimationFrame(assistantOpenFrameRef.current);
+    assistantOpenGenerationRef.current += 1;
+    clearTimeout(assistantCloseTimerRef.current);
+    assistantPanelClosingRef.current = true;
+    assistantContentFadeCompletedRef.current = false;
+    setAssistantPanelClosing(true);
+  }, [isAssistantVoice, isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
 
   const closeLiveTranscriptPanel = React.useCallback(
     ({ suppress = false, clear = false } = {}) => {
@@ -511,6 +706,7 @@ export default function App() {
         setLiveTranscriptManuallyCollapsed(false);
       }
       if (clear) liveTranscriptTextSchedulerRef.current.flush();
+      liveTranscriptOpenGenerationRef.current += 1;
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
       clearLiveTranscriptEntranceTimers();
       liveTranscriptPanelOpenRef.current = false;
@@ -542,16 +738,25 @@ export default function App() {
 
     clearTimeout(liveTranscriptCloseTimerRef.current);
     clearLiveTranscriptEntranceTimers();
+    const generation = ++liveTranscriptOpenGenerationRef.current;
+    // Reserve adaptive sizing immediately. The generic size ladder must not
+    // issue a recording/assistant resize while this entrance is awaiting the
+    // native compositor.
+    liveTranscriptPanelOpenRef.current = true;
     liveTranscriptOpenPromiseRef.current = (async () => {
       // Live Transcript owns an adaptive footprint. Enter at its footer-sized
       // surface instead of flashing the full Agent window before measurement.
-      await window.electronAPI?.resizeAssistantWindowToContent?.(
-        LIVE_TRANSCRIPT_SURFACE_LIMITS.minHeight
-      );
-      if (liveTranscriptSuppressedRef.current || assistantPanelOpenRef.current) return;
-      // Reserve the mode before the next frame so repeated preview chunks
-      // cannot restart the staged entrance while its first frame waits.
-      liveTranscriptPanelOpenRef.current = true;
+      await requestLiveTranscriptHeight(LIVE_TRANSCRIPT_SURFACE_LIMITS.minHeight);
+      if (
+        generation !== liveTranscriptOpenGenerationRef.current ||
+        liveTranscriptSuppressedRef.current ||
+        assistantPanelOpenRef.current
+      ) {
+        if (generation === liveTranscriptOpenGenerationRef.current) {
+          liveTranscriptPanelOpenRef.current = false;
+        }
+        return;
+      }
       setIsHovered(false);
       setLiveTranscriptManuallyCollapsed(false);
       liveTranscriptContentReadyRef.current = false;
@@ -561,6 +766,7 @@ export default function App() {
       setLiveTranscriptPanelMounted(true);
       cancelAnimationFrame(liveTranscriptOpenFrameRef.current);
       liveTranscriptOpenFrameRef.current = requestAnimationFrame(() => {
+        if (generation !== liveTranscriptOpenGenerationRef.current) return;
         setLiveTranscriptPanelOpen(true);
         const timeline = getLiveTranscriptEntranceTimeline();
         liveTranscriptEntranceTimersRef.current = [
@@ -570,10 +776,32 @@ export default function App() {
             prepareBufferedLiveTranscriptText();
             setLiveTranscriptEntrancePhase("prepare");
           }, timeline.prepareAtMs),
-          setTimeout(() => setLiveTranscriptEntrancePhase("panel"), timeline.panelAtMs),
-          setTimeout(() => setLiveTranscriptEntrancePhase("content"), timeline.contentAtMs),
-          setTimeout(() => resumeLiveTranscriptText(), timeline.streamAtMs),
         ];
+
+        const finishEntrance = setTimeout(async () => {
+          // ResizeObserver has now seen the hidden buffered transcript. Wait
+          // for its latest native resize rather than guessing that a fixed
+          // measurement delay was long enough on this computer.
+          await liveTranscriptResizePromiseRef.current;
+          if (generation !== liveTranscriptOpenGenerationRef.current) return;
+          setLiveTranscriptEntrancePhase("panel");
+
+          const contentTimer = setTimeout(() => {
+            if (generation !== liveTranscriptOpenGenerationRef.current) return;
+            setLiveTranscriptEntrancePhase("content");
+          }, LIVE_TRANSCRIPT_ENTRANCE_TIMING.panelExpansionMs + LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentRevealDelayMs);
+          const streamTimer = setTimeout(
+            () => {
+              if (generation !== liveTranscriptOpenGenerationRef.current) return;
+              resumeLiveTranscriptText();
+            },
+            LIVE_TRANSCRIPT_ENTRANCE_TIMING.panelExpansionMs +
+              LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentRevealDelayMs +
+              LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentSettleMs
+          );
+          liveTranscriptEntranceTimersRef.current.push(contentTimer, streamTimer);
+        }, timeline.panelAtMs);
+        liveTranscriptEntranceTimersRef.current.push(finishEntrance);
       });
     })().finally(() => {
       liveTranscriptOpenPromiseRef.current = null;
@@ -581,6 +809,7 @@ export default function App() {
   }, [
     clearLiveTranscriptEntranceTimers,
     prepareBufferedLiveTranscriptText,
+    requestLiveTranscriptHeight,
     resumeLiveTranscriptText,
   ]);
 
@@ -668,7 +897,7 @@ export default function App() {
   // content collapse animation to finish before the window snaps down.
   const voiceActivity = resolveVoiceActivityPresentation({
     isRecording,
-    isProcessing,
+    isProcessing: isVisuallyProcessing,
     isAssistantVoice,
     assistantThinking: assistantThinking || assistantBusy,
   });
@@ -706,9 +935,22 @@ export default function App() {
   });
   const isCompactPill = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
   const lastSizeKeyRef = useRef(null);
+  const panelSizeReservationRef = useRef(false);
   useEffect(() => {
+    const panelOwnsWindow =
+      assistantPanelOpenRef.current ||
+      liveTranscriptPanelOpenRef.current ||
+      assistantPanelMounted ||
+      liveTranscriptPanelMounted;
+    if (panelOwnsWindow) {
+      panelSizeReservationRef.current = true;
+      return undefined;
+    }
+
+    const returningFromPanel = panelSizeReservationRef.current;
+    panelSizeReservationRef.current = false;
     const target = resolveMainWindowSizeKey({
-      panelOpen: assistantPanelOpen || liveTranscriptPanelOpen,
+      panelOpen: false,
       menuOpen: isCommandMenuOpen,
       toastCount,
       compactPill: isCompactPill,
@@ -716,33 +958,35 @@ export default function App() {
     });
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
-    if (target === prev) return;
+    if (target === prev && !returningFromPanel) return undefined;
     if (target === "DICTATION_ERROR" || target === "DICTATION_ERROR_WITH_TRANSCRIPT") {
       // Establish the final width immediately. The hidden error card then
       // measures wrapping at that width and performs one content-height resize.
-      window.electronAPI?.resizeMainWindow?.(target);
-      return;
+      void requestMainWindowSize(target);
+      return undefined;
     }
     if (prev === "DICTATION_ERROR" || prev === "DICTATION_ERROR_WITH_TRANSCRIPT") {
       // The card has already completed its exit animation and been removed;
       // skip another delayed intermediate footprint.
-      window.electronAPI?.resizeMainWindow?.(target);
-      return;
+      void requestMainWindowSize(target);
+      return undefined;
     }
-    if (!prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {
-      window.electronAPI?.resizeMainWindow?.(target);
-      return;
+    if (returningFromPanel || !prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {
+      void requestMainWindowSize(target);
+      return undefined;
     }
-    const shrinkDelay = prev === "ASSISTANT" ? ASSISTANT_TRANSITION_MS : 340;
-    const timeout = setTimeout(() => window.electronAPI?.resizeMainWindow?.(target), shrinkDelay);
+    const timeout = setTimeout(() => void requestMainWindowSize(target), 340);
     return () => clearTimeout(timeout);
   }, [
     assistantPanelOpen,
+    assistantPanelMounted,
     liveTranscriptPanelOpen,
+    liveTranscriptPanelMounted,
     isCommandMenuOpen,
     toastCount,
     isCompactPill,
     dictationErrorActionCount,
+    requestMainWindowSize,
   ]);
 
   useEffect(() => {
@@ -780,7 +1024,7 @@ export default function App() {
     if (
       floatingIconAutoHide &&
       !isRecording &&
-      !isProcessing &&
+      !isVisuallyProcessing &&
       toastCount === 0 &&
       !assistantPanelMounted &&
       !liveTranscriptPanelMounted
@@ -797,7 +1041,7 @@ export default function App() {
     return () => clearTimeout(hideTimeout);
   }, [
     isRecording,
-    isProcessing,
+    isVisuallyProcessing,
     floatingIconAutoHide,
     toastCount,
     assistantPanelMounted,
@@ -837,6 +1081,8 @@ export default function App() {
           setIsCommandMenuOpen(false);
         } else if (isRecording) {
           cancelRecording();
+        } else if (isPreparing) {
+          cancelRecording();
         } else if (isProcessing) {
           cancelProcessing();
         } else {
@@ -851,6 +1097,7 @@ export default function App() {
     isCommandMenuOpen,
     assistantPanelMounted,
     isRecording,
+    isPreparing,
     isProcessing,
     cancelRecording,
     cancelProcessing,
@@ -861,8 +1108,8 @@ export default function App() {
     if (isRecording && (micCaptureStatus === "reconnecting" || micCaptureStatus === "unavailable"))
       return "unavailable";
     if (isRecording) return "recording";
-    if (isProcessing) return "processing";
-    if (isHovered && !isRecording && !isProcessing) return "hover";
+    if (isVisuallyProcessing) return "processing";
+    if (isHovered && !isRecording && !isVisuallyProcessing) return "hover";
     return "idle";
   };
 
@@ -900,7 +1147,7 @@ export default function App() {
   const agentModeActive = resolveAgentModeActive({
     isAssistantVoice,
     isRecording,
-    isProcessing,
+    isProcessing: isVisuallyProcessing,
     assistantPanelMounted,
   });
   const assistantFooter = resolveAssistantFooterPresentation(assistantFooterPhase);
@@ -999,10 +1246,10 @@ export default function App() {
                   canReopenLiveTranscript
                     ? t("transcriptionPreview.label")
                     : assistantPanelMounted
-                    ? t("settingsPage.agentConfig.title")
-                    : liveTranscriptPanelMounted
-                      ? t("transcriptionPreview.label")
-                      : micTooltip
+                      ? t("settingsPage.agentConfig.title")
+                      : liveTranscriptPanelMounted
+                        ? t("transcriptionPreview.label")
+                        : micTooltip
                 }
                 onMouseDown={(e) => {
                   if (anyPanelMounted) return;
@@ -1106,12 +1353,17 @@ export default function App() {
       <VoiceModePanelCore
         mode={activeVoicePanelMode}
         open={activeVoicePanel.open}
+        closing={activeVoicePanelMode === "assistant" && assistantPanelClosing}
         stage={
           activeVoicePanelMode === "live-transcript" ? liveTranscriptEntrance.coreStage : "content"
         }
         horizontalDirection={voiceHorizontalDirection}
         label={activeVoicePanelLabel}
+        measurementRevision={
+          activeVoicePanelMode === "live-transcript" ? liveTranscriptMeasurementText : null
+        }
         onPreferredHeightChange={handlePanelPreferredHeight}
+        onClosingFadeComplete={completeAssistantContentFade}
       >
         {activeVoicePanelMode === "assistant" && assistantPanelMounted && (
           <AssistantPanel
@@ -1131,13 +1383,14 @@ export default function App() {
           />
         )}
 
-        {activeVoicePanelMode === "live-transcript" && liveTranscriptPanelMounted && (
+        {activeVoicePanelMode !== "assistant" && (
           <LiveTranscriptPanel
-            text={liveTranscriptText}
+            text={liveTranscriptPanelMounted ? liveTranscriptText : ""}
+            measurementText={liveTranscriptPanelMounted ? liveTranscriptMeasurementText : ""}
             phase={liveTranscriptPhase}
-            processing={isProcessing && !isAssistantVoice}
-            controlsVisible={liveTranscriptEntrance.controlsVisible}
-            contentVisible={liveTranscriptEntrance.contentVisible}
+            processing={liveTranscriptPanelMounted && isProcessing && !isAssistantVoice}
+            controlsVisible={liveTranscriptPanelMounted && liveTranscriptEntrance.controlsVisible}
+            contentVisible={liveTranscriptPanelMounted && liveTranscriptEntrance.contentVisible}
             onCollapse={() => closeLiveTranscriptPanel({ suppress: true })}
           />
         )}

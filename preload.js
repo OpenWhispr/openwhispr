@@ -437,6 +437,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "main-window-horizontal-direction-changed",
     (callback) => (_event, direction) => callback(direction)
   ),
+  onMainWindowWillResize: registerListener(
+    "main-window-will-resize",
+    (callback) => (_event, resize) => callback(resize)
+  ),
   setMainWindowInteractivity: (interactive) =>
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
   setNotificationInteractivity: (interactive) =>

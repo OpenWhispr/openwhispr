@@ -178,6 +178,18 @@
   body:has(.meeting-notification-window) #root {
     background: transparent;
   }
+
+  .dictation-window {
+    --window-resize-compensation-x: 0px;
+    --window-resize-compensation-y: 0px;
+    position: fixed;
+    inset: 0;
+    transform: translate3d(
+      var(--window-resize-compensation-x),
+      var(--window-resize-compensation-y),
+      0
+    );
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -483,6 +495,19 @@ a:hover {
   transform: none;
 }
 
+/* Agent close first fades its complex inner tree while the surface is still
+   geometrically stable. The following pill-to-surface contraction can then be
+   composited as a simple layer instead of repainting markdown, controls, and
+   shimmer descendants inside a changing clip on every frame. */
+.expanding-panel-surface[data-panel-mode="assistant"] > * {
+  transition: opacity 100ms ease-out;
+}
+
+.expanding-panel-surface[data-panel-mode="assistant"][data-panel-closing="true"] > * {
+  pointer-events: none;
+  opacity: 0;
+}
+
 /* Live Transcript stages its empty surface before buffered text becomes visible. */
 .expanding-panel-surface[data-panel-mode="live-transcript"] {
   --live-transcript-footer-height: 4rem;
@@ -494,7 +519,7 @@ a:hover {
       var(--live-transcript-footer-inline-padding)
   );
   transition:
-    height 200ms cubic-bezier(0.2, 0, 0, 1),
+    height 180ms cubic-bezier(0.2, 0, 0, 1),
     clip-path var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
     opacity 140ms ease-out,
     transform var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
@@ -590,7 +615,6 @@ a:hover {
    into the leaf contour, while its bars bend into the leaf spine and spark. */
 .voice-identity-svg {
   color: inherit;
-  transition: color 220ms ease-out;
 }
 
 .voice-identity-icon[data-agent-mode="true"] .voice-identity-svg {
@@ -916,8 +940,7 @@ a:hover {
   }
 
   .expanding-panel-surface[data-panel-mode="live-transcript"]::before,
-  .voice-pill-control[data-integrated-with-panel="true"],
-  .voice-identity-svg {
+  .voice-pill-control[data-integrated-with-panel="true"] {
     transition-duration: 1ms !important;
     transition-delay: 0ms !important;
   }

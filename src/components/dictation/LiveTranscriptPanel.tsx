@@ -7,6 +7,7 @@ export type LiveTranscriptPhase = "listening" | "live" | "cleanup" | "final";
 
 interface LiveTranscriptPanelProps {
   text: string;
+  measurementText: string;
   phase: LiveTranscriptPhase;
   processing: boolean;
   controlsVisible: boolean;
@@ -19,6 +20,7 @@ const PIN_THRESHOLD_PX = 40;
 
 export function LiveTranscriptPanel({
   text,
+  measurementText,
   phase,
   processing,
   controlsVisible,
@@ -105,7 +107,7 @@ export function LiveTranscriptPanel({
         aria-hidden={!contentVisible}
         aria-live="polite"
       >
-        <div data-panel-size-source>
+        <div>
           {text ? (
             <p className="select-text whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
               <span>{shimmerParts.settled}</span>
@@ -152,6 +154,16 @@ export function LiveTranscriptPanel({
           </button>
         </div>
       </footer>
+
+      <div
+        data-panel-size-source
+        className="pointer-events-none absolute inset-x-5 top-0 invisible pb-3 pt-8"
+        aria-hidden="true"
+      >
+        <p className="whitespace-pre-wrap break-words text-base leading-relaxed">
+          {measurementText || t("transcriptionPreview.waitingForInput")}
+        </p>
+      </div>
     </>
   );
 }

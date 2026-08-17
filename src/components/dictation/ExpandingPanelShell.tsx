@@ -5,11 +5,14 @@ interface ExpandingPanelShellProps extends Omit<HTMLAttributes<HTMLElement>, "ch
   open: boolean;
   anchor?: "bottom-left" | "bottom-right";
   stabilizeHeight?: boolean;
-  animateHeight?: boolean;
   fillAvailableHeight?: boolean;
   preferredHeightCap?: number;
   measurementKey?: string | null;
-  onPreferredHeightChange?: (height: number) => void;
+  measurementRevision?: string | number | null;
+  onPreferredHeightChange?: (
+    height: number,
+    measurementRevision?: string | number | null
+  ) => void | Promise<unknown>;
   children: ReactNode;
 }
 
@@ -18,10 +21,10 @@ export function ExpandingPanelShell({
   open,
   anchor = "bottom-right",
   stabilizeHeight = false,
-  animateHeight = false,
   fillAvailableHeight = false,
   preferredHeightCap,
   measurementKey = null,
+  measurementRevision = null,
   onPreferredHeightChange,
   children,
   className,
@@ -32,6 +35,7 @@ export function ExpandingPanelShell({
   const lastPreferredHeightRef = useRef(0);
   const heightFloorRef = useRef(0);
   const heightCapRef = useRef(0);
+  const lastMeasurementRevisionRef = useRef<string | number | null>(null);
   const [heightFloor, setHeightFloor] = useState<number | null>(null);
 
   useLayoutEffect(() => {
@@ -41,6 +45,7 @@ export function ExpandingPanelShell({
     // configured ceiling so content measurement can grow that window again;
     // otherwise the initial compact viewport becomes an accidental hard cap.
     heightCapRef.current = Math.max(0, preferredHeightCap ?? window.innerHeight - 24);
+    lastMeasurementRevisionRef.current = null;
     setHeightFloor(null);
   }, [measurementKey, preferredHeightCap]);
 
@@ -59,7 +64,7 @@ export function ExpandingPanelShell({
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
-    if (!shell || !open || (!onPreferredHeightChange && !animateHeight)) return;
+    if (!shell || !open || !onPreferredHeightChange) return;
 
     let frame = 0;
     const measure = () => {
@@ -68,9 +73,21 @@ export function ExpandingPanelShell({
       // box metrics are enough here. Avoid getComputedStyle on every transcript
       // update: it synchronously flushes style calculation before layout reads.
       let preferredHeight = shell.offsetHeight - shell.clientHeight;
+      const detachedSizeSource = Array.from(shell.children).find(
+        (child) => child instanceof HTMLElement && child.hasAttribute("data-panel-size-source")
+      ) as HTMLElement | undefined;
 
       for (const child of Array.from(shell.children)) {
         if (!(child instanceof HTMLElement)) continue;
+        if (child === detachedSizeSource) continue;
+        if (child.hasAttribute("data-panel-scroll-region") && detachedSizeSource) {
+          preferredHeight += Math.max(
+            child.offsetHeight,
+            detachedSizeSource.offsetHeight,
+            detachedSizeSource.scrollHeight
+          );
+          continue;
+        }
         preferredHeight += Math.max(child.offsetHeight, child.scrollHeight);
       }
 
@@ -78,17 +95,24 @@ export function ExpandingPanelShell({
       // height is reached, the middle flex child owns scrolling and further
       // transcript lines must not keep changing the panel target.
       preferredHeight = Math.min(Math.ceil(preferredHeight), heightCapRef.current);
-      if (stabilizeHeight && preferredHeight > heightFloorRef.current) {
-        heightFloorRef.current = preferredHeight;
-        setHeightFloor(preferredHeight);
-      }
-
       const reportedHeight = stabilizeHeight
         ? Math.max(preferredHeight, heightFloorRef.current)
         : preferredHeight;
-      if (Math.abs(reportedHeight - lastPreferredHeightRef.current) < 1) return;
+      const revisionChanged = measurementRevision !== lastMeasurementRevisionRef.current;
+      if (Math.abs(reportedHeight - lastPreferredHeightRef.current) < 1 && !revisionChanged) return;
       lastPreferredHeightRef.current = reportedHeight;
-      onPreferredHeightChange?.(reportedHeight);
+      lastMeasurementRevisionRef.current = measurementRevision;
+      const resize = onPreferredHeightChange(reportedHeight, measurementRevision);
+      if (stabilizeHeight && preferredHeight > heightFloorRef.current) {
+        // The DOM already contains the natural height. Install its persistent
+        // floor only after the native window has caught up, so CSS and Electron
+        // never animate the same vertical change at the same time.
+        void Promise.resolve(resize).then(() => {
+          if (!shell.isConnected) return;
+          heightFloorRef.current = Math.max(heightFloorRef.current, preferredHeight);
+          setHeightFloor(heightFloorRef.current);
+        });
+      }
     };
     const scheduleMeasure = () => {
       cancelAnimationFrame(frame);
@@ -102,10 +126,8 @@ export function ExpandingPanelShell({
       }
     };
 
-    if (!animateHeight) {
-      resizeObserver.observe(shell);
-      for (const child of Array.from(shell.children)) resizeObserver.observe(child);
-    }
+    resizeObserver.observe(shell);
+    for (const child of Array.from(shell.children)) resizeObserver.observe(child);
     observeSizeSources();
 
     // React normally updates transcript text through characterData mutations.
@@ -124,7 +146,7 @@ export function ExpandingPanelShell({
       resizeObserver.disconnect();
       mutationObserver.disconnect();
     };
-  }, [animateHeight, onPreferredHeightChange, open, stabilizeHeight, measurementKey]);
+  }, [onPreferredHeightChange, open, stabilizeHeight, measurementKey, measurementRevision]);
 
   return (
     <section
@@ -141,16 +163,12 @@ export function ExpandingPanelShell({
         className
       )}
       aria-hidden={!open}
-      data-panel-height-animated={animateHeight ? "true" : undefined}
+      data-panel-height-stabilized={stabilizeHeight ? "true" : undefined}
       style={{
         // A long streaming response can make the natural-content floor taller
         // than the native window. Keep the floor within the same viewport cap
         // as max-height so the middle flex child shrinks and becomes scrollable.
-        height: animateHeight && heightFloor !== null ? `${heightFloor}px` : undefined,
-        minHeight:
-          !animateHeight && heightFloor !== null
-            ? `min(${heightFloor}px, calc(100% - 1.5rem))`
-            : undefined,
+        height: heightFloor !== null ? `min(${heightFloor}px, calc(100% - 1.5rem))` : undefined,
         ...style,
       }}
       {...props}

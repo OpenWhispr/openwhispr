@@ -1500,10 +1500,18 @@ declare global {
           | "WITH_TOAST"
           | "EXPANDED"
           | "ASSISTANT"
-      ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
-      resizeAssistantWindowToContent: (
-        surfaceHeight: number
-      ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
+      ) => Promise<{
+        success: boolean;
+        bounds?: Electron.Rectangle;
+        message?: string;
+        changed?: boolean;
+      }>;
+      resizeAssistantWindowToContent: (surfaceHeight: number) => Promise<{
+        success: boolean;
+        bounds?: Electron.Rectangle;
+        message?: string;
+        changed?: boolean;
+      }>;
       resizeDictationErrorWindowToContent: (
         surfaceHeight: number
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
@@ -1774,6 +1782,12 @@ declare global {
       getMainWindowHorizontalDirection?: () => Promise<"left" | "right">;
       onMainWindowHorizontalDirectionChanged?: (
         callback: (direction: "left" | "right") => void
+      ) => () => void;
+      onMainWindowWillResize?: (
+        callback: (resize: {
+          bounds: Electron.Rectangle;
+          anchor: "bottom-left" | "bottom-right" | "center";
+        }) => void
       ) => () => void;
 
       // Auto-start at login. requiresApproval is macOS-only: SMAppService can

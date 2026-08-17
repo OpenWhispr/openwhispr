@@ -126,7 +126,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
             size={identitySize}
             agentMode={agentMode}
             className={cn(
-              "transition-[color,width,height] duration-200",
+              "transition-[width,height] duration-200",
               state === "idle" && "text-foreground",
               (isUnavailable || isProcessing) && "animate-pulse"
             )}
@@ -135,9 +135,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         <ChevronUp
           className={cn(
             "voice-pill-expand-chevron absolute inset-0 m-auto size-5 transition-[opacity,transform] duration-200 ease-out",
-            showExpandChevron
-              ? "scale-100 opacity-100"
-              : "translate-y-1 scale-75 opacity-0"
+            showExpandChevron ? "scale-100 opacity-100" : "translate-y-1 scale-75 opacity-0"
           )}
           strokeWidth={2}
         />

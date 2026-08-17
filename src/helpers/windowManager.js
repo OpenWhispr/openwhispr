@@ -267,7 +267,27 @@ class WindowManager {
     return this._resizeMainWindowTo(newSize, "DICTATION_ERROR_CONTENT");
   }
 
+  async _prepareRendererForMainWindowResize(bounds, anchor) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("main-window-will-resize", { bounds, anchor });
+
+    // Give the renderer one frame to install screen-space anchor compensation
+    // before setBounds reaches the OS compositor. Without this handshake,
+    // Windows and macOS can paint the new viewport size one frame before the
+    // corresponding window position, which visibly kicks the pill or panel.
+    await new Promise((resolve) => setTimeout(resolve, 24));
+  }
+
   _resizeMainWindowTo(newSize, sizeKey) {
+    const run = () => this._performMainWindowResize(newSize, sizeKey);
+    // Renderer voice requests are latest-wins, while errors and other overlays
+    // can also resize through their own IPC handlers. Serialize once more at
+    // the native boundary so no two setBounds handshakes can overlap.
+    this._mainWindowResizeQueue = (this._mainWindowResizeQueue || Promise.resolve()).then(run, run);
+    return this._mainWindowResizeQueue;
+  }
+
+  async _performMainWindowResize(newSize, sizeKey) {
     const currentBounds = this.mainWindow.getBounds();
     const display = screen.getDisplayNearestPoint({
       x: currentBounds.x + currentBounds.width / 2,
@@ -294,12 +314,20 @@ class WindowManager {
     // user put it a little more on every grow/shrink cycle.
     if (sizeKey === "BASE" && this._baseBoundsBeforeResize) {
       const restored = { ...this._baseBoundsBeforeResize };
+      const restoreAnchor =
+        this._panelStartPosition === "center"
+          ? "center"
+          : `bottom-${this._activeHorizontalDirection || this.getMainWindowHorizontalDirection()}`;
       this._baseBoundsBeforeResize = null;
+      await this._prepareRendererForMainWindowResize(restored, restoreAnchor);
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, message: "Window not available" };
+      }
       this._lastResizeBounds = restored;
       this.mainWindow.setBounds(restored);
       this._activeHorizontalDirection = null;
       this._notifyMainWindowHorizontalDirection();
-      return { success: true, bounds: restored };
+      return { success: true, bounds: restored, changed: true };
     }
 
     if (
@@ -363,9 +391,13 @@ class WindowManager {
         this._activeHorizontalDirection = null;
         this._notifyMainWindowHorizontalDirection();
       }
-      return { success: true, bounds: currentBounds };
+      return { success: true, bounds: currentBounds, changed: false };
     }
 
+    await this._prepareRendererForMainWindowResize(newBounds, position);
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return { success: false, message: "Window not available" };
+    }
     this.mainWindow.setBounds(newBounds);
     this._lastResizeBounds = newBounds;
     if (sizeKey === "BASE") {
@@ -373,7 +405,7 @@ class WindowManager {
       this._notifyMainWindowHorizontalDirection();
     }
 
-    return { success: true, bounds: newBounds };
+    return { success: true, bounds: newBounds, changed: true };
   }
 
   async loadWindowContent(window, isControlPanel = false) {

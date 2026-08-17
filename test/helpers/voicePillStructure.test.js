@@ -55,9 +55,9 @@ test("the waveform stays to the right of the identity across docks and voice mod
   });
 
   assert.match(right, /data-horizontal-direction="right"/);
-  assert.match(right, /voice-pill-control[^"\n]*px-3/);
+  assert.match(right, /voice-pill-control[^"\n]*pr-1/);
   assert.match(left, /data-horizontal-direction="left"/);
-  assert.match(left, /voice-pill-control[^"\n]*px-3/);
+  assert.match(left, /voice-pill-control[^"\n]*pr-1/);
 
   for (const markup of [right, left, leftAgent, leftLiveTranscript]) {
     assert.doesNotMatch(markup, /flex-row-reverse/);
@@ -83,8 +83,7 @@ test("the collapsed Live Transcript pill transitions its logo into an expand che
   assert.match(hovered, /voice-pill-expand-chevron[^"\n]*scale-100 opacity-100/);
   assert.doesNotMatch(leftHovered, /flex-row-reverse/);
   assert.ok(
-    leftHovered.indexOf("voice-pill-expand-chevron") <
-      leftHovered.indexOf("voice-pill-waveform")
+    leftHovered.indexOf("voice-pill-expand-chevron") < leftHovered.indexOf("voice-pill-waveform")
   );
 });
 
@@ -93,7 +92,7 @@ test("the idle pill keeps the logo at normal foreground strength", async () => {
 
   assert.match(
     idle,
-    /voice-identity-icon relative inline-block shrink-0 transition-\[color,width,height\] duration-200 text-foreground/
+    /voice-identity-icon relative inline-block shrink-0 transition-\[width,height\] duration-200 text-foreground/
   );
 });
 
