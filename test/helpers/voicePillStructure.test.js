@@ -49,8 +49,12 @@ test("the persistent pill mirrors its content order for a left-origin interactio
 
   assert.match(right, /data-horizontal-direction="right"/);
   assert.doesNotMatch(right, /flex-row-reverse/);
+  assert.match(right, /voice-pill-control[^"\n]*pr-1/);
+  assert.doesNotMatch(right, /voice-pill-control[^"\n]*pl-1/);
   assert.match(left, /flex-row-reverse/);
   assert.match(left, /data-horizontal-direction="left"/);
+  assert.match(left, /voice-pill-control[^"\n]*pl-1/);
+  assert.doesNotMatch(left, /voice-pill-control[^"\n]*pr-1/);
 });
 
 test("the idle pill keeps the logo at normal foreground strength", async () => {

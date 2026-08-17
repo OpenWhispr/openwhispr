@@ -78,6 +78,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       className={cn(
         "voice-pill-control relative flex items-center justify-center overflow-hidden rounded-full border",
         horizontalDirection === "left" && "flex-row-reverse",
+        showCompactPill && (horizontalDirection === "left" ? "pl-1" : "pr-1"),
         "shadow-[var(--shadow-card)]",
         STATE_APPEARANCE[state],
         className
@@ -90,7 +91,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         height: showCompactPill ? 36 : 40,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
         transform: !isPanel && state === "hover" ? "scale(1.05)" : "scale(1)",
-        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out`,
+        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, padding-left ${GROW_TRANSITION}, padding-right ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out`,
         ...style,
       }}
       data-horizontal-direction={horizontalDirection}
