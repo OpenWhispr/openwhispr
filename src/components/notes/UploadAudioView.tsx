@@ -64,6 +64,7 @@ import { isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
+import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -656,14 +657,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
+      const diarization: DiarizationSettings = {
+        enabled: diarizationEnabled,
+        localModelsReady: !!diarizationModelsReady,
+        numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
+      };
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
         buildTranscriptionConfig(),
-        {
-          enabled: diarizationEnabled,
-          localModelsReady: !!diarizationModelsReady,
-          numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
-        },
+        diarization,
         currentFile.durationSeconds,
         { requestId }
       ).finally(() => {
@@ -689,25 +691,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         if (currentFile.fromUrl) {
           title = currentFile.name;
         } else {
-          const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
-          const fallbackTitle =
-            textFallback.length > 0
-              ? textFallback + (res.text.trim().split(/\s+/).length > 6 ? "..." : "")
-              : currentFile.name.replace(/\.[^.]+$/, "");
           const aiTitle = await generateTitle(res.text);
           if (runId !== runIdRef.current) return;
-          title = aiTitle || fallbackTitle;
+          title = aiTitle || uploadTitleFallback(res.text, currentFile.name);
         }
 
-        const folderId = selectedFolderId ? Number(selectedFolderId) : null;
-        const noteRes = await window.electronAPI.saveNote(
+        const noteRes = await saveUploadNote({
           title,
-          res.text,
-          "upload",
-          currentFile.name,
-          null,
-          folderId
-        );
+          text: res.text,
+          sourceName: currentFile.name,
+          folderId: selectedFolderId ? Number(selectedFolderId) : null,
+          diarization,
+          durationSeconds: res.durationSeconds,
+        });
         if (runId !== runIdRef.current) return;
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
         if (currentTempPath) {

@@ -48,6 +48,26 @@ test("client lookup fails closed instead of defaulting to OpenAI", async () => {
   assert.throws(() => getMeetingStreamingClient("unknown-realtime"), /Unsupported meeting/);
 });
 
+test("OpenAI-derived streaming clients carry their own provider log label", async () => {
+  const { STREAMING_CLIENT_BY_PROVIDER } = await load();
+  const OpenAIRealtimeStreaming = (await import("../../src/helpers/openaiRealtimeStreaming.js"))
+    .default;
+  const baseLabel = new OpenAIRealtimeStreaming().providerLabel;
+
+  assert.equal(typeof baseLabel, "string");
+  assert.ok(baseLabel.length > 0, "the base class must define a provider log label");
+
+  for (const [provider, StreamingClient] of Object.entries(STREAMING_CLIENT_BY_PROVIDER)) {
+    if (StreamingClient === OpenAIRealtimeStreaming) continue;
+    if (!(StreamingClient.prototype instanceof OpenAIRealtimeStreaming)) continue;
+    assert.notEqual(
+      new StreamingClient().providerLabel,
+      baseLabel,
+      `${provider} inherits the OpenAI log label and would misreport where audio goes`
+    );
+  }
+});
+
 test("connection identity includes every provider-specific option", async () => {
   const { getMeetingConnectionKey } = await load();
   const options = {

@@ -693,3 +693,39 @@ test("an override toggled on but never configured falls back to the base rules",
     useVisionOverride: false,
   });
 });
+
+test("wake-word language follows the dictation language when it is explicit", async () => {
+  const { resolveWakeWordLanguage } = await load();
+
+  assert.equal(
+    resolveWakeWordLanguage({ preferredLanguage: "it", uiLanguage: "en" }, "fr"),
+    "it"
+  );
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "zh-CN", uiLanguage: "en" }), "zh-CN");
+});
+
+test("wake-word language uses detected speech before the UI language on auto", async () => {
+  const { resolveWakeWordLanguage } = await load();
+
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: "it" }, "en"), "en");
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "", uiLanguage: "en" }, "it"), "it");
+});
+
+test("wake-word language falls back to the UI language on auto or unset", async () => {
+  const { resolveWakeWordLanguage } = await load();
+
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: "it" }), "it");
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "", uiLanguage: "pt" }), "pt");
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: "  ", uiLanguage: "de" }), "de");
+  assert.equal(resolveWakeWordLanguage({ preferredLanguage: undefined, uiLanguage: "fr" }), "fr");
+});
+
+test("wake-word language is undefined when no usable hint exists", async () => {
+  const { resolveWakeWordLanguage } = await load();
+
+  assert.equal(
+    resolveWakeWordLanguage({ preferredLanguage: "auto", uiLanguage: undefined }),
+    undefined
+  );
+  assert.equal(resolveWakeWordLanguage({}), undefined);
+});

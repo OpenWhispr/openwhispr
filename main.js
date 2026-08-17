@@ -935,7 +935,9 @@ function startAuthBridgeServer() {
 
 // Main application startup
 async function startApp() {
-  reapStaleSidecars();
+  // Await so a stale sidecar is confirmed dead before new ones can spawn and
+  // contend for its port or storage lock.
+  await reapStaleSidecars();
 
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();

@@ -497,8 +497,12 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
   // OpenRouter's vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) speak
   // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
   // custom endpoints keep the request shape they had before OpenRouter landed.
+  // Sampling params pass through to the upstream vendor, so a model the
+  // registry knows rejects temperature (Claude Opus 4.7+, #1417) must keep it
+  // omitted here too — OpenRouter forwards the 400 rather than stripping it.
   if (provider === "openrouter" && modelId.includes("/")) {
-    return { tokenParam: "max_tokens", supportsTemperature: true };
+    const upstream = getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
+    return { tokenParam: "max_tokens", supportsTemperature: upstream?.supportsTemperature ?? true };
   }
 
   // Fallback for models not in the registry (custom model IDs, etc.)

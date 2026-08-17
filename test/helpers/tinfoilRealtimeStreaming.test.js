@@ -111,6 +111,39 @@ test("connect defaults to the supported Tinfoil realtime model", async () => {
   streaming.cleanup();
 });
 
+test("connection lifecycle logs name Tinfoil, never OpenAI", async () => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const { TinfoilRealtimeStreaming } = await load();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const { factory } = makeRecordingFactory(socket);
+  const streaming = new TinfoilRealtimeStreaming(factory);
+
+  const messages = [];
+  const levels = ["debug", "warn", "error"];
+  const originals = Object.fromEntries(levels.map((level) => [level, debugLogger[level]]));
+  for (const level of levels) {
+    debugLogger[level] = (message) => messages.push(message);
+  }
+  try {
+    const connected = streaming.connect({ apiKey: "tk-secret" });
+    await finishConnect(streaming, socket);
+    await connected;
+    await streaming.disconnect();
+  } finally {
+    for (const level of levels) debugLogger[level] = originals[level];
+  }
+
+  assert.ok(
+    messages.some((message) => message.startsWith("Tinfoil Realtime")),
+    `expected Tinfoil-labelled logs, got: ${JSON.stringify(messages)}`
+  );
+  assert.deepEqual(
+    messages.filter((message) => message.includes("OpenAI")),
+    [],
+    "a Tinfoil session must never log the OpenAI label"
+  );
+});
+
 test("the default factory is the pinned Tinfoil transport", async () => {
   const { TinfoilRealtimeStreaming } = await load();
   const { createTinfoilRealtimeSocket } = require("../../src/helpers/tinfoilSecureClient");

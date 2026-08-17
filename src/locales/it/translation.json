@@ -1969,9 +1969,6 @@
       },
       "general": {
         "nameLabel": "Nome dell'area di lavoro",
-        "slugLabel": "Nome breve",
-        "slugHint": "Usato negli URL e nei link di invito. Solo lettere minuscole, cifre e trattini.",
-        "slugInvalid": "Solo lettere minuscole, cifre e trattini.",
         "saved": "Area di lavoro aggiornata",
         "dangerTitle": "Elimina area di lavoro",
         "dangerDescription": "Tutte le note, le cartelle e le integrazioni condivise verranno eliminate. Questa operazione non può essere annullata.",

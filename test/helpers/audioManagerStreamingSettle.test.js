@@ -4,6 +4,9 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 
 const QUIET_MS = 250;
 const CEILING_MS = 2000;
+// setTimeout schedules on the monotonic clock and can fire while the Date.now()
+// delta is still ~1ms short of the nominal delay, so lower bounds need slack.
+const TIMER_SLACK_MS = 50;
 
 async function loadManager(t) {
   installBrowserGlobals(t);
@@ -40,7 +43,7 @@ test("settles on the quiet window when the transcript is already complete", asyn
 
   const ms = await elapsed(() => manager.awaitStreamingTextSettled());
 
-  assert.ok(ms >= QUIET_MS, `settled too early: ${ms}ms`);
+  assert.ok(ms >= QUIET_MS - TIMER_SLACK_MS, `settled too early: ${ms}ms`);
   assert.ok(ms < QUIET_MS + 150, `settled too late: ${ms}ms`);
 });
 
@@ -55,7 +58,7 @@ test("waits out a slow tail instead of expiring on it", async (t) => {
 
   const ms = await elapsed(() => manager.awaitStreamingTextSettled());
 
-  assert.ok(ms >= lateFinalAt + QUIET_MS, `dropped the late tail: ${ms}ms`);
+  assert.ok(ms >= lateFinalAt + QUIET_MS - TIMER_SLACK_MS, `dropped the late tail: ${ms}ms`);
   assert.ok(ms < CEILING_MS, `should settle on quiet, not the ceiling: ${ms}ms`);
 });
 
@@ -65,7 +68,7 @@ test("the ceiling bounds a final that never lands", async (t) => {
 
   const ms = await elapsed(() => manager.awaitStreamingTextSettled());
 
-  assert.ok(ms >= CEILING_MS, `gave up too early: ${ms}ms`);
+  assert.ok(ms >= CEILING_MS - TIMER_SLACK_MS, `gave up too early: ${ms}ms`);
   assert.ok(ms < CEILING_MS + 300, `overran the ceiling: ${ms}ms`);
 });
 

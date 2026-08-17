@@ -906,10 +906,19 @@ export default function SettingsPage({
 
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [isRemovingModels, setIsRemovingModels] = useState(false);
-  const cachePathHint =
+  const [cachePathHint, setCachePathHint] = useState(
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
       ? "%USERPROFILE%\\.cache\\openwhispr"
-      : "~/.cache/openwhispr";
+      : "~/.cache/openwhispr"
+  );
+  useEffect(() => {
+    window.electronAPI
+      ?.getModelCacheRoot?.()
+      .then((root) => {
+        if (root) setCachePathHint(root);
+      })
+      .catch(() => {});
+  }, []);
 
   const {
     status: updateStatus,
