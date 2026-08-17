@@ -1028,8 +1028,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Для автоматической вставки текста установите",
     "methodReady": "для автоматической вставки текста",
@@ -1045,6 +1047,7 @@
     "waylandClipboardTitle": "Режим буфера обмена в Wayland",
     "windowsReady": "Windows поддерживает автоматическую вставку из коробки. Настройка не требуется!",
     "withoutToolPrefix": "Без этого инструмента OpenWhispr скопирует текст в буфер обмена. Вы сможете вставить его вручную с помощью Ctrl+V.",
+    "wtypeFallbackDescription": "wtype — предпочтительный способ автоматической вставки для этого композитора wlroots. Доступен резервный вариант, но он может быть менее надёжным.",
     "xwaylandAppsOnly": "автоматическая вставка работает только для приложений XWayland"
   },
   "promptStudio": {
@@ -1632,6 +1635,7 @@
         "recheck": "Проверить снова",
         "copy": "Копировать",
         "ydotoolDesc": "Инструмент автоматизации ввода для Wayland",
+        "wtypeDesc": "Предпочтительный инструмент автоматизации ввода для композиторов wlroots",
         "ydotooldDesc": "Демон ydotool (отдельный пакет в Ubuntu/Pop!_OS)",
         "uinputDesc": "Доступ к устройству ввода ядра",
         "uinputRuleFound": "Правило найдено, но не активно. Перезагрузка должна помочь.",
@@ -1649,6 +1653,11 @@
             "step1Desc": "Используйте менеджер пакетов вашего дистрибутива для установки ydotool.",
             "step2Title": "Проверить установку",
             "step2Desc": "Убедитесь, что ydotool доступен в вашем PATH."
+          },
+          "wtype": {
+            "step1Title": "Установить wtype",
+            "step1Desc": "wtype — основной способ автоматической вставки в Hyprland, Sway и других композиторах wlroots.",
+            "step2Title": "Проверить установку"
           },
           "ydotoold": {
             "step1Title": "Установить ydotoold",

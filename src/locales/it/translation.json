@@ -1028,8 +1028,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Per l'incollaggio automatico del testo, installa",
     "methodReady": "per l'incollaggio automatico del testo",
@@ -1045,6 +1047,7 @@
     "waylandClipboardTitle": "Modalità appunti su Wayland",
     "windowsReady": "Windows supporta l'incollaggio automatico senza configurazione aggiuntiva!",
     "withoutToolPrefix": "Senza questo strumento, OpenWhispr copierà il testo negli appunti. Potrai poi incollare manualmente con Ctrl+V.",
+    "wtypeFallbackDescription": "wtype è il metodo di incollaggio automatico preferito per questo compositor wlroots. È disponibile un'alternativa, ma potrebbe essere meno affidabile.",
     "xwaylandAppsOnly": "l'incollaggio automatico funziona solo per le app XWayland"
   },
   "promptStudio": {
@@ -1628,6 +1631,7 @@
         "recheck": "Ricontrolla",
         "copy": "Copia",
         "ydotoolDesc": "Strumento di automazione input per Wayland",
+        "wtypeDesc": "Strumento di automazione input preferito sui compositor wlroots",
         "ydotooldDesc": "Daemon per ydotool (pacchetto separato su Ubuntu/Pop!_OS)",
         "uinputDesc": "Accesso al dispositivo di input del kernel",
         "uinputRuleFound": "Regola presente ma non attiva. Un riavvio dovrebbe risolvere.",
@@ -1645,6 +1649,11 @@
             "step1Desc": "Usa il gestore pacchetti della tua distribuzione per installare ydotool.",
             "step2Title": "Verifica l'installazione",
             "step2Desc": "Controlla che ydotool sia disponibile nel tuo PATH."
+          },
+          "wtype": {
+            "step1Title": "Installa wtype",
+            "step1Desc": "wtype è il metodo principale di incollaggio automatico su Hyprland, Sway e altri compositor wlroots.",
+            "step2Title": "Verifica l'installazione"
           },
           "ydotoold": {
             "step1Title": "Installa ydotoold",

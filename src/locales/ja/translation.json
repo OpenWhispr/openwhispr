@@ -1028,8 +1028,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "テキストの自動貼り付けには",
     "methodReady": "で自動貼り付け可能",
@@ -1045,6 +1047,7 @@
     "waylandClipboardTitle": "Wayland でのクリップボードモード",
     "windowsReady": "Windows は自動貼り付けに標準対応しています。設定は不要です！",
     "withoutToolPrefix": "このツールがない場合、OpenWhispr はテキストをクリップボードにコピーします。Ctrl+V で手動で貼り付けてください。",
+    "wtypeFallbackDescription": "この wlroots 系コンポジターでは wtype が推奨される自動貼り付け方法です。代替手段も利用できますが、信頼性が低い場合があります。",
     "xwaylandAppsOnly": "自動貼り付けは XWayland アプリのみで動作します"
   },
   "promptStudio": {
@@ -1628,6 +1631,7 @@
         "recheck": "再確認",
         "copy": "コピー",
         "ydotoolDesc": "Wayland 用入力自動化ツール",
+        "wtypeDesc": "wlroots 系コンポジターで推奨される入力自動化ツール",
         "ydotooldDesc": "ydotool デーモン（Ubuntu/Pop!_OS では別パッケージ）",
         "uinputDesc": "カーネル入力デバイスへのアクセス",
         "uinputRuleFound": "ルールは存在しますが未適用です。再起動で解決するはずです。",
@@ -1645,6 +1649,11 @@
             "step1Desc": "お使いのディストリビューションのパッケージマネージャーで ydotool をインストールしてください。",
             "step2Title": "インストールの確認",
             "step2Desc": "ydotool が PATH で利用可能か確認してください。"
+          },
+          "wtype": {
+            "step1Title": "wtype をインストール",
+            "step1Desc": "wtype は Hyprland、Sway などの wlroots 系コンポジターにおける主要な自動貼り付け方法です。",
+            "step2Title": "インストールの確認"
           },
           "ydotoold": {
             "step1Title": "ydotoold をインストール",

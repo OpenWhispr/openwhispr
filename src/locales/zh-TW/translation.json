@@ -1028,8 +1028,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "如需自動貼上文字，請安裝",
     "methodReady": "用於自動貼上文字",
@@ -1045,6 +1047,7 @@
     "waylandClipboardTitle": "Wayland 剪貼簿模式",
     "windowsReady": "Windows 內建支援自動貼上。不需要額外設定！",
     "withoutToolPrefix": "若未安裝此工具，OpenWhispr 會將文字複製到剪貼簿。你可以使用 Ctrl+V 手動貼上。",
+    "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首選自動貼上方式。有備用方案可用，但可能較不可靠。",
     "xwaylandAppsOnly": "自動貼上僅適用於 XWayland 應用程式"
   },
   "promptStudio": {
@@ -1628,6 +1631,7 @@
         "recheck": "重新檢查",
         "copy": "複製",
         "ydotoolDesc": "Wayland 輸入自動化工具",
+        "wtypeDesc": "wlroots 合成器上的首選輸入自動化工具",
         "ydotooldDesc": "ydotool 常駐程式（Ubuntu/Pop!_OS 上為獨立套件）",
         "uinputDesc": "核心輸入裝置存取",
         "uinputRuleFound": "規則已存在但未生效，重新開機應可解決。",
@@ -1645,6 +1649,11 @@
             "step1Desc": "使用你的發行版套件管理員安裝 ydotool。",
             "step2Title": "驗證安裝",
             "step2Desc": "檢查 ydotool 是否在你的 PATH 中可用。"
+          },
+          "wtype": {
+            "step1Title": "安裝 wtype",
+            "step1Desc": "wtype 是 Hyprland、Sway 及其他 wlroots 合成器上的主要自動貼上方式。",
+            "step2Title": "驗證安裝"
           },
           "ydotoold": {
             "step1Title": "安裝 ydotoold",

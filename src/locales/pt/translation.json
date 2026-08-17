@@ -1007,8 +1007,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Para colagem automática de texto, instale",
     "methodReady": "para colagem automática de texto",
@@ -1024,6 +1026,7 @@
     "waylandClipboardTitle": "Modo área de transferência no Wayland",
     "windowsReady": "O Windows suporta colagem automática nativamente. Nenhuma configuração necessária!",
     "withoutToolPrefix": "Sem essa ferramenta, o OpenWhispr copiará o texto para a área de transferência. Você poderá colar manualmente com Ctrl+V.",
+    "wtypeFallbackDescription": "O wtype é o método de colagem automática preferido para este compositor wlroots. Há uma alternativa disponível, mas ela pode ser menos confiável.",
     "xwaylandAppsOnly": "a colagem automática funciona apenas para apps XWayland"
   },
   "promptStudio": {
@@ -1607,6 +1610,7 @@
         "recheck": "Verificar novamente",
         "copy": "Copiar",
         "ydotoolDesc": "Ferramenta de automação de entrada para Wayland",
+        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots",
         "ydotooldDesc": "Daemon do ydotool (pacote separado no Ubuntu/Pop!_OS)",
         "uinputDesc": "Acesso ao dispositivo de entrada do kernel",
         "uinputRuleFound": "Regra presente mas não ativa. Uma reinicialização deve resolver.",
@@ -1624,6 +1628,11 @@
             "step1Desc": "Use o gestor de pacotes da sua distribuição para instalar o ydotool.",
             "step2Title": "Verificar a instalação",
             "step2Desc": "Verifique se o ydotool está disponível no seu PATH."
+          },
+          "wtype": {
+            "step1Title": "Instalar o wtype",
+            "step1Desc": "O wtype é o método principal de colagem automática no Hyprland, Sway e outros compositores wlroots.",
+            "step2Title": "Verificar a instalação"
           },
           "ydotoold": {
             "step1Title": "Instalar o ydotoold",

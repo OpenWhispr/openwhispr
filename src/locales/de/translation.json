@@ -1116,8 +1116,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Für automatisches Einfügen installieren Sie",
     "methodReady": "für automatisches Einfügen",
@@ -1133,6 +1135,7 @@
     "waylandClipboardTitle": "Zwischenablage-Modus unter Wayland",
     "windowsReady": "Windows unterstützt automatisches Einfügen direkt. Keine Einrichtung erforderlich!",
     "withoutToolPrefix": "Ohne dieses Tool kopiert OpenWhispr den Text in Ihre Zwischenablage. Sie können ihn dann manuell mit Ctrl+V einfügen.",
+    "wtypeFallbackDescription": "wtype ist die bevorzugte Methode für automatisches Einfügen auf diesem wlroots-Compositor. Eine Alternative ist verfügbar, kann aber weniger zuverlässig sein.",
     "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps"
   },
   "promptStudio": {
@@ -1911,6 +1914,7 @@
         "recheck": "Erneut prüfen",
         "copy": "Kopieren",
         "ydotoolDesc": "Eingabeautomatisierung für Wayland",
+        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren",
         "ydotooldDesc": "Daemon für ydotool (separates Paket unter Ubuntu/Pop!_OS)",
         "uinputDesc": "Zugriff auf das Kernel-Eingabegerät",
         "uinputRuleFound": "Regel vorhanden, aber nicht aktiv. Ein Neustart sollte das beheben.",
@@ -1928,6 +1932,11 @@
             "step1Desc": "Verwenden Sie den Paketmanager Ihrer Distribution, um ydotool zu installieren.",
             "step2Title": "Installation überprüfen",
             "step2Desc": "Prüfen Sie, ob ydotool in Ihrem PATH verfügbar ist."
+          },
+          "wtype": {
+            "step1Title": "wtype installieren",
+            "step1Desc": "wtype ist die primäre Methode für automatisches Einfügen unter Hyprland, Sway und anderen wlroots-Compositoren.",
+            "step2Title": "Installation überprüfen"
           },
           "ydotoold": {
             "step1Title": "ydotoold installieren",

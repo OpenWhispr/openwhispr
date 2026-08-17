@@ -1076,8 +1076,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Para pegado automático de texto, instala",
     "methodReady": "para pegado automático de texto",
@@ -1093,6 +1095,7 @@
     "waylandClipboardTitle": "Modo portapapeles en Wayland",
     "windowsReady": "Windows es compatible con el pegado automático de forma nativa. ¡No se requiere configuración!",
     "withoutToolPrefix": "Sin esta herramienta, OpenWhispr copiará el texto al portapapeles. Luego puedes pegarlo manualmente con Ctrl+V.",
+    "wtypeFallbackDescription": "wtype es el método de pegado automático preferido para este compositor wlroots. Hay una alternativa disponible, pero puede ser menos fiable.",
     "xwaylandAppsOnly": "el pegado automático funciona solo en apps XWayland"
   },
   "promptStudio": {
@@ -1676,6 +1679,7 @@
         "recheck": "Volver a comprobar",
         "copy": "Copiar",
         "ydotoolDesc": "Herramienta de automatización de entrada para Wayland",
+        "wtypeDesc": "Herramienta de automatización de entrada preferida en compositores wlroots",
         "ydotooldDesc": "Daemon de ydotool (paquete separado en Ubuntu/Pop!_OS)",
         "uinputDesc": "Acceso al dispositivo de entrada del kernel",
         "uinputRuleFound": "Regla presente pero no activa. Un reinicio debería solucionarlo.",
@@ -1693,6 +1697,11 @@
             "step1Desc": "Usa el gestor de paquetes de tu distribución para instalar ydotool.",
             "step2Title": "Verificar la instalación",
             "step2Desc": "Comprueba que ydotool esté disponible en tu PATH."
+          },
+          "wtype": {
+            "step1Title": "Instalar wtype",
+            "step1Desc": "wtype es el método principal de pegado automático en Hyprland, Sway y otros compositores wlroots.",
+            "step2Title": "Verificar la instalación"
           },
           "ydotoold": {
             "step1Title": "Instalar ydotoold",

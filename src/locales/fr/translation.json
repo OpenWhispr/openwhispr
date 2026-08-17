@@ -1116,8 +1116,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Pour le collage automatique de texte, installez",
     "methodReady": "pour le collage automatique de texte",
@@ -1133,6 +1135,7 @@
     "waylandClipboardTitle": "Mode presse-papiers sur Wayland",
     "windowsReady": "Windows prend en charge le collage automatique nativement. Aucune configuration requise !",
     "withoutToolPrefix": "Sans cet outil, OpenWhispr copiera le texte dans le presse-papiers. Vous pourrez ensuite coller manuellement avec Ctrl+V.",
+    "wtypeFallbackDescription": "wtype est la méthode de collage automatique recommandée pour ce compositeur wlroots. Une solution de repli est disponible, mais elle peut être moins fiable.",
     "xwaylandAppsOnly": "le collage automatique fonctionne uniquement pour les apps XWayland"
   },
   "promptStudio": {
@@ -1911,6 +1914,7 @@
         "recheck": "Revérifier",
         "copy": "Copier",
         "ydotoolDesc": "Outil d'automatisation de saisie pour Wayland",
+        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots",
         "ydotooldDesc": "Daemon pour ydotool (paquet séparé sur Ubuntu/Pop!_OS)",
         "uinputDesc": "Accès au périphérique d'entrée du noyau",
         "uinputRuleFound": "Règle présente mais inactive. Un redémarrage devrait résoudre le problème.",
@@ -1928,6 +1932,11 @@
             "step1Desc": "Utilisez le gestionnaire de paquets de votre distribution pour installer ydotool.",
             "step2Title": "Vérifier l'installation",
             "step2Desc": "Vérifiez que ydotool est disponible dans votre PATH."
+          },
+          "wtype": {
+            "step1Title": "Installer wtype",
+            "step1Desc": "wtype est la méthode principale de collage automatique sur Hyprland, Sway et les autres compositeurs wlroots.",
+            "step2Title": "Vérifier l'installation"
           },
           "ydotoold": {
             "step1Title": "Installer ydotoold",
