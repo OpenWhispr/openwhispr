@@ -366,7 +366,6 @@
     "history": {
       "couldNotLoadTitle": "No se pudo cargar tu historial",
       "couldNotLoadDescription": "Ocurrió un problema al cargar tus transcripciones. Cierra y abre la app de nuevo.",
-      "loadingMore": "Cargando más transcripciones…",
       "discarded": {
         "show": "Mostrar descartadas",
         "hide": "Ocultar descartadas",

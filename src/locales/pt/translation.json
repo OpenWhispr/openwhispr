@@ -345,7 +345,6 @@
     "history": {
       "couldNotLoadTitle": "Não foi possível carregar seu histórico",
       "couldNotLoadDescription": "Ocorreu um erro ao carregar as transcrições. Feche e abra o app novamente.",
-      "loadingMore": "Carregando mais transcrições…",
       "copiedTitle": "Copiado!",
       "copiedDescription": "Texto copiado para a área de transferência",
       "couldNotCopyTitle": "Não foi possível copiar",

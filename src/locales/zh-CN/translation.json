@@ -366,7 +366,6 @@
     "history": {
       "couldNotLoadTitle": "无法加载历史记录",
       "couldNotLoadDescription": "加载转录记录时出错，请尝试关闭并重新打开应用。",
-      "loadingMore": "正在加载更多转录…",
       "copiedTitle": "已复制！",
       "copiedDescription": "文本已复制到剪贴板",
       "couldNotCopyTitle": "无法复制",

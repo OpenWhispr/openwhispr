@@ -366,7 +366,6 @@
     "history": {
       "couldNotLoadTitle": "Verlauf konnte nicht geladen werden",
       "couldNotLoadDescription": "Beim Laden der Transkriptionen ist ein Fehler aufgetreten. Bitte schließen Sie die App und öffnen Sie sie erneut.",
-      "loadingMore": "Weitere Transkripte werden geladen…",
       "copiedTitle": "Kopiert!",
       "copiedDescription": "Text wurde in die Zwischenablage kopiert",
       "couldNotCopyTitle": "Kopieren fehlgeschlagen",
