@@ -219,6 +219,13 @@ class MicrosoftCalendarManager {
     const toUpsert = [];
     const contactsToUpsert = [];
     for (const item of events) {
+      // An occurrence still stripped after backfill (master fetch failed) has no
+      // subject, attendees, or join link. Overwriting a row a previous sync
+      // stored in full would demote that meeting to an untitled time block, so
+      // keep the stored row and only insert bare stubs we've never seen.
+      if (isStrippedOccurrence(item) && this.databaseManager.getCalendarEventById(item.id)) {
+        continue;
+      }
       toUpsert.push(this._mapEvent(item, calendar));
       for (const a of item.attendees || []) {
         if (a.emailAddress?.address) {
@@ -232,12 +239,12 @@ class MicrosoftCalendarManager {
 
     // A full sync has no delta baseline, so deletions that happened while the
     // token was invalid never arrive as @removed — prune what the fresh
-    // snapshot no longer contains.
+    // snapshot no longer contains (kept stripped rows included).
     if (isFullSync) {
       this.databaseManager.removeStaleCalendarEvents(
         "microsoft",
         calendar.id,
-        toUpsert.map((event) => event.id)
+        events.map((event) => event.id)
       );
     }
     if (toUpsert.length > 0) this.databaseManager.upsertCalendarEvents(toUpsert);
@@ -250,7 +257,8 @@ class MicrosoftCalendarManager {
 
   // Merges each stripped occurrence with its series master (fetched once per
   // series); the occurrence's own id/start/end win. A failed master fetch
-  // leaves its occurrences bare instead of failing the calendar's sync.
+  // leaves its occurrences bare instead of failing the calendar's sync;
+  // _syncCalendar decides whether a bare stub may be written.
   async _backfillStrippedOccurrences(items, accountEmail) {
     const masterIds = new Set(
       items.filter(isStrippedOccurrence).map((item) => item.seriesMasterId)
