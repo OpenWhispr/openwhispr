@@ -121,9 +121,11 @@ function getPkgConfigFlags() {
 
     // atspi-2.pc lists gobject-2.0 under Requires.private, so plain --libs
     // omits -lgobject-2.0; add it explicitly for --as-needed linkers.
+    // gio is required for org.a11y.Status advertise (g_bus_get_sync).
     return [
       ...result.stdout.toString().trim().split(/\s+/).filter(Boolean),
       "-lgobject-2.0",
+      "-lgio-2.0",
     ];
   } catch {
     return null;

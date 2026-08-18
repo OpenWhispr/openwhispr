@@ -20,6 +20,29 @@ test("a phonetic mishearing fixed by the user is learned", () => {
   assert.ok(result.includes("Sinead"));
 });
 
+test("consecutive multi-word mishearings are learned as paired substitutions", () => {
+  // LCS aligns these as delete-block then insert-block; pairing must zip by
+  // position (Shunade→Sinead, Byrn→Byrne), not only adjacent delete+insert.
+  const result = extractCorrections(
+    "Hey Shunade Byrn how are you",
+    "Hey Sinead Byrne how are you",
+    []
+  );
+  assert.ok(result.includes("Sinead"), `expected Sinead in ${JSON.stringify(result)}`);
+  assert.ok(result.includes("Byrne"), `expected Byrne in ${JSON.stringify(result)}`);
+});
+
+test("two-word Irish name corrections are learned", () => {
+  const result = extractCorrections(
+    "Meeting with Sheona Walshe tomorrow",
+    "Meeting with Sinead Walsh tomorrow",
+    ["OpenWhispr"]
+  );
+  assert.ok(result.includes("Sinead"), `expected Sinead in ${JSON.stringify(result)}`);
+  assert.ok(result.includes("Walsh"), `expected Walsh in ${JSON.stringify(result)}`);
+});
+
+
 test("corrections already in the dictionary are not re-learned, case-insensitively", () => {
   const original = "Hey Shunade how are you";
   const edited = "Hey Sinead how are you";
