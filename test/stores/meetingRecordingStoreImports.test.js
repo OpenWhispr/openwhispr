@@ -5,7 +5,9 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 
 test("meetingRecordingStore still loads under the renderer harness after the reducer extraction", async (t) => {
   installBrowserGlobals(t);
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-meeting-store-import-test-" });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-meeting-store-import-test-",
+  });
 
   const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
   const reducer = await vite.ssrLoadModule("/stores/meetingSegmentReducer.ts");

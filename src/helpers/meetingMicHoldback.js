@@ -59,6 +59,7 @@ const isWithinRetractWindow = ({ candidate, systemTimestamp, windowMs }) => {
  * the startup warmup, whenever the system tap was speaking, or when the audio
  * analysis flagged double-talk / render bleed. Verified 2026-08-17: bare
  * `systemSpeaking` is sufficient today (design plan D4b tightens this).
+ * @returns {boolean|undefined} falsy (may be `undefined`, not `false`) when not risky — callers test truthiness only.
  */
 const isRiskyMicDuplicateProfile = ({ suppression = null, inStartupWarmup = false } = {}) => {
   if (inStartupWarmup) {

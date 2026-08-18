@@ -81,7 +81,9 @@ const REF_MS = 1200; // ≥ 800 + 12000 samples so the lag search has a full win
 // Feeds `reference` to the detector as system chunks and returns the sample index of the window end.
 function feedReference(detector, reference, startMs = 0) {
   const chunks = fx.chunkBuffer(fx.toInt16Buffer(reference), CHUNK);
-  chunks.forEach((chunk, i) => detector.recordSystemChunk(chunk, startMs + Math.round((i * CHUNK * 1000) / 24000)));
+  chunks.forEach((chunk, i) =>
+    detector.recordSystemChunk(chunk, startMs + Math.round((i * CHUNK * 1000) / 24000))
+  );
   return reference.length;
 }
 
@@ -105,7 +107,10 @@ test("PCM: a −12 dB copy of the reference delayed 100 ms reads as render bleed
   assert.equal(analysis.state, "suspected_render_bleed");
   assert.ok(analysis.correlation > 0.95, `corr ${analysis.correlation}`);
   assert.ok(analysis.residualRatio < 0.1, `residual ${analysis.residualRatio}`);
-  assert.ok(analysis.micToSystemRatio > 0.2 && analysis.micToSystemRatio < 0.3, `ratio ${analysis.micToSystemRatio}`);
+  assert.ok(
+    analysis.micToSystemRatio > 0.2 && analysis.micToSystemRatio < 0.3,
+    `ratio ${analysis.micToSystemRatio}`
+  );
   assert.equal(analysis.shouldMute, true);
 });
 
@@ -115,15 +120,27 @@ test("PCM: the field double-talk profile (corr 0.76–0.83, mic louder than refe
   feedReference(detector, reference);
   // mic = 1.2·delayed reference + 0.9·independent local speech ⇒ corr = 1.2/√(1.44+0.81) = 0.8
   const bleed = delayedReferenceSlice(reference, 100, 1.2);
-  const local = fx.scale(fx.makeSeededNoise({ durationMs: (CHUNK * 1000) / 24000, amplitude: 0.2, seed: 99 }), 0.9);
+  const local = fx.scale(
+    fx.makeSeededNoise({ durationMs: (CHUNK * 1000) / 24000, amplitude: 0.2, seed: 99 }),
+    0.9
+  );
   const mic = fx.mix(bleed, local);
 
   const analysis = detector.analyzeMicChunk(fx.toInt16Buffer(mic), REF_MS);
 
   assert.equal(analysis.state, "double_talk");
-  assert.ok(analysis.correlation >= 0.72 && analysis.correlation <= 0.88, `corr ${analysis.correlation}`);
-  assert.ok(analysis.residualRatio > 0.25 && analysis.residualRatio < 0.5, `residual ${analysis.residualRatio}`);
-  assert.ok(analysis.micToSystemRatio > 1.3, `ratio ${analysis.micToSystemRatio} (louder than reference)`);
+  assert.ok(
+    analysis.correlation >= 0.72 && analysis.correlation <= 0.88,
+    `corr ${analysis.correlation}`
+  );
+  assert.ok(
+    analysis.residualRatio > 0.25 && analysis.residualRatio < 0.5,
+    `residual ${analysis.residualRatio}`
+  );
+  assert.ok(
+    analysis.micToSystemRatio > 1.3,
+    `ratio ${analysis.micToSystemRatio} (louder than reference)`
+  );
   assert.equal(analysis.shouldMute, false);
 });
 
@@ -148,7 +165,11 @@ test("PCM (limitation): a bleed copy whose delay falls off the 5 ms lag grid is 
 
   const analysis = detector.analyzeMicChunk(fx.toInt16Buffer(mic), REF_MS);
 
-  assert.equal(analysis.state, "clean_local", "white-noise bleed 60 samples off-grid decorrelates completely");
+  assert.equal(
+    analysis.state,
+    "clean_local",
+    "white-noise bleed 60 samples off-grid decorrelates completely"
+  );
   assert.ok(analysis.correlation < 0.3, `corr ${analysis.correlation}`);
 });
 

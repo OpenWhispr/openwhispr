@@ -4,7 +4,13 @@ const SAMPLE_RATE = 24000;
 
 const samplesFor = (durationMs, sampleRate) => Math.round((durationMs / 1000) * sampleRate);
 
-function makeSine({ frequencyHz = 440, durationMs, amplitude = 0.5, sampleRate = SAMPLE_RATE, phase = 0 }) {
+function makeSine({
+  frequencyHz = 440,
+  durationMs,
+  amplitude = 0.5,
+  sampleRate = SAMPLE_RATE,
+  phase = 0,
+}) {
   const out = new Float32Array(samplesFor(durationMs, sampleRate));
   const step = (2 * Math.PI * frequencyHz) / sampleRate;
   for (let i = 0; i < out.length; i += 1) out[i] = amplitude * Math.sin(phase + i * step);

@@ -3,10 +3,12 @@ import type { TranscriptSegment } from "./meetingRecordingStore";
 import { normalizeTranscriptSegment } from "../utils/transcriptSpeakerState";
 
 /**
- * Pure state transition for live meeting segment events (partial / final /
- * retract). Extracted from meetingRecordingStore's onMeetingTranscriptionSegment
- * handler; speaker identity side effects stay in the store and are driven by the
- * returned reduction. Phase 0: byte-for-byte today's semantics.
+ * State transition for live meeting segment events (partial / final / retract)
+ * that never mutates its state argument; all side effects are confined to the
+ * injected deps. Extracted from meetingRecordingStore's
+ * onMeetingTranscriptionSegment handler; speaker identity side effects stay in
+ * the store and are driven by the returned reduction. Phase 0: byte-for-byte
+ * today's semantics.
  */
 export interface MeetingSegmentEvent {
   text: string;
@@ -24,7 +26,7 @@ export interface MeetingSegmentState {
 export interface MeetingSegmentReducerDeps {
   /** Renderer-side id for a new final (today `seg-${++segmentCounter}`). */
   mintSegmentId: () => string;
-  /** Applies speaker identifications, provisional speaker, index reservation, locks. */
+  /** Applies speaker identifications, provisional speaker, index reservation, locks. Must be free of store writes — the reducer inserts into the segments snapshot it was handed. */
   decorateFinal: (segment: TranscriptSegment) => TranscriptSegment;
 }
 
@@ -44,7 +46,9 @@ export function insertSegmentByTimestamp(
   let i = segments.length;
   while (i > 0 && (segments[i - 1].timestamp ?? 0) > ts) i--;
   const next =
-    i === segments.length ? [...segments, seg] : [...segments.slice(0, i), seg, ...segments.slice(i)];
+    i === segments.length
+      ? [...segments, seg]
+      : [...segments.slice(0, i), seg, ...segments.slice(i)];
   return { segments: next, index: i };
 }
 
@@ -65,7 +69,8 @@ export function reduceMeetingSegmentEvent(
   }
 
   if (event.type === "partial") {
-    const patch = event.source === "mic" ? { micPartial: event.text } : { systemPartial: event.text };
+    const patch =
+      event.source === "mic" ? { micPartial: event.text } : { systemPartial: event.text };
     return { kind: "partial", source: event.source, state: { ...state, ...patch } };
   }
 

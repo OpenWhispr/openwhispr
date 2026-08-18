@@ -45,5 +45,8 @@ test("toInt16Buffer round-trips within 1 LSB and chunkBuffer splits by sample co
   const view = new Int16Array(buf.buffer, buf.byteOffset, 7);
   assert.deepEqual(Array.from(view), [0, 16384, -16384, 32767, -32768, 32767, -32768]);
   const chunks = fx.chunkBuffer(buf, 3);
-  assert.deepEqual(chunks.map((c) => c.length), [6, 6, 2]);
+  assert.deepEqual(
+    chunks.map((c) => c.length),
+    [6, 6, 2]
+  );
 });

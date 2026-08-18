@@ -947,6 +947,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           data,
           {
             mintSegmentId: () => `seg-${++segmentCounter}`,
+            // Must not call setState: `current.segments` was snapshotted before this runs and the
+            // reduction inserts into that snapshot. Reads of segmentsRefValue (assignProvisionalSpeaker)
+            // still see the previous segments, exactly as before the reducer extraction.
             decorateFinal: (rawSegment) => {
               let decorated = rawSegment;
               for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
@@ -998,6 +1001,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
         const seg = reduction.inserted;
         segmentsRefValue = reduction.state.segments;
+        // Recomputed from data.source rather than read from reduction.state so the setState
+        // payload carries only the cleared partial (spreading both partial fields would add a key
+        // the pre-reducer code never wrote).
         const partialPatch = data.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
         useMeetingRecordingStore.setState({
           segments: reduction.state.segments,
