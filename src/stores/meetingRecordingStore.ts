@@ -1385,6 +1385,34 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         return;
       }
 
+      const systemAudioAvailable = systemAudioHandledInMain || systemStream !== null;
+      try {
+        const availabilityResult =
+          await window.electronAPI?.meetingTranscriptionSetSystemAudioAvailable?.(
+            sessionId,
+            systemAudioAvailable
+          );
+        if (availabilityResult && !availabilityResult.success) {
+          logger.warn(
+            "Meeting auto-end system-audio confirmation was rejected",
+            { sessionId, reason: availabilityResult.reason },
+            "meeting"
+          );
+        }
+      } catch (error) {
+        // Recording remains usable; auto-end stays disabled for this session.
+        logger.warn(
+          "Meeting auto-end system-audio confirmation failed",
+          { sessionId, error: (error as Error).message },
+          "meeting"
+        );
+      }
+
+      if (!isCurrentStart()) {
+        await teardownStart();
+        return;
+      }
+
       startOperation.markCommitted();
       isStartingFlag = false;
       socketReady = true;

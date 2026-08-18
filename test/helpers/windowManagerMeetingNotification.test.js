@@ -137,6 +137,7 @@ function installFakeTimers() {
   global.clearTimeout = (timerId) => timers.delete(timerId);
 
   return {
+    pendingCount: () => timers.size,
     runAll: () => {
       for (const [timerId, callback] of [...timers]) {
         timers.delete(timerId);
@@ -187,6 +188,52 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
     await showPromise;
   } finally {
     manager.dismissMeetingNotification();
+  }
+});
+
+test("unexpected auto-end window closure suppresses that countdown", async () => {
+  const manager = new WindowManager();
+  const unavailableSessions = [];
+  manager.meetingDetectionEngine = {
+    handleAutoEndNotificationUnavailable: (sessionId) => unavailableSessions.push(sessionId),
+  };
+
+  const showPromise = manager.showMeetingAutoEndCountdown({
+    sessionId: "meeting-1",
+    expiresAt: 70_000,
+    reason: "silence",
+  });
+  const notificationWindow = createdWindows[0];
+  notificationWindow.loadDeferred.resolve();
+  await showPromise;
+
+  notificationWindow.close();
+
+  assert.deepEqual(unavailableSessions, ["meeting-1"]);
+});
+
+test("auto-end notification loading has a fail-safe timeout", async () => {
+  const timers = installFakeTimers();
+  const manager = new WindowManager();
+  const showPromise = manager.showMeetingAutoEndCountdown({
+    sessionId: "meeting-1",
+    expiresAt: 70_000,
+    reason: "silence",
+  });
+  const notificationWindow = createdWindows[0];
+
+  try {
+    assert.equal(timers.pendingCount(), 1);
+    timers.runAll();
+
+    await assert.rejects(showPromise, /timed out/i);
+    assert.equal(notificationWindow.isDestroyed(), true);
+    assert.equal(manager.notificationWindow, null);
+  } finally {
+    manager.dismissMeetingNotification();
+    notificationWindow.loadDeferred.resolve();
+    await showPromise.catch(() => undefined);
+    timers.restore();
   }
 });
 

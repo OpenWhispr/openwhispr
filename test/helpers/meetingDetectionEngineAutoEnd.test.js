@@ -115,7 +115,7 @@ class FakeMeetingProcessDetector extends EventEmitter {
   }
 }
 
-function createEngine() {
+function createEngine(windowManagerOverrides = {}) {
   const clock = createClock();
   const audioActivityDetector = new FakeAudioActivityDetector();
   const meetingProcessDetector = new FakeMeetingProcessDetector();
@@ -127,6 +127,7 @@ function createEngine() {
     showMeetingAutoEndCountdown: (countdown) => shownCountdowns.push(countdown),
     dismissMeetingAutoEndCountdown: (sessionId) => dismissedCountdowns.push(sessionId),
     showMeetingNotification: (notification) => shownNotifications.push(notification),
+    ...windowManagerOverrides,
   };
   const engine = new MeetingDetectionEngine(
     { getActiveMeetingState: () => ({ activeMeeting: null, upcomingEvents: [] }) },
@@ -196,6 +197,7 @@ test("keeps audio ownership detection running while an eligible recording is act
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   assert.equal(audioActivityDetector.running, true);
 
@@ -216,11 +218,43 @@ test("keeps the process detector running for an eligible session while processDe
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   assert.equal(meetingProcessDetector.running, true);
 
   engine.endRecordingSession("meeting-1");
   assert.equal(meetingProcessDetector.running, false);
+});
+
+test("does not arm auto-end until system audio capture is confirmed", async () => {
+  const { clock, engine, micState, owner, shownCountdowns } = createEngine();
+  const ownerWebContents = owner();
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents,
+  });
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  clock.advance(2 * COUNTDOWN_MS);
+
+  assert.deepEqual(shownCountdowns, []);
+
+  assert.equal(
+    await engine.setRecordingSystemAudioAvailable("meeting-1", true, owner()),
+    false,
+    "a stale renderer must not arm another renderer's recording"
+  );
+  assert.equal(
+    await engine.setRecordingSystemAudioAvailable("meeting-1", true, ownerWebContents),
+    true
+  );
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+
+  assert.equal(shownCountdowns.length, 1);
+  engine.stop();
 });
 
 test("shows and dismisses the countdown from reliable external mic changes", async () => {
@@ -230,6 +264,7 @@ test("shows and dismisses the countdown from reliable external mic changes", asy
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
@@ -249,6 +284,7 @@ test("system activity from meeting chunks defers the ownership countdown until q
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   engine.recordMeetingAudioChunk("system", LOUD_CHUNK);
@@ -274,6 +310,7 @@ test("meeting audio chunks are ignored before the controller session begins and 
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
@@ -298,6 +335,7 @@ test("fallback silence prompts and forwards the reason to the countdown and stop
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(messages),
+    systemAudioAvailable: true,
   });
   clock.advance(SILENCE_WINDOW_MS);
 
@@ -323,6 +361,7 @@ test("meeting-process-ended tightens the silence window only when no tracked app
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   meetingProcessDetector.endProcess("teams");
   clock.advance(FAST_SILENCE_MS + TICK_MS);
@@ -343,6 +382,7 @@ test("reliability loss dismisses the countdown and prevents auto-stop", async ()
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(messages),
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
@@ -356,14 +396,37 @@ test("reliability loss dismisses the countdown and prevents auto-stop", async ()
   engine.stop();
 });
 
-test("expiry requests one stop from the renderer that owns the current session", async () => {
-  const { clock, engine, micState, owner } = createEngine();
+test("countdown presentation failure keeps the recording active", async () => {
+  const { clock, engine, micState, owner } = createEngine({
+    showMeetingAutoEndCountdown: () => Promise.reject(new Error("notification load failed")),
+  });
   const messages = [];
 
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(messages),
+    systemAudioAvailable: true,
+  });
+  clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  micState(true, false);
+  await Promise.resolve();
+  await Promise.resolve();
+  clock.advance(2 * COUNTDOWN_MS);
+
+  assert.deepEqual(messages, []);
+  engine.stop();
+});
+
+test("expiry requests one stop from the renderer that owns the current session", async () => {
+  const { clock, dismissedCountdowns, engine, micState, owner } = createEngine();
+  const messages = [];
+
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(messages),
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
@@ -375,6 +438,7 @@ test("expiry requests one stop from the renderer that owns the current session",
       payload: { sessionId: "meeting-1", reason: "mic-released" },
     },
   ]);
+  assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
   engine.stop();
 });
 
@@ -386,6 +450,7 @@ test("replacement cancels the old countdown and stale end requests preserve the 
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: { isDestroyed: () => false, send: () => messages.push("meeting-1") },
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
@@ -394,13 +459,14 @@ test("replacement cancels the old countdown and stale end requests preserve the 
     sessionId: "meeting-2",
     autoEndEligible: true,
     ownerWebContents: { isDestroyed: () => false, send: () => messages.push("meeting-2") },
+    systemAudioAvailable: true,
   });
   assert.equal(engine.endRecordingSession("meeting-1"), false);
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
   clock.advance(2 * COUNTDOWN_MS);
 
-  assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
+  assert.deepEqual(dismissedCountdowns, ["meeting-1", "meeting-2"]);
   assert.deepEqual(messages, ["meeting-2"]);
   engine.stop();
 });
@@ -429,6 +495,7 @@ test("keep recording suppresses prompts until fresh ownership evidence, only for
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
@@ -455,6 +522,7 @@ test("keep recording after countdown expiry reports a stale session", async () =
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
@@ -479,6 +547,7 @@ test("the autoEnd preference disables the feature mid-recording and re-enabling 
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
@@ -509,6 +578,7 @@ test("a session started while autoEnd is off does not arm and does not retain th
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   micState(true, false);
   clock.advance(2 * SILENCE_WINDOW_MS);
@@ -526,6 +596,7 @@ test("the auto-end ticker is cleared on session end and engine stop", async () =
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   assert.equal(clock.activeIntervals(), 1);
   engine.endRecordingSession("meeting-1");
@@ -535,6 +606,7 @@ test("the auto-end ticker is cleared on session end and engine stop", async () =
     sessionId: "meeting-2",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   assert.equal(clock.activeIntervals(), 1);
   engine.stop();
@@ -548,6 +620,7 @@ test("ending with no tracked session allows teardown to proceed", async () => {
     sessionId: "meeting-1",
     autoEndEligible: true,
     ownerWebContents: owner(),
+    systemAudioAvailable: true,
   });
   // Quit-path engine stop clears the session while capture may still be live;
   // a scoped stop afterwards must not be treated as stale or streams leak.

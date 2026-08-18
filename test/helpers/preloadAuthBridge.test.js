@@ -63,6 +63,16 @@ test("meeting stop forwards the optional expected recording session ID", async (
   assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2"]]);
 });
 
+test("meeting system-audio availability forwards the scoped session", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.meetingTranscriptionSetSystemAudioAvailable("meeting-2", true);
+
+  assert.deepEqual(invocations, [
+    ["meeting-transcription-set-system-audio-available", "meeting-2", true],
+  ]);
+});
+
 test("meeting auto-end listener strips the event and can unsubscribe", () => {
   const { api, listeners } = loadPreloadApi();
   const payload = { sessionId: "meeting-2" };

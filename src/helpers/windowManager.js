@@ -9,6 +9,7 @@ const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
 const { DEV_SERVER_PORT } = DevServerManager;
+const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -27,6 +28,7 @@ class WindowManager {
     this.controlPanelWindow = null;
     this.agentWindow = null;
     this.notificationWindow = null;
+    this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
       if (this.meetingDetectionEngine) {
         this.meetingDetectionEngine.handleNotificationTimeout();
@@ -1248,10 +1250,16 @@ class WindowManager {
 
   async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
     if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
-      this.notificationWindow.close();
+      const previousWindow = this.notificationWindow;
       this.notificationWindow = null;
+      this._pendingNotificationData = null;
+      previousWindow.close();
     }
     this._notificationDismissTimer.cancel();
+    if (this._notificationLoadTimeout) {
+      clearTimeout(this._notificationLoadTimeout);
+      this._notificationLoadTimeout = null;
+    }
     if (this._notificationReadyFallback) {
       clearTimeout(this._notificationReadyFallback);
       this._notificationReadyFallback = null;
@@ -1272,12 +1280,25 @@ class WindowManager {
     // after the replacement already took over the reference and the countdown.
     win.on("closed", () => {
       if (this.notificationWindow !== win) return;
+      const unavailableAutoEndSessionId =
+        this._pendingNotificationData?.kind === "auto-end"
+          ? this._pendingNotificationData.sessionId
+          : null;
       this.notificationWindow = null;
       this._pendingNotificationData = null;
       this._notificationDismissTimer.cancel();
+      if (this._notificationLoadTimeout) {
+        clearTimeout(this._notificationLoadTimeout);
+        this._notificationLoadTimeout = null;
+      }
       if (this._notificationReadyFallback) {
         clearTimeout(this._notificationReadyFallback);
         this._notificationReadyFallback = null;
+      }
+      if (unavailableAutoEndSessionId) {
+        this.meetingDetectionEngine?.handleAutoEndNotificationUnavailable?.(
+          unavailableAutoEndSessionId
+        );
       }
     });
 
@@ -1295,21 +1316,46 @@ class WindowManager {
     // Everything past the load addresses `win` directly: a replacement taking
     // over mid-load must not have this prompt's data, countdown or force-show
     // applied to its window.
+    let loadTimeout = null;
     try {
-      if (process.env.NODE_ENV === "development") {
-        await DevServerManager.waitForDevServer();
-        if (this.notificationWindow !== win) return;
-        await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`);
-      } else {
+      const loadNotification = async () => {
+        if (process.env.NODE_ENV === "development") {
+          await DevServerManager.waitForDevServer();
+          if (this.notificationWindow !== win) return;
+          await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`);
+          return;
+        }
+
         const fileInfo = DevServerManager.getAppFilePath(false);
         await win.loadFile(fileInfo.path, {
           query: { ...fileInfo.query, "meeting-notification": "true" },
         });
+      };
+      const loadPromise = loadNotification();
+      if (promptData?.kind === "auto-end") {
+        const timeoutPromise = new Promise((_, reject) => {
+          loadTimeout = setTimeout(() => {
+            if (this._notificationLoadTimeout === loadTimeout) {
+              this._notificationLoadTimeout = null;
+            }
+            reject(new Error("Meeting auto-end notification load timed out"));
+          }, AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS);
+          this._notificationLoadTimeout = loadTimeout;
+        });
+        await Promise.race([loadPromise, timeoutPromise]);
+      } else {
+        await loadPromise;
       }
     } catch (error) {
       // A load aborted by our own replacement or dismissal is not a failure.
       if (this.notificationWindow !== win) return;
+      this.dismissMeetingNotification();
       throw error;
+    } finally {
+      if (loadTimeout && this._notificationLoadTimeout === loadTimeout) {
+        clearTimeout(loadTimeout);
+        this._notificationLoadTimeout = null;
+      }
     }
     if (this.notificationWindow !== win) return;
 
@@ -1352,6 +1398,10 @@ class WindowManager {
       this._notificationReadyFallback = null;
     }
     this._notificationDismissTimer.cancel();
+    if (this._notificationLoadTimeout) {
+      clearTimeout(this._notificationLoadTimeout);
+      this._notificationLoadTimeout = null;
+    }
     const win = this.notificationWindow;
     this.notificationWindow = null;
     if (win && !win.isDestroyed()) win.close();

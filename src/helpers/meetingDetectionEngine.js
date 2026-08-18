@@ -80,11 +80,15 @@ class MeetingDetectionEngine {
               { error: error?.message },
               "meeting"
             );
+            this.handleAutoEndNotificationUnavailable(countdown.sessionId);
           }
         );
       },
       onCountdownCanceled: (sessionId) => {
         debugLogger.info("Meeting auto-end countdown canceled", { sessionId }, "meeting");
+        this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
+      },
+      onCountdownExpired: (sessionId) => {
         this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
       },
       onStop: (sessionId, reason) => this._requestRecordingStop(sessionId, reason),
@@ -170,7 +174,11 @@ class MeetingDetectionEngine {
   }
 
   _isAutoEndWanted() {
-    return this._recordingSession?.autoEndEligible === true && this.preferences.autoEnd !== false;
+    return (
+      this._recordingSession?.autoEndEligible === true &&
+      this._recordingSession.systemAudioAvailable === true &&
+      this.preferences.autoEnd !== false
+    );
   }
 
   _syncAudioActivityDetector() {
@@ -241,13 +249,19 @@ class MeetingDetectionEngine {
     this._startAutoEndTicker();
   }
 
-  async beginRecordingSession({ sessionId, autoEndEligible, ownerWebContents }) {
+  async beginRecordingSession({
+    sessionId,
+    autoEndEligible,
+    ownerWebContents,
+    systemAudioAvailable = false,
+  }) {
     if (this._recordingSession) this._deactivateAutoEnd();
 
     this._recordingSession = {
       sessionId,
       autoEndEligible: autoEndEligible === true,
       ownerWebContents,
+      systemAudioAvailable: systemAudioAvailable === true,
     };
     this._syncMeetingProcessDetector();
 
@@ -257,6 +271,31 @@ class MeetingDetectionEngine {
     }
 
     await this._activateAutoEnd(sessionId);
+  }
+
+  async setRecordingSystemAudioAvailable(sessionId, available, ownerWebContents) {
+    const session = this._recordingSession;
+    if (
+      !session ||
+      session.sessionId !== sessionId ||
+      (ownerWebContents && session.ownerWebContents !== ownerWebContents)
+    ) {
+      return false;
+    }
+
+    const autoEndWasWanted = this._isAutoEndWanted();
+    session.systemAudioAvailable = available === true;
+    const autoEndWanted = this._isAutoEndWanted();
+
+    if (autoEndWasWanted && !autoEndWanted) {
+      this._deactivateAutoEnd();
+    } else if (!autoEndWasWanted && autoEndWanted) {
+      await this._activateAutoEnd(sessionId);
+    }
+
+    this._syncMeetingProcessDetector();
+    this._syncAudioActivityDetector();
+    return true;
   }
 
   // Returns false only when a *different* session is currently live — the one
@@ -297,6 +336,18 @@ class MeetingDetectionEngine {
       "meeting"
     );
     return kept;
+  }
+
+  handleAutoEndNotificationUnavailable(sessionId) {
+    const suppressed = this._autoEndController.handleCountdownUnavailable(sessionId) === true;
+    if (suppressed) {
+      debugLogger.warn(
+        "Meeting auto-end suppressed because its countdown was unavailable",
+        { sessionId },
+        "meeting"
+      );
+    }
+    return suppressed;
   }
 
   // Calendar reminders enter the same pipeline as mic detections, so they share

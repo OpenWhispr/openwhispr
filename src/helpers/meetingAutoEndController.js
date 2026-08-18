@@ -32,6 +32,7 @@ const createMeetingAutoEndController = ({
   now = Date.now,
   onCountdown,
   onCountdownCanceled = () => {},
+  onCountdownExpired = () => {},
   onStop,
 }) => {
   let session = null;
@@ -76,9 +77,11 @@ const createMeetingAutoEndController = ({
     if (session.countdown) {
       if (nowMs >= session.countdown.expiresAt) {
         const { reason } = session.countdown;
+        const { sessionId } = session;
         session.countdown = null;
         session.stopped = true;
-        onStop(session.sessionId, reason);
+        onCountdownExpired(sessionId);
+        onStop(sessionId, reason);
       }
       return;
     }
@@ -203,6 +206,15 @@ const createMeetingAutoEndController = ({
     evaluate();
   };
 
+  const handleCountdownUnavailable = (sessionId) => {
+    observeClock();
+    if (!isLive(sessionId) || !session.countdown) return false;
+    cancelCountdown();
+    // Do not retry the same episode when the user had no chance to keep it.
+    session.episodeConsumed = true;
+    return true;
+  };
+
   // Returns false once the countdown has fired: the stop is already in flight,
   // so reporting success would tell the user their recording was kept.
   // Keep is per episode: prompts resume only on fresh evidence (a re-acquired
@@ -234,6 +246,7 @@ const createMeetingAutoEndController = ({
     handleExternalMicState,
     handleAudioActivity,
     handleMeetingProcessExit,
+    handleCountdownUnavailable,
     keepRecording,
     endSession,
     tick,
