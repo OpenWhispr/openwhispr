@@ -83,6 +83,11 @@ import {
   dictionaryEchoError,
   matchesDictionaryPrompt,
 } from "../utils/dictionaryEchoFilter.js";
+import {
+  WHISPER_PROMPT_CHARS,
+  dictionaryPromptLimit,
+  trimDictionaryPrompt,
+} from "../utils/dictionaryPromptCap.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import {
   buildSelectionEditSystemPrompt,
@@ -1844,10 +1849,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         options.language = language;
       }
 
-      // Add custom dictionary as initial prompt to help Whisper recognize specific words
+      // Add custom dictionary as initial prompt to help Whisper recognize specific
+      // words. whisper.cpp reads at most 224 prompt tokens and would keep the TAIL of
+      // a longer list; trim to the head here so the top of the dictionary wins on
+      // this path too, matching the direct-API path and the dictionary UI.
       const dictionaryPrompt = this.getWhisperPrompt();
       if (dictionaryPrompt) {
-        options.initialPrompt = dictionaryPrompt;
+        const trimmed = trimDictionaryPrompt(dictionaryPrompt, WHISPER_PROMPT_CHARS);
+        if (trimmed.truncated) {
+          logger.debug(
+            "Custom dictionary prompt truncated",
+            {
+              originalLength: trimmed.originalLength,
+              truncatedLength: trimmed.prompt.length,
+              maxChars: WHISPER_PROMPT_CHARS,
+            },
+            "transcription"
+          );
+        }
+        options.initialPrompt = trimmed.prompt;
       }
 
       logger.debug(
@@ -3086,27 +3106,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const endpoint = this.getTranscriptionEndpoint(model);
 
-      // Prompt caps follow each provider's real limit, not a blanket one. Groq
-      // rejects prompts > 896 chars (incl. when reached via "custom" provider);
-      // 890 leaves margin for UTF-16 vs codepoint counting drift. Whisper-family
-      // decoders read at most 224 prompt tokens (~900 chars), so longer prompts
-      // are dead weight — trimming here keeps the head of the list, matching the
-      // words-at-the-top-win order users see in the dictionary. The 4o transcribe
-      // models take a 16k-token context and get the dictionary whole.
-      const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
-      const isWhisperModel = (model || "").toLowerCase().includes("whisper");
-      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : isWhisperModel ? 900 : null;
-      let dictionaryPrompt = this.getWhisperPrompt(apiSettings);
+      // Prompt budgets follow each provider's real limit (see dictionaryPromptCap):
+      // Groq 890, Whisper-family 900, a generous context guard for the 4o
+      // transcribe models. Trimming keeps the head of the list, so the top of the
+      // user's dictionary is what wins.
+      const MAX_PROMPT_CHARS = dictionaryPromptLimit({ provider, endpoint, model });
+      const trimmedPrompt = trimDictionaryPrompt(
+        this.getWhisperPrompt(apiSettings),
+        MAX_PROMPT_CHARS
+      );
+      const dictionaryPrompt = trimmedPrompt.prompt;
       if (dictionaryPrompt) {
-        if (MAX_PROMPT_CHARS !== null && dictionaryPrompt.length > MAX_PROMPT_CHARS) {
-          const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+        if (trimmedPrompt.truncated) {
           logger.debug(
             "Custom dictionary prompt truncated",
             {
-              originalLength,
+              originalLength: trimmedPrompt.originalLength,
               truncatedLength: dictionaryPrompt.length,
               maxChars: MAX_PROMPT_CHARS,
             },

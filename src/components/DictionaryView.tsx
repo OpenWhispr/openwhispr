@@ -21,10 +21,11 @@ import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
 import { getDictionaryHintWords } from "../utils/snippets";
+import { GROQ_PROMPT_CHARS } from "../utils/dictionaryPromptCap";
 
 // Groq caps STT prompts at 896 chars and Whisper-family models read ~900; past
 // that, those providers only see the head of the list (audioManager truncation).
-const STT_PROMPT_CHAR_LIMIT = 890;
+const STT_PROMPT_CHAR_LIMIT = GROQ_PROMPT_CHARS;
 
 export default function DictionaryView() {
   const { t } = useTranslation();

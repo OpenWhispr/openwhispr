@@ -73,10 +73,10 @@ function capturePrompts(t) {
 
 // A ~100-term custom dictionary joined the way getCustomDictionaryPrompt does,
 // mirroring the 1633-char report in #CUS-49 (1633 -> 899 at maxChars 900).
-function buildLongDictionaryPrompt() {
+function buildLongDictionaryPrompt(count = 100) {
   const words = [];
-  for (let i = 0; i < 100; i++) {
-    words.push(`SpecializedTerm${String(i).padStart(2, "0")}`);
+  for (let i = 0; i < count; i++) {
+    words.push(`SpecializedTerm${String(i).padStart(3, "0")}`);
   }
   return words.join(", ");
 }
@@ -159,4 +159,50 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
     );
     assert.ok(longPrompt.startsWith(prompts[0]), "truncation must keep the head of the list");
   });
+
+  await t.test("4o transcribe still gets a context guard on absurd lists", async () => {
+    setSettings({
+      useLocalWhisper: false,
+      allowLocalFallback: false,
+      cloudTranscriptionProvider: "openai",
+    });
+    const hugePrompt = buildLongDictionaryPrompt(700); // ~13k chars
+    assert.ok(hugePrompt.length > 12000);
+    const prompts = capturePrompts(t);
+    const manager = createManager({
+      getTranscriptionModel: () => "gpt-4o-transcribe",
+      getTranscriptionEndpoint: () => "https://api.openai.com/v1/audio/transcriptions",
+      getWhisperPrompt: () => hugePrompt,
+    });
+
+    await manager.processWithOpenAIAPI(audioBlob, {});
+    assert.equal(prompts.length, 1);
+    assert.ok(prompts[0].length <= 8000, `4o guard must hold, got ${prompts[0].length}`);
+    assert.ok(prompts[0].length > 7000, "guard must be generous, not the Groq-era 900");
+    assert.ok(hugePrompt.startsWith(prompts[0]), "truncation must keep the head of the list");
+  });
+});
+
+test("local whisper gets the head of a long dictionary, not whisper.cpp's tail", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-dictionary-prompt-cap-local-test-",
+    settingsKey: "__dictionaryPromptCapLocalSettings",
+  });
+  setSettings({ useLocalWhisper: true, localTranscriptionProvider: "whisper" });
+
+  const audioBlob = new Blob([new ArrayBuffer(8)], { type: "audio/webm" });
+  const longPrompt = buildLongDictionaryPrompt();
+  const seen = [];
+  window.electronAPI.transcribeLocalWhisper = async (_buf, options) => {
+    seen.push(options.initialPrompt);
+    return { success: true, text: "transcribed text" };
+  };
+  const manager = createManager({ getWhisperPrompt: () => longPrompt });
+
+  const result = await manager.processWithLocalWhisper(audioBlob, "base", {});
+  assert.equal(result.success, true);
+  assert.equal(seen.length, 1);
+  assert.ok(seen[0].length <= 900, `local prompt must stay capped, got ${seen[0].length}`);
+  assert.ok(longPrompt.startsWith(seen[0]), "truncation must keep the head of the list");
+  assert.equal(longPrompt[seen[0].length], ",", "truncation must end on a whole entry");
 });
