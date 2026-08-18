@@ -17,25 +17,11 @@ import { useToast } from "../ui/useToast";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { useBillingRefreshOnReturn } from "../../hooks/useBillingRefreshOnReturn";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { canSelfServeEnterprise } from "../../lib/workspaceBilling";
 import type { Workspace } from "../../types/electron";
 
 const SEAT_LIMIT = 500;
 const CONTACT_SALES_URL = "https://openwhispr.com/contact-sales";
-
-/**
- * Mirrors the API's checkout guard: only an owned workspace with no live
- * subscription can start a self-serve Enterprise checkout.
- */
-function canSelfServeEnterprise(workspace: Workspace): boolean {
-  return (
-    workspace.role === "owner" &&
-    !workspace.stripe_subscription_id &&
-    !(
-      ["pro", "business", "enterprise"].includes(workspace.plan) &&
-      ["active", "trialing"].includes(workspace.status)
-    )
-  );
-}
 
 interface Props {
   open: boolean;

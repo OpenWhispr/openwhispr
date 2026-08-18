@@ -15,6 +15,7 @@ import {
 import { useToast } from "../ui/useToast";
 import { WorkspacesService, type SeatPreview } from "../../services/WorkspacesService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { hasActiveWorkspaceSubscription } from "../../lib/workspaceBilling";
 import { formatAmount } from "../../utils/formatAmount";
 import type { Workspace } from "../../types/electron";
 
@@ -35,10 +36,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   });
   const isOwner = workspace.role === "owner";
   const hasSubscription = Boolean(workspace.stripe_subscription_id);
-  const canAddSeats =
-    hasSubscription &&
-    ["pro", "business", "enterprise"].includes(workspace.plan) &&
-    ["active", "trialing"].includes(workspace.status);
+  const canAddSeats = hasSubscription && hasActiveWorkspaceSubscription(workspace);
   const seatsUsed = workspace.seats_used ?? workspace.seats;
   const seatsTotal = Math.max(workspace.seats, seatsUsed);
   const pct = seatsTotal > 0 ? Math.min(100, (seatsUsed / seatsTotal) * 100) : 0;

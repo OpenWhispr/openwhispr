@@ -3,17 +3,8 @@ import { useTranslation } from "react-i18next";
 import { ExternalLink, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "../ui/button";
 import { openAdminConsole } from "../../lib/auth";
-import { canManageWorkspace } from "../../lib/spacePermissions";
+import { isEnterpriseConsoleAvailable } from "../../lib/workspaceBilling";
 import type { Workspace } from "../../types/electron";
-
-/** Mirrors the console's own gate: Enterprise plan + owner/admin role. */
-function isEnterpriseConsoleAvailable(workspace: Workspace): boolean {
-  return (
-    workspace.plan === "enterprise" &&
-    ["active", "trialing"].includes(workspace.status) &&
-    canManageWorkspace(workspace.role)
-  );
-}
 
 /**
  * Entry point to the web admin console (admin.openwhispr.com) for
