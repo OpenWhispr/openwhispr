@@ -462,6 +462,11 @@ Enable with `--log-level=debug` or `OPENWHISPR_LOG_LEVEL=debug` (can be set in `
 - Audio level analysis
 - Complete reasoning pipeline debugging with stage-by-stage logging
 
+Packaged Windows builds keep logger output off stdout/stderr by default. Launch with
+`--console-logs` to opt into terminal output independently of the configured log level.
+Default INFO entries are not persisted in this mode; enabling debug logging retains them
+in the existing log file without enabling terminal output.
+
 ### 12. Windows Push-to-Talk
 
 Native Windows support for true push-to-talk functionality using low-level keyboard hooks:
