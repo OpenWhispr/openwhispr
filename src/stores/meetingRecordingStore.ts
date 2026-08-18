@@ -47,7 +47,7 @@ import {
   createMeetingRecordingSessionId,
   teardownFailedMeetingRecordingSetup,
 } from "../helpers/meetingRecordingSession";
-import { buildFinalMeetingTranscript } from "../helpers/meetingTranscriptPersistence";
+import { persistFinalTranscriptAroundStop } from "../helpers/meetingTranscriptPersistence";
 
 export interface TranscriptSegment {
   id: string;
@@ -1496,41 +1496,14 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     isStartingFlag = false;
     useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
 
-    await cleanup();
-
-    let diarizationSessionId: string | null = null;
-    try {
-      const result = await window.electronAPI?.meetingTranscriptionStop?.(sessionId ?? undefined);
-      if (result?.diarizationSessionId) {
-        diarizationSessionId = result.diarizationSessionId;
-        useMeetingRecordingStore.setState({ diarizationSessionId });
-      }
-      if (result?.success && result.transcript) {
-        useMeetingRecordingStore.setState({ transcript: result.transcript });
-      } else if (result?.error) {
-        reportMeetingError(result.error);
-      }
-    } catch (err) {
-      reportMeetingError((err as Error).message);
-      logger.error(
-        "Meeting transcription stop failed",
-        { error: (err as Error).message },
-        "meeting"
-      );
-    }
-
     // Persist here, not in a notes-view effect: an auto-end stop can fire while
     // that view is unmounted, and any view-scoped saver dies with it. (Delayed
     // diarization results are persisted by the module-level listener below.)
     const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
-    const finalTranscript = buildFinalMeetingTranscript(
-      finalSegments,
-      useMeetingRecordingStore.getState().transcript,
-      serializeTranscriptSegments
-    );
-    if (recordingNoteId != null && finalTranscript) {
+    const persistTranscript = async (transcript: string) => {
+      if (recordingNoteId == null) return;
       try {
-        await window.electronAPI?.updateNote?.(recordingNoteId, { transcript: finalTranscript });
+        await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
       } catch (err) {
         logger.error(
           "Failed to persist final meeting transcript",
@@ -1538,7 +1511,43 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
           "meeting"
         );
       }
-    }
+    };
+
+    const diarizationSessionId = await persistFinalTranscriptAroundStop({
+      segments: finalSegments,
+      serializeSegments: serializeTranscriptSegments,
+      persist: persistTranscript,
+      fallbackTranscript: () => useMeetingRecordingStore.getState().transcript,
+      stop: async () => {
+        await cleanup();
+
+        let stoppedDiarizationSessionId: string | null = null;
+        try {
+          const result = await window.electronAPI?.meetingTranscriptionStop?.(
+            sessionId ?? undefined
+          );
+          if (result?.diarizationSessionId) {
+            stoppedDiarizationSessionId = result.diarizationSessionId;
+            useMeetingRecordingStore.setState({
+              diarizationSessionId: stoppedDiarizationSessionId,
+            });
+          }
+          if (result?.success && result.transcript) {
+            useMeetingRecordingStore.setState({ transcript: result.transcript });
+          } else if (result?.error) {
+            reportMeetingError(result.error);
+          }
+        } catch (err) {
+          reportMeetingError((err as Error).message);
+          logger.error(
+            "Meeting transcription stop failed",
+            { error: (err as Error).message },
+            "meeting"
+          );
+        }
+        return stoppedDiarizationSessionId;
+      },
+    });
 
     useMeetingRecordingStore.setState({
       micPartial: "",

@@ -5,11 +5,33 @@ import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 // (auto-end, owner loss) while another view is open, and any persistence keyed
 // to a mounted editor would silently drop the tail since the last periodic
 // save. Delayed diarization results are handled by the store's #1495 listener.
-export function buildFinalMeetingTranscript(
-  segments: TranscriptSegment[],
-  fallbackTranscript: string,
-  serializeSegments: (segments: TranscriptSegment[]) => string
-): string | null {
-  if (segments.length > 0) return serializeSegments(segments);
-  return fallbackTranscript || null;
+//
+// The captured segments are final the moment the stop begins, and the note
+// editor swaps to the stored transcript as soon as isRecording flips — so they
+// are written before the main-side stop (which can take seconds) is awaited.
+// Only a segment-less recording waits for main's final transcript.
+export async function persistFinalTranscriptAroundStop<T>({
+  segments,
+  serializeSegments,
+  persist,
+  stop,
+  fallbackTranscript,
+}: {
+  segments: TranscriptSegment[];
+  serializeSegments: (segments: TranscriptSegment[]) => string;
+  persist: (transcript: string) => Promise<void>;
+  stop: () => Promise<T>;
+  fallbackTranscript: () => string;
+}): Promise<T> {
+  const segmentWrite = segments.length > 0 ? persist(serializeSegments(segments)) : null;
+
+  const result = await stop();
+
+  if (segmentWrite) {
+    await segmentWrite;
+  } else {
+    const fallback = fallbackTranscript();
+    if (fallback) await persist(fallback);
+  }
+  return result;
 }
