@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, FileSearch, Loader2, MessageCircle, UsersRound } from "lucide-react";
-import { Button } from "../ui/button";
+import { CircleCheck, FileSearch, Loader2, MessageCircle, UsersRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import googleCalendarIcon from "../../assets/icons/google-calendar.svg";
-import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.svg";
-import appleCalendarIcon from "../../assets/icons/apple-calendar.svg";
-import notesBackdrop from "../../assets/onboarding-notes-motion.webp";
-import { BrandMark } from "./OnboardingShell";
+import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.webp";
+import appleCalendarIcon from "../../assets/icons/apple-calendar.webp";
+import meetingDetectedPanel from "../../assets/onboarding-notes-meeting-detected.webp";
 
 type ProviderId = "google" | "microsoft" | "apple";
 
@@ -116,40 +114,44 @@ export default function CalendarConnectionsStep() {
   ];
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-[25rem] space-y-3">
-      <section className="grid h-48 grid-cols-[2fr_3fr] overflow-hidden rounded-xl border border-neutral-200 bg-white">
-        <div
-          className="relative bg-cover bg-center"
-          style={{ backgroundImage: `url(${notesBackdrop})` }}
-        >
-          <div className="absolute left-5 top-19 flex w-36 items-center gap-2 rounded-lg bg-neutral-950/80 p-2 text-white shadow-lg backdrop-blur-sm">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-blue-500">
-              <BrandMark className="size-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[11px] font-medium">
-                {t("onboarding.rehaul.notes.hero.detected")}
-              </span>
-              <span className="block truncate text-[9px] text-neutral-300">
-                {t("onboarding.rehaul.notes.hero.transcribe")}
-              </span>
-            </span>
-          </div>
-        </div>
+    // Figma: Onboarding / Frame 2147203458 — column, gap 16, hugging its content.
+    <div className="flex w-full flex-col items-center gap-4">
+      {/* Frame 2147258979 — 499x245, 198px of artwork on the left and a white
+          301px panel on the right. radius 13.33, 1px stroke. */}
+      <section className="flex h-[245px] w-[499px] overflow-hidden rounded-[13.33px] border border-[var(--onboarding-control-border)] bg-white">
+        {/* Frame 2147258992 — 198x245. Exported from Figma with the notification
+            already composited. NOTE: that export was composited for the right-hand
+            slot, so its bleed runs off the artwork's right edge — now the card's
+            inner edge. It needs re-exporting with the bleed on the left. */}
+        <img
+          src={meetingDetectedPanel}
+          alt=""
+          aria-hidden="true"
+          width={198}
+          height={245}
+          decoding="async"
+          draggable={false}
+          className="h-[245px] w-[198px] shrink-0 select-none object-cover"
+        />
 
-        <div className="p-3.5 text-left">
-          <p className="text-[13px] font-medium leading-[1.35] text-neutral-950">
+        {/* Frame 2147258994 — 301x245 white panel, col gap 24, pad 24 16. */}
+        <div className="flex w-[301px] shrink-0 flex-col gap-6 bg-white px-4 py-6 text-left">
+          <p className="text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
             {t("onboarding.rehaul.notes.hero.description")}
           </p>
-          <ul className="mt-4 space-y-3 text-[11px] text-neutral-950">
+          {/* Frame 2147258993 — 227 wide, col gap 14; rows are gap 6, 18px marks. */}
+          <ul className="flex w-[227px] flex-col gap-[14px]">
             {[
               [MessageCircle, t("onboarding.rehaul.notes.hero.chat")],
               [FileSearch, t("onboarding.rehaul.notes.hero.transcript")],
               [UsersRound, t("onboarding.rehaul.notes.hero.speakers")],
             ].map(([Icon, label]) => (
-              <li key={String(label)} className="flex items-center gap-2">
-                <span className="flex size-4 items-center justify-center rounded-full bg-blue-50 text-blue-500">
-                  <Icon className="size-2.5" />
+              <li
+                key={String(label)}
+                className="flex items-center gap-1.5 text-xs leading-[1.32] text-[var(--onboarding-text-primary)]"
+              >
+                <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--onboarding-accent)_8%,transparent)] text-[var(--onboarding-accent)]">
+                  <Icon className="size-2.5" strokeWidth={0.833} />
                 </span>
                 {String(label)}
               </li>
@@ -158,38 +160,67 @@ export default function CalendarConnectionsStep() {
         </div>
       </section>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 px-3">
+      {/* Frame 16 — 498 wide, pad 24 16, #F7F7F7 surface, radius 17. Rows follow
+          the shared list rhythm: no padding above the first, none below the last,
+          hairline dividers between. */}
+      <div className="w-[498px] rounded-[17px] border border-[var(--onboarding-control-border)] bg-[#f7f7f7] px-4 py-6">
         {providers.map((provider, index) => (
           <div
             key={provider.id}
-            className={`flex h-16 items-center gap-3 ${index > 0 ? "border-t border-neutral-200" : ""}`}
+            className={`flex items-center gap-[14px] ${
+              index === 0 ? "pb-4" : "border-t border-black/4 py-4 last:pb-0"
+            }`}
           >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white">
-              <img src={provider.icon} alt="" className="size-5" />
+            {/* Frame 2147258981 — 44x44 tile, 1px surface stroke, rx 9.5, with a 24px
+                glyph inset. The stroke lives here rather than in each asset so all
+                three providers match; the 48px sources land exactly 2x at 24px.
+                No fill: the frame has stroke only, so the row's #F7F7F7 reads
+                through. Do not re-add bg-white. */}
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-[9.5px] border border-[var(--onboarding-control-border)]">
+              <img
+                src={provider.icon}
+                alt=""
+                aria-hidden="true"
+                width={24}
+                height={24}
+                decoding="async"
+                draggable={false}
+                // contain, not cover: the Microsoft export is 51x48, so it
+                // letterboxes instead of stretching.
+                className="size-6 select-none object-contain"
+              />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-[3px] text-left">
+              <p className="text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
+                {provider.title}
+              </p>
+              <p className="truncate text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                {provider.description}
+              </p>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-neutral-950">{provider.title}</p>
-              <p className="mt-0.5 truncate text-xs text-neutral-500">{provider.description}</p>
-            </div>
+            {/* Figma "Frame 25", both states: pad 6 14, radius 38, 14/140% medium
+                white. Deliberately a plain button, not the shadcn Button — that
+                default variant layers on shadow-sm, hover:shadow, a
+                border-primary/60 and font-semibold, none of which the spec has. */}
             {provider.connected ? (
-              <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-blue-500 px-3 text-xs font-medium text-white">
-                <CheckCircle2 className="size-3.5" />
+              <span className="inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-accent)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-white">
+                <CircleCheck className="size-3.5 shrink-0" strokeWidth={1.167} />
                 {t(
                   `integrations.${provider.id === "microsoft" ? "microsoftCalendar" : `${provider.id}Calendar`}.connected`
                 )}
               </span>
             ) : (
-              <Button
+              <button
                 type="button"
-                variant="default"
-                size="sm"
                 disabled={connecting !== null}
                 onClick={() => void connect(provider.id)}
-                className="h-7 rounded-full bg-neutral-950 px-3 text-xs text-white hover:bg-neutral-800"
+                className="onboarding-pressable inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-text-primary)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-white hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:opacity-60"
               >
-                {connecting === provider.id && <Loader2 className="size-3.5 animate-spin" />}
+                {connecting === provider.id && (
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                )}
                 {t("onboarding.rehaul.notes.connectors.connect")}
-              </Button>
+              </button>
             )}
           </div>
         ))}

@@ -14,12 +14,21 @@ export function HotkeyChord({ value, compact = false }: { value: string; compact
       {keycaps.map(({ id, label, symbol }) => (
         <kbd
           key={id}
-          className={`onboarding-keycap relative flex flex-col justify-between rounded-lg border border-neutral-300 bg-neutral-200 text-neutral-950 ${
-            compact ? "h-8 min-w-12 px-2 py-1 text-xs" : "h-20 w-26 px-2.5 py-2 text-sm"
+          // Surface, bevel and border live in .onboarding-keycap so the cap is
+          // styled in one place; only the box metrics vary by size here.
+          className={`onboarding-keycap relative flex flex-col justify-between rounded-[12px] border text-[var(--onboarding-text-primary)] ${
+            compact ? "h-8 min-w-12 px-2 py-1 text-xs" : "h-20 w-26 px-3 py-2.5 text-sm"
           }`}
         >
-          <span className="self-end text-base font-semibold leading-none">{symbol}</span>
-          <span className="self-start font-medium leading-none">{label}</span>
+          <span
+            className={`self-end font-medium leading-none ${compact ? "text-sm" : "text-xl"}`}
+            aria-hidden="true"
+          >
+            {symbol}
+          </span>
+          <span className="self-start font-medium leading-none text-[var(--onboarding-text-secondary)]">
+            {label}
+          </span>
         </kbd>
       ))}
     </div>
@@ -35,6 +44,9 @@ interface ShortcutSetupStepProps {
   chooseAnotherLabel: string;
   validate?: (value: string) => string | null;
   onConfirm?: (value: string) => Promise<string | null>;
+  /** Fires whenever the capture box goes back to empty, so the caller can drop
+      whatever it recorded from a previous `onChange`. */
+  onClearSelection?: () => void;
   dense?: boolean;
   showCandidateActions?: boolean;
 }
@@ -48,6 +60,7 @@ export default function ShortcutSetupStep({
   chooseAnotherLabel,
   validate,
   onConfirm,
+  onClearSelection,
   dense = false,
   showCandidateActions = true,
 }: ShortcutSetupStepProps) {
@@ -68,6 +81,9 @@ export default function ShortcutSetupStep({
       setError(confirmationError);
       setCandidate("");
       setCaptureKey((current) => current + 1);
+      // A failed capture leaves the box empty, so an earlier confirmed hotkey
+      // must not keep the step looking complete.
+      onClearSelection?.();
       return;
     }
     setConfirmed(true);
@@ -79,13 +95,23 @@ export default function ShortcutSetupStep({
     setConfirmed(false);
     setError(null);
     setCaptureKey((current) => current + 1);
+    onClearSelection?.();
   };
 
   return (
-    <div className={`mx-auto w-full max-w-[22.25rem] text-center ${dense ? "mt-4" : "mt-8"}`}>
+    // dense is the assistant page, where the box follows the preview still on
+    // Frame 2147203458's 20 gap; on its own it keeps the wider 32.
+    <div
+      className={`mx-auto w-full max-w-[28.125rem] shrink-0 text-center ${dense ? "mt-5" : "mt-8"}`}
+    >
+      {/* Figma "Frame 2147258980": 450x160, 24 radius, light/surface-secondary
+          behind a 2px 6-6 dashed light/surface-stroke. The filled state drops the
+          dash and the tint so the keycaps sit on their own surface. */}
       <div
-        className={`relative flex h-32 items-center justify-center rounded-2xl bg-white px-6 ${
-          candidate ? "border border-transparent" : "border border-dashed border-neutral-300"
+        className={`relative flex h-40 items-center justify-center rounded-3xl px-6 ${
+          candidate
+            ? "border-2 border-transparent bg-white"
+            : "border-2 border-dashed border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]"
         }`}
       >
         <HotkeyInput
@@ -107,23 +133,32 @@ export default function ShortcutSetupStep({
         ) : candidate ? (
           <HotkeyChord value={candidate} />
         ) : (
-          <div className="pointer-events-none flex flex-col items-center">
-            <p className="text-base text-neutral-400">{captureLabel}</p>
-            <p className="mt-10 flex items-center gap-2 text-sm text-neutral-400">
+          // Figma "Frame 2147258973/74": the recommendation leads and the
+          // instruction closes, both Inter 18/140% on light/text-tertiary. Frame
+          // 2147258980 has no auto-layout, so its 47.5/22 padding is only a hint
+          // and does not add up to 160 — the measured 51.5 gap is the real value,
+          // and the pair is centred in the box instead.
+          <div className="pointer-events-none flex flex-col items-center gap-[51.5px]">
+            <p className="flex items-center gap-2.5 text-lg leading-[1.4] text-[var(--onboarding-text-tertiary)]">
               {recommendedLabel}
-              <span className="rounded-full bg-neutral-200 px-2.5 py-1 text-xs text-neutral-600">
+              <span className="rounded-[39px] bg-[var(--onboarding-surface-tertiary)] px-2.5 py-2 text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
                 {formatHotkeyInstruction(recommended)}
               </span>
+            </p>
+            <p className="text-lg leading-[1.4] text-[var(--onboarding-text-tertiary)]">
+              {captureLabel}
             </p>
           </div>
         )}
       </div>
 
       {candidate && confirmed && !error && showCandidateActions && (
-        <div className="mt-8 space-y-2 text-center" aria-live="polite">
-          <p className="mx-auto w-fit rounded-full bg-neutral-200 px-5 py-2 text-sm text-neutral-600">
-            {formatHotkeyInstruction(candidate)}
-          </p>
+        <div className="mt-8 text-center" aria-live="polite">
+          {/* The keycaps above are the visual confirmation, so the pill that used
+              to sit here is sr-only rather than deleted: HotkeyChord's aria-label
+              is not a live region, so this is the only spoken confirmation that
+              the chord was accepted. */}
+          <p className="sr-only">{formatHotkeyInstruction(candidate)}</p>
           <button
             type="button"
             onClick={reset}

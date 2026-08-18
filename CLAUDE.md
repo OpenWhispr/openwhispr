@@ -2,6 +2,10 @@
 
 This document provides comprehensive technical details about the OpenWhispr project architecture for AI assistants working on the codebase.
 
+## Response Style
+
+Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer. When asked to explain something, give a high-level summary unless an in-depth explanation is specifically requested.
+
 ## Project Overview
 
 OpenWhispr is an Electron-based desktop dictation application that uses whisper.cpp for speech-to-text transcription. It supports both local (privacy-focused) and cloud (OpenAI API) processing modes.
@@ -715,6 +719,26 @@ const { t } = useTranslation();
 3. Keep `{{variable}}` interpolation syntax for dynamic values
 4. Do NOT translate: brand names (OpenWhispr, Pro), technical terms (Markdown, Signal ID), format names (MP3, WAV), AI system prompts
 5. Group keys by feature area (e.g., `notes.editor.*`, `referral.toasts.*`)
+
+### Image and Icon Assets — REQUIRED
+
+Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`). Vector provider/brand marks live in `src/assets/icons/`.
+
+**Rules**:
+
+1. **Always `import` the asset**; never write a literal path like `/assets/foo.webp`. Packaged builds load the renderer from a `file://` origin, so root-relative paths resolve to nothing. Importing lets Vite fingerprint the file and rewrite the URL:
+
+   ```tsx
+   import microphoneIcon from "@/assets/onboarding-permission-microphone.webp";
+   <img src={microphoneIcon} ... />;
+   ```
+
+2. **WebP, lossless** for UI art with hard edges or alpha — `cwebp -lossless -z 9 -alpha_q 100 in.png -o out.webp` (roughly 40–55% smaller than PNG). Reserve lossy for photographic art.
+3. **Author at 2x the CSS slot** and no larger (a 44px slot gets an 88px asset). Retina-sharp without paying for pixels that get downscaled away.
+4. **Bake rounded corners into the artwork as transparency** rather than adding a CSS `rounded-*` on the `<img>` — CSS rounding on top of already-rounded art clips the corners twice.
+5. **Decorative images take `alt=""` plus `aria-hidden="true"`.** Most icons sit beside a visible label that already names them (e.g. the permission rows), so a descriptive `alt` makes screen readers announce the same thing twice. Only write real `alt` text when the image is the _only_ source of that information.
+6. **Always set explicit `width`/`height`** matching the CSS size, to reserve layout space before decode. Add `decoding="async"` and `draggable={false}` (in Electron a draggable image can be dragged out of the window).
+7. **Assets under 4 KB are inlined** by Vite as base64 data URIs, so they will not appear in `dist/assets/`. Grep the JS chunks for `data:image/webp;base64,` before concluding an asset went missing.
 
 ### Adding New Features
 

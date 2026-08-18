@@ -32,6 +32,9 @@ class WindowManager {
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
+    // Dev-only escape hatch (see setOnboardingWindowUnlocked). Never set in a
+    // packaged build: the IPC that flips it is gated on !app.isPackaged.
+    this._onboardingWindowUnlocked = false;
     this._onboardingActive = false;
     this._onboardingDemoKind = null;
     this.agentWindow = null;
@@ -1258,6 +1261,56 @@ class WindowManager {
     dockManager.setControlPanelVisible(true);
   }
 
+  // Onboarding runs in a fixed-size window with no traffic lights so a user
+  // can't resize, minimise or close their way out of setup. Split out so the
+  // dev unlock can invert it without duplicating the affordance list.
+  _applyOnboardingWindowChrome(win) {
+    const locked = !this._onboardingWindowUnlocked;
+    win.setResizable(!locked);
+    win.setMinimizable(!locked);
+    win.setMaximizable(!locked);
+    win.setClosable(!locked);
+    win.setFullScreenable(!locked);
+    if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
+      win.setWindowButtonVisibility(!locked);
+    }
+  }
+
+  /**
+   * Dev-only: hand the onboarding window back its native macOS chrome (traffic
+   * lights, drag-to-resize, minimise, zoom, fullscreen) so layouts can be tested
+   * at sizes other than the two canonical ones.
+   *
+   * Gated at the IPC boundary on !app.isPackaged — shipping this would let a user
+   * close the window mid-setup and land in a half-configured app.
+   */
+  setOnboardingWindowUnlocked(unlocked) {
+    if (typeof unlocked !== "boolean") return false;
+    this._onboardingWindowUnlocked = unlocked;
+
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return false;
+    // Outside onboarding the control panel already owns its own chrome; touching
+    // it here would fight setOnboardingWindowMode("restore").
+    if (!this._onboardingWindowMode) return true;
+
+    this._applyOnboardingWindowChrome(win);
+
+    // Re-locking from an arbitrary user-dragged size has to put the window back
+    // on the canonical bounds for the mode, or onboarding renders at a size its
+    // steps were never laid out for.
+    if (!unlocked) {
+      // setOnboardingWindowMode refuses to resize a fullscreen/maximized window,
+      // so leave those states first or the re-lock silently keeps the dev size.
+      if (win.isFullScreen()) win.setFullScreen(false);
+      if (win.isMaximized()) win.unmaximize();
+      const mode = this._onboardingWindowMode;
+      this._onboardingWindowMode = null;
+      this.setOnboardingWindowMode(mode);
+    }
+    return true;
+  }
+
   setOnboardingWindowMode(mode) {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return false;
@@ -1300,13 +1353,15 @@ class WindowManager {
       };
     }
 
-    win.setResizable(false);
-    win.setMinimizable(false);
-    win.setMaximizable(false);
-    win.setClosable(false);
-    win.setFullScreenable(false);
-    if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
-      win.setWindowButtonVisibility(false);
+    this._applyOnboardingWindowChrome(win);
+
+    // Unlocked, the window is yours to size: snapping it back to the canonical
+    // compact/expanded bounds on every step change would undo the drag you just
+    // made. The mode is still recorded so re-locking picks the right size.
+    if (this._onboardingWindowUnlocked) {
+      this._onboardingWindowMode = mode;
+      this._showControlPanelAfterModeApplied(win);
+      return true;
     }
 
     if (this._onboardingWindowMode === mode) {

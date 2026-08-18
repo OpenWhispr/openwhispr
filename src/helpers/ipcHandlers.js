@@ -1134,6 +1134,13 @@ class IPCHandlers {
       this.windowManager.setOnboardingWindowMode(mode)
     );
 
+    // Dev-only: see WindowManager.setOnboardingWindowUnlocked. Refused in a
+    // packaged build so a real user can never unlock their way out of setup.
+    ipcMain.handle("onboarding-set-window-unlocked", (_event, unlocked) => {
+      if (app.isPackaged) return false;
+      return this.windowManager.setOnboardingWindowUnlocked(unlocked);
+    });
+
     ipcMain.handle("onboarding-set-active", (_event, active) => {
       if (typeof active !== "boolean") return false;
       return this.windowManager.setOnboardingActive(active);
