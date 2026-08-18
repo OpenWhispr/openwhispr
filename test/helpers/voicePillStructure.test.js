@@ -27,9 +27,23 @@ test("thinking and recording keep the same persistent Beam and pill roots", asyn
   const recording = await renderPill("recording", true);
 
   assert.match(thinking, /^<div data-beam="[^"]+" data-active="" class="agent-thinking-beam/);
+  assert.match(thinking, /plain-dictation-processing-glow/);
   assert.match(recording, /^<div data-beam="[^"]+" class="agent-thinking-beam/);
+  assert.doesNotMatch(recording, /plain-dictation-processing-glow/);
   assert.equal((thinking.match(/rounded-full bg-current/g) || []).length, 22);
   assert.equal((recording.match(/rounded-full bg-current/g) || []).length, 22);
+});
+
+test("plain dictation processing strengthens only the light-theme radial bloom", async () => {
+  const sourceRoot = path.resolve(__dirname, "../..");
+  const styles = fs.readFileSync(path.join(sourceRoot, "src/index.css"), "utf8");
+  const agentThinking = await renderPill("thinking", false, "right", { agentMode: true });
+
+  assert.match(
+    styles,
+    /:root:not\(\.dark\) \.agent-thinking-beam\.plain-dictation-processing-glow\s*\{[^}]*--beam-stroke-opacity: 6\.25;[^}]*--beam-bloom-opacity: 2\.2;/s
+  );
+  assert.doesNotMatch(agentThinking, /plain-dictation-processing-glow/);
 });
 
 test("panel thinking contracts to the identity circle instead of freezing a waveform", async () => {

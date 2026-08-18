@@ -202,7 +202,10 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       strength={agentMode ? 0.9 : 0.85}
       active={showBorderBeam}
       borderRadius={20}
-      className="agent-thinking-beam inline-flex rounded-full"
+      className={cn(
+        "agent-thinking-beam inline-flex rounded-full",
+        isThinking && !agentMode && "plain-dictation-processing-glow"
+      )}
       data-agent-mode={agentMode || undefined}
     >
       {pill}

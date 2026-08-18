@@ -702,6 +702,14 @@ a:hover {
   --beam-bloom-opacity: 0.8;
 }
 
+/* Plain dictation contracts to the identity circle while processing. Match
+   the radial bloom's perceived strength to dark mode without strengthening
+   the listening entrance or Agent Mode beam. */
+:root:not(.dark) .agent-thinking-beam.plain-dictation-processing-glow {
+  --beam-stroke-opacity: 6.25;
+  --beam-bloom-opacity: 2.2;
+}
+
 :root:not(.dark) .agent-thinking-beam::before,
 :root:not(.dark) .agent-thinking-beam::after,
 :root:not(.dark) .agent-thinking-beam [data-beam-bloom] {
