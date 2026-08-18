@@ -3,7 +3,10 @@ import { Check, Terminal, Info } from "lucide-react";
 import { Button } from "./button";
 import { InfoBox } from "./InfoBox";
 import type { PasteToolsResult } from "../../types/electron";
-import { getLinuxPasteInstallCommands, needsLinuxPasteToolGuidance } from "../../utils/linuxPasteTools";
+import {
+  getLinuxPasteInstallCommands,
+  needsLinuxPasteToolGuidance,
+} from "../../utils/linuxPasteTools";
 
 interface PasteToolsInfoProps {
   pasteToolsInfo: PasteToolsResult | null;
@@ -121,8 +124,11 @@ export default function PasteToolsInfo({
                     t("pasteToolsInfo.wtypeFallbackDescription")
                   ) : (
                     <>
-                      {t("pasteToolsInfo.installPrefix")} {" "}
-                      <code className="bg-warning/20 px-1 rounded font-mono">{recommendedTool}</code>:
+                      {t("pasteToolsInfo.installPrefix")}{" "}
+                      <code className="bg-warning/20 px-1 rounded font-mono">
+                        {recommendedTool}
+                      </code>
+                      :
                     </>
                   )}
                 </p>
