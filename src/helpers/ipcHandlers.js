@@ -1125,6 +1125,13 @@ class IPCHandlers {
       this.windowManager.setOnboardingWindowMode(mode)
     );
 
+    // Dev-only: see WindowManager.setOnboardingWindowUnlocked. Refused in a
+    // packaged build so a real user can never unlock their way out of setup.
+    ipcMain.handle("onboarding-set-window-unlocked", (_event, unlocked) => {
+      if (app.isPackaged) return false;
+      return this.windowManager.setOnboardingWindowUnlocked(unlocked);
+    });
+
     ipcMain.handle("onboarding-set-active", (_event, active) => {
       if (typeof active !== "boolean") return false;
       return this.windowManager.setOnboardingActive(active);
@@ -2510,6 +2517,14 @@ class IPCHandlers {
     });
 
     ipcMain.handle("paste-text", async (event, text, options) => {
+      // An onboarding demo already puts the transcript in its own textarea from
+      // the demo event, and that textarea is what has focus — pasting on top of
+      // it appends the same sentence a second time. Reported as success because
+      // nothing failed and the caller would otherwise toast a paste error.
+      if (this.windowManager?.isOnboardingDemoActive()) {
+        return { success: true };
+      }
+
       const mainWindow = this.windowManager?.mainWindow;
       const targetPid = this.textEditMonitor?.lastTargetPid || null;
 

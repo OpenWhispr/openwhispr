@@ -27,9 +27,13 @@ class WindowManager {
   constructor() {
     this.mainWindow = null;
     this.controlPanelWindow = null;
+    this._controlPanelVisibilityTimer = null;
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
+    // Dev-only escape hatch (see setOnboardingWindowUnlocked). Never set in a
+    // packaged build: the IPC that flips it is gated on !app.isPackaged.
+    this._onboardingWindowUnlocked = false;
     this._onboardingActive = false;
     this._onboardingDemoKind = null;
     this.agentWindow = null;
@@ -725,26 +729,15 @@ class WindowManager {
       }
     });
 
-    const visibilityTimer = setTimeout(() => {
-      if (!this.controlPanelWindow || this.controlPanelWindow.isDestroyed()) {
-        return;
-      }
-      if (!this.controlPanelWindow.isVisible()) {
-        this.controlPanelWindow.show();
-        this.controlPanelWindow.focus();
-        dockManager.setControlPanelVisible(true);
-      }
+    // Nothing else shows this window: ready-to-show deliberately doesn't, so the
+    // renderer can pick the onboarding size first and avoid a visible
+    // expanded → compact flash on fresh installs. That makes this the only
+    // backstop if the renderer never gets that far — it loads but throws, a lazy
+    // chunk fails, or auth/policy resolution never settles — so it must outlive
+    // did-finish-load. Only a real show cancels it.
+    this._controlPanelVisibilityTimer = setTimeout(() => {
+      this._showControlPanel();
     }, 10000);
-
-    const clearVisibilityTimer = () => {
-      clearTimeout(visibilityTimer);
-    };
-
-    this.controlPanelWindow.once("ready-to-show", () => {
-      // AppRouter signals either an onboarding size or the restored control-
-      // panel mode once auth/policy resolution decides which UI will render.
-      // Waiting avoids a visible expanded → compact flash on fresh installs.
-    });
 
     this.controlPanelWindow.on("close", (event) => {
       if (!this.isQuitting) {
@@ -754,7 +747,7 @@ class WindowManager {
     });
 
     this.controlPanelWindow.on("closed", () => {
-      clearVisibilityTimer();
+      this._clearControlPanelVisibilityTimer();
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
       this._onboardingRestoreBounds = null;
@@ -766,7 +759,6 @@ class WindowManager {
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
 
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
-      clearVisibilityTimer();
       this.controlPanelWindow.setTitle(i18nMain.t("window.controlPanelTitle"));
     });
 
@@ -776,15 +768,12 @@ class WindowManager {
         if (!isMainFrame) {
           return;
         }
-        clearVisibilityTimer();
         if (process.env.NODE_ENV !== "development") {
           this.showLoadFailureDialog("Control panel", errorCode, errorDescription, validatedURL);
         }
-        if (!this.controlPanelWindow.isVisible()) {
-          this.controlPanelWindow.show();
-          this.controlPanelWindow.focus();
-          dockManager.setControlPanelVisible(true);
-        }
+        // Show it regardless: a failed load can't reach the renderer path that
+        // normally does, and a hidden window leaves the failure invisible.
+        this._showControlPanel();
       }
     );
 
@@ -1231,6 +1220,10 @@ class WindowManager {
     return true;
   }
 
+  isOnboardingDemoActive() {
+    return this._onboardingDemoKind !== null;
+  }
+
   stopOnboardingDemoRecording() {
     if (!this._onboardingDemoKind) return false;
     this.sendStopDictation();
@@ -1248,11 +1241,71 @@ class WindowManager {
     return true;
   }
 
-  _showControlPanelAfterModeApplied(win) {
+  _clearControlPanelVisibilityTimer() {
+    clearTimeout(this._controlPanelVisibilityTimer);
+    this._controlPanelVisibilityTimer = null;
+  }
+
+  _showControlPanel() {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    // Cancel the backstop either way: once the window has been shown on purpose,
+    // a later timer firing could pull it back out of the tray.
+    this._clearControlPanelVisibilityTimer();
     if (win.isVisible()) return;
     win.show();
     win.focus();
     dockManager.setControlPanelVisible(true);
+  }
+
+  // Onboarding runs in a fixed-size window with no traffic lights so a user
+  // can't resize, minimise or close their way out of setup. Split out so the
+  // dev unlock can invert it without duplicating the affordance list.
+  _applyOnboardingWindowChrome(win) {
+    const locked = !this._onboardingWindowUnlocked;
+    win.setResizable(!locked);
+    win.setMinimizable(!locked);
+    win.setMaximizable(!locked);
+    win.setClosable(!locked);
+    win.setFullScreenable(!locked);
+    if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
+      win.setWindowButtonVisibility(!locked);
+    }
+  }
+
+  /**
+   * Dev-only: hand the onboarding window back its native macOS chrome (traffic
+   * lights, drag-to-resize, minimise, zoom, fullscreen) so layouts can be tested
+   * at sizes other than the two canonical ones.
+   *
+   * Gated at the IPC boundary on !app.isPackaged — shipping this would let a user
+   * close the window mid-setup and land in a half-configured app.
+   */
+  setOnboardingWindowUnlocked(unlocked) {
+    if (typeof unlocked !== "boolean") return false;
+    this._onboardingWindowUnlocked = unlocked;
+
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return false;
+    // Outside onboarding the control panel already owns its own chrome; touching
+    // it here would fight setOnboardingWindowMode("restore").
+    if (!this._onboardingWindowMode) return true;
+
+    this._applyOnboardingWindowChrome(win);
+
+    // Re-locking from an arbitrary user-dragged size has to put the window back
+    // on the canonical bounds for the mode, or onboarding renders at a size its
+    // steps were never laid out for.
+    if (!unlocked) {
+      // setOnboardingWindowMode refuses to resize a fullscreen/maximized window,
+      // so leave those states first or the re-lock silently keeps the dev size.
+      if (win.isFullScreen()) win.setFullScreen(false);
+      if (win.isMaximized()) win.unmaximize();
+      const mode = this._onboardingWindowMode;
+      this._onboardingWindowMode = null;
+      this.setOnboardingWindowMode(mode);
+    }
+    return true;
   }
 
   setOnboardingWindowMode(mode) {
@@ -1282,7 +1335,7 @@ class WindowManager {
       this._onboardingRestoreBounds = null;
       this._onboardingWindowMode = null;
       this._onboardingWindowState = null;
-      this._showControlPanelAfterModeApplied(win);
+      this._showControlPanel();
       return true;
     }
 
@@ -1297,17 +1350,19 @@ class WindowManager {
       };
     }
 
-    win.setResizable(false);
-    win.setMinimizable(false);
-    win.setMaximizable(false);
-    win.setClosable(false);
-    win.setFullScreenable(false);
-    if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
-      win.setWindowButtonVisibility(false);
+    this._applyOnboardingWindowChrome(win);
+
+    // Unlocked, the window is yours to size: snapping it back to the canonical
+    // compact/expanded bounds on every step change would undo the drag you just
+    // made. The mode is still recorded so re-locking picks the right size.
+    if (this._onboardingWindowUnlocked) {
+      this._onboardingWindowMode = mode;
+      this._showControlPanel();
+      return true;
     }
 
     if (this._onboardingWindowMode === mode) {
-      this._showControlPanelAfterModeApplied(win);
+      this._showControlPanel();
       return true;
     }
 
@@ -1321,13 +1376,13 @@ class WindowManager {
       current.height === next.height
     ) {
       this._onboardingWindowMode = mode;
-      this._showControlPanelAfterModeApplied(win);
+      this._showControlPanel();
       return true;
     }
 
     win.setContentBounds(next, true);
     this._onboardingWindowMode = mode;
-    this._showControlPanelAfterModeApplied(win);
+    this._showControlPanel();
     return true;
   }
 

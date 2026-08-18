@@ -1064,7 +1064,10 @@ export default function SettingsPage({
 
   const meetingRegisterFn = useCallback(async (hotkey: string) => {
     const result = await window.electronAPI?.registerMeetingHotkey?.(hotkey);
-    return result ?? { success: false, message: "Electron API unavailable" };
+    // No `message`: useHotkeyRegistration falls back to the translated
+    // hooks.hotkeyRegistration.errors.couldNotRegister, and that string is what
+    // gets shown in a toast. An English literal here would surface untranslated.
+    return result ?? { success: false };
   }, []);
 
   const { registerHotkey: registerMeetingHotkey, isRegistering: isMeetingHotkeyRegistering } =

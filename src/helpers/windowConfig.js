@@ -60,16 +60,23 @@ const MAIN_WINDOW_CONFIG = {
   type: MAIN_OVERLAY_TYPE,
 };
 
+// The expanded height carries the tallest step: the assistant hotkey page needs
+// ~903px for Figma "Desktop - 287" at literal sizes (159 header + 40 + 318 still
+// + 20 + 160 capture box, inside the shell's 32/20 top and 154 footer). Shrink
+// this and that page loses its capture box to the shell's overflow-hidden.
+// clampedBounds still clamps to the display work area, so a short screen crops
+// it regardless — see setOnboardingWindowMode.
 const ONBOARDING_WINDOW_SIZES = {
   COMPACT: { width: 546, height: 654 },
-  EXPANDED: { width: 1200, height: 800 },
+  EXPANDED: { width: 1200, height: 910 },
 };
 
 // Control panel window configuration
 const CONTROL_PANEL_CONFIG = {
   width: ONBOARDING_WINDOW_SIZES.EXPANDED.width,
   height: ONBOARDING_WINDOW_SIZES.EXPANDED.height,
-  backgroundColor: "#1c1c2e",
+  // Fully transparent: any opaque value here paints into the rounded corners.
+  backgroundColor: "#00000000",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
@@ -93,7 +100,12 @@ const CONTROL_PANEL_CONFIG = {
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 20, y: 20 },
   }),
-  transparent: false,
+  // Transparent so a renderer that insets or rounds itself shows the desktop
+  // rather than a square page backing bleeding out behind it. Safe for the other
+  // control panel screens because each paints its own opaque background
+  // (ControlPanel's root is `bg-background`); only the compact onboarding steps
+  // clear body/#root — see index.css.
+  transparent: true,
   minimizable: true,
   maximizable: true,
   closable: true,

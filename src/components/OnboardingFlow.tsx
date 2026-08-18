@@ -37,28 +37,19 @@ import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/p
 import { cloudPost } from "../services/cloudApi";
 import logger from "../utils/logger";
 import {
+  COMPACT_STEPS,
   getNextOnboardingStep,
+  getOnboardingProgress,
   getOnboardingRoute,
   reconcileStepWithRoute,
   type OnboardingSetupMode,
   type OnboardingStepId,
 } from "./onboarding/flow";
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
+import { hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
-}
-
-const COMPACT_STEPS = new Set<OnboardingStepId>(["auth", "permissions"]);
-
-function progressForStep(stepId: OnboardingStepId): number {
-  if (["languages", "assistant-demo", "setup-choice"].includes(stepId)) return 0;
-  if (["use-cases", "dictation-demo"].includes(stepId)) return 1;
-  if (["dictation-hotkey", "assistant-hotkey"].includes(stepId)) return 2;
-  if (stepId === "notes") return 0;
-  if (stepId.startsWith("byok-") || stepId.startsWith("local-") || stepId.startsWith("enterprise-"))
-    return 0;
-  return stepId.endsWith("assistant") ? 1 : 0;
 }
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
@@ -82,6 +73,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [dictationDemoSuccess, setDictationDemoSuccess] = useState(false);
   const [assistantDemoSuccess, setAssistantDemoSuccess] = useState(false);
   const [stageReady, setStageReady] = useState(false);
+  const [selfHostedRequested, setSelfHostedRequested] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [permissionAlert, setPermissionAlert] = useState<{
@@ -116,8 +108,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   }, [currentStepId, session.currentStepId, setSession]);
 
+  // Cleared on unmount as well as on completion: main fails hotkeys closed while
+  // this is set, so an ErrorBoundary catch or a route swap that never comes back
+  // would otherwise leave every shortcut dead until the app restarts.
   useEffect(() => {
     void window.electronAPI?.setOnboardingActive?.(true);
+    return () => {
+      void window.electronAPI?.setOnboardingActive?.(false);
+    };
   }, []);
 
   useEffect(() => {
@@ -208,7 +206,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         localStorage.setItem("authenticationSkipped", String(skippedAuth));
         localStorage.setItem("skipAuth", String(skippedAuth));
         localStorage.setItem("onboardingCompleted", "true");
-        if (options.localPending) localStorage.setItem("localSetupPending", "true");
+        // hasPendingLocalModels() covers proceeding past a still-running download
+        // rather than skipping: the model was remembered when the download
+        // started, and BackgroundModelDownloadTray only applies it (and then
+        // clears this flag) while the flag is set.
+        if (options.localPending || hasPendingLocalModels())
+          localStorage.setItem("localSetupPending", "true");
         else localStorage.removeItem("localSetupPending");
         await window.electronAPI?.saveAllKeysToEnv?.();
         await window.electronAPI?.markBundleMigrated?.();
@@ -236,11 +239,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const applyReasoningSelectionToAllScopes = useCallback(
-    (mode: "byok" | "local") => {
+    (mode: "byok" | "local" | "enterprise") => {
+      // getState(), not the render-time snapshot: the provider steps write
+      // chatAgentProvider/chatAgentModel via switchReasoningProvider and call
+      // onProceed() in the same tick, so `settingsStore` here still holds the
+      // values from before the pick. Reading it stale configured the other three
+      // scopes to the defaults (groq / openai/gpt-oss-120b) with no key.
+      const { chatAgentProvider, chatAgentModel } = useSettingsStore.getState();
       settingsStore.setCloudReasoningForAllScopes({
         cleanupCloudMode: mode,
-        cleanupProvider: settingsStore.chatAgentProvider,
-        cleanupModel: settingsStore.chatAgentModel,
+        cleanupProvider: chatAgentProvider,
+        cleanupModel: chatAgentModel,
         useCleanupModel: true,
         useDictationAgent: true,
       });
@@ -249,8 +258,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const handleSetupSelection = useCallback(
-    async (mode: Exclude<OnboardingSetupMode, null>) => {
+    async (mode: Exclude<OnboardingSetupMode, null>, options?: { selfHosted?: boolean }) => {
       setSetupMode(mode);
+      setSelfHostedRequested(!!options?.selfHosted);
       if (mode === "cloud") {
         settingsStore.setCloudTranscriptionForAllScopes({
           useLocalWhisper: false,
@@ -317,6 +327,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       settingsStore.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
     } else if (currentStepId === "local-assistant") {
       applyReasoningSelectionToAllScopes("local");
+    } else if (currentStepId === "enterprise-assistant") {
+      // Transcription is deliberately untouched: "enterprise" is not one of
+      // TRANSCRIPTION_POLICY_CATALOG.modes, so enterprise governs the LLM scopes
+      // only. Without this, cleanup and note formatting keep their default
+      // provider and model with no credential behind them.
+      applyReasoningSelectionToAllScopes("enterprise");
     }
 
     const next = getNextOnboardingStep(currentStepId, route);
@@ -425,7 +441,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "languages":
         return (
-          <div className="h-full w-full pt-2">
+          <div className="flex h-full min-h-0 w-full flex-col pt-2">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.languages.title")}
               titleLines={[
@@ -460,7 +476,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "assistant-hotkey": {
         const assistant = currentStepId === "assistant-hotkey";
         return (
-          <div className="h-full w-full pt-5">
+          // Flex column: the preview illustration is allowed to shrink so the
+          // capture box below it always stays inside the shell, which is
+          // overflow-hidden. Left as a plain block, the fixed 318px preview
+          // pushed the capture box off-screen on shorter windows.
+          <div className="flex h-full min-h-0 w-full flex-col pt-5">
             <OnboardingStepHeader
               title={t(
                 assistant
@@ -500,6 +520,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 } else {
                   setDictationHotkey(value);
                   setDictationHotkeyConfirmed(true);
+                }
+              }}
+              onClearSelection={() => {
+                if (assistant) {
+                  setAssistantHotkeyConfirmed(false);
+                } else {
+                  setDictationHotkeyConfirmed(false);
                 }
               }}
               recommended={assistant ? "CommandOrControl+Shift+Space" : getDefaultHotkey()}
@@ -556,11 +583,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ? "onboarding.rehaul.assistantDemo.prompt"
                   : "onboarding.rehaul.dictationDemo.prompt"
               )}
-              placeholder={t(
-                assistant
-                  ? "onboarding.rehaul.dictationDemo.placeholder"
-                  : "onboarding.rehaul.dictationDemo.prompt"
-              )}
+              // Only the dictation demo renders this: the assistant card passes
+              // secondMessage as its textarea placeholder. The arms used to be
+              // crossed, so dictation showed the "Try saying…" prompt it already
+              // displays as a chat bubble and the authored placeholder went to the
+              // one card that ignores the prop.
+              placeholder={t("onboarding.rehaul.dictationDemo.placeholder")}
               listeningLabel={t("onboarding.rehaul.demo.listening")}
               processingLabel={t("onboarding.rehaul.demo.processing")}
               stopLabel={t("onboarding.rehaul.demo.stop")}
@@ -577,22 +605,31 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "notes":
         return (
-          <div className="h-full w-full pt-2">
-            <header className="mx-auto w-full max-w-2xl text-center">
-              <h1 className="onboarding-display-title text-neutral-950">
+          // Figma: Onboarding / Frame 50 — column, gap 40, centred; the header
+          // block (Frame 29) is its own column at gap 18.
+          <div className="flex h-full min-h-0 w-full flex-col items-center gap-10 pt-2">
+            <header className="flex w-full shrink-0 flex-col items-center gap-[18px] text-center">
+              <h1 className="onboarding-display-title text-[var(--onboarding-text-primary)]">
                 <span className="block">{t("onboarding.rehaul.notes.titleLineOne")}</span>
                 <span className="block">
                   {t("onboarding.rehaul.notes.titleLineTwoPrefix")}{" "}
-                  <span className="brand-script text-[1.15em]">
+                  {/* Caveat sits at the same 40px as the Inter run, per the spec. */}
+                  <span className="brand-script">
                     {t("onboarding.rehaul.notes.titleLineTwoBrand")}
                   </span>
                 </span>
               </h1>
-              <p className="mx-auto mt-3 max-w-md text-sm leading-5 text-neutral-500">
+              <p className="w-[357px] text-base leading-[1.4] text-[var(--onboarding-text-secondary)]">
                 {t("onboarding.rehaul.notes.description")}
               </p>
             </header>
-            <CalendarConnectionsStep />
+            {/* The hero panel and the connector list are both fixed-height, so on
+                a short window they run past the footer. The shell never scrolls,
+                so the content scrolls here instead — px-1/pb-1 keeps focus rings
+                off the clip edge. */}
+            <div className="onboarding-shell-scroll min-h-0 w-full flex-1 overflow-y-auto px-1 pb-1">
+              <CalendarConnectionsStep />
+            </div>
           </div>
         );
 
@@ -609,7 +646,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <SetupChoiceStep
               isSignedIn={isSignedIn}
-              onSelect={(mode) => void handleSetupSelection(mode)}
+              onSelect={(mode, options) => void handleSetupSelection(mode, options)}
               onRequestAuthentication={() => {
                 setSetupMode("cloud");
                 setAuthPath(null);
@@ -636,6 +673,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             </div>
             <ByokProviderStep
               stepId={currentStepId}
+              selfHostedRequested={selfHostedRequested}
               onConnectionChange={onStageReady}
               onProceed={() => void continueFromCurrentStep()}
             />
@@ -648,6 +686,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <div className="h-full w-full pt-6">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.local.title")}
+              // Without this the h1 is capped at max-w-xs (320px), which wraps
+              // "Set up local models" onto a second line at 40px.
+              wideTitle
               description={t("onboarding.rehaul.local.description")}
               descriptionLines={[
                 t("onboarding.rehaul.local.descriptionLineOne"),
@@ -704,6 +745,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     <>
       <OnboardingShell
         compact={compact}
+        stepKey={currentStepId}
         onBack={
           hasShellNavigation &&
           currentStepId !== "languages" &&
@@ -732,8 +774,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         continueDisabled={!canContinue}
         continueLoading={isFinishing || isRegistering}
-        progressIndex={compact ? undefined : progressForStep(currentStepId)}
-        showBackLabel={hotkeyStep || (demoStep && !canContinue)}
+        progress={getOnboardingProgress(currentStepId, route)}
+        // On both step families canContinue means "the thing this step asks for
+        // is done", so the labelled Back collapses to icon-only the moment a
+        // shortcut is confirmed or a demo succeeds.
+        showBackLabel={(hotkeyStep || demoStep) && !canContinue}
       >
         {fatalError && (
           <div

@@ -356,9 +356,7 @@ export default function AuthenticationStep({
     return (
       <CompactOnboardingFrame>
         <div className="px-5 pt-48 text-center">
-          <h1 className="text-[2rem] font-medium leading-tight tracking-[-0.035em]">
-            {t("auth.welcomeTitle")}
-          </h1>
+          <h1 className="onboarding-display-title">{t("auth.welcomeTitle")}</h1>
           <p className="mt-4 text-base text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
           <div className="mt-8 rounded-xl border border-warning/20 bg-warning/5 p-3 text-sm text-warning">
             {t("auth.cloudNotConfigured")}

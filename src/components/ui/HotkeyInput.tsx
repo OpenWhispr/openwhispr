@@ -304,6 +304,10 @@ export function HotkeyInput({
       e.preventDefault();
       e.stopPropagation();
 
+      // The user is attempting a new chord, so the previous rejection no longer
+      // applies. This is where clearing belongs, not in handleFocus.
+      onValidationError?.(null);
+
       // Track held modifiers for modifier-only capture
       heldModifiersRef.current = {
         ctrl: e.ctrlKey,
@@ -355,7 +359,7 @@ export function HotkeyInput({
       }
       // If no base key, modifiers are held - don't finalize yet
     },
-    [disabled, isMac, isWindows, finalizeCapture]
+    [disabled, isMac, isWindows, finalizeCapture, onValidationError]
   );
 
   const handleKeyUp = useCallback(
@@ -415,15 +419,18 @@ export function HotkeyInput({
     [disabled, isCapturing, finalizeCapture]
   );
 
+  // Deliberately does not clear the parent's error (handleKeyDown does that on the
+  // next real attempt). A rejected chord makes ShortcutSetupStep bump captureKey,
+  // which remounts this input with autoFocus, so clearing here fired one frame
+  // after the parent set the message and the rejection was never readable.
   const handleFocus = useCallback(() => {
     if (!disabled) {
       setIsCapturing(true);
       setValidationWarning(null);
-      onValidationError?.(null);
       clearFnHeld();
       window.electronAPI?.setHotkeyListeningMode?.(true);
     }
-  }, [disabled, clearFnHeld, onValidationError]);
+  }, [disabled, clearFnHeld]);
 
   const handleBlur = useCallback(() => {
     setIsCapturing(false);
