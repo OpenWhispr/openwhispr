@@ -29,10 +29,11 @@ export default function CalendarConnectionsStep() {
       setConnecting(provider);
       setError(null);
       try {
-        if (!(await ensureSystemAudio())) {
-          setError(t("onboarding.permissions.systemAudioDescription"));
-          return;
-        }
+        // Recording a meeting needs system audio; connecting a calendar does not.
+        // Awaited so the permission dialog doesn't race the OAuth browser window,
+        // but a denial no longer aborts the connection — that left a user who
+        // declined the prompt unable to connect any calendar at all.
+        await ensureSystemAudio();
 
         if (provider === "google") {
           const result = await window.electronAPI?.gcalStartOAuth?.();
@@ -118,7 +119,7 @@ export default function CalendarConnectionsStep() {
     <div className="flex w-full flex-col items-center gap-4">
       {/* Frame 2147258979 — 499x245, 198px of artwork on the left and a white
           301px panel on the right. radius 13.33, 1px stroke. */}
-      <section className="flex h-[245px] w-[499px] overflow-hidden rounded-[13.33px] border border-[var(--onboarding-control-border)] bg-white">
+      <section className="flex h-[245px] w-[499px] overflow-hidden rounded-[13.33px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
         {/* Frame 2147258992 — 198x245. Exported from Figma with the notification
             already composited. NOTE: that export was composited for the right-hand
             slot, so its bleed runs off the artwork's right edge — now the card's
@@ -135,7 +136,7 @@ export default function CalendarConnectionsStep() {
         />
 
         {/* Frame 2147258994 — 301x245 white panel, col gap 24, pad 24 16. */}
-        <div className="flex w-[301px] shrink-0 flex-col gap-6 bg-white px-4 py-6 text-left">
+        <div className="flex w-[301px] shrink-0 flex-col gap-6 bg-[var(--onboarding-surface)] px-4 py-6 text-left">
           <p className="text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
             {t("onboarding.rehaul.notes.hero.description")}
           </p>
@@ -168,14 +169,16 @@ export default function CalendarConnectionsStep() {
           <div
             key={provider.id}
             className={`flex items-center gap-[14px] ${
-              index === 0 ? "pb-4" : "border-t border-black/4 py-4 last:pb-0"
+              index === 0
+                ? "pb-4"
+                : "border-t border-[var(--onboarding-control-border)] py-4 last:pb-0"
             }`}
           >
             {/* Frame 2147258981 — 44x44 tile, 1px surface stroke, rx 9.5, with a 24px
                 glyph inset. The stroke lives here rather than in each asset so all
                 three providers match; the 48px sources land exactly 2x at 24px.
                 No fill: the frame has stroke only, so the row's #F7F7F7 reads
-                through. Do not re-add bg-white. */}
+                through. Do not re-add bg-[var(--onboarding-surface)]. */}
             <span className="flex size-11 shrink-0 items-center justify-center rounded-[9.5px] border border-[var(--onboarding-control-border)]">
               <img
                 src={provider.icon}
@@ -203,7 +206,7 @@ export default function CalendarConnectionsStep() {
                 default variant layers on shadow-sm, hover:shadow, a
                 border-primary/60 and font-semibold, none of which the spec has. */}
             {provider.connected ? (
-              <span className="inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-accent)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-white">
+              <span className="inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-accent)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]">
                 <CircleCheck className="size-3.5 shrink-0" strokeWidth={1.167} />
                 {t(
                   `integrations.${provider.id === "microsoft" ? "microsoftCalendar" : `${provider.id}Calendar`}.connected`
@@ -214,7 +217,7 @@ export default function CalendarConnectionsStep() {
                 type="button"
                 disabled={connecting !== null}
                 onClick={() => void connect(provider.id)}
-                className="onboarding-pressable inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-text-primary)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-white hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:opacity-60"
+                className="onboarding-pressable inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-inverse-surface)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-inverse-text)] hover:bg-[var(--onboarding-inverse-surface-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:opacity-60"
               >
                 {connecting === provider.id && (
                   <Loader2 className="size-3.5 shrink-0 animate-spin" />
@@ -227,7 +230,7 @@ export default function CalendarConnectionsStep() {
       </div>
 
       {error && (
-        <p role="alert" className="text-center text-xs text-red-500">
+        <p role="alert" className="text-center text-xs text-[var(--onboarding-danger)]">
           {error}
         </p>
       )}

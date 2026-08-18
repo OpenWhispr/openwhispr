@@ -184,7 +184,7 @@
         "title": "Set up OpenWhispr in 3 minutes",
         "microphoneDescription": "Turns speech into text.",
         "accessibilityDescription": "Pastes text into your active app.",
-        "systemAudioTitle": "Screen Audio",
+        "systemAudioTitle": "System Audio",
         "systemAudioDescription": "Captures audio from other apps.",
         "enable": "Enable",
         "enabled": "Enabled"
@@ -248,7 +248,8 @@
       "demo": {
         "listening": "Listening…",
         "processing": "Turning your voice into text…",
-        "stop": "Stop"
+        "stop": "Stop",
+        "typing": "Typing…"
       },
       "notes": {
         "title": "Record meetings without a bot with OpenWhispr Notes",

@@ -48,7 +48,7 @@ export default function LanguageSelectionStep({
           onChange={(event) => setQuery(event.target.value)}
           placeholder={searchPlaceholder}
           /* pl = 16 pad + 24 icon + 10 gap = 50px */
-          className="onboarding-light-input onboarding-light-input-bordered w-full rounded-full! border border-[var(--onboarding-control-border)] bg-white py-3 pl-[3.125rem] pr-4 text-[1.125rem] leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
+          className="onboarding-light-input onboarding-light-input-bordered w-full rounded-full! border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] py-3 pl-[3.125rem] pr-4 text-[1.125rem] leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
         />
       </label>
 
@@ -64,7 +64,7 @@ export default function LanguageSelectionStep({
                 type="button"
                 key={code}
                 onClick={() => toggle(code)}
-                className="onboarding-pressable inline-flex items-center gap-[7px] rounded-full border border-[var(--onboarding-control-border)] bg-white px-5 py-2.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-neutral-50"
+                className="onboarding-pressable inline-flex items-center gap-[7px] rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
               >
                 {displayOnboardingLanguageLabel(language)}
                 <X className="size-5 shrink-0" strokeWidth={1.667} />
@@ -79,7 +79,9 @@ export default function LanguageSelectionStep({
           .onboarding-list-row. max-h shows 5 rows, matching the Figma frame. */}
       <OnboardingList className="min-h-0 flex-1">
         {languages.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-neutral-500">{noResultsLabel}</p>
+          <p className="px-4 py-8 text-center text-sm text-[var(--onboarding-text-secondary)]">
+            {noResultsLabel}
+          </p>
         ) : (
           languages.map((language) => {
             const checked = selected.includes(language.code);
@@ -96,7 +98,9 @@ export default function LanguageSelectionStep({
                     asset carries both the fill and the #E3E3E3 border. */}
                 <span
                   className={`flex size-6 shrink-0 items-center justify-center rounded-[5.5px] border border-[var(--onboarding-control-border)] ${
-                    checked ? "bg-[var(--onboarding-accent)] text-white" : "bg-white"
+                    checked
+                      ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
+                      : "bg-[var(--onboarding-surface)]"
                   }`}
                   aria-hidden="true"
                 >

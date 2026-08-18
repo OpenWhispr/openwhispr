@@ -3,7 +3,7 @@ import { HotkeyInput } from "../ui/HotkeyInput";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
 import { formatHotkeyInstruction, getHotkeyKeycaps } from "./hotkeyPresentation";
 
-export function HotkeyChord({ value, compact = false }: { value: string; compact?: boolean }) {
+function HotkeyChord({ value, compact = false }: { value: string; compact?: boolean }) {
   const keycaps = getHotkeyKeycaps(value);
 
   return (
@@ -110,7 +110,7 @@ export default function ShortcutSetupStep({
       <div
         className={`relative flex h-40 items-center justify-center rounded-3xl px-6 ${
           candidate
-            ? "border-2 border-transparent bg-white"
+            ? "border-2 border-transparent bg-[var(--onboarding-surface)]"
             : "border-2 border-dashed border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]"
         }`}
       >
@@ -127,7 +127,7 @@ export default function ShortcutSetupStep({
         />
 
         {error ? (
-          <p role="alert" className="max-w-60 text-sm leading-5 text-red-500">
+          <p role="alert" className="max-w-60 text-sm leading-5 text-[var(--onboarding-danger)]">
             {error}
           </p>
         ) : candidate ? (
@@ -162,7 +162,7 @@ export default function ShortcutSetupStep({
           <button
             type="button"
             onClick={reset}
-            className="rounded-full border border-neutral-200 bg-white px-5 py-2 text-sm text-neutral-950 hover:bg-neutral-50"
+            className="rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2 text-sm text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
           >
             {chooseAnotherLabel}
           </button>

@@ -56,15 +56,15 @@ export default function ProviderConnectionTest({
   if (variant === "inline") {
     return (
       <div>
-        <div className="flex h-11 items-center justify-between rounded-xl border border-neutral-200 bg-white px-3">
-          <span className="text-xs font-medium text-neutral-950">
+        <div className="flex h-11 items-center justify-between rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3">
+          <span className="text-xs font-medium text-[var(--onboarding-text-primary)]">
             {t("onboarding.rehaul.provider.testConnection")}
           </span>
           <Button
             type="button"
             onClick={() => void testConnection()}
             disabled={status === "testing"}
-            className="h-7 gap-1 rounded-full border-neutral-950! bg-neutral-950 px-2 text-[0.5625rem] font-normal text-white shadow-none! hover:bg-neutral-800 focus-visible:ring-0 disabled:opacity-70"
+            className="h-7 gap-1 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-2 text-[0.5625rem] font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] focus-visible:ring-0 disabled:opacity-70"
           >
             {status === "testing" && <Loader2 className="size-3 animate-spin" />}
             {status === "success" && <CheckCircle className="size-3" />}

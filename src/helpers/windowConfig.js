@@ -100,11 +100,11 @@ const CONTROL_PANEL_CONFIG = {
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 20, y: 20 },
   }),
-  // Transparent so the compact onboarding frame's 44px rounded corners show the
-  // desktop instead of a square page backing bleeding into the corner crescent.
-  // Safe for the other control panel screens because each paints its own opaque
-  // background (ControlPanel's root is `bg-background`); only the compact
-  // onboarding steps clear body/#root — see index.css.
+  // Transparent so a renderer that insets or rounds itself shows the desktop
+  // rather than a square page backing bleeding out behind it. Safe for the other
+  // control panel screens because each paints its own opaque background
+  // (ControlPanel's root is `bg-background`); only the compact onboarding steps
+  // clear body/#root — see index.css.
   transparent: true,
   minimizable: true,
   maximizable: true,

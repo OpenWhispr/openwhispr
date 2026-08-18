@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import confetti from "canvas-confetti";
 import { ChevronDown, Loader2, Mic, RefreshCw, Square } from "lucide-react";
 import { Button } from "../ui/button";
@@ -20,9 +21,8 @@ import assistantAvatar from "../../assets/onboarding-assistant-dog.webp";
  * would keep firing into a detached canvas. And reduced motion skips the loop
  * outright rather than scheduling ~100 frames of no-ops.
  *
- * Colours are sampled from the reference artwork. `scalar` sizes the pieces (1 is
- * canvas-confetti's default); the override exists so the kitchen can compare
- * sizes without a rebuild.
+ * Colours are sampled from the reference artwork; `scalar` sizes the pieces (1 is
+ * canvas-confetti's default).
  */
 const CONFETTI_BASE = {
   // Sampled from the reference artwork: gold and yellow through orange, then teal,
@@ -54,7 +54,7 @@ const STREAM_DURATION_MS = 1800;
 /** Per side, per frame, at full strength; tapers to 1 as the streams wind down. */
 const STREAM_PARTICLES = 7;
 
-export function ConfettiLayer({ scalar }: { scalar?: number } = {}) {
+function ConfettiLayer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -67,8 +67,6 @@ export function ConfettiLayer({ scalar }: { scalar?: number } = {}) {
     // main thread costs nothing next to that.
     const fire = confetti.create(canvas, { resize: true, useWorker: false });
 
-    const size = scalar ?? CONFETTI_BASE.scalar;
-
     // canvas-confetti already no-ops per call under reduced motion, but bail
     // before the loop so we don't schedule ~100 frames of nothing.
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
@@ -80,7 +78,6 @@ export function ConfettiLayer({ scalar }: { scalar?: number } = {}) {
       const remaining = Math.max(0, (end - now) / STREAM_DURATION_MS);
       const shared = {
         ...CONFETTI_BASE,
-        scalar: size,
         particleCount: Math.max(1, Math.round(STREAM_PARTICLES * remaining)),
       };
       // 60 from the left edge and 120 from the right both angle inward and up.
@@ -94,7 +91,7 @@ export function ConfettiLayer({ scalar }: { scalar?: number } = {}) {
       cancelAnimationFrame(frameId);
       fire.reset();
     };
-  }, [scalar]);
+  }, []);
 
   return (
     <canvas
@@ -128,7 +125,7 @@ function FounderAvatar() {
 function FounderBubble({ children }: { children: ReactNode }) {
   return (
     <p
-      className="w-fit rounded-[38px] bg-[var(--onboarding-accent)] px-5 py-2.5 text-sm font-medium leading-[1.4] text-white"
+      className="w-fit rounded-[38px] bg-[var(--onboarding-accent)] px-5 py-2.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]"
       style={BUBBLE_IN}
     >
       {children}
@@ -143,6 +140,8 @@ function FounderBubble({ children }: { children: ReactNode }) {
 const BUBBLE_IN = { animation: "agent-message-in 220ms ease-out both" } as const;
 
 function TypingBubble() {
+  const { t } = useTranslation();
+
   return (
     // Figma "Onboarding / Frame 25": pill on light/surface-stroke, radius 38,
     // 10/20 padding, hugging a 40x20 row of 8px dots on 16px centers (so an 8px
@@ -150,7 +149,7 @@ function TypingBubble() {
     <div
       className="flex items-center rounded-[38px] bg-[var(--onboarding-control-border)] px-5 py-2.5"
       style={BUBBLE_IN}
-      aria-label="Typing"
+      aria-label={t("onboarding.rehaul.demo.typing")}
     >
       <span className="flex h-5 items-center gap-2">
         {[0, 1, 2].map((index) => (
@@ -302,7 +301,7 @@ export default function DemoStep({
         // Figma "Frame 2147203460": 400 tall, radius 20, #E3E3E3 stroke, 20/16
         // padding, 24 between the mail header and the reply row. No shadow — the
         // stroke carries the edge.
-        <article className="flex h-[400px] flex-col gap-6 rounded-[20px] border border-[var(--onboarding-control-border)] bg-white px-4 py-5 text-left">
+        <article className="flex h-[400px] flex-col gap-6 rounded-[20px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-5 text-left">
           {/* Frame 2147259013: 44px avatar, 16 gap, and a column that keeps the
               body copy on the text's left edge rather than the avatar's. */}
           <div className="flex gap-4">
@@ -404,7 +403,7 @@ function VoiceSurface({
       // Figma "Frame 3", shared by both demos: 180 tall, radius 14, #E3E3E3
       // stroke, 15/11 padding. The dictation card is a fixed 424 wide; the
       // assistant one fills the row beside its avatar.
-      className={`relative flex h-[180px] flex-col rounded-[14px] border border-[var(--onboarding-control-border)] bg-white px-[11px] py-[15px] ${
+      className={`relative flex h-[180px] flex-col rounded-[14px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-[11px] py-[15px] ${
         embedded ? "min-w-0 flex-1" : ""
       }`}
     >
@@ -416,7 +415,7 @@ function VoiceSurface({
         // Placeholder is text-tertiary at 38% — 16/140% in the mail card, 18/140%
         // in the dictation one. The caret takes the brand colour, which is what
         // Figma draws as the 3x18 bar.
-        className={`input-inline min-h-0 w-full flex-1 resize-none bg-transparent pr-10 leading-[1.4] text-neutral-950 caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
+        className={`input-inline min-h-0 w-full flex-1 resize-none bg-transparent pr-10 leading-[1.4] text-[var(--onboarding-text-primary)] caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
           embedded ? "text-base" : "text-[1.125rem]"
         }`}
       />
@@ -427,7 +426,7 @@ function VoiceSurface({
         aria-label={stopLabel}
         title={event?.status === "listening" ? stopLabel : undefined}
         // Figma places the 32px control 10 from the card's bottom-right corner.
-        className="absolute bottom-2.5 right-2.5 flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-neutral-950 text-white transition-colors hover:bg-neutral-800 disabled:cursor-default disabled:hover:bg-neutral-950"
+        className="absolute bottom-2.5 right-2.5 flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)] transition-colors hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:cursor-default disabled:hover:bg-[var(--onboarding-inverse-surface)]"
       >
         {event?.status === "processing" ? (
           <Loader2 className="size-4 animate-spin" />
@@ -438,13 +437,13 @@ function VoiceSurface({
         )}
       </button>
       <div
-        className="absolute bottom-3 left-3 max-w-[15rem] text-xs text-neutral-500"
+        className="absolute bottom-3 left-3 max-w-[15rem] text-xs text-[var(--onboarding-text-secondary)]"
         aria-live="polite"
       >
         {event?.status === "listening" && listeningLabel}
         {event?.status === "processing" && processingLabel}
         {event?.status === "error" && (
-          <span className="inline-flex items-center gap-1 text-red-500">
+          <span className="inline-flex items-center gap-1 text-[var(--onboarding-danger)]">
             {event.message}
             <Button type="button" variant="ghost" size="sm" onClick={onRetry}>
               <RefreshCw className="size-3" />

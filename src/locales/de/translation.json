@@ -135,7 +135,7 @@
     "pttUnavailable": "Der native Push-to-Talk-Listener ist nicht verfügbar"
   },
   "common": {
-    "continue": "Continue",
+    "continue": "Weiter",
     "add": "Hinzufügen",
     "retry": "Erneut versuchen",
     "back": "Zurück",
@@ -181,254 +181,255 @@
   "onboarding": {
     "rehaul": {
       "permissions": {
-        "title": "Set up OpenWhispr in 3 minutes",
+        "title": "OpenWhispr in 3 Minuten einrichten",
         "microphoneDescription": "Verwandelt Sprache in Text.",
         "accessibilityDescription": "Fügt Text in deine aktive App ein.",
-        "systemAudioTitle": "Bildschirm-Audio",
+        "systemAudioTitle": "Systemaudio",
         "systemAudioDescription": "Nimmt Audio aus anderen Apps auf.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
       "languages": {
-        "title": "Which languages do you speak?",
+        "title": "Welche Sprachen sprechen Sie?",
         "titleLineOne": "Welche Sprachen",
         "titleLineTwo": "sprichst du?",
         "description": "Select all that apply. Multiple selections use automatic language detection."
       },
       "dictationHotkey": {
-        "title": "Set up your keyboard shortcut",
+        "title": "Richten Sie Ihr Tastenkürzel ein",
         "titleLineOne": "Tastenkürzel",
         "titleLineTwo": "einrichten",
-        "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
+        "description": "Wählen Sie ein Tastenkürzel, um das Diktieren von überall zu starten und zu stoppen."
       },
       "assistantHotkey": {
-        "title": "Set up OpenWhispr Assistant",
-        "titleLineOne": "Set up",
+        "title": "OpenWhispr Assistant einrichten",
+        "titleLineOne": "Einrichten:",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "description": "Sprechen Sie eine Anfrage aus, und OpenWhispr Assistant schreibt das Ergebnis für Sie.",
         "preview": {
-          "newMessage": "New Message",
+          "newMessage": "Neue Nachricht",
           "toLabel": "To:",
           "recipient": "alex@northstarstudio.co",
-          "subjectLabel": "Subject:",
-          "subject": "Project completed",
-          "greeting": "Hi Alex,",
-          "bodyLineOne": "The new project is complete and ready for review.",
-          "bodyLineTwo": "I’ve wrapped up the final updates and everything is good to go from my side.",
-          "prompt": "Draft an email notifying the client that I have completed the new project"
+          "subjectLabel": "Betreff:",
+          "subject": "Projekt abgeschlossen",
+          "greeting": "Hallo Alex,",
+          "bodyLineOne": "Das neue Projekt ist abgeschlossen und bereit zur Durchsicht.",
+          "bodyLineTwo": "Ich habe die letzten Aktualisierungen fertiggestellt, von meiner Seite ist alles bereit.",
+          "prompt": "Schreibe eine E-Mail, in der ich dem Kunden mitteile, dass ich das neue Projekt abgeschlossen habe"
         }
       },
       "hotkey": {
-        "capture": "Press the keys you want to use",
-        "confirm": "Press {{hotkey}} again to confirm",
-        "chooseAnother": "Choose another shortcut",
+        "capture": "Drücken Sie die Tasten, die Sie verwenden möchten",
+        "confirm": "Drücken Sie {{hotkey}} erneut zum Bestätigen",
+        "chooseAnother": "Anderes Tastenkürzel wählen",
         "inUse": "Dieses Tastenkürzel wird bereits verwendet. Wähle ein anderes."
       },
       "dictationDemo": {
-        "title": "Try your first dictation",
-        "titleLineOne": "Try your",
-        "titleLineTwo": "first dictation",
-        "description": "Press {{hotkey}} and start speaking. OpenWhispr will turn your voice into text.",
+        "title": "Probieren Sie Ihr erstes Diktat aus",
+        "titleLineOne": "Probieren Sie Ihr",
+        "titleLineTwo": "erstes Diktat aus",
+        "description": "Drücken Sie {{hotkey}} und sprechen Sie los. OpenWhispr wandelt Ihre Stimme in Text um.",
         "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
-        "prompt": "Try saying: “I’m testing dictation for the first time.”",
-        "placeholder": "Your dictation will appear here…"
+        "prompt": "Sagen Sie zum Beispiel: „Ich teste das Diktieren zum ersten Mal.“",
+        "placeholder": "Ihr Diktat erscheint hier…"
       },
       "assistantDemo": {
-        "title": "Meet OpenWhispr Assistant",
-        "titleLineOne": "Meet",
+        "title": "OpenWhispr Assistant kennenlernen",
+        "titleLineOne": "Das ist",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "description": "Sprechen Sie eine Anfrage aus, und OpenWhispr Assistant schreibt das Ergebnis für Sie.",
         "senderName": "Eren Lauren",
         "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "to John Doe",
-        "email": "Hey! Want to grab coffee next week? Let me know what works for you.",
-        "prompt": "Reply that Tuesday at 3 works. Send an invite.",
+        "recipientLabel": "an John Doe",
+        "email": "Hey! Hast du nächste Woche Zeit für einen Kaffee? Sag mir, was dir passt.",
+        "prompt": "Antworte, dass Dienstag um 15 Uhr passt. Sende eine Einladung.",
         "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
       },
       "demo": {
-        "listening": "Listening…",
-        "processing": "Turning your voice into text…",
-        "stop": "Stop"
+        "listening": "Höre zu…",
+        "processing": "Ihre Stimme wird zu Text…",
+        "stop": "Stopp",
+        "typing": "Schreibt…"
       },
       "notes": {
-        "title": "Record meetings without a bot with OpenWhispr Notes",
-        "titleLineOne": "Record meetings without a bot",
-        "titleLineTwoPrefix": "with OpenWhispr",
+        "title": "Meetings ohne Bot aufzeichnen – mit OpenWhispr Notes",
+        "titleLineOne": "Meetings ohne Bot aufzeichnen",
+        "titleLineTwoPrefix": "mit OpenWhispr",
         "titleLineTwoBrand": "Notes",
-        "description": "OpenWhispr turns your conversation into clear notes. No meeting bot joins your call.",
+        "description": "OpenWhispr verwandelt Ihr Gespräch in klare Notizen. Kein Meeting-Bot nimmt an Ihrem Anruf teil.",
         "hero": {
-          "detected": "Meeting Detected",
-          "transcribe": "Want to transcribe the meeting?",
-          "description": "Record your meeting and let OpenWhispr turn the conversation into clear, organized notes.",
-          "chat": "Chat with your meeting notes",
-          "transcript": "Review the full transcript",
-          "speakers": "See who said what"
+          "detected": "Meeting erkannt",
+          "transcribe": "Möchten Sie das Meeting transkribieren?",
+          "description": "Zeichnen Sie Ihr Meeting auf und lassen Sie OpenWhispr das Gespräch in klare, strukturierte Notizen verwandeln.",
+          "chat": "Mit Ihren Meeting-Notizen chatten",
+          "transcript": "Das vollständige Transkript ansehen",
+          "speakers": "Sehen, wer was gesagt hat"
         },
         "connectors": {
-          "connect": "Connect",
+          "connect": "Verbinden",
           "googleTitle": "Google Calendar",
-          "googleDescription": "Sync your meetings.",
+          "googleDescription": "Synchronisieren Sie Ihre Meetings.",
           "microsoftTitle": "Microsoft Outlook",
-          "microsoftDescription": "Bring in work meetings and invites.",
-          "appleTitle": "Apple Calendar",
-          "appleDescription": "Sync events from your Mac and iPhone."
+          "microsoftDescription": "Arbeitsmeetings und Einladungen übernehmen.",
+          "appleTitle": "Apple Kalender",
+          "appleDescription": "Termine von Ihrem Mac und iPhone synchronisieren."
         }
       },
       "setupChoice": {
-        "title": "Choose your OpenWhispr setup",
-        "titleLineOne": "Choose your",
-        "titleLineTwo": "OpenWhispr setup",
-        "description": "Pick the option that fits how you work.",
+        "title": "OpenWhispr-Einrichtung wählen",
+        "titleLineOne": "Wählen Sie Ihre",
+        "titleLineTwo": "OpenWhispr-Einrichtung",
+        "description": "Wählen Sie die Option, die zu Ihrer Arbeitsweise passt.",
         "cloud": {
           "title": "OpenWhispr Cloud",
-          "description": "Get 2,000 free words each week. Your settings stay synced across devices.",
-          "continue": "Continue for free",
-          "signIn": "Sign in to use Cloud",
+          "description": "2.000 Wörter pro Woche gratis. Ihre Einstellungen bleiben geräteübergreifend synchron.",
+          "continue": "Kostenlos fortfahren",
+          "signIn": "Anmelden, um Cloud zu nutzen",
           "features": {
-            "fast": "Fastest, no setup required",
+            "fast": "Am schnellsten, keine Einrichtung nötig",
             "privacy": "Privacy-focused processing",
-            "sync": "Settings sync across devices",
-            "features": "AI features for notes and actions"
+            "sync": "Einstellungen geräteübergreifend synchron",
+            "features": "KI-Funktionen für Notizen und Aktionen"
           }
         },
         "byok": {
-          "title": "API Provider",
-          "description": "Use your own API key."
+          "title": "API-Anbieter",
+          "description": "Verwenden Sie Ihren eigenen API-Schlüssel."
         },
         "local": {
-          "title": "On your device",
-          "description": "Private offline transcription. Needs at least {{minimumSpace}} GB free space.",
-          "badge": "Free",
-          "download": "Download models",
+          "title": "Auf Ihrem Gerät",
+          "description": "Private Offline-Transkription. Benötigt mindestens {{minimumSpace}} GB freien Speicher.",
+          "badge": "Kostenlos",
+          "download": "Modelle herunterladen",
           "features": {
-            "device": "Runs on your device",
-            "offline": "Works offline after setup",
-            "models": "Choose models for dictation and assistant",
-            "free": "Free to use"
+            "device": "Läuft auf Ihrem Gerät",
+            "offline": "Funktioniert nach der Einrichtung offline",
+            "models": "Modelle für Diktat und Assistant wählen",
+            "free": "Kostenlos nutzbar"
           }
         },
         "enterprise": {
           "title": "Enterprise",
-          "description": "Use an organization-managed AI provider with team controls.",
-          "setUp": "Set up Enterprise",
+          "description": "Verwenden Sie einen von Ihrer Organisation verwalteten KI-Anbieter mit Team-Kontrollen.",
+          "setUp": "Enterprise einrichten",
           "features": {
-            "credentials": "Use your organization’s credentials",
-            "compliance": "SOC 2 Type II, HIPAA, and ISO 27001",
-            "controls": "Manage access with team controls"
+            "credentials": "Zugangsdaten Ihrer Organisation verwenden",
+            "compliance": "SOC 2 Type II, HIPAA und ISO 27001",
+            "controls": "Zugriff über Team-Kontrollen verwalten"
           }
         },
         "warnings": {
           "byok": {
-            "title": "Your provider handles your data",
-            "description": "You’ll add credentials for separate dictation and Assistant providers. Provider pricing and retention policies apply.",
-            "continue": "Set up API provider",
+            "title": "Ihr Anbieter verarbeitet Ihre Daten",
+            "description": "Sie fügen Zugangsdaten für separate Diktat- und Assistant-Anbieter hinzu. Es gelten die Preise und Aufbewahrungsrichtlinien des Anbieters.",
+            "continue": "API-Anbieter einrichten",
             "steps": {
-              "1": "Choose providers for dictation and Assistant",
-              "2": "Add credentials using secure storage",
-              "3": "Test each connection before activation"
+              "1": "Anbieter für Diktat und Assistant wählen",
+              "2": "Zugangsdaten über sichere Speicherung hinzufügen",
+              "3": "Jede Verbindung vor der Aktivierung testen"
             }
           },
           "local": {
-            "title": "Local setup takes a few extra steps",
-            "description": "Local processing keeps your speech on this device, but requires a one-time setup and at least {{minimumSpace}} GB of free space.",
+            "title": "Die lokale Einrichtung erfordert ein paar zusätzliche Schritte",
+            "description": "Die lokale Verarbeitung behält Ihre Sprache auf diesem Gerät, erfordert aber eine einmalige Einrichtung und mindestens {{minimumSpace}} GB freien Speicher.",
             "continue": "Set up locally",
             "steps": {
-              "1": "Choose a transcription engine",
-              "2": "Configure or download a model, about {{modelSize}}",
-              "3": "Wait for installation and activation"
+              "1": "Transkriptions-Engine wählen",
+              "2": "Modell konfigurieren oder herunterladen, etwa {{modelSize}}",
+              "3": "Auf Installation und Aktivierung warten"
             }
           },
           "enterprise": {
-            "title": "Have your organization credentials ready",
-            "description": "Manual enterprise setup is available only when your workspace policy permits it.",
-            "continue": "Set up enterprise",
+            "title": "Halten Sie die Zugangsdaten Ihrer Organisation bereit",
+            "description": "Die manuelle Enterprise-Einrichtung ist nur verfügbar, wenn Ihre Workspace-Richtlinie sie erlaubt.",
+            "continue": "Enterprise einrichten",
             "steps": {
-              "1": "Sign in with SSO or enter approved credentials",
-              "2": "Choose an available region and model",
-              "3": "Test the managed connection before activation"
+              "1": "Mit SSO anmelden oder freigegebene Zugangsdaten eingeben",
+              "2": "Verfügbare Region und Modell wählen",
+              "3": "Die verwaltete Verbindung vor der Aktivierung testen"
             }
           }
         },
-        "useCloud": "Use Cloud instead",
-        "continueSetup": "Continue setup",
-        "showMore": "Show More Options",
+        "useCloud": "Stattdessen Cloud verwenden",
+        "continueSetup": "Einrichtung fortsetzen",
+        "showMore": "Weitere Optionen anzeigen",
         "moreOptions": {
-          "title": "Choose your API setup",
-          "description": "Add an API key or connect a self-hosted model.",
+          "title": "API-Einrichtung wählen",
+          "description": "Fügen Sie einen API-Schlüssel hinzu oder verbinden Sie ein selbst gehostetes Modell.",
           "selfHosted": {
-            "title": "Self-hosted",
-            "description": "Connect your own hosted model."
+            "title": "Selbst gehostet",
+            "description": "Verbinden Sie Ihr eigenes gehostetes Modell."
           }
         }
       },
       "provider": {
-        "progress": "Provider setup progress",
-        "dictation": "Dictation",
-        "assistant": "Assistant",
-        "title": "Connect your AI provider",
-        "description": "Choose a provider, add your credentials, and test the connection.",
-        "descriptionLineOne": "Choose a provider and add",
-        "descriptionLineTwo": "your API key.",
-        "selfHosted": "Have a self-hosted model key",
-        "providerLabel": "Provider",
-        "providerPlaceholder": "Choose the model provider",
-        "modelLabel": "Model",
-        "modelPlaceholder": "Choose the model",
-        "apiKey": "API Key",
-        "apiKeyPlaceholder": "Paste your API key",
-        "endpointUrl": "Endpoint URL",
-        "endpointPlaceholder": "Paste your endpoint URL",
+        "progress": "Fortschritt der Anbieter-Einrichtung",
+        "dictation": "Diktat",
+        "assistant": "Assistent",
+        "title": "KI-Anbieter verbinden",
+        "description": "Wählen Sie einen Anbieter, fügen Sie Ihre Zugangsdaten hinzu und testen Sie die Verbindung.",
+        "descriptionLineOne": "Wählen Sie einen Anbieter und fügen",
+        "descriptionLineTwo": "Sie Ihren API-Schlüssel hinzu.",
+        "selfHosted": "Ich habe einen Schlüssel für ein selbst gehostetes Modell",
+        "providerLabel": "Anbieter",
+        "providerPlaceholder": "Modellanbieter auswählen",
+        "modelLabel": "Modell",
+        "modelPlaceholder": "Modell auswählen",
+        "apiKey": "API-Schlüssel",
+        "apiKeyPlaceholder": "API-Schlüssel einfügen",
+        "endpointUrl": "Endpoint-URL",
+        "endpointPlaceholder": "Endpoint-URL einfügen",
         "optional": "Optional",
-        "modelId": "Model ID",
-        "modelIdPlaceholder": "Write your model ID",
-        "testConnection": "Test Connection",
-        "proceed": "Proceed",
-        "clinical": "FOR CLINICAL TRANSCRIPTION",
+        "modelId": "Modell-ID",
+        "modelIdPlaceholder": "Modell-ID eingeben",
+        "testConnection": "Verbindung testen",
+        "proceed": "Fortfahren",
+        "clinical": "FÜR KLINISCHE TRANSKRIPTION",
         "clientId": "Client ID",
-        "clientSecret": "Client secret",
-        "runTest": "Run Test",
-        "testing": "Testing…",
-        "connected": "Connected",
-        "connectionFailed": "The connection could not be verified."
+        "clientSecret": "Client Secret",
+        "runTest": "Test starten",
+        "testing": "Test läuft…",
+        "connected": "Verbunden",
+        "connectionFailed": "Die Verbindung konnte nicht überprüft werden."
       },
       "local": {
-        "title": "Set up local models",
-        "description": "Choose the models you want to run on your device.",
-        "descriptionLineOne": "Choose the models you want",
-        "descriptionLineTwo": "to run on your device.",
-        "providerLabel": "Provider",
+        "title": "Lokale Modelle einrichten",
+        "description": "Wählen Sie die Modelle, die auf Ihrem Gerät laufen sollen.",
+        "descriptionLineOne": "Wählen Sie die Modelle, die",
+        "descriptionLineTwo": "auf Ihrem Gerät laufen sollen.",
+        "providerLabel": "Anbieter",
         "agent": "Agent",
-        "download": "Download",
-        "downloadingShort": "Downloading",
-        "selected": "Selected",
-        "use": "Use",
-        "downloadInProgress": "Download in progress",
+        "download": "Herunterladen",
+        "downloadingShort": "Wird geladen",
+        "selected": "Ausgewählt",
+        "use": "Verwenden",
+        "downloadInProgress": "Download läuft",
         "cancelDownload": "Download von {{model}} abbrechen",
-        "downloadInBackground": "Finish in background",
-        "downloads": "Model downloads",
-        "downloading": "Downloading… {{progress}}%",
-        "installing": "Installing model…"
+        "downloadInBackground": "Im Hintergrund abschließen",
+        "downloads": "Modell-Downloads",
+        "downloading": "Wird heruntergeladen… {{progress}}%",
+        "installing": "Modell wird installiert…"
       },
       "enterprise": {
-        "title": "Connect your enterprise provider",
-        "description": "Use your organization’s credentials for dictation intelligence and the Assistant.",
-        "descriptionLineOne": "Use your organization’s credentials",
-        "descriptionLineTwo": "to connect a provider.",
-        "dictationIntelligence": "Dictation intelligence",
-        "ssoProfile": "SSO Profile",
-        "accessKeys": "Access Keys",
-        "profileName": "Profile Name",
-        "profilePlaceholder": "Add profile name",
+        "title": "Enterprise-Anbieter verbinden",
+        "description": "Verwenden Sie die Zugangsdaten Ihrer Organisation für Diktier-Intelligenz und den Assistant.",
+        "descriptionLineOne": "Verwenden Sie die Zugangsdaten Ihrer Organisation,",
+        "descriptionLineTwo": "um einen Anbieter zu verbinden.",
+        "dictationIntelligence": "Diktier-Intelligenz",
+        "ssoProfile": "SSO-Profil",
+        "accessKeys": "Zugriffsschlüssel",
+        "profileName": "Profilname",
+        "profilePlaceholder": "Profilnamen hinzufügen",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
         "region": "Region",
-        "regionPlaceholder": "Choose a region",
-        "model": "Model",
-        "modelPlaceholder": "Choose a model",
-        "testConnection": "Test Connection",
-        "managedTitle": "Your provider is managed by your organization",
-        "managedDescription": "OpenWhispr will use the provider and model assigned by your administrator.",
-        "unavailable": "Enterprise setup is unavailable under your workspace policy."
+        "regionPlaceholder": "Region auswählen",
+        "model": "Modell",
+        "modelPlaceholder": "Modell auswählen",
+        "testConnection": "Verbindung testen",
+        "managedTitle": "Ihr Anbieter wird von Ihrer Organisation verwaltet",
+        "managedDescription": "OpenWhispr verwendet den Anbieter und das Modell, die Ihr Administrator zugewiesen hat.",
+        "unavailable": "Die Enterprise-Einrichtung ist unter Ihrer Workspace-Richtlinie nicht verfügbar."
       }
     },
     "steps": {

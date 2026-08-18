@@ -135,7 +135,7 @@
     "pttUnavailable": "Нативный слушатель Push-to-Talk недоступен"
   },
   "common": {
-    "continue": "Continue",
+    "continue": "Продолжить",
     "add": "Добавить",
     "retry": "Повторить",
     "back": "Назад",
@@ -163,16 +163,16 @@
     "tap": "Нажатие",
     "close": "Закрыть",
     "dismiss": "Скрыть",
-    "save": "Speichern",
-    "saving": "Speichern…",
-    "create": "Erstellen",
-    "delete": "Löschen",
-    "actions": "Aktionen",
-    "error": "Etwas ist schiefgelaufen",
-    "unknownError": "Ein unbekannter Fehler ist aufgetreten",
-    "copy": "Kopieren",
-    "copied": "Kopiert",
-    "done": "Fertig",
+    "save": "Сохранить",
+    "saving": "Сохранение…",
+    "create": "Создать",
+    "delete": "Удалить",
+    "actions": "Действия",
+    "error": "Что-то пошло не так",
+    "unknownError": "Произошла неизвестная ошибка",
+    "copy": "Копировать",
+    "copied": "Скопировано",
+    "done": "Готово",
     "skip": "Пропустить",
     "policyAiProcessingRestricted": "Обработка ИИ ограничена вашей организацией.",
     "policyAgentRestricted": "Использование ИИ-агента ограничено вашей организацией.",
@@ -181,254 +181,255 @@
   "onboarding": {
     "rehaul": {
       "permissions": {
-        "title": "Set up OpenWhispr in 3 minutes",
+        "title": "Настройте OpenWhispr за 3 минуты",
         "microphoneDescription": "Преобразует речь в текст.",
         "accessibilityDescription": "Вставляет текст в активное приложение.",
-        "systemAudioTitle": "Системный звук",
+        "systemAudioTitle": "Системное аудио",
         "systemAudioDescription": "Записывает звук из других приложений.",
         "enable": "Включить",
         "enabled": "Включено"
       },
       "languages": {
-        "title": "Which languages do you speak?",
+        "title": "На каких языках вы говорите?",
         "titleLineOne": "На каких языках",
         "titleLineTwo": "вы говорите?",
         "description": "Select all that apply. Multiple selections use automatic language detection."
       },
       "dictationHotkey": {
-        "title": "Set up your keyboard shortcut",
+        "title": "Настройте сочетание клавиш",
         "titleLineOne": "Настройте",
         "titleLineTwo": "сочетание клавиш",
-        "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
+        "description": "Выберите сочетание клавиш, чтобы начинать и останавливать диктовку из любого приложения."
       },
       "assistantHotkey": {
-        "title": "Set up OpenWhispr Assistant",
-        "titleLineOne": "Set up",
+        "title": "Настройте OpenWhispr Assistant",
+        "titleLineOne": "Настройте",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "description": "Произнесите запрос, и OpenWhispr Assistant напишет результат за вас.",
         "preview": {
-          "newMessage": "New Message",
+          "newMessage": "Новое сообщение",
           "toLabel": "To:",
           "recipient": "alex@northstarstudio.co",
-          "subjectLabel": "Subject:",
-          "subject": "Project completed",
-          "greeting": "Hi Alex,",
-          "bodyLineOne": "The new project is complete and ready for review.",
-          "bodyLineTwo": "I’ve wrapped up the final updates and everything is good to go from my side.",
-          "prompt": "Draft an email notifying the client that I have completed the new project"
+          "subjectLabel": "Тема:",
+          "subject": "Проект завершён",
+          "greeting": "Привет, Алекс!",
+          "bodyLineOne": "Новый проект готов и ждёт проверки.",
+          "bodyLineTwo": "Я внёс последние правки, с моей стороны всё готово.",
+          "prompt": "Составь письмо клиенту о том, что я завершил новый проект"
         }
       },
       "hotkey": {
-        "capture": "Press the keys you want to use",
-        "confirm": "Press {{hotkey}} again to confirm",
-        "chooseAnother": "Choose another shortcut",
+        "capture": "Нажмите клавиши, которые хотите использовать",
+        "confirm": "Нажмите {{hotkey}} ещё раз для подтверждения",
+        "chooseAnother": "Выбрать другое сочетание",
         "inUse": "Это сочетание уже используется. Выберите другое."
       },
       "dictationDemo": {
-        "title": "Try your first dictation",
-        "titleLineOne": "Try your",
-        "titleLineTwo": "first dictation",
-        "description": "Press {{hotkey}} and start speaking. OpenWhispr will turn your voice into text.",
+        "title": "Попробуйте свою первую диктовку",
+        "titleLineOne": "Попробуйте свою",
+        "titleLineTwo": "первую диктовку",
+        "description": "Нажмите {{hotkey}} и начните говорить. OpenWhispr превратит вашу речь в текст.",
         "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
-        "prompt": "Try saying: “I’m testing dictation for the first time.”",
-        "placeholder": "Your dictation will appear here…"
+        "prompt": "Попробуйте сказать: «Я впервые тестирую диктовку».",
+        "placeholder": "Ваша диктовка появится здесь…"
       },
       "assistantDemo": {
-        "title": "Meet OpenWhispr Assistant",
-        "titleLineOne": "Meet",
+        "title": "Знакомьтесь: OpenWhispr Assistant",
+        "titleLineOne": "Знакомьтесь:",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "description": "Произнесите запрос, и OpenWhispr Assistant напишет результат за вас.",
         "senderName": "Eren Lauren",
         "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "to John Doe",
-        "email": "Hey! Want to grab coffee next week? Let me know what works for you.",
-        "prompt": "Reply that Tuesday at 3 works. Send an invite.",
+        "recipientLabel": "для John Doe",
+        "email": "Привет! Может, выпьем кофе на следующей неделе? Скажи, когда тебе удобно.",
+        "prompt": "Ответь, что вторник в 15:00 подходит. Отправь приглашение.",
         "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
       },
       "demo": {
-        "listening": "Listening…",
-        "processing": "Turning your voice into text…",
-        "stop": "Stop"
+        "listening": "Слушаю…",
+        "processing": "Превращаю ваш голос в текст…",
+        "stop": "Остановить",
+        "typing": "Печатает…"
       },
       "notes": {
-        "title": "Record meetings without a bot with OpenWhispr Notes",
-        "titleLineOne": "Record meetings without a bot",
-        "titleLineTwoPrefix": "with OpenWhispr",
+        "title": "Записывайте встречи без бота с OpenWhispr Notes",
+        "titleLineOne": "Записывайте встречи без бота",
+        "titleLineTwoPrefix": "с OpenWhispr",
         "titleLineTwoBrand": "Notes",
-        "description": "OpenWhispr turns your conversation into clear notes. No meeting bot joins your call.",
+        "description": "OpenWhispr превращает разговор в понятные заметки. Никакой бот не подключается к вашему звонку.",
         "hero": {
-          "detected": "Meeting Detected",
-          "transcribe": "Want to transcribe the meeting?",
-          "description": "Record your meeting and let OpenWhispr turn the conversation into clear, organized notes.",
-          "chat": "Chat with your meeting notes",
-          "transcript": "Review the full transcript",
-          "speakers": "See who said what"
+          "detected": "Обнаружена встреча",
+          "transcribe": "Транскрибировать встречу?",
+          "description": "Запишите встречу, и OpenWhispr превратит разговор в понятные, структурированные заметки.",
+          "chat": "Общайтесь с заметками встречи",
+          "transcript": "Просматривайте полную расшифровку",
+          "speakers": "Смотрите, кто что сказал"
         },
         "connectors": {
-          "connect": "Connect",
-          "googleTitle": "Google Calendar",
-          "googleDescription": "Sync your meetings.",
+          "connect": "Подключить",
+          "googleTitle": "Google Календарь",
+          "googleDescription": "Синхронизируйте свои встречи.",
           "microsoftTitle": "Microsoft Outlook",
-          "microsoftDescription": "Bring in work meetings and invites.",
-          "appleTitle": "Apple Calendar",
-          "appleDescription": "Sync events from your Mac and iPhone."
+          "microsoftDescription": "Добавьте рабочие встречи и приглашения.",
+          "appleTitle": "Календарь Apple",
+          "appleDescription": "Синхронизируйте события с Mac и iPhone."
         }
       },
       "setupChoice": {
-        "title": "Choose your OpenWhispr setup",
-        "titleLineOne": "Choose your",
-        "titleLineTwo": "OpenWhispr setup",
-        "description": "Pick the option that fits how you work.",
+        "title": "Выберите настройку OpenWhispr",
+        "titleLineOne": "Выберите настройку",
+        "titleLineTwo": "OpenWhispr",
+        "description": "Выберите вариант, который подходит вашему стилю работы.",
         "cloud": {
           "title": "OpenWhispr Cloud",
-          "description": "Get 2,000 free words each week. Your settings stay synced across devices.",
-          "continue": "Continue for free",
-          "signIn": "Sign in to use Cloud",
+          "description": "2 000 бесплатных слов каждую неделю. Ваши настройки синхронизируются между устройствами.",
+          "continue": "Продолжить бесплатно",
+          "signIn": "Войдите, чтобы использовать Облако",
           "features": {
-            "fast": "Fastest, no setup required",
+            "fast": "Самый быстрый вариант, без настройки",
             "privacy": "Privacy-focused processing",
-            "sync": "Settings sync across devices",
-            "features": "AI features for notes and actions"
+            "sync": "Синхронизация настроек между устройствами",
+            "features": "ИИ-функции для заметок и действий"
           }
         },
         "byok": {
-          "title": "API Provider",
-          "description": "Use your own API key."
+          "title": "API-провайдер",
+          "description": "Используйте свой API-ключ."
         },
         "local": {
-          "title": "On your device",
-          "description": "Private offline transcription. Needs at least {{minimumSpace}} GB free space.",
-          "badge": "Free",
-          "download": "Download models",
+          "title": "На вашем устройстве",
+          "description": "Приватная расшифровка офлайн. Нужно не менее {{minimumSpace}} ГБ свободного места.",
+          "badge": "Бесплатно",
+          "download": "Скачать модели",
           "features": {
-            "device": "Runs on your device",
-            "offline": "Works offline after setup",
-            "models": "Choose models for dictation and assistant",
-            "free": "Free to use"
+            "device": "Работает на вашем устройстве",
+            "offline": "После настройки работает офлайн",
+            "models": "Выберите модели для диктовки и ассистента",
+            "free": "Бесплатно"
           }
         },
         "enterprise": {
-          "title": "Enterprise",
-          "description": "Use an organization-managed AI provider with team controls.",
-          "setUp": "Set up Enterprise",
+          "title": "Корпоративный",
+          "description": "Используйте ИИ-провайдера под управлением организации с командными настройками доступа.",
+          "setUp": "Настроить корпоративный вариант",
           "features": {
-            "credentials": "Use your organization’s credentials",
-            "compliance": "SOC 2 Type II, HIPAA, and ISO 27001",
-            "controls": "Manage access with team controls"
+            "credentials": "Используйте учётные данные организации",
+            "compliance": "SOC 2 Type II, HIPAA и ISO 27001",
+            "controls": "Управляйте доступом командными настройками"
           }
         },
         "warnings": {
           "byok": {
-            "title": "Your provider handles your data",
-            "description": "You’ll add credentials for separate dictation and Assistant providers. Provider pricing and retention policies apply.",
-            "continue": "Set up API provider",
+            "title": "Ваши данные обрабатывает ваш провайдер",
+            "description": "Вы добавите учётные данные для отдельных провайдеров диктовки и Assistant. Действуют тарифы и политики хранения провайдера.",
+            "continue": "Настроить API-провайдера",
             "steps": {
-              "1": "Choose providers for dictation and Assistant",
-              "2": "Add credentials using secure storage",
-              "3": "Test each connection before activation"
+              "1": "Выберите провайдеров для диктовки и Assistant",
+              "2": "Добавьте учётные данные в безопасное хранилище",
+              "3": "Проверьте каждое подключение перед активацией"
             }
           },
           "local": {
-            "title": "Local setup takes a few extra steps",
-            "description": "Local processing keeps your speech on this device, but requires a one-time setup and at least {{minimumSpace}} GB of free space.",
+            "title": "Локальная настройка требует нескольких дополнительных шагов",
+            "description": "Локальная обработка оставляет вашу речь на этом устройстве, но требует однократной настройки и не менее {{minimumSpace}} ГБ свободного места.",
             "continue": "Set up locally",
             "steps": {
-              "1": "Choose a transcription engine",
-              "2": "Configure or download a model, about {{modelSize}}",
-              "3": "Wait for installation and activation"
+              "1": "Выберите движок расшифровки",
+              "2": "Настройте или скачайте модель, около {{modelSize}}",
+              "3": "Дождитесь установки и активации"
             }
           },
           "enterprise": {
-            "title": "Have your organization credentials ready",
-            "description": "Manual enterprise setup is available only when your workspace policy permits it.",
-            "continue": "Set up enterprise",
+            "title": "Подготовьте учётные данные организации",
+            "description": "Ручная корпоративная настройка доступна только если политика вашего рабочего пространства это разрешает.",
+            "continue": "Настроить корпоративный вариант",
             "steps": {
-              "1": "Sign in with SSO or enter approved credentials",
-              "2": "Choose an available region and model",
-              "3": "Test the managed connection before activation"
+              "1": "Войдите через SSO или введите одобренные учётные данные",
+              "2": "Выберите доступный регион и модель",
+              "3": "Проверьте управляемое подключение перед активацией"
             }
           }
         },
-        "useCloud": "Use Cloud instead",
-        "continueSetup": "Continue setup",
-        "showMore": "Show More Options",
+        "useCloud": "Использовать Облако вместо этого",
+        "continueSetup": "Продолжить настройку",
+        "showMore": "Показать больше вариантов",
         "moreOptions": {
-          "title": "Choose your API setup",
-          "description": "Add an API key or connect a self-hosted model.",
+          "title": "Выберите способ настройки API",
+          "description": "Добавьте API-ключ или подключите самостоятельно размещённую модель.",
           "selfHosted": {
-            "title": "Self-hosted",
-            "description": "Connect your own hosted model."
+            "title": "Самостоятельное размещение",
+            "description": "Подключите свою размещённую модель."
           }
         }
       },
       "provider": {
-        "progress": "Provider setup progress",
-        "dictation": "Dictation",
-        "assistant": "Assistant",
-        "title": "Connect your AI provider",
-        "description": "Choose a provider, add your credentials, and test the connection.",
-        "descriptionLineOne": "Choose a provider and add",
-        "descriptionLineTwo": "your API key.",
-        "selfHosted": "Have a self-hosted model key",
-        "providerLabel": "Provider",
-        "providerPlaceholder": "Choose the model provider",
-        "modelLabel": "Model",
-        "modelPlaceholder": "Choose the model",
-        "apiKey": "API Key",
-        "apiKeyPlaceholder": "Paste your API key",
-        "endpointUrl": "Endpoint URL",
-        "endpointPlaceholder": "Paste your endpoint URL",
-        "optional": "Optional",
-        "modelId": "Model ID",
-        "modelIdPlaceholder": "Write your model ID",
-        "testConnection": "Test Connection",
-        "proceed": "Proceed",
-        "clinical": "FOR CLINICAL TRANSCRIPTION",
+        "progress": "Ход настройки провайдера",
+        "dictation": "Диктовка",
+        "assistant": "Ассистент",
+        "title": "Подключите своего ИИ-провайдера",
+        "description": "Выберите провайдера, добавьте учётные данные и проверьте подключение.",
+        "descriptionLineOne": "Выберите провайдера и добавьте",
+        "descriptionLineTwo": "свой API-ключ.",
+        "selfHosted": "У меня есть ключ самостоятельно размещённой модели",
+        "providerLabel": "Провайдер",
+        "providerPlaceholder": "Выберите провайдера модели",
+        "modelLabel": "Модель",
+        "modelPlaceholder": "Выберите модель",
+        "apiKey": "API-ключ",
+        "apiKeyPlaceholder": "Вставьте свой API-ключ",
+        "endpointUrl": "URL endpoint",
+        "endpointPlaceholder": "Вставьте URL своего endpoint",
+        "optional": "Необязательно",
+        "modelId": "ID модели",
+        "modelIdPlaceholder": "Укажите ID своей модели",
+        "testConnection": "Проверить подключение",
+        "proceed": "Продолжить",
+        "clinical": "ДЛЯ КЛИНИЧЕСКОЙ РАСШИФРОВКИ",
         "clientId": "Client ID",
         "clientSecret": "Client secret",
-        "runTest": "Run Test",
-        "testing": "Testing…",
-        "connected": "Connected",
-        "connectionFailed": "The connection could not be verified."
+        "runTest": "Запустить тест",
+        "testing": "Проверка…",
+        "connected": "Подключено",
+        "connectionFailed": "Не удалось проверить подключение."
       },
       "local": {
-        "title": "Set up local models",
-        "description": "Choose the models you want to run on your device.",
-        "descriptionLineOne": "Choose the models you want",
-        "descriptionLineTwo": "to run on your device.",
-        "providerLabel": "Provider",
-        "agent": "Agent",
-        "download": "Download",
-        "downloadingShort": "Downloading",
-        "selected": "Selected",
-        "use": "Use",
-        "downloadInProgress": "Download in progress",
+        "title": "Настройка локальных моделей",
+        "description": "Выберите модели, которые хотите запускать на своём устройстве.",
+        "descriptionLineOne": "Выберите модели, которые хотите",
+        "descriptionLineTwo": "запускать на своём устройстве.",
+        "providerLabel": "Провайдер",
+        "agent": "Агент",
+        "download": "Скачать",
+        "downloadingShort": "Загрузка",
+        "selected": "Выбрано",
+        "use": "Использовать",
+        "downloadInProgress": "Загрузка выполняется",
         "cancelDownload": "Отменить загрузку {{model}}",
-        "downloadInBackground": "Finish in background",
-        "downloads": "Model downloads",
-        "downloading": "Downloading… {{progress}}%",
-        "installing": "Installing model…"
+        "downloadInBackground": "Завершить в фоне",
+        "downloads": "Загрузки моделей",
+        "downloading": "Загрузка… {{progress}}%",
+        "installing": "Установка модели…"
       },
       "enterprise": {
-        "title": "Connect your enterprise provider",
-        "description": "Use your organization’s credentials for dictation intelligence and the Assistant.",
-        "descriptionLineOne": "Use your organization’s credentials",
-        "descriptionLineTwo": "to connect a provider.",
-        "dictationIntelligence": "Dictation intelligence",
-        "ssoProfile": "SSO Profile",
-        "accessKeys": "Access Keys",
-        "profileName": "Profile Name",
-        "profilePlaceholder": "Add profile name",
+        "title": "Подключите корпоративного провайдера",
+        "description": "Используйте учётные данные вашей организации для интеллекта диктовки и Assistant.",
+        "descriptionLineOne": "Используйте учётные данные организации,",
+        "descriptionLineTwo": "чтобы подключить провайдера.",
+        "dictationIntelligence": "Интеллект диктовки",
+        "ssoProfile": "Профиль SSO",
+        "accessKeys": "Ключи доступа",
+        "profileName": "Имя профиля",
+        "profilePlaceholder": "Добавьте имя профиля",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
-        "region": "Region",
-        "regionPlaceholder": "Choose a region",
-        "model": "Model",
-        "modelPlaceholder": "Choose a model",
-        "testConnection": "Test Connection",
-        "managedTitle": "Your provider is managed by your organization",
-        "managedDescription": "OpenWhispr will use the provider and model assigned by your administrator.",
-        "unavailable": "Enterprise setup is unavailable under your workspace policy."
+        "region": "Регион",
+        "regionPlaceholder": "Выберите регион",
+        "model": "Модель",
+        "modelPlaceholder": "Выберите модель",
+        "testConnection": "Проверить подключение",
+        "managedTitle": "Вашим провайдером управляет ваша организация",
+        "managedDescription": "OpenWhispr будет использовать провайдера и модель, назначенные вашим администратором.",
+        "unavailable": "Корпоративная настройка недоступна по политике вашего рабочего пространства."
       }
     },
     "steps": {

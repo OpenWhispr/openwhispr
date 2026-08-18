@@ -37,7 +37,9 @@ import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/p
 import { cloudPost } from "../services/cloudApi";
 import logger from "../utils/logger";
 import {
+  COMPACT_STEPS,
   getNextOnboardingStep,
+  getOnboardingProgress,
   getOnboardingRoute,
   reconcileStepWithRoute,
   type OnboardingSetupMode,
@@ -48,18 +50,6 @@ import { hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
-}
-
-const COMPACT_STEPS = new Set<OnboardingStepId>(["auth", "permissions"]);
-
-function progressForStep(stepId: OnboardingStepId): number {
-  if (["languages", "assistant-demo", "setup-choice"].includes(stepId)) return 0;
-  if (["use-cases", "dictation-demo"].includes(stepId)) return 1;
-  if (["dictation-hotkey", "assistant-hotkey"].includes(stepId)) return 2;
-  if (stepId === "notes") return 0;
-  if (stepId.startsWith("byok-") || stepId.startsWith("local-") || stepId.startsWith("enterprise-"))
-    return 0;
-  return stepId.endsWith("assistant") ? 1 : 0;
 }
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
@@ -83,6 +73,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [dictationDemoSuccess, setDictationDemoSuccess] = useState(false);
   const [assistantDemoSuccess, setAssistantDemoSuccess] = useState(false);
   const [stageReady, setStageReady] = useState(false);
+  const [selfHostedRequested, setSelfHostedRequested] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [permissionAlert, setPermissionAlert] = useState<{
@@ -117,8 +108,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   }, [currentStepId, session.currentStepId, setSession]);
 
+  // Cleared on unmount as well as on completion: main fails hotkeys closed while
+  // this is set, so an ErrorBoundary catch or a route swap that never comes back
+  // would otherwise leave every shortcut dead until the app restarts.
   useEffect(() => {
     void window.electronAPI?.setOnboardingActive?.(true);
+    return () => {
+      void window.electronAPI?.setOnboardingActive?.(false);
+    };
   }, []);
 
   useEffect(() => {
@@ -242,7 +239,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const applyReasoningSelectionToAllScopes = useCallback(
-    (mode: "byok" | "local") => {
+    (mode: "byok" | "local" | "enterprise") => {
       // getState(), not the render-time snapshot: the provider steps write
       // chatAgentProvider/chatAgentModel via switchReasoningProvider and call
       // onProceed() in the same tick, so `settingsStore` here still holds the
@@ -261,8 +258,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const handleSetupSelection = useCallback(
-    async (mode: Exclude<OnboardingSetupMode, null>) => {
+    async (mode: Exclude<OnboardingSetupMode, null>, options?: { selfHosted?: boolean }) => {
       setSetupMode(mode);
+      setSelfHostedRequested(!!options?.selfHosted);
       if (mode === "cloud") {
         settingsStore.setCloudTranscriptionForAllScopes({
           useLocalWhisper: false,
@@ -329,6 +327,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       settingsStore.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
     } else if (currentStepId === "local-assistant") {
       applyReasoningSelectionToAllScopes("local");
+    } else if (currentStepId === "enterprise-assistant") {
+      // Transcription is deliberately untouched: "enterprise" is not one of
+      // TRANSCRIPTION_POLICY_CATALOG.modes, so enterprise governs the LLM scopes
+      // only. Without this, cleanup and note formatting keep their default
+      // provider and model with no credential behind them.
+      applyReasoningSelectionToAllScopes("enterprise");
     }
 
     const next = getNextOnboardingStep(currentStepId, route);
@@ -642,7 +646,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <SetupChoiceStep
               isSignedIn={isSignedIn}
-              onSelect={(mode) => void handleSetupSelection(mode)}
+              onSelect={(mode, options) => void handleSetupSelection(mode, options)}
               onRequestAuthentication={() => {
                 setSetupMode("cloud");
                 setAuthPath(null);
@@ -669,6 +673,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             </div>
             <ByokProviderStep
               stepId={currentStepId}
+              selfHostedRequested={selfHostedRequested}
               onConnectionChange={onStageReady}
               onProceed={() => void continueFromCurrentStep()}
             />
@@ -769,7 +774,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         continueDisabled={!canContinue}
         continueLoading={isFinishing || isRegistering}
-        progressIndex={compact ? undefined : progressForStep(currentStepId)}
+        progress={getOnboardingProgress(currentStepId, route)}
         // On both step families canContinue means "the thing this step asks for
         // is done", so the labelled Back collapses to icon-only the moment a
         // shortcut is confirmed or a demo succeeds.

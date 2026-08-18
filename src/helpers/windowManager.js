@@ -27,6 +27,7 @@ class WindowManager {
   constructor() {
     this.mainWindow = null;
     this.controlPanelWindow = null;
+    this._controlPanelVisibilityTimer = null;
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
@@ -728,26 +729,15 @@ class WindowManager {
       }
     });
 
-    const visibilityTimer = setTimeout(() => {
-      if (!this.controlPanelWindow || this.controlPanelWindow.isDestroyed()) {
-        return;
-      }
-      if (!this.controlPanelWindow.isVisible()) {
-        this.controlPanelWindow.show();
-        this.controlPanelWindow.focus();
-        dockManager.setControlPanelVisible(true);
-      }
+    // Nothing else shows this window: ready-to-show deliberately doesn't, so the
+    // renderer can pick the onboarding size first and avoid a visible
+    // expanded → compact flash on fresh installs. That makes this the only
+    // backstop if the renderer never gets that far — it loads but throws, a lazy
+    // chunk fails, or auth/policy resolution never settles — so it must outlive
+    // did-finish-load. Only a real show cancels it.
+    this._controlPanelVisibilityTimer = setTimeout(() => {
+      this._showControlPanel();
     }, 10000);
-
-    const clearVisibilityTimer = () => {
-      clearTimeout(visibilityTimer);
-    };
-
-    this.controlPanelWindow.once("ready-to-show", () => {
-      // AppRouter signals either an onboarding size or the restored control-
-      // panel mode once auth/policy resolution decides which UI will render.
-      // Waiting avoids a visible expanded → compact flash on fresh installs.
-    });
 
     this.controlPanelWindow.on("close", (event) => {
       if (!this.isQuitting) {
@@ -757,7 +747,7 @@ class WindowManager {
     });
 
     this.controlPanelWindow.on("closed", () => {
-      clearVisibilityTimer();
+      this._clearControlPanelVisibilityTimer();
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
       this._onboardingRestoreBounds = null;
@@ -769,7 +759,6 @@ class WindowManager {
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
 
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
-      clearVisibilityTimer();
       this.controlPanelWindow.setTitle(i18nMain.t("window.controlPanelTitle"));
     });
 
@@ -779,15 +768,12 @@ class WindowManager {
         if (!isMainFrame) {
           return;
         }
-        clearVisibilityTimer();
         if (process.env.NODE_ENV !== "development") {
           this.showLoadFailureDialog("Control panel", errorCode, errorDescription, validatedURL);
         }
-        if (!this.controlPanelWindow.isVisible()) {
-          this.controlPanelWindow.show();
-          this.controlPanelWindow.focus();
-          dockManager.setControlPanelVisible(true);
-        }
+        // Show it regardless: a failed load can't reach the renderer path that
+        // normally does, and a hidden window leaves the failure invisible.
+        this._showControlPanel();
       }
     );
 
@@ -1234,6 +1220,10 @@ class WindowManager {
     return true;
   }
 
+  isOnboardingDemoActive() {
+    return this._onboardingDemoKind !== null;
+  }
+
   stopOnboardingDemoRecording() {
     if (!this._onboardingDemoKind) return false;
     this.sendStopDictation();
@@ -1251,7 +1241,17 @@ class WindowManager {
     return true;
   }
 
-  _showControlPanelAfterModeApplied(win) {
+  _clearControlPanelVisibilityTimer() {
+    clearTimeout(this._controlPanelVisibilityTimer);
+    this._controlPanelVisibilityTimer = null;
+  }
+
+  _showControlPanel() {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    // Cancel the backstop either way: once the window has been shown on purpose,
+    // a later timer firing could pull it back out of the tray.
+    this._clearControlPanelVisibilityTimer();
     if (win.isVisible()) return;
     win.show();
     win.focus();
@@ -1335,7 +1335,7 @@ class WindowManager {
       this._onboardingRestoreBounds = null;
       this._onboardingWindowMode = null;
       this._onboardingWindowState = null;
-      this._showControlPanelAfterModeApplied(win);
+      this._showControlPanel();
       return true;
     }
 
@@ -1357,12 +1357,12 @@ class WindowManager {
     // made. The mode is still recorded so re-locking picks the right size.
     if (this._onboardingWindowUnlocked) {
       this._onboardingWindowMode = mode;
-      this._showControlPanelAfterModeApplied(win);
+      this._showControlPanel();
       return true;
     }
 
     if (this._onboardingWindowMode === mode) {
-      this._showControlPanelAfterModeApplied(win);
+      this._showControlPanel();
       return true;
     }
 
@@ -1376,13 +1376,13 @@ class WindowManager {
       current.height === next.height
     ) {
       this._onboardingWindowMode = mode;
-      this._showControlPanelAfterModeApplied(win);
+      this._showControlPanel();
       return true;
     }
 
     win.setContentBounds(next, true);
     this._onboardingWindowMode = mode;
-    this._showControlPanelAfterModeApplied(win);
+    this._showControlPanel();
     return true;
   }
 
