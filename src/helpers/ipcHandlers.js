@@ -66,7 +66,14 @@ const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
-const { partitionPendingMicFinals, isWithinRetractWindow } = require("./meetingMicHoldback");
+const {
+  partitionPendingMicFinals,
+  isWithinRetractWindow,
+  isRiskyMicDuplicateProfile,
+  isDuplicateMicSegment,
+  selectRacingMicEntryIndices,
+  partitionOverlappingPendingMicFinals,
+} = require("./meetingMicHoldback");
 const {
   MEETING_MIC_BLEED_RMS_CEILING,
   MEETING_MIC_BLEED_PEAK_CEILING,
@@ -5456,73 +5463,32 @@ class IPCHandlers {
       return false;
     };
 
-    const shouldSkipDuplicateMicSegment = (text, timestamp, suppression = null) => {
-      if (suppression?.likelyRenderBleed || suppression?.hasBleedEvidence) {
-        if (hasNearbyTranscriptMatch("system", text, timestamp)) {
-          return true;
-        }
-      }
-
-      if (suppression?.reason === "double_talk") {
-        return hasNearbyTranscriptMatch("system", text, timestamp, { relaxed: true });
-      }
-
-      return false;
-    };
+    const shouldSkipDuplicateMicSegment = (text, timestamp, suppression = null) =>
+      isDuplicateMicSegment({ text, timestamp, suppression, hasNearbyTranscriptMatch });
 
     const isWithinMeetingStartupWarmup = () =>
       meetingStartedAt != null && Date.now() - meetingStartedAt < MEETING_STARTUP_WARMUP_MS;
 
-    const hasRiskyMicDuplicateProfile = (suppression = null) => {
-      if (isWithinMeetingStartupWarmup()) {
-        return true;
-      }
-      if (suppression?.systemSpeaking) {
-        return true;
-      }
-      return (
-        !!suppression &&
-        (suppression.reason === "double_talk" ||
-          suppression.hasBleedEvidence ||
-          suppression.likelyRenderBleed)
-      );
-    };
+    const hasRiskyMicDuplicateProfile = (suppression = null) =>
+      isRiskyMicDuplicateProfile({
+        suppression,
+        inStartupWarmup: isWithinMeetingStartupWarmup(),
+      });
 
     const removeRacingMicEntriesFor = (systemText, systemTimestamp) => {
+      const indices = selectRacingMicEntryIndices({
+        segments: meetingDiarizationSegments,
+        systemText,
+        systemTimestamp,
+        hasNearbyTranscriptMatch,
+        duplicateWindowMs: DUPLICATE_TRANSCRIPT_WINDOW_MS,
+        retractWindowMs: RACING_MIC_RETRACT_WINDOW_MS,
+      });
       const removed = [];
-      for (let i = meetingDiarizationSegments.length - 1; i >= 0; i -= 1) {
-        const candidate = meetingDiarizationSegments[i];
-        if (candidate.source !== "mic" || candidate.timestamp == null) continue;
-        if (systemTimestamp != null) {
-          const windowMs =
-            candidate.hasBleedEvidence || candidate.likelyRenderBleed
-              ? DUPLICATE_TRANSCRIPT_WINDOW_MS
-              : RACING_MIC_RETRACT_WINDOW_MS;
-          if (!isWithinRetractWindow({ candidate, systemTimestamp, windowMs })) {
-            if (candidate.timestamp < systemTimestamp - DUPLICATE_TRANSCRIPT_WINDOW_MS) break;
-            continue;
-          }
-        }
-        const hasMicDuplicateRisk =
-          candidate.likelyRenderBleed ||
-          candidate.hasBleedEvidence ||
-          candidate.suppressionReason === "double_talk";
-        const overlapsSystem = hasNearbyTranscriptMatch(
-          "system",
-          candidate.text,
-          candidate.timestamp,
-          {
-            extraSegment: {
-              text: systemText,
-              timestamp: systemTimestamp,
-            },
-            relaxed: candidate.suppressionReason === "double_talk",
-          }
-        );
-        if (hasMicDuplicateRisk && overlapsSystem) {
-          meetingDiarizationSegments.splice(i, 1);
-          removed.push(candidate);
-        }
+      // Indices are descending, so splicing in order never shifts a later index.
+      for (const index of indices) {
+        removed.push(meetingDiarizationSegments[index]);
+        meetingDiarizationSegments.splice(index, 1);
       }
       return removed;
     };
@@ -5652,26 +5618,13 @@ class IPCHandlers {
     };
 
     const removePendingMicFinalsFor = (systemText, systemTimestamp) => {
-      const removed = [];
-      meetingPendingMicFinals = meetingPendingMicFinals.filter((candidate) => {
-        const overlapsSystem = hasNearbyTranscriptMatch(
-          "system",
-          candidate.text,
-          candidate.timestamp,
-          {
-            extraSegment: {
-              text: systemText,
-              timestamp: systemTimestamp,
-            },
-            relaxed: candidate.micSuppression?.reason === "double_talk",
-          }
-        );
-        if (!overlapsSystem) {
-          return true;
-        }
-        removed.push(candidate);
-        return false;
+      const { kept, removed } = partitionOverlappingPendingMicFinals({
+        pending: meetingPendingMicFinals,
+        systemText,
+        systemTimestamp,
+        hasNearbyTranscriptMatch,
       });
+      meetingPendingMicFinals = kept;
       schedulePendingMicFinalFlush();
       return removed;
     };
