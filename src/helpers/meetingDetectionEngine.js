@@ -320,6 +320,11 @@ class MeetingDetectionEngine {
       "meeting"
     );
     this._recordingSession = null;
+    // Meeting mode was entered when the note was created; the recording it led
+    // to is over, so the next call (or the next meeting's reminder) must prompt
+    // again. Only the narrow layout's "Back to notes" button cleared it before,
+    // which in the wide layout meant no prompts for the rest of the app session.
+    if (this._meetingModeActive) this.setMeetingModeActive(false);
     this._syncAudioActivityDetector();
     this._syncMeetingProcessDetector();
     return true;

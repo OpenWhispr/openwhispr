@@ -194,7 +194,23 @@ test("ownership: keep suppresses prompts until fresh active ownership, and the c
   assert.equal(h.countdowns.length, 2, "a new call is fresh evidence");
 });
 
-test("ownership: a release inside the cooldown prompts once the cooldown passes", () => {
+test("ownership: a call rejoined and left again re-prompts at once, even inside the keep cooldown", () => {
+  const h = createHarness();
+  beginOwnership(h.controller);
+  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  micReleased(h.controller);
+  h.controller.keepRecording("s1");
+
+  h.runFor(60_000);
+  micAcquired(h.controller);
+  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  micReleased(h.controller);
+
+  assert.equal(h.countdowns.length, 2, "unambiguous evidence must not wait out the cooldown");
+  assert.equal(h.countdowns[1].reason, "mic-released");
+});
+
+test("ownership: a brief rejoin inside the cooldown does not bypass it", () => {
   const h = createHarness();
   beginOwnership(h.controller);
   h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
@@ -204,13 +220,15 @@ test("ownership: a release inside the cooldown prompts once the cooldown passes"
 
   h.runFor(60_000);
   micAcquired(h.controller);
-  h.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  h.runFor(OWNERSHIP_MIN_ACTIVE_MS - TICK_MS);
   micReleased(h.controller);
-  assert.equal(h.countdowns.length, 1, "still inside the cooldown");
+  h.runFor(2 * SILENCE_WINDOW_MS);
+  assert.equal(h.countdowns.length, 1, "an incidental hold is not fresh evidence");
 
   h.runFor(keptAt + KEEP_COOLDOWN_MS - h.now());
-  assert.equal(h.countdowns.length, 2);
-  assert.equal(h.countdowns[1].reason, "mic-released");
+  h.runFor(SILENCE_WINDOW_MS);
+  assert.equal(h.countdowns.length, 2, "after the cooldown, silence prompts as fallback");
+  assert.equal(h.countdowns[1].reason, "silence");
 });
 
 // --------------------------------------------------------------------------

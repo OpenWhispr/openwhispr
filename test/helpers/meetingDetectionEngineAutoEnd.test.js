@@ -509,9 +509,8 @@ test("keep recording suppresses prompts until fresh ownership evidence, only for
   micState(true, true);
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
-  assert.equal(shownCountdowns.length, 1, "still inside the keep cooldown");
-  clock.advance(5 * 60_000);
-  assert.equal(shownCountdowns.length, 2, "cooldown passed and a new call was released");
+  assert.equal(shownCountdowns.length, 2, "a rejoined-and-left call re-prompts at once");
+  assert.equal(shownCountdowns[1].reason, "mic-released");
   engine.stop();
 });
 
@@ -691,5 +690,79 @@ test("a post-dictation queue flush holds queued detections while the recording s
   engine.setUserRecording(false);
   t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
   assert.equal(shownNotifications.length, 1);
+  engine.stop();
+});
+
+// "Take notes" / the meeting hotkey / calendar Join set meeting mode when they
+// create the note, and until now only the narrow layout's "Back to notes"
+// button ever cleared it. In the wide layout that left every later mic,
+// process, and calendar detection suppressed for the rest of the app session.
+test("a detection-started recording re-enables prompts once its session ends", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { audioActivityDetector, clock, engine, owner, shownNotifications } = createEngine();
+  engine.setMeetingModeActive(true);
+  engine.setUserRecording(true);
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+    systemAudioAvailable: true,
+  });
+
+  engine.endRecordingSession("meeting-1");
+  engine.setUserRecording(false);
+  t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+
+  audioActivityDetector.emit("sustained-audio-detected", {
+    durationMs: 2000,
+    detectedAt: clock.now(),
+  });
+  assert.equal(shownNotifications.length, 1, "the next call must prompt again");
+  assert.equal(shownNotifications[0].detectionId, "audio:sustained-audio");
+  engine.stop();
+});
+
+test("the next meeting's reminder prompts after a detection-started recording ends", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { clock, engine, owner, shownNotifications } = createEngine();
+  engine.setMeetingModeActive(true);
+  engine.setUserRecording(true);
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+    systemAudioAvailable: true,
+  });
+
+  engine.endRecordingSession("meeting-1");
+  engine.setUserRecording(false);
+  t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+
+  engine.handleCalendarReminder(nextMeetingReminder(clock));
+  assert.equal(shownNotifications.length, 1, "no longer suppressed as meeting-mode noise");
+  assert.equal(shownNotifications[0].detectionId, "calendar:next");
+  engine.stop();
+});
+
+test("meeting mode still suppresses prompts while the detection-started recording is live", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { audioActivityDetector, clock, engine, owner, shownNotifications } = createEngine();
+  engine.setMeetingModeActive(true);
+  engine.setUserRecording(true);
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+    systemAudioAvailable: true,
+  });
+
+  engine.setUserRecording(false);
+  t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+  audioActivityDetector.emit("sustained-audio-detected", {
+    durationMs: 2000,
+    detectedAt: clock.now(),
+  });
+
+  assert.equal(shownNotifications.length, 0);
   engine.stop();
 });

@@ -167,6 +167,12 @@ const createMeetingAutoEndController = ({
       if (heldMs < OWNERSHIP_MIN_ACTIVE_MS) {
         session.mode = "fallback";
         session.quietSince = nowMs;
+      } else {
+        // A call that was genuinely rejoined and left again is unambiguous
+        // evidence; making it wait out the keep cooldown reads as the feature
+        // silently failing. The cooldown exists for silence-based nags, which
+        // still honor it.
+        session.keptUntil = 0;
       }
     }
     evaluate();
@@ -217,10 +223,10 @@ const createMeetingAutoEndController = ({
 
   // Returns false once the countdown has fired: the stop is already in flight,
   // so reporting success would tell the user their recording was kept.
-  // Keep is per episode: prompts resume only on fresh evidence (a re-acquired
-  // mic in ownership mode, renewed audio or a process exit in fallback) and
-  // never inside the cooldown. In ownership mode with no further call the
-  // session is therefore never prompted again.
+  // Keep is per episode: prompts resume only on fresh evidence. Renewed audio
+  // or a process exit (fallback) also wait out the cooldown; a call rejoined
+  // for at least OWNERSHIP_MIN_ACTIVE_MS and left again re-prompts at once. In
+  // ownership mode with no further call the session is never prompted again.
   const keepRecording = (sessionId) => {
     const nowMs = observeClock();
     if (!session || session.sessionId !== sessionId || session.stopped) return false;
