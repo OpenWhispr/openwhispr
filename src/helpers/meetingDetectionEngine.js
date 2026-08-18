@@ -387,7 +387,11 @@ class MeetingDetectionEngine {
       return;
     }
 
-    if (this._userRecording || this._postRecordingCooldown) {
+    // _userRecording is shared with dictation, so a dictation ending mid-meeting
+    // clears it while the recording is still live; the tracked session is the
+    // gate that cannot be reset from outside. A prompt shown then would replace
+    // a visible auto-end countdown card and let the countdown run on unseen.
+    if (this._userRecording || this._postRecordingCooldown || this._recordingSession) {
       debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
       this._notificationQueue.push({ source, key, data });
       this.activeDetections.set(detectionId, { source, key, data });
@@ -638,6 +642,13 @@ class MeetingDetectionEngine {
         this.activeDetections.delete(`${source}:${key}`);
       }
       this._notificationQueue = [];
+      return;
+    }
+
+    // A dictation's post-recording cooldown can flush while a meeting recording
+    // is still live; hold the queue for the flush that follows the recording.
+    if (this._recordingSession) {
+      debugLogger.info("Holding queued notifications — recording session live", {}, "meeting");
       return;
     }
 

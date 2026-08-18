@@ -628,3 +628,68 @@ test("ending with no tracked session allows teardown to proceed", async () => {
 
   assert.equal(engine.endRecordingSession("meeting-1"), true);
 });
+
+// The user-recording flag is shared with dictation, so a dictation ending
+// mid-meeting clears it while the recording is still live. Without the engine's
+// own session as a gate, the next detection would bypass the queue and its
+// prompt would replace a visible auto-end countdown card — the countdown then
+// runs on invisibly and stops the recording without a chance to keep it.
+const POST_RECORDING_COOLDOWN_MS = 2500;
+
+const nextMeetingReminder = (clock) => ({
+  id: "next",
+  summary: "Next meeting",
+  start_time: new Date(clock.now() + 60_000).toISOString(),
+});
+
+test("a detection during a live recording session is queued even after the user-recording flag is cleared", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { clock, engine, owner, shownNotifications } = createEngine();
+  engine.setUserRecording(true);
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+    systemAudioAvailable: true,
+  });
+
+  // A dictation ended mid-meeting: the shared flag clears and its cooldown runs out.
+  engine.setUserRecording(false);
+  t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+
+  engine.handleCalendarReminder(nextMeetingReminder(clock));
+  assert.equal(shownNotifications.length, 0, "no prompt may surface while the recording is live");
+
+  // The recording ends the way ipcHandlers ends it; the held prompt surfaces then.
+  engine.endRecordingSession("meeting-1");
+  engine.setUserRecording(false);
+  t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+  assert.equal(shownNotifications.length, 1);
+  assert.equal(shownNotifications[0].detectionId, "calendar:next");
+  engine.stop();
+});
+
+test("a post-dictation queue flush holds queued detections while the recording session is live", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { clock, engine, owner, shownNotifications } = createEngine();
+  engine.setUserRecording(true);
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents: owner(),
+    systemAudioAvailable: true,
+  });
+
+  engine.handleCalendarReminder(nextMeetingReminder(clock));
+  assert.equal(shownNotifications.length, 0, "queued behind the user-recording gate");
+
+  engine.setUserRecording(false);
+  t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+  assert.equal(shownNotifications.length, 0, "the flush must not surface it mid-recording");
+
+  engine.endRecordingSession("meeting-1");
+  engine.setUserRecording(false);
+  t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+  assert.equal(shownNotifications.length, 1);
+  engine.stop();
+});
