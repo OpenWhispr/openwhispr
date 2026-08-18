@@ -721,7 +721,6 @@
       "id": "qwen",
       "name": "Qwen",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "qwen3.5-9b-q4_k_m",
@@ -882,7 +881,6 @@
       "id": "mistral",
       "name": "Mistral",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "[INST] {system}\n\n{user} [/INST]",
       "models": [
         {
           "id": "mistral-nemo-12b-instruct-q4_k_m",
@@ -927,7 +925,6 @@
       "id": "llama",
       "name": "Meta Llama",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{user}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
       "models": [
         {
           "id": "llama-3.2-1b-instruct-q4_k_m",
@@ -972,7 +969,6 @@
       "id": "openai-oss",
       "name": "OpenAI",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "gpt-oss-20b-mxfp4",
@@ -994,7 +990,6 @@
       "id": "gemma",
       "name": "Gemma (Google)",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<bos><start_of_turn>user\n{system}\n\n{user}<end_of_turn>\n<start_of_turn>model\n",
       "models": [
         {
           "id": "gemma-4-31b-it-q4_k_m",
@@ -1148,7 +1143,6 @@
       "id": "liquidai",
       "name": "Liquid AI",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "lfm2.5-1.2b-instruct-q4_k_m",

@@ -394,7 +394,7 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 **Local model features:**
 
 - Each model has `hfRepo` for direct HuggingFace download URLs
-- `promptTemplate` defines the chat format (ChatML, Llama, Mistral)
+- Chat formatting comes from the GGUF's embedded template (llama-server runs with `--jinja`); the registry carries no prompt templates
 - Download URLs constructed as: `{baseUrl}/{hfRepo}/resolve/main/{fileName}`
 
 ### 9. API Integrations and Updates
