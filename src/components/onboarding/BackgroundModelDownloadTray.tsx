@@ -280,7 +280,7 @@ export default function BackgroundModelDownloadTray() {
     // body:has(.onboarding-canvas), so they resolve during onboarding and the
     // literals cover the panel, where the tokens are not defined.
     <aside
-      className="fixed right-7 top-5 z-50 w-[341px] overflow-hidden rounded-[12px] border border-[var(--onboarding-control-border,#e3e3e3)] bg-white text-black"
+      className="fixed right-7 top-5 z-50 w-[341px] overflow-hidden rounded-[12px] border border-[var(--onboarding-control-border,#e3e3e3)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
       aria-label={t("onboarding.rehaul.local.downloads")}
       aria-live="polite"
     >
@@ -306,7 +306,6 @@ export default function BackgroundModelDownloadTray() {
                 <ProviderIcon
                   provider={downloadDisplay(download).provider}
                   className="size-[14.55px] shrink-0"
-                  forceLight
                   monochrome={downloadDisplay(download).provider === "qwen"}
                 />
                 <span className="min-w-0 truncate font-medium">

@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
+import type { OnboardingProgressState } from "./flow";
 import { Undo2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { useTranslation } from "react-i18next";
+// Imported (not referenced by path) so Vite fingerprints it and it resolves
+// under the packaged app's file:// origin. See .onboarding-compact-hero.
+import heroDither from "@/assets/onboarding-hero-dither.webp";
+import heroDitherDark from "@/assets/onboarding-hero-dither-dark.webp";
 
 interface OnboardingShellProps {
   compact?: boolean;
@@ -13,7 +18,7 @@ interface OnboardingShellProps {
   skipLabel?: string;
   continueDisabled?: boolean;
   continueLoading?: boolean;
-  progressIndex?: number;
+  progress?: OnboardingProgressState | null;
   showBackLabel?: boolean;
   /** Changing this replays the step entry animation. Pass the current step id. */
   stepKey?: string;
@@ -25,12 +30,15 @@ interface CompactOnboardingFrameProps {
   showLegalNotice?: boolean;
 }
 
-export function OnboardingProgress({ index }: { index: number }) {
+export function OnboardingProgress({ index, total }: { index: number; total: number }) {
   return (
     <div className="flex items-center justify-center gap-2" aria-hidden="true">
       {/* Figma "Frame 26": 20x6 pills, filled light/text-primary, the remaining
-          one on light/surface-stroke. */}
-      {[0, 1, 2, 3].map((item) => (
+          ones on light/surface-stroke. Figma draws four because that is what the
+          mock happened to show; the real count is one per step in the live route,
+          which getOnboardingProgress derives (6-10 depending on whether the agent
+          is allowed and which setup mode was picked). */}
+      {Array.from({ length: total }, (_, item) => (
         <span
           key={item}
           className={`h-1.5 w-5 rounded-full transition-colors ${
@@ -65,7 +73,7 @@ export function OnboardingStepHeader({
         // clamp only re-wraps them — "keyboard shortcut" is ~350px at 40px
         // Inter and was splitting across three lines. Lines still wrap inside
         // the header's 32rem cap if a translation runs long.
-        className={`onboarding-display-title mx-auto text-neutral-950 ${
+        className={`onboarding-display-title mx-auto text-[var(--onboarding-text-primary)] ${
           wideTitle || titleLines ? "max-w-none" : "max-w-xs"
         }`}
       >
@@ -117,16 +125,16 @@ export default function OnboardingShell({
   skipLabel,
   continueDisabled = false,
   continueLoading = false,
-  progressIndex,
+  progress,
   showBackLabel = false,
   stepKey,
 }: OnboardingShellProps) {
   const { t } = useTranslation();
-  const hasFooter = onBack || onContinue || onSkip || progressIndex !== undefined;
+  const hasFooter = onBack || onContinue || onSkip || progress;
 
   return (
     <main
-      className={`onboarding-canvas relative flex h-screen flex-col overflow-hidden ${compact ? "compact rounded-[44px]" : ""}`}
+      className={`onboarding-canvas relative flex h-screen flex-col overflow-hidden ${compact ? "compact" : ""}`}
     >
       <div
         className="absolute inset-x-0 top-0 z-50 h-4"
@@ -135,10 +143,15 @@ export default function OnboardingShell({
       />
 
       <div
-        // Deliberately not scrollable: each step sizes itself to the window and
-        // anything long (e.g. the language list) scrolls inside its own
-        // container, so an outer scrollbar would just double up.
-        className={`onboarding-shell-scroll min-h-0 flex-1 overflow-hidden ${compact ? "px-0 pb-0" : "px-6 py-8 md:px-12"}`}
+        // Normally nothing scrolls here: each step sizes itself to the window and
+        // anything long (e.g. the language list) scrolls inside its own container.
+        // auto rather than hidden is the short-display fallback — the expanded
+        // window wants 910px of work area and centeredBounds clamps below that on
+        // a 1366x768-class screen, where a step built from fixed heights would
+        // otherwise clip with its controls unreachable. The bar itself is hidden
+        // (.onboarding-shell-scroll), so on a tall display this is invisible and
+        // cannot double up with an inner scroller.
+        className={`onboarding-shell-scroll min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-6 py-8 md:px-12"}`}
       >
         <div
           // Keyed on the step so React remounts this subtree and the CSS entry
@@ -157,7 +170,7 @@ export default function OnboardingShell({
       </div>
 
       {hasFooter && (
-        <footer className="shrink-0 px-6 pb-[4.5rem] pt-3 md:px-12">
+        <footer className="shrink-0 px-6 pb-13 pt-3 md:px-12">
           {/* Figma "Frame 2147258967": 24 between the button row and the dots. */}
           <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6">
             <div className="flex items-center justify-center gap-2">
@@ -223,14 +236,14 @@ export default function OnboardingShell({
                   // blue-500. Frame 25 hugs its content at 39.6px tall, so the
                   // height is pinned to 40 to keep the pill aligned with the back
                   // and skip buttons beside it.
-                  className="h-10 gap-4 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-6 py-2.5 text-sm font-medium leading-[1.4] tracking-normal text-white shadow-none! hover:bg-[color-mix(in_srgb,var(--onboarding-accent)_88%,black)] hover:shadow-none! disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100!"
+                  className="h-10 gap-4 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-6 py-2.5 text-sm font-medium leading-[1.4] tracking-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100!"
                 >
                   {continueLoading ? t("common.loading") : (continueLabel ?? t("common.continue"))}
                 </Button>
               )}
             </div>
 
-            {progressIndex !== undefined && <OnboardingProgress index={progressIndex} />}
+            {progress && <OnboardingProgress index={progress.index} total={progress.total} />}
           </div>
         </footer>
       )}
@@ -246,22 +259,41 @@ export function CompactOnboardingFrame({
   const { t } = useTranslation();
 
   return (
-    <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden rounded-[44px] bg-white text-neutral-950 dark:bg-white dark:text-neutral-950">
-      <div className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-indigo-400 via-indigo-300 to-white" />
+    <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]">
+      <div
+        className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-48"
+        // Both strips are handed over as custom properties and .onboarding-compact-hero
+        // picks one per theme; the URLs have to come from here because only an import
+        // gets fingerprinted by Vite and resolves under the packaged file:// origin.
+        style={
+          {
+            "--onboarding-hero-dither-light": `url(${heroDither})`,
+            "--onboarding-hero-dither-dark": `url(${heroDitherDark})`,
+          } as React.CSSProperties
+        }
+      />
       {showBrandMark && (
         <BrandMark className="pointer-events-none absolute left-1/2 top-13 z-10 size-28 -translate-x-1/2 text-white" />
       )}
 
-      <div className="relative z-10 flex flex-1 flex-col">{children}</div>
+      {/* Capped at the compact window's own width (546, ONBOARDING_WINDOW_SIZES.COMPACT
+          in windowConfig.js) and centred, so a viewport wider than the real window —
+          the browser dev harness, or an unlocked window in dev tools — keeps the
+          authored column instead of stretching the email field and the OAuth row
+          edge to edge. The hero strip stays full-bleed above it: it is a background
+          ramp, so it reads correctly at any width. */}
+      <div className="relative z-10 mx-auto flex w-full max-w-[34.125rem] flex-1 flex-col">
+        {children}
+      </div>
 
       {showLegalNotice && (
-        <p className="relative z-10 mx-auto mt-auto w-full max-w-xs shrink-0 px-2 pb-6 pt-5 text-center text-sm leading-5 text-neutral-500 dark:text-neutral-500">
+        <p className="relative z-10 mx-auto mt-auto w-full max-w-xs shrink-0 px-2 pb-6 pt-5 text-center text-sm leading-5 text-[var(--onboarding-text-secondary)]">
           {t("auth.legal.prefix")}{" "}
           <a
             href="https://openwhispr.com/terms"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 transition-colors hover:text-blue-500 dark:text-blue-600 dark:hover:text-blue-500"
+            className="text-[var(--onboarding-link)] transition-colors hover:opacity-80"
           >
             {t("auth.legal.terms")}
           </a>{" "}
@@ -270,7 +302,7 @@ export function CompactOnboardingFrame({
             href="https://openwhispr.com/privacy"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 transition-colors hover:text-blue-500 dark:text-blue-600 dark:hover:text-blue-500"
+            className="text-[var(--onboarding-link)] transition-colors hover:opacity-80"
           >
             {t("auth.legal.privacy")}
           </a>

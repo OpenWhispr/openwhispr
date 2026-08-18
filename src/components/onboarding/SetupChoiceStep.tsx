@@ -36,7 +36,7 @@ const REFERENCE_LOCAL_MODEL_ID = "nemotron-3.5-asr-streaming-0.6b";
 
 interface SetupChoiceStepProps {
   isSignedIn: boolean;
-  onSelect: (mode: SetupMode) => void;
+  onSelect: (mode: SetupMode, options?: { selfHosted?: boolean }) => void;
   onRequestAuthentication: () => void;
 }
 
@@ -72,7 +72,7 @@ function Feature({
 // 1px surface stroke, radius 16, content pinned top and the action pinned bottom.
 function SetupCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="relative flex h-[400px] w-[343px] shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-white px-[18px] pb-6 pt-5 text-left">
+    <section className="relative flex h-[400px] w-[343px] shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-[18px] pb-6 pt-5 text-left">
       {children}
     </section>
   );
@@ -96,8 +96,8 @@ function CardAction({
       onClick={onClick}
       className={`onboarding-pressable relative z-10 w-full rounded-[38px] px-5 py-2 text-sm font-medium leading-[1.4] ${className} ${
         brand
-          ? "bg-[var(--onboarding-accent)] text-white hover:brightness-95"
-          : "border border-[var(--onboarding-control-border)] text-[var(--onboarding-text-primary)] hover:bg-neutral-50"
+          ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)] hover:brightness-95"
+          : "border border-[var(--onboarding-control-border)] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
       }`}
     >
       {children}
@@ -168,7 +168,7 @@ export default function SetupChoiceStep({
                 {/* Frame 2147259034: the two model marks overlap by 8, each on a
                     1.33px white ring so the stack reads front-to-back. */}
                 <span className="flex -space-x-2">
-                  <span className="flex size-10 items-center justify-center rounded-full bg-neutral-950 ring-[1.33px] ring-white">
+                  <span className="flex size-10 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]">
                     <img src={openAIIcon} alt="" aria-hidden="true" className="size-5 invert" />
                   </span>
                   {/* The tile is its own green field, so it fills the chip and gets
@@ -250,7 +250,7 @@ export default function SetupChoiceStep({
                     glass fill over the card's background artwork ("Vector 1",
                     which was not exported) — on plain white that would be
                     invisible, so it takes the brand fill until the art lands. */}
-                <span className="rounded-[47px] bg-[var(--onboarding-accent)] px-[9px] py-1 text-[10px] leading-[1.4] text-white">
+                <span className="rounded-[47px] bg-[var(--onboarding-accent)] px-[9px] py-1 text-[10px] leading-[1.4] text-[var(--onboarding-accent-foreground)]">
                   {t("common.recommended")}
                 </span>
               </div>
@@ -334,7 +334,7 @@ export default function SetupChoiceStep({
         <button
           type="button"
           onClick={() => setShowMore(true)}
-          className="onboarding-pressable rounded-[38px] border border-[var(--onboarding-control-border)] px-5 py-2 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-neutral-50"
+          className="onboarding-pressable rounded-[38px] border border-[var(--onboarding-control-border)] px-5 py-2 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
         >
           {t("onboarding.rehaul.setupChoice.showMore")}
         </button>
@@ -346,8 +346,8 @@ export default function SetupChoiceStep({
           the cards use, since the user has already made an explicit choice here. */}
       <Dialog open={showMore} onOpenChange={(open) => !open && setShowMore(false)}>
         <DialogContent
-          overlayClassName="bg-black/20! backdrop-blur-[11px]"
-          className="w-[460px] max-w-[460px] gap-8 rounded-[28px] border-0 bg-white px-5 pb-8 pt-6 text-left dark:bg-white [&>button]:hidden"
+          overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
+          className="w-[460px] max-w-[460px] gap-8 rounded-[28px] border-0 bg-[var(--onboarding-surface)] px-5 pb-8 pt-6 text-left [&>button]:hidden"
         >
           {/* Frame 2147258979: 238 tall, radius 20, image fill. Source is 840x477,
               so it lands at ~2x for the 420x238 slot. */}
@@ -356,7 +356,7 @@ export default function SetupChoiceStep({
             style={{ backgroundImage: `url(${apiSetupHero})` }}
           >
             {/* Frame 35: pad 10 20, gap 7, radius 38, 16/140% medium. */}
-            <span className="inline-flex items-center gap-[7px] rounded-[38px] border border-[var(--onboarding-control-border)] bg-white px-5 py-2.5 text-base font-medium leading-[1.4] text-black">
+            <span className="inline-flex items-center gap-[7px] rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2.5 text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
               <KeyRound
                 className="size-5 shrink-0 text-[var(--onboarding-accent)]"
                 strokeWidth={1.667}
@@ -404,7 +404,9 @@ export default function SetupChoiceStep({
                   type="button"
                   onClick={() => {
                     setShowMore(false);
-                    onSelect("byok");
+                    // Both rows land on the BYOK step; self-hosted differs only in
+                    // starting it with the self-hosted field set on.
+                    onSelect("byok", { selfHosted: row.id === "self-hosted" });
                   }}
                   className={`onboarding-pressable flex w-full items-center gap-[14px] text-left ${
                     index === 0 ? "pb-5" : "border-t border-[var(--onboarding-control-border)] pt-5"
@@ -434,8 +436,8 @@ export default function SetupChoiceStep({
 
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent
-          overlayClassName="bg-black/20! backdrop-blur-[11px]"
-          className="w-[460px] max-w-[460px] gap-8 rounded-[28px] border-0 bg-white px-5 pb-8 pt-6 text-left text-neutral-950 dark:bg-white [&>button]:hidden"
+          overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
+          className="w-[460px] max-w-[460px] gap-8 rounded-[28px] border-0 bg-[var(--onboarding-surface)] px-5 pb-8 pt-6 text-left text-[var(--onboarding-text-primary)] [&>button]:hidden"
         >
           {/* Frame 2147258979: 238 tall, radius 20, image crop. The three marks
               are 32 / 55 / 32 on a 14 gap, with the outer two at 72% white so the
@@ -445,13 +447,13 @@ export default function SetupChoiceStep({
             style={{ backgroundImage: `url(${warningBackdrop})` }}
           >
             <div className="flex items-center gap-3.5">
-              <span className="flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-white/72 text-[var(--onboarding-text-tertiary)]">
+              <span className="flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[color-mix(in_srgb,var(--onboarding-surface)_72%,transparent)] text-[var(--onboarding-text-tertiary)]">
                 <KeyRound className="size-4" strokeWidth={1.25} />
               </span>
-              <span className="flex size-[55px] items-center justify-center rounded-full border-[1.83px] border-[var(--onboarding-control-border)] bg-white text-[var(--onboarding-accent)]">
+              <span className="flex size-[55px] items-center justify-center rounded-full border-[1.83px] border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-accent)]">
                 <WarningPrimaryIcon className="size-[22px]" strokeWidth={2.14} />
               </span>
-              <span className="flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-white/72 text-[var(--onboarding-text-tertiary)]">
+              <span className="flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[color-mix(in_srgb,var(--onboarding-surface)_72%,transparent)] text-[var(--onboarding-text-tertiary)]">
                 <Server className="size-4" strokeWidth={1.25} />
               </span>
             </div>
@@ -486,7 +488,7 @@ export default function SetupChoiceStep({
                     </li>
                   )}
                   <li className="flex items-center gap-2">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--onboarding-text-primary)] text-sm leading-[1.32] text-white">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] text-sm leading-[1.32] text-[var(--onboarding-inverse-text)]">
                       {index + 1}
                     </span>
                     <span className="flex-1 text-sm font-medium leading-[1.32] text-[var(--onboarding-text-primary)]">

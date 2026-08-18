@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 // with their rounded corners baked in as transparency.
 import microphoneIcon from "@/assets/onboarding-permission-microphone.webp";
 import accessibilityIcon from "@/assets/onboarding-permission-accessibility.webp";
-import screenAudioIcon from "@/assets/onboarding-permission-screen-audio.webp";
+import systemAudioIcon from "@/assets/onboarding-permission-system-audio.webp";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
@@ -67,22 +67,26 @@ function PermissionRow({
       />
 
       <div className="min-w-0 flex-1 text-left">
-        <p className="text-base font-medium leading-5 text-neutral-950">{title}</p>
-        <p className="mt-1 truncate text-sm leading-5 text-neutral-500">{description}</p>
+        <p className="text-base font-medium leading-5 text-[var(--onboarding-text-primary)]">
+          {title}
+        </p>
+        <p className="mt-1 truncate text-sm leading-5 text-[var(--onboarding-text-secondary)]">
+          {description}
+        </p>
       </div>
 
       <button
         type="button"
         disabled={busy || disabled || (granted && !canContinue)}
         onClick={() => (canContinue ? onContinue() : void onRequest())}
-        className={`onboarding-pressable inline-flex h-9 min-w-24 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 disabled:cursor-default ${
+        className={`onboarding-pressable inline-flex h-9 min-w-24 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default ${
           canContinue
-            ? "bg-blue-500 text-white hover:bg-blue-600"
+            ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)] hover:bg-[var(--onboarding-accent-hover)]"
             : granted
               ? // Granted rows are disabled, so the disabled: variants have to
                 // restate the tint or it falls back to the neutral grey below.
                 "bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] text-[var(--onboarding-accent)] disabled:bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] disabled:text-[var(--onboarding-accent)]"
-              : "bg-neutral-200 text-neutral-500 hover:bg-neutral-300 disabled:bg-neutral-200 disabled:text-neutral-500"
+              : "bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary-hover)] disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-secondary)]"
         }`}
       >
         {granted && !canContinue && !busy && (
@@ -124,6 +128,8 @@ export default function CompactPermissionsStep({
       <button
         type="button"
         onClick={onSkip}
+        // Literal whites, not tokens: this sits on the indigo hero, which stays
+        // indigo in both themes, so it is white-on-translucent either way.
         className="absolute right-5 top-5 z-20 h-8 rounded-full bg-white/20 px-3 text-sm font-medium text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
       >
         {t("common.skip")}
@@ -137,9 +143,11 @@ export default function CompactPermissionsStep({
         <h1 className="onboarding-display-title mx-auto max-w-72 text-balance">
           {t("onboarding.rehaul.permissions.title")}
         </h1>
-        <p className="mt-4 text-base text-neutral-500">{t("auth.welcomeSubtitle")}</p>
+        <p className="mt-4 text-base text-[var(--onboarding-text-secondary)]">
+          {t("auth.welcomeSubtitle")}
+        </p>
 
-        <div className="mt-[3.125rem] rounded-[1.35rem] bg-neutral-100 px-4 py-1.5">
+        <div className="mt-[3.125rem] rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-4 py-1.5">
           <PermissionRow
             id="microphone"
             title={t("onboarding.permissions.microphoneTitle")}
@@ -150,7 +158,7 @@ export default function CompactPermissionsStep({
             onRequest={() => request("microphone", permissions.requestMicPermission)}
             onContinue={onContinue}
           />
-          <div className="h-px bg-neutral-200" />
+          <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
           <PermissionRow
             id="accessibility"
             title={t("onboarding.permissions.accessibilityTitle")}
@@ -160,7 +168,7 @@ export default function CompactPermissionsStep({
             iconSrc={accessibilityIcon}
             onRequest={() => request("accessibility", permissions.requestAccessibilityPermission)}
           />
-          <div className="h-px bg-neutral-200" />
+          <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
           <PermissionRow
             id="system-audio"
             title={t("onboarding.rehaul.permissions.systemAudioTitle")}
@@ -168,7 +176,7 @@ export default function CompactPermissionsStep({
             granted={systemAudio.granted}
             busy={busyPermission === "system-audio"}
             disabled={!canRequestSystemAudio}
-            iconSrc={screenAudioIcon}
+            iconSrc={systemAudioIcon}
             onRequest={() => request("system-audio", systemAudio.request)}
           />
         </div>

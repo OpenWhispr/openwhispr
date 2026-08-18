@@ -78,6 +78,17 @@ const STEP_ORDER: OnboardingStepId[] = [
 
 const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
 
+/**
+ * Steps that render in the compact frame. That frame has no footer, so these
+ * steps show no progress row and are left out of the count entirely — landing on
+ * `languages` reads as "1 of N", not "3 of N" for two steps the user never saw a
+ * counter on.
+ */
+export const COMPACT_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingStepId>([
+  "auth",
+  "permissions",
+]);
+
 const LEGACY_STEP_MAP: OnboardingStepId[] = [
   "auth",
   "use-cases",
@@ -222,4 +233,38 @@ export function getNextOnboardingStep(
 ): OnboardingStepId | null {
   const index = route.indexOf(currentStepId);
   return index >= 0 ? (route[index + 1] ?? null) : (route[0] ?? null);
+}
+
+export interface OnboardingProgressState {
+  /** Zero-based position among the counted steps. */
+  index: number;
+  /** Number of counted steps in the current route. */
+  total: number;
+}
+
+/**
+ * Progress across the live route: one dot per step the user will actually see a
+ * counter on, filled up to the current one.
+ *
+ * The total comes from the route rather than a constant because the route itself
+ * is conditional — the assistant pair drops out when the agent is disallowed, and
+ * the provider pair only exists once a non-cloud setup mode is picked. Choosing
+ * BYOK/local/enterprise on setup-choice therefore appends two steps and the row
+ * grows by two dots at that moment, which is the flow honestly getting longer.
+ *
+ * Returns null when there is nothing worth drawing: a compact step, an off-route
+ * step, or a route so short (the guest path is setup-choice alone) that a
+ * one-dot row would read as decoration.
+ */
+export function getOnboardingProgress(
+  stepId: OnboardingStepId,
+  route: OnboardingStepId[]
+): OnboardingProgressState | null {
+  if (COMPACT_STEPS.has(stepId)) return null;
+
+  const counted = route.filter((candidate) => !COMPACT_STEPS.has(candidate));
+  const index = counted.indexOf(stepId);
+  if (index === -1 || counted.length < 2) return null;
+
+  return { index, total: counted.length };
 }

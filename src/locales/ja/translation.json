@@ -139,7 +139,7 @@
     "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
   },
   "common": {
-    "continue": "Continue",
+    "continue": "続ける",
     "add": "追加",
     "retry": "再試行",
     "back": "戻る",
@@ -185,254 +185,255 @@
   "onboarding": {
     "rehaul": {
       "permissions": {
-        "title": "Set up OpenWhispr in 3 minutes",
+        "title": "3 分で OpenWhispr を設定",
         "microphoneDescription": "音声をテキストに変換します。",
         "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
-        "systemAudioTitle": "画面オーディオ",
+        "systemAudioTitle": "システムオーディオ",
         "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
         "enable": "有効にする",
         "enabled": "有効"
       },
       "languages": {
-        "title": "Which languages do you speak?",
+        "title": "どの言語を話しますか？",
         "titleLineOne": "どの言語を",
         "titleLineTwo": "話しますか？",
         "description": "Select all that apply. Multiple selections use automatic language detection."
       },
       "dictationHotkey": {
-        "title": "Set up your keyboard shortcut",
+        "title": "キーボードショートカットを設定",
         "titleLineOne": "キーボードショートカットを",
         "titleLineTwo": "設定しましょう",
-        "description": "Choose a keyboard shortcut to start and stop dictation from anywhere."
+        "description": "どこからでもディクテーションを開始・停止できるキーボードショートカットを選びます。"
       },
       "assistantHotkey": {
-        "title": "Set up OpenWhispr Assistant",
-        "titleLineOne": "Set up",
+        "title": "OpenWhispr Assistant を設定",
+        "titleLineOne": "セットアップ",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。",
         "preview": {
-          "newMessage": "New Message",
+          "newMessage": "新規メッセージ",
           "toLabel": "To:",
           "recipient": "alex@northstarstudio.co",
-          "subjectLabel": "Subject:",
-          "subject": "Project completed",
-          "greeting": "Hi Alex,",
-          "bodyLineOne": "The new project is complete and ready for review.",
-          "bodyLineTwo": "I’ve wrapped up the final updates and everything is good to go from my side.",
-          "prompt": "Draft an email notifying the client that I have completed the new project"
+          "subjectLabel": "件名:",
+          "subject": "プロジェクト完了",
+          "greeting": "Alex さん、",
+          "bodyLineOne": "新しいプロジェクトが完成し、確認の準備が整いました。",
+          "bodyLineTwo": "最終の更新をすべて終え、こちらの作業は完了しています。",
+          "prompt": "新しいプロジェクトが完了したことをクライアントに知らせるメールを作成して"
         }
       },
       "hotkey": {
-        "capture": "Press the keys you want to use",
-        "confirm": "Press {{hotkey}} again to confirm",
-        "chooseAnother": "Choose another shortcut",
+        "capture": "使用したいキーを押してください",
+        "confirm": "確定するにはもう一度 {{hotkey}} を押してください",
+        "chooseAnother": "別のショートカットを選ぶ",
         "inUse": "そのショートカットはすでに使用されています。別のものを選んでください。"
       },
       "dictationDemo": {
-        "title": "Try your first dictation",
-        "titleLineOne": "Try your",
-        "titleLineTwo": "first dictation",
-        "description": "Press {{hotkey}} and start speaking. OpenWhispr will turn your voice into text.",
+        "title": "最初のディクテーションを試す",
+        "titleLineOne": "最初の",
+        "titleLineTwo": "ディクテーションを試す",
+        "description": "{{hotkey}} を押して話し始めてください。OpenWhispr が音声をテキストに変換します。",
         "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
-        "prompt": "Try saying: “I’m testing dictation for the first time.”",
-        "placeholder": "Your dictation will appear here…"
+        "prompt": "「初めてディクテーションを試しています」と話してみてください。",
+        "placeholder": "ここにディクテーションが表示されます…"
       },
       "assistantDemo": {
-        "title": "Meet OpenWhispr Assistant",
-        "titleLineOne": "Meet",
+        "title": "OpenWhispr Assistant を使ってみる",
+        "titleLineOne": "ご紹介します",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
+        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。",
         "senderName": "Eren Lauren",
         "senderEmail": "eren32@gmail.com",
-        "recipientLabel": "to John Doe",
-        "email": "Hey! Want to grab coffee next week? Let me know what works for you.",
-        "prompt": "Reply that Tuesday at 3 works. Send an invite.",
+        "recipientLabel": "John Doe 宛て",
+        "email": "こんにちは！来週コーヒーでもどうですか？ご都合を教えてください。",
+        "prompt": "火曜の15時で大丈夫だと返信して。招待を送って。",
         "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
       },
       "demo": {
-        "listening": "Listening…",
-        "processing": "Turning your voice into text…",
-        "stop": "Stop"
+        "listening": "聞き取り中…",
+        "processing": "音声をテキストに変換中…",
+        "stop": "停止",
+        "typing": "入力中…"
       },
       "notes": {
-        "title": "Record meetings without a bot with OpenWhispr Notes",
-        "titleLineOne": "Record meetings without a bot",
-        "titleLineTwoPrefix": "with OpenWhispr",
+        "title": "ボットなしで会議を録音 — OpenWhispr Notes",
+        "titleLineOne": "ボットなしでミーティングを録音",
+        "titleLineTwoPrefix": "OpenWhispr の",
         "titleLineTwoBrand": "Notes",
-        "description": "OpenWhispr turns your conversation into clear notes. No meeting bot joins your call.",
+        "description": "OpenWhispr は会話をわかりやすいノートに変換します。ミーティングボットが通話に参加することはありません。",
         "hero": {
-          "detected": "Meeting Detected",
-          "transcribe": "Want to transcribe the meeting?",
-          "description": "Record your meeting and let OpenWhispr turn the conversation into clear, organized notes.",
-          "chat": "Chat with your meeting notes",
-          "transcript": "Review the full transcript",
-          "speakers": "See who said what"
+          "detected": "会議を検出しました",
+          "transcribe": "会議を文字起こししますか？",
+          "description": "ミーティングを録音すれば、OpenWhispr が会話をわかりやすく整理されたノートに変換します。",
+          "chat": "ミーティングノートとチャット",
+          "transcript": "全文の文字起こしを確認",
+          "speakers": "誰が何を話したかを確認"
         },
         "connectors": {
-          "connect": "Connect",
-          "googleTitle": "Google Calendar",
-          "googleDescription": "Sync your meetings.",
+          "connect": "接続",
+          "googleTitle": "Google カレンダー",
+          "googleDescription": "ミーティングを同期します。",
           "microsoftTitle": "Microsoft Outlook",
-          "microsoftDescription": "Bring in work meetings and invites.",
-          "appleTitle": "Apple Calendar",
-          "appleDescription": "Sync events from your Mac and iPhone."
+          "microsoftDescription": "仕事のミーティングと招待を取り込みます。",
+          "appleTitle": "Apple カレンダー",
+          "appleDescription": "Mac と iPhone の予定を同期します。"
         }
       },
       "setupChoice": {
-        "title": "Choose your OpenWhispr setup",
-        "titleLineOne": "Choose your",
-        "titleLineTwo": "OpenWhispr setup",
-        "description": "Pick the option that fits how you work.",
+        "title": "OpenWhispr のセットアップを選択",
+        "titleLineOne": "OpenWhispr の",
+        "titleLineTwo": "セットアップを選択",
+        "description": "働き方に合った方法を選んでください。",
         "cloud": {
           "title": "OpenWhispr Cloud",
-          "description": "Get 2,000 free words each week. Your settings stay synced across devices.",
-          "continue": "Continue for free",
-          "signIn": "Sign in to use Cloud",
+          "description": "毎週 2,000 語を無料で利用できます。設定はデバイス間で同期されます。",
+          "continue": "無料で続ける",
+          "signIn": "サインインしてクラウドを使う",
           "features": {
-            "fast": "Fastest, no setup required",
+            "fast": "最速、セットアップ不要",
             "privacy": "Privacy-focused processing",
-            "sync": "Settings sync across devices",
-            "features": "AI features for notes and actions"
+            "sync": "設定をデバイス間で同期",
+            "features": "ノートとアクションの AI 機能"
           }
         },
         "byok": {
-          "title": "API Provider",
-          "description": "Use your own API key."
+          "title": "API プロバイダー",
+          "description": "自分の API キーを使用します。"
         },
         "local": {
-          "title": "On your device",
-          "description": "Private offline transcription. Needs at least {{minimumSpace}} GB free space.",
-          "badge": "Free",
-          "download": "Download models",
+          "title": "デバイス上で実行",
+          "description": "プライベートなオフライン文字起こし。空き容量が {{minimumSpace}} GB 以上必要です。",
+          "badge": "無料",
+          "download": "モデルをダウンロード",
           "features": {
-            "device": "Runs on your device",
-            "offline": "Works offline after setup",
-            "models": "Choose models for dictation and assistant",
-            "free": "Free to use"
+            "device": "デバイス上で動作",
+            "offline": "設定後はオフラインで動作",
+            "models": "ディクテーションとアシスタント用のモデルを選択",
+            "free": "無料で使える"
           }
         },
         "enterprise": {
-          "title": "Enterprise",
-          "description": "Use an organization-managed AI provider with team controls.",
-          "setUp": "Set up Enterprise",
+          "title": "エンタープライズ",
+          "description": "チーム管理機能付きの、組織が管理する AI プロバイダーを使用します。",
+          "setUp": "エンタープライズを設定",
           "features": {
-            "credentials": "Use your organization’s credentials",
-            "compliance": "SOC 2 Type II, HIPAA, and ISO 27001",
-            "controls": "Manage access with team controls"
+            "credentials": "組織の認証情報を使用",
+            "compliance": "SOC 2 Type II、HIPAA、ISO 27001",
+            "controls": "チーム管理機能でアクセスを管理"
           }
         },
         "warnings": {
           "byok": {
-            "title": "Your provider handles your data",
-            "description": "You’ll add credentials for separate dictation and Assistant providers. Provider pricing and retention policies apply.",
-            "continue": "Set up API provider",
+            "title": "データはプロバイダーが取り扱います",
+            "description": "ディクテーションと Assistant のプロバイダーそれぞれに認証情報を追加します。プロバイダーの料金と保持ポリシーが適用されます。",
+            "continue": "API プロバイダーを設定",
             "steps": {
-              "1": "Choose providers for dictation and Assistant",
-              "2": "Add credentials using secure storage",
-              "3": "Test each connection before activation"
+              "1": "ディクテーションと Assistant のプロバイダーを選ぶ",
+              "2": "安全なストレージを使って認証情報を追加する",
+              "3": "有効化する前に各接続をテストする"
             }
           },
           "local": {
-            "title": "Local setup takes a few extra steps",
-            "description": "Local processing keeps your speech on this device, but requires a one-time setup and at least {{minimumSpace}} GB of free space.",
+            "title": "ローカル設定には追加の手順がいくつか必要です",
+            "description": "ローカル処理では音声がこのデバイスに留まりますが、初回の設定と {{minimumSpace}} GB 以上の空き容量が必要です。",
             "continue": "Set up locally",
             "steps": {
-              "1": "Choose a transcription engine",
-              "2": "Configure or download a model, about {{modelSize}}",
-              "3": "Wait for installation and activation"
+              "1": "文字起こしエンジンを選ぶ",
+              "2": "モデルを設定またはダウンロードする（約 {{modelSize}}）",
+              "3": "インストールと有効化を待つ"
             }
           },
           "enterprise": {
-            "title": "Have your organization credentials ready",
-            "description": "Manual enterprise setup is available only when your workspace policy permits it.",
-            "continue": "Set up enterprise",
+            "title": "組織の認証情報を用意してください",
+            "description": "手動のエンタープライズ設定は、ワークスペースのポリシーが許可している場合のみ利用できます。",
+            "continue": "エンタープライズを設定",
             "steps": {
-              "1": "Sign in with SSO or enter approved credentials",
-              "2": "Choose an available region and model",
-              "3": "Test the managed connection before activation"
+              "1": "SSO でサインインするか、承認済みの認証情報を入力する",
+              "2": "利用できるリージョンとモデルを選ぶ",
+              "3": "有効化する前に管理された接続をテストする"
             }
           }
         },
-        "useCloud": "Use Cloud instead",
-        "continueSetup": "Continue setup",
-        "showMore": "Show More Options",
+        "useCloud": "代わりにクラウドを使う",
+        "continueSetup": "セットアップを続ける",
+        "showMore": "その他のオプションを表示",
         "moreOptions": {
-          "title": "Choose your API setup",
-          "description": "Add an API key or connect a self-hosted model.",
+          "title": "API の設定方法を選択",
+          "description": "API キーを追加するか、セルフホストモデルを接続します。",
           "selfHosted": {
-            "title": "Self-hosted",
-            "description": "Connect your own hosted model."
+            "title": "セルフホスト",
+            "description": "自分でホストしているモデルを接続します。"
           }
         }
       },
       "provider": {
-        "progress": "Provider setup progress",
-        "dictation": "Dictation",
-        "assistant": "Assistant",
-        "title": "Connect your AI provider",
-        "description": "Choose a provider, add your credentials, and test the connection.",
-        "descriptionLineOne": "Choose a provider and add",
-        "descriptionLineTwo": "your API key.",
-        "selfHosted": "Have a self-hosted model key",
-        "providerLabel": "Provider",
-        "providerPlaceholder": "Choose the model provider",
-        "modelLabel": "Model",
-        "modelPlaceholder": "Choose the model",
-        "apiKey": "API Key",
-        "apiKeyPlaceholder": "Paste your API key",
-        "endpointUrl": "Endpoint URL",
-        "endpointPlaceholder": "Paste your endpoint URL",
-        "optional": "Optional",
-        "modelId": "Model ID",
-        "modelIdPlaceholder": "Write your model ID",
-        "testConnection": "Test Connection",
-        "proceed": "Proceed",
-        "clinical": "FOR CLINICAL TRANSCRIPTION",
+        "progress": "プロバイダー設定の進行状況",
+        "dictation": "ディクテーション",
+        "assistant": "アシスタント",
+        "title": "AI プロバイダーを接続",
+        "description": "プロバイダーを選び、認証情報を追加して、接続をテストします。",
+        "descriptionLineOne": "プロバイダーを選んで",
+        "descriptionLineTwo": "API キーを追加してください。",
+        "selfHosted": "セルフホストモデルのキーを持っている",
+        "providerLabel": "プロバイダー",
+        "providerPlaceholder": "モデルプロバイダーを選択",
+        "modelLabel": "モデル",
+        "modelPlaceholder": "モデルを選択",
+        "apiKey": "API キー",
+        "apiKeyPlaceholder": "API キーを貼り付け",
+        "endpointUrl": "エンドポイント URL",
+        "endpointPlaceholder": "エンドポイント URL を貼り付け",
+        "optional": "任意",
+        "modelId": "モデル ID",
+        "modelIdPlaceholder": "モデル ID を入力",
+        "testConnection": "接続をテスト",
+        "proceed": "次へ進む",
+        "clinical": "臨床文字起こし向け",
         "clientId": "Client ID",
         "clientSecret": "Client secret",
-        "runTest": "Run Test",
-        "testing": "Testing…",
-        "connected": "Connected",
-        "connectionFailed": "The connection could not be verified."
+        "runTest": "テストを実行",
+        "testing": "テスト中…",
+        "connected": "接続済み",
+        "connectionFailed": "接続を確認できませんでした。"
       },
       "local": {
-        "title": "Set up local models",
-        "description": "Choose the models you want to run on your device.",
-        "descriptionLineOne": "Choose the models you want",
-        "descriptionLineTwo": "to run on your device.",
-        "providerLabel": "Provider",
-        "agent": "Agent",
-        "download": "Download",
-        "downloadingShort": "Downloading",
-        "selected": "Selected",
-        "use": "Use",
-        "downloadInProgress": "Download in progress",
+        "title": "ローカルモデルを設定",
+        "description": "デバイス上で実行するモデルを選択してください。",
+        "descriptionLineOne": "デバイス上で実行する",
+        "descriptionLineTwo": "モデルを選択してください。",
+        "providerLabel": "プロバイダー",
+        "agent": "エージェント",
+        "download": "ダウンロード",
+        "downloadingShort": "ダウンロード中",
+        "selected": "選択済み",
+        "use": "使用",
+        "downloadInProgress": "ダウンロード中",
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
-        "downloadInBackground": "Finish in background",
-        "downloads": "Model downloads",
-        "downloading": "Downloading… {{progress}}%",
-        "installing": "Installing model…"
+        "downloadInBackground": "バックグラウンドで完了",
+        "downloads": "モデルのダウンロード",
+        "downloading": "ダウンロード中… {{progress}}%",
+        "installing": "モデルをインストール中…"
       },
       "enterprise": {
-        "title": "Connect your enterprise provider",
-        "description": "Use your organization’s credentials for dictation intelligence and the Assistant.",
-        "descriptionLineOne": "Use your organization’s credentials",
-        "descriptionLineTwo": "to connect a provider.",
-        "dictationIntelligence": "Dictation intelligence",
-        "ssoProfile": "SSO Profile",
-        "accessKeys": "Access Keys",
-        "profileName": "Profile Name",
-        "profilePlaceholder": "Add profile name",
+        "title": "エンタープライズプロバイダーを接続",
+        "description": "組織の認証情報をディクテーションの知能と Assistant に使用します。",
+        "descriptionLineOne": "組織の認証情報を使って",
+        "descriptionLineTwo": "プロバイダーを接続します。",
+        "dictationIntelligence": "ディクテーション インテリジェンス",
+        "ssoProfile": "SSO プロファイル",
+        "accessKeys": "アクセスキー",
+        "profileName": "プロファイル名",
+        "profilePlaceholder": "プロファイル名を追加",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
-        "region": "Region",
-        "regionPlaceholder": "Choose a region",
-        "model": "Model",
-        "modelPlaceholder": "Choose a model",
-        "testConnection": "Test Connection",
-        "managedTitle": "Your provider is managed by your organization",
-        "managedDescription": "OpenWhispr will use the provider and model assigned by your administrator.",
-        "unavailable": "Enterprise setup is unavailable under your workspace policy."
+        "region": "リージョン",
+        "regionPlaceholder": "リージョンを選択",
+        "model": "モデル",
+        "modelPlaceholder": "モデルを選択",
+        "testConnection": "接続をテスト",
+        "managedTitle": "プロバイダーは組織によって管理されています",
+        "managedDescription": "OpenWhispr は管理者が割り当てたプロバイダーとモデルを使用します。",
+        "unavailable": "ワークスペースのポリシーにより、エンタープライズ設定は利用できません。"
       }
     },
     "steps": {

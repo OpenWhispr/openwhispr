@@ -53,7 +53,7 @@ export default function UseCaseStep({
               // Figma: Frame 36 — the selected row is the same card as the
               // unselected one. Only the control changes; the surface keeps its
               // white fill and #E3E3E3 stroke.
-              className="flex w-full shrink-0 items-center gap-3 overflow-hidden rounded-xl border border-[var(--onboarding-control-border)] bg-white px-4 py-3.5 text-left transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_20%,transparent)]"
+              className="flex w-full shrink-0 items-center gap-3 overflow-hidden rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_20%,transparent)]"
             >
               {/* Unchecked: #00000033 hairline. Checked: the spec's asset —
                   accent fill, no stroke, 1px white tick with round joins. */}
@@ -75,7 +75,7 @@ export default function UseCaseStep({
                 </svg>
               ) : (
                 <span
-                  className="size-4 shrink-0 rounded border border-black/20 bg-white/[0.02]"
+                  className="size-4 shrink-0 rounded border border-[var(--onboarding-control-border)]"
                   aria-hidden="true"
                 />
               )}
@@ -100,7 +100,7 @@ export default function UseCaseStep({
             value={note}
             onChange={(event) => onNoteChange(event.target.value)}
             placeholder={t("onboarding.useCase.notePlaceholder")}
-            className="onboarding-light-input onboarding-light-input-bordered w-full rounded-xl! border border-[var(--onboarding-control-border)] bg-white p-3 text-sm font-normal leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
+            className="onboarding-light-input onboarding-light-input-bordered w-full rounded-xl! border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-3 text-sm font-normal leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
           />
         </label>
       </div>

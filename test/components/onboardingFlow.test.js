@@ -121,3 +121,56 @@ test("route helpers recover from ineligible steps", async () => {
   assert.equal(getNextOnboardingStep("auth", route), "setup-choice");
   assert.equal(getNextOnboardingStep("setup-choice", route), null);
 });
+
+test("progress counts every step the user is shown, once each", async () => {
+  const { getOnboardingProgress, getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({ authPath: "account", setupMode: null, agentAllowed: true });
+
+  // The compact steps render in a frame with no footer, so they carry no row and
+  // must not inflate the total — landing on languages is "1 of 8", not "3 of 10".
+  assert.equal(getOnboardingProgress("auth", route), null);
+  assert.equal(getOnboardingProgress("permissions", route), null);
+
+  const counted = route.filter((stepId) => getOnboardingProgress(stepId, route) !== null);
+  assert.deepEqual(
+    counted.map((stepId) => getOnboardingProgress(stepId, route).index),
+    counted.map((_, index) => index)
+  );
+  assert.deepEqual(getOnboardingProgress("languages", route), { index: 0, total: 8 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", route), { index: 7, total: 8 });
+});
+
+test("progress total tracks the conditional parts of the route", async () => {
+  const { getOnboardingProgress, getOnboardingRoute } = await load();
+  const context = { authPath: "account", setupMode: null, agentAllowed: true };
+
+  // Dropping the assistant pair shortens the row rather than leaving two dots
+  // that can never fill.
+  const noAgent = getOnboardingRoute({ ...context, agentAllowed: false });
+  assert.equal(getOnboardingProgress("languages", noAgent).total, 6);
+  assert.deepEqual(getOnboardingProgress("setup-choice", noAgent), { index: 5, total: 6 });
+
+  // Picking a non-cloud mode appends the provider pair, so the row grows by two
+  // at that moment and the last provider step is what fills it.
+  const byok = getOnboardingRoute({ ...context, setupMode: "byok" });
+  assert.deepEqual(getOnboardingProgress("setup-choice", byok), { index: 7, total: 10 });
+  assert.deepEqual(getOnboardingProgress("byok-assistant", byok), { index: 9, total: 10 });
+});
+
+test("progress hides itself rather than drawing a one-dot row", async () => {
+  const { getOnboardingProgress, getOnboardingRoute } = await load();
+  // The guest route before a plan is picked is auth + setup-choice: one counted
+  // step, and a single dot reads as decoration rather than progress.
+  const guest = getOnboardingRoute({ authPath: "guest", setupMode: null, agentAllowed: true });
+  assert.equal(getOnboardingProgress("setup-choice", guest), null);
+
+  const guestByok = getOnboardingRoute({
+    authPath: "guest",
+    setupMode: "byok",
+    agentAllowed: true,
+  });
+  assert.deepEqual(getOnboardingProgress("setup-choice", guestByok), { index: 0, total: 3 });
+
+  // An off-route step has no position to report.
+  assert.equal(getOnboardingProgress("notes", guestByok), null);
+});
