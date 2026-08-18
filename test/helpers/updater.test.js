@@ -3,8 +3,6 @@ const { afterEach, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 
-// UpdateManager no-ops in development; pin the env so a developer shell with
-// NODE_ENV=development cannot turn every assertion below into a false pass.
 process.env.NODE_ENV = "test";
 
 const updaterModulePath = require.resolve("../../src/updater.js");
@@ -13,9 +11,6 @@ const originalLoad = Module._load;
 const STARTUP_DELAY_MS = 3000;
 const PERIODIC_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
-// Builds a fake electron-updater whose checkForUpdates records each call and,
-// when `offline` is set, behaves like a machine with no network: it emits the
-// `error` event on the updater (as electron-updater does) and rejects.
 function makeAutoUpdater({ offline = false } = {}) {
   const listeners = {};
   const autoUpdater = {
@@ -29,6 +24,7 @@ function makeAutoUpdater({ offline = false } = {}) {
     checkForUpdates() {
       autoUpdater.calls += 1;
       if (offline) {
+        // electron-updater emits the error before rejecting
         const error = new Error("net::ERR_INTERNET_DISCONNECTED");
         listeners.error?.(error);
         return Promise.reject(error);
@@ -39,10 +35,8 @@ function makeAutoUpdater({ offline = false } = {}) {
   return autoUpdater;
 }
 
-// UpdateManager requires electron lazily — in the constructor
-// (before-quit-for-update hook), in cleanup(), and on Intel Macs child_process
-// (Rosetta probe) — so the mocks stay installed for the whole test and are
-// restored in afterEach rather than right after the module load.
+// updater.js requires electron and child_process lazily (constructor, cleanup(),
+// Rosetta probe), so the mocks stay installed until afterEach.
 function createUpdateManager(autoUpdater) {
   delete require.cache[updaterModulePath];
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -113,8 +107,6 @@ test("prefs are read at fire time, so toggling App updates takes effect without 
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   const autoUpdater = makeAutoUpdater();
   const manager = createUpdateManager(autoUpdater);
-  // sync-notification-preferences mutates this object in place; the timers
-  // were scheduled while the toggle was off.
   const windowManager = {
     notificationPrefs: { notificationsEnabled: true, notifyUpdates: false },
   };
@@ -175,8 +167,6 @@ test("offline with App updates off, no update-error reaches the renderers (#1605
   t.mock.timers.tick(STARTUP_DELAY_MS);
   assert.deepEqual(sent, [], "a skipped check produces no renderer traffic at all");
 
-  // Same machine with the toggle on: the connection error still surfaces, which
-  // is what a user who asked for update checks should see.
   windowManager.notificationPrefs.notifyUpdates = true;
   t.mock.timers.tick(PERIODIC_INTERVAL_MS);
   assert.ok(sent.includes("update-error"));
