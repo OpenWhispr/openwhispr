@@ -1990,7 +1990,7 @@
         "checkForUpdates": "Check for Updates",
         "checking": "Checking...",
         "autoUpdates": "Automatic updates",
-        "autoUpdatesDescription": "Download updates in the background and ask you to restart when they are ready",
+        "autoUpdatesDescription": "Stay current with the latest improvements and security fixes",
         "currentVersion": "Current version",
         "devMode": "Running in development mode",
         "dialogs": {
