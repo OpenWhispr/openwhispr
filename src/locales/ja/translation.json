@@ -1126,7 +1126,7 @@
     "sections": {
       "account": {
         "description": "プロフィールとサインイン",
-        "label": "アカウント"
+        "label": "プロフィール"
       },
       "plansBilling": {
         "description": "プラン、使用状況、請求",
@@ -1269,7 +1269,7 @@
             "公開リンクでノートを共有",
             "個人APIアクセス",
             "すべてのアプリでMCP統合",
-            "モバイルアプリ（iOS 近日公開）",
+            "モバイルアプリ",
             "メールサポート"
           ],
           "cta": "始める",
@@ -1285,9 +1285,8 @@
           "includesPrefix": "Pro の全機能 +",
           "badge": "一番人気",
           "features": [
-            "共有ノートのためのチームスペース",
-            "ワークスペースのロールとメンバー管理",
             "無制限の会議録音",
+            "ワークスペースのロールとメンバー管理",
             "エージェントモード",
             "データとチャット",
             "優先サポート"
@@ -1336,7 +1335,6 @@
         "signOut": "サインアウト",
         "signingOut": "サインアウト中..."
       },
-      "signedIn": "サインイン済み",
       "signedOutPlans": {
         "button": "無料アカウントを作成"
       },
@@ -2293,8 +2291,8 @@
       "actions": "アクション"
     },
     "spaces": {
-      "privateSpaces": "プライベートスペース",
-      "teamSpaces": "チームスペース",
+      "privateSpaces": "プライベートノート",
+      "teamSpaces": "Teamspaces",
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
       "newSpace": "新しいチームスペース",
@@ -2675,13 +2673,14 @@
         "notLabeled": "話者ラベルなし",
         "finalizing": "話者を確定中…",
         "justYou": "あなたのみ",
-        "defaultingHint": "他の参加者を1人と想定 — 違う場合は変更してください",
+        "assumedHint": "2人と想定 — 違う場合は変更してください",
+        "speakersLabel": "話者数",
+        "labelToggle": "話者をラベル付け",
         "toggleAria": "この録音の話者識別を切り替える",
         "incAria": "想定する話者数を増やす",
-        "decAria": "想定する話者数を減らす",
-        "othersInCall_one": "他{{count}}人が通話中",
-        "othersInCall_other": "他{{count}}人が通話中"
+        "decAria": "想定する話者数を減らす"
       },
+      "consentNotice": "他の人を録音するときは必ず同意を得てください",
       "createNewPrefix": "作成",
       "emailPlaceholder": "name@example.com",
       "nameOrEmailPlaceholder": "名前またはメールを入力",
@@ -3422,7 +3421,6 @@
       "description": "ワークスペースには組織のメンバーと請求がまとまります。その中に共有ノート用のチームスペースを作成できます。",
       "nameLabel": "ワークスペース名",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "新しいワークスペースは Free プランで始まります。チームスペースにはワークスペースのプランが必要です。",
       "submit": "ワークスペースを作成",
       "submitting": "作成中…",
       "errorTitle": "ワークスペースを作成できませんでした"

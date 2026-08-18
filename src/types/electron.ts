@@ -1200,6 +1200,8 @@ declare global {
       onActionDeleted?: (callback: (payload: { id: number }) => void) => () => void;
 
       // Audio file operations
+      saveTempAudio: (buffer: ArrayBuffer) => Promise<{ success: boolean; path: string }>;
+      deleteTempAudio: (tempPath: string) => Promise<{ success: boolean; error?: string }>;
       selectAudioFile: (options?: { multiple?: boolean }) => Promise<{
         canceled: boolean;
         filePath?: string;

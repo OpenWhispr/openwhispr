@@ -411,3 +411,16 @@ test("translated: false when the translate step is skipped", async () => {
   assert.equal(result.translated, false);
   assert.equal(result.text, "raw");
 });
+
+// Guard shared with the agent/cleanup call sites (audioManager, ControlPanel history
+// retry): whitespace-only reasoning output must never replace existing text (#1616).
+test("hasTextContent: true only for strings with non-whitespace content", async () => {
+  const { hasTextContent } = await load();
+
+  assert.equal(hasTextContent("cleaned text"), true);
+  assert.equal(hasTextContent("  padded  "), true);
+  assert.equal(hasTextContent(""), false);
+  assert.equal(hasTextContent("   \n\t  "), false);
+  assert.equal(hasTextContent(null), false);
+  assert.equal(hasTextContent(undefined), false);
+});

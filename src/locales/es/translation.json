@@ -1174,7 +1174,7 @@
     "sections": {
       "account": {
         "description": "Perfil e inicio de sesión",
-        "label": "Cuenta"
+        "label": "Perfil"
       },
       "plansBilling": {
         "description": "Planes, uso y facturación",
@@ -1317,7 +1317,7 @@
             "Comparte notas con enlaces públicos",
             "Acceso personal a la API",
             "Integración MCP en todas tus apps",
-            "Aplicación móvil (iOS próximamente)",
+            "Aplicación móvil",
             "Soporte por correo electrónico"
           ],
           "cta": "Comenzar",
@@ -1333,9 +1333,8 @@
           "includesPrefix": "Todas las funciones de Pro +",
           "badge": "Más popular",
           "features": [
-            "Espacios de equipo para notas compartidas",
-            "Roles y gestión de miembros del espacio de trabajo",
             "Grabaciones de reuniones ilimitadas",
+            "Roles y gestión de miembros del espacio de trabajo",
             "Modo agente",
             "Chatea sobre tus datos",
             "Soporte prioritario"
@@ -1384,7 +1383,6 @@
         "signOut": "Cerrar sesión",
         "signingOut": "Cerrando sesión..."
       },
-      "signedIn": "Sesión iniciada",
       "signedOutPlans": {
         "button": "Crear cuenta gratuita"
       },
@@ -1851,7 +1849,7 @@
       "lastSynced": "Última sincronización {{time}}",
       "minutesAgo": "hace {{count}}m",
       "audioRetention": "Retención de audio",
-      "audioRetentionDescription": "Almacena grabaciones de audio localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención.",
+      "audioRetentionDescription": "Almacena el audio de dictado localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención. El audio de las reuniones nunca se almacena.",
       "saveDiscarded": "Guardar dictados descartados",
       "saveDiscardedDescription": "Cuando cancelas un dictado con Escape, conserva su audio en el historial para poder recuperarlo. Requiere tener activadas la retención de datos y de audio.",
       "audioRetentionDisabled": "Desactivado",
@@ -2413,8 +2411,8 @@
       "actions": "Acciones"
     },
     "spaces": {
-      "privateSpaces": "Espacios privados",
-      "teamSpaces": "Espacios de equipo",
+      "privateSpaces": "Notas privadas",
+      "teamSpaces": "Teamspaces",
       "personal": "Personal",
       "privateTooltip": "Solo tú puedes ver tu espacio personal",
       "newSpace": "Nuevo espacio de equipo",
@@ -2800,14 +2798,15 @@
         "identifying": "Identificando participantes",
         "notLabeled": "Participantes sin etiquetar",
         "finalizing": "Finalizando participantes…",
-        "justYou": "solo tú",
-        "defaultingHint": "por defecto 1 otra persona",
+        "justYou": "Solo tú",
+        "assumedHint": "se asumen 2 — ajústalo si hay más",
+        "speakersLabel": "Participantes",
+        "labelToggle": "Etiquetar participantes",
         "toggleAria": "Alternar identificación de participantes para esta grabación",
         "incAria": "Aumentar número de participantes esperados",
-        "decAria": "Disminuir número de participantes esperados",
-        "othersInCall_one": "{{count}} otra persona en la llamada",
-        "othersInCall_other": "{{count}} otras personas en la llamada"
-      }
+        "decAria": "Disminuir número de participantes esperados"
+      },
+      "consentNotice": "Pide siempre consentimiento al grabar a otras personas"
     },
     "overview": {
       "subtitle": {
@@ -3422,7 +3421,6 @@
       "description": "Un espacio de trabajo reúne a los miembros y la facturación de tu organización. Crea dentro espacios de equipo para notas compartidas.",
       "nameLabel": "Nombre del espacio de trabajo",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Los espacios de trabajo nuevos empiezan en el plan Free. Los espacios de equipo requieren un plan del espacio de trabajo.",
       "submit": "Crear espacio de trabajo",
       "submitting": "Creando…",
       "errorTitle": "No se pudo crear el espacio de trabajo"

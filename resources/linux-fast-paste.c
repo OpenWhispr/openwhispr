@@ -352,7 +352,8 @@ static const char *terminal_classes[] = {
     "konsole", "gnome-terminal", "terminal", "kitty", "alacritty",
     "terminator", "xterm", "urxvt", "rxvt", "tilix", "terminology",
     "wezterm", "foot", "st", "yakuake", "ghostty", "guake", "tilda",
-    "hyper", "tabby", "sakura", "warp", "termius", "waveterm", NULL
+    "hyper", "tabby", "sakura", "warp", "termius", "waveterm",
+    "ptyxis", "kgx", "org.gnome.console", NULL
 };
 
 static int is_terminal(const char *wm_class) {

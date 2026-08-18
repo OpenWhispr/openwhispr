@@ -1214,7 +1214,7 @@
     "sections": {
       "account": {
         "description": "Profil & Anmeldung",
-        "label": "Konto"
+        "label": "Profil"
       },
       "plansBilling": {
         "description": "Tarife, Nutzung & Abrechnung",
@@ -1552,7 +1552,7 @@
             "Notizen per öffentlichem Link teilen",
             "Persönlicher API-Zugang",
             "MCP-Integration in all deinen Apps",
-            "Mobile App (iOS demnächst verfügbar)",
+            "Mobile App",
             "E-Mail-Support"
           ],
           "cta": "Jetzt starten",
@@ -1568,9 +1568,8 @@
           "includesPrefix": "Alle Pro-Funktionen +",
           "badge": "Beliebteste Wahl",
           "features": [
-            "Team-Bereiche für gemeinsame Notizen",
-            "Workspace-Rollen & Mitgliederverwaltung",
             "Unbegrenzte Meeting-Aufnahmen",
+            "Workspace-Rollen & Mitgliederverwaltung",
             "Agentenmodus",
             "Chat über Ihre Daten",
             "Prioritäts-Support"
@@ -1619,7 +1618,6 @@
         "signOut": "Abmelden",
         "signingOut": "Abmeldung läuft..."
       },
-      "signedIn": "Angemeldet",
       "title": "Konto",
       "toasts": {
         "approachingLimit": {
@@ -2077,7 +2075,7 @@
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
       "audioRetention": "Audio-Aufbewahrung",
-      "audioRetentionDescription": "Audioaufnahmen lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht.",
+      "audioRetentionDescription": "Diktat-Audio lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht. Meeting-Audio wird niemals gespeichert.",
       "audioRetentionDisabled": "Deaktiviert",
       "retentionDays_one": "{{count}} Tag",
       "retentionDays_other": "{{count}} Tage",
@@ -2395,7 +2393,6 @@
       "description": "Ein Workspace bündelt die Mitglieder und Abrechnung Ihrer Organisation. Darin erstellen Sie Team-Bereiche für gemeinsame Notizen.",
       "nameLabel": "Workspace-Name",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Neue Workspaces starten im Free-Tarif. Team-Bereiche erfordern einen Workspace-Tarif.",
       "submit": "Workspace erstellen",
       "submitting": "Erstelle…",
       "errorTitle": "Workspace konnte nicht erstellt werden"
@@ -2573,8 +2570,8 @@
       "actions": "Aktionen"
     },
     "spaces": {
-      "privateSpaces": "Private Bereiche",
-      "teamSpaces": "Team-Bereiche",
+      "privateSpaces": "Private Notizen",
+      "teamSpaces": "Teamspaces",
       "personal": "Persönlich",
       "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
       "newSpace": "Neuer Team-Bereich",
@@ -2960,14 +2957,15 @@
         "identifying": "Sprecher werden identifiziert",
         "notLabeled": "Sprecher nicht beschriftet",
         "finalizing": "Sprecher werden finalisiert…",
-        "justYou": "nur du",
-        "defaultingHint": "standardmäßig 1 weitere Person",
+        "justYou": "Nur du",
+        "assumedHint": "Standard: 2 — bei Bedarf anpassen",
+        "speakersLabel": "Sprecher",
+        "labelToggle": "Sprecher beschriften",
         "toggleAria": "Sprechererkennung für diese Aufnahme umschalten",
         "incAria": "Erwartete Sprecheranzahl erhöhen",
-        "decAria": "Erwartete Sprecheranzahl verringern",
-        "othersInCall_one": "{{count}} weitere Person im Gespräch",
-        "othersInCall_other": "{{count}} weitere Personen im Gespräch"
-      }
+        "decAria": "Erwartete Sprecheranzahl verringern"
+      },
+      "consentNotice": "Hole immer die Zustimmung ein, wenn du andere aufnimmst"
     },
     "overview": {
       "subtitle": {

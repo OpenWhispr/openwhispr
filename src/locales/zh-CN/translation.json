@@ -1126,7 +1126,7 @@
     "sections": {
       "account": {
         "description": "个人资料与登录",
-        "label": "账户"
+        "label": "个人资料"
       },
       "plansBilling": {
         "description": "套餐、用量与账单",
@@ -1241,7 +1241,6 @@
         "signOut": "退出登录",
         "signingOut": "正在退出..."
       },
-      "signedIn": "已登录",
       "title": "账户",
       "toasts": {
         "approachingLimit": {
@@ -1289,7 +1288,7 @@
             "通过公开链接分享笔记",
             "个人 API 访问",
             "在所有应用中集成 MCP",
-            "移动应用（iOS 即将推出）",
+            "移动应用",
             "邮件支持"
           ],
           "cta": "开始使用",
@@ -1305,9 +1304,8 @@
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
           "features": [
-            "用于共享笔记的团队空间",
-            "工作区角色与成员管理",
             "无限会议录制",
+            "工作区角色与成员管理",
             "代理模式",
             "与您的数据对话",
             "优先支持"
@@ -1803,7 +1801,7 @@
       "lastSynced": "上次同步 {{time}}",
       "minutesAgo": "{{count}}分钟前",
       "audioRetention": "音频保留",
-      "audioRetentionDescription": "在本地存储音频录制文件以便重新转录和下载。文件会在保留期过后自动删除。",
+      "audioRetentionDescription": "在本地存储听写音频以便重新转录和下载。文件会在保留期过后自动删除。会议音频绝不会被存储。",
       "audioRetentionDisabled": "已禁用",
       "retentionDays_one": "{{count}} 天",
       "retentionDays_other": "{{count}} 天",
@@ -2365,8 +2363,8 @@
       "actions": "操作"
     },
     "spaces": {
-      "privateSpaces": "私人空间",
-      "teamSpaces": "团队空间",
+      "privateSpaces": "私人笔记",
+      "teamSpaces": "Teamspaces",
       "personal": "个人",
       "privateTooltip": "只有你可以看到你的个人空间",
       "newSpace": "新建团队空间",
@@ -2753,13 +2751,14 @@
         "notLabeled": "发言者未标记",
         "finalizing": "正在完成发言者识别…",
         "justYou": "只有你",
-        "defaultingHint": "默认 1 位其他人",
+        "assumedHint": "默认 2 人——如有更多请调整",
+        "speakersLabel": "发言人数",
+        "labelToggle": "标记发言者",
         "toggleAria": "切换本次录音的发言者识别",
         "incAria": "增加预计发言人数",
-        "decAria": "减少预计发言人数",
-        "othersInCall_one": "通话中还有 {{count}} 人",
-        "othersInCall_other": "通话中还有 {{count}} 人"
-      }
+        "decAria": "减少预计发言人数"
+      },
+      "consentNotice": "录制他人时请务必征得同意"
     },
     "overview": {
       "subtitle": {
@@ -3422,7 +3421,6 @@
       "description": "工作区集中管理组织的成员和账单。你可以在其中创建团队空间来共享笔记。",
       "nameLabel": "工作区名称",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "新工作区默认使用 Free 方案。团队空间需要工作区方案。",
       "submit": "创建工作区",
       "submitting": "创建中…",
       "errorTitle": "无法创建工作区"

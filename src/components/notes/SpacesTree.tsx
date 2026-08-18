@@ -56,7 +56,6 @@ import { localMutationErrorKey } from "../../lib/localMutationError";
 import { deleteSpace, renameSpace } from "../../services/spaceActions";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
-import { formatRelativeTime } from "../../utils/dateFormatting";
 import { getCachedPlatform } from "../../utils/platform";
 import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
@@ -171,6 +170,7 @@ function getFileManagerName(): string {
 
 function SectionHeader({
   label,
+  icon,
   action,
   className,
   expanded,
@@ -181,6 +181,8 @@ function SectionHeader({
   isDropSuccess,
 }: {
   label: string;
+  /** Resting icon shown in the chevron slot; the chevron appears on hover. */
+  icon?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
   expanded?: boolean;
@@ -198,7 +200,7 @@ function SectionHeader({
       role="none"
       {...dropHandlers}
       className={cn(
-        "flex items-center justify-between h-6 px-2 mt-1 rounded-md",
+        "group flex items-center justify-between h-6 px-2 mt-1 rounded-md",
         isDragOver && DROP_TARGET_CLASS,
         isDropSuccess && DROP_SUCCESS_CLASS,
         className
@@ -212,14 +214,24 @@ function SectionHeader({
           onClick={onToggle}
           className="flex h-full min-w-0 items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/30"
         >
-          <ChevronRight
-            size={11}
+          <span
             aria-hidden="true"
-            className={cn(
-              "shrink-0 text-foreground/40 transition-transform duration-150",
-              expanded && "rotate-90"
+            className="relative h-3.5 w-3.5 flex items-center justify-center shrink-0"
+          >
+            {icon && (
+              <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover:opacity-0">
+                {icon}
+              </span>
             )}
-          />
+            <ChevronRight
+              size={11}
+              className={cn(
+                "text-foreground/40 transition-all duration-150",
+                expanded && "rotate-90",
+                icon && "opacity-0 group-hover:opacity-100"
+              )}
+            />
+          </span>
           <span className={labelClassName}>{label}</span>
         </button>
       ) : (
@@ -260,7 +272,19 @@ function TreeChildren({
   );
 }
 
-function Chevron({ isExpanded, onToggle }: { isExpanded: boolean; onToggle: () => void }) {
+/**
+ * Expand/collapse toggle. With `icon`, the icon is the resting state and the
+ * chevron fades in when the row (a `group`) is hovered.
+ */
+function RowToggle({
+  isExpanded,
+  onToggle,
+  icon,
+}: {
+  isExpanded: boolean;
+  onToggle: () => void;
+  icon?: React.ReactNode;
+}) {
   return (
     <span
       aria-hidden="true"
@@ -268,42 +292,32 @@ function Chevron({ isExpanded, onToggle }: { isExpanded: boolean; onToggle: () =
         e.stopPropagation();
         onToggle();
       }}
-      className="h-4 w-4 flex items-center justify-center shrink-0 rounded-sm text-foreground/30 hover:text-foreground/60 transition-colors duration-150"
+      className="relative h-4 w-4 flex items-center justify-center shrink-0 rounded-sm text-foreground/30 hover:text-foreground/60 transition-colors duration-150"
     >
+      {icon && (
+        <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover:opacity-0">
+          {icon}
+        </span>
+      )}
       <ChevronRight
         size={12}
-        className={cn("transition-transform duration-150", isExpanded && "rotate-90")}
+        className={cn(
+          "transition-all duration-150",
+          isExpanded && "rotate-90",
+          icon && "opacity-0 group-hover:opacity-100"
+        )}
       />
     </span>
   );
 }
 
-function ContainerRowTrailing({
-  count,
-  isActive,
-  isDropSuccess,
-}: {
-  count: number;
-  isActive: boolean;
-  isDropSuccess: boolean;
-}) {
-  return isDropSuccess ? (
+function DropSuccessCheck({ isDropSuccess }: { isDropSuccess: boolean }) {
+  if (!isDropSuccess) return null;
+  return (
     <Check
       size={10}
       className="text-emerald-500 dark:text-emerald-400 shrink-0 animate-[scale-in_200ms_ease-out]"
     />
-  ) : (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "text-xs tabular-nums shrink-0 transition-opacity group-hover:opacity-0",
-        isActive
-          ? "text-foreground/50 dark:text-foreground/30"
-          : "text-foreground/35 dark:text-foreground/15"
-      )}
-    >
-      {count > 0 ? count : ""}
-    </span>
   );
 }
 
@@ -429,7 +443,7 @@ function SpaceRow({
       onKeyDown={a11y.onKeyDown}
       onFocus={a11y.onFocus}
       onClick={onActivate}
-      title={displayName}
+      title={isPrivate ? t("notes.spaces.privateTooltip") : displayName}
       {...dropHandlers}
       className={cn(
         ROW_BASE_CLASS,
@@ -441,32 +455,35 @@ function SpaceRow({
         isDropSuccess && DROP_SUCCESS_CLASS
       )}
     >
-      <Chevron isExpanded={isExpanded} onToggle={onToggle} />
-      {isPrivate ? (
-        <span title={t("notes.spaces.privateTooltip")} className="flex shrink-0">
-          <Lock
-            size={14}
-            role="img"
-            aria-label={t("notes.spaces.privateTooltip")}
-            className={cn(
-              "transition-colors duration-150",
-              isActive ? "text-primary" : "text-foreground/35 dark:text-foreground/20"
-            )}
-          />
-        </span>
-      ) : space.emoji ? (
-        <span className="text-[13px] leading-none shrink-0" aria-hidden="true">
-          {space.emoji}
-        </span>
-      ) : (
-        <Users
-          size={14}
-          className={cn(
-            "shrink-0 transition-colors duration-150",
-            isDragOver || isActive ? "text-primary" : "text-foreground/35 dark:text-foreground/20"
-          )}
-        />
-      )}
+      <RowToggle
+        isExpanded={isExpanded}
+        onToggle={onToggle}
+        icon={
+          isPrivate ? (
+            <Lock
+              size={13}
+              className={cn(
+                "transition-colors duration-150",
+                isActive ? "text-primary" : "text-foreground/35 dark:text-foreground/20"
+              )}
+            />
+          ) : space.emoji ? (
+            <span className="text-[12px] leading-none" aria-hidden="true">
+              {space.emoji}
+            </span>
+          ) : (
+            <Users
+              size={13}
+              className={cn(
+                "transition-colors duration-150",
+                isDragOver || isActive
+                  ? "text-primary"
+                  : "text-foreground/35 dark:text-foreground/20"
+              )}
+            />
+          )
+        }
+      />
       <span
         className={cn(
           "text-xs truncate flex-1 transition-colors duration-150",
@@ -475,7 +492,7 @@ function SpaceRow({
       >
         {displayName}
       </span>
-      <ContainerRowTrailing count={count} isActive={isActive} isDropSuccess={isDropSuccess} />
+      <DropSuccessCheck isDropSuccess={isDropSuccess} />
       <span className="absolute right-1.5 flex items-center gap-px">
         <Button
           variant="ghost"
@@ -647,15 +664,18 @@ function FolderRow({
         isDropSuccess && DROP_SUCCESS_CLASS
       )}
     >
-      <Chevron isExpanded={isExpanded} onToggle={onToggle} />
-      <Folder
-        size={14}
-        className={cn(
-          "shrink-0 transition-colors duration-150",
-          isDragOver || isActive
-            ? "text-primary"
-            : "text-foreground/35 dark:text-foreground/20 group-hover:text-foreground/50 dark:group-hover:text-foreground/35"
-        )}
+      <RowToggle
+        isExpanded={isExpanded}
+        onToggle={onToggle}
+        icon={
+          <Folder
+            size={13}
+            className={cn(
+              "transition-colors duration-150",
+              isDragOver || isActive ? "text-primary" : "text-foreground/35 dark:text-foreground/20"
+            )}
+          />
+        }
       />
       <span
         className={cn(
@@ -667,7 +687,7 @@ function FolderRow({
       >
         {folder.name}
       </span>
-      <ContainerRowTrailing count={count} isActive={isActive} isDropSuccess={isDropSuccess} />
+      <DropSuccessCheck isDropSuccess={isDropSuccess} />
       <span className="absolute right-1.5 flex items-center gap-px">
         <Button
           variant="ghost"
@@ -940,12 +960,6 @@ function NoteLeaf({
           className="text-foreground/40 shrink-0 transition-opacity group-hover:opacity-0"
         />
       )}
-      <span
-        aria-hidden="true"
-        className="text-[10px] tabular-nums shrink-0 text-foreground/35 dark:text-foreground/15 transition-opacity group-hover:opacity-0"
-      >
-        {formatRelativeTime(note.updated_at, t)}
-      </span>
       {(noteFilesEnabled || canMove || canDelete) && (
         <DropdownMenu
           onOpenChange={(open) => {
@@ -1831,7 +1845,7 @@ export default function SpacesTree({
           level={level}
           spaces={moveTargetsBySpace.get(folder.space_id) ?? []}
           isExpanded={isExpanded}
-          isActive={activeContext?.folderId === folder.id}
+          isActive={activeNoteId == null && activeContext?.folderId === folder.id}
           count={folderCounts[folder.id] ?? 0}
           isDragOver={dragState.dragOverKey === folderKey}
           isDropSuccess={dragState.dropSuccessKey === folderKey}
@@ -1992,7 +2006,11 @@ export default function SpacesTree({
             space={space}
             displayName={displayName}
             isExpanded={isExpanded}
-            isActive={activeContext?.spaceId === space.id && activeContext.folderId == null}
+            isActive={
+              activeNoteId == null &&
+              activeContext?.spaceId === space.id &&
+              activeContext.folderId == null
+            }
             count={noteCount}
             isDragOver={dragState.dragOverKey === spaceKey}
             isDropSuccess={dragState.dropSuccessKey === spaceKey}
@@ -2037,6 +2055,7 @@ export default function SpacesTree({
         <div role="none" className="group/section">
           <SectionHeader
             label={t("notes.spaces.privateSpaces")}
+            icon={<Lock size={11} className="text-foreground/40" />}
             expanded={privateSectionExpanded}
             onToggle={() => {
               if (privateSpace) toggleContainerExpanded(spaceContainerKey(privateSpace.id));

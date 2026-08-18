@@ -1214,7 +1214,7 @@
     "sections": {
       "account": {
         "description": "Profile & sign in",
-        "label": "Account"
+        "label": "Profile"
       },
       "plansBilling": {
         "description": "Plans, usage & billing",
@@ -1552,7 +1552,7 @@
             "Share notes with public links",
             "Personal API access",
             "MCP integration in all your apps",
-            "Mobile app (iOS Coming Soon)",
+            "Mobile app",
             "Email support"
           ],
           "cta": "Get Started",
@@ -1568,9 +1568,8 @@
           "includesPrefix": "All Pro features +",
           "badge": "Most Popular",
           "features": [
-            "Team spaces for shared notes",
-            "Workspace roles & member management",
             "Unlimited meeting recordings",
+            "Workspace roles & member management",
             "Agent mode",
             "Chat over your data",
             "Priority support"
@@ -1619,7 +1618,6 @@
         "signOut": "Sign Out",
         "signingOut": "Signing out..."
       },
-      "signedIn": "Signed in",
       "title": "Account",
       "toasts": {
         "approachingLimit": {
@@ -2077,7 +2075,7 @@
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
       "audioRetention": "Audio Retention",
-      "audioRetentionDescription": "Store audio recordings locally for re-transcription and download. Files are automatically deleted after the retention period.",
+      "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
       "retentionDays_one": "{{count}} day",
       "retentionDays_other": "{{count}} days",
@@ -2395,7 +2393,6 @@
       "description": "A workspace brings your organization's members and billing together. Create team spaces inside it for shared notes.",
       "nameLabel": "Workspace name",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "New workspaces start on the Free plan. Team spaces require a workspace plan.",
       "submit": "Create workspace",
       "submitting": "Creating…",
       "errorTitle": "Couldn't create workspace"
@@ -2573,8 +2570,8 @@
       "actions": "Actions"
     },
     "spaces": {
-      "privateSpaces": "Private spaces",
-      "teamSpaces": "Team spaces",
+      "privateSpaces": "Private notes",
+      "teamSpaces": "Teamspaces",
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
       "newSpace": "New team space",
@@ -2960,14 +2957,15 @@
         "identifying": "Identifying speakers",
         "notLabeled": "Speakers not labeled",
         "finalizing": "Finalizing speakers…",
-        "justYou": "just you",
-        "defaultingHint": "defaulting to 1 other — change if more",
+        "justYou": "Just you",
+        "assumedHint": "assuming 2 — adjust if more",
+        "speakersLabel": "Speakers",
+        "labelToggle": "Label speakers",
         "toggleAria": "Toggle speaker identification for this recording",
         "incAria": "Increase expected speaker count",
-        "decAria": "Decrease expected speaker count",
-        "othersInCall_one": "{{count}} other in call",
-        "othersInCall_other": "{{count}} others in call"
-      }
+        "decAria": "Decrease expected speaker count"
+      },
+      "consentNotice": "Always get consent when recording others"
     },
     "overview": {
       "subtitle": {

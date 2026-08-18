@@ -57,6 +57,9 @@ const LINUX_TERMINAL_CLASSES = [
   "warp",
   "termius",
   "waveterm",
+  "ptyxis",
+  "kgx",
+  "org.gnome.console",
 ];
 
 // macOS reports localized app names rather than window classes, and iTerm2 has
