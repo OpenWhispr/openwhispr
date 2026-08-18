@@ -136,7 +136,18 @@ class MarkdownMirror {
     try {
       const files = [...this._globNoteFiles(noteId), ...this._globTranscriptFiles(noteId)];
       for (const f of files) {
-        fs.unlinkSync(f);
+        // Isolate each unlink like writeNote/writeTranscript do: a single file we
+        // can't remove (e.g. locked by an external editor) must not orphan the
+        // note's other mirrored files.
+        try {
+          fs.unlinkSync(f);
+        } catch (err) {
+          debugLogger.error(
+            "Failed to delete note file",
+            { noteId, file: f, error: err.message },
+            "note-files"
+          );
+        }
       }
     } catch (err) {
       debugLogger.error("Failed to delete note file", { noteId, error: err.message }, "note-files");

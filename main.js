@@ -417,8 +417,7 @@ function initializeCoreManagers() {
   debugLogger.ensureFileLogging();
 
   environmentManager = new EnvironmentManager();
-  const uiLanguage = environmentManager.getUiLanguage();
-  process.env.UI_LANGUAGE = uiLanguage;
+  const uiLanguage = environmentManager.getUiLanguage(app.getLocale());
   changeLanguage(uiLanguage);
   debugLogger.refreshLogLevel();
 
