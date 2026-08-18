@@ -74,7 +74,10 @@ import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { formatHotkeyLabel } from "../utils/hotkeys";
-import { getLinuxPasteInstallCommands, needsLinuxPasteToolGuidance } from "../utils/linuxPasteTools";
+import {
+  getLinuxPasteInstallCommands,
+  needsLinuxPasteToolGuidance,
+} from "../utils/linuxPasteTools";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
