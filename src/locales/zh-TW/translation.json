@@ -1028,8 +1028,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "如需自動貼上文字，請安裝",
     "methodReady": "用於自動貼上文字",
@@ -1045,6 +1047,7 @@
     "waylandClipboardTitle": "Wayland 剪貼簿模式",
     "windowsReady": "Windows 內建支援自動貼上。不需要額外設定！",
     "withoutToolPrefix": "若未安裝此工具，OpenWhispr 會將文字複製到剪貼簿。你可以使用 Ctrl+V 手動貼上。",
+    "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首選自動貼上方式。有備用方案可用，但可能較不可靠。",
     "xwaylandAppsOnly": "自動貼上僅適用於 XWayland 應用程式"
   },
   "promptStudio": {
@@ -1123,7 +1126,7 @@
     "sections": {
       "account": {
         "description": "個人資料與登入",
-        "label": "帳號"
+        "label": "個人資料"
       },
       "plansBilling": {
         "description": "方案、用量與帳單",
@@ -1238,7 +1241,6 @@
         "signOut": "登出",
         "signingOut": "登出中..."
       },
-      "signedIn": "已登入",
       "title": "帳號",
       "toasts": {
         "approachingLimit": {
@@ -1286,7 +1288,7 @@
             "透過公開連結分享筆記",
             "個人 API 存取",
             "在所有應用程式中整合 MCP",
-            "行動應用程式（iOS 即將推出）",
+            "行動應用程式",
             "電子郵件支援"
           ],
           "cta": "開始使用",
@@ -1302,9 +1304,8 @@
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
           "features": [
-            "用於共享筆記的團隊空間",
-            "工作區角色與成員管理",
             "無限會議錄製",
+            "工作區角色與成員管理",
             "代理模式",
             "與您的資料對話",
             "優先支援"
@@ -1628,6 +1629,7 @@
         "recheck": "重新檢查",
         "copy": "複製",
         "ydotoolDesc": "Wayland 輸入自動化工具",
+        "wtypeDesc": "wlroots 合成器上的首選輸入自動化工具",
         "ydotooldDesc": "ydotool 常駐程式（Ubuntu/Pop!_OS 上為獨立套件）",
         "uinputDesc": "核心輸入裝置存取",
         "uinputRuleFound": "規則已存在但未生效，重新開機應可解決。",
@@ -1645,6 +1647,11 @@
             "step1Desc": "使用你的發行版套件管理員安裝 ydotool。",
             "step2Title": "驗證安裝",
             "step2Desc": "檢查 ydotool 是否在你的 PATH 中可用。"
+          },
+          "wtype": {
+            "step1Title": "安裝 wtype",
+            "step1Desc": "wtype 是 Hyprland、Sway 及其他 wlroots 合成器上的主要自動貼上方式。",
+            "step2Title": "驗證安裝"
           },
           "ydotoold": {
             "step1Title": "安裝 ydotoold",
@@ -1794,7 +1801,7 @@
       "lastSynced": "上次同步 {{time}}",
       "minutesAgo": "{{count}}分鐘前",
       "audioRetention": "音訊保留",
-      "audioRetentionDescription": "將音訊錄製檔案儲存在本機以便重新轉錄和下載。檔案會在保留期限過後自動刪除。",
+      "audioRetentionDescription": "將語音輸入音訊儲存在本機以便重新轉錄和下載。檔案會在保留期限過後自動刪除。會議音訊絕不會被儲存。",
       "audioRetentionDisabled": "已停用",
       "retentionDays_one": "{{count}} 天",
       "retentionDays_other": "{{count}} 天",
@@ -1969,9 +1976,6 @@
       },
       "general": {
         "nameLabel": "工作區名稱",
-        "slugLabel": "簡短名稱",
-        "slugHint": "用於網址與邀請連結。僅限小寫字母、數字與連字號。",
-        "slugInvalid": "僅限小寫字母、數字與連字號。",
         "saved": "工作區已更新",
         "dangerTitle": "刪除工作區",
         "dangerDescription": "所有共享的筆記、資料夾與整合都會被刪除。此操作無法復原。",
@@ -2359,8 +2363,8 @@
       "actions": "動作"
     },
     "spaces": {
-      "privateSpaces": "私人空間",
-      "teamSpaces": "團隊空間",
+      "privateSpaces": "私人筆記",
+      "teamSpaces": "Teamspaces",
       "personal": "個人",
       "privateTooltip": "只有你可以看到你的個人空間",
       "newSpace": "新增團隊空間",
@@ -2747,13 +2751,14 @@
         "notLabeled": "發言者未標記",
         "finalizing": "正在完成發言者辨識…",
         "justYou": "只有你",
-        "defaultingHint": "預設 1 位其他人",
+        "assumedHint": "預設 2 人——如有更多請調整",
+        "speakersLabel": "發言人數",
+        "labelToggle": "標記發言者",
         "toggleAria": "切換此錄音的發言者辨識",
         "incAria": "增加預期發言人數",
-        "decAria": "減少預期發言人數",
-        "othersInCall_one": "通話中還有 {{count}} 人",
-        "othersInCall_other": "通話中還有 {{count}} 人"
-      }
+        "decAria": "減少預期發言人數"
+      },
+      "consentNotice": "錄製他人時請務必徵得同意"
     },
     "overview": {
       "subtitle": {
@@ -3416,7 +3421,6 @@
       "description": "工作區集中管理組織的成員和帳單。你可以在其中建立團隊空間來分享筆記。",
       "nameLabel": "工作區名稱",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "新工作區預設使用 Free 方案。團隊空間需要工作區方案。",
       "submit": "建立工作區",
       "submitting": "建立中…",
       "errorTitle": "無法建立工作區"

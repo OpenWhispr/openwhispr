@@ -1028,8 +1028,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Per l'incollaggio automatico del testo, installa",
     "methodReady": "per l'incollaggio automatico del testo",
@@ -1045,6 +1047,7 @@
     "waylandClipboardTitle": "Modalità appunti su Wayland",
     "windowsReady": "Windows supporta l'incollaggio automatico senza configurazione aggiuntiva!",
     "withoutToolPrefix": "Senza questo strumento, OpenWhispr copierà il testo negli appunti. Potrai poi incollare manualmente con Ctrl+V.",
+    "wtypeFallbackDescription": "wtype è il metodo di incollaggio automatico preferito per questo compositor wlroots. È disponibile un'alternativa, ma potrebbe essere meno affidabile.",
     "xwaylandAppsOnly": "l'incollaggio automatico funziona solo per le app XWayland"
   },
   "promptStudio": {
@@ -1123,7 +1126,7 @@
     "sections": {
       "account": {
         "description": "Profilo e accesso",
-        "label": "Account"
+        "label": "Profilo"
       },
       "plansBilling": {
         "description": "Piani, utilizzo e fatturazione",
@@ -1238,7 +1241,6 @@
         "signOut": "Disconnetti",
         "signingOut": "Disconnessione..."
       },
-      "signedIn": "Accesso effettuato",
       "title": "Account",
       "toasts": {
         "approachingLimit": {
@@ -1286,7 +1288,7 @@
             "Condividi note con link pubblici",
             "Accesso personale all'API",
             "Integrazione MCP in tutte le tue app",
-            "App mobile (iOS in arrivo)",
+            "App mobile",
             "Supporto via e-mail"
           ],
           "cta": "Inizia",
@@ -1302,9 +1304,8 @@
           "includesPrefix": "Tutte le funzionalità Pro +",
           "badge": "Più popolare",
           "features": [
-            "Spazi del team per note condivise",
-            "Ruoli e gestione dei membri dell'area di lavoro",
             "Registrazioni riunioni illimitate",
+            "Ruoli e gestione dei membri dell'area di lavoro",
             "Modalità agente",
             "Chatta con i tuoi dati",
             "Supporto prioritario"
@@ -1628,6 +1629,7 @@
         "recheck": "Ricontrolla",
         "copy": "Copia",
         "ydotoolDesc": "Strumento di automazione input per Wayland",
+        "wtypeDesc": "Strumento di automazione input preferito sui compositor wlroots",
         "ydotooldDesc": "Daemon per ydotool (pacchetto separato su Ubuntu/Pop!_OS)",
         "uinputDesc": "Accesso al dispositivo di input del kernel",
         "uinputRuleFound": "Regola presente ma non attiva. Un riavvio dovrebbe risolvere.",
@@ -1645,6 +1647,11 @@
             "step1Desc": "Usa il gestore pacchetti della tua distribuzione per installare ydotool.",
             "step2Title": "Verifica l'installazione",
             "step2Desc": "Controlla che ydotool sia disponibile nel tuo PATH."
+          },
+          "wtype": {
+            "step1Title": "Installa wtype",
+            "step1Desc": "wtype è il metodo principale di incollaggio automatico su Hyprland, Sway e altri compositor wlroots.",
+            "step2Title": "Verifica l'installazione"
           },
           "ydotoold": {
             "step1Title": "Installa ydotoold",
@@ -1794,7 +1801,7 @@
       "lastSynced": "Ultima sincronizzazione {{time}}",
       "minutesAgo": "{{count}}m fa",
       "audioRetention": "Conservazione audio",
-      "audioRetentionDescription": "Salva le registrazioni audio localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione.",
+      "audioRetentionDescription": "Salva l'audio di dettatura localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione. L'audio delle riunioni non viene mai salvato.",
       "audioRetentionDisabled": "Disattivato",
       "retentionDays_one": "{{count}} giorno",
       "retentionDays_other": "{{count}} giorni",
@@ -1969,9 +1976,6 @@
       },
       "general": {
         "nameLabel": "Nome dell'area di lavoro",
-        "slugLabel": "Nome breve",
-        "slugHint": "Usato negli URL e nei link di invito. Solo lettere minuscole, cifre e trattini.",
-        "slugInvalid": "Solo lettere minuscole, cifre e trattini.",
         "saved": "Area di lavoro aggiornata",
         "dangerTitle": "Elimina area di lavoro",
         "dangerDescription": "Tutte le note, le cartelle e le integrazioni condivise verranno eliminate. Questa operazione non può essere annullata.",
@@ -2359,8 +2363,8 @@
       "actions": "Azioni"
     },
     "spaces": {
-      "privateSpaces": "Spazi privati",
-      "teamSpaces": "Spazi del team",
+      "privateSpaces": "Note private",
+      "teamSpaces": "Teamspaces",
       "personal": "Personale",
       "privateTooltip": "Solo tu puoi vedere il tuo spazio personale",
       "newSpace": "Nuovo spazio del team",
@@ -2746,14 +2750,15 @@
         "identifying": "Identificazione dei partecipanti",
         "notLabeled": "Partecipanti non etichettati",
         "finalizing": "Finalizzazione dei partecipanti…",
-        "justYou": "solo tu",
-        "defaultingHint": "predefinito 1 altra persona",
+        "justYou": "Solo tu",
+        "assumedHint": "si presumono 2 — modifica se sono di più",
+        "speakersLabel": "Partecipanti",
+        "labelToggle": "Etichetta i partecipanti",
         "toggleAria": "Attiva/disattiva l'identificazione dei partecipanti per questa registrazione",
         "incAria": "Aumenta il numero di partecipanti previsti",
-        "decAria": "Diminuisci il numero di partecipanti previsti",
-        "othersInCall_one": "{{count}} altra persona in chiamata",
-        "othersInCall_other": "{{count}} altre persone in chiamata"
-      }
+        "decAria": "Diminuisci il numero di partecipanti previsti"
+      },
+      "consentNotice": "Ottieni sempre il consenso quando registri altre persone"
     },
     "overview": {
       "subtitle": {
@@ -3416,7 +3421,6 @@
       "description": "Un'area di lavoro riunisce membri e fatturazione della tua organizzazione. Crea al suo interno spazi del team per le note condivise.",
       "nameLabel": "Nome dell'area di lavoro",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Le nuove aree di lavoro partono dal piano Free. Gli spazi del team richiedono un piano dell'area di lavoro.",
       "submit": "Crea area di lavoro",
       "submitting": "Creazione…",
       "errorTitle": "Impossibile creare l'area di lavoro"

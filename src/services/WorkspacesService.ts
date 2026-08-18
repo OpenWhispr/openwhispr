@@ -26,7 +26,7 @@ async function create(name: string): Promise<Workspace> {
 
 async function update(
   workspaceId: string,
-  patch: { name?: string; slug?: string }
+  patch: { name?: string }
 ): Promise<Workspace> {
   const res = await cloudPatch<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}`, patch);
   return res.data;

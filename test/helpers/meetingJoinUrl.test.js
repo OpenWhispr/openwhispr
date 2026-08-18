@@ -53,8 +53,12 @@ test("extractMeetingUrl matches known meeting vendors", async () => {
   const urls = [
     "https://zoom.us/j/123456789",
     "https://us02web.zoom.us/j/123456789?pwd=abc",
+    "https://zoom.us/w/123456789",
+    "https://us02web.zoom.us/w/123456789?pwd=abc",
+    "https://zoom.us/my/alice",
     "https://meet.google.com/abc-defg-hij",
     "https://teams.microsoft.com/l/meetup-join/19%3ameeting_x/0",
+    "https://teams.microsoft.com/meet/1234567890?p=abc",
     "https://teams.live.com/meet/9876543210",
     "https://company.webex.com/meet/jdoe",
     "https://chime.aws/1234567890",
@@ -74,6 +78,52 @@ test("extractMeetingUrl finds a link inside a location string", async () => {
     extractMeetingUrl(["Zoom: https://zoom.us/j/123456789, dial-in below"]),
     "https://zoom.us/j/123456789"
   );
+});
+
+test("extractMeetingUrl rejects meeting paths on untrusted hosts", async () => {
+  const { extractMeetingUrl } = await load();
+  const urls = [
+    "https://attacker.example/teams.microsoft.com/meet/123?p=abc",
+    "https://attacker.example/zoom.us/w/123?tk=secret",
+    "https://attacker.example/meet.google.com/abc-defg-hij",
+    "https://attacker.example/teams.live.com/meet/9876543210",
+    "https://attacker.example/company.webex.com/meet/jdoe",
+    "https://attacker.example/chime.aws/1234567890",
+    "https://attacker.example/?next=https://zoom.us/my/alice",
+    "https://zoom.us@attacker.example/w/123",
+    "https://zoom.us.attacker.example/w/123",
+  ];
+
+  for (const url of urls) {
+    assert.equal(extractMeetingUrl([url]), null);
+  }
+});
+
+test("extractMeetingUrl skips untrusted URLs before a valid meeting URL", async () => {
+  const { extractMeetingUrl } = await load();
+
+  assert.equal(
+    extractMeetingUrl([
+      "Agenda: https://attacker.example/zoom.us/w/123 Join: https://zoom.us/w/456",
+    ]),
+    "https://zoom.us/w/456"
+  );
+});
+
+test("extractMeetingUrl rejects unsupported paths on trusted hosts", async () => {
+  const { extractMeetingUrl } = await load();
+  const urls = [
+    "https://zoom.us/profile/alice",
+    "https://meet.google.com/",
+    "https://teams.microsoft.com/chat/123",
+    "https://teams.live.com/chat/123",
+    "https://company.webex.com/",
+    "https://chime.aws/",
+  ];
+
+  for (const url of urls) {
+    assert.equal(extractMeetingUrl([url]), null);
+  }
 });
 
 test("extractMeetingUrl returns the first matching candidate", async () => {

@@ -311,6 +311,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),
 
+  // Voice drafts (chat input recordings)
+  saveTempAudio: (buffer) => ipcRenderer.invoke("save-temp-audio", buffer),
+  deleteTempAudio: (tempPath) => ipcRenderer.invoke("delete-temp-audio", tempPath),
+
   // Local Whisper functions (whisper.cpp)
   transcribeLocalWhisper: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-whisper", audioBlob, options),

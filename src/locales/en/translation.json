@@ -1116,8 +1116,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "For automatic text pasting, install",
     "methodReady": "for automatic text pasting",
@@ -1133,6 +1135,7 @@
     "waylandClipboardTitle": "Clipboard Mode on Wayland",
     "windowsReady": "Windows supports automatic pasting out of the box. No setup required!",
     "withoutToolPrefix": "Without this tool, OpenWhispr will copy text to your clipboard. You can then paste manually with Ctrl+V.",
+    "wtypeFallbackDescription": "wtype is the preferred auto-paste method for this wlroots compositor. A fallback is available, but may be less reliable.",
     "xwaylandAppsOnly": "automatic pasting works for XWayland apps only"
   },
   "promptStudio": {
@@ -1211,7 +1214,7 @@
     "sections": {
       "account": {
         "description": "Profile & sign in",
-        "label": "Account"
+        "label": "Profile"
       },
       "plansBilling": {
         "description": "Plans, usage & billing",
@@ -1275,9 +1278,6 @@
       },
       "general": {
         "nameLabel": "Workspace name",
-        "slugLabel": "Short name",
-        "slugHint": "Used in URLs and invite links. Lowercase letters, digits, and dashes only.",
-        "slugInvalid": "Only lowercase letters, digits, and dashes.",
         "saved": "Workspace updated",
         "dangerTitle": "Delete workspace",
         "dangerDescription": "All shared notes, folders, and integrations will be deleted. This cannot be undone.",
@@ -1552,7 +1552,7 @@
             "Share notes with public links",
             "Personal API access",
             "MCP integration in all your apps",
-            "Mobile app (iOS Coming Soon)",
+            "Mobile app",
             "Email support"
           ],
           "cta": "Get Started",
@@ -1568,9 +1568,8 @@
           "includesPrefix": "All Pro features +",
           "badge": "Most Popular",
           "features": [
-            "Team spaces for shared notes",
-            "Workspace roles & member management",
             "Unlimited meeting recordings",
+            "Workspace roles & member management",
             "Agent mode",
             "Chat over your data",
             "Priority support"
@@ -1619,7 +1618,6 @@
         "signOut": "Sign Out",
         "signingOut": "Signing out..."
       },
-      "signedIn": "Signed in",
       "title": "Account",
       "toasts": {
         "approachingLimit": {
@@ -1909,11 +1907,12 @@
       },
       "waylandPaste": {
         "title": "Wayland Paste Setup",
-        "description": "Auto-paste on Wayland requires ydotool. Check the status of each component below.",
+        "description": "Auto-paste on Wayland uses ydotool or wtype. wtype is preferred on wlroots compositors.",
         "allGoodDesc": "Auto-paste is ready to go.",
         "recheck": "Re-check",
         "copy": "Copy",
         "ydotoolDesc": "Input automation tool for Wayland",
+        "wtypeDesc": "Preferred input automation tool on wlroots compositors",
         "ydotooldDesc": "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
         "uinputDesc": "Kernel input device access",
         "uinputRuleFound": "Rule present but not active. A reboot should fix it.",
@@ -1931,6 +1930,11 @@
             "step1Desc": "Use your distribution's package manager to install ydotool.",
             "step2Title": "Verify installation",
             "step2Desc": "Check that ydotool is available in your PATH."
+          },
+          "wtype": {
+            "step1Title": "Install wtype",
+            "step1Desc": "wtype is the primary auto-paste method on Hyprland, Sway, and other wlroots compositors.",
+            "step2Title": "Verify installation"
           },
           "ydotoold": {
             "step1Title": "Install ydotoold",
@@ -2071,7 +2075,7 @@
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
       "audioRetention": "Audio Retention",
-      "audioRetentionDescription": "Store audio recordings locally for re-transcription and download. Files are automatically deleted after the retention period.",
+      "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
       "retentionDays_one": "{{count}} day",
       "retentionDays_other": "{{count}} days",
@@ -2389,7 +2393,6 @@
       "description": "A workspace brings your organization's members and billing together. Create team spaces inside it for shared notes.",
       "nameLabel": "Workspace name",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "New workspaces start on the Free plan. Team spaces require a workspace plan.",
       "submit": "Create workspace",
       "submitting": "Creating…",
       "errorTitle": "Couldn't create workspace"
@@ -2567,8 +2570,8 @@
       "actions": "Actions"
     },
     "spaces": {
-      "privateSpaces": "Private spaces",
-      "teamSpaces": "Team spaces",
+      "privateSpaces": "Private notes",
+      "teamSpaces": "Teamspaces",
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
       "newSpace": "New team space",
@@ -2954,14 +2957,15 @@
         "identifying": "Identifying speakers",
         "notLabeled": "Speakers not labeled",
         "finalizing": "Finalizing speakers…",
-        "justYou": "just you",
-        "defaultingHint": "defaulting to 1 other — change if more",
+        "justYou": "Just you",
+        "assumedHint": "assuming 2 — adjust if more",
+        "speakersLabel": "Speakers",
+        "labelToggle": "Label speakers",
         "toggleAria": "Toggle speaker identification for this recording",
         "incAria": "Increase expected speaker count",
-        "decAria": "Decrease expected speaker count",
-        "othersInCall_one": "{{count}} other in call",
-        "othersInCall_other": "{{count}} others in call"
-      }
+        "decAria": "Decrease expected speaker count"
+      },
+      "consentNotice": "Always get consent when recording others"
     },
     "overview": {
       "subtitle": {
