@@ -771,7 +771,7 @@
       "failedUserCheck": "Échec de la vérification du compte utilisateur",
       "generic": "Une erreur est survenue. Veuillez réessayer.",
       "invalidCredentials": "E-mail ou mot de passe incorrect",
-      "plusAliasUnsupported": "Les alias d'e-mail avec « + » ne sont pas pris en charge"
+      "invalidEmail": "Entrez une adresse e-mail valide"
     },
     "getStarted": "Commencer",
     "legal": {

@@ -772,7 +772,7 @@
       "failedUserCheck": "Verifica dell'account utente non riuscita",
       "generic": "Qualcosa è andato storto. Riprova.",
       "invalidCredentials": "E-mail o password non valide",
-      "plusAliasUnsupported": "Gli alias e-mail con '+' non sono supportati"
+      "invalidEmail": "Inserisci un indirizzo email valido"
     },
     "getStarted": "Inizia",
     "legal": {

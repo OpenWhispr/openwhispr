@@ -771,7 +771,7 @@
       "failedUserCheck": "No se pudo verificar la cuenta de usuario",
       "generic": "Algo salió mal. Inténtalo de nuevo.",
       "invalidCredentials": "Correo o contraseña incorrectos",
-      "plusAliasUnsupported": "Los alias de correo con '+' no son compatibles"
+      "invalidEmail": "Introduce un correo válido"
     },
     "getStarted": "Comenzar",
     "legal": {

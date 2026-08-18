@@ -772,7 +772,7 @@
       "failedUserCheck": "ユーザーアカウントの確認に失敗しました",
       "generic": "問題が発生しました。もう一度お試しください。",
       "invalidCredentials": "メールアドレスまたはパスワードが正しくありません",
-      "plusAliasUnsupported": "「+」を含むメールエイリアスはサポートされていません"
+      "invalidEmail": "有効なメールアドレスを入力してください"
     },
     "getStarted": "はじめる",
     "legal": {

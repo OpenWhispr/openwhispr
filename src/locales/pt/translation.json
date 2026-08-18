@@ -751,7 +751,7 @@
       "failedUserCheck": "Falha ao verificar conta do usuário",
       "generic": "Algo deu errado. Tente novamente.",
       "invalidCredentials": "E-mail ou senha inválidos",
-      "plusAliasUnsupported": "Endereços de e-mail com '+' não são aceitos"
+      "invalidEmail": "Digite um endereço de e-mail válido"
     },
     "getStarted": "Começar",
     "legal": {
