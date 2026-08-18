@@ -31,12 +31,22 @@ class LocalReasoningService {
     const startTime = Date.now();
 
     try {
+      // The renderer shapes every tunable (applyChatCompletionsParams in
+      // local.ts) and this bridge forwards that verbatim — the main process
+      // never decides sampling. A caller that skips the shaper keeps the
+      // pre-shaping contract: the length-based token budget, and
+      // enable_thinking off unless it opted out (Qwen templates otherwise
+      // leave `content` empty, #783). llamaServer keeps the same defaults for
+      // its own direct callers.
+      const shaped = config.params !== undefined;
+      const params = { ...config.params };
+      params.max_tokens ??= this.calculateMaxTokens(text.length);
+      if (!shaped && config.disableThinking !== false) {
+        params.chat_template_kwargs = { enable_thinking: false };
+      }
+
       const inferenceConfig = {
-        maxTokens: config.maxTokens ?? this.calculateMaxTokens(text.length),
-        temperature: config.temperature ?? 0.7,
-        topK: config.topK ?? 40,
-        topP: config.topP ?? 0.9,
-        repeatPenalty: config.repeatPenalty ?? 1.1,
+        params,
         systemPrompt: config.systemPrompt || "",
         disableThinking: config.disableThinking !== false,
         requireCompleteOutput: config.requireCompleteOutput,

@@ -509,9 +509,11 @@ class ModelManager {
     });
 
     try {
+      // `params` is the renderer-shaped body (temperature, max_tokens,
+      // chat_template_kwargs, …) and goes through untouched — no allowlist
+      // here, so a new shaped param needs no plumbing edit.
       const result = await this.serverManager.inference(messages, {
-        temperature: options.temperature ?? 0.7,
-        max_tokens: options.maxTokens ?? 512,
+        params: options.params,
         disableThinking: options.disableThinking,
         requireCompleteOutput: options.requireCompleteOutput,
       });

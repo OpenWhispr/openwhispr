@@ -530,18 +530,28 @@ class LlamaServerManager {
 
     this.clearIdleTimer();
 
+    // `options.params` is the shaped body from the renderer
+    // (applyChatCompletionsParams) and is sent verbatim; the two `??` are
+    // last-resort defaults, not decisions. A caller with no params at all
+    // predates shaping and keeps the old default: without enable_thinking off,
+    // Qwen chat templates leave `message.content` empty and route output into
+    // `reasoning_content` (#783). Non-Qwen templates ignore it.
     const requestBody = {
       messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens ?? 512,
+      ...options.params,
+      temperature: options.params?.temperature ?? 0.7,
+      max_tokens: options.params?.max_tokens ?? 512,
       stream: false,
     };
-
-    // Without this, Qwen chat templates leave `message.content` empty and
-    // route output into `reasoning_content`. Non-Qwen templates ignore it.
-    if (options.disableThinking !== false) {
+    if (!options.params && options.disableThinking !== false) {
       requestBody.chat_template_kwargs = { enable_thinking: false };
     }
+
+    const { messages: _messages, stream: _stream, ...tunables } = requestBody;
+    debugLogger.debug("llama-server inference request", {
+      ...tunables,
+      requireCompleteOutput: Boolean(options.requireCompleteOutput),
+    });
 
     const body = JSON.stringify(requestBody);
 
