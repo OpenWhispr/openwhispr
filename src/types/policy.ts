@@ -27,6 +27,11 @@ export interface OrgPolicy {
     webSearchEnabled: boolean;
     /** Absent on servers that predate the field; absent means allowed. */
     screenContextEnabled?: boolean;
+    /**
+     * Server-only Mem0 agent-memory gate, enforced by the API on
+     * `/api/agent/stream`; the app never reads it. Absent on older servers.
+     */
+    memoryEnabled?: boolean;
   };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
