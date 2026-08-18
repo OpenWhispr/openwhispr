@@ -3,6 +3,98 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/services/syncPassPolicy.ts");
 
+// --- resolveSyncConsent -----------------------------------------------------
+// Backup is a blanket copy of private content; sharing and team spaces are
+// per-item consent. Conflating the two is what stranded free teammates in
+// workspaces they had already been added to.
+
+const SIGNED_IN = {
+  authValidated: true,
+  signedIn: true,
+  backupEnabled: true,
+  subscribed: true,
+  backupAllowedByPolicy: true,
+};
+
+test("consent: a free account still syncs shared notes and team spaces", async () => {
+  const { resolveSyncConsent } = await load();
+  const consent = resolveSyncConsent({
+    ...SIGNED_IN,
+    subscribed: false,
+    backupEnabled: false,
+  });
+  assert.equal(consent.shared, true);
+  // The paid boundary holds: private content is still not backed up.
+  assert.equal(consent.backup, false);
+});
+
+test("consent: sharing survives the cloud-backup toggle being off", async () => {
+  const { resolveSyncConsent } = await load();
+  const consent = resolveSyncConsent({ ...SIGNED_IN, backupEnabled: false });
+  assert.deepEqual(consent, { shared: true, backup: false });
+});
+
+test("consent: backup needs the plan, the toggle, and org policy together", async () => {
+  const { resolveSyncConsent } = await load();
+  assert.equal(resolveSyncConsent(SIGNED_IN).backup, true);
+  for (const off of ["backupEnabled", "subscribed", "backupAllowedByPolicy"]) {
+    assert.equal(
+      resolveSyncConsent({ ...SIGNED_IN, [off]: false }).backup,
+      false,
+      `backup must not run with ${off} off`
+    );
+  }
+});
+
+test("consent: nothing syncs without a validated signed-in session", async () => {
+  const { resolveSyncConsent } = await load();
+  for (const off of ["authValidated", "signedIn"]) {
+    assert.deepEqual(
+      resolveSyncConsent({ ...SIGNED_IN, [off]: false }),
+      { shared: false, backup: false },
+      `${off} off must stop every pass`
+    );
+  }
+});
+
+// --- ambient team-only pass backoff ----------------------------------------
+// Most signed-in accounts have no shared notes and no team spaces; before the
+// backoff they spent three requests every five minutes confirming that.
+
+test("team-only backoff: an account that keeps finding work never slows down", async () => {
+  const { teamOnlyPassDelayMs, shouldRunAmbientTeamOnlyPass } = await load();
+  assert.equal(teamOnlyPassDelayMs(0), 0);
+  // One empty pass is not a pattern — stay on the normal interval.
+  assert.equal(teamOnlyPassDelayMs(1), 0);
+  assert.equal(shouldRunAmbientTeamOnlyPass({ emptyStreak: 0, lastPassAt: 1000, now: 1001 }), true);
+});
+
+test("team-only backoff: consecutive empty passes double up to an hour", async () => {
+  const { teamOnlyPassDelayMs } = await load();
+  assert.equal(teamOnlyPassDelayMs(2), 10 * 60 * 1000);
+  assert.equal(teamOnlyPassDelayMs(3), 20 * 60 * 1000);
+  assert.equal(teamOnlyPassDelayMs(4), 40 * 60 * 1000);
+  // Ceiling holds no matter how long the account stays idle.
+  for (const streak of [5, 6, 20, 500]) {
+    assert.equal(teamOnlyPassDelayMs(streak), 60 * 60 * 1000, `streak ${streak}`);
+  }
+});
+
+test("team-only backoff: an idle account waits, and the first launch always runs", async () => {
+  const { shouldRunAmbientTeamOnlyPass } = await load();
+  const now = 10 * 60 * 60 * 1000;
+  assert.equal(
+    shouldRunAmbientTeamOnlyPass({ emptyStreak: 4, lastPassAt: now - 39 * 60 * 1000, now }),
+    false
+  );
+  assert.equal(
+    shouldRunAmbientTeamOnlyPass({ emptyStreak: 4, lastPassAt: now - 41 * 60 * 1000, now }),
+    true
+  );
+  // No recorded pass (fresh profile) must never be held back.
+  assert.equal(shouldRunAmbientTeamOnlyPass({ emptyStreak: 9, lastPassAt: null, now }), true);
+});
+
 // --- resolvePullCursorAdvance ----------------------------------------------
 // The matrix mirrors SyncService's pullFolders/pullNotes cursor semantics: a
 // wrongly advanced cursor silently drops teammate edits from the delta pulls.

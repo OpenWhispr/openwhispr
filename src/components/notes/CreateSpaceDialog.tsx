@@ -19,7 +19,6 @@ import CreateTeamDialog from "../CreateTeamDialog";
 import MemberPickList from "../MemberPickList";
 import { createSpace } from "../../services/spaceActions";
 import { TeamsService } from "../../services/TeamsService";
-import { CloudApiError } from "../../services/cloudApi";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
@@ -40,15 +39,12 @@ interface CreateSpaceDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Workspace preselected by the opener (e.g. a sidebar workspace row's + button). */
   initialWorkspaceId?: string | null;
-  /** Opens the given workspace's billing in Settings (the 402 upsell CTA). */
-  onOpenWorkspaceBilling?: (workspaceId: string) => void;
 }
 
 export default function CreateSpaceDialog({
   open,
   onOpenChange,
   initialWorkspaceId = null,
-  onOpenWorkspaceBilling,
 }: CreateSpaceDialogProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -81,7 +77,6 @@ export default function CreateSpaceDialog({
   const [newTeamName, setNewTeamName] = useState("");
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [planBlocked, setPlanBlocked] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const showSpinner = useDelayedFlag(isCreating);
 
@@ -161,7 +156,6 @@ export default function CreateSpaceDialog({
       setNewTeamOpen(false);
       setNewTeamName("");
       setCreateTeamOpen(false);
-      setPlanBlocked(false);
       setSelectedWorkspaceId(null);
     }
   };
@@ -205,7 +199,6 @@ export default function CreateSpaceDialog({
     setSelectedTeamIds(new Set());
     setNewTeamOpen(false);
     setNewTeamName("");
-    setPlanBlocked(false);
   };
 
   // A space needs at least one team (existing or new) unless team loading
@@ -248,13 +241,6 @@ export default function CreateSpaceDialog({
       }
       handleOpenChange(false);
     } catch (err) {
-      // Workspace entitlement is separate from the user's personal plan, so a
-      // paying user can hit this on a fresh (Free) workspace — an inline
-      // explainer with a billing CTA, not an error toast.
-      if (err instanceof CloudApiError && err.code === "upgrade_required") {
-        setPlanBlocked(true);
-        return;
-      }
       toast({
         title: t("notes.spaces.couldNotCreate"),
         description: err instanceof Error ? err.message : t("common.unknownError"),
@@ -508,30 +494,6 @@ export default function CreateSpaceDialog({
                   </>
                 )}
               </div>
-
-              {planBlocked && workspace && (
-                <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-foreground">
-                      {t("notes.spaces.planBlocked.title", { workspace: workspace.name })}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {t("notes.spaces.planBlocked.description")}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => {
-                      handleOpenChange(false);
-                      onOpenWorkspaceBilling?.(workspace.id);
-                    }}
-                  >
-                    {t("notes.spaces.planBlocked.cta")}
-                  </Button>
-                </div>
-              )}
 
               <DialogFooter>
                 <Button

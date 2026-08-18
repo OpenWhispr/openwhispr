@@ -1,0 +1,54 @@
+# Weekly live check that every LLM provider still accepts the exact request
+# shapes the app sends (reasoning params, token-limit param, temperature), plus
+# a model-catalog drift diff. Deliberately NOT part of PR CI: it exercises
+# external APIs and their failures are provider news, not code regressions.
+name: llm-canary
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run canary
+        id: canary
+        env:
+          LLM_CANARY_OPENAI_KEY: ${{ secrets.LLM_CANARY_OPENAI_KEY }}
+          LLM_CANARY_GROQ_KEY: ${{ secrets.LLM_CANARY_GROQ_KEY }}
+          LLM_CANARY_TINFOIL_KEY: ${{ secrets.LLM_CANARY_TINFOIL_KEY }}
+          LLM_CANARY_GEMINI_KEY: ${{ secrets.LLM_CANARY_GEMINI_KEY }}
+          LLM_CANARY_OPENROUTER_KEY: ${{ secrets.LLM_CANARY_OPENROUTER_KEY }}
+          LLM_CANARY_MISTRAL_KEY: ${{ secrets.LLM_CANARY_MISTRAL_KEY }}
+          LLM_CANARY_DEEPSEEK_KEY: ${{ secrets.LLM_CANARY_DEEPSEEK_KEY }}
+          LLM_CANARY_CEREBRAS_KEY: ${{ secrets.LLM_CANARY_CEREBRAS_KEY }}
+        run: |
+          set -o pipefail
+          node --import tsx scripts/llm-canary.mjs | tee canary-report.md
+      - name: File or update failure issue
+        if: failure() && steps.canary.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="LLM canary: provider request-shape check failing"
+          body="$(cat canary-report.md)
+
+          _Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}_"
+          existing=$(gh issue list --label llm-canary --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label llm-canary
+          fi

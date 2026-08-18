@@ -1,31 +1,30 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const createElectronProcessIdProvider = require("../../src/helpers/electronProcessIds");
-const { collectAudioCaptureHelperPids } = require("../../src/helpers/electronProcessIds");
+const {
+  collectAudioCaptureHelperPids,
+  createExcludedProcessIdProvider,
+} = require("../../src/helpers/electronProcessIds");
 
-test("returns the main PID plus the current Electron child PIDs on every call", () => {
-  let metrics = [{ pid: 22 }, { pid: 33 }];
-  const getProcessIds = createElectronProcessIdProvider(11, () => metrics);
-
-  assert.deepEqual(getProcessIds(), [11, 22, 33]);
-
-  metrics = [{ pid: 44 }];
-  assert.deepEqual(getProcessIds(), [11, 44]);
-});
-
-test("appends live audio capture helper PIDs so own capture never reads as external", () => {
+test("combines the Electron process tree with live audio capture helper PIDs on every call", () => {
+  let ownPids = new Set([11, 22]);
   let helperPids = [55];
-  const getProcessIds = createElectronProcessIdProvider(
-    11,
-    () => [{ pid: 22 }],
-    () => helperPids
+  const getProcessIds = createExcludedProcessIdProvider(
+    () => helperPids,
+    () => ownPids
   );
 
   assert.deepEqual(getProcessIds(), [11, 22, 55]);
 
+  ownPids = new Set([11, 33]);
   helperPids = [];
-  assert.deepEqual(getProcessIds(), [11, 22]);
+  assert.deepEqual(getProcessIds(), [11, 33]);
+});
+
+test("defaults to the shared own-process set so the main pid is always excluded", () => {
+  const getProcessIds = createExcludedProcessIdProvider();
+
+  assert.ok(getProcessIds().includes(process.pid));
 });
 
 test("collectAudioCaptureHelperPids reads only live helper processes", () => {

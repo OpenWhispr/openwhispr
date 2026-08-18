@@ -1,3 +1,8 @@
+function findStoredWord(words, word) {
+  const needle = word.toLowerCase();
+  return words.find((w) => typeof w === "string" && w.trim().toLowerCase() === needle);
+}
+
 /**
  * Work out which dictionary changes an agent name requires: drop a
  * renamed-away name, add the current one.
@@ -13,10 +18,14 @@
  */
 export function agentNameDictionaryChanges(dictionary, newName, oldName) {
   const words = Array.isArray(dictionary) ? dictionary : [];
-  const trimmed = newName.trim();
+  const trimmedNew = typeof newName === "string" ? newName.trim() : "";
+  const trimmedOld = typeof oldName === "string" ? oldName.trim() : "";
+  const storedNew = trimmedNew ? findStoredWord(words, trimmedNew) : undefined;
+  const storedOld = trimmedOld ? findStoredWord(words, trimmedOld) : undefined;
 
   return {
-    add: trimmed && !words.includes(trimmed) ? [trimmed] : [],
-    remove: oldName && oldName !== newName && words.includes(oldName) ? [oldName] : [],
+    add: trimmedNew && !storedNew ? [trimmedNew] : [],
+    remove:
+      storedOld && storedOld.trim().toLowerCase() !== trimmedNew.toLowerCase() ? [storedOld] : [],
   };
 }

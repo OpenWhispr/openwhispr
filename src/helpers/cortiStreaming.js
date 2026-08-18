@@ -17,6 +17,8 @@ class CortiStreaming {
     this.onFinalTranscript = null;
     this.onError = null;
     this.onSessionEnd = null;
+    this.onConnectionLost = null;
+    this.connectionLossNotified = false;
     this.pendingResolve = null;
     this.pendingReject = null;
     this.connectionTimeout = null;
@@ -73,6 +75,7 @@ class CortiStreaming {
     this.accumulatedText = "";
     this.completedSegments = [];
     this.configAccepted = false;
+    this.connectionLossNotified = false;
     this.preConfigBuffer = [];
     this.preConfigBufferSize = 0;
     this.audioBytesSent = 0;
@@ -113,6 +116,7 @@ class CortiStreaming {
     });
 
     ws.on("error", (error) => {
+      const wasActive = this.isConnected;
       debugLogger.error("Corti WebSocket error", { error: error.message });
       this.cleanup();
       if (this.pendingReject) {
@@ -120,7 +124,11 @@ class CortiStreaming {
         this.pendingReject = null;
         this.pendingResolve = null;
       }
-      this.onError?.(error);
+      if (wasActive && !this.isDisconnecting) {
+        this.notifyConnectionLost(error);
+      } else if (!this.isDisconnecting) {
+        this.onError?.(error);
+      }
     });
 
     ws.on("close", (code, reason) => {
@@ -138,9 +146,19 @@ class CortiStreaming {
       this.resolvePendingAck();
       this.cleanup();
       if (wasActive && !this.isDisconnecting) {
-        this.onError?.(new Error(`Connection lost (code: ${code})`));
+        this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
       }
     });
+  }
+
+  notifyConnectionLost(error) {
+    if (this.connectionLossNotified) return;
+    this.connectionLossNotified = true;
+    if (this.onConnectionLost) {
+      this.onConnectionLost(error);
+    } else {
+      this.onError?.(error);
+    }
   }
 
   // Pre-open the socket and finish the config handshake before recording, so the

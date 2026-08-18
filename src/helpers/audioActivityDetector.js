@@ -3,6 +3,7 @@ const { promisify } = require("util");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
 const { resolveBundledBinary } = require("./binaryResolver");
+const { getOwnProcessPids } = require("./ownProcessPids");
 
 const execAsync = promisify(exec);
 
@@ -14,7 +15,10 @@ const INACTIVE_RESET_MS = 60 * 1000;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
 class AudioActivityDetector extends EventEmitter {
-  constructor(getExcludedProcessIds = () => [process.pid]) {
+  // `getExcludedProcessIds` lists every pid whose mic use is OpenWhispr's own:
+  // the Electron process tree by default, plus any live capture helpers when
+  // main.js composes them in (see electronProcessIds.js).
+  constructor(getExcludedProcessIds = () => [...getOwnProcessPids()]) {
     super();
     this._getExcludedProcessIds = getExcludedProcessIds;
     this.checkInterval = null;
@@ -32,6 +36,9 @@ class AudioActivityDetector extends EventEmitter {
     this._eventDriven = false;
     this._resetTimer = null;
     this._startGeneration = 0;
+    this._micWarmHold = false;
+    this._lastKnownMicState = false;
+    this._cooldownReevalTimer = null;
     this._linuxOwnershipRequest = 0;
     this._linuxReconcileQueued = false;
     this._linuxReconcileRunning = false;
@@ -56,8 +63,26 @@ class AudioActivityDetector extends EventEmitter {
       this.consecutiveChecks = 0;
       this.audioActiveStart = null;
       this._clearSustainedTimer();
+    } else {
+      this._reevaluateAfterGate();
     }
     debugLogger.debug("User recording state changed", { active }, "meeting");
+  }
+
+  // Our own idle-hold keeps the device "in use" after a dictation ends, and the
+  // macOS/Linux mic signals are device-global — they cannot tell us apart from
+  // a meeting app. Mic evidence during the hold is dropped outright (never
+  // queued: it is not a meeting). Sustained state resets on both transitions so
+  // a half-armed detection from before the hold cannot fire after it.
+  setMicWarmHold(active) {
+    this._micWarmHold = active;
+    this.consecutiveChecks = 0;
+    this.audioActiveStart = null;
+    this._clearSustainedTimer();
+    if (!active) {
+      this._reevaluateAfterGate();
+    }
+    debugLogger.debug("Mic warm-hold state changed", { active }, "meeting");
   }
 
   async start() {
@@ -92,12 +117,12 @@ class AudioActivityDetector extends EventEmitter {
     this._killListenerProcess();
     this._clearSustainedTimer();
     this._clearResetTimer();
+    this._resetListenerState();
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
     this._reset();
-    this._resetExternalMicState();
     this._eventDriven = false;
     debugLogger.info("Audio activity detector stopped", {}, "meeting");
   }
@@ -107,6 +132,11 @@ class AudioActivityDetector extends EventEmitter {
     this._reset();
     this._clearSustainedTimer();
     this._clearResetTimer();
+    // Polling parity: polling re-detects a still-running call once the cooldown
+    // lapses, but the edge-triggered listeners will never re-announce it.
+    if (this._eventDriven && this._lastKnownMicState) {
+      this._scheduleCooldownReeval(COOLDOWN_MS);
+    }
     debugLogger.info(
       "Audio detection dismissed, cooldown started",
       { cooldownMs: COOLDOWN_MS },
@@ -128,9 +158,16 @@ class AudioActivityDetector extends EventEmitter {
     this._clearResetTimer();
   }
 
-  _resetExternalMicState() {
+  // The pid set, source count, and ownership snapshot mirror what the OS told
+  // us is open, not our own detection state — only losing the listener
+  // invalidates them. Clearing them on dismissal would desync the reference
+  // count, so an unrelated app's mic session ending would report the
+  // still-running call as gone.
+  _resetListenerState() {
     this._activeMicPids.clear();
     this._activeSources = 0;
+    this._lastKnownMicState = false;
+    this._clearCooldownReevalTimer();
     this._linuxOwnershipRequest++;
     this._pidScopedCapability = false;
     this._externalMicReliable = false;
@@ -254,10 +291,10 @@ class AudioActivityDetector extends EventEmitter {
     const fallbackToPolling = () => {
       if (this._listenerProcess !== child) return;
       this._listenerProcess = null;
-      this._linuxOwnershipRequest++;
-      this._activeMicPids.clear();
-      this._activeSources = 0;
+      // Announce the reliability loss before the snapshot is reset, or the
+      // emit de-dupe would swallow it.
       this._setPidScopedCapability(false);
+      this._resetListenerState();
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
         this._startPolling();
@@ -351,10 +388,25 @@ class AudioActivityDetector extends EventEmitter {
     this._parsePidScopedListenerLine(line);
   }
 
+  // Our own captures never enter the pid set: dictation opens the mic from
+  // Chromium's audio service and the system-audio helpers are child processes,
+  // so the OS reports both under pids that are not the main one (#1392). Kept
+  // out at ingest so they can neither arm the prompt nor, on their stop, read
+  // as "every mic closed" while another app still holds one.
+  _isExcludedProcessId(pid) {
+    try {
+      return this._getExcludedProcessIdSet().has(pid);
+    } catch {
+      // A failing provider is reported as unreliable by _updateExternalMicState.
+      return false;
+    }
+  }
+
   _parsePidScopedListenerLine(line) {
     const startMatch = line.match(/^MIC_START\s+(\d+)$/);
     if (startMatch) {
       const pid = parseInt(startMatch[1], 10);
+      if (this._isExcludedProcessId(pid)) return;
       this._activeMicPids.add(pid);
       const externalMicActive = this._updateExternalMicState();
       this._onMicStateChanged(externalMicActive);
@@ -364,6 +416,7 @@ class AudioActivityDetector extends EventEmitter {
     const stopMatch = line.match(/^MIC_STOP\s+(\d+)$/);
     if (stopMatch) {
       const pid = parseInt(stopMatch[1], 10);
+      if (this._isExcludedProcessId(pid)) return;
       this._activeMicPids.delete(pid);
       const externalMicActive = this._updateExternalMicState();
       this._onMicStateChanged(externalMicActive);
@@ -516,21 +569,62 @@ class AudioActivityDetector extends EventEmitter {
   // Shared event-driven handler
   // ---------------------------------------------------------------------------
 
+  // The listeners are edge-triggered: they announce transitions, never steady
+  // state. A gate may swallow the only edge a call will ever produce, so the
+  // state is recorded unconditionally and re-evaluated when gates lift.
   _onMicStateChanged(active) {
     if (!this._running) return;
+    this._lastKnownMicState = active;
+    this._evaluateMicState(active);
+  }
+
+  _reevaluateAfterGate() {
+    if (this._running && this._eventDriven && this._lastKnownMicState) {
+      this._evaluateMicState(true);
+    }
+  }
+
+  _cooldownRemainingMs() {
+    if (!this.lastDismissedAt) return 0;
+    return Math.max(0, COOLDOWN_MS - (Date.now() - this.lastDismissedAt));
+  }
+
+  _scheduleCooldownReeval(delayMs) {
+    this._clearCooldownReevalTimer();
+    this._cooldownReevalTimer = setTimeout(() => {
+      this._cooldownReevalTimer = null;
+      this._reevaluateAfterGate();
+    }, delayMs);
+  }
+
+  _clearCooldownReevalTimer() {
+    if (this._cooldownReevalTimer) {
+      clearTimeout(this._cooldownReevalTimer);
+      this._cooldownReevalTimer = null;
+    }
+  }
+
+  _evaluateMicState(active) {
     if (this._userRecording) {
       debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
       return;
     }
-    if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) {
+    if (this._micWarmHold) {
+      debugLogger.debug("Mic state changed during warm-hold, ignoring", { active }, "meeting");
+      return;
+    }
+    const cooldownRemainingMs = this._cooldownRemainingMs();
+    if (cooldownRemainingMs > 0) {
       debugLogger.debug(
         "Mic state changed but in cooldown",
-        {
-          active,
-          remainingMs: COOLDOWN_MS - (Date.now() - this.lastDismissedAt),
-        },
+        { active, remainingMs: cooldownRemainingMs },
         "meeting"
       );
+      if (active) {
+        this._scheduleCooldownReeval(cooldownRemainingMs);
+      } else {
+        this._clearCooldownReevalTimer();
+      }
       return;
     }
 
@@ -551,7 +645,7 @@ class AudioActivityDetector extends EventEmitter {
       if (!this._sustainedTimer) {
         this._sustainedTimer = setTimeout(() => {
           this._sustainedTimer = null;
-          if (this._userRecording || this.hasPrompted) return;
+          if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
           if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
 
           this.hasPrompted = true;
@@ -585,6 +679,7 @@ class AudioActivityDetector extends EventEmitter {
     if (this._checking) return;
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     if (this._userRecording) return;
+    if (this._micWarmHold) return;
 
     this._checking = true;
     try {

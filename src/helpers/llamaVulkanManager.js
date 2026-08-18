@@ -4,10 +4,13 @@ const GpuBinaryManager = require("./gpuBinaryManager");
 // Overridable via LLAMA_CPP_VERSION so GPU and CPU stay on one tested llama.cpp.
 const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b9763";
 
+const BIN_SUBDIR = "llama-vulkan";
+
 class LlamaVulkanManager extends GpuBinaryManager {
   constructor() {
     super({
       name: "Vulkan llama",
+      dirName: BIN_SUBDIR,
       releaseUrl: `https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_TAG}`,
       assets: {
         "win32-x64": {
@@ -43,3 +46,4 @@ class LlamaVulkanManager extends GpuBinaryManager {
 }
 
 module.exports = LlamaVulkanManager;
+module.exports.BIN_SUBDIR = BIN_SUBDIR;

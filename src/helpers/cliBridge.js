@@ -212,6 +212,10 @@ class CliBridge {
       sendV1Error(res, 404, "not_found", err.message);
       return;
     }
+    if (err.code === "VALIDATION") {
+      sendV1Error(res, 400, "validation_error", err.message);
+      return;
+    }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
     sendV1Error(res, 500, "internal_error", err.message || "Internal server error");
   }

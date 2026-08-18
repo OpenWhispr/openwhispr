@@ -9,10 +9,12 @@ const modelRegistryData = require("../../src/models/modelRegistryData.json");
 
 const originalLoad = Module._load;
 const modelManagerModulePath = require.resolve("../../src/helpers/modelManagerBridge.js");
+const modelDirUtilsModulePath = require.resolve("../../src/helpers/modelDirUtils.js");
 let electronHome = os.tmpdir();
 
 function loadModelManager() {
   delete require.cache[modelManagerModulePath];
+  delete require.cache[modelDirUtilsModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron") {
@@ -30,6 +32,11 @@ function loadModelManager() {
   };
 
   try {
+    // modelManagerBridge requires modelDirUtils lazily (inside getModelsDir),
+    // after this mock is uninstalled — load it now so its electron binding is
+    // the stub and modelsDir resolves inside the per-test temp home instead of
+    // the real ~/.cache/openwhispr.
+    require("../../src/helpers/modelDirUtils.js");
     return require("../../src/helpers/modelManagerBridge.js").default;
   } finally {
     Module._load = originalLoad;

@@ -14,6 +14,7 @@ interface ShareVisibilityMenuProps {
   value: ShareVisibility;
   ownerDomain: string;
   showDomainOption: boolean;
+  visibleOptions?: readonly ShareVisibility[];
   disabled?: boolean;
   onChange: (visibility: ShareVisibility) => void;
 }
@@ -22,12 +23,15 @@ export default function ShareVisibilityMenu({
   value,
   ownerDomain,
   showDomainOption,
+  visibleOptions = ["private", "invited", "link", "domain"],
   disabled,
   onChange,
 }: ShareVisibilityMenuProps) {
   const { t } = useTranslation();
 
   const current = renderCurrent(value, ownerDomain, t);
+  const isVisible = (visibility: ShareVisibility): boolean =>
+    visibility === "private" || visibleOptions.includes(visibility);
 
   return (
     <DropdownMenu>
@@ -57,19 +61,23 @@ export default function ShareVisibilityMenu({
           active={value === "private"}
           onSelect={() => onChange("private")}
         />
-        <VisibilityItem
-          icon={<Users size={13} className="text-foreground/50" />}
-          label={t("noteEditor.share.dialog.visibility.invited")}
-          active={value === "invited"}
-          onSelect={() => onChange("invited")}
-        />
-        <VisibilityItem
-          icon={<Globe size={13} className="text-foreground/50" />}
-          label={t("noteEditor.share.dialog.visibility.link")}
-          active={value === "link"}
-          onSelect={() => onChange("link")}
-        />
-        {showDomainOption && (
+        {isVisible("invited") && (
+          <VisibilityItem
+            icon={<Users size={13} className="text-foreground/50" />}
+            label={t("noteEditor.share.dialog.visibility.invited")}
+            active={value === "invited"}
+            onSelect={() => onChange("invited")}
+          />
+        )}
+        {isVisible("link") && (
+          <VisibilityItem
+            icon={<Globe size={13} className="text-foreground/50" />}
+            label={t("noteEditor.share.dialog.visibility.link")}
+            active={value === "link"}
+            onSelect={() => onChange("link")}
+          />
+        )}
+        {showDomainOption && isVisible("domain") && (
           <VisibilityItem
             icon={<Building2 size={13} className="text-foreground/50" />}
             label={t("noteEditor.share.dialog.visibility.domain", { domain: ownerDomain })}
