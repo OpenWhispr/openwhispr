@@ -128,6 +128,47 @@ test("a title with control characters keeps the frontmatter a valid single-line 
   assert.equal(frontmatter.title, note.title);
 });
 
+test("deleteNote removes the note's other files even when one unlink fails", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+
+  const note = {
+    id: 9,
+    title: "Team sync",
+    content: "Body",
+    created_at: "2026-07-21T12:00:00Z",
+    transcript: JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hello." }]),
+  };
+
+  markdownMirror.init(basePath);
+  markdownMirror.writeNote(note, "Personal");
+  markdownMirror.writeTranscript(note, "Personal", {});
+
+  const folderPath = path.join(basePath, "Personal");
+  assert.equal(fs.readdirSync(folderPath).length, 2);
+
+  // Make the first unlink throw (e.g. the file is open in an external editor on
+  // Windows); the remaining file must still be deleted rather than orphaned.
+  const realUnlink = fs.unlinkSync;
+  let failedPath = null;
+  fs.unlinkSync = (target) => {
+    if (failedPath === null) {
+      failedPath = target;
+      throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+    }
+    return realUnlink(target);
+  };
+  t.after(() => {
+    fs.unlinkSync = realUnlink;
+  });
+
+  markdownMirror.deleteNote(note.id);
+  fs.unlinkSync = realUnlink;
+
+  // Only the file that genuinely could not be unlinked remains.
+  assert.deepEqual(fs.readdirSync(folderPath), [path.basename(failedPath)]);
+});
+
 test("a note file re-saved with a BOM or CRLF is still recognised as its note", (t) => {
   const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));

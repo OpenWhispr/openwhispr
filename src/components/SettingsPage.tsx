@@ -74,6 +74,7 @@ import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { formatHotkeyLabel } from "../utils/hotkeys";
+import { getLinuxPasteInstallCommands, needsLinuxPasteToolGuidance } from "../utils/linuxPasteTools";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
@@ -102,6 +103,7 @@ import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
+import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
@@ -562,12 +564,26 @@ function TabPanel({ active, children }: { active: boolean; children: React.React
   return <div className={active ? undefined : "hidden"}>{children}</div>;
 }
 
-function AccountAvatar({ image, name }: { image?: string | null; name: string }) {
+// "Gabriel Stein" → "GS"; single names fall back to their first letter.
+function nameInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
+  return (first + last).toUpperCase();
+}
+
+export function AccountAvatar({ image, name }: { image?: string | null; name: string }) {
   // Same stale-URL fallback as MemberAvatar: OAuth-hosted images expire, and a
-  // bare <img> would render the broken-image glyph instead of the icon.
+  // bare <img> would render the broken-image glyph instead of the initials.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const initials = nameInitials(name);
   return (
-    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
+    <div
+      className={cn(
+        "w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden",
+        GRADIENT_CIRCLE
+      )}
+    >
       {image && image !== failedSrc ? (
         <img
           src={image}
@@ -577,8 +593,10 @@ function AccountAvatar({ image, name }: { image?: string | null; name: string })
           onError={() => setFailedSrc(image)}
           className="w-10 h-10 rounded-full object-cover"
         />
+      ) : initials ? (
+        <span className="text-[13px] font-semibold leading-none select-none">{initials}</span>
       ) : (
-        <UserCircle className="w-5 h-5 text-primary" />
+        <UserCircle className="w-5 h-5" />
       )}
     </div>
   );
@@ -987,22 +1005,23 @@ export default function SettingsPage({
     }
   };
 
-  // ydotool status for Wayland paste diagnostics
+  // Wayland paste tool status for diagnostics.
   const [ydotoolStatus, setYdotoolStatus] = useState<{
     isLinux: boolean;
     isWayland: boolean;
     hasYdotool: boolean;
     hasYdotoold: boolean;
+    hasWtype: boolean;
     daemonRunning: boolean;
     hasService: boolean;
     hasUinput: boolean;
     hasUdevRule: boolean;
     hasGroup: boolean;
-    allGood: boolean;
-    isKde?: boolean;
-    hasXclip?: boolean;
-    hasXsel?: boolean;
-    isNixOS?: boolean;
+    isKde: boolean;
+    isWlroots: boolean;
+    hasXclip: boolean;
+    hasXsel: boolean;
+    isNixOS: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
 
@@ -1731,24 +1750,6 @@ export default function SettingsPage({
             ) : isLoaded && isSignedIn && user ? (
               <>
                 <SectionHeader title={t("settingsPage.account.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <div className="flex items-center gap-3">
-                      <AccountAvatar
-                        image={user.image}
-                        name={user.name || t("settingsPage.account.user")}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-foreground truncate">
-                          {user.name || t("settingsPage.account.user")}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                      </div>
-                      <Badge variant="success">{t("settingsPage.account.signedIn")}</Badge>
-                    </div>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-
                 <ProfileSection
                   name={user.name || ""}
                   onSessionRefresh={() => {
@@ -2958,7 +2959,7 @@ export default function SettingsPage({
                   })}
                   description={t("settingsPage.general.waylandPaste.description", {
                     defaultValue:
-                      "Auto-paste on Wayland requires ydotool. Check the status of each component below.",
+                      "Auto-paste on Wayland uses ydotool or wtype. wtype is preferred on wlroots compositors.",
                   })}
                 />
                 {(() => {
@@ -2969,9 +2970,28 @@ export default function SettingsPage({
                   }
                   const checks = [
                     {
+                      key: "hasWtype",
+                      label: "wtype",
+                      ok: ydotoolStatus.hasWtype,
+                      required: ydotoolStatus.isWlroots,
+                      desc: t("settingsPage.general.waylandPaste.wtypeDesc"),
+                      steps: [
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.wtype.step1Title"),
+                          desc: t("settingsPage.general.waylandPaste.guide.wtype.step1Desc"),
+                          cmds: getLinuxPasteInstallCommands(t, "wtype"),
+                        },
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.wtype.step2Title"),
+                          cmds: [{ cmd: "which wtype" }],
+                        },
+                      ],
+                    },
+                    {
                       key: "hasYdotool",
                       label: "ydotool",
                       ok: ydotoolStatus.hasYdotool,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.ydotoolDesc", {
                         defaultValue: "Input automation tool for Wayland",
                       }),
@@ -2984,12 +3004,7 @@ export default function SettingsPage({
                             defaultValue:
                               "Use your distribution's package manager to install ydotool.",
                           }),
-                          cmds: [
-                            { label: "Ubuntu / Pop!_OS / Debian", cmd: "sudo apt install ydotool" },
-                            { label: "Fedora", cmd: "sudo dnf install ydotool" },
-                            { label: "Arch Linux", cmd: "sudo pacman -S ydotool" },
-                            { label: "openSUSE", cmd: "sudo zypper install ydotool" },
-                          ],
+                          cmds: getLinuxPasteInstallCommands(t, "ydotool"),
                         },
                         {
                           title: t("settingsPage.general.waylandPaste.guide.ydotool.step2Title", {
@@ -3006,6 +3021,7 @@ export default function SettingsPage({
                       key: "hasYdotoold",
                       label: "ydotoold",
                       ok: ydotoolStatus.hasYdotoold,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.ydotooldDesc", {
                         defaultValue: "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
                       }),
@@ -3033,6 +3049,7 @@ export default function SettingsPage({
                       key: "hasUinput",
                       label: "/dev/uinput",
                       ok: ydotoolStatus.hasUinput,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.uinputDesc", {
                         defaultValue: "Kernel input device access",
                       }),
@@ -3132,6 +3149,7 @@ export default function SettingsPage({
                         defaultValue: "input group",
                       }),
                       ok: ydotoolStatus.hasGroup,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.inputGroupDesc", {
                         defaultValue: "User must be in the input group (requires re-login)",
                       }),
@@ -3159,6 +3177,7 @@ export default function SettingsPage({
                         defaultValue: "systemd service",
                       }),
                       ok: ydotoolStatus.hasService,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.serviceDesc", {
                         defaultValue: "User service file for auto-starting ydotoold",
                       }),
@@ -3214,6 +3233,7 @@ EOF`,
                         defaultValue: "ydotoold daemon",
                       }),
                       ok: ydotoolStatus.daemonRunning,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.daemonDesc", {
                         defaultValue: "Background service must be running",
                       }),
@@ -3256,6 +3276,7 @@ EOF`,
                       key: "hasXclip",
                       label: "xclip",
                       ok: ydotoolStatus.hasXclip || ydotoolStatus.hasXsel || false,
+                      required: true,
                       desc: t("settingsPage.general.waylandPaste.xclipDesc", {
                         defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
                       }),
@@ -3273,7 +3294,7 @@ EOF`,
                     });
                   }
 
-                  const allOk = checks.every((c) => c.ok);
+                  const allOk = checks.filter((c) => c.required).every((c) => c.ok);
                   const activeGuide = checks.find((c) => c.key === ydotoolGuideKey);
 
                   return (
@@ -3906,7 +3927,7 @@ EOF`,
 
               {platform === "linux" &&
                 permissionsHook.pasteToolsInfo &&
-                !permissionsHook.pasteToolsInfo.available && (
+                needsLinuxPasteToolGuidance(permissionsHook.pasteToolsInfo) && (
                   <PasteToolsInfo
                     pasteToolsInfo={permissionsHook.pasteToolsInfo}
                     isChecking={permissionsHook.isCheckingPasteTools}

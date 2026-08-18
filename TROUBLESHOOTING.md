@@ -116,10 +116,16 @@
    - Debian/Ubuntu: `sudo apt install wl-clipboard`
    - Fedora/RHEL: `sudo dnf install wl-clipboard`
    - Arch: `sudo pacman -S wl-clipboard`
-2. Ensure a paste tool is installed (`xdotool` recommended, or `wtype` for Sway/Hyprland, or `ydotool` with daemon)
+2. OpenWhispr chooses a compositor-specific paste method:
+   - Hyprland: `wtype`, then `hyprctl dispatch sendshortcut`
+   - Sway and other wlroots compositors: `wtype`
+   - GNOME and KDE Plasma: the RemoteDesktop keyboard portal
+   - `ydotool` is a fallback and requires the `ydotoold` daemon
 3. Restart OpenWhispr after installing
 
 OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → renderer `navigator.clipboard` → X11 fallback.
+
+On GNOME and KDE, the first automatic paste can show a remote-interaction permission dialog. Approval is remembered in `~/.cache/openwhispr/portal-paste-token`; revoking permission or invalidating that token makes the prompt return. If automatic paste fails, the transcription remains in the clipboard for manual paste.
 
 ### Linux System Audio PipeWire Issues
 

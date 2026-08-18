@@ -101,7 +101,7 @@ test("_mapEvent falls back to a meeting link found in location or body text", ()
   assert.equal(mapped.attendees, null);
 });
 
-function createManager(MicrosoftCalendarManager, upserted, contacts = []) {
+function createManager(MicrosoftCalendarManager, upserted, contacts = [], overrides = {}) {
   return new MicrosoftCalendarManager(
     {
       removeStaleCalendarEvents: () => {},
@@ -109,6 +109,8 @@ function createManager(MicrosoftCalendarManager, upserted, contacts = []) {
       removeCalendarEvents: () => {},
       updateMicrosoftCalendarSyncToken: () => {},
       upsertContacts: (rows) => contacts.push(...rows),
+      getCalendarEventById: () => null,
+      ...overrides,
     },
     {}
   );
@@ -182,7 +184,7 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
   assert.ok(contacts.some((contact) => contact.email === "me@example.com"));
 });
 
-test("_syncCalendar keeps stripped occurrences when the series master fetch fails", async () => {
+test("_syncCalendar inserts a never-seen stripped occurrence bare when the series master fetch fails", async () => {
   const MicrosoftCalendarManager = loadManagerModule();
   const upserted = [];
   const manager = createManager(MicrosoftCalendarManager, upserted);
@@ -200,4 +202,43 @@ test("_syncCalendar keeps stripped occurrences when the series master fetch fail
   assert.equal(upserted[0].id, "occ-1");
   assert.equal(upserted[0].summary, null);
   assert.equal(upserted[0].start_time, "2026-07-20T09:25:00Z");
+});
+
+// A bare stub has attendees_count 0 and no join link, which the reminder
+// scheduler treats as a time block — it must not overwrite a full row.
+test("_syncCalendar keeps the stored row when a stripped occurrence's master fetch fails", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const upserted = [];
+  const staleKeepLists = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, [], {
+    getCalendarEventById: (id) => (id === "occ-1" ? { id, summary: "Standup" } : null),
+    removeStaleCalendarEvents: (_provider, _calendarId, keepIds) => staleKeepLists.push(keepIds),
+  });
+
+  manager._apiGet = async (url) => {
+    if (url.includes("/calendarView/delta")) {
+      return {
+        "@odata.deltaLink": "delta-link",
+        value: [
+          STRIPPED_OCCURRENCE,
+          {
+            id: "evt-1",
+            subject: "One-off",
+            start: { dateTime: "2026-07-20T17:00:00.0000000" },
+            end: { dateTime: "2026-07-20T17:30:00.0000000" },
+          },
+        ],
+      };
+    }
+    throw new Error("master gone");
+  };
+
+  // No sync_token → full sync, so the stale prune runs and must spare occ-1.
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+
+  assert.deepEqual(
+    upserted.map((event) => event.id),
+    ["evt-1"]
+  );
+  assert.deepEqual(staleKeepLists, [["occ-1", "evt-1"]]);
 });
