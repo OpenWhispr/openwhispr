@@ -95,3 +95,26 @@ test("upcoming groups fall back to a formatted date further out", async (t2) => 
   assert.notEqual(result, "Today");
   assert.notEqual(result, "Tomorrow");
 });
+
+test("upcoming groups date-only strings as the local calendar day, not UTC midnight", async (t2) => {
+  const { formatUpcomingDateGroup } = await load();
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+
+  try {
+    t2.mock.timers.enable({ apis: ["Date"], now: new Date("2024-06-15T16:00:00Z") });
+
+    assert.equal(formatUpcomingDateGroup("2024-06-15", t), "Today");
+    assert.equal(formatUpcomingDateGroup("2024-06-16", t), "Tomorrow");
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
+});
+
+test("upcoming groups ignore null or invalid dates instead of throwing", async () => {
+  const { formatUpcomingDateGroup } = await load();
+  assert.equal(formatUpcomingDateGroup(null, t), "");
+  assert.equal(formatUpcomingDateGroup(undefined, t), "");
+  assert.equal(formatUpcomingDateGroup("not-a-date", t), "");
+});

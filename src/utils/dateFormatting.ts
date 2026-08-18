@@ -27,8 +27,32 @@ export function formatRelativeTime(
   return formatShortDate(dateStr);
 }
 
-export function formatUpcomingDateGroup(date: Date | string, t: (key: string) => string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
+function toUpcomingGroupDate(date: Date | string | null | undefined): Date | null {
+  if (date instanceof Date) {
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof date !== "string") return null;
+  const trimmed = date.trim();
+  if (!trimmed) return null;
+
+  // Google all-day events are date-only (`YYYY-MM-DD`). `new Date("YYYY-MM-DD")`
+  // is UTC midnight, which is still the previous local day west of UTC.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (dateOnly) {
+    const parsed = new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function formatUpcomingDateGroup(
+  date: Date | string | null | undefined,
+  t: (key: string) => string
+): string {
+  const d = toUpcomingGroupDate(date);
+  if (!d) return "";
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const tomorrow = new Date(today);
