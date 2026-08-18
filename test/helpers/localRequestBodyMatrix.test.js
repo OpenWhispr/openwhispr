@@ -131,3 +131,235 @@ test("local.ts: the caller's config still travels over the IPC beside params", a
     chat_template_kwargs: { enable_thinking: false },
   });
 });
+
+// --- Matrix: the full wire body per family × call shape (#1620 pattern) ---
+//
+// Every row is a literal expectation, never re-derived from the shaper, so a
+// changed family fact, dialect, or registry flag surfaces here as a one-line
+// diff. deepEqual on the whole body asserts absence too: no top-level
+// reasoning_effort, no Ollama `think`, no chat_template_kwargs where the model
+// has none.
+
+const { setupLocalChain } = require("./harness/localChain");
+const modelRegistryData = require("../../src/models/modelRegistryData.json");
+
+// Not in the registry. modelManagerBridge would reject it before the wire
+// today; the row pins the renderer's fail-safe (suppress when the model is
+// unknown) for the day a non-registry GGUF can be served, by letting the
+// manager know a model the shaper does not.
+const UNKNOWN = { id: "some-custom-model-q4", fileName: "some-custom-model-q4.gguf" };
+
+// [modelId, kwargs when the disable-thinking toggle is on (default), kwargs
+// when it is off on a deterministic shape]. `enable_thinking` is llama.cpp's
+// generic switch, sent per registry supportsThinking (and for unknown ids); the
+// gpt-oss "low" floor/pin is the only family effort llama-server can read.
+const MODELS = [
+  ["qwen3-4b-q4_k_m", { enable_thinking: false }, null],
+  ["qwen3.5-4b-q4_k_m", { enable_thinking: false }, null],
+  ["qwen2.5-3b-instruct-q5_k_m", null, null],
+  ["gemma-4-e4b-it-qat-q4_0", null, null],
+  ["lfm2.5-1.2b-instruct-q4_k_m", null, null],
+  ["llama-3.2-3b-instruct-q4_k_m", null, null],
+  ["mistral-nemo-12b-instruct-q4_k_m", null, null],
+  [
+    "gpt-oss-20b-mxfp4",
+    { enable_thinking: false, reasoning_effort: "low" },
+    { reasoning_effort: "low" },
+  ],
+  [UNKNOWN.id, { enable_thinking: false }, null],
+];
+
+const AGENT_PROMPT = "You are an agent.";
+const TRANSLATE_PROMPT = "Translate to Spanish.";
+const FORMAT_PROMPT = "Format these notes.";
+const EDIT_PROMPT = "Edit the selection.";
+
+// Call shapes as the real callers build them (audioManager, the dictation
+// inference helpers, actionProcessingStore, the selection-edit path), with the
+// body each must produce. Texts stay short so the bridge's length-based token
+// fallback resolves to its 512 floor.
+const SHAPES = [
+  {
+    name: "cleanup",
+    text: "hello there",
+    config: { disableThinking: true, inferenceScope: "dictationCleanup" },
+    expect: {
+      systemPrompt: CLEANUP_PROMPT,
+      wrapped: true,
+      temperature: 0,
+      max_tokens: 512,
+      kwargs: "suppressed",
+    },
+  },
+  {
+    name: "agent",
+    text: "do the thing",
+    config: { systemPrompt: AGENT_PROMPT, disableThinking: true, inferenceScope: "dictationAgent" },
+    expect: { systemPrompt: AGENT_PROMPT, temperature: 0.3, max_tokens: 512, kwargs: "suppressed" },
+  },
+  {
+    name: "translation",
+    text: "hello there",
+    config: {
+      systemPrompt: TRANSLATE_PROMPT,
+      disableThinking: true,
+      inferenceScope: "dictationTranslation",
+      language: "es",
+    },
+    expect: {
+      systemPrompt: TRANSLATE_PROMPT,
+      temperature: 0.3,
+      max_tokens: 512,
+      kwargs: "suppressed",
+    },
+  },
+  {
+    name: "note-format",
+    text: "- item one\n- item two",
+    config: {
+      systemPrompt: FORMAT_PROMPT,
+      temperature: 0.3,
+      disableThinking: true,
+      inferenceScope: "noteFormatting",
+    },
+    expect: {
+      systemPrompt: FORMAT_PROMPT,
+      temperature: 0.3,
+      max_tokens: 512,
+      kwargs: "suppressed",
+    },
+  },
+  {
+    name: "selection-edit",
+    text: "make it shorter",
+    config: {
+      systemPrompt: EDIT_PROMPT,
+      temperature: 0.2,
+      maxTokens: 8192,
+      requireCompleteOutput: true,
+      disableThinking: true,
+      inferenceScope: "dictationAgent",
+    },
+    expect: {
+      systemPrompt: EDIT_PROMPT,
+      temperature: 0.2,
+      max_tokens: 8192,
+      kwargs: "suppressed",
+      requireCompleteOutput: true,
+    },
+  },
+  {
+    name: "cleanup, thinking allowed",
+    text: "hello there",
+    config: { disableThinking: false, inferenceScope: "dictationCleanup" },
+    expect: {
+      systemPrompt: CLEANUP_PROMPT,
+      wrapped: true,
+      temperature: 0,
+      max_tokens: 512,
+      kwargs: "pinOnly",
+    },
+  },
+];
+
+async function setupPathA(t) {
+  const chain = await setupLocalChain(t);
+  // Same contract as ipcHandlers' process-local-reasoning handler.
+  stubIpc(t, (text, modelId, _agentName, config) =>
+    chain.bridge.processText(text, modelId, config).then(
+      (out) => ({ success: true, text: out }),
+      (error) => ({ success: false, error: error.message })
+    )
+  );
+  const { localProvider } = await loadProvider();
+  const { wrapCleanupTranscript } = await loadPrompts();
+  return { ...chain, localProvider, wrapCleanupTranscript };
+}
+
+async function useMatrixModel(chain, modelId) {
+  if (modelId !== UNKNOWN.id) return chain.useModel(modelId);
+  await chain.useModel(UNKNOWN);
+  const original = chain.modelManager.findModelById.bind(chain.modelManager);
+  chain.modelManager.findModelById = (id) =>
+    id === UNKNOWN.id
+      ? { model: { ...UNKNOWN, name: "Custom" }, provider: { id: "custom" } }
+      : original(id);
+  return UNKNOWN.id;
+}
+
+for (const [modelId, suppressedKwargs, pinOnlyKwargs] of MODELS) {
+  test(`matrix: ${modelId}`, async (t) => {
+    const chain = await setupPathA(t);
+    await useMatrixModel(chain, modelId);
+
+    for (const shape of SHAPES) {
+      await t.test(shape.name, async () => {
+        const before = chain.requests.length;
+        await chain.localProvider.call({
+          text: shape.text,
+          model: modelId,
+          agentName: null,
+          config: shape.config,
+          ctx,
+        });
+
+        assert.equal(chain.requests.length, before + 1, "exactly one request reaches llama-server");
+        const kwargs = shape.expect.kwargs === "suppressed" ? suppressedKwargs : pinOnlyKwargs;
+        assert.deepEqual(chain.requests[before], {
+          messages: [
+            { role: "system", content: shape.expect.systemPrompt },
+            {
+              role: "user",
+              content: shape.expect.wrapped ? chain.wrapCleanupTranscript(shape.text) : shape.text,
+            },
+          ],
+          temperature: shape.expect.temperature,
+          max_tokens: shape.expect.max_tokens,
+          ...(kwargs ? { chat_template_kwargs: kwargs } : {}),
+          stream: false,
+        });
+        assert.equal(
+          Boolean(chain.inferenceCalls[before].requireCompleteOutput),
+          Boolean(shape.expect.requireCompleteOutput),
+          "requireCompleteOutput must reach llamaServer.inference exactly for selection edits"
+        );
+      });
+    }
+  });
+}
+
+test("matrix: an unshaped caller (no params) gets the same legacy body for every model", async (t) => {
+  const chain = await setupPathA(t);
+
+  for (const [modelId] of MODELS) {
+    await useMatrixModel(chain, modelId);
+    const before = chain.requests.length;
+    await chain.bridge.processText("hello there", modelId, {});
+    assert.deepEqual(
+      chain.requests[before],
+      {
+        messages: [
+          { role: "system", content: "" },
+          { role: "user", content: "hello there" },
+        ],
+        temperature: 0.7,
+        max_tokens: 512,
+        chat_template_kwargs: { enable_thinking: false },
+        stream: false,
+      },
+      modelId
+    );
+  }
+});
+
+test("matrix guard: every registry model of a thinking family is flagged supportsThinking", () => {
+  const thinkingFamily = /qwen3|gpt-oss/;
+  const offenders = [];
+  for (const provider of modelRegistryData.localProviders) {
+    for (const model of provider.models) {
+      if (thinkingFamily.test(model.id) && model.supportsThinking !== true)
+        offenders.push(model.id);
+    }
+  }
+  assert.deepEqual(offenders, [], "these ids would silently skip enable_thinking suppression");
+});
