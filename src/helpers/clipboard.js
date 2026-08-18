@@ -1509,8 +1509,8 @@ class ClipboardManager {
       }
     };
 
-    const targetWindowId = preDetectTargetWindow();
-    let detectedWindowClass = preDetectWindowClass(targetWindowId);
+    let targetWindowId = isWayland ? null : preDetectTargetWindow();
+    let detectedWindowClass = isWayland ? null : preDetectWindowClass(targetWindowId);
 
     if (!detectedWindowClass && isKde) {
       detectedWindowClass = this._detectKdeWindowClass();
@@ -1526,7 +1526,7 @@ class ClipboardManager {
       }
     }
 
-    const detectedWindowPid = preDetectWindowPid(targetWindowId);
+    const detectedWindowPid = isWayland ? null : preDetectWindowPid(targetWindowId);
     const detectedWindowComm = preDetectWindowComm(detectedWindowPid);
     const detectedIsElectron = preDetectIsElectron(detectedWindowPid);
     if (detectedIsElectron) {
@@ -1569,6 +1569,11 @@ class ClipboardManager {
     const appendModeFlag = (args) => {
       if (useShiftInsert) args.push("--shift-insert");
       else if (isTerminalTarget) args.push("--terminal");
+    };
+
+    const detectXwaylandTarget = () => {
+      // Avoid xdotool on the normal Wayland path; fallbacks target the window active now.
+      if (isWayland && !targetWindowId) targetWindowId = preDetectTargetWindow();
     };
 
     if (isWayland && isWlroots && wtypeExists) {
@@ -1733,6 +1738,7 @@ class ClipboardManager {
 
         // XTest/XWayland fallback: works for XWayland apps on any Wayland compositor
         if (xwaylandAvailable && !this.xtestTimedOut) {
+          detectXwaylandTarget();
           const xtestArgs = [];
           if (targetWindowId) xtestArgs.push("--window", targetWindowId);
           appendModeFlag(xtestArgs);
@@ -1805,10 +1811,6 @@ class ClipboardManager {
     const canUseXdotool = isWayland ? xwaylandAvailable && xdotoolExists : xdotoolExists;
 
     // windowactivate ensures the target window (not ours) receives the keystroke
-    const xdotoolArgs = targetWindowId
-      ? ["windowactivate", "--sync", targetWindowId, "key", pasteKeys]
-      : ["key", pasteKeys];
-
     if (targetWindowId) {
       this.safeLog(
         `🎯 Targeting window ID ${targetWindowId} for paste (signals: ${windowSignals.join(" | ") || "none"})`
@@ -1831,7 +1833,7 @@ class ClipboardManager {
       ydotoolArgs = legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
     }
 
-    const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : [];
+    const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool" }] : [];
     const ydotoolEntry = canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : [];
 
     // Compositor-aware priority ordering. X11 and wlroots (where wtype already
@@ -1950,6 +1952,12 @@ class ClipboardManager {
     const failedAttempts = [];
     for (const tool of available) {
       try {
+        if (tool.cmd === "xdotool") {
+          detectXwaylandTarget();
+          tool.args = targetWindowId
+            ? ["windowactivate", "--sync", targetWindowId, "key", pasteKeys]
+            : ["key", pasteKeys];
+        }
         const pasteResult = await pasteWith(tool);
         this.safeLog(`✅ Paste successful using ${tool.cmd}`);
         debugLogger.info("Paste successful", { tool: tool.cmd }, "clipboard");

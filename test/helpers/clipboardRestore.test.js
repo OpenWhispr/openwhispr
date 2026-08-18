@@ -63,7 +63,7 @@ const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
 const originalLoad = Module._load;
 
-function loadClipboardManager({ spawn } = {}) {
+function loadClipboardManager({ spawn, spawnSync } = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -75,8 +75,8 @@ function loadClipboardManager({ spawn } = {}) {
         },
       };
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || spawnSync)) {
+      return { ...childProcess, ...(spawn && { spawn }), ...(spawnSync && { spawnSync }) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -470,6 +470,29 @@ test("KDE tries portal before uinput", async () => {
   );
 });
 
+test("KDE portal paste does not probe xdotool on XWayland", async () => {
+  const spawnCalls = [];
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    spawnSync(command, args) {
+      spawnSyncCalls.push({ command, args });
+      return { status: 1, stdout: Buffer.from("") };
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "xdotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  await withWaylandEnvironment("KDE", async () => {
+    process.env.DISPLAY = ":0";
+    await manager.pasteLinux(null);
+  });
+
+  assert.deepEqual(spawnCalls, [{ command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] }]);
+  assert.deepEqual(spawnSyncCalls, []);
+});
+
 test("portal exit zero succeeds with or without a restore token", async () => {
   const calls = [];
   const TestClipboardManager = loadClipboardManager({
@@ -582,11 +605,16 @@ test("successful Wayland dispatch starts clipboard restoration", async () => {
 
 test("XWayland fallback remains reachable after native Wayland failure", async () => {
   const spawnCalls = [];
+  const spawnSyncCalls = [];
   const TestClipboardManager = loadClipboardManager({
     spawn: createSpawn(spawnCalls, [1, 0]),
+    spawnSync(command, args) {
+      spawnSyncCalls.push({ command, args });
+      return { status: 0, stdout: Buffer.from("42\n") };
+    },
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = () => false;
+  manager.commandExists = (command) => command === "xdotool";
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
 
   await withWaylandEnvironment("Unknown", async () => {
@@ -596,8 +624,9 @@ test("XWayland fallback remains reachable after native Wayland failure", async (
 
   assert.deepEqual(
     spawnCalls.map((call) => call.args),
-    [["--uinput", "--shift-insert"], ["--shift-insert"]]
+    [["--uinput", "--shift-insert"], ["--window", "42", "--shift-insert"]]
   );
+  assert.deepEqual(spawnSyncCalls, [{ command: "xdotool", args: ["getactivewindow"] }]);
 });
 
 test("pasteMacOS restores clipboard after the short macOS delay on successful fast paste", async () => {
