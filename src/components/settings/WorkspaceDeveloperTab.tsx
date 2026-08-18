@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Copy, Trash2, Check, Key, Loader2 } from "lucide-react";
 import { Button } from "../ui/button";
+import { EmptyState } from "../ui/EmptyState";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { useToast } from "../ui/useToast";
@@ -194,12 +195,11 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
           </div>
         )}
         {!loadError && keys.length === 0 && (
-          <div className="py-10 text-center">
-            <Key className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground">
-              {t("settingsPage.workspace.developer.empty")}
-            </p>
-          </div>
+          <EmptyState
+            icon={Key}
+            description={t("settingsPage.workspace.developer.empty")}
+            className="py-10"
+          />
         )}
         {keys.map((k) => (
           <div key={k.id} className="flex items-center gap-3 px-4 h-14">

@@ -7,6 +7,7 @@ import { WorkspacesService } from "../../services/WorkspacesService";
 import { InvitationsService } from "../../services/InvitationsService";
 import { useDialogs } from "../../hooks/useDialogs";
 import { Button } from "../ui/button";
+import { EmptyState } from "../ui/EmptyState";
 import { ConfirmDialog } from "../ui/dialog";
 import { useToast } from "../ui/useToast";
 import type {
@@ -316,9 +317,11 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
             </div>
           ))}
           {members.length === 0 && (
-            <div className="py-8 text-center text-xs text-muted-foreground">
-              {t("settingsPage.workspace.members.empty")}
-            </div>
+            <EmptyState
+              compact
+              description={t("settingsPage.workspace.members.empty")}
+              className="py-8"
+            />
           )}
         </div>
       )}

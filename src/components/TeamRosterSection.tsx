@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Mail, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { EmptyState } from "./ui/EmptyState";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
 import { useToast } from "./ui/useToast";
 import { cn } from "./lib/utils";
@@ -214,9 +215,7 @@ export default function TeamRosterSection({
             );
           })}
           {members.length === 0 && (
-            <div className="py-8 text-center text-xs text-muted-foreground">
-              {t("notes.spaces.members.empty")}
-            </div>
+            <EmptyState compact description={t("notes.spaces.members.empty")} className="py-8" />
           )}
         </div>
       )}

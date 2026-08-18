@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import { AudioLines, Check, Loader2, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
+import { EmptyState } from "../ui/EmptyState";
 import { Toggle } from "../ui/toggle";
 import { cn } from "../lib/utils";
 import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
@@ -362,9 +363,11 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
           </div>
         )}
         {isEmpty && (
-          <div className="px-3 py-4 text-center text-[11px] text-foreground/30">
-            {t("notes.speaker.nameOrEmailPlaceholder")}
-          </div>
+          <EmptyState
+            compact
+            description={t("notes.speaker.nameOrEmailPlaceholder")}
+            className="px-3 py-4"
+          />
         )}
       </div>
     </>
@@ -671,9 +674,11 @@ export function MeetingTranscriptChat({
       <div className="h-full flex flex-col">
         {consentNotice}
         <div className="flex-1 flex items-center justify-center px-5">
-          <p className="text-xs text-muted-foreground/40 select-none">
-            {t("notes.editor.conversationWillAppear")}
-          </p>
+          <EmptyState
+            icon={AudioLines}
+            description={t("notes.editor.conversationWillAppear")}
+            className="select-none"
+          />
         </div>
       </div>
     );

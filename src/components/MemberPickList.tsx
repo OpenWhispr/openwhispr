@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2, Search } from "lucide-react";
 import MemberAvatar from "./MemberAvatar";
+import { EmptyState } from "./ui/EmptyState";
 import { cn } from "./lib/utils";
 import { filterMemberCandidates } from "../lib/memberCandidates";
 import type { WorkspaceMember } from "../types/electron";
@@ -86,9 +87,7 @@ export default function MemberPickList({
           );
         })}
         {filteredMembers.length === 0 && !footer && (
-          <p className="text-xs text-foreground/25 text-center py-2">
-            {t("notes.spaces.members.noResults")}
-          </p>
+          <EmptyState compact description={t("notes.spaces.members.noResults")} className="py-2" />
         )}
         {filteredMembers.length === 0 && footer}
       </div>

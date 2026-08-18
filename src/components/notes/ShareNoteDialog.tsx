@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy, Link2, Loader2, MoreHorizontal, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { EmptyState } from "../ui/EmptyState";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -734,11 +735,11 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                           <Loader2 size={12} className="animate-spin text-foreground/40" />
                         </div>
                       ) : suggestions.length === 0 ? (
-                        <div className="h-8 flex items-center justify-center">
-                          <span className="text-xs text-foreground/40">
-                            {t("noteEditor.share.dialog.noResults")}
-                          </span>
-                        </div>
+                        <EmptyState
+                          compact
+                          description={t("noteEditor.share.dialog.noResults")}
+                          className="h-8 py-0"
+                        />
                       ) : (
                         suggestions.map((principal) => (
                           <button

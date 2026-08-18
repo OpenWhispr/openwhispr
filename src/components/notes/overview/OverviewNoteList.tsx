@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { FileText, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import MemberAvatar from "../../MemberAvatar";
+import { Button } from "../../ui/button";
+import { EmptyState } from "../../ui/EmptyState";
 import { groupItemsByDate } from "../../../utils/dateGrouping";
 import { formatRelativeTime } from "../../../utils/dateFormatting";
 import { useSpaceRoster } from "../../../hooks/useSpaceRoster";
@@ -32,28 +34,24 @@ export function OverviewNoteList({
 
   if (notes.length === 0) {
     return (
-      <div className="flex flex-col items-center py-8">
-        <p className="text-xs text-foreground/40 dark:text-foreground/30 mb-3">
-          {t("notes.overview.list.empty")}
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onNewNote}
-            className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
-          >
-            <Plus size={11} />
-            {t("notes.empty.createNote")}
-          </button>
-          {onAddExisting && (
-            <button
-              onClick={onAddExisting}
-              className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
-            >
-              {t("notes.addToFolder.addExisting")}
-            </button>
-          )}
-        </div>
-      </div>
+      <EmptyState
+        compact
+        description={t("notes.overview.list.empty")}
+        actions={
+          <>
+            <Button size="sm" onClick={onNewNote}>
+              <Plus size={12} />
+              {t("notes.empty.createNote")}
+            </Button>
+            {onAddExisting && (
+              <Button variant="outline-flat" size="sm" onClick={onAddExisting}>
+                {t("notes.addToFolder.addExisting")}
+              </Button>
+            )}
+          </>
+        }
+        className="py-8"
+      />
     );
   }
 

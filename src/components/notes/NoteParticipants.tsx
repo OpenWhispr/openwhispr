@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, X } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
+import { EmptyState } from "../ui/EmptyState";
 import type { CalendarAttendee } from "../../types/calendar";
 import { syncSessionExpectedCountFromParticipants } from "../../stores/meetingRecordingStore";
 
@@ -257,9 +258,11 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
           ))}
 
           {localParticipants.length === 0 && !search && (
-            <div className="px-3 py-4 text-center text-[11px] text-foreground/30">
-              {t("notes.participants.typeEmail", "Type an email to add...")}
-            </div>
+            <EmptyState
+              compact
+              description={t("notes.participants.typeEmail", "Type an email to add...")}
+              className="px-3 py-4"
+            />
           )}
         </div>
       </PopoverContent>

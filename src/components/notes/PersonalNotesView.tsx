@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
-import { Plus, Sparkles } from "lucide-react";
+import { FileText, Plus, Sparkles } from "lucide-react";
 import { useToast } from "../ui/useToast";
+import { Button } from "../ui/button";
+import { EmptyState } from "../ui/EmptyState";
 import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
@@ -852,139 +854,37 @@ export default function PersonalNotesView({
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center -mt-6">
-            <svg
-              className="text-foreground dark:text-white mb-5"
-              width="72"
-              height="64"
-              viewBox="0 0 72 64"
-              fill="none"
-            >
-              <rect
-                x="22"
-                y="2"
-                width="32"
-                height="42"
-                rx="3"
-                transform="rotate(6 38 23)"
-                fill="currentColor"
-                fillOpacity={0.025}
-                stroke="currentColor"
-                strokeOpacity={0.06}
-              />
-              <rect
-                x="18"
-                y="5"
-                width="32"
-                height="42"
-                rx="3"
-                transform="rotate(3 34 26)"
-                fill="currentColor"
-                fillOpacity={0.04}
-                stroke="currentColor"
-                strokeOpacity={0.08}
-              />
-              <rect
-                x="14"
-                y="8"
-                width="32"
-                height="42"
-                rx="3"
-                fill="currentColor"
-                fillOpacity={0.05}
-                stroke="currentColor"
-                strokeOpacity={0.1}
-              />
-              <rect
-                x="20"
-                y="16"
-                width="16"
-                height="2"
-                rx="1"
-                fill="currentColor"
-                fillOpacity={0.08}
-              />
-              <rect
-                x="20"
-                y="21"
-                width="20"
-                height="2"
-                rx="1"
-                fill="currentColor"
-                fillOpacity={0.06}
-              />
-              <rect
-                x="20"
-                y="26"
-                width="12"
-                height="2"
-                rx="1"
-                fill="currentColor"
-                fillOpacity={0.05}
-              />
-              <rect
-                x="20"
-                y="31"
-                width="18"
-                height="2"
-                rx="1"
-                fill="currentColor"
-                fillOpacity={0.04}
-              />
-              <circle
-                cx="54"
-                cy="50"
-                r="5"
-                fill="currentColor"
-                fillOpacity={0.03}
-                stroke="currentColor"
-                strokeOpacity={0.06}
-              />
-              <path
-                d="M51.5 50L53 51.5L56.5 48"
-                stroke="currentColor"
-                strokeOpacity={0.12}
-                strokeWidth={1.2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
             {notes.length === 0 ? (
-              <>
-                <h3 className="text-xs font-semibold text-foreground/60 mb-1">
-                  {t(notesEmptyTitleKey(activeFolderId != null))}
-                </h3>
-                <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-55 mb-4">
-                  {t("notes.empty.description")}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleNewNote}
-                    className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
-                  >
-                    <Plus size={11} />
-                    {t("notes.empty.createNote")}
-                  </button>
-                  {/* AddNotesToFolderDialog only mounts for folder contexts —
-                      space-root empty states offer just "Create note". */}
-                  {activeFolderId != null && (
-                    <button
-                      onClick={() => setShowAddNotesDialog(true)}
-                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
-                    >
-                      {t("notes.addToFolder.addExisting")}
-                    </button>
-                  )}
-                </div>
-              </>
+              <EmptyState
+                icon={FileText}
+                title={t(notesEmptyTitleKey(activeFolderId != null))}
+                description={t("notes.empty.description")}
+                actions={
+                  <>
+                    <Button size="sm" onClick={handleNewNote}>
+                      <Plus size={12} />
+                      {t("notes.empty.createNote")}
+                    </Button>
+                    {/* AddNotesToFolderDialog only mounts for folder contexts —
+                        space-root empty states offer just "Create note". */}
+                    {activeFolderId != null && (
+                      <Button
+                        variant="outline-flat"
+                        size="sm"
+                        onClick={() => setShowAddNotesDialog(true)}
+                      >
+                        {t("notes.addToFolder.addExisting")}
+                      </Button>
+                    )}
+                  </>
+                }
+              />
             ) : (
-              <>
-                <h3 className="text-xs font-semibold text-foreground/60 mb-1">
-                  {t("notes.empty.selectTitle")}
-                </h3>
-                <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-50">
-                  {t("notes.empty.selectDescription")}
-                </p>
-              </>
+              <EmptyState
+                icon={FileText}
+                title={t("notes.empty.selectTitle")}
+                description={t("notes.empty.selectDescription")}
+              />
             )}
           </div>
         )}

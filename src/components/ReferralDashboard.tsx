@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Send, Mail, Copy, Check, Link, UserPlus, Gift, CheckCircle2, User } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { EmptyState } from "./ui/EmptyState";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/useToast";
 import { cn } from "./lib/utils";
@@ -580,13 +581,13 @@ export function ReferralDashboard() {
                 </div>
               </div>
             ) : !stats.referrals?.length ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Mail className="w-5 h-5 text-foreground/10 mb-2" />
-                <p className="text-xs text-foreground/25">{t("referral.empty.title")}</p>
-                <p className="text-xs text-foreground/15 mt-0.5">
-                  {t("referral.empty.description")}
-                </p>
-              </div>
+              <EmptyState
+                compact
+                icon={Mail}
+                title={t("referral.empty.title")}
+                description={t("referral.empty.description")}
+                className="py-12"
+              />
             ) : null}
           </TabsContent>
         </Tabs>

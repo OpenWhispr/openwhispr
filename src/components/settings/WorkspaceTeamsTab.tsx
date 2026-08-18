@@ -6,6 +6,7 @@ import { TeamsService } from "../../services/TeamsService";
 import { loadSpaces, useSpaces } from "../../stores/noteStore";
 import { useDialogs } from "../../hooks/useDialogs";
 import { Button } from "../ui/button";
+import { EmptyState } from "../ui/EmptyState";
 import { useToast } from "../ui/useToast";
 import { ConfirmDialog } from "../ui/dialog";
 import CreateTeamDialog from "../CreateTeamDialog";
@@ -121,17 +122,18 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
       ) : (
         <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
           {teams.length === 0 && (
-            <div className="py-10 text-center">
-              <Users className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground mb-3">
-                {t("settingsPage.workspace.teams.empty")}
-              </p>
-              {canManage && (
-                <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
-                  {t("settingsPage.workspace.teams.createFirst")}
-                </Button>
-              )}
-            </div>
+            <EmptyState
+              icon={Users}
+              description={t("settingsPage.workspace.teams.empty")}
+              actions={
+                canManage && (
+                  <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+                    {t("settingsPage.workspace.teams.createFirst")}
+                  </Button>
+                )
+              }
+              className="py-10"
+            />
           )}
           {teams.map((team) => {
             const isDeleting = deletingId === team.id;

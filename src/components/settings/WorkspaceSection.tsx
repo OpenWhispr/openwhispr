@@ -8,6 +8,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { Button } from "../ui/button";
+import { EmptyState } from "../ui/EmptyState";
 import { Input } from "../ui/input";
 import { SettingsPanel, SettingsPanelRow, SettingsRow } from "../ui/SettingsSection";
 import { useToast } from "../ui/useToast";
@@ -130,18 +131,18 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
             </Button>
           </div>
         ) : (
-          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
-            <Users className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
-            <p className="text-xs font-medium text-foreground mb-1">
-              {t("settingsPage.workspace.empty.title")}
-            </p>
-            <p className="text-xs text-muted-foreground mb-4">
-              {t("settingsPage.workspace.empty.description")}
-            </p>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-              {t("settingsPage.workspace.empty.create")}
-            </Button>
+          <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50">
+            <EmptyState
+              icon={Users}
+              title={t("settingsPage.workspace.empty.title")}
+              description={t("settingsPage.workspace.empty.description")}
+              actions={
+                <Button size="sm" onClick={() => setCreateOpen(true)}>
+                  <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                  {t("settingsPage.workspace.empty.create")}
+                </Button>
+              }
+            />
           </div>
         )}
         {createDialog}

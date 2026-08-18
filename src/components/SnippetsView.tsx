@@ -13,6 +13,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
+import { EmptyState } from "./ui/EmptyState";
 import { useSettings } from "../hooks/useSettings";
 import { getCachedPlatform } from "../utils/platform";
 import type { Snippet } from "../utils/snippets";
@@ -280,9 +281,7 @@ export default function SnippetsView() {
             </div>
           </div>
         ) : visibleSnippets.length === 0 ? (
-          <p className="py-6 text-xs text-foreground/20 text-center">
-            {t("dictionary.noMatches", { word: trimmedTrigger })}
-          </p>
+          <EmptyState compact description={t("dictionary.noMatches", { word: trimmedTrigger })} />
         ) : (
           <ul>
             {visibleSnippets.map((snippet) => (

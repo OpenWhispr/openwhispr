@@ -5,7 +5,8 @@ import { useChatStreaming } from "./useChatStreaming";
 import { useChatMessageSender } from "./useChatMessageSender";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
-import { ChatEmptyIllustration } from "./ChatEmptyIllustration";
+import { MessagesSquare } from "lucide-react";
+import { EmptyState } from "../ui/EmptyState";
 import ConversationList from "./ConversationList";
 import EmptyChatState from "./EmptyChatState";
 import { ConfirmDialog } from "../ui/dialog";
@@ -19,12 +20,11 @@ const platform = getCachedPlatform();
 function NewChatEmptyState() {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-center justify-center h-full -mt-6 select-none">
-      <ChatEmptyIllustration />
-      <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-48 mt-4">
-        {t("chat.newChatEmpty")}
-      </p>
-    </div>
+    <EmptyState
+      icon={MessagesSquare}
+      description={t("chat.newChatEmpty")}
+      className="h-full -mt-6 select-none"
+    />
   );
 }
 

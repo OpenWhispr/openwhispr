@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Calendar, Loader2, LogIn, Monitor, Video } from "lucide-react";
 import { Button } from "./ui/button";
+import { EmptyState } from "./ui/EmptyState";
 import { cn } from "./lib/utils";
 import type { CalendarEvent } from "../types/calendar";
 import { formatUpcomingDateGroup } from "../utils/dateFormatting";
@@ -91,14 +92,14 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
       )}
 
       {/* Empty state */}
-      {!isLoading && events.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-8 px-3">
-          {needsSystemAudioGrant ? (
-            <>
-              <Monitor size={24} className="text-muted-foreground/30 mb-2.5" />
-              <p className="text-xs text-muted-foreground/60 text-center mb-3">
-                {t("upcoming.systemAudioRequired")}
-              </p>
+      {!isLoading &&
+        events.length === 0 &&
+        (needsSystemAudioGrant ? (
+          <EmptyState
+            compact
+            icon={Monitor}
+            description={t("upcoming.systemAudioRequired")}
+            actions={
               <Button
                 size="sm"
                 variant="outline"
@@ -109,27 +110,25 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
                   ? t("upcoming.openSettings")
                   : t("onboarding.permissions.grantAccess")}
               </Button>
-            </>
-          ) : !isSignedIn && !appleCalendarConnected ? (
-            <>
-              <LogIn size={24} className="text-muted-foreground/30 mb-2.5" />
-              <p className="text-xs font-medium text-muted-foreground/70 text-center mb-1">
-                {t("upcoming.signInRequired")}
-              </p>
-              <p className="text-xs text-muted-foreground/50 text-center mb-3">
-                {t("upcoming.signInDescription")}
-              </p>
-            </>
-          ) : (
-            <>
-              <Calendar size={24} className="text-muted-foreground/30 mb-2.5" />
-              <p className="text-xs text-muted-foreground/60 text-center">
-                {t("upcoming.noMoreMeetings")}
-              </p>
-            </>
-          )}
-        </div>
-      )}
+            }
+            className="py-8 px-3"
+          />
+        ) : !isSignedIn && !appleCalendarConnected ? (
+          <EmptyState
+            compact
+            icon={LogIn}
+            title={t("upcoming.signInRequired")}
+            description={t("upcoming.signInDescription")}
+            className="py-8 px-3"
+          />
+        ) : (
+          <EmptyState
+            compact
+            icon={Calendar}
+            description={t("upcoming.noMoreMeetings")}
+            className="py-8 px-3"
+          />
+        ))}
 
       {/* Grouped event list */}
       {!isLoading && groupedEvents.length > 0 && (
