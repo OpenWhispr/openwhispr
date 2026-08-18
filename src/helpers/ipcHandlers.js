@@ -68,18 +68,12 @@ const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const {
   partitionPendingMicFinals,
-  isWithinRetractWindow,
   isRiskyMicDuplicateProfile,
   isDuplicateMicSegment,
   selectRacingMicEntryIndices,
   partitionOverlappingPendingMicFinals,
 } = require("./meetingMicHoldback");
-const {
-  MEETING_MIC_BLEED_RMS_CEILING,
-  MEETING_MIC_BLEED_PEAK_CEILING,
-  computeChunkStats,
-  resolveMicChunkAction,
-} = require("./meetingMicGate");
+const { computeChunkStats, resolveMicChunkAction } = require("./meetingMicGate");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const {
