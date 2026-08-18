@@ -1001,16 +1001,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
         const seg = reduction.inserted;
         segmentsRefValue = reduction.state.segments;
-        // Recomputed from data.source rather than read from reduction.state so the setState
-        // payload carries only the cleared partial (spreading both partial fields would add a key
-        // the pre-reducer code never wrote).
-        const partialPatch = data.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
+        // Only the cleared partial goes in the payload (spreading both partial fields would add a
+        // key the pre-reducer code never wrote), so derive it from the inserted segment's source.
+        const partialPatch = seg.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
         useMeetingRecordingStore.setState({
           segments: reduction.state.segments,
           transcript: buildTranscriptText(reduction.state.segments),
           ...partialPatch,
         });
-        if (data.source === "system" && seg.speaker) {
+        if (seg.source === "system" && seg.speaker) {
           rememberSystemSpeaker(
             seg.speaker,
             seg.speakerName ?? null,
@@ -1018,7 +1017,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             seg.timestamp ?? Date.now()
           );
         }
-        if (data.source === "system") {
+        if (seg.source === "system") {
           setSystemPartialSpeakerIdentity(null, null);
         }
       }
