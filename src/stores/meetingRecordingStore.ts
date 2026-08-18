@@ -40,6 +40,7 @@ import {
 import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
 import { resolveDiarizationTarget, selectBaseSegments } from "../utils/diarizationCompletion";
 import { createSerialQueue } from "../utils/serialQueue";
+import { reduceMeetingSegmentEvent, type MeetingSegmentEvent } from "./meetingSegmentReducer";
 
 export interface TranscriptSegment {
   id: string;
@@ -935,36 +936,56 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     }
 
     const segmentCleanup = window.electronAPI?.onMeetingTranscriptionSegment?.(
-      (data: {
-        text: string;
-        source: "mic" | "system";
-        type: "partial" | "final" | "retract";
-        timestamp?: number;
-      }) => {
-        if (data.type === "retract") {
-          const next = useMeetingRecordingStore
-            .getState()
-            .segments.filter(
-              (seg) =>
-                !(
-                  seg.source === data.source &&
-                  seg.timestamp === data.timestamp &&
-                  seg.text === data.text
-                )
-            );
-          segmentsRefValue = next;
+      (data: MeetingSegmentEvent) => {
+        const current = useMeetingRecordingStore.getState();
+        const reduction = reduceMeetingSegmentEvent(
+          {
+            segments: current.segments,
+            micPartial: current.micPartial,
+            systemPartial: current.systemPartial,
+          },
+          data,
+          {
+            mintSegmentId: () => `seg-${++segmentCounter}`,
+            // Must not call setState: `current.segments` was snapshotted before this runs and the
+            // reduction inserts into that snapshot. Reads of segmentsRefValue (assignProvisionalSpeaker)
+            // still see the previous segments, exactly as before the reducer extraction.
+            decorateFinal: (rawSegment) => {
+              let decorated = rawSegment;
+              for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
+                decorated = applySpeakerIdentification(decorated, speakerIdentifications[i]);
+              }
+              const provisional = assignProvisionalSpeaker(decorated);
+              reserveSpeakerIndex(provisional.speaker);
+              const lockedName = provisional.speaker
+                ? speakerLocks.get(provisional.speaker)
+                : undefined;
+              return lockedName
+                ? lockTranscriptSpeaker(provisional, {
+                    speakerName: lockedName,
+                    speakerIsPlaceholder: false,
+                    suggestedName: undefined,
+                    suggestedProfileId: undefined,
+                  })
+                : provisional;
+            },
+          }
+        );
+
+        if (reduction.kind === "retract") {
+          segmentsRefValue = reduction.state.segments;
           useMeetingRecordingStore.setState({
-            segments: next,
-            transcript: buildTranscriptText(next),
+            segments: reduction.state.segments,
+            transcript: buildTranscriptText(reduction.state.segments),
           });
           return;
         }
 
-        if (data.type === "partial") {
-          if (data.source === "mic") {
-            useMeetingRecordingStore.setState({ micPartial: data.text });
+        if (reduction.kind === "partial") {
+          if (reduction.source === "mic") {
+            useMeetingRecordingStore.setState({ micPartial: reduction.state.micPartial });
           } else {
-            useMeetingRecordingStore.setState({ systemPartial: data.text });
+            useMeetingRecordingStore.setState({ systemPartial: reduction.state.systemPartial });
             if (!systemPartialSpeakerIdValue) {
               // Reuse the recent system speaker before minting — the partial id is
               // cleared after every final, so always minting spawned one per utterance.
@@ -978,44 +999,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           return;
         }
 
-        let rawSegment: TranscriptSegment = normalizeTranscriptSegment({
-          id: `seg-${++segmentCounter}`,
-          text: data.text,
-          source: data.source,
-          timestamp: data.timestamp,
-        });
-
-        for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
-          rawSegment = applySpeakerIdentification(rawSegment, speakerIdentifications[i]);
-        }
-
-        const provisional = assignProvisionalSpeaker(rawSegment);
-        reserveSpeakerIndex(provisional.speaker);
-        const lockedName = provisional.speaker ? speakerLocks.get(provisional.speaker) : undefined;
-        const seg = lockedName
-          ? lockTranscriptSpeaker(provisional, {
-              speakerName: lockedName,
-              speakerIsPlaceholder: false,
-              suggestedName: undefined,
-              suggestedProfileId: undefined,
-            })
-          : provisional;
-
-        const prev = useMeetingRecordingStore.getState().segments;
-        const ts = seg.timestamp ?? Infinity;
-        let i = prev.length;
-        while (i > 0 && (prev[i - 1].timestamp ?? 0) > ts) i--;
-        const next =
-          i === prev.length ? [...prev, seg] : [...prev.slice(0, i), seg, ...prev.slice(i)];
-        segmentsRefValue = next;
-
-        const partialPatch = data.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
+        const seg = reduction.inserted;
+        segmentsRefValue = reduction.state.segments;
+        // Only the cleared partial goes in the payload (spreading both partial fields would add a
+        // key the pre-reducer code never wrote), so derive it from the inserted segment's source.
+        const partialPatch = seg.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
         useMeetingRecordingStore.setState({
-          segments: next,
-          transcript: buildTranscriptText(next),
+          segments: reduction.state.segments,
+          transcript: buildTranscriptText(reduction.state.segments),
           ...partialPatch,
         });
-        if (data.source === "system" && seg.speaker) {
+        if (seg.source === "system" && seg.speaker) {
           rememberSystemSpeaker(
             seg.speaker,
             seg.speakerName ?? null,
@@ -1023,7 +1017,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             seg.timestamp ?? Date.now()
           );
         }
-        if (data.source === "system") {
+        if (seg.source === "system") {
           setSystemPartialSpeakerIdentity(null, null);
         }
       }

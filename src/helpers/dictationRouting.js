@@ -141,6 +141,16 @@ export function resolveTranslationDisplayProvider({ translationMode, translation
   return resolveModeDisplayProvider(translationMode, translationProvider);
 }
 
+// Wake-word cues gate on the explicit dictation language, then the language
+// detected by STT, with the UI language as the final hint under auto-detect.
+export function resolveWakeWordLanguage({ preferredLanguage, uiLanguage }, detectedLanguage) {
+  const language = typeof preferredLanguage === "string" ? preferredLanguage.trim() : "";
+  if (language && language.toLowerCase() !== "auto") return language;
+  const detected = typeof detectedLanguage === "string" ? detectedLanguage.trim() : "";
+  if (detected && detected.toLowerCase() !== "auto") return detected;
+  return typeof uiLanguage === "string" ? uiLanguage : undefined;
+}
+
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")
 // a finished dictation takes. A recording started via the voice agent hotkey
 // always takes the agent path — no wake word needed — and never falls back to

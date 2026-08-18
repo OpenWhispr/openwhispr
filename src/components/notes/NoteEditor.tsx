@@ -23,6 +23,7 @@ import {
   resolveNotePermission,
   type NoteAclState,
 } from "../../lib/notePermissions";
+import { ownsNote } from "../../lib/spacePermissions";
 import SpaceMembersDialog from "./SpaceMembersDialog";
 import {
   useShareCacheEntry,
@@ -259,6 +260,7 @@ export default function NoteEditor({
     cachedPermission: shareCache?.access?.my_permission,
     aclState,
     isTeamNote,
+    locallyOwned: ownsNote(note, user?.id),
   });
   const shareCapabilities = noteCapabilities(notePermission);
   const canShare =

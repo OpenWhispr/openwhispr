@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, Sparkles, Users, X } from "lucide-react";
+import { Check, Loader2, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Toggle } from "../ui/toggle";
 import { cn } from "../lib/utils";
@@ -612,7 +612,6 @@ export function MeetingTranscriptChat({
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
-  const [hintDismissed, setHintDismissed] = useState(false);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -660,12 +659,22 @@ export function MeetingTranscriptChat({
     return map;
   }, [segments, speakerMappings]);
 
+  const consentNotice = (
+    <div className="shrink-0 flex items-center justify-center gap-1 px-4 pt-2 pb-1 text-[10px] text-muted-foreground/50 select-none">
+      <ShieldCheck size={10} className="shrink-0" />
+      <span>{t("notes.speaker.consentNotice")}</span>
+    </div>
+  );
+
   if (!hasContent) {
     return (
-      <div className="h-full flex items-center justify-center px-5">
-        <p className="text-xs text-muted-foreground/40 select-none">
-          {t("notes.editor.conversationWillAppear")}
-        </p>
+      <div className="h-full flex flex-col">
+        {consentNotice}
+        <div className="flex-1 flex items-center justify-center px-5">
+          <p className="text-xs text-muted-foreground/40 select-none">
+            {t("notes.editor.conversationWillAppear")}
+          </p>
+        </div>
       </div>
     );
   }
@@ -678,78 +687,94 @@ export function MeetingTranscriptChat({
     return segment.source === "mic";
   };
 
-  const others = Math.max(0, sessionExpectedCount - 1);
+  const showAssumedHint =
+    !isDiarizing &&
+    sessionDiarizationEnabled &&
+    sessionExpectedCount === 2 &&
+    !(participants && participants.length > 0) &&
+    !userTouchedStepper;
 
   return (
-    <div className="h-full relative">
-      {(isRecording || isDiarizing) && !hintDismissed && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-2.5 py-1 rounded-md border border-border bg-background/95 backdrop-blur shadow-sm text-xs text-foreground">
-          {isDiarizing ? (
-            <Loader2 size={12} className="animate-spin text-muted-foreground" />
-          ) : (
-            <Sparkles
-              size={12}
-              className={cn(sessionDiarizationEnabled ? "text-primary" : "text-muted-foreground")}
-            />
-          )}
-          <span>
-            {isDiarizing
-              ? t("notes.speaker.pill.finalizing")
-              : sessionDiarizationEnabled
-                ? others === 1 && !(participants && participants.length > 0) && !userTouchedStepper
-                  ? t("notes.speaker.pill.defaultingHint")
-                  : t("notes.speaker.pill.identifying")
-                : t("notes.speaker.pill.notLabeled")}
-          </span>
-          {!isDiarizing && sessionDiarizationEnabled && (
-            <>
-              <span className="text-muted-foreground">
-                {others === 0
-                  ? t("notes.speaker.pill.justYou")
-                  : t("notes.speaker.pill.othersInCall", { count: others })}
+    <div className="h-full flex flex-col">
+      {consentNotice}
+      {(isRecording || isDiarizing) && (
+        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 mx-4 mb-1.5 px-3 py-1.5 rounded-lg border border-border/60 bg-surface-2/40 text-xs text-foreground">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {isDiarizing ? (
+              <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />
+            ) : (
+              <Sparkles
+                size={12}
+                className={cn(
+                  "shrink-0",
+                  sessionDiarizationEnabled ? "text-primary" : "text-muted-foreground"
+                )}
+              />
+            )}
+            <span className="truncate">
+              {isDiarizing
+                ? t("notes.speaker.pill.finalizing")
+                : sessionDiarizationEnabled
+                  ? t("notes.speaker.pill.identifying")
+                  : t("notes.speaker.pill.notLabeled")}
+            </span>
+            {showAssumedHint && (
+              <span className="text-muted-foreground truncate">
+                {t("notes.speaker.pill.assumedHint")}
               </span>
+            )}
+          </div>
+          <div className="flex-1" />
+          {!isDiarizing && sessionDiarizationEnabled && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">{t("notes.speaker.pill.speakersLabel")}</span>
               <div className="flex items-center gap-0.5 rounded-md border border-border bg-surface-2/60">
                 <button
                   onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
-                  disabled={others <= 0}
+                  disabled={sessionExpectedCount <= 1}
                   className="px-1.5 py-0.5 rounded-l-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                   aria-label={t("notes.speaker.pill.decAria")}
                 >
                   −
                 </button>
                 <span className="px-1.5 tabular-nums" aria-live="polite">
-                  {others}
+                  {sessionExpectedCount === 1
+                    ? t("notes.speaker.pill.justYou")
+                    : sessionExpectedCount}
                 </span>
                 <button
                   onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}
-                  disabled={others >= MAX_SPEAKER_COUNT - 1}
+                  disabled={sessionExpectedCount >= MAX_SPEAKER_COUNT}
                   className="px-1.5 py-0.5 rounded-r-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                   aria-label={t("notes.speaker.pill.incAria")}
                 >
                   +
                 </button>
               </div>
-            </>
-          )}
-          {!isDiarizing && (
-            <div className="scale-75">
-              <Toggle
-                checked={sessionDiarizationEnabled}
-                onChange={(next) => onSetSessionDiarizationEnabled?.(next)}
-              />
             </div>
           )}
-          <button
-            onClick={() => setHintDismissed(true)}
-            className="text-foreground/40 hover:text-foreground/70 transition-colors"
-          >
-            <X size={12} />
-          </button>
+          {!isDiarizing && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => onSetSessionDiarizationEnabled?.(!sessionDiarizationEnabled)}
+                className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:underline"
+                aria-label={t("notes.speaker.pill.toggleAria")}
+              >
+                {t("notes.speaker.pill.labelToggle")}
+              </button>
+              <div className="scale-75 -my-1">
+                <Toggle
+                  checked={sessionDiarizationEnabled}
+                  onChange={(next) => onSetSessionDiarizationEnabled?.(next)}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
       <div
         ref={scrollRef}
-        className="h-full overflow-y-auto px-4 pt-3 pb-24 flex flex-col gap-1.5 agent-chat-scroll"
+        className="flex-1 min-h-0 overflow-y-auto px-4 pt-2 pb-24 flex flex-col gap-1.5 agent-chat-scroll"
       >
         {segments.map((segment, i) => {
           const selfSide = isSelfSide(segment);

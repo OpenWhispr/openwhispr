@@ -196,6 +196,11 @@ test("meeting sessions declare the 24kHz PCM input format", async () => {
   const [update] = sentEvents(socket, "session.update");
   assert.deepEqual(update.session.audio.input.format, { type: "audio/pcm", rate: 24000 });
   assert.equal(update.session.audio.input.transcription.model, "voxtral-mini-4b-realtime");
+  assert.deepEqual(
+    update.session.audio.input.turn_detection,
+    { type: "server_vad", threshold: 0.6, silence_duration_ms: 600, prefix_padding_ms: 500 },
+    "subclass inherits the base VAD; Phase 1 changes this only when options are passed"
+  );
 
   socket.emit("message", JSON.stringify({ type: "session.updated" }));
   await connected;

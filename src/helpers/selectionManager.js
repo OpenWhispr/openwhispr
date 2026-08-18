@@ -371,6 +371,7 @@ class SelectionManager {
         if (
           this.clipboardManager._runPortalPaste &&
           !this.clipboardManager.portalDenied &&
+          !this.clipboardManager.portalUnavailable &&
           !this.clipboardManager.portalFailed
         ) {
           try {
