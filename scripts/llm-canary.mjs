@@ -10,7 +10,9 @@
  *
  * Run: node --import tsx scripts/llm-canary.mjs
  * Keys come from LLM_CANARY_<PROVIDER>_KEY env vars; providers without a key
- * are skipped and listed. Exit 1 when any probe on a keyed provider fails.
+ * are skipped and listed. Exit 1 when any probe on a keyed provider fails, or
+ * when no key is configured at all — an all-skip run probed nothing and must
+ * not report green.
  */
 import { applyChatCompletionsParams } from "../src/services/ai/chatRequestBody.ts";
 import registryData from "../src/models/modelRegistryData.json" with { type: "json" };
@@ -171,6 +173,10 @@ for (const entry of PROVIDERS) {
       }
     }
   }
+}
+
+if (skipped.length === PROVIDERS.length) {
+  failures.push("no canary secrets configured — every provider was skipped, nothing was probed");
 }
 
 console.log("## LLM request-shape canary\n");

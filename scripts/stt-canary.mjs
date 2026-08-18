@@ -8,7 +8,9 @@
  *
  * Run: node scripts/stt-canary.mjs
  * Keys come from STT_CANARY_<PROVIDER>_KEY env vars; providers without a key
- * are skipped and listed. Exit 1 when any probe on a keyed provider fails.
+ * are skipped and listed. Exit 1 when any probe on a keyed provider fails, or
+ * when no key is configured at all — an all-skip run probed nothing and must
+ * not report green.
  * Corti is not probed (needs tenant/environment credentials beyond a key).
  */
 import WebSocket from "ws";
@@ -117,6 +119,10 @@ for (const probe of PROBES) {
   const result = await probe.run(key).catch((err) => ({ ok: false, detail: err.message }));
   report.push(`| ${probe.id} | ${result.ok ? "✅" : `❌ ${result.detail}`} |`);
   if (!result.ok) failures.push(`${probe.id}: ${result.detail}`);
+}
+
+if (skipped.length === PROBES.length) {
+  failures.push("no canary secrets configured — every provider was skipped, nothing was probed");
 }
 
 console.log("## Realtime STT canary\n");
