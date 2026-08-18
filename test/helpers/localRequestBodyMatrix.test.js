@@ -73,7 +73,10 @@ test("local.ts: an agent call keeps its own systemPrompt and shapes 0.3", async 
   const [userContent, , , config] = calls[0];
   assert.equal(userContent, "do the thing");
   assert.equal(config.systemPrompt, "You are an agent.");
-  assert.deepEqual(config.params, { temperature: 0.3 });
+  assert.deepEqual(config.params, {
+    temperature: 0.3,
+    chat_template_kwargs: { enable_thinking: false },
+  });
 });
 
 test("local.ts: explicit maxTokens becomes params.max_tokens; absent leaves the key to the bridge", async (t) => {
@@ -151,16 +154,20 @@ const UNKNOWN = { id: "some-custom-model-q4", fileName: "some-custom-model-q4.gg
 
 // [modelId, kwargs when the disable-thinking toggle is on (default), kwargs
 // when it is off on a deterministic shape]. `enable_thinking` is llama.cpp's
-// generic switch, sent per registry supportsThinking (and for unknown ids); the
+// generic switch and goes out on every local model when the toggle is on —
+// llama-server decides "think by default" per template on its own (Gemma 4 and
+// Qwen3 do; b9763 --reasoning auto) and ignores the kwarg for templates that
+// don't read it, so the registry's supportsThinking never gates it here. The
 // gpt-oss "low" floor/pin is the only family effort llama-server can read.
 const MODELS = [
   ["qwen3-4b-q4_k_m", { enable_thinking: false }, null],
   ["qwen3.5-4b-q4_k_m", { enable_thinking: false }, null],
-  ["qwen2.5-3b-instruct-q5_k_m", null, null],
-  ["gemma-4-e4b-it-qat-q4_0", null, null],
-  ["lfm2.5-1.2b-instruct-q4_k_m", null, null],
-  ["llama-3.2-3b-instruct-q4_k_m", null, null],
-  ["mistral-nemo-12b-instruct-q4_k_m", null, null],
+  ["qwen2.5-3b-instruct-q5_k_m", { enable_thinking: false }, null],
+  ["gemma-4-e4b-it-qat-q4_0", { enable_thinking: false }, null],
+  ["gemma-3-4b-it-q4_k_m", { enable_thinking: false }, null],
+  ["lfm2.5-1.2b-instruct-q4_k_m", { enable_thinking: false }, null],
+  ["llama-3.2-3b-instruct-q4_k_m", { enable_thinking: false }, null],
+  ["mistral-nemo-12b-instruct-q4_k_m", { enable_thinking: false }, null],
   [
     "gpt-oss-20b-mxfp4",
     { enable_thinking: false, reasoning_effort: "low" },
@@ -352,8 +359,12 @@ test("matrix: an unshaped caller (no params) gets the same legacy body for every
   }
 });
 
+// The flag no longer gates the local off switch (see MODELS), but it still
+// drives the settings toggle and every other provider's suppression, and it is
+// simply true for these families: Qwen3/3.5 and gpt-oss by design, Gemma 4 via
+// its `<|think|>` template variable (which llama-server turns on by default).
 test("matrix guard: every registry model of a thinking family is flagged supportsThinking", () => {
-  const thinkingFamily = /qwen3|gpt-oss/;
+  const thinkingFamily = /qwen3|gpt-oss|gemma-4/;
   const offenders = [];
   for (const provider of modelRegistryData.localProviders) {
     for (const model of provider.models) {
@@ -361,5 +372,5 @@ test("matrix guard: every registry model of a thinking family is flagged support
         offenders.push(model.id);
     }
   }
-  assert.deepEqual(offenders, [], "these ids would silently skip enable_thinking suppression");
+  assert.deepEqual(offenders, [], "these ids would hide the thinking toggle for a thinking model");
 });

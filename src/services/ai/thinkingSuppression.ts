@@ -22,9 +22,15 @@ export function applyThinkingSuppression(
 
   if (config.disableThinking !== true) return;
 
+  // A known model without a thinking mode needs no suppression — except on
+  // llama-server, which decides "think by default" per template on its own
+  // (b9763: --reasoning auto + the template's supports_thinking) and ignores
+  // chat_template_kwargs.enable_thinking when the template doesn't read it.
+  // There the registry flag can only lose (Gemma 4 shipped without it and
+  // thinks unless told not to), so the off switch always goes out.
   const localModel = getLocalModel(model);
   const knownModel = cloudModel || localModel;
-  if (knownModel && !knownModel.supportsThinking) return;
+  if (knownModel && !knownModel.supportsThinking && providerKey !== "local") return;
 
   suppressThinking(requestBody, providerKey, model);
 }

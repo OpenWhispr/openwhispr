@@ -73,7 +73,8 @@ test("shaped params reach the wire verbatim and nothing else is invented", async
 test("shaped params without chat_template_kwargs stay without them — the renderer already decided", async (t) => {
   const { bridge, requests } = await setup(t);
 
-  // What the shaper emits for a registry model without supportsThinking (Gemma).
+  // Once params exist the bridge forwards them verbatim: it must not re-add
+  // its legacy enable_thinking default from `disableThinking` on top.
   await bridge.processText("clean this", MODEL_ID, {
     params: { temperature: 0, max_tokens: 512 },
     disableThinking: true,
