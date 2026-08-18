@@ -104,10 +104,21 @@ test("the collapsed Live Transcript pill transitions its logo into an expand che
 test("the idle pill keeps the logo at normal foreground strength", async () => {
   const idle = await renderPill("idle", false);
 
+  assert.match(idle, /border-border-hover[^"\n]*dark:border-border\/50/);
   assert.match(
     idle,
     /voice-identity-icon relative inline-block shrink-0 transition-\[width,height\] duration-200 text-foreground/
   );
+});
+
+test("the floating hover pill changes surface treatment without zooming", async () => {
+  const hovered = await renderPill("hover", false);
+
+  assert.match(hovered, /border-border-hover bg-surface-3 text-foreground/);
+  assert.match(hovered, /box-shadow:var\(--shadow-card-hover-subtle\)/);
+  assert.doesNotMatch(hovered, /style="[^"]*transform:/);
+  assert.match(hovered, /style="width:40px;height:40px/);
+  assert.match(hovered, /<svg width="22" height="22"/);
 });
 
 test("the waveform pill keeps the normal compact logo footprint", async () => {

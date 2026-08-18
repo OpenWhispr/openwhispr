@@ -33,8 +33,8 @@ const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier
 const RESTING_WAVE_HEIGHTS = [6, 12, 5, 9, 7, 22, 18, 5, 20, 12, 17];
 
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
-  idle: "border-border/50 bg-surface-1 text-muted-foreground",
-  hover: "border-border-hover bg-surface-2 text-foreground",
+  idle: "border-border-hover bg-surface-1 text-muted-foreground dark:border-border/50",
+  hover: "border-border-hover bg-surface-3 text-foreground",
   recording: "border-border-hover bg-surface-1 text-foreground",
   processing: "border-border/60 bg-surface-1 text-foreground/70",
   thinking: "border-border/60 bg-surface-1 text-foreground",
@@ -76,7 +76,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     !collapseToIdentity && (isRecording || expanded || (isPanel && !waveformOnlyWhileRecording));
   const showDivider = showCompactPill && waveformVisible && !isRecording;
   const dividerMargin = showCompactPill ? (showDivider ? 4 : 3) : 0;
-  const identitySize = state === "hover" ? 24 : 22;
+  const identitySize = 22;
+  const floatingHover = !isPanel && state === "hover";
 
   const pill = (
     <div
@@ -95,8 +96,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         width: showCompactPill ? 92 : 40,
         height: showCompactPill ? 36 : 40,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
-        transform: !isPanel && state === "hover" ? "scale(1.05)" : "scale(1)",
-        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, padding-left ${GROW_TRANSITION}, padding-right ${GROW_TRANSITION}, transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out`,
+        boxShadow: floatingHover ? "var(--shadow-card-hover-subtle)" : undefined,
+        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, padding-left ${GROW_TRANSITION}, padding-right ${GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,
         ...style,
       }}
       data-horizontal-direction={horizontalDirection}
@@ -107,8 +108,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       {...props}
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-foreground/10 to-transparent transition-opacity duration-150"
-        style={{ opacity: state === "hover" ? 0.8 : 0 }}
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-foreground/10 to-transparent transition-opacity duration-200 ease-out"
+        style={{ opacity: state === "hover" ? 0.72 : 0 }}
       />
 
       <span
