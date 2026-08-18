@@ -379,13 +379,7 @@ function migrateProviderSettings() {
       reasoningProvider === "vertex"
     ) {
       newReasoningMode = "enterprise";
-    } else if (
-      reasoningProvider === "qwen" ||
-      reasoningProvider === "llama" ||
-      reasoningProvider === "mistral" ||
-      reasoningProvider === "openai-oss" ||
-      reasoningProvider === "gemma"
-    ) {
+    } else if (reasoningProvider && localLlmProviderIds.has(reasoningProvider)) {
       newReasoningMode = "local";
     } else {
       newReasoningMode = "providers";
@@ -442,7 +436,6 @@ function migrateAgentMode() {
 
   let agentInferenceMode: InferenceMode = "openwhispr";
   if (cloudAgentMode === "byok") {
-    const localProviders = ["qwen", "llama", "mistral", "openai-oss", "gemma"];
     if (agentProvider === "custom") {
       agentInferenceMode = "self-hosted";
     } else if (
@@ -451,7 +444,7 @@ function migrateAgentMode() {
       agentProvider === "vertex"
     ) {
       agentInferenceMode = "enterprise";
-    } else if (agentProvider && localProviders.includes(agentProvider)) {
+    } else if (agentProvider && localLlmProviderIds.has(agentProvider)) {
       agentInferenceMode = "local";
     } else {
       agentInferenceMode = "providers";
