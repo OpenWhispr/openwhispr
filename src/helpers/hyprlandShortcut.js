@@ -150,7 +150,7 @@ class HyprlandShortcutManager {
   }
 
   /**
-   * Initialize a D-Bus service to receive Toggle() calls from Hyprland keybindings.
+   * Initialize a D-Bus service to receive hotkey events from Hyprland keybindings.
    * Reuses the same D-Bus service name/path as the GNOME integration.
    */
   async initDBusService(callback) {
@@ -177,12 +177,24 @@ class HyprlandShortcutManager {
               this.callback();
             }
           },
+          PttDown: () => {
+            if (this.callback) {
+              this.callback(undefined, "down");
+            }
+          },
+          PttUp: () => {
+            if (this.callback) {
+              this.callback(undefined, "up");
+            }
+          },
         },
         DBUS_OBJECT_PATH,
         {
           name: DBUS_INTERFACE,
           methods: {
             Toggle: ["", ""],
+            PttDown: ["", ""],
+            PttUp: ["", ""],
           },
         }
       );
@@ -369,12 +381,12 @@ class HyprlandShortcutManager {
 
   /**
    * Register a keybinding in Hyprland using hyprctl keyword bind.
-   * The binding executes a dbus-send command that calls our Toggle() method.
+   * The binding executes a dbus-send command that calls our D-Bus service.
    *
    * Also writes the bind to a format-specific config file so it survives
    * `hyprctl reload`.
    */
-  async registerKeybinding(hotkey) {
+  async registerKeybinding(hotkey, isPushToTalk = false) {
     if (!HyprlandShortcutManager.isHyprland()) {
       debugLogger.log("[HyprlandShortcut] Not running on Hyprland, skipping registration");
       return false;
@@ -397,10 +409,11 @@ class HyprlandShortcutManager {
         await this.unregisterKeybinding();
       }
 
-      const dbusCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.Toggle`;
+      const pressCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${isPushToTalk ? "PttDown" : "Toggle"}`;
+      const releaseCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.PttUp`;
 
       // hyprctl keyword bind "MODS, key, exec, command"
-      const bindValue = `${converted.bindKey}, exec, ${dbusCommand}`;
+      const bindValue = `${converted.bindKey}, exec, ${pressCommand}`;
 
       try {
         execFileSync("hyprctl", ["keyword", "unbind", converted.bindKey], {
@@ -414,10 +427,20 @@ class HyprlandShortcutManager {
         );
       }
 
-      execFileSync("hyprctl", ["keyword", "bind", bindValue], {
+      execFileSync("hyprctl", ["keyword", isPushToTalk ? "bindt" : "bind", bindValue], {
         stdio: "pipe",
         timeout: 5000,
       });
+      if (isPushToTalk) {
+        execFileSync("hyprctl", [
+          "keyword",
+          "bindrt",
+          `${converted.bindKey}, exec, ${releaseCommand}`,
+        ], {
+          stdio: "pipe",
+          timeout: 5000,
+        });
+      }
 
       this.currentBinding = converted.bindKey;
       this.isRegistered = true;
@@ -426,10 +449,21 @@ class HyprlandShortcutManager {
         const persistedBind =
           this.config.format === "lua"
             ? `hl.bind(${JSON.stringify(converted.luaKeys)}, hl.dsp.exec_cmd(${JSON.stringify(
-                dbusCommand
-              )}))`
-            : `bind = ${bindValue}`;
-        this._writeBindToConfig(this.config, persistedBind);
+                pressCommand
+              )})${isPushToTalk ? ", { transparent = true }" : ""})`
+            : `${isPushToTalk ? "bindt" : "bind"} = ${bindValue}`;
+        const persistedReleaseBind =
+          !isPushToTalk
+            ? null
+            : this.config.format === "lua"
+              ? `hl.bind(${JSON.stringify(converted.luaKeys)}, hl.dsp.exec_cmd(${JSON.stringify(
+                  releaseCommand
+                )}), { release = true, transparent = true })`
+              : `bindrt = ${converted.bindKey}, exec, ${releaseCommand}`;
+        this._writeBindToConfig(
+          this.config,
+          [persistedBind, persistedReleaseBind].filter(Boolean).join("\n")
+        );
         this._ensureSourceInMainConfig(this.config);
       } catch (err) {
         debugLogger.log(
@@ -451,9 +485,9 @@ class HyprlandShortcutManager {
   /**
    * Update the keybinding to a new hotkey.
    */
-  async updateKeybinding(hotkey) {
-    // Just unregister old and register new
-    return this.registerKeybinding(hotkey);
+  async updateKeybinding(hotkey, isPushToTalk = false) {
+    await this.unregisterKeybinding();
+    return this.registerKeybinding(hotkey, isPushToTalk);
   }
 
   /**

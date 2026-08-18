@@ -385,6 +385,16 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
+  setActivationMode(mode) {
+    this.activationMode = mode === "push" ? "push" : "tap";
+    if (this.useHyprland && this.hyprlandManager && this.currentHotkey) {
+      void this.hyprlandManager.updateKeybinding(
+        this.currentHotkey,
+        this.activationMode === "push"
+      );
+    }
+  }
+
   // Which mouse buttons the macOS listener must swallow for these slots, and
   // whether OpenWhispr owns Globe — if it does, macOS's own standalone Globe
   // action has to stand down.
@@ -792,7 +802,10 @@ class HotkeyManager extends EventEmitter {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
 
-            const success = await this.hyprlandManager.registerKeybinding(hotkey);
+            const success = await this.hyprlandManager.registerKeybinding(
+              hotkey,
+              this.activationMode === "push"
+            );
             if (success) {
               this.currentHotkey = hotkey;
               this.notifyActiveHotkey(hotkey);
@@ -801,7 +814,7 @@ class HotkeyManager extends EventEmitter {
               );
             } else {
               const ok = await this.tryNativeFallbacks(hotkey, "Hyprland", (fb) =>
-                this.hyprlandManager.registerKeybinding(fb)
+                this.hyprlandManager.registerKeybinding(fb, this.activationMode === "push")
               );
               if (!ok) {
                 this.useHyprland = false;
@@ -1189,7 +1202,10 @@ class HotkeyManager extends EventEmitter {
 
       if (this.useHyprland && this.hyprlandManager) {
         debugLogger.log(`[HotkeyManager] Updating Hyprland hotkey to "${primary}"`);
-        const success = await this.hyprlandManager.updateKeybinding(primary);
+        const success = await this.hyprlandManager.updateKeybinding(
+          primary,
+          this.activationMode === "push"
+        );
         if (!success) {
           return {
             success: false,

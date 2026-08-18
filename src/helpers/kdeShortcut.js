@@ -191,13 +191,20 @@ class KDEShortcutManager {
         const callback =
           this.callbacks.get(shortcutUnique) || this._findCallbackByFriendlyName(shortcutUnique);
         if (callback) {
-          callback();
+          callback(undefined, "down");
         } else {
           debugLogger.log("[KDEShortcut] No callback found for", {
             shortcutUnique,
             registered: [...this.callbacks.keys()],
           });
         }
+      });
+      iface.on("globalShortcutReleased", (componentUnique, shortcutUnique) => {
+        debugLogger.log("[KDEShortcut] Shortcut released", { componentUnique, shortcutUnique });
+        if (shortcutUnique !== "dictation") return;
+        const callback =
+          this.callbacks.get(shortcutUnique) || this._findCallbackByFriendlyName(shortcutUnique);
+        callback?.(undefined, "up");
       });
 
       this.componentProxy = iface;

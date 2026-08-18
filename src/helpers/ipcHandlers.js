@@ -3418,7 +3418,10 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
           );
-          await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
+          await hotkeyManager.hyprlandManager.registerKeybinding(
+            effectiveHotkey,
+            this.windowManager.getActivationMode() === "push"
+          );
         }
 
         // On KDE (X11 or Wayland), re-register the keybinding with the effective hotkey
@@ -3461,7 +3464,9 @@ class IPCHandlers {
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
       const supportsPushToTalk =
         process.platform === "linux"
-          ? this.linuxKeyManager?.isAvailable?.() === true
+          ? this.windowManager.isUsingHyprlandHotkeys() ||
+            this.windowManager.isUsingKDEHotkeys() ||
+            (!isUsingNativeShortcut && this.linuxKeyManager?.isAvailable?.() === true)
           : !isUsingNativeShortcut;
 
       return {
