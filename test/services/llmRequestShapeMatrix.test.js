@@ -105,6 +105,16 @@ for (const [name, provider, model, endpoint, config, expectedParams] of MATRIX) 
   });
 }
 
+test("matrix: an undefined maxTokens sets no token param, leaving the transport's fallback in charge", async () => {
+  const { applyChatCompletionsParams } = await load();
+  for (const [provider, model] of [["local", "qwen3-4b-q4_k_m"], ["openai", "gpt-4o"], ["openai", "gpt-5-mini"]]) {
+    const body = { model, messages: [] };
+    applyChatCompletionsParams(body, { model, provider, config: {}, maxTokens: undefined });
+    assert.ok(!("max_tokens" in body), `${provider}/${model} must not carry an own max_tokens key`);
+    assert.ok(!("max_completion_tokens" in body), `${provider}/${model} must not carry an own max_completion_tokens key`);
+  }
+});
+
 test("matrix: explicit temperature and maxTokens overrides always win", async () => {
   const { applyChatCompletionsParams } = await load();
   const body = { model: "gpt-4o", messages: [] };

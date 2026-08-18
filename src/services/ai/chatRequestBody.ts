@@ -34,7 +34,8 @@ export function applyChatCompletionsParams(
     provider: string;
     endpoint?: string | null;
     config: ReasoningConfig;
-    maxTokens: number;
+    /** Omitted when the transport owns the token fallback (local's bridge). */
+    maxTokens?: number;
   }
 ): void {
   const providerKey = provider.toLowerCase();
@@ -43,12 +44,12 @@ export function applyChatCompletionsParams(
   const defaultTemperature = config.systemPrompt ? 0.3 : 0;
 
   if (LEGACY_CHAT_COMPLETIONS_PROVIDERS.has(providerKey)) {
-    requestBody.max_tokens = maxTokens;
+    if (maxTokens !== undefined) requestBody.max_tokens = maxTokens;
     requestBody.temperature = config.temperature ?? defaultTemperature;
   } else {
     // A known endpoint host knows its own request shape better than the model id does.
     const apiConfig = detectEndpointDialect(endpoint) ?? getOpenAiApiConfig(model, providerKey);
-    requestBody[apiConfig.tokenParam] = maxTokens;
+    if (maxTokens !== undefined) requestBody[apiConfig.tokenParam] = maxTokens;
     if (apiConfig.supportsTemperature) {
       requestBody.temperature = config.temperature ?? defaultTemperature;
     }
