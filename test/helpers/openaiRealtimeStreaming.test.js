@@ -537,7 +537,9 @@ test("BYOK session.update is byte-for-byte today's payload when no VAD/language/
   socket.readyState = WS.OPEN;
   socket.emit("message", JSON.stringify({ type: "session.created" }));
 
-  const updates = socket.sent.map((raw) => JSON.parse(raw)).filter((e) => e.type === "session.update");
+  const updates = socket.sent
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "session.update");
   assert.equal(updates.length, 1, "exactly one session.update after session.created");
   assert.deepEqual(updates[0], {
     type: "session.update",
@@ -582,7 +584,9 @@ test("dictation-style connect (inputRate 16000, custom socket factory) declares 
   socket.readyState = WS.OPEN;
   socket.emit("message", JSON.stringify({ type: "session.created" }));
 
-  const [update] = socket.sent.map((raw) => JSON.parse(raw)).filter((e) => e.type === "session.update");
+  const [update] = socket.sent
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "session.update");
   assert.equal(factoryCalls.length, 1);
   assert.deepEqual(update.session.audio.input.format, { type: "audio/pcm", rate: 16000 });
   assert.equal(update.session.audio.input.transcription.model, "voxtral-mini-4b-realtime");
@@ -622,7 +626,10 @@ test("characterization: a final that lands during disconnect()'s commit window r
   socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
   socket.emit(
     "message",
-    JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: "tail words" })
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "tail words",
+    })
   );
   const result = await disconnecting;
 

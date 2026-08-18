@@ -159,7 +159,7 @@ test("missing byok keys throw configuration errors, not token errors", async () 
   }
 });
 
-test("wire bodies: dictation posts the bare {\"streams\":1}; meetings post model+language+streams", async () => {
+test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+language+streams', async () => {
   const { fetchRealtimeTokenForProvider } = await load();
   const wire = [];
   const cloudDeps = deps({
@@ -190,7 +190,10 @@ test("wire bodies: dictation posts the bare {\"streams\":1}; meetings post model
 
   assert.deepEqual(wire, [
     { path: "/api/openai-realtime-token", json: '{"streams":1}' },
-    { path: "/api/openai-realtime-token", json: '{"model":"gpt-4o-mini-transcribe","language":"en","streams":2}' },
+    {
+      path: "/api/openai-realtime-token",
+      json: '{"model":"gpt-4o-mini-transcribe","language":"en","streams":2}',
+    },
     { path: "/api/openai-realtime-token", json: '{"model":"gpt-4o-mini-transcribe","streams":1}' },
   ]);
 });

@@ -81,7 +81,12 @@ const isRiskyMicDuplicateProfile = ({ suppression = null, inStartupWarmup = fals
  * evidence exists, relaxed overlap for double-talk. `hasNearbyTranscriptMatch`
  * is ipcHandlers' closure over the committed system segments.
  */
-const isDuplicateMicSegment = ({ text, timestamp, suppression = null, hasNearbyTranscriptMatch }) => {
+const isDuplicateMicSegment = ({
+  text,
+  timestamp,
+  suppression = null,
+  hasNearbyTranscriptMatch,
+}) => {
   if (suppression?.likelyRenderBleed || suppression?.hasBleedEvidence) {
     if (hasNearbyTranscriptMatch("system", text, timestamp)) {
       return true;
@@ -128,18 +133,13 @@ const selectRacingMicEntryIndices = ({
       candidate.likelyRenderBleed ||
       candidate.hasBleedEvidence ||
       candidate.suppressionReason === "double_talk";
-    const overlapsSystem = hasNearbyTranscriptMatch(
-      "system",
-      candidate.text,
-      candidate.timestamp,
-      {
-        extraSegment: {
-          text: systemText,
-          timestamp: systemTimestamp,
-        },
-        relaxed: candidate.suppressionReason === "double_talk",
-      }
-    );
+    const overlapsSystem = hasNearbyTranscriptMatch("system", candidate.text, candidate.timestamp, {
+      extraSegment: {
+        text: systemText,
+        timestamp: systemTimestamp,
+      },
+      relaxed: candidate.suppressionReason === "double_talk",
+    });
     if (hasMicDuplicateRisk && overlapsSystem) {
       removedIndices.push(i);
     }
@@ -162,18 +162,13 @@ const partitionOverlappingPendingMicFinals = ({
   const kept = [];
   const removed = [];
   for (const candidate of pending) {
-    const overlapsSystem = hasNearbyTranscriptMatch(
-      "system",
-      candidate.text,
-      candidate.timestamp,
-      {
-        extraSegment: {
-          text: systemText,
-          timestamp: systemTimestamp,
-        },
-        relaxed: candidate.micSuppression?.reason === "double_talk",
-      }
-    );
+    const overlapsSystem = hasNearbyTranscriptMatch("system", candidate.text, candidate.timestamp, {
+      extraSegment: {
+        text: systemText,
+        timestamp: systemTimestamp,
+      },
+      relaxed: candidate.micSuppression?.reason === "double_talk",
+    });
     (overlapsSystem ? removed : kept).push(candidate);
   }
   return { kept, removed };
