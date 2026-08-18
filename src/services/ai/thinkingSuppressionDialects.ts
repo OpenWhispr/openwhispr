@@ -38,6 +38,29 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
   return null;
 }
 
+/**
+ * Where a provider reads a reasoning-effort value. Everyone OpenAI-compatible
+ * takes the top-level field; llama-server (`local`) never parses it (b9763 —
+ * zero hits in server-common.cpp / chat.cpp) and only sees effort as the
+ * `reasoning_effort` template variable inside chat_template_kwargs, which the
+ * gpt-oss harmony template reads (llama.cpp gpt-oss guide, #15396). Merges
+ * into an existing kwargs object so the cleanup pin and suppression compose.
+ */
+export function applyReasoningEffort(
+  requestBody: Record<string, unknown>,
+  providerKey: string,
+  effort: string
+): void {
+  if (providerKey === "local") {
+    requestBody.chat_template_kwargs = {
+      ...(requestBody.chat_template_kwargs as Record<string, unknown> | undefined),
+      reasoning_effort: effort,
+    };
+    return;
+  }
+  requestBody.reasoning_effort = effort;
+}
+
 export function suppressThinking(
   requestBody: Record<string, unknown>,
   providerKey: string,
@@ -83,8 +106,22 @@ export function suppressThinking(
   }
 
   if (providerKey === "local") {
-    requestBody.think = false;
-  } else if (providerKey === "lan") {
+    // llama-server ignores Ollama's `think` and any top-level effort field;
+    // `enable_thinking` in chat_template_kwargs is llama.cpp's generic off
+    // switch (server-common.cpp promotes it, chat.cpp injects it into every
+    // template). "none" is the OpenAI-enum off value and adds nothing here, but
+    // a family with no off value (gpt-oss: low|medium|high) still needs its
+    // floor, and llama-server only reads that as a template kwarg.
+    requestBody.chat_template_kwargs = {
+      ...(requestBody.chat_template_kwargs as Record<string, unknown> | undefined),
+      enable_thinking: false,
+    };
+    const floor = family?.reasoningEffort?.suppressValue;
+    if (floor && floor !== "none") applyReasoningEffort(requestBody, providerKey, floor);
+    return;
+  }
+
+  if (providerKey === "lan") {
     // `lan` always talks to an OpenAI-compat /v1 endpoint: the `reasoning` object
     // disables Ollama thinking; other backends drop it (flat reasoning_effort trips vLLM).
     // The effort value is the family's — gpt-oss has no off switch, so "none" would

@@ -1,6 +1,6 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
 import { getOpenAiApiConfig } from "../../models/ModelRegistry";
-import { detectEndpointDialect } from "./thinkingSuppressionDialects";
+import { applyReasoningEffort, detectEndpointDialect } from "./thinkingSuppressionDialects";
 import { getModelFamilyConstraints } from "./modelFamilyConstraints";
 import { applyThinkingSuppression } from "./thinkingSuppression";
 
@@ -57,9 +57,11 @@ export function applyChatCompletionsParams(
   // Deterministic transforms (cleanup, selection edits) pin the family's
   // preferred effort — see modelFamilyConstraints for the gpt-oss rationale.
   // applyThinkingSuppression still wins when thinking is disabled by the user.
+  // The dialect decides where the value goes (top-level vs. llama-server's
+  // chat_template_kwargs), so the pin can't silently no-op on a provider.
   const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
   if (familyEffort?.cleanupValue && (!config.systemPrompt || config.requireCompleteOutput)) {
-    requestBody.reasoning_effort = familyEffort.cleanupValue;
+    applyReasoningEffort(requestBody, providerKey, familyEffort.cleanupValue);
   }
 
   applyThinkingSuppression(requestBody, model, provider, config, endpoint ?? undefined);
@@ -81,7 +83,6 @@ const STRIPPABLE_SHAPED_PARAMS = [
   "reasoning_effort",
   "chat_template_kwargs",
   "thinking",
-  "think",
   "temperature",
 ] as const;
 

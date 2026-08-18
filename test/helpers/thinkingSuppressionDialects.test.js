@@ -74,13 +74,39 @@ test("openrouter gets its native reasoning toggle and nothing else", async () =>
   assert.deepEqual(body, { reasoning: { enabled: false } });
 });
 
-test("local gets think false plus chat_template_kwargs", async () => {
+test("local gets only chat_template_kwargs — llama-server ignores Ollama's think flag", async () => {
   const { suppressThinking } = await load();
 
   const body = {};
   suppressThinking(body, "local", "qwen3-8b");
 
-  assert.deepEqual(body, { think: false, chat_template_kwargs: { enable_thinking: false } });
+  assert.deepEqual(body, { chat_template_kwargs: { enable_thinking: false } });
+});
+
+test("local sends a family's effort floor inside chat_template_kwargs, never top-level", async () => {
+  const { suppressThinking } = await load();
+
+  const body = {};
+  suppressThinking(body, "local", "gpt-oss-20b-mxfp4");
+
+  assert.deepEqual(body, {
+    chat_template_kwargs: { enable_thinking: false, reasoning_effort: "low" },
+  });
+  assert.ok(
+    !("reasoning_effort" in body),
+    "llama-server (b9763) never parses a top-level reasoning_effort"
+  );
+});
+
+test("local suppression merges into kwargs the cleanup pin already wrote", async () => {
+  const { suppressThinking } = await load();
+
+  const body = { chat_template_kwargs: { reasoning_effort: "low" } };
+  suppressThinking(body, "local", "gpt-oss-20b-mxfp4");
+
+  assert.deepEqual(body, {
+    chat_template_kwargs: { enable_thinking: false, reasoning_effort: "low" },
+  });
 });
 
 test("lan gets the nested reasoning object plus chat_template_kwargs", async () => {
