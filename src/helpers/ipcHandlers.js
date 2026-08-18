@@ -17,6 +17,7 @@ const {
 } = require("./workspacePolicyManager");
 const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager");
 const { createCloudConfigRequestHandler } = require("./cloudConfigRequest");
+const { extractAnthropicText, describeMissingAnthropicText } = require("./anthropicResponse");
 const {
   createPolicyResponseError,
   readPolicyResponseError,
@@ -4403,7 +4404,11 @@ class IPCHandlers {
           if (config?.requireCompleteOutput && data.stop_reason === "max_tokens") {
             throw new Error("Model output was truncated before the selection edit completed");
           }
-          return { success: true, text: data.content[0].text.trim() };
+          const outputText = extractAnthropicText(data);
+          if (outputText === null) {
+            throw new Error(describeMissingAnthropicText(data));
+          }
+          return { success: true, text: outputText };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
           return { success: false, error: error.message };
