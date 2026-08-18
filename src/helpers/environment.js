@@ -489,8 +489,9 @@ class EnvironmentManager {
     return result;
   }
 
-  getUiLanguage() {
-    return normalizeUiLanguage(this._getKey("UI_LANGUAGE"));
+  getUiLanguage(fallbackLanguage = "") {
+    const language = this._getKey("UI_LANGUAGE") || fallbackLanguage;
+    return language ? normalizeUiLanguage(language) : "";
   }
 
   saveUiLanguage(language) {
