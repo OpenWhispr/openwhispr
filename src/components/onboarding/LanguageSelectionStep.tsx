@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Check, Search, X } from "lucide-react";
+import OnboardingList from "./OnboardingList";
 import {
   displayOnboardingLanguageLabel,
   getOnboardingLanguageByCode,
@@ -32,15 +33,22 @@ export default function LanguageSelectionStep({
   };
 
   return (
-    <div className="mx-auto mt-6 w-full max-w-[26.25rem] space-y-2.5">
+    <div className="mx-auto mt-6 flex min-h-0 w-full max-w-[33.75rem] flex-1 flex-col gap-2.5">
+      {/* Figma: Onboarding / Frame 25 — pad 12 16, gap 10, radius 66 (pill),
+          24px icon and 18/140% text, both in text-tertiary. Height hugs the
+          content rather than being pinned, which is why there's no h-*. */}
       <label className="relative block">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-neutral-400" />
+        <Search
+          className="pointer-events-none absolute left-4 top-1/2 size-6 -translate-y-1/2 text-[var(--onboarding-text-tertiary)]"
+          strokeWidth={2}
+        />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={searchPlaceholder}
-          className="onboarding-light-input onboarding-light-input-bordered h-10 w-full rounded-full! border border-neutral-200 bg-white pl-10 pr-4 text-sm text-neutral-950 shadow-none! outline-none placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+          /* pl = 16 pad + 24 icon + 10 gap = 50px */
+          className="onboarding-light-input onboarding-light-input-bordered w-full rounded-full! border border-[var(--onboarding-control-border)] bg-white py-3 pl-[3.125rem] pr-4 text-[1.125rem] leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
         />
       </label>
 
@@ -50,21 +58,26 @@ export default function LanguageSelectionStep({
             const language = getOnboardingLanguageByCode(code);
             if (!language) return null;
             return (
+              // Figma: Onboarding / Frame 38 — gap 7, pad 10 20, radius 38,
+              // 14/140% medium, 20px close glyph at 1.667 stroke.
               <button
                 type="button"
                 key={code}
                 onClick={() => toggle(code)}
-                className="inline-flex h-8 items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 text-sm font-normal text-neutral-950 hover:bg-neutral-50"
+                className="onboarding-pressable inline-flex items-center gap-[7px] rounded-full border border-[var(--onboarding-control-border)] bg-white px-5 py-2.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-neutral-50"
               >
                 {displayOnboardingLanguageLabel(language)}
-                <X className="size-4" strokeWidth={1.8} />
+                <X className="size-5 shrink-0" strokeWidth={1.667} />
               </button>
             );
           })}
         </div>
       )}
 
-      <div className="max-h-[15.5rem] overflow-y-auto rounded-2xl border border-neutral-200 bg-white px-3">
+      {/* Figma: Onboarding / Frame 37. OnboardingList owns the surface, the
+          scrollbar and the single shared hover slab; rows just carry
+          .onboarding-list-row. max-h shows 5 rows, matching the Figma frame. */}
+      <OnboardingList className="min-h-0 flex-1">
         {languages.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-neutral-500">{noResultsLabel}</p>
         ) : (
@@ -77,23 +90,26 @@ export default function LanguageSelectionStep({
                 role="checkbox"
                 aria-checked={checked}
                 onClick={() => toggle(language.code)}
-                className="flex h-12 w-full items-center gap-3 border-b border-neutral-200 text-left transition-colors last:border-b-0 hover:bg-neutral-50"
+                className="onboarding-list-row w-full text-left"
               >
+                {/* The control keeps its light stroke when checked — the spec's
+                    asset carries both the fill and the #E3E3E3 border. */}
                 <span
-                  className={`flex size-5 shrink-0 items-center justify-center rounded-[0.3rem] border ${
-                    checked
-                      ? "border-blue-500 bg-blue-500 text-white"
-                      : "border-neutral-200 bg-white"
+                  className={`flex size-6 shrink-0 items-center justify-center rounded-[5.5px] border border-[var(--onboarding-control-border)] ${
+                    checked ? "bg-[var(--onboarding-accent)] text-white" : "bg-white"
                   }`}
                   aria-hidden="true"
                 >
-                  {checked && <Check className="size-3.5" strokeWidth={2.5} />}
+                  {checked && <Check className="size-4" strokeWidth={1.17} />}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-neutral-950">
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="truncate text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
                     {displayOnboardingLanguageLabel(language)}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-neutral-500" dir="auto">
+                  <span
+                    className="truncate text-sm font-normal leading-[1.4] text-[var(--onboarding-text-secondary)]"
+                    dir="auto"
+                  >
                     {getOnboardingLanguageNativeLabel(language)}
                   </span>
                 </span>
@@ -101,7 +117,7 @@ export default function LanguageSelectionStep({
             );
           })
         )}
-      </div>
+      </OnboardingList>
     </div>
   );
 }

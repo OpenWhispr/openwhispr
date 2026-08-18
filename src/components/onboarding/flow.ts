@@ -55,7 +55,9 @@ const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, Onboard
   enterprise: ["enterprise-dictation", "enterprise-assistant"],
 };
 
-const KNOWN_STEPS = new Set<OnboardingStepId>([
+// Canonical flow order, independent of any one route. reconcileStepWithRoute uses
+// it to clamp backwards instead of jumping to the end of the route.
+const STEP_ORDER: OnboardingStepId[] = [
   "auth",
   "permissions",
   "languages",
@@ -72,7 +74,9 @@ const KNOWN_STEPS = new Set<OnboardingStepId>([
   "local-assistant",
   "enterprise-dictation",
   "enterprise-assistant",
-]);
+];
+
+const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
 
 const LEGACY_STEP_MAP: OnboardingStepId[] = [
   "auth",
@@ -185,11 +189,31 @@ export function migrateLegacyOnboardingStep(value: string | null): OnboardingSte
   return LEGACY_STEP_MAP[Math.min(index, LEGACY_STEP_MAP.length - 1)] ?? "auth";
 }
 
+/**
+ * Map a step onto the caller's route, for when a saved session names a step the
+ * current route no longer has (the agent gets disallowed, setupMode changes, or a
+ * dev jump asks for an off-route step).
+ *
+ * Clamps to the route step nearest in the canonical order, ties going to the
+ * earlier one so nothing gets skipped. route.at(-1) was the old fallback and it
+ * teleported you to the LAST step: with agentAllowed false, asking for either
+ * assistant step landed on setup-choice, jumping past notes and reading as
+ * "onboarding sent me straight to the plan chooser". Nearest-wins keeps the guest
+ * route's assistant-demo -> setup-choice (distance 2 vs auth's 7) while the
+ * account route lands on its neighbour instead of the end.
+ */
 export function reconcileStepWithRoute(
   stepId: OnboardingStepId,
   route: OnboardingStepId[]
 ): OnboardingStepId {
-  return route.includes(stepId) ? stepId : (route.at(-1) ?? "auth");
+  if (route.includes(stepId)) return stepId;
+  const target = STEP_ORDER.indexOf(stepId);
+  if (target === -1 || route.length === 0) return route[0] ?? "auth";
+  return route.reduce((best, candidate) => {
+    const bestDistance = Math.abs(STEP_ORDER.indexOf(best) - target);
+    const candidateDistance = Math.abs(STEP_ORDER.indexOf(candidate) - target);
+    return candidateDistance < bestDistance ? candidate : best;
+  }, route[0]);
 }
 
 export function getNextOnboardingStep(

@@ -1,4 +1,3 @@
-import { Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { OnboardingStepHeader } from "./OnboardingShell";
 import { USE_CASE_OPTIONS } from "./useCases";
@@ -25,14 +24,23 @@ export default function UseCaseStep({
   };
 
   return (
-    <div className="min-h-full w-full">
-      <OnboardingStepHeader
-        title={t("onboarding.useCase.title")}
-        titleLines={[t("onboarding.useCase.titleLineOne"), t("onboarding.useCase.titleLineTwo")]}
-        description={t("onboarding.useCase.description")}
-      />
+    // h-full + a scrolling body: the shell never scrolls, so the seven cards
+    // have to absorb a short window themselves instead of spilling past the
+    // footer.
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <div className="shrink-0">
+        <OnboardingStepHeader
+          title={t("onboarding.useCase.title")}
+          titleLines={[t("onboarding.useCase.titleLineOne"), t("onboarding.useCase.titleLineTwo")]}
+          description={t("onboarding.useCase.description")}
+        />
+      </div>
 
-      <div className="mx-auto mt-8 w-full max-w-[26.25rem] space-y-2">
+      {/* Figma: Onboarding / Frame 50 — 527 wide, gap 10. Each row is a
+          radius-12 white card with a 14 16 pad, 12 gap and a 16px control;
+          the card hugs its text instead of being pinned to a height.
+          px-1/py-1 leaves room for the focus ring inside the scroll box. */}
+      <div className="onboarding-shell-scroll mx-auto mt-8 flex w-full max-w-[33.4375rem] min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-1 py-1">
         {USE_CASE_OPTIONS.map(({ id }) => {
           const selected = useCases.includes(id);
           return (
@@ -42,27 +50,40 @@ export default function UseCaseStep({
               role="checkbox"
               aria-checked={selected}
               onClick={() => toggleUseCase(id)}
-              className={`flex h-14 w-full items-center gap-3 rounded-xl border px-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
-                selected
-                  ? "border-blue-500 bg-blue-50/50"
-                  : "border-neutral-200 bg-white hover:bg-neutral-50"
-              }`}
+              // Figma: Frame 36 — the selected row is the same card as the
+              // unselected one. Only the control changes; the surface keeps its
+              // white fill and #E3E3E3 stroke.
+              className="flex w-full shrink-0 items-center gap-3 overflow-hidden rounded-xl border border-[var(--onboarding-control-border)] bg-white px-4 py-3.5 text-left transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_20%,transparent)]"
             >
-              <span
-                className={`flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border ${
-                  selected
-                    ? "border-blue-500 bg-blue-500 text-white"
-                    : "border-neutral-300 bg-white"
-                }`}
-                aria-hidden="true"
-              >
-                {selected && <Check className="size-3" strokeWidth={2.7} />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-normal text-neutral-950">
+              {/* Unchecked: #00000033 hairline. Checked: the spec's asset —
+                  accent fill, no stroke, 1px white tick with round joins. */}
+              {selected ? (
+                <svg
+                  className="size-4 shrink-0"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <rect width="16" height="16" rx="4" fill="var(--onboarding-accent)" />
+                  <path
+                    d="M12 5L6.5 10.5L4 8"
+                    stroke="white"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              ) : (
+                <span
+                  className="size-4 shrink-0 rounded border border-black/20 bg-white/[0.02]"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-base font-normal leading-[1.4] text-[var(--onboarding-text-primary)]">
                   {t(`onboarding.useCase.options.${id}.title`)}
                 </span>
-                <span className="mt-0.5 block truncate text-xs text-neutral-500">
+                <span className="truncate text-sm font-normal leading-[1.4] text-[var(--onboarding-text-secondary)]">
                   {t(`onboarding.useCase.options.${id}.description`)}
                 </span>
               </span>
@@ -70,14 +91,16 @@ export default function UseCaseStep({
           );
         })}
 
-        <label>
+        {/* Figma: Frame 37 — same card shell as the rows, pad 12, 14/140%
+            placeholder in text-tertiary. */}
+        <label className="block shrink-0">
           <span className="sr-only">{t("onboarding.useCase.noteLabel")}</span>
           <input
             type="text"
             value={note}
             onChange={(event) => onNoteChange(event.target.value)}
             placeholder={t("onboarding.useCase.notePlaceholder")}
-            className="onboarding-light-input onboarding-light-input-bordered h-9 w-full rounded-xl! border border-neutral-200 bg-white px-3 text-xs text-neutral-950 shadow-none! outline-none placeholder:text-neutral-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+            className="onboarding-light-input onboarding-light-input-bordered w-full rounded-xl! border border-[var(--onboarding-control-border)] bg-white p-3 text-sm font-normal leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
           />
         </label>
       </div>

@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { Accessibility, Check, Mic, Volume2 } from "lucide-react";
+import { CircleCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
+// Imported (not referenced by path) so Vite fingerprints them and they resolve
+// under the packaged app's file:// origin. Authored at 88px = 2x the 44px slot,
+// with their rounded corners baked in as transparency.
+import microphoneIcon from "@/assets/onboarding-permission-microphone.webp";
+import accessibilityIcon from "@/assets/onboarding-permission-accessibility.webp";
+import screenAudioIcon from "@/assets/onboarding-permission-screen-audio.webp";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
@@ -24,8 +30,7 @@ interface PermissionRowProps {
   granted: boolean;
   busy: boolean;
   disabled?: boolean;
-  icon: typeof Mic;
-  iconClassName: string;
+  iconSrc: string;
   onRequest: () => Promise<void>;
   onContinue?: () => void;
 }
@@ -37,8 +42,7 @@ function PermissionRow({
   granted,
   busy,
   disabled = false,
-  icon: Icon,
-  iconClassName,
+  iconSrc,
   onRequest,
   onContinue,
 }: PermissionRowProps) {
@@ -48,12 +52,19 @@ function PermissionRow({
 
   return (
     <div className="flex h-[5.25rem] items-center gap-3.5">
-      <div
-        className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${iconClassName}`}
+      {/* Decorative: the adjacent title and description already name the
+          permission, so announcing the icon too would just duplicate it. The
+          icon stays put once granted — the button carries the state. */}
+      <img
+        src={iconSrc}
+        alt=""
         aria-hidden="true"
-      >
-        {granted ? <Check className="size-5" strokeWidth={2.5} /> : <Icon className="size-6" />}
-      </div>
+        width={44}
+        height={44}
+        decoding="async"
+        draggable={false}
+        className="size-11 shrink-0 select-none"
+      />
 
       <div className="min-w-0 flex-1 text-left">
         <p className="text-base font-medium leading-5 text-neutral-950">{title}</p>
@@ -64,12 +75,19 @@ function PermissionRow({
         type="button"
         disabled={busy || disabled || (granted && !canContinue)}
         onClick={() => (canContinue ? onContinue() : void onRequest())}
-        className={`inline-flex h-9 w-24 shrink-0 items-center justify-center rounded-full px-2 text-sm font-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 disabled:cursor-default ${
+        className={`onboarding-pressable inline-flex h-9 min-w-24 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 disabled:cursor-default ${
           canContinue
             ? "bg-blue-500 text-white hover:bg-blue-600"
-            : "bg-neutral-200 text-neutral-500 hover:bg-neutral-300 disabled:bg-neutral-200 disabled:text-neutral-500"
+            : granted
+              ? // Granted rows are disabled, so the disabled: variants have to
+                // restate the tint or it falls back to the neutral grey below.
+                "bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] text-[var(--onboarding-accent)] disabled:bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] disabled:text-[var(--onboarding-accent)]"
+              : "bg-neutral-200 text-neutral-500 hover:bg-neutral-300 disabled:bg-neutral-200 disabled:text-neutral-500"
         }`}
       >
+        {granted && !canContinue && !busy && (
+          <CircleCheck className="size-4 shrink-0" aria-hidden="true" />
+        )}
         {busy
           ? t("common.loading")
           : canContinue
@@ -112,7 +130,11 @@ export default function CompactPermissionsStep({
       </button>
 
       <div className="px-6 pt-48 text-center">
-        <h1 className="onboarding-display-title mx-auto max-w-72">
+        {/* text-balance evens the two lines out ("Set up OpenWhispr" / "in 3
+            minutes") instead of leaving one word stranded. Preferred over a
+            hardcoded <br> because the break point stays correct in all 9
+            locales, where the string length differs. */}
+        <h1 className="onboarding-display-title mx-auto max-w-72 text-balance">
           {t("onboarding.rehaul.permissions.title")}
         </h1>
         <p className="mt-4 text-base text-neutral-500">{t("auth.welcomeSubtitle")}</p>
@@ -124,8 +146,7 @@ export default function CompactPermissionsStep({
             description={t("onboarding.rehaul.permissions.microphoneDescription")}
             granted={permissions.micPermissionGranted}
             busy={busyPermission === "microphone"}
-            icon={Mic}
-            iconClassName="bg-blue-800 text-sky-400"
+            iconSrc={microphoneIcon}
             onRequest={() => request("microphone", permissions.requestMicPermission)}
             onContinue={onContinue}
           />
@@ -136,8 +157,7 @@ export default function CompactPermissionsStep({
             description={t("onboarding.rehaul.permissions.accessibilityDescription")}
             granted={permissions.accessibilityPermissionGranted}
             busy={busyPermission === "accessibility"}
-            icon={Accessibility}
-            iconClassName="bg-blue-500 text-white"
+            iconSrc={accessibilityIcon}
             onRequest={() => request("accessibility", permissions.requestAccessibilityPermission)}
           />
           <div className="h-px bg-neutral-200" />
@@ -148,8 +168,7 @@ export default function CompactPermissionsStep({
             granted={systemAudio.granted}
             busy={busyPermission === "system-audio"}
             disabled={!canRequestSystemAudio}
-            icon={Volume2}
-            iconClassName="bg-red-400 text-white"
+            iconSrc={screenAudioIcon}
             onRequest={() => request("system-audio", systemAudio.request)}
           />
         </div>

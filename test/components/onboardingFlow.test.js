@@ -90,6 +90,30 @@ test("legacy numeric steps migrate conservatively", async () => {
   assert.equal(migrateLegacyOnboardingStep("999"), "setup-choice");
 });
 
+test("an off-route assistant step clamps to its neighbour, not the end of the route", async () => {
+  const { getOnboardingRoute, reconcileStepWithRoute } = await load();
+  // agentAllowed false is what a failed policy fetch produces, and it drops both
+  // assistant steps from the route. Clamping to route.at(-1) used to land the user
+  // on setup-choice, skipping notes and looking like a jump to the plan chooser.
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: false,
+  });
+  assert.equal(route.includes("assistant-hotkey"), false);
+  assert.equal(reconcileStepWithRoute("assistant-hotkey", route), "dictation-demo");
+  assert.equal(reconcileStepWithRoute("assistant-demo", route), "notes");
+  assert.notEqual(reconcileStepWithRoute("assistant-hotkey", route), "setup-choice");
+
+  // With the agent allowed the steps are on the route and pass through untouched.
+  const agentRoute = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: true,
+  });
+  assert.equal(reconcileStepWithRoute("assistant-hotkey", agentRoute), "assistant-hotkey");
+});
+
 test("route helpers recover from ineligible steps", async () => {
   const { getNextOnboardingStep, getOnboardingRoute, reconcileStepWithRoute } = await load();
   const route = getOnboardingRoute({ authPath: "guest", setupMode: null, agentAllowed: true });

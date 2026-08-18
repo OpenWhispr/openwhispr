@@ -293,15 +293,29 @@
         },
         "byok": {
           "title": "API Provider",
-          "description": "Use your own API key from a supported provider."
+          "description": "Use your own API key."
         },
         "local": {
           "title": "On your device",
-          "description": "Private offline transcription. Needs at least {{minimumSpace}} GB free space."
+          "description": "Private offline transcription. Needs at least {{minimumSpace}} GB free space.",
+          "badge": "Free",
+          "download": "Download models",
+          "features": {
+            "device": "Runs on your device",
+            "offline": "Works offline after setup",
+            "models": "Choose models for dictation and assistant",
+            "free": "Free to use"
+          }
         },
         "enterprise": {
           "title": "Enterprise",
-          "description": "Use an organization-managed AI provider with team controls."
+          "description": "Use an organization-managed AI provider with team controls.",
+          "setUp": "Set up Enterprise",
+          "features": {
+            "credentials": "Use your organization’s credentials",
+            "compliance": "SOC 2 Type II, HIPAA, and ISO 27001",
+            "controls": "Manage access with team controls"
+          }
         },
         "warnings": {
           "byok": {
@@ -336,7 +350,16 @@
           }
         },
         "useCloud": "Use Cloud instead",
-        "continueSetup": "Continue setup"
+        "continueSetup": "Continue setup",
+        "showMore": "Show More Options",
+        "moreOptions": {
+          "title": "Choose your API setup",
+          "description": "Add an API key or connect a self-hosted model.",
+          "selfHosted": {
+            "title": "Self-hosted",
+            "description": "Connect your own hosted model."
+          }
+        }
       },
       "provider": {
         "progress": "Provider setup progress",
@@ -380,6 +403,7 @@
         "selected": "Selected",
         "use": "Use",
         "downloadInProgress": "Download in progress",
+        "cancelDownload": "Отменить загрузку {{model}}",
         "downloadInBackground": "Finish in background",
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
