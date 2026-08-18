@@ -27,6 +27,37 @@ test("punctuation accelerators map to X11 keysyms", () => {
   assert.equal(GnomeShortcutManager.isValidShortcut("<Control>plus"), true);
 });
 
+test("UI-emitted shifted punctuation consumes Shift and uses the resulting X11 keysym", () => {
+  const shiftedPunctuationCases = [
+    ["Control+Shift+`", "<Control>asciitilde"],
+    ["Control+Shift+1", "<Control>exclam"],
+    ["Control+Shift+2", "<Control>at"],
+    ["Control+Shift+3", "<Control>numbersign"],
+    ["Control+Shift+4", "<Control>dollar"],
+    ["Control+Shift+5", "<Control>percent"],
+    ["Control+Shift+6", "<Control>asciicircum"],
+    ["Control+Shift+7", "<Control>ampersand"],
+    ["Control+Shift+8", "<Control>asterisk"],
+    ["Control+Shift+9", "<Control>parenleft"],
+    ["Control+Shift+0", "<Control>parenright"],
+    ["Control+Shift+-", "<Control>underscore"],
+    ["Control+Shift+=", "<Control>plus"],
+    ["Control+Shift+[", "<Control>braceleft"],
+    ["Control+Shift+]", "<Control>braceright"],
+    ["Control+Shift+\\", "<Control>bar"],
+    ["Control+Shift+;", "<Control>colon"],
+    ["Control+Shift+'", "<Control>quotedbl"],
+    ["Control+Shift+,", "<Control>less"],
+    ["Control+Shift+.", "<Control>greater"],
+    ["Control+Shift+/", "<Control>question"],
+  ];
+
+  for (const [hotkey, expected] of shiftedPunctuationCases) {
+    assert.equal(GnomeShortcutManager.convertToGnomeFormat(hotkey), expected, hotkey);
+    assert.equal(GnomeShortcutManager.isValidShortcut(expected), true, expected);
+  }
+});
+
 test("raw punctuation strings are rejected by the GNOME validator", () => {
   assert.equal(GnomeShortcutManager.isValidShortcut("<Control>,"), false);
   assert.equal(GnomeShortcutManager.isValidShortcut("<Control>plus"), true);
