@@ -22,11 +22,14 @@ export const localProvider: InferenceProvider = {
     // carries a prompt, which would make every call look like an agent call
     // (0.3) and cleanup would never get its deterministic 0. An absent
     // maxTokens is left to the bridge's length-based fallback.
+    // Once params exists, the bridge defers to the renderer's decision, so
+    // normalize the legacy off-by-default contract before shaping.
+    const disableThinking = config.disableThinking !== false;
     const params: Record<string, unknown> = {};
     applyChatCompletionsParams(params, {
       model,
       provider: "local",
-      config,
+      config: { ...config, disableThinking },
       maxTokens: config.maxTokens,
     });
 
@@ -34,6 +37,7 @@ export const localProvider: InferenceProvider = {
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const result = await window.electronAPI.processLocalReasoning(userContent, model, agentName, {
       ...config,
+      disableThinking,
       systemPrompt,
       params,
     });

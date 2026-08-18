@@ -294,6 +294,30 @@ async function useMatrixModel(chain, modelId) {
   return UNKNOWN.id;
 }
 
+test("matrix: an omitted disableThinking flag preserves the local off-by-default contract", async (t) => {
+  const chain = await setupPathA(t);
+  const modelId = await chain.useModel("qwen3.5-4b-q4_k_m");
+
+  await chain.localProvider.call({
+    text: "hello there",
+    model: modelId,
+    agentName: null,
+    config: {},
+    ctx,
+  });
+
+  assert.deepEqual(chain.requests[0], {
+    messages: [
+      { role: "system", content: CLEANUP_PROMPT },
+      { role: "user", content: chain.wrapCleanupTranscript("hello there") },
+    ],
+    temperature: 0,
+    max_tokens: 512,
+    chat_template_kwargs: { enable_thinking: false },
+    stream: false,
+  });
+});
+
 for (const [modelId, suppressedKwargs, pinOnlyKwargs] of MODELS) {
   test(`matrix: ${modelId}`, async (t) => {
     const chain = await setupPathA(t);
