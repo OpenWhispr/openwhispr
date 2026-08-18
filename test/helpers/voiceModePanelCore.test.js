@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 
@@ -104,4 +106,18 @@ test("Agent close keeps the same surface mounted while its expensive content fad
   assert.match(closing, /data-panel-mode="assistant"/);
   assert.match(closing, /data-panel-closing="true"/);
   assert.equal((closing.match(/<section/g) || []).length, 1);
+});
+
+test("Agent close releases native ownership immediately and has a parent fallback", () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, "../../src/App.jsx"), "utf8");
+  const closeHandler = appSource.slice(
+    appSource.indexOf("const handleAssistantPanelClose"),
+    appSource.indexOf("const closeLiveTranscriptPanel")
+  );
+
+  assert.match(closeHandler, /setAssistantPanelOpen\?\.\(false\)/);
+  assert.match(
+    closeHandler,
+    /setTimeout\(\s*completeAssistantContentFade,\s*ASSISTANT_CONTENT_FADE_FALLBACK_MS\s*\)/s
+  );
 });

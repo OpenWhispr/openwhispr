@@ -3,6 +3,7 @@ const debugLogger = require("./debugLogger");
 const HotkeyManager = require("./hotkeyManager");
 const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
+const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
 const dockManager = require("./dockManager");
@@ -51,6 +52,7 @@ class WindowManager {
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
     this.dragManager = new DragManager();
+    this._mainWindowPlacementCoordinator = new MainWindowPlacementCoordinator();
     this.isQuitting = false;
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
@@ -279,10 +281,13 @@ class WindowManager {
   }
 
   _resizeMainWindowTo(newSize, sizeKey) {
-    const run = () => this._performMainWindowResize(newSize, sizeKey);
+    return this._enqueueMainWindowMutation(() => this._performMainWindowResize(newSize, sizeKey));
+  }
+
+  _enqueueMainWindowMutation(run) {
     // Renderer voice requests are latest-wins, while errors and other overlays
-    // can also resize through their own IPC handlers. Serialize once more at
-    // the native boundary so no two setBounds handshakes can overlap.
+    // and active-display placement can also mutate the native bounds. Serialize
+    // once more at the native boundary so setBounds calls cannot interleave.
     this._mainWindowResizeQueue = (this._mainWindowResizeQueue || Promise.resolve()).then(run, run);
     return this._mainWindowResizeQueue;
   }
@@ -474,9 +479,6 @@ class WindowManager {
       }
       lastToggleTime = now;
 
-      // Capture target app PID before the window might steal focus
-      if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
-
       this.sendToggleDictation();
     };
   }
@@ -495,8 +497,8 @@ class WindowManager {
     const MAX_PUSH_DURATION_MS = 300000; // 5 minutes max recording
     const downTime = Date.now();
 
-    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
-    this.showDictationPanel();
+    const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
+    this.showDictationPanel({ reposition: true, targetPidPromise });
     this.sendPrepareDictation();
 
     const safetyTimeoutId = setTimeout(() => {
@@ -624,7 +626,7 @@ class WindowManager {
     const MIN_HOLD_DURATION_MS = 150;
     const downTime = Date.now();
 
-    this.showDictationPanel();
+    this.showDictationPanel({ reposition: true });
     this.sendPrepareDictation();
 
     this.winPushState = {
@@ -695,6 +697,7 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const isStarting = !this._isDictatingToggle;
       // Capture the paste target and any selection on every toggle press,
       // before the overlay steals focus — the paste can't refocus the target
       // otherwise (#668). The renderer owns the real recording state and may
@@ -703,13 +706,19 @@ class WindowManager {
       // previous app. Press-time capture matches the dictation hotkey call
       // sites in main.js; a stop-press capture resolves the same frontmost
       // app, since NSWorkspace ignores the overlay panel.
-      if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+      const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
       void this.selectionManager?.captureTarget?.();
-      this.showDictationPanel();
+      if (!isStarting) {
+        this._mainWindowPlacementCoordinator.cancelPending();
+      }
+      this.showDictationPanel({
+        reposition: isStarting,
+        targetPidPromise,
+      });
       // About-to-start guess: open the mic one IPC message ahead of the toggle.
       // A wrong guess (renderer declines) is bounded by the prepared capture's
       // max-age expiry, and the renderer dedups its own prepare call.
-      if (!this._isDictatingToggle) this.sendPrepareDictation({ voiceAgentRequested });
+      if (isStarting) this.sendPrepareDictation({ voiceAgentRequested });
       this.mainWindow.webContents.send(channel);
     }
   }
@@ -750,9 +759,9 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+      const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
       void this.selectionManager?.captureTarget?.();
-      this.showDictationPanel();
+      this.showDictationPanel({ reposition: true, targetPidPromise });
       this.mainWindow.webContents.send("start-dictation");
     }
   }
@@ -859,6 +868,7 @@ class WindowManager {
 
   setPanelStartPosition(position) {
     this._panelStartPosition = position || "bottom-right";
+    this._mainWindowPlacementCoordinator.resetManualPosition();
     this._activeHorizontalDirection = null;
     // Reposition the window immediately
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
@@ -910,11 +920,20 @@ class WindowManager {
   }
 
   async startWindowDrag() {
+    // A lookup started by a prior hotkey must never land while the user is
+    // taking ownership of the panel position.
+    this._mainWindowPlacementCoordinator.cancelPending();
     return await this.dragManager.startWindowDrag();
   }
 
   async stopWindowDrag() {
     const result = await this.dragManager.stopWindowDrag();
+    if (result.success && this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const draggedBounds = this.mainWindow.getBounds();
+      this._mainWindowPlacementCoordinator.markManuallyPositioned();
+      this._baseBoundsBeforeResize = null;
+      this._lastResizeBounds = { ...draggedBounds };
+    }
     this._activeHorizontalDirection = null;
     this._notifyMainWindowHorizontalDirection();
     return result;
@@ -1100,19 +1119,40 @@ class WindowManager {
   // into, which on a multi-monitor desk is often not the one the mouse rests on.
   // Falls back to the cursor when the target has no readable window (non-macOS,
   // no target captured yet, or an app with no ordinary window).
-  async _resolveActiveDisplay() {
-    const pid = this.textEditMonitor?.lastTargetPid;
+  async _resolveActiveDisplay(targetPidPromise) {
+    let pid = this.textEditMonitor?.lastTargetPid;
+    if (targetPidPromise) {
+      try {
+        pid = await targetPidPromise;
+      } catch {
+        pid = null;
+      }
+    }
     const bounds = pid ? await this.textEditMonitor.getTargetWindowBounds(pid) : null;
     return bounds
       ? screen.getDisplayMatching(bounds)
       : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   }
 
-  async _repositionToActiveDisplay() {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+  _repositionToActiveDisplay(targetPidPromise) {
+    return this._mainWindowPlacementCoordinator.request(
+      () => this._resolveActiveDisplay(targetPidPromise),
+      (activeDisplay, isCurrent) =>
+        this._enqueueMainWindowMutation(() =>
+          this._performActiveDisplayReposition(activeDisplay, isCurrent)
+        )
+    );
+  }
 
-    const activeDisplay = await this._resolveActiveDisplay();
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+  _performActiveDisplayReposition(activeDisplay, isCurrent) {
+    if (
+      !isCurrent() ||
+      this.dragManager.isDragActive() ||
+      !this.mainWindow ||
+      this.mainWindow.isDestroyed()
+    ) {
+      return { applied: false, reason: "superseded" };
+    }
 
     const currentBounds = this.mainWindow.getBounds();
     const currentDisplay = screen.getDisplayNearestPoint({
@@ -1127,9 +1167,13 @@ class WindowManager {
       // overlay vanished. Pull it back before showing it.
       const clamped = WindowPositionUtil.clampToWorkArea(currentBounds, currentDisplay);
       if (clamped.x !== currentBounds.x || clamped.y !== currentBounds.y) {
-        this.mainWindow.setBounds({ ...currentBounds, ...clamped });
+        const clampedBounds = { ...currentBounds, ...clamped };
+        this.mainWindow.setBounds(clampedBounds);
+        this._lastResizeBounds = { ...clampedBounds };
+        this._baseBoundsBeforeResize = null;
+        return { applied: true, bounds: clampedBounds };
       }
-      return;
+      return { applied: false, reason: "same-display" };
     }
 
     const newPos = WindowPositionUtil.getMainWindowPosition(
@@ -1143,16 +1187,22 @@ class WindowManager {
       "window"
     );
     this.mainWindow.setBounds(newPos);
+    // This is an intentional native move, not a drag. Keep resize restoration
+    // from treating the old display's bounds as the user's desired base state.
+    this._lastResizeBounds = { ...newPos };
+    this._baseBoundsBeforeResize = null;
+    this._activeHorizontalDirection = null;
+    this._notifyMainWindowHorizontalDirection();
+    return { applied: true, bounds: newPos };
   }
 
   showDictationPanel(options = {}) {
-    const { focus = false } = options;
+    const { focus = false, reposition = false, targetPidPromise } = options;
     if (this._assistantPanelOpen) return;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      // Reading the target's window costs a helper spawn, so show now and move
-      // when the answer lands: a visible hop only happens when the panel was on
-      // the wrong display, which is the case being corrected.
-      void this._repositionToActiveDisplay();
+      if (reposition) {
+        void this._repositionToActiveDisplay(targetPidPromise);
+      }
 
       if (this.mainWindow.isMinimized()) {
         this.mainWindow.restore();
@@ -1181,6 +1231,7 @@ class WindowManager {
 
   hideDictationPanel() {
     if (this._assistantPanelOpen) return;
+    this._mainWindowPlacementCoordinator.cancelPending();
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.hide();
     }

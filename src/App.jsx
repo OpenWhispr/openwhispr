@@ -40,6 +40,7 @@ import {
 } from "./helpers/voicePillPresentation";
 
 const ASSISTANT_TRANSITION_MS = 320;
+const ASSISTANT_CONTENT_FADE_FALLBACK_MS = 260;
 const LIVE_TRANSCRIPT_RENDER_INTERVAL_MS = 50;
 const LIVE_TRANSCRIPT_SHELL_GROW_MS = 180;
 const formatPillHotkeyLabel = (value) =>
@@ -694,7 +695,29 @@ export default function App() {
     assistantPanelClosingRef.current = true;
     assistantContentFadeCompletedRef.current = false;
     setAssistantPanelClosing(true);
-  }, [isAssistantVoice, isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
+
+    // Native interaction ownership must be released at close intent, not after
+    // the renderer's opacity transition. If the transition event is delayed or
+    // dropped, keeping this flag true makes the compact pill look closed while
+    // the main process still rejects hide and ordinary dictation requests.
+    void window.electronAPI?.setAssistantPanelOpen?.(false);
+
+    // VoiceModePanelCore reports the actual content fade when it can. Keep the
+    // lifecycle owner here as a final guarantee so a missed child transition
+    // can never strand Agent Mode in its closing state.
+    assistantCloseTimerRef.current = setTimeout(
+      completeAssistantContentFade,
+      ASSISTANT_CONTENT_FADE_FALLBACK_MS
+    );
+  }, [
+    isAssistantVoice,
+    isRecording,
+    isPreparing,
+    isProcessing,
+    cancelRecording,
+    cancelProcessing,
+    completeAssistantContentFade,
+  ]);
 
   const closeLiveTranscriptPanel = React.useCallback(
     ({ suppress = false, clear = false } = {}) => {
