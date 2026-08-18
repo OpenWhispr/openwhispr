@@ -629,7 +629,8 @@ test("characterization: a final that lands during disconnect()'s commit window r
   assert.equal(result.text, "tail words", "the tail is returned to the caller");
   assert.equal(calls.length, 1, "the tail also reaches the live onFinalTranscript handler");
   assert.equal(calls[0].text, "tail words");
-  // TODAY the commit wrapper at openaiRealtimeStreaming.js:467 forwards only `text`.
+  // TODAY the temporary onFinalTranscript wrapper that disconnect() installs while
+  // awaiting the commit forwards only `text` to the previous handler.
   // Phase 1 changes this line to `typeof calls[0].timestamp === "number"`.
   assert.equal(calls[0].timestamp, undefined);
 });

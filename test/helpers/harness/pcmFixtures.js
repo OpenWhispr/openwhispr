@@ -1,4 +1,3 @@
-// test/helpers/harness/pcmFixtures.js
 // Deterministic PCM generators for meeting-audio tests. 24 kHz mono float in [-1, 1].
 const SAMPLE_RATE = 24000;
 

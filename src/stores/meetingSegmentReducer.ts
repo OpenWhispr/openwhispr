@@ -1,4 +1,3 @@
-// src/stores/meetingSegmentReducer.ts
 import type { TranscriptSegment } from "./meetingRecordingStore";
 import { normalizeTranscriptSegment } from "../utils/transcriptSpeakerState";
 

@@ -170,7 +170,7 @@ test("wire bodies: dictation posts the bare {\"streams\":1}; meetings post model
     },
   });
 
-  // Dictation (ipcHandlers.js:7018-7021 passes only { mode, provider }).
+  // Dictation: ipcHandlers' connectDictationStreaming passes only { mode, provider }.
   await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, { mode: "openwhispr" });
   // Meeting with system audio.
   await fetchRealtimeTokenForProvider(
@@ -179,7 +179,8 @@ test("wire bodies: dictation posts the bare {\"streams\":1}; meetings post model
     { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: "en" },
     { streams: 2 }
   );
-  // Meeting whose system audio is unsupported (ipcHandlers.js:6136-6144) — still carries model+language.
+  // Meeting whose system audio is unsupported (connectRealtimeStreaming's single-stream
+  // branch) — still carries model+language; streams defaults to 1.
   await fetchRealtimeTokenForProvider(
     "openai-realtime",
     cloudDeps,

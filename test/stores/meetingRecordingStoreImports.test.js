@@ -1,4 +1,3 @@
-// test/stores/meetingRecordingStoreImports.test.js
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
