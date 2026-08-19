@@ -33,13 +33,13 @@ export default function LanguageSelectionStep({
   };
 
   return (
-    <div className="mx-auto mt-6 flex min-h-0 w-full max-w-[33.75rem] flex-1 flex-col gap-2.5">
+    <div className="mx-auto mt-4 flex min-h-0 w-full max-w-md flex-1 flex-col gap-2">
       {/* Figma: Onboarding / Frame 25 — pad 12 16, gap 10, radius 66 (pill),
           24px icon and 18/140% text, both in text-tertiary. Height hugs the
           content rather than being pinned, which is why there's no h-*. */}
       <label className="relative block">
         <Search
-          className="pointer-events-none absolute left-4 top-1/2 size-6 -translate-y-1/2 text-[var(--onboarding-text-tertiary)]"
+          className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-[var(--onboarding-text-tertiary)]"
           strokeWidth={2}
         />
         <input
@@ -47,8 +47,7 @@ export default function LanguageSelectionStep({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={searchPlaceholder}
-          /* pl = 16 pad + 24 icon + 10 gap = 50px */
-          className="onboarding-light-input onboarding-light-input-bordered w-full rounded-full! border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] py-3 pl-[3.125rem] pr-4 text-[1.125rem] leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
+          className="onboarding-light-input onboarding-light-input-bordered w-full rounded-full! border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] py-2.5 pl-11 pr-3.5 text-base leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
         />
       </label>
 
@@ -64,10 +63,10 @@ export default function LanguageSelectionStep({
                 type="button"
                 key={code}
                 onClick={() => toggle(code)}
-                className="onboarding-pressable inline-flex items-center gap-[7px] rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
+                className="onboarding-pressable inline-flex items-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-2 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
               >
                 {displayOnboardingLanguageLabel(language)}
-                <X className="size-5 shrink-0" strokeWidth={1.667} />
+                <X className="size-4 shrink-0" strokeWidth={1.667} />
               </button>
             );
           })}
@@ -97,21 +96,21 @@ export default function LanguageSelectionStep({
                 {/* The control keeps its light stroke when checked — the spec's
                     asset carries both the fill and the #E3E3E3 border. */}
                 <span
-                  className={`flex size-6 shrink-0 items-center justify-center rounded-[5.5px] border border-[var(--onboarding-control-border)] ${
+                  className={`flex size-5 shrink-0 items-center justify-center rounded-[5px] border border-[var(--onboarding-control-border)] ${
                     checked
                       ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
                       : "bg-[var(--onboarding-surface)]"
                   }`}
                   aria-hidden="true"
                 >
-                  {checked && <Check className="size-4" strokeWidth={1.17} />}
+                  {checked && <Check className="size-3.5" strokeWidth={1.17} />}
                 </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="truncate text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="truncate text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
                     {displayOnboardingLanguageLabel(language)}
                   </span>
                   <span
-                    className="truncate text-sm font-normal leading-[1.4] text-[var(--onboarding-text-secondary)]"
+                    className="truncate text-xs font-normal leading-[1.4] text-[var(--onboarding-text-secondary)]"
                     dir="auto"
                   >
                     {getOnboardingLanguageNativeLabel(language)}

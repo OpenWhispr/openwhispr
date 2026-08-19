@@ -74,21 +74,18 @@ const MAIN_WINDOW_CONFIG = {
   type: OVERLAY_WINDOW_TYPES.main,
 };
 
-// The expanded height carries the tallest step: the assistant hotkey page needs
-// ~903px for Figma "Desktop - 287" at literal sizes (159 header + 40 + 318 still
-// + 20 + 160 capture box, inside the shell's 32/20 top and 154 footer). Shrink
-// this and that page loses its capture box to the shell's overflow-hidden.
-// clampedBounds still clamps to the display work area, so a short screen crops
-// it regardless — see setOnboardingWindowMode.
+// The expanded flow deliberately uses a denser frame than the main control
+// panel. Its typography, cards and spacing are sized for this 1000x740 canvas;
+// clampedBounds still handles displays whose work area is smaller.
 const ONBOARDING_WINDOW_SIZES = {
   COMPACT: { width: 546, height: 654 },
-  EXPANDED: { width: 1200, height: 910 },
+  EXPANDED: { width: 1000, height: 740 },
 };
 
 // Control panel window configuration
 const CONTROL_PANEL_CONFIG = {
-  width: ONBOARDING_WINDOW_SIZES.EXPANDED.width,
-  height: ONBOARDING_WINDOW_SIZES.EXPANDED.height,
+  width: 1200,
+  height: 910,
   // macOS: fully transparent, so nothing paints into the compact onboarding
   // frame's rounded corners. Windows/Linux keep an opaque backing (the renderer
   // paints its own background on top) — see the transparent flag below.

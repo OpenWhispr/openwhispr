@@ -56,6 +56,21 @@ interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
 }
 
+function DemoHotkeyDescription({ text, hotkey }: { text: string; hotkey: string }) {
+  const hotkeyStart = text.indexOf(hotkey);
+  if (hotkeyStart < 0) return text;
+
+  return (
+    <>
+      {text.slice(0, hotkeyStart)}
+      <kbd className="mx-0.5 inline-flex rounded-md bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-1.5 py-0.5 font-semibold text-[var(--onboarding-accent)]">
+        {hotkey}
+      </kbd>
+      {text.slice(hotkeyStart + hotkey.length)}
+    </>
+  );
+}
+
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
@@ -555,7 +570,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "languages":
         return (
-          <div className="flex h-full min-h-0 w-full flex-col pt-2">
+          <div className="flex h-full min-h-0 w-full flex-col pt-1">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.languages.title")}
               titleLines={[
@@ -576,7 +591,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "use-cases":
         return (
-          <div className="h-full w-full pt-2">
+          <div className="h-full w-full pt-1">
             <UseCaseStep
               useCases={settings.onboardingUseCases}
               onUseCasesChange={settings.setOnboardingUseCases}
@@ -592,9 +607,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return (
           // Flex column: the preview illustration is allowed to shrink so the
           // capture box below it always stays inside the shell, which is
-          // overflow-hidden. Left as a plain block, the fixed 318px preview
-          // pushed the capture box off-screen on shorter windows.
-          <div className="flex h-full min-h-0 w-full flex-col pt-5">
+          // overflow-hidden.
+          <div className="flex h-full min-h-0 w-full flex-col pt-2">
             <OnboardingStepHeader
               title={t(
                 assistant
@@ -659,8 +673,19 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "dictation-demo":
       case "assistant-demo": {
         const assistant = currentStepId === "assistant-demo";
+        const hotkeyInstruction = formatHotkeyInstruction(
+          assistant ? assistantHotkey : dictationHotkey
+        );
+        const description = t(
+          assistant
+            ? "onboarding.rehaul.assistantDemo.description"
+            : "onboarding.rehaul.dictationDemo.description",
+          // Formatted for reading: the raw accelerator would show internal
+          // syntax like "GLOBE" or "CommandOrControl+Shift+Space".
+          { hotkey: hotkeyInstruction }
+        );
         return (
-          <div className="h-full w-full pt-5">
+          <div className="h-full w-full pt-2">
             <OnboardingStepHeader
               title={t(
                 assistant
@@ -678,14 +703,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                       t("onboarding.rehaul.dictationDemo.titleLineTwo"),
                     ]
               }
-              description={t(
-                assistant
-                  ? "onboarding.rehaul.assistantDemo.description"
-                  : "onboarding.rehaul.dictationDemo.description",
-                // Formatted for reading: the raw accelerator would show internal
-                // syntax like "GLOBE" or "CommandOrControl+Shift+Space".
-                { hotkey: formatHotkeyInstruction(assistant ? assistantHotkey : dictationHotkey) }
-              )}
+              description={
+                assistant ? (
+                  description
+                ) : (
+                  <DemoHotkeyDescription text={description} hotkey={hotkeyInstruction} />
+                )
+              }
             />
             <DemoStep
               kind={assistant ? "assistant" : "dictation"}
@@ -718,11 +742,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "notes":
         return (
-          // Figma: Onboarding / Frame 50 — column, centred; header (Frame 29) at
-          // gap 18. Gap tightened from the spec's 40 so the column fits without
-          // scrolling.
-          <div className="flex h-full min-h-0 w-full flex-col items-center gap-8 pt-2">
-            <header className="flex w-full shrink-0 flex-col items-center gap-[18px] text-center">
+          // Compact centred column; the calendar body owns short-window scrolling.
+          <div className="flex h-full min-h-0 w-full flex-col items-center gap-5 pt-1">
+            <header className="flex w-full shrink-0 flex-col items-center gap-3 text-center">
               <h1 className="onboarding-display-title text-[var(--onboarding-text-primary)]">
                 <span className="block">{t("onboarding.rehaul.notes.titleLineOne")}</span>
                 <span className="block">
@@ -733,7 +755,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   </span>
                 </span>
               </h1>
-              <p className="w-[357px] text-base leading-[1.4] text-[var(--onboarding-text-secondary)]">
+              <p className="w-full max-w-xs text-sm leading-[1.5] text-[var(--onboarding-text-secondary)]">
                 {t("onboarding.rehaul.notes.description")}
               </p>
             </header>
@@ -749,7 +771,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "setup-choice":
         return (
-          <div className="h-full w-full pt-6">
+          <div className="h-full w-full pt-2">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.setupChoice.title")}
               titleLines={[
@@ -773,7 +795,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "byok-dictation":
       case "byok-assistant":
         return (
-          <div className="h-full w-full pt-6">
+          <div className="h-full w-full pt-2">
             <div>
               <OnboardingStepHeader
                 title={t("onboarding.rehaul.provider.title")}
@@ -801,7 +823,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "local-dictation":
       case "local-assistant":
         return (
-          <div className="h-full w-full pt-6">
+          <div className="h-full w-full pt-2">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.local.title")}
               // Without this the h1 is capped at max-w-xs (320px), which wraps
@@ -826,7 +848,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "enterprise-dictation":
       case "enterprise-assistant":
         return (
-          <div className="h-full w-full pt-6">
+          <div className="h-full w-full pt-2">
             <OnboardingStepHeader
               title={t("onboarding.rehaul.enterprise.title")}
               description={t("onboarding.rehaul.enterprise.description")}

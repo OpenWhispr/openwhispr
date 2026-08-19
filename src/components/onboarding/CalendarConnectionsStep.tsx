@@ -128,11 +128,10 @@ export default function CalendarConnectionsStep() {
   return (
     // Figma: Onboarding / Frame 2147203458 — column, hugging its content. Sizes
     // tightened from the spec so all three provider rows fit without scrolling.
-    <div className="flex w-full flex-col items-center gap-3">
-      {/* Frame 2147258979 — 499x245 in the spec, rendered at 220 tall: 198px of
-          artwork on the left and a white 301px panel on the right. radius 13.33,
-          1px stroke. */}
-      <section className="flex h-[220px] w-[499px] overflow-hidden rounded-[13.33px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
+    <div className="flex w-full flex-col items-center gap-2.5">
+      {/* The original two-panel artwork is kept proportional inside the denser
+          onboarding frame. */}
+      <section className="flex h-44 w-full max-w-[26rem] overflow-hidden rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
         {/* Frame 2147258992 — 198x245 export, cropped by object-cover. NOTE: it
             was composited for the right-hand slot, so its bleed runs off the
             artwork's right edge — now the card's inner edge. It needs
@@ -145,16 +144,16 @@ export default function CalendarConnectionsStep() {
           height={220}
           decoding="async"
           draggable={false}
-          className="h-[220px] w-[198px] shrink-0 select-none object-cover"
+          className="h-44 w-40 shrink-0 select-none object-cover"
         />
 
-        {/* Frame 2147258994 — 301-wide white panel. */}
-        <div className="flex w-[301px] shrink-0 flex-col gap-5 bg-[var(--onboarding-surface)] px-4 py-5 text-left">
-          <p className="text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
+        {/* Flexible copy panel beside the fixed-aspect artwork. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3 bg-[var(--onboarding-surface)] px-3.5 py-4 text-left">
+          <p className="text-xs font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
             {t("onboarding.rehaul.notes.hero.description")}
           </p>
           {/* Frame 2147258993 — 227 wide, col gap 14; rows are gap 6, 18px marks. */}
-          <ul className="flex w-[227px] flex-col gap-[14px]">
+          <ul className="flex flex-col gap-2.5">
             {[
               [MessageCircle, t("onboarding.rehaul.notes.hero.chat")],
               [FileSearch, t("onboarding.rehaul.notes.hero.transcript")],
@@ -179,14 +178,14 @@ export default function CalendarConnectionsStep() {
           mode while the text tokens flipped light and the provider names
           vanished. Rows: no padding above the first, none below the last,
           hairline dividers between. */}
-      <div className="w-[498px] rounded-[17px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-4 py-5">
+      <div className="w-full max-w-[26rem] rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3.5 py-3">
         {providers.map((provider, index) => (
           <div
             key={provider.id}
             className={`flex items-center gap-[14px] ${
               index === 0
-                ? "pb-3"
-                : "border-t border-[var(--onboarding-control-border)] py-3 last:pb-0"
+                ? "pb-2.5"
+                : "border-t border-[var(--onboarding-control-border)] py-2.5 last:pb-0"
             }`}
           >
             {/* Frame 2147258981 — 44x44 tile, 1px surface stroke, rx 9.5, with a 24px
@@ -194,7 +193,7 @@ export default function CalendarConnectionsStep() {
                 three providers match; the 48px sources land exactly 2x at 24px.
                 No fill: the frame has stroke only, so the row's surface reads
                 through. Do not re-add bg-[var(--onboarding-surface)]. */}
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-[9.5px] border border-[var(--onboarding-control-border)]">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--onboarding-control-border)]">
               <img
                 src={provider.icon}
                 alt=""
@@ -205,14 +204,14 @@ export default function CalendarConnectionsStep() {
                 draggable={false}
                 // contain, not cover: the Microsoft export is 51x48, so it
                 // letterboxes instead of stretching.
-                className="size-6 select-none object-contain"
+                className="size-5 select-none object-contain"
               />
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-[3px] text-left">
-              <p className="text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
+              <p className="text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
                 {provider.title}
               </p>
-              <p className="truncate text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
+              <p className="truncate text-xs leading-[1.4] text-[var(--onboarding-text-secondary)]">
                 {provider.description}
               </p>
             </div>
@@ -221,7 +220,7 @@ export default function CalendarConnectionsStep() {
                 default variant layers on shadow-sm, hover:shadow, a
                 border-primary/60 and font-semibold, none of which the spec has. */}
             {provider.connected ? (
-              <span className="inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-accent)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]">
+              <span className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[38px] bg-[var(--onboarding-accent)] px-3 py-1.5 text-xs font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]">
                 <CircleCheck className="size-3.5 shrink-0" strokeWidth={1.167} />
                 {t(`integrations.${provider.id}Calendar.connected`)}
               </span>
@@ -230,7 +229,7 @@ export default function CalendarConnectionsStep() {
                 type="button"
                 disabled={connecting !== null}
                 onClick={() => void connect(provider.id)}
-                className="onboarding-pressable inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-inverse-surface)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-inverse-text)] hover:bg-[var(--onboarding-inverse-surface-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:opacity-60"
+                className="onboarding-pressable inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[38px] bg-[var(--onboarding-inverse-surface)] px-3 py-1.5 text-xs font-medium leading-[1.4] text-[var(--onboarding-inverse-text)] hover:bg-[var(--onboarding-inverse-surface-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:opacity-60"
               >
                 {connecting === provider.id && (
                   <Loader2 className="size-3.5 shrink-0 animate-spin" />

@@ -64,20 +64,19 @@ function Feature({
   children: string;
 }) {
   return (
-    <li className="flex items-center gap-2 text-sm leading-[1.4] text-[var(--onboarding-text-primary)]">
+    <li className="flex items-center gap-1.5 text-xs leading-[1.4] text-[var(--onboarding-text-primary)]">
       <Icon
-        className={`size-3.5 shrink-0 ${accent ? "text-[var(--onboarding-accent)]" : "text-[var(--onboarding-text-tertiary)]"}`}
+        className={`size-3 shrink-0 ${accent ? "text-[var(--onboarding-accent)]" : "text-[var(--onboarding-text-tertiary)]"}`}
       />
       {children}
     </li>
   );
 }
 
-// Figma "Frame 34"/"Frame 60"/"Frame 61": 343x400, pad 20/18/24/18, white on a
-// 1px surface stroke, radius 16, content pinned top and the action pinned bottom.
+// Compact setup card: content stays pinned to the top and the action to the bottom.
 function SetupCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="relative flex h-[400px] w-[343px] shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-[18px] pb-6 pt-5 text-left">
+    <section className="relative flex h-[350px] w-68 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 pb-5 pt-4 text-left">
       {children}
     </section>
   );
@@ -98,7 +97,7 @@ const CardAction = forwardRef<
       ref={ref}
       type="button"
       onClick={onClick}
-      className={`onboarding-pressable relative z-10 w-full rounded-[38px] px-5 py-2 text-sm font-medium leading-[1.4] ${className} ${
+      className={`onboarding-pressable relative z-10 w-full rounded-[38px] px-4 py-1.5 text-xs font-medium leading-[1.4] ${className} ${
         brand
           ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)] hover:brightness-95"
           : "border border-[var(--onboarding-control-border)] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
@@ -182,18 +181,18 @@ export default function SetupChoiceStep({
     hasEnforcedManagedProvider(managedConfig)
   ) {
     return (
-      <div className="mx-auto mt-8 flex w-full flex-col items-center gap-8">
+      <div className="mx-auto mt-5 flex w-full flex-col items-center gap-5">
         <div className="onboarding-stagger flex items-start justify-center">
           <SetupCard>
-            <div className="flex flex-col gap-5">
-              <span className="flex size-10 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]">
-                <Building2 className="size-5" />
+            <div className="flex flex-col gap-4">
+              <span className="flex size-9 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]">
+                <Building2 className="size-4" />
               </span>
               <div className="flex flex-col gap-2">
                 <h2 className="onboarding-card-title text-[var(--onboarding-text-primary)]">
                   {t("onboarding.rehaul.setupChoice.managed.title")}
                 </h2>
-                <p className="text-base leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                <p className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
                   {t("onboarding.rehaul.setupChoice.managed.description")}
                 </p>
               </div>
@@ -210,17 +209,17 @@ export default function SetupChoiceStep({
   return (
     // Figma "Frame 2147259042": column, gap 32, centred — the card row above the
     // Show More Options pill.
-    <div className="mx-auto mt-8 flex w-full flex-col items-center gap-8">
+    <div className="mx-auto mt-5 flex w-full flex-col items-center gap-4">
       {/* Frame 60: row, gap 16. */}
-      <div className="onboarding-stagger flex items-start justify-center gap-4">
+      <div className="onboarding-stagger flex items-start justify-center gap-3">
         {localAllowed && (
           <SetupCard>
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 {/* Frame 2147259034: the two model marks overlap by 8, each on a
                     1.33px white ring so the stack reads front-to-back. */}
                 <span className="flex -space-x-2">
-                  <span className="flex size-10 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]">
+                  <span className="flex size-9 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]">
                     <img
                       src={openAIIcon}
                       alt=""
@@ -229,7 +228,7 @@ export default function SetupChoiceStep({
                       height={20}
                       decoding="async"
                       draggable={false}
-                      className="size-5 invert dark:invert-0"
+                      className="size-4 invert dark:invert-0"
                     />
                   </span>
                   {/* The tile is its own green field, so it fills the chip and gets
@@ -237,7 +236,7 @@ export default function SetupChoiceStep({
                       green eye mark, which read as green on green. The mark and
                       wordmark both fall inside the inscribed circle, so nothing of
                       the logo is lost to the crop. */}
-                  <span className="size-10 overflow-hidden rounded-full ring-[1.33px] ring-[var(--onboarding-surface)]">
+                  <span className="size-9 overflow-hidden rounded-full ring-[1.33px] ring-[var(--onboarding-surface)]">
                     <img
                       src={nvidiaIcon}
                       alt=""
@@ -256,12 +255,12 @@ export default function SetupChoiceStep({
                 </span>
               </div>
 
-              <div className="flex flex-col gap-[22px]">
-                <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
                   <h2 className="onboarding-card-title text-[var(--onboarding-text-primary)]">
                     {t("onboarding.rehaul.setupChoice.local.title")}
                   </h2>
-                  <p className="text-base leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                  <p className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
                     {t("onboarding.rehaul.setupChoice.local.description", {
                       minimumSpace: minimumLocalSpaceGb,
                     })}
@@ -271,7 +270,7 @@ export default function SetupChoiceStep({
                     exported from, matched by their path coordinates: Laptop (not
                     LaptopMinimal, which is a plain rect with a detached base line)
                     and BanknoteCheck (not BadgeCheck). */}
-                <ul className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-2">
                   <Feature icon={Laptop}>
                     {t("onboarding.rehaul.setupChoice.local.features.device")}
                   </Feature>
@@ -301,11 +300,11 @@ export default function SetupChoiceStep({
               className="pointer-events-none absolute inset-x-0 bottom-0 h-[183px] bg-gradient-to-t from-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] to-transparent"
               aria-hidden="true"
             />
-            <div className="relative z-10 flex flex-col gap-5">
+            <div className="relative z-10 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 {/* Frame 48: 40px mark on the brand gradient. */}
-                <span className="flex size-10 items-center justify-center rounded-full bg-gradient-to-b from-[#4079ed] to-[#244587] text-white">
-                  <BrandMark className="size-6" />
+                <span className="flex size-9 items-center justify-center rounded-full bg-gradient-to-b from-[#4079ed] to-[#244587] text-white">
+                  <BrandMark className="size-5" />
                 </span>
                 {/* Frame 49: the "Recommended" chip. Figma has white text on a
                     glass fill over the card's background artwork ("Vector 1",
@@ -316,16 +315,16 @@ export default function SetupChoiceStep({
                 </span>
               </div>
 
-              <div className="flex flex-col gap-[22px]">
-                <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
                   <h2 className="onboarding-card-title text-[var(--onboarding-text-primary)]">
                     {t("onboarding.rehaul.setupChoice.cloud.title")}
                   </h2>
-                  <p className="text-base leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                  <p className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
                     {t("onboarding.rehaul.setupChoice.cloud.description")}
                   </p>
                 </div>
-                <ul className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-2">
                   <Feature icon={Zap} accent>
                     {t("onboarding.rehaul.setupChoice.cloud.features.fast")}
                   </Feature>
@@ -351,24 +350,24 @@ export default function SetupChoiceStep({
 
         {enterpriseAllowed && (
           <SetupCard>
-            <div className="flex flex-col gap-5">
-              <div className="flex items-center gap-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-4">
                 {/* Frame 3: 40px outlined mark, 1.33px surface stroke. */}
-                <span className="flex size-10 items-center justify-center rounded-full border-[1.33px] border-[var(--onboarding-control-border)] text-[var(--onboarding-accent)]">
-                  <Building2 className="size-[22px]" strokeWidth={1.556} />
+                <span className="flex size-9 items-center justify-center rounded-full border-[1.33px] border-[var(--onboarding-control-border)] text-[var(--onboarding-accent)]">
+                  <Building2 className="size-5" strokeWidth={1.556} />
                 </span>
               </div>
 
-              <div className="flex flex-col gap-[22px]">
-                <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
                   <h2 className="onboarding-card-title text-[var(--onboarding-text-primary)]">
                     {t("onboarding.rehaul.setupChoice.enterprise.title")}
                   </h2>
-                  <p className="text-base leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                  <p className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
                     {t("onboarding.rehaul.setupChoice.enterprise.description")}
                   </p>
                 </div>
-                <ul className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-2">
                   <Feature icon={ShieldUser}>
                     {t("onboarding.rehaul.setupChoice.enterprise.features.credentials")}
                   </Feature>
@@ -395,7 +394,7 @@ export default function SetupChoiceStep({
         <button
           type="button"
           onClick={() => setShowMore(true)}
-          className="onboarding-pressable rounded-[38px] border border-[var(--onboarding-control-border)] px-5 py-2 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
+          className="onboarding-pressable rounded-[38px] border border-[var(--onboarding-control-border)] px-4 py-1.5 text-xs font-medium leading-[1.4] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
         >
           {t("onboarding.rehaul.setupChoice.showMore")}
         </button>
@@ -408,16 +407,16 @@ export default function SetupChoiceStep({
       <Dialog open={showMore} onOpenChange={(open) => !open && setShowMore(false)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-[460px] max-w-[460px] gap-8 rounded-[28px] border-0 bg-[var(--onboarding-surface)] px-5 pb-8 pt-6 text-left [&>button]:hidden"
+          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-left [&>button]:hidden"
         >
           {/* Frame 2147258979: 238 tall, radius 20, image fill. Source is 840x477,
               so it lands at ~2x for the 420x238 slot. */}
           <div
-            className="flex h-[238px] items-center justify-center rounded-[20px] bg-cover bg-center"
+            className="flex h-[190px] items-center justify-center rounded-2xl bg-cover bg-center"
             style={{ backgroundImage: `url(${apiSetupHero})` }}
           >
             {/* Frame 35: pad 10 20, gap 7, radius 38, 16/140% medium. */}
-            <span className="inline-flex items-center gap-[7px] rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2.5 text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
+            <span className="inline-flex items-center gap-1.5 rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-2 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
               <KeyRound
                 className="size-5 shrink-0 text-[var(--onboarding-accent)]"
                 strokeWidth={1.667}
@@ -428,22 +427,22 @@ export default function SetupChoiceStep({
           </div>
 
           {/* Frame 2147259001: col gap 20. */}
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center gap-2 text-center">
               {/* Important modifiers are load-bearing: DialogTitle renders an h2, and both
                   its own shadcn classes and the global h1–h6 rule set weight 600 and a
                   tighter tracking that a plain utility loses to. */}
-              <DialogTitle className="text-2xl! font-medium! leading-[1.4]! tracking-normal! text-[var(--onboarding-text-primary)]">
+              <DialogTitle className="text-xl! font-medium! leading-[1.4]! tracking-normal! text-[var(--onboarding-text-primary)]">
                 {t("onboarding.rehaul.setupChoice.moreOptions.title")}
               </DialogTitle>
-              <DialogDescription className="w-[336px] text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
+              <DialogDescription className="w-full max-w-xs text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
                 {t("onboarding.rehaul.setupChoice.moreOptions.description")}
               </DialogDescription>
             </div>
 
             {/* Frame 16: pad 20 16, surface-secondary, radius 20. Rows follow the
                 shared rhythm — nothing above the first, divider between. */}
-            <div className="rounded-[20px] bg-[var(--onboarding-surface-secondary)] px-4 py-5">
+            <div className="rounded-2xl bg-[var(--onboarding-surface-secondary)] px-3.5 py-4">
               {[
                 {
                   id: "byok" as const,
@@ -470,14 +469,14 @@ export default function SetupChoiceStep({
                     onSelect("byok", { selfHosted: row.id === "self-hosted" });
                   }}
                   className={`onboarding-pressable flex w-full items-center gap-[14px] text-left ${
-                    index === 0 ? "pb-5" : "border-t border-[var(--onboarding-control-border)] pt-5"
+                    index === 0 ? "pb-4" : "border-t border-[var(--onboarding-control-border)] pt-4"
                   }`}
                 >
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full border-[1.47px] border-[var(--onboarding-control-border)] text-[var(--onboarding-accent)]">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-[1.47px] border-[var(--onboarding-control-border)] text-[var(--onboarding-accent)]">
                     <row.icon className="size-[18px]" strokeWidth={1.667} />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                    <span className="text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
+                    <span className="text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
                       {row.title}
                     </span>
                     <span className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
@@ -498,14 +497,14 @@ export default function SetupChoiceStep({
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-[460px] max-w-[460px] gap-8 rounded-[28px] border-0 bg-[var(--onboarding-surface)] px-5 pb-8 pt-6 text-left text-[var(--onboarding-text-primary)] [&>button]:hidden"
+          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-left text-[var(--onboarding-text-primary)] [&>button]:hidden"
           onOpenAutoFocus={handleWarningAutoFocus}
         >
           {/* Frame 2147258979: 238 tall, radius 20, image crop. The three marks
               are 32 / 55 / 32 on a 14 gap, with the outer two at 72% white so the
               middle one reads as the subject. */}
           <div
-            className="flex h-[238px] items-center justify-center rounded-[20px] bg-cover bg-center"
+            className="flex h-[190px] items-center justify-center rounded-2xl bg-cover bg-center"
             style={{ backgroundImage: `url(${warningBackdrop})` }}
           >
             <div className="flex items-center gap-3.5">
@@ -522,11 +521,11 @@ export default function SetupChoiceStep({
           </div>
 
           {/* Frame 2147259001: col gap 28. */}
-          <div className="flex flex-col gap-7">
+          <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
               {/* Important modifiers again: DialogTitle is an h2, and the global
                   h1–h6 rule forces line-height 1.15 and -0.025em tracking. */}
-              <DialogTitle className="text-xl! font-semibold! leading-[1.4]! tracking-normal! text-[var(--onboarding-text-primary)]">
+              <DialogTitle className="text-lg! font-semibold! leading-[1.4]! tracking-normal! text-[var(--onboarding-text-primary)]">
                 {pending ? t(`onboarding.rehaul.setupChoice.warnings.${pending}.title`) : ""}
               </DialogTitle>
               <DialogDescription className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">

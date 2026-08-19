@@ -409,7 +409,7 @@ body.dark:has(.onboarding-canvas) {
    leading-* and tracking-* utilities, so a utility on the element is silently
    ignored. */
 .onboarding-card-title {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: normal;
@@ -512,7 +512,7 @@ body.dark:has(.onboarding-canvas) {
      edge at rest, and scrolls out of the way once the list moves. 4px inline is
      the hover slab's breathing room; the scrollbar sits outside it, flush to the
      border. */
-  padding: 8px 4px;
+  padding: 6px 4px;
 }
 
 /* Figma "Rectangle 45": a true 5px pill. Faking an inset with a transparent
@@ -619,8 +619,8 @@ body.dark:has(.onboarding-canvas) {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-block: 12px;
+  gap: 12px;
+  padding-block: 10px;
   /* Indents the content inside the full-width hover slab, which is what gives
      the slab room around the checkbox. With the scroller's 4px, content lands
      16px from the border as specced. */
@@ -791,7 +791,7 @@ h1 {
 }
 
 .onboarding-display-title {
-  font-size: 2.5rem; /* 40px */
+  font-size: 2rem; /* 32px */
   font-weight: 500; /* Inter Medium */
   line-height: 1.2; /* 120% */
   /* No letter-spacing on purpose. Inter's opsz build already tightens the
@@ -800,8 +800,7 @@ h1 {
 }
 
 /* The compact first-run steps (auth + permissions, per COMPACT_STEPS in
-   OnboardingFlow.tsx) drop to 32px. Scoped to .compact rather than set on the
-   individual headings so it keeps tracking COMPACT_STEPS on its own. */
+   OnboardingFlow.tsx) intentionally keep their existing 32px scale. */
 .onboarding-canvas.compact .onboarding-display-title {
   font-size: 2rem; /* 32px */
 }

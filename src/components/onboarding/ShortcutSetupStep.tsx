@@ -9,7 +9,7 @@ function HotkeyChord({ value, compact = false }: { value: string; compact?: bool
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-center ${compact ? "gap-1.5" : "gap-5"}`}
+      className={`flex flex-wrap items-center justify-center ${compact ? "gap-1.5" : "gap-3"}`}
       aria-label={formatHotkeyLabel(value)}
     >
       {keycaps.map(({ id, label, symbol }) => (
@@ -18,11 +18,11 @@ function HotkeyChord({ value, compact = false }: { value: string; compact?: bool
           // Surface, bevel and border live in .onboarding-keycap so the cap is
           // styled in one place; only the box metrics vary by size here.
           className={`onboarding-keycap relative flex flex-col justify-between rounded-[12px] border text-[var(--onboarding-text-primary)] ${
-            compact ? "h-8 min-w-12 px-2 py-1 text-xs" : "h-20 w-26 px-3 py-2.5 text-sm"
+            compact ? "h-8 min-w-12 px-2 py-1 text-xs" : "h-16 min-w-20 px-2.5 py-2 text-xs"
           }`}
         >
           <span
-            className={`self-end font-medium leading-none ${compact ? "text-sm" : "text-xl"}`}
+            className={`self-end font-medium leading-none ${compact ? "text-sm" : "text-lg"}`}
             aria-hidden="true"
           >
             {symbol}
@@ -104,16 +104,13 @@ export default function ShortcutSetupStep({
   };
 
   return (
-    // dense is the assistant page, where the box follows the preview still on
-    // Frame 2147203458's 20 gap; on its own it keeps the wider 32.
-    <div
-      className={`mx-auto w-full max-w-[28.125rem] shrink-0 text-center ${dense ? "mt-5" : "mt-8"}`}
-    >
-      {/* Figma "Frame 2147258980": 450x160, 24 radius, light/surface-secondary
-          behind a 2px 6-6 dashed light/surface-stroke. The filled state drops the
-          dash and the tint so the keycaps sit on their own surface. */}
+    // The assistant page keeps the tighter margin because it also includes the
+    // preview image; the standalone shortcut page has a little more separation.
+    <div className={`mx-auto w-full max-w-sm shrink-0 text-center ${dense ? "mt-4" : "mt-5"}`}>
+      {/* Compact capture surface. The filled state drops the dash and tint so
+          the keycaps sit on their own surface. */}
       <div
-        className={`relative flex h-40 items-center justify-center rounded-3xl px-6 ${
+        className={`relative flex h-32 items-center justify-center rounded-2xl px-5 ${
           candidate
             ? "border-2 border-transparent bg-[var(--onboarding-surface)]"
             : "border-2 border-dashed border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]"
@@ -137,7 +134,7 @@ export default function ShortcutSetupStep({
             {error}
           </p>
         ) : heldModifiers ? (
-          <div className="pointer-events-none flex flex-col items-center gap-4">
+          <div className="pointer-events-none flex flex-col items-center gap-3">
             <HotkeyChord value={heldModifiers} />
             <p className="text-sm leading-[1.4] text-[var(--onboarding-text-tertiary)]">
               {t("onboarding.rehaul.hotkey.holding")}
@@ -146,19 +143,16 @@ export default function ShortcutSetupStep({
         ) : candidate ? (
           <HotkeyChord value={candidate} />
         ) : (
-          // Figma "Frame 2147258973/74": the recommendation leads and the
-          // instruction closes, both Inter 18/140% on light/text-tertiary. Frame
-          // 2147258980 has no auto-layout, so its 47.5/22 padding is only a hint
-          // and does not add up to 160 — the measured 51.5 gap is the real value,
-          // and the pair is centred in the box instead.
-          <div className="pointer-events-none flex flex-col items-center gap-[51.5px]">
-            <p className="flex items-center gap-2.5 text-lg leading-[1.4] text-[var(--onboarding-text-tertiary)]">
+          // The recommendation leads and the capture instruction closes; the
+          // pair remains centred as the surface scales down.
+          <div className="pointer-events-none flex flex-col items-center gap-8">
+            <p className="flex items-center gap-2 text-base leading-[1.4] text-[var(--onboarding-text-tertiary)]">
               {recommendedLabel}
-              <span className="rounded-[39px] bg-[var(--onboarding-surface-tertiary)] px-2.5 py-2 text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
+              <span className="rounded-[39px] bg-[var(--onboarding-surface-tertiary)] px-2.5 py-1.5 text-xs leading-[1.4] text-[var(--onboarding-text-secondary)]">
                 {formatHotkeyInstruction(recommended)}
               </span>
             </p>
-            <p className="text-lg leading-[1.4] text-[var(--onboarding-text-tertiary)]">
+            <p className="text-base leading-[1.4] text-[var(--onboarding-text-tertiary)]">
               {captureLabel}
             </p>
           </div>
@@ -166,7 +160,7 @@ export default function ShortcutSetupStep({
       </div>
 
       {candidate && confirmed && !error && showCandidateActions && (
-        <div className="mt-8 text-center" aria-live="polite">
+        <div className="mt-5 text-center" aria-live="polite">
           {/* The keycaps above are the visual confirmation, so the pill that used
               to sit here is sr-only rather than deleted: HotkeyChord's aria-label
               is not a live region, so this is the only spoken confirmation that
@@ -175,7 +169,7 @@ export default function ShortcutSetupStep({
           <button
             type="button"
             onClick={reset}
-            className="rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2 text-sm text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
+            className="rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-1.5 text-sm text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
           >
             {chooseAnotherLabel}
           </button>

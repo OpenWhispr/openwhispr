@@ -131,7 +131,7 @@ function StepPrimaryAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-10 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-6 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-secondary)] disabled:opacity-100! ${className}`}
+      className={`h-9 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-secondary)] disabled:opacity-100! ${className}`}
     >
       {children}
     </Button>
@@ -152,7 +152,7 @@ function StepSecondaryAction({
       type="button"
       variant="outline-flat"
       onClick={onClick}
-      className={`h-10 rounded-[38px]! border! border-[var(--onboarding-control-border)]! bg-transparent! px-6 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! hover:bg-[var(--onboarding-surface-hover)]! ${className}`}
+      className={`h-9 rounded-[38px]! border! border-[var(--onboarding-control-border)]! bg-transparent! px-5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! hover:bg-[var(--onboarding-surface-hover)]! ${className}`}
     >
       {children}
     </Button>
@@ -161,7 +161,7 @@ function StepSecondaryAction({
 
 /** The card each setup mode's step renders into. Top margin is per call site. */
 const SETUP_CARD_CLASS =
-  "mx-auto w-full max-w-[23.75rem] rounded-[1.125rem] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-[1.125rem] text-[var(--onboarding-text-primary)]";
+  "mx-auto w-full max-w-[22rem] rounded-[1.125rem] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-4 text-[var(--onboarding-text-primary)]";
 
 /** The field trigger. Call sites that can be disabled add the disabled: variants. */
 const SELECT_TRIGGER_CLASS =
@@ -206,7 +206,7 @@ const SELECT_PANEL_CLASS =
  * theme out here and would paint a square band behind the slab.
  */
 const SELECT_ITEM_CLASS =
-  "onboarding-select-item gap-2.5 rounded-none py-3 pl-1.5 pr-8 text-base font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
+  "onboarding-select-item gap-2.5 rounded-none py-2.5 pl-1.5 pr-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
 
 function providerCredential(provider: string, store: ReturnType<typeof useSettingsStore.getState>) {
   switch (provider) {
@@ -391,7 +391,7 @@ export function ByokProviderStep({
     "onboarding-provider-input h-9 rounded-xl! border px-3 text-xs shadow-none! focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]";
 
   return (
-    <section className={`mt-8 ${SETUP_CARD_CLASS}`}>
+    <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
       <SetupStageStepper stepId={stepId} stepIds={stepIds} />
 
       <div className="mt-3 space-y-3">
@@ -781,7 +781,7 @@ export function LocalModelSetupStep({
   };
 
   return (
-    <section className={`mt-8 ${SETUP_CARD_CLASS}`}>
+    <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
       <SetupStageStepper stepId={stepId} stepIds={stepIds} />
 
       <div className="mt-5">
@@ -825,7 +825,7 @@ export function LocalModelSetupStep({
           the edge while a short provider's list filled it, and the two read as
           different widths. The partially visible row at the bottom edge is the
           overflow affordance instead. */}
-      <div className="onboarding-scroll-hidden mt-4 h-64 overflow-y-auto rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3">
+      <div className="onboarding-scroll-hidden mt-3 h-56 overflow-y-auto rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3">
         {models.map((model) => {
           const isDownloaded = downloadedModels.has(model.id);
           const isDownloading = activeDownload.isDownloadingModel(model.id);
@@ -834,7 +834,7 @@ export function LocalModelSetupStep({
           return (
             <div
               key={model.id}
-              className="flex min-h-16 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-1 py-2 last:border-b-0"
+              className="flex min-h-14 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-1 py-2 last:border-b-0"
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
                 <ProviderIcon
@@ -912,7 +912,7 @@ export function LocalModelSetupStep({
         })}
       </div>
 
-      <div className={`mt-6 grid gap-2 ${anyDownloadActive ? "grid-cols-2" : "grid-cols-1"}`}>
+      <div className={`mt-4 grid gap-2 ${anyDownloadActive ? "grid-cols-2" : "grid-cols-1"}`}>
         {anyDownloadActive && (
           <StepSecondaryAction onClick={onSkip}>{t("common.skip")}</StepSecondaryAction>
         )}
@@ -1160,7 +1160,7 @@ export function EnterpriseSetupStep({
       identityErrorCode === "SSO_REQUIRED" ||
       (managed.kind === "error" && managed.code === "MANAGED_CONFIG_UNAVAILABLE");
     return (
-      <section className={`mt-8 ${SETUP_CARD_CLASS}`}>
+      <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
         <SetupStageStepper stepId={stepId} stepIds={stepIds} />
         <div className="mt-7 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
           {managed.kind === "error"
@@ -1182,7 +1182,7 @@ export function EnterpriseSetupStep({
   }
 
   return (
-    <section className={`mt-[2.125rem] ${SETUP_CARD_CLASS}`}>
+    <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
       <SetupStageStepper stepId={stepId} stepIds={stepIds} />
 
       {lockedToManaged && managed.kind === "managed" ? (

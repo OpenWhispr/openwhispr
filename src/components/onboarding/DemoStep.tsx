@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import confetti from "canvas-confetti";
 import { ChevronDown, Loader2, Mic, RefreshCw, Square } from "lucide-react";
@@ -93,12 +94,15 @@ function ConfettiLayer() {
     };
   }, []);
 
-  return (
+  // Escape the transformed onboarding step so the fixed canvas spans the full
+  // window and particles can fall naturally past the panel's bottom edge.
+  return createPortal(
     <canvas
       ref={canvasRef}
       className="pointer-events-none fixed inset-0 z-20 h-full w-full"
       aria-hidden="true"
-    />
+    />,
+    document.body
   );
 }
 
@@ -115,7 +119,7 @@ function FounderAvatar() {
       height={40}
       decoding="async"
       draggable={false}
-      className="size-10 shrink-0 rounded-full object-cover"
+      className="size-9 shrink-0 rounded-full object-cover"
     />
   );
 }
@@ -125,7 +129,7 @@ function FounderAvatar() {
 function FounderBubble({ children }: { children: ReactNode }) {
   return (
     <p
-      className="w-fit rounded-[38px] bg-[var(--onboarding-accent)] px-5 py-2.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]"
+      className="w-fit rounded-[38px] bg-[var(--onboarding-accent)] px-4 py-2 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]"
       style={BUBBLE_IN}
     >
       {children}
@@ -147,7 +151,7 @@ function TypingBubble() {
     // 10/20 padding, hugging a 40x20 row of 8px dots on 16px centers (so an 8px
     // gap) in light/text-tertiary.
     <div
-      className="flex items-center rounded-[38px] bg-[var(--onboarding-control-border)] px-5 py-2.5"
+      className="flex items-center rounded-[38px] bg-[var(--onboarding-control-border)] px-4 py-2"
       style={BUBBLE_IN}
       aria-label={t("onboarding.rehaul.demo.typing")}
     >
@@ -155,7 +159,7 @@ function TypingBubble() {
         {[0, 1, 2].map((index) => (
           <span
             key={index}
-            className="onboarding-typing-dot size-2 rounded-full bg-[var(--onboarding-text-tertiary)]"
+            className="onboarding-typing-dot size-1.5 rounded-full bg-[var(--onboarding-text-tertiary)]"
             style={{ animationDelay: `${index * 160}ms` }}
           />
         ))}
@@ -239,13 +243,9 @@ export default function DemoStep({
 
   return (
     <div
-      // Figma "Frame 50": 40 between the header and this block. Both demos cap at
-      // 640, wider than the spec's 424 (dictation) and 720 (mail) on purpose: at
-      // 424 the bubbles only had 374px once the 50px avatar gutter came off, so
-      // the "Try saying" line and the 18px placeholder under it both wrapped. One
-      // width for both keeps the two demo steps from stepping in and out as the
-      // flow moves between them.
-      className="relative mx-auto mt-10 w-full max-w-[40rem]"
+      // One compact width for both demos keeps the two steps from stepping in
+      // and out as the flow moves between them.
+      className="relative mx-auto mt-6 w-full max-w-lg"
     >
       {successful && kind === "dictation" && <ConfettiLayer />}
 
@@ -253,7 +253,7 @@ export default function DemoStep({
         // Frame 2147258978: 40 between the bubbles and the card. Explicit gaps
         // rather than space-y so the card's spacing can't collide with the
         // 12 that separates the two bubble rows.
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             {messageCount === 0 ? (
               <div className="flex items-end gap-2.5">
@@ -265,7 +265,7 @@ export default function DemoStep({
                 {/* Frame 32: the first bubble carries the avatar gutter as padding
                     (40 avatar + 10 gap) so both messages share one left edge and
                     the avatar rides the newest row. */}
-                <div className="flex items-end gap-2.5 pl-[50px]">
+                <div className="flex items-end gap-2.5 pl-11">
                   <FounderBubble>{firstMessage}</FounderBubble>
                 </div>
                 {/* Frame 33 */}
@@ -298,13 +298,11 @@ export default function DemoStep({
           )}
         </div>
       ) : (
-        // Figma "Frame 2147203460": 400 tall, radius 20, #E3E3E3 stroke, 20/16
-        // padding, 24 between the mail header and the reply row. No shadow — the
-        // stroke carries the edge.
-        <article className="flex h-[400px] flex-col gap-6 rounded-[20px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-5 text-left">
+        // No shadow: the tokenized stroke carries the edge of the compact card.
+        <article className="flex h-[340px] flex-col gap-5 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-4 text-left">
           {/* Frame 2147259013: 44px avatar, 16 gap, and a column that keeps the
               body copy on the text's left edge rather than the avatar's. */}
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <img
               src={emailSenderAvatar}
               alt=""
@@ -313,9 +311,9 @@ export default function DemoStep({
               height={44}
               decoding="async"
               draggable={false}
-              className="size-11 shrink-0 rounded-full object-cover"
+              className="size-10 shrink-0 rounded-full object-cover"
             />
-            <div className="flex min-w-0 flex-1 flex-col gap-6">
+            <div className="flex min-w-0 flex-1 flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <p className="flex min-w-0 gap-1 text-sm leading-[1.4]">
                   <span className="font-medium text-[var(--onboarding-text-primary)]">
@@ -341,7 +339,7 @@ export default function DemoStep({
 
           {/* Frame 2147259014: the reply row repeats the 44px avatar and 16 gap so
               the input card lines up with the mail body above it. */}
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <img
               src={assistantAvatar}
               alt=""
@@ -350,7 +348,7 @@ export default function DemoStep({
               height={44}
               decoding="async"
               draggable={false}
-              className="size-11 shrink-0 rounded-full object-cover"
+              className="size-10 shrink-0 rounded-full object-cover"
             />
             <VoiceSurface
               inputRef={inputRef}
@@ -402,10 +400,8 @@ function VoiceSurface({
 }) {
   return (
     <div
-      // Figma "Frame 3", shared by both demos: 180 tall, radius 14, #E3E3E3
-      // stroke, 15/11 padding. The dictation card is a fixed 424 wide; the
-      // assistant one fills the row beside its avatar.
-      className={`relative flex h-[180px] flex-col rounded-[14px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-[11px] py-[15px] ${
+      // Shared by both demos; the assistant variant fills the row beside its avatar.
+      className={`relative flex h-36 flex-col rounded-[14px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-3 ${
         embedded ? "min-w-0 flex-1" : ""
       }`}
     >
@@ -418,7 +414,7 @@ function VoiceSurface({
         // in the dictation one. The caret takes the brand colour, which is what
         // Figma draws as the 3x18 bar.
         className={`input-inline min-h-0 w-full flex-1 resize-none bg-transparent pr-10 leading-[1.4] text-[var(--onboarding-text-primary)] caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
-          embedded ? "text-base" : "text-[1.125rem]"
+          embedded ? "text-sm" : "text-base"
         }`}
       />
       <button
