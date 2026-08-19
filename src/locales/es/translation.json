@@ -197,7 +197,7 @@
         "title": "¿Qué idiomas hablas?",
         "titleLineOne": "¿Qué idiomas",
         "titleLineTwo": "hablas?",
-        "description": "Select all that apply. Multiple selections use automatic language detection."
+        "description": "Selecciona todos los que correspondan. Esto ayuda a OpenWhispr a reconocer los cambios de idioma con mayor precisión."
       },
       "dictationHotkey": {
         "title": "Configura tu atajo de teclado",
@@ -209,22 +209,10 @@
         "title": "Configura OpenWhispr Assistant",
         "titleLineOne": "Configura",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Di lo que necesitas y OpenWhispr Assistant escribe el resultado por ti.",
-        "preview": {
-          "newMessage": "Mensaje nuevo",
-          "toLabel": "To:",
-          "recipient": "alex@northstarstudio.co",
-          "subjectLabel": "Asunto:",
-          "subject": "Proyecto finalizado",
-          "greeting": "Hola Alex:",
-          "bodyLineOne": "El nuevo proyecto está terminado y listo para su revisión.",
-          "bodyLineTwo": "He completado las últimas actualizaciones y, por mi parte, todo está listo.",
-          "prompt": "Redacta un correo para avisar al cliente de que he terminado el nuevo proyecto"
-        }
+        "description": "Di lo que necesitas y OpenWhispr Assistant escribe el resultado por ti."
       },
       "hotkey": {
         "capture": "Pulsa las teclas que quieras usar",
-        "confirm": "Pulsa {{hotkey}} otra vez para confirmar",
         "chooseAnother": "Elegir otro atajo",
         "inUse": "Ese atajo ya está en uso. Elige otro.",
         "holding": "Mantén pulsado o pulsa otra tecla"
@@ -234,7 +222,7 @@
         "titleLineOne": "Prueba tu",
         "titleLineTwo": "primer dictado",
         "description": "Pulsa {{hotkey}} y empieza a hablar. OpenWhispr convertirá tu voz en texto.",
-        "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
+        "founder": "Hola, soy Gabe, fundador de OpenWhispr",
         "prompt": "Prueba a decir: «Estoy probando el dictado por primera vez».",
         "placeholder": "Tu dictado aparecerá aquí…"
       },
@@ -248,7 +236,7 @@
         "recipientLabel": "para John Doe",
         "email": "¡Hola! ¿Te apetece un café la semana que viene? Dime qué día te viene bien.",
         "prompt": "Responde que el martes a las 3 me va bien. Envía una invitación.",
-        "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
+        "response": "Hola Eren:\n\nMe encantaría ponernos al día. El martes a las 15:00 me viene bien. Si te parece bien, te enviaré una invitación de calendario.\nCon ganas de verte,\nJohn"
       },
       "demo": {
         "listening": "Escuchando…",
@@ -263,8 +251,6 @@
         "titleLineTwoBrand": "Notes",
         "description": "OpenWhispr convierte tu conversación en notas claras. Ningún bot de reuniones se une a tu llamada.",
         "hero": {
-          "detected": "Reunión detectada",
-          "transcribe": "¿Quieres transcribir la reunión?",
           "description": "Graba tu reunión y deja que OpenWhispr convierta la conversación en notas claras y organizadas.",
           "chat": "Chatea con las notas de tu reunión",
           "transcript": "Revisa la transcripción completa",
@@ -342,7 +328,7 @@
           "local": {
             "title": "La configuración local requiere algunos pasos más",
             "description": "El procesamiento local mantiene tu voz en este dispositivo, pero requiere una configuración inicial y al menos {{minimumSpace}} GB de espacio libre.",
-            "continue": "Set up locally",
+            "continue": "Configurar localmente",
             "steps": {
               "1": "Elige un motor de transcripción",
               "2": "Configura o descarga un modelo, unos {{modelSize}}",
@@ -405,6 +391,7 @@
         "errors": {
           "endpointRequired": "Introduce la URL del endpoint antes de probar.",
           "invalidUrl": "El endpoint debe ser una URL HTTP o HTTPS válida.",
+          "httpsRequired": "Los endpoints públicos deben usar HTTPS. HTTP solo se permite en direcciones privadas.",
           "unsupportedProvider": "La prueba de conexión no está disponible para este proveedor.",
           "apiKeyRequired": "Añade una clave API antes de probar.",
           "credentialsRejected": "El proveedor rechazó estas credenciales.",
@@ -427,7 +414,6 @@
         "use": "Usar",
         "downloadInProgress": "Descarga en curso",
         "cancelDownload": "Cancelar la descarga de {{model}}",
-        "downloadInBackground": "Terminar en segundo plano",
         "downloads": "Descargas de modelos",
         "downloading": "Descargando… {{progress}}%",
         "installing": "Instalando el modelo…"
@@ -437,11 +423,13 @@
         "description": "Usa las credenciales de tu organización para la inteligencia de dictado y el Assistant.",
         "descriptionLineOne": "Usa las credenciales de tu organización",
         "descriptionLineTwo": "para conectar un proveedor.",
-        "dictationIntelligence": "Inteligencia de dictado",
         "ssoProfile": "Perfil SSO",
         "accessKeys": "Claves de acceso",
         "profileName": "Nombre del perfil",
         "profilePlaceholder": "Añade el nombre del perfil",
+        "accessKeyIdPlaceholder": "Añade el ID de clave de acceso",
+        "secretAccessKeyPlaceholder": "Añade la clave de acceso secreta",
+        "sessionTokenPlaceholder": "Añade el token de sesión",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
         "sessionToken": "Session Token (opcional)",

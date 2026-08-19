@@ -33,7 +33,6 @@ export interface OnboardingSession {
   history: OnboardingStepId[];
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
-  completedStepIds: OnboardingStepId[];
 }
 
 export interface OnboardingRouteContext {
@@ -116,7 +115,6 @@ export function createOnboardingSession(): OnboardingSession {
     history: [],
     authPath: null,
     setupMode: null,
-    completedStepIds: [],
   };
 }
 
@@ -179,8 +177,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     if (
       parsed.version !== ONBOARDING_FLOW_VERSION ||
       !isOnboardingStepId(parsed.currentStepId) ||
-      !Array.isArray(parsed.history) ||
-      !Array.isArray(parsed.completedStepIds)
+      !Array.isArray(parsed.history)
     ) {
       return null;
     }
@@ -204,7 +201,6 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       history: parsed.history.filter(isOnboardingStepId),
       authPath,
       setupMode,
-      completedStepIds: parsed.completedStepIds.filter(isOnboardingStepId),
     };
   } catch {
     return null;
@@ -226,12 +222,9 @@ export function migrateLegacyOnboardingStep(value: string | null): OnboardingSte
  * dev jump asks for an off-route step).
  *
  * Clamps to the route step nearest in the canonical order, ties going to the
- * earlier one so nothing gets skipped. route.at(-1) was the old fallback and it
- * teleported you to the LAST step: with agentAllowed false, asking for either
- * assistant step landed on setup-choice, jumping past notes and reading as
- * "onboarding sent me straight to the plan chooser". Nearest-wins keeps the guest
- * route's assistant-demo -> setup-choice (distance 2 vs auth's 7) while the
- * account route lands on its neighbour instead of the end.
+ * earlier one so nothing gets skipped — falling back to the route's last step
+ * would teleport past intermediate steps (with agentAllowed false, asking for an
+ * assistant step must land on its neighbour, not on setup-choice).
  */
 export function reconcileStepWithRoute(
   stepId: OnboardingStepId,
@@ -273,8 +266,8 @@ export interface OnboardingProgressState {
  * grows by two dots at that moment, which is the flow honestly getting longer.
  *
  * Returns null when there is nothing worth drawing: a compact step, an off-route
- * step, or a route so short (the guest path is setup-choice alone) that a
- * one-dot row would read as decoration.
+ * step, or a route with fewer than two counted steps, where a one-dot row would
+ * read as decoration.
  */
 export function getOnboardingProgress(
   stepId: OnboardingStepId,

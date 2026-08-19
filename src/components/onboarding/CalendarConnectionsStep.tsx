@@ -221,9 +221,7 @@ export default function CalendarConnectionsStep() {
             {provider.connected ? (
               <span className="inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[38px] bg-[var(--onboarding-accent)] px-3.5 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]">
                 <CircleCheck className="size-3.5 shrink-0" strokeWidth={1.167} />
-                {t(
-                  `integrations.${provider.id === "microsoft" ? "microsoftCalendar" : `${provider.id}Calendar`}.connected`
-                )}
+                {t(`integrations.${provider.id}Calendar.connected`)}
               </span>
             ) : (
               <button

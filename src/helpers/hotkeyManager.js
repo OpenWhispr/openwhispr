@@ -116,9 +116,12 @@ class HotkeyManager extends EventEmitter {
    * drops any firing where Fn is not down.
    */
   _wrapFnGuardedCallback(hotkey, callback) {
-    if (!hotkey.startsWith("Fn+") || !this.isFnHeld) return callback;
+    if (!hotkey.startsWith("Fn+")) return callback;
     return (firedHotkey) => {
-      if (!this.isFnHeld()) {
+      // Provider looked up at fire time, not wrap time: startup registration
+      // runs before setFnHeldProvider is wired up in initializeDeferredManagers,
+      // and a wrap-time check would leave those hotkeys permanently unguarded.
+      if (this.isFnHeld && !this.isFnHeld()) {
         debugLogger.log(`[HotkeyManager] Ignoring "${hotkey}" — Fn was not held`);
         return;
       }

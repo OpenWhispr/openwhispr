@@ -5,14 +5,11 @@ import { Button } from "../ui/button";
 
 type ProviderConnectionConfig = Parameters<
   NonNullable<Window["electronAPI"]["testProviderConnection"]>
->[0] & { model?: string };
+>[0];
 
-interface ConnectionTestResult {
-  success?: boolean;
-  error?: string;
-  errorCode?: string;
-  status?: number;
-}
+type ConnectionTestResult = Awaited<
+  ReturnType<NonNullable<Window["electronAPI"]["testProviderConnection"]>>
+>;
 
 interface ProviderConnectionTestProps {
   config: ProviderConnectionConfig;

@@ -892,11 +892,12 @@ declare global {
         provider: string;
         apiKey?: string;
         baseUrl?: string;
+        model?: string;
         clientId?: string;
         clientSecret?: string;
         environment?: string;
         tenant?: string;
-      }) => Promise<{ success: boolean; error?: string }>;
+      }) => Promise<{ success: boolean; error?: string; errorCode?: string; status?: number }>;
       pasteText: (
         text: string,
         options?: {

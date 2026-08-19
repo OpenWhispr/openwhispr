@@ -10,12 +10,15 @@ interface EmailVerificationStepProps {
   email: string;
   onVerified: () => void;
   onBack: () => void;
+  /** Rendering inside SignInDialog rather than the onboarding window. */
+  embedded?: boolean;
 }
 
 export default function EmailVerificationStep({
   email,
   onVerified,
   onBack,
+  embedded = false,
 }: EmailVerificationStepProps) {
   const { t } = useTranslation();
   const [resendCooldown, setResendCooldown] = useState(60);
@@ -78,12 +81,20 @@ export default function EmailVerificationStep({
   }, [resendCooldown, isResending, email, t]);
 
   return (
-    <CompactOnboardingFrame showBrandMark={false}>
-      <div className="px-5 pt-[11.9rem] text-center">
+    <CompactOnboardingFrame showBrandMark={false} embedded={embedded}>
+      <div className={`${embedded ? "pt-1" : "px-5 pt-[11.9rem]"} text-center`}>
         <div className="mx-auto flex size-[4.25rem] items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-950 shadow-sm">
           <MailCheck className="size-8" strokeWidth={1.8} />
         </div>
-        <h1 className="onboarding-display-title mt-9">{t("emailVerification.checkEmailTitle")}</h1>
+        <h1
+          className={
+            embedded
+              ? "mt-6 text-2xl font-semibold tracking-tight"
+              : "onboarding-display-title mt-9"
+          }
+        >
+          {t("emailVerification.checkEmailTitle")}
+        </h1>
         <p className="mx-auto mt-3.5 max-w-xs text-base leading-6 text-neutral-500 dark:text-neutral-500">
           {t("emailVerification.checkEmailDescription")}{" "}
           <span className="font-medium text-neutral-950 dark:text-neutral-950">{email}</span>
@@ -110,7 +121,10 @@ export default function EmailVerificationStep({
           </div>
         )}
 
-        {!verified && error && (
+        {/* Resend and Back stay available the whole time the poll is running: a
+            verification email that never arrives raises no error, and without
+            these the step is a dead end. */}
+        {!verified && (
           <div className="mt-5 flex justify-center gap-2">
             <Button
               type="button"

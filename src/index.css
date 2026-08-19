@@ -47,14 +47,11 @@
 
 :root {
   /* Easing. The built-in CSS curves are too weak to read as intentional, so UI
-     motion uses these. --ease-out for anything entering or exiting (starts fast,
-     so the user sees movement at the moment they are watching most closely),
-     --ease-in-out for something moving on screen, --ease-drawer for sheets. Never
+     motion uses --ease-out for anything entering or exiting (starts fast, so the
+     user sees movement at the moment they are watching most closely). Never
      ease-in on UI: it delays the first frame and reads as sluggish at the same
      duration. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* Typography */
   --font-family-sans:
@@ -614,28 +611,6 @@ body.dark:has(.onboarding-canvas) {
   background-image: none;
 }
 
-/* Rectangle 45's 5px pill for a box that scrolls itself, rather than delegating to
-   an inner element the way .onboarding-list does. Needed because the app-wide rule
-   near the end of this file paints every thumb transparent until :hover, at 6px on
-   --color-border — so an onboarding scroller left on the default looks like it has
-   no scrollbar at all, then flashes the wrong one. No scrollbar-gutter here: the
-   bar should only take space when the content actually overflows.
-   The track inset holds the thumb clear of a 16px corner radius, same as
-   .onboarding-list-scroll. */
-.onboarding-thin-scroll::-webkit-scrollbar {
-  width: 5px;
-}
-
-.onboarding-thin-scroll::-webkit-scrollbar-track {
-  margin-block: 14px;
-  background: transparent;
-}
-
-.onboarding-thin-scroll::-webkit-scrollbar-thumb {
-  border-radius: 39px;
-  background-color: var(--onboarding-control-border);
-}
-
 .onboarding-list-row {
   --onboarding-row-inset: 12px;
   position: relative;
@@ -729,57 +704,6 @@ body.dark:has(.onboarding-canvas) {
    indigo with it. */
 .dark .onboarding-compact-hero {
   background-image: var(--onboarding-hero-dither-dark);
-}
-
-.onboarding-brand-hero {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background-image: linear-gradient(
-    205deg,
-    color-mix(in oklch, var(--color-primary) 68%, var(--color-primary-foreground)),
-    var(--color-primary) 48%,
-    color-mix(in oklch, var(--color-primary) 78%, var(--color-foreground))
-  );
-}
-
-.onboarding-brand-hero::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background-image:
-    radial-gradient(
-      circle,
-      color-mix(in oklch, var(--color-primary-foreground) 30%, transparent) 0.5px,
-      transparent 1px
-    ),
-    radial-gradient(
-      circle,
-      color-mix(in oklch, var(--color-primary-foreground) 30%, transparent) 0.5px,
-      transparent 1px
-    );
-  background-position:
-    0 0,
-    2px 2px;
-  background-size: 5px 5px;
-  content: "";
-  mask-image: linear-gradient(205deg, transparent 4%, var(--color-foreground) 88%);
-  pointer-events: none;
-}
-
-.onboarding-code-hero {
-  background-image:
-    radial-gradient(
-      circle at 28% 72%,
-      color-mix(in oklch, var(--color-success) 65%, transparent),
-      transparent 34%
-    ),
-    radial-gradient(
-      circle at 72% 32%,
-      color-mix(in oklch, var(--color-info) 24%, transparent),
-      transparent 36%
-    ),
-    linear-gradient(135deg, var(--color-surface-3), var(--color-surface-1));
 }
 
 /* The classic typing indicator: each dot hops and brightens in turn, so with a

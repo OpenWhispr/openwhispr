@@ -8,7 +8,7 @@ import { Input } from "../ui/input";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useModelDownload } from "../../hooks/useModelDownload";
-import { LLM_ENTERPRISE_POLICY_PROVIDER_IDS, useSettingsStore } from "../../stores/settingsStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   filterByokProviderOptionsByPolicy,
@@ -349,14 +349,20 @@ export function ByokProviderStep({
 
   const commitAndProceed = () => {
     if (selfHosted) {
+      // The connection test parses scheme-less input as https
+      // (providerConnectionTest.js), so commit the same URL it validated —
+      // the runtime's isSecureHttpEndpoint gate rejects a bare host.
+      const committedBaseUrl = draftBaseUrl.includes("://")
+        ? draftBaseUrl.trim()
+        : `https://${draftBaseUrl.trim()}`;
       if (assistant) {
-        store.setChatAgentRemoteUrl(draftBaseUrl);
+        store.setChatAgentRemoteUrl(committedBaseUrl);
         store.setChatAgentCustomApiKey(draftApiKey);
         store.setChatAgentModel(draftCustomModel);
         store.setChatAgentMode("self-hosted");
         store.setChatAgentProvider("custom");
       } else {
-        store.setCloudTranscriptionBaseUrl(draftBaseUrl);
+        store.setCloudTranscriptionBaseUrl(committedBaseUrl);
         store.setCustomTranscriptionApiKey(draftApiKey);
         store.setCloudTranscriptionModel(draftCustomModel);
         store.switchCloudTranscriptionProvider("dictation", "custom");
@@ -429,6 +435,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
               <Input
+                type="password"
                 value={draftApiKey}
                 onChange={(event) => setDraftApiKey(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.optional")}
@@ -528,6 +535,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientSecret")}</FieldLabel>
                   <Input
+                    type="password"
                     value={draftCortiClientSecret}
                     onChange={(event) => setDraftCortiClientSecret(event.target.value)}
                     className={inputClass}
@@ -539,6 +547,7 @@ export function ByokProviderStep({
               <label className="block">
                 <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
                 <Input
+                  type="password"
                   value={draftApiKey}
                   onChange={(event) => setDraftApiKey(event.target.value)}
                   placeholder={t("onboarding.rehaul.provider.apiKeyPlaceholder")}
@@ -938,9 +947,7 @@ export function EnterpriseSetupStep({
   const lockedToManaged =
     managed.kind === "managed" &&
     (managed.mode === "managed_required" || !managed.allowManualSetup);
-  const bedrockAllowed =
-    LLM_ENTERPRISE_POLICY_PROVIDER_IDS.includes("bedrock") &&
-    isEnterpriseProviderAllowed(policy, "bedrock");
+  const bedrockAllowed = isEnterpriseProviderAllowed(policy, "bedrock");
   // Onboarding only carries the Bedrock manual form. A workspace whose policy
   // allows manual Azure instead hands off to Settings (which has the full
   // form) rather than dead-ending; Vertex stays disabled there too, so it
@@ -972,7 +979,8 @@ export function EnterpriseSetupStep({
       })),
     [region]
   );
-  const modelOptions = catalog.status === "loaded" && catalog.models?.length ? catalog.models : models;
+  const modelOptions =
+    catalog.status === "loaded" && catalog.models?.length ? catalog.models : models;
 
   // Load the live model catalog once the credentials could plausibly work
   // (mirrors EnterpriseProviderConfig in Settings). Failures fall back to the
@@ -1131,9 +1139,15 @@ export function EnterpriseSetupStep({
 
   const inputClass =
     "onboarding-provider-input h-[2.125rem] rounded-xl! border px-3 text-xs shadow-none! focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]";
-  const resetKey = [authMode, profile, accessKeyId, secretAccessKey, sessionToken, region, model].join(
-    "|"
-  );
+  const resetKey = [
+    authMode,
+    profile,
+    accessKeyId,
+    secretAccessKey,
+    sessionToken,
+    region,
+    model,
+  ].join("|");
 
   if (
     managed.kind === "error" ||
@@ -1259,7 +1273,7 @@ export function EnterpriseSetupStep({
                       setAccessKeyId(event.target.value);
                       resetConnection();
                     }}
-                    placeholder={t("onboarding.rehaul.enterprise.profilePlaceholder")}
+                    placeholder={t("onboarding.rehaul.enterprise.accessKeyIdPlaceholder")}
                     className={inputClass}
                   />
                 </label>
@@ -1272,7 +1286,7 @@ export function EnterpriseSetupStep({
                       setSecretAccessKey(event.target.value);
                       resetConnection();
                     }}
-                    placeholder={t("onboarding.rehaul.enterprise.profilePlaceholder")}
+                    placeholder={t("onboarding.rehaul.enterprise.secretAccessKeyPlaceholder")}
                     className={inputClass}
                   />
                 </label>
@@ -1285,7 +1299,7 @@ export function EnterpriseSetupStep({
                       setSessionToken(event.target.value);
                       resetConnection();
                     }}
-                    placeholder={t("onboarding.rehaul.enterprise.profilePlaceholder")}
+                    placeholder={t("onboarding.rehaul.enterprise.sessionTokenPlaceholder")}
                     className={inputClass}
                   />
                 </label>

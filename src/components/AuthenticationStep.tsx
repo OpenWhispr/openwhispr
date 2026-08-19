@@ -22,6 +22,8 @@ interface AuthenticationStepProps {
   onContinueWithoutAccount?: () => void;
   onAuthComplete: () => void;
   onNeedsVerification: (email: string) => void;
+  /** Rendering inside SignInDialog rather than the onboarding window. */
+  embedded?: boolean;
 }
 
 type AuthMode = "sign-in" | "sign-up" | null;
@@ -53,7 +55,7 @@ function ProviderTile({
       disabled={disabled}
       title={title}
       aria-label={label}
-      className="flex h-[3.8rem] min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-xl bg-neutral-100 px-2 text-neutral-950 transition-colors hover:bg-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40 disabled:pointer-events-none disabled:text-neutral-500 dark:bg-neutral-100 dark:text-neutral-950 dark:hover:bg-neutral-200"
+      className="flex h-[3.8rem] min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-xl bg-neutral-100 px-2 text-neutral-950 transition-colors hover:bg-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40 disabled:pointer-events-none disabled:text-neutral-500"
     >
       {loading ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -110,8 +112,15 @@ export default function AuthenticationStep({
   onContinueWithoutAccount,
   onAuthComplete,
   onNeedsVerification,
+  embedded = false,
 }: AuthenticationStepProps) {
   const { t } = useTranslation();
+  // The fixed top offsets centre content in the 546px compact setup window;
+  // inside the SignInDialog the dialog supplies its own padding.
+  const frameInset = (topClass: string) => (embedded ? "pt-1" : `px-5 ${topClass}`);
+  const titleClass = embedded
+    ? "text-2xl font-semibold tracking-tight"
+    : "onboarding-display-title";
   const { isSignedIn, isLoaded, user } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [email, setEmail] = useState("");
@@ -354,9 +363,9 @@ export default function AuthenticationStep({
   // Auth not configured state
   if (!AUTH_URL || !authClient) {
     return (
-      <CompactOnboardingFrame>
-        <div className="px-5 pt-48 text-center">
-          <h1 className="onboarding-display-title">{t("auth.welcomeTitle")}</h1>
+      <CompactOnboardingFrame embedded={embedded}>
+        <div className={`${frameInset("pt-48")} text-center`}>
+          <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
           <p className="mt-4 text-base text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
           <div className="mt-8 rounded-xl border border-warning/20 bg-warning/5 p-3 text-sm text-warning">
             {t("auth.cloudNotConfigured")}
@@ -375,8 +384,8 @@ export default function AuthenticationStep({
   // Already signed in state
   if (isLoaded && isSignedIn) {
     return (
-      <CompactOnboardingFrame>
-        <div className="px-5 pt-48 text-center">
+      <CompactOnboardingFrame embedded={embedded}>
+        <div className={`${frameInset("pt-48")} text-center`}>
           <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-border bg-card shadow-sm">
             <Check className="size-5 text-success" />
           </div>
@@ -397,8 +406,8 @@ export default function AuthenticationStep({
 
   if (forgotPasswordOpen) {
     return (
-      <CompactOnboardingFrame>
-        <div className="px-5 pt-72">
+      <CompactOnboardingFrame embedded={embedded}>
+        <div className={frameInset("pt-72")}>
           <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />
         </div>
       </CompactOnboardingFrame>
@@ -407,8 +416,8 @@ export default function AuthenticationStep({
 
   if (ssoDiscovery && authMode === null) {
     return (
-      <CompactOnboardingFrame>
-        <div className="space-y-3 px-5 pt-72">
+      <CompactOnboardingFrame embedded={embedded}>
+        <div className={`space-y-3 ${frameInset("pt-72")}`}>
           <button
             type="button"
             onClick={handleBack}
@@ -476,8 +485,8 @@ export default function AuthenticationStep({
   // Password form (after email is entered)
   if (authMode !== null) {
     return (
-      <CompactOnboardingFrame showLegalNotice={false}>
-        <div className="px-5 pt-[18.3rem]">
+      <CompactOnboardingFrame showLegalNotice={false} embedded={embedded}>
+        <div className={frameInset("pt-[18.3rem]")}>
           <button type="button" onClick={handleBack} className="sr-only">
             <ChevronLeft className="w-3 h-3" />
             {t("auth.common.back")}
@@ -620,9 +629,9 @@ export default function AuthenticationStep({
   ];
 
   return (
-    <CompactOnboardingFrame>
-      <div className="px-5 pt-48 text-center">
-        <h1 className="onboarding-display-title">{t("auth.welcomeTitle")}</h1>
+    <CompactOnboardingFrame embedded={embedded}>
+      <div className={`${frameInset("pt-48")} text-center`}>
+        <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
         <p className="mt-3 text-base text-neutral-500 dark:text-neutral-500">
           {t("auth.welcomeSubtitle")}
         </p>

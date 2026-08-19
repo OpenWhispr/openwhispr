@@ -29,6 +29,14 @@ interface CompactOnboardingFrameProps {
   children: ReactNode;
   showBrandMark?: boolean;
   showLegalNotice?: boolean;
+  /**
+   * AuthenticationStep and EmailVerificationStep also render inside the control
+   * panel's SignInDialog, where the compact window chrome makes no sense: the
+   * min-h-screen surface would blow out the dialog, and the --onboarding-*
+   * tokens only exist inside .onboarding-canvas. Embedded drops the chrome and
+   * lets the dialog size to its content.
+   */
+  embedded?: boolean;
 }
 
 /**
@@ -302,8 +310,11 @@ export function CompactOnboardingFrame({
   children,
   showBrandMark = true,
   showLegalNotice = true,
+  embedded = false,
 }: CompactOnboardingFrameProps) {
   const { t } = useTranslation();
+
+  if (embedded) return <>{children}</>;
 
   return (
     <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]">

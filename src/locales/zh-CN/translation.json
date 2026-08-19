@@ -197,7 +197,7 @@
         "title": "你会说哪些语言？",
         "titleLineOne": "你会说",
         "titleLineTwo": "哪些语言？",
-        "description": "Select all that apply. Multiple selections use automatic language detection."
+        "description": "选择所有适用的语言。这有助于 OpenWhispr 更准确地识别语言切换。"
       },
       "dictationHotkey": {
         "title": "设置键盘快捷键",
@@ -209,22 +209,10 @@
         "title": "设置 OpenWhispr Assistant",
         "titleLineOne": "设置",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "说出你的需求，OpenWhispr Assistant 就会为你写好结果。",
-        "preview": {
-          "newMessage": "新邮件",
-          "toLabel": "To:",
-          "recipient": "alex@northstarstudio.co",
-          "subjectLabel": "主题：",
-          "subject": "项目已完成",
-          "greeting": "你好 Alex，",
-          "bodyLineOne": "新项目已完成，可以开始审阅了。",
-          "bodyLineTwo": "我已完成最后的更新，我这边一切就绪。",
-          "prompt": "写一封邮件告知客户我已完成新项目"
-        }
+        "description": "说出你的需求，OpenWhispr Assistant 就会为你写好结果。"
       },
       "hotkey": {
         "capture": "请按下你想使用的按键",
-        "confirm": "再按一次 {{hotkey}} 确认",
         "chooseAnother": "选择其他快捷键",
         "inUse": "该快捷键已被使用。请选择其他快捷键。",
         "holding": "继续按住，或按下另一个键"
@@ -234,7 +222,7 @@
         "titleLineOne": "试试你的",
         "titleLineTwo": "第一次听写",
         "description": "按 {{hotkey}} 开始说话，OpenWhispr 会把你的语音转成文字。",
-        "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
+        "founder": "你好，我是 Gabe，OpenWhispr 的创始人",
         "prompt": "试着说：“我第一次测试听写功能。”",
         "placeholder": "你的听写结果会显示在这里…"
       },
@@ -248,7 +236,7 @@
         "recipientLabel": "发送给 John Doe",
         "email": "嗨！下周一起喝杯咖啡吗？告诉我你什么时候方便。",
         "prompt": "回复说周二下午 3 点可以。发送一个邀请。",
-        "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
+        "response": "你好，Eren：\n\n很想和你聊聊近况。周二下午 3 点对我来说很合适。如果你方便，我会发送日历邀请。\n期待见面，\nJohn"
       },
       "demo": {
         "listening": "正在聆听…",
@@ -263,8 +251,6 @@
         "titleLineTwoBrand": "Notes",
         "description": "OpenWhispr 把你的对话变成清晰的笔记。不会有会议机器人加入你的通话。",
         "hero": {
-          "detected": "检测到会议",
-          "transcribe": "要转写这场会议吗？",
           "description": "录制会议，让 OpenWhispr 把对话整理成清晰有条理的笔记。",
           "chat": "与会议笔记对话",
           "transcript": "查看完整转录",
@@ -342,7 +328,7 @@
           "local": {
             "title": "本地设置需要多几个步骤",
             "description": "本地处理会把你的语音保留在此设备上，但需要一次性设置和至少 {{minimumSpace}} GB 可用空间。",
-            "continue": "Set up locally",
+            "continue": "本地设置",
             "steps": {
               "1": "选择转录引擎",
               "2": "配置或下载模型，约 {{modelSize}}",
@@ -405,6 +391,7 @@
         "errors": {
           "endpointRequired": "测试前请先输入端点 URL。",
           "invalidUrl": "端点必须是有效的 HTTP 或 HTTPS URL。",
+          "httpsRequired": "公共端点必须使用 HTTPS。HTTP 仅允许用于私有地址。",
           "unsupportedProvider": "此服务商不支持连接测试。",
           "apiKeyRequired": "测试前请先添加 API Key。",
           "credentialsRejected": "服务商拒绝了这些凭据。",
@@ -427,7 +414,6 @@
         "use": "使用",
         "downloadInProgress": "下载进行中",
         "cancelDownload": "取消下载 {{model}}",
-        "downloadInBackground": "在后台完成",
         "downloads": "模型下载",
         "downloading": "正在下载… {{progress}}%",
         "installing": "正在安装模型…"
@@ -437,11 +423,13 @@
         "description": "使用你所在组织的凭据来支持听写智能和 Assistant。",
         "descriptionLineOne": "使用你所在组织的凭据",
         "descriptionLineTwo": "来连接服务商。",
-        "dictationIntelligence": "听写智能",
         "ssoProfile": "SSO 配置",
         "accessKeys": "访问密钥",
         "profileName": "配置名称",
         "profilePlaceholder": "添加配置名称",
+        "accessKeyIdPlaceholder": "输入访问密钥 ID",
+        "secretAccessKeyPlaceholder": "输入秘密访问密钥",
+        "sessionTokenPlaceholder": "输入会话令牌",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
         "sessionToken": "Session Token（可选）",

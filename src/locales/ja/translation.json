@@ -197,7 +197,7 @@
         "title": "どの言語を話しますか？",
         "titleLineOne": "どの言語を",
         "titleLineTwo": "話しますか？",
-        "description": "Select all that apply. Multiple selections use automatic language detection."
+        "description": "当てはまるものをすべて選択してください。OpenWhisprが言語の切り替えをより正確に認識できるようになります。"
       },
       "dictationHotkey": {
         "title": "キーボードショートカットを設定",
@@ -209,22 +209,10 @@
         "title": "OpenWhispr Assistant を設定",
         "titleLineOne": "セットアップ",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。",
-        "preview": {
-          "newMessage": "新規メッセージ",
-          "toLabel": "To:",
-          "recipient": "alex@northstarstudio.co",
-          "subjectLabel": "件名:",
-          "subject": "プロジェクト完了",
-          "greeting": "Alex さん、",
-          "bodyLineOne": "新しいプロジェクトが完成し、確認の準備が整いました。",
-          "bodyLineTwo": "最終の更新をすべて終え、こちらの作業は完了しています。",
-          "prompt": "新しいプロジェクトが完了したことをクライアントに知らせるメールを作成して"
-        }
+        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。"
       },
       "hotkey": {
         "capture": "使用したいキーを押してください",
-        "confirm": "確定するにはもう一度 {{hotkey}} を押してください",
         "chooseAnother": "別のショートカットを選ぶ",
         "inUse": "そのショートカットはすでに使用されています。別のものを選んでください。",
         "holding": "押したままにするか、別のキーを押してください"
@@ -234,7 +222,7 @@
         "titleLineOne": "最初の",
         "titleLineTwo": "ディクテーションを試す",
         "description": "{{hotkey}} を押して話し始めてください。OpenWhispr が音声をテキストに変換します。",
-        "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
+        "founder": "こんにちは、OpenWhispr創業者のゲイブです",
         "prompt": "「初めてディクテーションを試しています」と話してみてください。",
         "placeholder": "ここにディクテーションが表示されます…"
       },
@@ -248,7 +236,7 @@
         "recipientLabel": "John Doe 宛て",
         "email": "こんにちは！来週コーヒーでもどうですか？ご都合を教えてください。",
         "prompt": "火曜の15時で大丈夫だと返信して。招待を送って。",
-        "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
+        "response": "エレンさん\n\nぜひ近況をお話ししたいです。火曜日の15時で大丈夫です。ご都合がよければ、カレンダーの招待をお送りします。\n楽しみにしています。\nジョン"
       },
       "demo": {
         "listening": "聞き取り中…",
@@ -263,8 +251,6 @@
         "titleLineTwoBrand": "Notes",
         "description": "OpenWhispr は会話をわかりやすいノートに変換します。ミーティングボットが通話に参加することはありません。",
         "hero": {
-          "detected": "会議を検出しました",
-          "transcribe": "会議を文字起こししますか？",
           "description": "ミーティングを録音すれば、OpenWhispr が会話をわかりやすく整理されたノートに変換します。",
           "chat": "ミーティングノートとチャット",
           "transcript": "全文の文字起こしを確認",
@@ -342,7 +328,7 @@
           "local": {
             "title": "ローカル設定には追加の手順がいくつか必要です",
             "description": "ローカル処理では音声がこのデバイスに留まりますが、初回の設定と {{minimumSpace}} GB 以上の空き容量が必要です。",
-            "continue": "Set up locally",
+            "continue": "ローカルでセットアップ",
             "steps": {
               "1": "文字起こしエンジンを選ぶ",
               "2": "モデルを設定またはダウンロードする（約 {{modelSize}}）",
@@ -405,6 +391,7 @@
         "errors": {
           "endpointRequired": "テストの前にエンドポイント URL を入力してください。",
           "invalidUrl": "エンドポイントは有効な HTTP または HTTPS の URL である必要があります。",
+          "httpsRequired": "公開エンドポイントにはHTTPSが必要です。HTTPはプライベートアドレスでのみ使用できます。",
           "unsupportedProvider": "このプロバイダーでは接続テストを利用できません。",
           "apiKeyRequired": "テストの前に API キーを追加してください。",
           "credentialsRejected": "プロバイダーがこの認証情報を拒否しました。",
@@ -427,7 +414,6 @@
         "use": "使用",
         "downloadInProgress": "ダウンロード中",
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
-        "downloadInBackground": "バックグラウンドで完了",
         "downloads": "モデルのダウンロード",
         "downloading": "ダウンロード中… {{progress}}%",
         "installing": "モデルをインストール中…"
@@ -437,11 +423,13 @@
         "description": "組織の認証情報をディクテーションの知能と Assistant に使用します。",
         "descriptionLineOne": "組織の認証情報を使って",
         "descriptionLineTwo": "プロバイダーを接続します。",
-        "dictationIntelligence": "ディクテーション インテリジェンス",
         "ssoProfile": "SSO プロファイル",
         "accessKeys": "アクセスキー",
         "profileName": "プロファイル名",
         "profilePlaceholder": "プロファイル名を追加",
+        "accessKeyIdPlaceholder": "アクセスキーIDを入力",
+        "secretAccessKeyPlaceholder": "シークレットアクセスキーを入力",
+        "sessionTokenPlaceholder": "セッショントークンを入力",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
         "sessionToken": "Session Token（任意）",

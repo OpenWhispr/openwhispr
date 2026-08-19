@@ -50,9 +50,6 @@ export function useOnboardingSession() {
         ...current,
         currentStepId: stepId,
         history: [...current.history, current.currentStepId],
-        completedStepIds: current.completedStepIds.includes(current.currentStepId)
-          ? current.completedStepIds
-          : [...current.completedStepIds, current.currentStepId],
       };
     });
   }, []);

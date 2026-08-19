@@ -209,22 +209,10 @@
         "title": "Set up OpenWhispr Assistant",
         "titleLineOne": "Set up",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Speak a request, and OpenWhispr Assistant writes the result for you.",
-        "preview": {
-          "newMessage": "New Message",
-          "toLabel": "To:",
-          "recipient": "alex@northstarstudio.co",
-          "subjectLabel": "Subject:",
-          "subject": "Project completed",
-          "greeting": "Hi Alex,",
-          "bodyLineOne": "The new project is complete and ready for review.",
-          "bodyLineTwo": "I’ve wrapped up the final updates and everything is good to go from my side.",
-          "prompt": "Draft an email notifying the client that I have completed the new project"
-        }
+        "description": "Speak a request, and OpenWhispr Assistant writes the result for you."
       },
       "hotkey": {
         "capture": "Press the keys you want to use",
-        "confirm": "Press {{hotkey}} again to confirm",
         "chooseAnother": "Choose another shortcut",
         "inUse": "That shortcut is already in use. Choose another one.",
         "holding": "Keep holding, or press another key"
@@ -263,8 +251,6 @@
         "titleLineTwoBrand": "Notes",
         "description": "OpenWhispr turns your conversation into clear notes. No meeting bot joins your call.",
         "hero": {
-          "detected": "Meeting Detected",
-          "transcribe": "Want to transcribe the meeting?",
           "description": "Record your meeting and let OpenWhispr turn the conversation into clear, organized notes.",
           "chat": "Chat with your meeting notes",
           "transcript": "Review the full transcript",
@@ -405,6 +391,7 @@
         "errors": {
           "endpointRequired": "Enter an endpoint URL before testing.",
           "invalidUrl": "The endpoint must be a valid HTTP or HTTPS URL.",
+          "httpsRequired": "Public endpoints must use HTTPS. HTTP is only allowed on private addresses.",
           "unsupportedProvider": "Connection testing is not available for this provider.",
           "apiKeyRequired": "Add an API key before testing.",
           "credentialsRejected": "The provider rejected these credentials.",
@@ -427,7 +414,6 @@
         "use": "Use",
         "downloadInProgress": "Download in progress",
         "cancelDownload": "Cancel download of {{model}}",
-        "downloadInBackground": "Finish in background",
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
         "installing": "Installing model…"
@@ -437,11 +423,13 @@
         "description": "Use your organization’s credentials for dictation intelligence and the Assistant.",
         "descriptionLineOne": "Use your organization’s credentials",
         "descriptionLineTwo": "to connect a provider.",
-        "dictationIntelligence": "Dictation intelligence",
         "ssoProfile": "SSO Profile",
         "accessKeys": "Access Keys",
         "profileName": "Profile Name",
         "profilePlaceholder": "Add profile name",
+        "accessKeyIdPlaceholder": "Add access key ID",
+        "secretAccessKeyPlaceholder": "Add secret access key",
+        "sessionTokenPlaceholder": "Add session token",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
         "sessionToken": "Session Token (optional)",

@@ -28,11 +28,13 @@ export default function SignInDialog({ open, onOpenChange }: SignInDialogProps) 
             email={pendingVerificationEmail}
             onVerified={() => handleOpenChange(false)}
             onBack={() => setPendingVerificationEmail(null)}
+            embedded
           />
         ) : (
           <AuthenticationStep
             onAuthComplete={() => handleOpenChange(false)}
             onNeedsVerification={setPendingVerificationEmail}
+            embedded
           />
         )}
       </DialogContent>

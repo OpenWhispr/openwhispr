@@ -58,6 +58,7 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
+const { ONBOARDING_DEMO_KINDS } = require("./onboardingInputPolicy");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
@@ -1152,7 +1153,7 @@ class IPCHandlers {
         !session ||
         typeof session.id !== "string" ||
         session.id.length > 128 ||
-        !["dictation", "assistant"].includes(session.kind)
+        !ONBOARDING_DEMO_KINDS.has(session.kind)
       ) {
         return false;
       }
@@ -1214,9 +1215,27 @@ class IPCHandlers {
             });
           }
           return { success: true };
-        } catch {
+        } catch (error) {
           // errorCode is the machine-readable field the renderer maps to i18n;
-          // the English string stays for logs/back-compat.
+          // the English string stays for logs/back-compat. Only a response
+          // Corti actually sent counts as a rejection (getCortiToken prefixes
+          // those); a fetch that never reached it is a network problem, and
+          // reporting it as "credentials rejected" sends the user to re-type a
+          // key that was never the issue.
+          if (error?.name === "AbortError") {
+            return {
+              success: false,
+              errorCode: "timeout",
+              error: "The connection test timed out.",
+            };
+          }
+          if (!/^(Corti authentication failed|Invalid Corti)/.test(error?.message || "")) {
+            return {
+              success: false,
+              errorCode: "network",
+              error: "The provider could not be reached.",
+            };
+          }
           return {
             success: false,
             errorCode: "credentialsRejected",

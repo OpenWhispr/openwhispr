@@ -52,8 +52,6 @@ export default function TestConnectionButton({
         | {
             success?: boolean;
             error?: string;
-            errorCode?: string;
-            status?: number;
             action?: string;
             copyCommand?: string;
           }
@@ -69,12 +67,7 @@ export default function TestConnectionButton({
         setStatus("error");
         onStatusChange?.(false);
         setErrorInfo({
-          message: result?.errorCode
-            ? t(`onboarding.rehaul.provider.errors.${result.errorCode}`, {
-                status: result.status,
-                defaultValue: result.error || "Connection failed",
-              })
-            : result?.error || "Connection failed",
+          message: result?.error || "Connection failed",
           action: result?.action,
           copyCommand: result?.copyCommand,
         });
@@ -94,15 +87,18 @@ export default function TestConnectionButton({
   if (variant === "inline") {
     return (
       <div className="space-y-2">
-        <div className="flex h-11 items-center justify-between rounded-xl border border-neutral-200 bg-white px-3">
-          <span className="text-xs font-medium text-neutral-950">
+        {/* The inline variant only renders inside the onboarding canvas, so it
+            uses the --onboarding-* tokens (like ProviderConnectionTest) instead
+            of a hardcoded light palette that ignores dark mode. */}
+        <div className="flex h-11 items-center justify-between rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3">
+          <span className="text-xs font-medium text-[var(--onboarding-text-primary)]">
             {t("onboarding.rehaul.enterprise.testConnection")}
           </span>
           <Button
             type="button"
             onClick={handleTest}
             disabled={disabled || status === "testing"}
-            className="h-7 rounded-full border-neutral-950! bg-neutral-950 px-3 text-[0.6875rem] font-normal text-white shadow-none! hover:bg-neutral-800 disabled:border-neutral-200! disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100!"
+            className="h-7 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-3 text-[0.6875rem] font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:border-[var(--onboarding-surface-tertiary)]! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100!"
           >
             {status === "testing" && <Loader2 className="mr-1.5 size-3 animate-spin" />}
             {status === "success" && <CheckCircle className="mr-1.5 size-3" />}

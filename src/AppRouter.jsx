@@ -8,11 +8,17 @@ import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.ts
 import WindowControls from "./components/WindowControls.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
-import { ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
+import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
 import { usePolicyStore } from "./stores/policyStore";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
+
+// Either marker means the flow is mid-way: the legacy step key is kept for
+// back-compat, the v2 session is what the rebuilt flow actually persists.
+const isOnboardingInProgress = () =>
+  localStorage.getItem(LEGACY_ONBOARDING_STEP_KEY) !== null ||
+  localStorage.getItem(ONBOARDING_SESSION_KEY) !== null;
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
@@ -86,11 +92,7 @@ function MainApp() {
     const authSkipped =
       localStorage.getItem("authenticationSkipped") === "true" ||
       localStorage.getItem("skipAuth") === "true";
-    // Either marker means the flow is mid-way: the legacy step key is kept for
-    // back-compat, the v2 session is what the rebuilt flow actually persists.
-    const onboardingInProgress =
-      localStorage.getItem("onboardingCurrentStep") !== null ||
-      localStorage.getItem(ONBOARDING_SESSION_KEY) !== null;
+    const onboardingInProgress = isOnboardingInProgress();
     const isReturningUser =
       !onboardingCompleted && isSignedIn && !isGracePeriodOnly && !onboardingInProgress;
 
@@ -125,10 +127,7 @@ function MainApp() {
     // restarts fall through to the effect below, preserving the no-flash
     // guarantee for windows that will enter compact onboarding mode.
     const completed = localStorage.getItem("onboardingCompleted") === "true";
-    const inProgress =
-      localStorage.getItem("onboardingCurrentStep") !== null ||
-      localStorage.getItem(ONBOARDING_SESSION_KEY) !== null;
-    if (completed && !inProgress) {
+    if (completed && !isOnboardingInProgress()) {
       void window.electronAPI?.setOnboardingWindowMode?.("restore");
     }
   }, [isControlPanel]);
@@ -204,6 +203,7 @@ function MainApp() {
                   }}
                   onAuthComplete={() => setNeedsReauth(false)}
                   onNeedsVerification={() => {}}
+                  embedded
                 />
               </CardContent>
             </Card>

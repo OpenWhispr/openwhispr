@@ -43,6 +43,39 @@ test("probes the /v1 sibling for bare custom origins", () => {
   );
 });
 
+// The runtime (isSecureHttpEndpoint in src/utils/urlUtils.ts) refuses plain
+// HTTP on public hosts, so the test must refuse the same URLs — a passing test
+// would otherwise commit a config every real request rejects.
+test("rejects public HTTP endpoints but allows private hosts", async () => {
+  assert.deepEqual(
+    await testProviderConnection({ provider: "custom", baseUrl: "http://myserver.example.com/v1" }),
+    {
+      success: false,
+      errorCode: "httpsRequired",
+      error: "Public endpoints must use HTTPS. HTTP is only allowed on private addresses.",
+    }
+  );
+
+  for (const baseUrl of [
+    "http://localhost:1234",
+    "http://192.168.1.10:8080/v1",
+    "http://100.101.102.103/v1",
+    "http://ollama.ts.net/v1",
+  ]) {
+    assert.equal(
+      resolveProviderRequest({ provider: "custom", baseUrl }).endpoints.length > 0,
+      true
+    );
+  }
+
+  // A public DNS name that merely starts with a private prefix is still public.
+  assert.equal(
+    (await testProviderConnection({ provider: "custom", baseUrl: "http://10.example.com/v1" }))
+      .errorCode,
+    "httpsRequired"
+  );
+});
+
 test("rejects invalid custom endpoints with error codes", async () => {
   assert.deepEqual(await testProviderConnection({ provider: "custom", baseUrl: "" }), {
     success: false,

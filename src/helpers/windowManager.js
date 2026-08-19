@@ -23,7 +23,7 @@ const {
   WindowPositionUtil,
 } = require("./windowConfig");
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
-const { isOnboardingInputAllowed } = require("./onboardingInputPolicy");
+const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
 
 class WindowManager {
   constructor() {
@@ -796,6 +796,9 @@ class WindowManager {
           { reason: details.reason, exitCode: details.exitCode },
           "window"
         );
+        // The renderer owned any running demo; without this, its stale session
+        // keeps swallowing dictations after the reload.
+        this.endOnboardingDemo();
         setTimeout(() => this.loadControlPanel(), 1000);
       }
     });
@@ -1223,7 +1226,7 @@ class WindowManager {
   }
 
   beginOnboardingDemo(kind) {
-    if (!["dictation", "assistant"].includes(kind)) return false;
+    if (!ONBOARDING_DEMO_KINDS.has(kind)) return false;
     this._onboardingActive = true;
     this._onboardingDemoKind = kind;
     // A prior recording must not leak into a new correlated demo session.
@@ -1311,10 +1314,7 @@ class WindowManager {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return false;
     if (!new Set(["compact", "expanded", "restore"]).has(mode)) return false;
-    if (mode === "restore") {
-      // Restoring never fights a maximized/fullscreen window the user made.
-      if (win.isFullScreen() || win.isMaximized()) return false;
-    } else if (win.isFullScreen() || win.isMaximized()) {
+    if (mode !== "restore" && (win.isFullScreen() || win.isMaximized())) {
       // Entering onboarding from a maximized/fullscreen control panel must not
       // refuse: refusing leaves the native chrome (traffic lights, resize) on a
       // window whose flow assumes it is locked to the canonical bounds.
@@ -1326,7 +1326,11 @@ class WindowManager {
     const { workArea } = screen.getDisplayMatching(win.getBounds());
 
     if (mode === "restore") {
-      if (this._onboardingRestoreBounds) {
+      // A maximized/fullscreen window the user made keeps its bounds, but the
+      // chrome state below must still be restored and the tracking cleared —
+      // refusing outright left setFullScreenable(false) and onboarding's
+      // minimum-size floor on the control panel for the rest of its life.
+      if (!win.isFullScreen() && !win.isMaximized() && this._onboardingRestoreBounds) {
         win.setContentBounds(clampedBounds(this._onboardingRestoreBounds, workArea), true);
       }
       const state = this._onboardingWindowState;
@@ -1392,6 +1396,9 @@ class WindowManager {
       return;
     }
 
+    // A demo left running when the panel hides would keep swallowing normal
+    // dictations (paste suppressed, transcripts rerouted to the demo session).
+    this.endOnboardingDemo();
     this.controlPanelWindow.hide();
     dockManager.setControlPanelVisible(false);
   }

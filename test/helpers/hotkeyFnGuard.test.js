@@ -74,6 +74,23 @@ test("hotkeys without an Fn prefix are never gated", async () => {
   assert.deepEqual(fired, ["Control+Shift+A"]);
 });
 
+// Startup registers hotkeys (createMainWindow → initializeHotkey) before
+// initializeDeferredManagers installs the provider, so the guard must consult
+// the provider at fire time — a wrap-time check left every hotkey saved as
+// "Fn+X" firing on the bare X for the whole session.
+test("a provider installed after registration still guards the hotkey", async () => {
+  const manager = new HotkeyManager();
+  const fired = [];
+
+  await manager.registerSlot("dictation", "Fn+A", (hotkey) => fired.push(hotkey), {
+    atomic: true,
+  });
+  manager.setFnHeldProvider(() => false);
+
+  registered.get("A")();
+  assert.deepEqual(fired, []);
+});
+
 // Platforms with no Fn reporting (everything but macOS) never install a
 // provider, and must keep the pre-existing behaviour rather than going dead.
 test("without a provider the guard stays out of the way", async () => {

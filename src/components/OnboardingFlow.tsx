@@ -153,15 +153,20 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // teach the key that really works, not the one that always errors.
   useEffect(() => {
     let cancelled = false;
-    void window.electronAPI?.getEffectiveDefaultHotkey?.().then((key) => {
-      const effective = key && parseHotkeyList(key)[0];
-      if (cancelled || !effective) return;
-      setRecommendedDictationHotkey(effective);
-      // finalizeOnboarding registers dictationHotkey without further input on
-      // routes that never show the hotkey step, so an unregistrable renderer
-      // default has to be replaced here, not just in the recommendation.
-      setDictationHotkey((current) => (current === getDefaultHotkey() ? effective : current));
-    });
+    void window.electronAPI
+      ?.getEffectiveDefaultHotkey?.()
+      .then((key) => {
+        const effective = key && parseHotkeyList(key)[0];
+        if (cancelled || !effective) return;
+        setRecommendedDictationHotkey(effective);
+        // finalizeOnboarding registers dictationHotkey without further input on
+        // routes that never show the hotkey step, so an unregistrable renderer
+        // default has to be replaced here, not just in the recommendation.
+        setDictationHotkey((current) => (current === getDefaultHotkey() ? effective : current));
+      })
+      .catch((error) =>
+        logger.warn("Failed to read effective default hotkey", { error }, "onboarding")
+      );
     const unsubscribe = window.electronAPI?.onHotkeyFallbackUsed?.((data) => {
       const fallback = parseHotkeyList(data?.fallback)[0];
       if (!fallback) return;
@@ -351,8 +356,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         agentAllowed,
         enterpriseTranscription,
       });
-      const choiceIndex = nextRoute.indexOf("setup-choice");
-      const next = nextRoute[choiceIndex + 1];
+      const next = getNextOnboardingStep("setup-choice", nextRoute);
       if (next) goTo(next);
     },
     [
@@ -524,8 +528,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             ) : (
               <AuthenticationStep
                 onContinueWithoutAccount={() => {
+                  // Guests continue onto their route's permissions step — jumping
+                  // straight to setup-choice would skip the permission grants and
+                  // hotkey the guest route exists to guarantee (see flow.ts).
                   setAuthPath("guest");
-                  goTo("setup-choice");
+                  goTo("permissions");
                 }}
                 onAuthComplete={() => {
                   setAuthPath("account");
@@ -694,10 +701,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   : "onboarding.rehaul.dictationDemo.prompt"
               )}
               // Only the dictation demo renders this: the assistant card passes
-              // secondMessage as its textarea placeholder. The arms used to be
-              // crossed, so dictation showed the "Try saying…" prompt it already
-              // displays as a chat bubble and the authored placeholder went to the
-              // one card that ignores the prop.
+              // secondMessage as its textarea placeholder.
               placeholder={t("onboarding.rehaul.dictationDemo.placeholder")}
               listeningLabel={t("onboarding.rehaul.demo.listening")}
               processingLabel={t("onboarding.rehaul.demo.processing")}
@@ -847,7 +851,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   };
 
-  const hasShellNavigation = !COMPACT_STEPS.has(currentStepId);
+  const hasShellNavigation = !compact;
   const hotkeyStep = currentStepId === "dictation-hotkey" || currentStepId === "assistant-hotkey";
   const demoStep = currentStepId === "dictation-demo" || currentStepId === "assistant-demo";
   const inlineGatedStep = hotkeyStep || demoStep;

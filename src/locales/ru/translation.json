@@ -197,7 +197,7 @@
         "title": "На каких языках вы говорите?",
         "titleLineOne": "На каких языках",
         "titleLineTwo": "вы говорите?",
-        "description": "Select all that apply. Multiple selections use automatic language detection."
+        "description": "Выберите все подходящие варианты. Это помогает OpenWhispr точнее распознавать переключение языков."
       },
       "dictationHotkey": {
         "title": "Настройте сочетание клавиш",
@@ -209,22 +209,10 @@
         "title": "Настройте OpenWhispr Assistant",
         "titleLineOne": "Настройте",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "Произнесите запрос, и OpenWhispr Assistant напишет результат за вас.",
-        "preview": {
-          "newMessage": "Новое сообщение",
-          "toLabel": "To:",
-          "recipient": "alex@northstarstudio.co",
-          "subjectLabel": "Тема:",
-          "subject": "Проект завершён",
-          "greeting": "Привет, Алекс!",
-          "bodyLineOne": "Новый проект готов и ждёт проверки.",
-          "bodyLineTwo": "Я внёс последние правки, с моей стороны всё готово.",
-          "prompt": "Составь письмо клиенту о том, что я завершил новый проект"
-        }
+        "description": "Произнесите запрос, и OpenWhispr Assistant напишет результат за вас."
       },
       "hotkey": {
         "capture": "Нажмите клавиши, которые хотите использовать",
-        "confirm": "Нажмите {{hotkey}} ещё раз для подтверждения",
         "chooseAnother": "Выбрать другое сочетание",
         "inUse": "Это сочетание уже используется. Выберите другое.",
         "holding": "Удерживайте или нажмите другую клавишу"
@@ -234,7 +222,7 @@
         "titleLineOne": "Попробуйте свою",
         "titleLineTwo": "первую диктовку",
         "description": "Нажмите {{hotkey}} и начните говорить. OpenWhispr превратит вашу речь в текст.",
-        "founder": "Hi, I’m Gabe, founder of OpenWhispr.",
+        "founder": "Привет, я Гейб, основатель OpenWhispr",
         "prompt": "Попробуйте сказать: «Я впервые тестирую диктовку».",
         "placeholder": "Ваша диктовка появится здесь…"
       },
@@ -248,7 +236,7 @@
         "recipientLabel": "для John Doe",
         "email": "Привет! Может, выпьем кофе на следующей неделе? Скажи, когда тебе удобно.",
         "prompt": "Ответь, что вторник в 15:00 подходит. Отправь приглашение.",
-        "response": "Hi Eren, I’d love to catch up. Tuesday at 3 PM works well for me. I’ll send over a calendar invite."
+        "response": "Привет, Эрен!\n\nБуду рад пообщаться. Вторник в 15:00 мне отлично подходит. Если тебе удобно, отправлю приглашение в календарь.\nДо встречи,\nДжон"
       },
       "demo": {
         "listening": "Слушаю…",
@@ -263,8 +251,6 @@
         "titleLineTwoBrand": "Notes",
         "description": "OpenWhispr превращает разговор в понятные заметки. Никакой бот не подключается к вашему звонку.",
         "hero": {
-          "detected": "Обнаружена встреча",
-          "transcribe": "Транскрибировать встречу?",
           "description": "Запишите встречу, и OpenWhispr превратит разговор в понятные, структурированные заметки.",
           "chat": "Общайтесь с заметками встречи",
           "transcript": "Просматривайте полную расшифровку",
@@ -342,7 +328,7 @@
           "local": {
             "title": "Локальная настройка требует нескольких дополнительных шагов",
             "description": "Локальная обработка оставляет вашу речь на этом устройстве, но требует однократной настройки и не менее {{minimumSpace}} ГБ свободного места.",
-            "continue": "Set up locally",
+            "continue": "Настроить локально",
             "steps": {
               "1": "Выберите движок расшифровки",
               "2": "Настройте или скачайте модель, около {{modelSize}}",
@@ -405,6 +391,7 @@
         "errors": {
           "endpointRequired": "Перед тестом введите URL endpoint.",
           "invalidUrl": "Endpoint должен быть корректным HTTP- или HTTPS-URL.",
+          "httpsRequired": "Публичные эндпоинты должны использовать HTTPS. HTTP разрешён только для частных адресов.",
           "unsupportedProvider": "Проверка подключения недоступна для этого провайдера.",
           "apiKeyRequired": "Перед тестом добавьте API-ключ.",
           "credentialsRejected": "Провайдер отклонил эти учётные данные.",
@@ -427,7 +414,6 @@
         "use": "Использовать",
         "downloadInProgress": "Загрузка выполняется",
         "cancelDownload": "Отменить загрузку {{model}}",
-        "downloadInBackground": "Завершить в фоне",
         "downloads": "Загрузки моделей",
         "downloading": "Загрузка… {{progress}}%",
         "installing": "Установка модели…"
@@ -437,11 +423,13 @@
         "description": "Используйте учётные данные вашей организации для интеллекта диктовки и Assistant.",
         "descriptionLineOne": "Используйте учётные данные организации,",
         "descriptionLineTwo": "чтобы подключить провайдера.",
-        "dictationIntelligence": "Интеллект диктовки",
         "ssoProfile": "Профиль SSO",
         "accessKeys": "Ключи доступа",
         "profileName": "Имя профиля",
         "profilePlaceholder": "Добавьте имя профиля",
+        "accessKeyIdPlaceholder": "Добавьте ID ключа доступа",
+        "secretAccessKeyPlaceholder": "Добавьте секретный ключ доступа",
+        "sessionTokenPlaceholder": "Добавьте токен сессии",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
         "sessionToken": "Session Token (необязательно)",

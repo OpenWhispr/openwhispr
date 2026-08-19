@@ -5,4 +5,4 @@ function isOnboardingInputAllowed(onboardingActive, demoKind, inputKind) {
   return ONBOARDING_DEMO_KINDS.has(demoKind) && demoKind === inputKind;
 }
 
-module.exports = { isOnboardingInputAllowed };
+module.exports = { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed };

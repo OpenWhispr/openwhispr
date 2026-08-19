@@ -17,7 +17,6 @@ interface EnterpriseProviderConfigProps {
   provider: "bedrock" | "azure" | "vertex";
   reasoningModel: string;
   setReasoningModel: (model: string) => void;
-  onConnectionChange?: (connected: boolean) => void;
 }
 
 const VERTEX_LOCATIONS = [
@@ -115,11 +114,7 @@ type BedrockCatalogState =
   | { status: "error"; error: string }
   | { status: "loaded"; models: ModelCardOption[] };
 
-function BedrockConfig({
-  reasoningModel,
-  setReasoningModel,
-  onConnectionChange,
-}: EnterpriseProviderConfigProps) {
+function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderConfigProps) {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const suggestedModels = useSuggestedModels("bedrock");
@@ -337,20 +332,12 @@ function BedrockConfig({
 
       <CustomModelInput value={reasoningModel} onChange={setReasoningModel} />
 
-      <TestConnectionButton
-        provider="bedrock"
-        getConfig={getTestConfig}
-        onStatusChange={onConnectionChange}
-      />
+      <TestConnectionButton provider="bedrock" getConfig={getTestConfig} />
     </div>
   );
 }
 
-function AzureConfig({
-  reasoningModel,
-  setReasoningModel,
-  onConnectionChange,
-}: EnterpriseProviderConfigProps) {
+function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderConfigProps) {
   const { t } = useTranslation();
   const store = useSettingsStore();
 
@@ -418,20 +405,12 @@ function AzureConfig({
         />
       </div>
 
-      <TestConnectionButton
-        provider="azure"
-        getConfig={getTestConfig}
-        onStatusChange={onConnectionChange}
-      />
+      <TestConnectionButton provider="azure" getConfig={getTestConfig} />
     </div>
   );
 }
 
-function VertexConfig({
-  reasoningModel,
-  setReasoningModel,
-  onConnectionChange,
-}: EnterpriseProviderConfigProps) {
+function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderConfigProps) {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const suggestedModels = useSuggestedModels("vertex");
@@ -531,11 +510,7 @@ function VertexConfig({
 
       <CustomModelInput value={reasoningModel} onChange={setReasoningModel} />
 
-      <TestConnectionButton
-        provider="vertex"
-        getConfig={getTestConfig}
-        onStatusChange={onConnectionChange}
-      />
+      <TestConnectionButton provider="vertex" getConfig={getTestConfig} />
     </div>
   );
 }

@@ -237,7 +237,7 @@ export default function SetupChoiceStep({
                       green eye mark, which read as green on green. The mark and
                       wordmark both fall inside the inscribed circle, so nothing of
                       the logo is lost to the crop. */}
-                  <span className="size-10 overflow-hidden rounded-full ring-[1.33px] ring-white">
+                  <span className="size-10 overflow-hidden rounded-full ring-[1.33px] ring-[var(--onboarding-surface)]">
                     <img
                       src={nvidiaIcon}
                       alt=""
