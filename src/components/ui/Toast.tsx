@@ -68,6 +68,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         createdAt: Date.now(),
       };
 
+      if (presentation === "dictation-error") {
+        // The new error replaces any current one; its auto-dismiss timer must
+        // not fire (and re-schedule exit work) for the removed toast.
+        for (const item of toastsRef.current) {
+          if (item.presentation === "dictation-error") clearTimer(item.id);
+        }
+      }
       setToasts((prev) =>
         presentation === "dictation-error"
           ? [...prev.filter((item) => item.presentation !== "dictation-error"), newToast]
@@ -83,7 +90,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return id;
     },
-    [startExitAnimation]
+    [clearTimer, startExitAnimation]
   );
 
   const dismissByPresentation = React.useCallback(

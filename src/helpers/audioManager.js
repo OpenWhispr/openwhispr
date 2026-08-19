@@ -1896,7 +1896,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       } else if (error.message === "No audio detected") {
         noAudioDetected = true;
-      } else if (error.message !== "No audio detected") {
+      } else {
         this.onError?.({
           title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
           description: error.selectionEditFatal

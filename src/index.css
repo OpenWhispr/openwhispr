@@ -1078,6 +1078,15 @@ a:hover {
   }
 }
 
+@keyframes shimmer-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;

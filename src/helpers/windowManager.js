@@ -32,11 +32,6 @@ const {
   WindowPositionUtil,
 } = require("./windowConfig");
 
-// Temporary screen-recording mode: keep every OpenWhispr window visible to
-// screenshots and screen shares. Restore this to true when content protection
-// should be enforced again.
-const CONTENT_PROTECTION_ENABLED = false;
-
 class WindowManager {
   constructor() {
     this.mainWindow = null;
@@ -133,13 +128,10 @@ class WindowManager {
     MenuManager.setupMainMenu(() => this.openSettings());
   }
 
-  // Keep this update path intact so content protection can be restored with the
-  // shared switch after the temporary screen-recording period.
   _updateMainContentProtection() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.setContentProtection(
-      CONTENT_PROTECTION_ENABLED &&
-        Boolean(this._screenContextProtection || this._assistantPanelOpen)
+      Boolean(this._screenContextProtection || this._assistantPanelOpen)
     );
   }
 
@@ -311,6 +303,11 @@ class WindowManager {
   }
 
   async _performMainWindowResize(newSize, sizeKey) {
+    // The queue can drain after the window is gone (quit, recreate); the
+    // caller's guard ran before enqueueing.
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return { success: false, error: "Main window not available" };
+    }
     const currentBounds = this.mainWindow.getBounds();
     const display = screen.getDisplayNearestPoint({
       x: currentBounds.x + currentBounds.width / 2,
@@ -1370,8 +1367,7 @@ class WindowManager {
       }
     });
 
-    // Follow the same temporary app-wide screen-recording policy as the main window.
-    win.setContentProtection(CONTENT_PROTECTION_ENABLED);
+    win.setContentProtection(true);
 
     if (process.platform === "darwin") {
       win.setIgnoreMouseEvents(true, { forward: true });

@@ -4693,8 +4693,17 @@ class IPCHandlers {
     });
 
     // Panel open: window becomes focusable so follow-up keyboard input works.
+    // Only the dictation renderer may flip main-window focusability.
     ipcMain.handle("set-assistant-panel-open", (event, open) => {
-      this.windowManager?.setAssistantPanelOpen(open);
+      const dictationWindow = this.windowManager?.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return { success: false, error: "Not the dictation window" };
+      }
+      this.windowManager.setAssistantPanelOpen(open);
       return { success: true };
     });
 
