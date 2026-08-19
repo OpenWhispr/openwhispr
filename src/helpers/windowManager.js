@@ -1259,12 +1259,17 @@ class WindowManager {
     }
   }
 
+  // Checked before awaiting so the overlay path keeps creating its window in
+  // the same tick as the caller. Only actionable prompts reach the daemon.
+  _canUseNativeMeetingNotification(promptData) {
+    return linuxNotifier.isSupported() && Boolean(promptData?.detectionId);
+  }
+
   // Deliver the prompt through the desktop notification daemon, falling back
   // to the overlay when the caller gets false back.
   async _tryNativeMeetingNotification(promptData, { autoDismiss = true } = {}) {
-    if (!linuxNotifier.isSupported()) return false;
-    const detectionId = promptData?.detectionId;
-    if (!detectionId) return false;
+    if (!this._canUseNativeMeetingNotification(promptData)) return false;
+    const detectionId = promptData.detectionId;
 
     const previous = this._nativeMeetingNotification;
     this._nativeMeetingNotification = null;
@@ -1323,7 +1328,12 @@ class WindowManager {
       this._notificationReadyFallback = null;
     }
 
-    if (await this._tryNativeMeetingNotification(promptData, { autoDismiss })) return;
+    if (
+      this._canUseNativeMeetingNotification(promptData) &&
+      (await this._tryNativeMeetingNotification(promptData, { autoDismiss }))
+    ) {
+      return;
+    }
 
     const display = screen.getPrimaryDisplay();
     const notificationSize = getMeetingNotificationWindowSize(promptData);
@@ -1538,7 +1548,9 @@ class WindowManager {
       this._updateNotificationAutoDismiss = null;
     }
 
-    if (await this._tryNativeUpdateNotification(info, onUpdate)) return;
+    if (linuxNotifier.isSupported() && (await this._tryNativeUpdateNotification(info, onUpdate))) {
+      return;
+    }
 
     const display = screen.getPrimaryDisplay();
     const position = WindowPositionUtil.getNotificationPosition(display);
