@@ -38,12 +38,6 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
   return null;
 }
 
-export function getGroqReasoningEffort(model: string | null | undefined): "none" | "low" | null {
-  const family = getModelFamilyConstraints(model);
-  if (family?.family !== "qwen" && family?.family !== "gpt-oss") return null;
-  return family.reasoningEffort?.suppressValue === "low" ? "low" : "none";
-}
-
 export function suppressThinking(
   requestBody: Record<string, unknown>,
   providerKey: string,

@@ -45,3 +45,16 @@ test("streaming preview runs for BYOK only, even if a stale setting remains enab
   assert.equal(shouldShowByokStreamingPreview(true, "openwhispr"), false);
   assert.equal(shouldShowByokStreamingPreview(false, "byok"), false);
 });
+
+test("assistant-routed recordings never show the dictation preview", async () => {
+  const { shouldDisplayDictationPreview, shouldShowByokStreamingPreview } = await load();
+
+  // Local preview window display flag.
+  assert.equal(shouldDisplayDictationPreview(true, false), true);
+  assert.equal(shouldDisplayDictationPreview(true, true), false);
+  assert.equal(shouldDisplayDictationPreview(false, false), false);
+
+  // The BYOK streaming preview follows the same rule.
+  assert.equal(shouldShowByokStreamingPreview(true, "byok", true), false);
+  assert.equal(shouldShowByokStreamingPreview(true, "byok", false), true);
+});

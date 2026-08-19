@@ -11,9 +11,26 @@ export function buildLiveTranscriptionPreview(committedText = "", partialText = 
   return [committedText.trim(), partialText.trim()].filter(Boolean).join(" ");
 }
 
+/**
+ * Assistant-routed recordings stream their answer into the assistant panel;
+ * the floating dictation preview must never appear for them. Single owner of
+ * that rule for both the local preview window (AudioManager's `display` flag)
+ * and the BYOK streaming preview below.
+ */
+export function shouldDisplayDictationPreview(
+  enabled: boolean,
+  voiceAgentRequested: boolean
+): boolean {
+  return !!enabled && !voiceAgentRequested;
+}
+
 export function shouldShowByokStreamingPreview(
   enabled: boolean,
-  cloudTranscriptionMode: string
+  cloudTranscriptionMode: string,
+  voiceAgentRequested = false
 ): boolean {
-  return enabled && cloudTranscriptionMode === "byok";
+  return (
+    shouldDisplayDictationPreview(enabled, voiceAgentRequested) &&
+    cloudTranscriptionMode === "byok"
+  );
 }

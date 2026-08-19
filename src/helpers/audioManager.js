@@ -90,6 +90,7 @@ import {
 } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
+import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
 import {
   buildSelectionEditSystemPrompt,
   buildSelectionEditUserPrompt,
@@ -287,6 +288,23 @@ const isValidApiKey = (key, provider = "openai") => {
 const STREAMING_FINAL_QUIET_MS = 250;
 const STREAMING_FINAL_CEILING_MS = 2000;
 
+// Both realtime providers share the dictation realtime IPC surface and differ
+// only in the token-provider id. Forcing `provider` here (even though
+// buildStreamingSessionOptions already stamps it) is pinned by
+// audioManagerStreamingRouting.test.js: the hardened main-process allowlist
+// fails closed on an options object that lost the tag (#1624).
+const makeDictationRealtimeProvider = (id) => ({
+  awaitsFinalTranscript: true,
+  warmup: (opts) => window.electronAPI.dictationRealtimeWarmup({ ...opts, provider: id }),
+  start: (opts) => window.electronAPI.dictationRealtimeStart({ ...opts, provider: id }),
+  send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
+  stop: () => window.electronAPI.dictationRealtimeStop(),
+  onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
+  onFinal: (cb) => window.electronAPI.onDictationRealtimeFinal(cb),
+  onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
+  onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
+});
+
 const STREAMING_PROVIDERS = {
   deepgram: {
     warmup: (opts) => window.electronAPI.deepgramStreamingWarmup(opts),
@@ -312,25 +330,7 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onAssemblyAiError(cb),
     onSessionEnd: (cb) => window.electronAPI.onAssemblyAiSessionEnd(cb),
   },
-  "openai-realtime": {
-    awaitsFinalTranscript: true,
-    warmup: (opts) =>
-      window.electronAPI.dictationRealtimeWarmup({
-        ...opts,
-        provider: "openai-realtime",
-      }),
-    start: (opts) =>
-      window.electronAPI.dictationRealtimeStart({
-        ...opts,
-        provider: "openai-realtime",
-      }),
-    send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
-    stop: () => window.electronAPI.dictationRealtimeStop(),
-    onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
-    onFinal: (cb) => window.electronAPI.onDictationRealtimeFinal(cb),
-    onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
-    onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
-  },
+  "openai-realtime": makeDictationRealtimeProvider("openai-realtime"),
   corti: {
     warmup: (opts) => window.electronAPI.cortiStreamingWarmup(opts),
     start: (opts) => window.electronAPI.cortiStreamingStart(opts),
@@ -343,25 +343,7 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onCortiError(cb),
     onSessionEnd: (cb) => window.electronAPI.onCortiSessionEnd(cb),
   },
-  "tinfoil-realtime": {
-    awaitsFinalTranscript: true,
-    warmup: (opts) =>
-      window.electronAPI.dictationRealtimeWarmup({
-        ...opts,
-        provider: "tinfoil-realtime",
-      }),
-    start: (opts) =>
-      window.electronAPI.dictationRealtimeStart({
-        ...opts,
-        provider: "tinfoil-realtime",
-      }),
-    send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
-    stop: () => window.electronAPI.dictationRealtimeStop(),
-    onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
-    onFinal: (cb) => window.electronAPI.onDictationRealtimeFinal(cb),
-    onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
-    onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
-  },
+  "tinfoil-realtime": makeDictationRealtimeProvider("tinfoil-realtime"),
 };
 
 // Batch providers that must transcribe via a main-process proxy (CORS,
@@ -512,7 +494,6 @@ class AudioManager {
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
-    this.context = "dictation";
     this.sttConfig = null;
     this.warmupFailureStreak = 0;
     this.lastAudioBlob = null;
@@ -829,15 +810,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
-  setContext(context) {
-    this.context = context;
-  }
-
   isRecordingAllowedByPolicy() {
     const policyState = usePolicyStore.getState();
     return (
       isTranscriptionContextAllowed(policyState, getSettings(), "dictation") &&
-      (this.context !== "agent" || isAgentAllowed(policyState)) &&
       (!this.voiceAgentRequested || isAgentAllowed(policyState))
     );
   }
@@ -859,16 +835,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProviderName() {
+    // Every AudioManager instance records dictation; notes and meetings have
+    // their own routing, so the context is a literal here.
     const name = resolveStreamingProviderName({
       settings: getSettings(),
-      context: this.context,
+      context: "dictation",
       sttConfig: this.sttConfig,
     });
     // A server-driven sttConfig.streamingProvider we don't recognize must fall
     // back to a provider we can run — and the reported name must match the
     // channel bindings actually used, so the main process is never handed a
     // provider id it would fail closed on.
-    return STREAMING_PROVIDERS[name] ? name : defaultStreamingProviderName(this.context);
+    return STREAMING_PROVIDERS[name] ? name : defaultStreamingProviderName("dictation");
   }
 
   async getAudioConstraints(forceDefaultMic = false) {
@@ -1351,7 +1329,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             provider,
             model,
             language,
-            display: showTranscriptionPreview && !this.voiceAgentRequested,
+            display: shouldDisplayDictationPreview(
+              showTranscriptionPreview,
+              this.voiceAgentRequested
+            ),
           });
           this._streamingCommitActive = streamingCommit;
         } catch (e) {
@@ -1837,14 +1818,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       result = withSalvageWarning(result, metadata.salvagedRecording);
 
-      if (this.pendingAssistantConversation) {
-        result = { ...result, assistantConversation: this.pendingAssistantConversation };
-        this.pendingAssistantConversation = null;
-      }
-      if (this.pendingSelectionEdit) {
-        result = { ...result, selectionEdit: this.pendingSelectionEdit };
-        this.pendingSelectionEdit = null;
-      }
+      result = { ...result, ...this._takePendingResultExtras() };
       this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {
@@ -2317,8 +2291,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // their command — rerun it text-only, swapping in the pre-built prompt
       // that never had the screen-context suffix. Rebuilding from scratch
       // would drop the selection-edit instructions and completion marker.
+      // rawScreenContext/selectionEditReachable are routing-only keys (see
+      // processAgentCommand) — keep the retry config clean of them too.
       if (config?.screenContext) {
-        const { screenContext, textOnlySystemPrompt, ...textOnlyConfig } = config;
+        const {
+          screenContext,
+          rawScreenContext,
+          selectionEditReachable,
+          textOnlySystemPrompt,
+          ...textOnlyConfig
+        } = config;
         const result = await ReasoningService.processText(text, model, agentName, {
           ...textOnlyConfig,
           systemPrompt: textOnlySystemPrompt ?? dictationAgentPrompt(getSettings(), agentName),
@@ -2331,6 +2313,36 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Panel-first banking: the command streams into the assistant panel with
+  // the chat's tools and memory once transcription completes; nothing types
+  // at the cursor. The transcript flows back as the result text so history
+  // and previews stay truthful.
+  _bankAssistantDirective(transcript, config, selectedContext) {
+    this.pendingAssistantConversation = {
+      transcript,
+      // resolveReasoningRoute mirrors an attached screenContext into
+      // rawScreenContext (same object), so the raw carry is the single source
+      // to read — it also survives when the agent scope's attach gate dropped
+      // the image (the panel re-decides against the chat scope's model).
+      screenContext: config?.rawScreenContext ?? null,
+      ...(selectedContext ? { selectedContext } : {}),
+    };
+  }
+
+  // Consume the directives banked during reasoning so that exactly one
+  // transcription result — batch or streaming — carries them.
+  _takePendingResultExtras() {
+    const extras = {
+      ...(this.pendingAssistantConversation
+        ? { assistantConversation: this.pendingAssistantConversation }
+        : {}),
+      ...(this.pendingSelectionEdit ? { selectionEdit: this.pendingSelectionEdit } : {}),
+    };
+    this.pendingAssistantConversation = null;
+    this.pendingSelectionEdit = null;
+    return extras;
+  }
+
   async processAgentCommand(text, model, agentName, config) {
     const assistantSelectionContext = this.consumeAssistantSelectionContext();
     if (assistantSelectionContext) {
@@ -2338,11 +2350,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // target. Keep it on the existing panel-first route and leave the
       // external selection replacement path completely untouched.
       this.selectionCapturePromise = null;
-      this.pendingAssistantConversation = {
-        transcript: text,
-        screenContext: config?.screenContext ?? config?.rawScreenContext ?? null,
-        selectedContext: assistantSelectionContext,
-      };
+      this._bankAssistantDirective(text, config, assistantSelectionContext);
       return text;
     }
 
@@ -2382,13 +2390,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       captureDisposition === "selection" && !config?.selectionEditReachable;
 
     if (captureDisposition === "standalone" || selectionWithoutEditor) {
-      // Panel-first: the command streams into the assistant panel with the
-      // chat's tools and memory; nothing types at the cursor. The transcript
-      // flows back as the result text so history and previews stay truthful.
-      this.pendingAssistantConversation = {
-        transcript: selectionWithoutEditor ? `${text}\n\n"${capture.text}"` : text,
-        screenContext: config?.screenContext ?? config?.rawScreenContext ?? null,
-      };
+      // The directive's transcript carries the quoted selection when the
+      // selection-without-editor fallback routed a highlighted passage here.
+      this._bankAssistantDirective(
+        selectionWithoutEditor ? `${text}\n\n"${capture.text}"` : text,
+        config
+      );
       return text;
     }
 
@@ -2406,8 +2413,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
+    // selectionEditReachable and rawScreenContext are routing directives for
+    // this method, not reasoning options — strip them before the config
+    // reaches ReasoningService.
+    const { selectionEditReachable, rawScreenContext, ...reasoningOptions } = config ?? {};
     const selectionConfig = {
-      ...config,
+      ...reasoningOptions,
       maxTokens: Math.max(config?.maxTokens || 0, 8192),
       contextSize: Math.max(config?.contextSize || 0, 16384),
       temperature: config?.temperature ?? 0.2,
@@ -4591,14 +4602,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         text: finalText,
         rawText: rawStreamingText || finalText,
         source: `${this.getStreamingProviderName()}-streaming`,
-        ...(this.pendingAssistantConversation
-          ? { assistantConversation: this.pendingAssistantConversation }
-          : {}),
-        ...(this.pendingSelectionEdit ? { selectionEdit: this.pendingSelectionEdit } : {}),
+        ...this._takePendingResultExtras(),
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
-      this.pendingAssistantConversation = null;
-      this.pendingSelectionEdit = null;
 
       if (!usedBatchFallback) {
         (async () => {

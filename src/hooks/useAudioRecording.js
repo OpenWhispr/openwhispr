@@ -17,6 +17,7 @@ import {
   buildLiveTranscriptionPreview,
   shouldShowByokStreamingPreview,
 } from "../utils/transcriptionPreview";
+import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
@@ -77,6 +78,7 @@ export const useAudioRecording = (toast, options = {}) => {
       startLockRef.current = true;
       stopRequestedDuringStartRef.current = false;
       let preparationStarted = false;
+      let recordingStarted = false;
       try {
         if (!audioManagerRef.current) return false;
         const policyState = usePolicyStore.getState();
@@ -88,16 +90,7 @@ export const useAudioRecording = (toast, options = {}) => {
           return false;
         }
 
-        const currentState = audioManagerRef.current.getState();
-        if (
-          currentState.isRecording ||
-          currentState.isProcessing ||
-          currentState.isStreaming ||
-          currentState.isStreamingStartInProgress ||
-          currentState.isFinalizingStreaming
-        ) {
-          return false;
-        }
+        if (!canStartDictation(audioManagerRef.current.getState())) return false;
 
         const assistantSelectionContext = voiceAgentRequested
           ? (getAssistantSelectionContextRef.current?.() ?? null)
@@ -167,6 +160,7 @@ export const useAudioRecording = (toast, options = {}) => {
         const didStart = audioManagerRef.current.shouldUseStreaming()
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
+        recordingStarted = didStart;
         if (didStart) dismissDictationError?.();
 
         // A stop that landed while the start was still awaiting the mic open was
@@ -198,8 +192,18 @@ export const useAudioRecording = (toast, options = {}) => {
         return didStart;
       } finally {
         startLockRef.current = false;
+        // A stop that landed mid-start set isStopping expecting the started
+        // recording's state change to clear it; if the recording never began,
+        // no state change will ever arrive.
+        if (stopRequestedDuringStartRef.current && !recordingStarted) setIsStopping(false);
         stopRequestedDuringStartRef.current = false;
-        if (preparationStarted) setIsPreparing(false);
+        if (preparationStarted) {
+          setIsPreparing(false);
+          // The assistant identity set at preparation time is only confirmed
+          // by a real recording's onStateChange; an aborted or failed start
+          // must shed it or the idle pill keeps wearing the assistant look.
+          if (!recordingStarted) setIsAssistantVoice(false);
+        }
       }
     },
     [t, toast, dismissDictationError]
@@ -373,9 +377,9 @@ export const useAudioRecording = (toast, options = {}) => {
         if (
           shouldShowByokStreamingPreview(
             settings.showTranscriptionPreview,
-            settings.cloudTranscriptionMode
-          ) &&
-          !audioManagerRef.current?.voiceAgentRequested
+            settings.cloudTranscriptionMode,
+            !!audioManagerRef.current?.voiceAgentRequested
+          )
         ) {
           const previewText = buildLiveTranscriptionPreview(
             audioManagerRef.current?.streamingFinalText,
@@ -561,12 +565,7 @@ export const useAudioRecording = (toast, options = {}) => {
       // the lock check this toggle-off would take the start branch and be lost.
       if (startLockRef.current || currentState.isRecording) {
         await performStopRecording();
-      } else if (
-        !currentState.isProcessing &&
-        !currentState.isStreaming &&
-        !currentState.isStreamingStartInProgress &&
-        !currentState.isFinalizingStreaming
-      ) {
+      } else if (canStartDictation(currentState)) {
         await performStartRecording({ voiceAgentRequested, translationRequested });
       }
     };
@@ -601,8 +600,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
     const disposePrepare = window.electronAPI.onPrepareDictation?.(async () => {
       if (!audioManagerRef.current || startLockRef.current) return;
-      const currentState = audioManagerRef.current.getState();
-      if (currentState.isRecording || currentState.isProcessing || currentState.isStreaming) return;
+      if (!canStartDictation(audioManagerRef.current.getState())) return;
       const generation = ++preparationGenerationRef.current;
       setIsAssistantVoice(false);
       setIsPreparing(true);

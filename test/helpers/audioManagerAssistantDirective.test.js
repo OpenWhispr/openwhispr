@@ -87,21 +87,24 @@ test("the directive carries the raw screenshot past the attach gate", async (t) 
   assert.equal(manager.pendingAssistantConversation.screenContext, screenshot);
 });
 
-test("an attached screenshot is preferred over the raw carry", async (t) => {
+test("an attached screenshot still reaches the panel through the raw carry", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-attached-",
     settingsKey: "__assistantAttachedSettings",
   });
   const { manager } = managerWithCapture(createManager, null);
-  const attached = { mediaType: "image/jpeg", data: "attached" };
+  // resolveReasoningRoute mirrors the attached screenContext into
+  // rawScreenContext (same object), so the raw carry is the single source
+  // the banking path reads.
+  const screenshot = { mediaType: "image/jpeg", data: "attached" };
 
   await manager.processAgentCommand("read this", "gpt", "Aria", {
     selectionEditReachable: true,
-    screenContext: attached,
-    rawScreenContext: { mediaType: "image/jpeg", data: "raw" },
+    screenContext: screenshot,
+    rawScreenContext: screenshot,
   });
 
-  assert.equal(manager.pendingAssistantConversation.screenContext, attached);
+  assert.equal(manager.pendingAssistantConversation.screenContext, screenshot);
 });
 
 test("an Agent-panel selection stays on the panel route without touching external selection editing", async (t) => {
@@ -171,6 +174,7 @@ test("a selection with the dictation agent reachable keeps the in-place edit pat
   try {
     await manager.processAgentCommand("make this shorter", "gpt", "Aria", {
       selectionEditReachable: true,
+      rawScreenContext: { mediaType: "image/jpeg", data: "raw" },
       systemPrompt: "base prompt",
     });
   } catch {
@@ -180,4 +184,8 @@ test("a selection with the dictation agent reachable keeps the in-place edit pat
 
   assert.equal(modelCalls.length, 1, "the dictation-agent model runs the selection edit");
   assert.equal(manager.pendingAssistantConversation ?? null, null);
+  // Routing-only directives must not leak into the reasoning layer.
+  const selectionConfig = modelCalls[0][3];
+  assert.ok(!("selectionEditReachable" in selectionConfig));
+  assert.ok(!("rawScreenContext" in selectionConfig));
 });
