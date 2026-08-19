@@ -245,15 +245,32 @@ const Toast: React.FC<
   const [errorSurfaceReady, setErrorSurfaceReady] = React.useState(false);
   const isDestructive = variant === "destructive";
 
+  React.useEffect(() => {
+    if (presentation !== "dictation-error" || errorSurfaceReady) return undefined;
+
+    // Native error sizing is an enhancement, not a visibility gate. A resize
+    // acknowledgment can be delayed or skipped when another panel is handing
+    // off the same BrowserWindow, so always reveal the already-mounted card
+    // after a short grace period instead of leaving it permanently transparent.
+    const fallbackTimer = setTimeout(() => {
+      requestAnimationFrame(() => setErrorSurfaceReady(true));
+    }, 240);
+    return () => clearTimeout(fallbackTimer);
+  }, [errorSurfaceReady, presentation]);
+
   const handleStructuredAction = (structuredAction: ToastActionConfig) => {
     if (structuredAction.dismissOnClick !== false) onClose?.();
     void structuredAction.onClick();
   };
 
   const handleErrorHeightChange = React.useCallback(async (height: number) => {
-    const result = await window.electronAPI?.resizeDictationErrorWindowToContent?.(height);
-    if (result?.success === false) return;
-    requestAnimationFrame(() => setErrorSurfaceReady(true));
+    try {
+      await window.electronAPI?.resizeDictationErrorWindowToContent?.(height);
+    } finally {
+      // A failed or superseded content-height request must never suppress the
+      // actual warning. The initial DICTATION_ERROR width is already usable.
+      requestAnimationFrame(() => setErrorSurfaceReady(true));
+    }
   }, []);
 
   const handleMouseEnter = () => {

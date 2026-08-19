@@ -473,7 +473,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onUpdateError: registerListener("update-error"),
 
   // Audio event listeners
-  onNoAudioDetected: registerListener("no-audio-detected"),
   onCancelHotkeyPressed: registerListener("cancel-hotkey-pressed", (cb) => () => cb()),
   registerCancelHotkey: (key) => ipcRenderer.invoke("register-cancel-hotkey", key),
   unregisterCancelHotkey: () => ipcRenderer.invoke("unregister-cancel-hotkey"),

@@ -121,6 +121,36 @@ test("the floating hover pill changes surface treatment without zooming", async 
   assert.match(hovered, /<svg width="22" height="22"/);
 });
 
+test("dictation errors preserve the pill root until compact bounds settle", () => {
+  const sourceRoot = path.resolve(__dirname, "../..");
+  const appSource = fs.readFileSync(path.join(sourceRoot, "src/App.jsx"), "utf8");
+  const pillMarkup = appSource.slice(
+    appSource.indexOf("{/* The panel footer owns this pill"),
+    appSource.indexOf("<VoiceModePanelCore")
+  );
+  const errorExit = appSource.slice(
+    appSource.indexOf('if (prev === "DICTATION_ERROR"'),
+    appSource.indexOf("if (returningFromPanel")
+  );
+
+  assert.doesNotMatch(pillMarkup, /dictationErrorActionCount === 0\s*&&/);
+  assert.match(pillMarkup, /data-dictation-error-suppressed/);
+  assert.match(errorExit, /dictationErrorPillHandoffRef\.current\.releaseAfter/);
+  assert.ok(errorExit.indexOf("await requestMainWindowSize") >= 0);
+});
+
+test("dictation error visibility cannot deadlock on native content sizing", () => {
+  const sourceRoot = path.resolve(__dirname, "../..");
+  const toastSource = fs.readFileSync(path.join(sourceRoot, "src/components/ui/Toast.tsx"), "utf8");
+
+  assert.match(toastSource, /presentation !== "dictation-error" \|\| errorSurfaceReady/);
+  assert.match(toastSource, /setTimeout\(\(\) => \{[\s\S]*setErrorSurfaceReady\(true\)[\s\S]*240/);
+  assert.match(
+    toastSource,
+    /resizeDictationErrorWindowToContent[\s\S]*finally[\s\S]*setErrorSurfaceReady\(true\)/
+  );
+});
+
 test("the waveform pill keeps the normal compact logo footprint", async () => {
   const idle = await renderPill("idle", false);
   const recording = await renderPill("recording", true);

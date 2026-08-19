@@ -18,6 +18,7 @@ import {
   calculateWindowAnchorCompensation,
   createMainWindowResizeCoordinator,
 } from "./utils/mainWindowResizeCoordinator";
+import { createDictationErrorPillHandoff } from "./utils/dictationErrorPillHandoff";
 
 import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
 import {
@@ -92,6 +93,17 @@ export default function App() {
 
   const [dragStartPos, setDragStartPos] = useState(null);
   const [hasDragged, setHasDragged] = useState(false);
+  const [dictationErrorPillHandoffActive, setDictationErrorPillHandoffActive] = useState(false);
+  const dictationErrorActionCountRef = useRef(dictationErrorActionCount);
+  const dictationErrorPillHandoffRef = useRef(null);
+
+  if (dictationErrorPillHandoffRef.current === null) {
+    dictationErrorPillHandoffRef.current = createDictationErrorPillHandoff({
+      onSuppressedChange: setDictationErrorPillHandoffActive,
+      shouldAutoHide: () => useSettingsStore.getState().floatingIconAutoHide,
+      hideWindow: () => window.electronAPI?.hideWindow?.(),
+    });
+  }
 
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
@@ -115,6 +127,13 @@ export default function App() {
     setWindowInteractivity(false);
     return () => setWindowInteractivity(false);
   }, [setWindowInteractivity]);
+
+  useLayoutEffect(() => {
+    dictationErrorActionCountRef.current = dictationErrorActionCount;
+    if (dictationErrorActionCount > 0) {
+      dictationErrorPillHandoffRef.current.suppress();
+    }
+  }, [dictationErrorActionCount]);
 
   useEffect(() => {
     let disposed = false;
@@ -521,6 +540,7 @@ export default function App() {
       clearLiveTranscriptEntranceTimers();
       liveTranscriptTextSchedulerRef.current.cancel();
       mainWindowResizeCoordinatorRef.current?.dispose();
+      dictationErrorPillHandoffRef.current?.cancel();
     },
     [clearAssistantFooterTimers, clearLiveTranscriptEntranceTimers]
   );
@@ -989,9 +1009,22 @@ export default function App() {
       return undefined;
     }
     if (prev === "DICTATION_ERROR" || prev === "DICTATION_ERROR_WITH_TRANSCRIPT") {
-      // The card has already completed its exit animation and been removed;
-      // skip another delayed intermediate footprint.
-      void requestMainWindowSize(target);
+      // Keep the same pill root hidden until Electron has restored the compact
+      // bounds. Revealing it in the old error footprint makes it jump once when
+      // React mounts it and again when the native resize reaches Chromium.
+      void dictationErrorPillHandoffRef.current.releaseAfter(async () => {
+        let settledTarget = target;
+        await requestMainWindowSize(settledTarget);
+        // A menu/toast edge can supersede BASE while its native resize is
+        // queued. Follow the size owner's latest target before revealing.
+        while (
+          dictationErrorActionCountRef.current === 0 &&
+          lastSizeKeyRef.current !== settledTarget
+        ) {
+          settledTarget = lastSizeKeyRef.current;
+          await requestMainWindowSize(settledTarget);
+        }
+      });
       return undefined;
     }
     if (returningFromPanel || !prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {
@@ -1017,6 +1050,25 @@ export default function App() {
       dismissByPresentation("dictation-error");
     }
   }, [isRecording, dictationErrorActionCount, dismissByPresentation]);
+
+  useEffect(() => {
+    if (
+      dictationErrorActionCount > 0 ||
+      !dictationErrorPillHandoffActive ||
+      (!assistantPanelMounted && !liveTranscriptPanelMounted)
+    ) {
+      return;
+    }
+
+    // A panel already owns stable native bounds, so an error displayed inside
+    // it has no compact resize to await. Release only the visual suppression.
+    void dictationErrorPillHandoffRef.current.releaseAfter(async () => {});
+  }, [
+    assistantPanelMounted,
+    dictationErrorActionCount,
+    dictationErrorPillHandoffActive,
+    liveTranscriptPanelMounted,
+  ]);
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -1049,6 +1101,7 @@ export default function App() {
       !isRecording &&
       !isVisuallyProcessing &&
       toastCount === 0 &&
+      !dictationErrorPillHandoffActive &&
       !assistantPanelMounted &&
       !liveTranscriptPanelMounted
     ) {
@@ -1067,6 +1120,7 @@ export default function App() {
     isVisuallyProcessing,
     floatingIconAutoHide,
     toastCount,
+    dictationErrorPillHandoffActive,
     assistantPanelMounted,
     liveTranscriptPanelMounted,
   ]);
@@ -1209,16 +1263,22 @@ export default function App() {
     liveTranscriptPanelOpen && liveTranscriptEntrancePhase === "encapsulate"
       ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
       : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs;
+  const dictationErrorSuppressesPill =
+    dictationErrorActionCount > 0 || dictationErrorPillHandoffActive;
 
   return (
     <div className="dictation-window">
       {/* The panel footer owns this pill until final-response actions replace it. */}
-      {dictationErrorActionCount === 0 && (!assistantPanelOpen || assistantFooter.pillVisible) && (
+      {(!assistantPanelOpen || assistantFooter.pillVisible) && (
         <div
-          className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50`}
+          className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${
+            dictationErrorSuppressesPill ? "pointer-events-none opacity-0" : "opacity-100"
+          }`}
           style={{
             "--voice-pill-travel-duration": `${voicePillTravelDuration}ms`,
           }}
+          data-dictation-error-suppressed={dictationErrorSuppressesPill || undefined}
+          aria-hidden={dictationErrorSuppressesPill || undefined}
         >
           <div
             className="assistant-pill-presence relative flex items-center gap-2"

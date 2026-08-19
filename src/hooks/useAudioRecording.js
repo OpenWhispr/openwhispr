@@ -605,18 +605,6 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const handleNoAudioDetected = () => {
-      if (getSettings().pauseMediaOnDictation) {
-        window.electronAPI?.resumeMediaPlayback?.();
-      }
-      showDictationError({
-        title: t("hooks.audioRecording.noAudio.title"),
-        description: t("hooks.audioRecording.noAudio.description"),
-      });
-    };
-
-    const disposeNoAudio = window.electronAPI.onNoAudioDetected?.(handleNoAudioDetected);
-
     // Cleanup
     return () => {
       reportLifecycle("idle");
@@ -628,7 +616,6 @@ export const useAudioRecording = (toast, options = {}) => {
       disposePrepare?.();
       disposeCancelPreparation?.();
       disposeStop?.();
-      disposeNoAudio?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
       }

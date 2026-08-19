@@ -115,6 +115,22 @@ test("streaming finalization is immediately processing and cannot start another 
   });
 });
 
+test("streaming silence publishes its empty outcome only after processing settles", async (t) => {
+  const AudioManager = await loadAudioManager(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  const order = [];
+  manager.onStateChange = (state) => {
+    order.push(state.isProcessing ? "processing" : "idle");
+  };
+  manager.onTranscriptionComplete = (result) => {
+    order.push(result.text === "" ? "empty" : "transcript");
+  };
+
+  await manager.stopStreamingRecording();
+
+  assert.deepEqual(order, ["processing", "idle", "empty"]);
+});
+
 test("an older streaming session cannot clean up the active session listeners", async (t) => {
   const AudioManager = await loadAudioManager(t);
   const manager = Object.assign(Object.create(AudioManager.prototype), {

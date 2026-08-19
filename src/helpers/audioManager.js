@@ -1718,6 +1718,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async processAudio(audioBlob, metadata = {}) {
     const pipelineStart = performance.now();
     const settings = getSettings();
+    let noAudioDetected = false;
     const speechGateDecision = getLocalSpeechGateDecision(this._localSpeechGateState);
     this._localSpeechGateState = null;
 
@@ -1852,14 +1853,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       if (error.code === DICTIONARY_ECHO_CODE) {
-        // The transcript was discarded as an echo of the dictionary prompt. Only
-        // the local engine's genuine-silence path gets a toast from main, so
-        // surface the same one here and keep the audio for a manual retry —
-        // otherwise the whole utterance disappears with no feedback (#1547).
-        this.onNoAudio?.();
+        // The transcript was discarded as an echo of the dictionary prompt.
+        // Surface the shared soft no-audio outcome and keep the recording for
+        // a manual retry — otherwise the whole utterance disappears with no
+        // feedback (#1547).
+        noAudioDetected = true;
         if (this.lastAudioBlob) {
           this.saveFailedTranscription(error.message, error.code, metadata);
         }
+      } else if (error.message === "No audio detected") {
+        noAudioDetected = true;
       } else if (error.message !== "No audio detected") {
         this.onError?.({
           title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
@@ -1880,6 +1883,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.isProcessing = false;
         this.onStateChange?.({ isRecording: false, isProcessing: false });
       }
+      // Every provider reports genuine silence through this one post-processing
+      // outcome. The pill can now leave thinking before the error surface takes
+      // ownership, instead of receiving an IPC event mid-pipeline.
+      if (noAudioDetected) this.onNoAudio?.();
     }
   }
 
@@ -4581,13 +4588,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         },
         "streaming"
       );
-    } else {
-      // Silence: still fire callback to dismiss the preview and show the no-audio toast.
-      this.onTranscriptionComplete?.({ success: true, text: "" });
     }
 
     this.isProcessing = false;
     this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
+
+    if (!finalText) {
+      // Match the batch pipeline: settle processing first, then publish the
+      // empty outcome so the warning cannot interrupt the thinking transition.
+      this.onTranscriptionComplete?.({ success: true, text: "" });
+    }
 
     if (this.shouldUseStreaming()) {
       this.warmupStreamingConnection().catch((e) => {
