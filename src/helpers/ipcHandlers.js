@@ -7756,13 +7756,6 @@ class IPCHandlers {
       })
     );
 
-    ipcMain.handle("resize-transcription-preview-window", async (_event, width, height) => {
-      if (!dictationPreviewSessionActive) {
-        return { success: false, error: "Preview session not active" };
-      }
-      return this.windowManager.resizeTranscriptionPreview(width, height);
-    });
-
     ipcMain.handle("stop-dictation-preview", async (_event, options = {}) => {
       if (!dictationPreviewMode && !dictationPreviewSessionActive) {
         return { success: true, streamed: false, text: "" };

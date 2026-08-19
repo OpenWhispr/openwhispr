@@ -20,7 +20,7 @@ import {
 } from "./utils/mainWindowResizeCoordinator";
 import { createDictationErrorPillHandoff } from "./utils/dictationErrorPillHandoff";
 
-import { SIZE_RANK, resolveMainWindowSizeKey } from "./helpers/windowSizeLadder";
+import { SIZE_RANK, resolveMainWindowSizeKey } from "./utils/windowSizeLadder";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
   getAssistantFooterTransitionTimeline,

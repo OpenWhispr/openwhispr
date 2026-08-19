@@ -9,12 +9,12 @@ const DevServerManager = require("./devServerManager");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
-const { shouldBlockNonAgentDictation } = require("./assistantDictationGuard");
 const {
   DICTATION_LIFECYCLE,
   normalizeDictationLifecycle,
   shouldIgnoreDictationHotkey,
   isDictationRecording,
+  shouldBlockDictationWhilePanelOpen,
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
 const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
@@ -208,25 +208,7 @@ class WindowManager {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return { success: false, message: "Window not available" };
     }
-
-    let newSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
-    if (
-      sizeKey === "ASSISTANT" ||
-      sizeKey === "DICTATION_ERROR" ||
-      sizeKey === "DICTATION_ERROR_WITH_TRANSCRIPT"
-    ) {
-      const currentBounds = this.mainWindow.getBounds();
-      const display = screen.getDisplayNearestPoint({
-        x: currentBounds.x + currentBounds.width / 2,
-        y: currentBounds.y + currentBounds.height,
-      });
-      const workArea = display.workArea || display.bounds;
-      newSize =
-        sizeKey === "ASSISTANT"
-          ? fitAssistantWindowToWorkArea(newSize, workArea)
-          : fitDictationErrorWindowToWorkArea(newSize, workArea);
-    }
-    return this._resizeMainWindowTo(newSize, sizeKey);
+    return this._enqueueMainWindowMutation(() => this._performMainWindowResize(sizeKey));
   }
 
   resizeAssistantWindowToContent(surfaceHeight) {
@@ -240,16 +222,9 @@ class WindowManager {
       return this.resizeMainWindow("ASSISTANT");
     }
 
-    const currentBounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height,
-    });
-    const newSize = fitAssistantContentWindowToWorkArea(
-      surfaceHeight,
-      display.workArea || display.bounds
+    return this._enqueueMainWindowMutation(() =>
+      this._performMainWindowResize("ASSISTANT_CONTENT", { surfaceHeight })
     );
-    return this._resizeMainWindowTo(newSize, "ASSISTANT_CONTENT");
   }
 
   resizeDictationErrorWindowToContent(surfaceHeight) {
@@ -267,16 +242,9 @@ class WindowManager {
       return { success: true, bounds, changed: false };
     }
 
-    const currentBounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height,
-    });
-    const newSize = fitDictationErrorContentWindowToWorkArea(
-      surfaceHeight,
-      display.workArea || display.bounds
+    return this._enqueueMainWindowMutation(() =>
+      this._performMainWindowResize("DICTATION_ERROR_CONTENT", { surfaceHeight })
     );
-    return this._resizeMainWindowTo(newSize, "DICTATION_ERROR_CONTENT");
   }
 
   async _prepareRendererForMainWindowResize(bounds, anchor) {
@@ -290,10 +258,6 @@ class WindowManager {
     await new Promise((resolve) => setTimeout(resolve, 24));
   }
 
-  _resizeMainWindowTo(newSize, sizeKey) {
-    return this._enqueueMainWindowMutation(() => this._performMainWindowResize(newSize, sizeKey));
-  }
-
   _enqueueMainWindowMutation(run) {
     // Renderer voice requests are latest-wins, while errors and other overlays
     // and active-display placement can also mutate the native bounds. Serialize
@@ -302,17 +266,47 @@ class WindowManager {
     return this._mainWindowResizeQueue;
   }
 
-  async _performMainWindowResize(newSize, sizeKey) {
+  // The pill is bottom-anchored, so the display that owns its bottom-center
+  // point is the one that must keep it through resizes and repositions.
+  _getMainWindowDisplayFor(bounds) {
+    return screen.getDisplayNearestPoint({
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height,
+    });
+  }
+
+  _resolveMainWindowSize(sizeKey, workArea, request) {
+    switch (sizeKey) {
+      case "ASSISTANT":
+        return fitAssistantWindowToWorkArea(WINDOW_SIZES.ASSISTANT, workArea);
+      case "DICTATION_ERROR":
+      case "DICTATION_ERROR_WITH_TRANSCRIPT":
+        return fitDictationErrorWindowToWorkArea(WINDOW_SIZES[sizeKey], workArea);
+      case "ASSISTANT_CONTENT":
+        return fitAssistantContentWindowToWorkArea(request?.surfaceHeight, workArea);
+      case "DICTATION_ERROR_CONTENT":
+        return fitDictationErrorContentWindowToWorkArea(request?.surfaceHeight, workArea);
+      default:
+        return WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
+    }
+  }
+
+  async _performMainWindowResize(sizeKey, request) {
     // The queue can drain after the window is gone (quit, recreate); the
     // caller's guard ran before enqueueing.
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return { success: false, error: "Main window not available" };
     }
+    // Bounds, display and the work-area fit are all sampled inside the queue:
+    // a queued cross-display move would otherwise leave a fit computed at
+    // enqueue time describing the display the window is about to leave.
     const currentBounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height,
-    });
+    const display = this._getMainWindowDisplayFor(currentBounds);
+    const newSize = this._resolveMainWindowSize(
+      sizeKey,
+      display.workArea || display.bounds,
+      request
+    );
 
     // A window moved since the last resize (dragged) means the captured BASE
     // bounds no longer describe where the user wants the pill — drop them.
@@ -333,7 +327,13 @@ class WindowManager {
     // work-area clamp did on the way up, walking the pill away from where the
     // user put it a little more on every grow/shrink cycle.
     if (sizeKey === "BASE" && this._baseBoundsBeforeResize) {
-      const restored = { ...this._baseBoundsBeforeResize };
+      // The work area can shrink while the window is grown (dock/taskbar
+      // reappearing, resolution change) — clamp the restore so the pill
+      // cannot come back off-screen.
+      const restored = {
+        ...this._baseBoundsBeforeResize,
+        ...WindowPositionUtil.clampToWorkArea(this._baseBoundsBeforeResize, display),
+      };
       const restoreAnchor =
         this._panelStartPosition === "center"
           ? "center"
@@ -695,7 +695,7 @@ class WindowManager {
   _sendDictationToggle(channel) {
     const voiceAgentRequested = channel === "toggle-voice-agent";
     if (
-      shouldBlockNonAgentDictation({
+      shouldBlockDictationWhilePanelOpen({
         assistantPanelOpen: this._assistantPanelOpen,
         voiceAgentRequested,
       })
@@ -764,7 +764,7 @@ class WindowManager {
   }
 
   sendStartDictation() {
-    if (shouldBlockNonAgentDictation({ assistantPanelOpen: this._assistantPanelOpen })) {
+    if (shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: this._assistantPanelOpen })) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -782,7 +782,7 @@ class WindowManager {
   }
 
   sendStopDictation() {
-    if (shouldBlockNonAgentDictation({ assistantPanelOpen: this._assistantPanelOpen })) {
+    if (shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: this._assistantPanelOpen })) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -795,7 +795,7 @@ class WindowManager {
 
   sendPrepareDictation({ voiceAgentRequested = false } = {}) {
     if (
-      shouldBlockNonAgentDictation({
+      shouldBlockDictationWhilePanelOpen({
         assistantPanelOpen: this._assistantPanelOpen,
         voiceAgentRequested,
       })
@@ -866,10 +866,7 @@ class WindowManager {
       return this._panelStartPosition === "bottom-left" ? "left" : "right";
     }
     const bounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayNearestPoint({
-      x: bounds.x + bounds.width / 2,
-      y: bounds.y + bounds.height / 2,
-    });
+    const display = this._getMainWindowDisplayFor(bounds);
     return resolveHorizontalWindowDirection(bounds, display, this._panelStartPosition);
   }
 
@@ -888,10 +885,7 @@ class WindowManager {
     // Reposition the window immediately
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       const currentBounds = this.mainWindow.getBounds();
-      const display = screen.getDisplayNearestPoint({
-        x: currentBounds.x + currentBounds.width / 2,
-        y: currentBounds.y + currentBounds.height / 2,
-      });
+      const display = this._getMainWindowDisplayFor(currentBounds);
       const newPos = WindowPositionUtil.getMainWindowPosition(
         display,
         { width: currentBounds.width, height: currentBounds.height },
@@ -1123,13 +1117,6 @@ class WindowManager {
     this.mainWindow.webContents.send("preview-hide");
   }
 
-  resizeTranscriptionPreview() {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      return { success: false, error: "Dictation window not available" };
-    }
-    return { success: true, bounds: this.mainWindow.getBounds() };
-  }
-
   // The display the user is working on is the one showing the app being dictated
   // into, which on a multi-monitor desk is often not the one the mouse rests on.
   // Falls back to the cursor when the target has no readable window (non-macOS,
@@ -1170,10 +1157,7 @@ class WindowManager {
     }
 
     const currentBounds = this.mainWindow.getBounds();
-    const currentDisplay = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height / 2,
-    });
+    const currentDisplay = this._getMainWindowDisplayFor(currentBounds);
 
     if (currentDisplay.id === activeDisplay.id) {
       // Nearest-display math can't tell "on this display" from "just past its

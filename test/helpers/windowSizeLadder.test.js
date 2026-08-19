@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = () => import("../../src/helpers/windowSizeLadder.js");
+const load = () => import("../../src/utils/windowSizeLadder.js");
 
 test("recording window only grows enough for the compact listening pill", () => {
   const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
@@ -166,6 +166,42 @@ test("a toast dismissing never shrinks the window below an active state", async 
   });
   assert.equal(during, "RECORDING");
   assert.ok(SIZE_RANK[during] > SIZE_RANK.BASE);
+});
+
+test("every ladder size key has a native footprint in WINDOW_SIZES", async () => {
+  const { SIZE_RANK, resolveMainWindowSizeKey } = await load();
+  const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
+
+  // A ladder key missing from WINDOW_SIZES makes windowManager silently fall
+  // back to the BASE footprint. Cover both the ranked keys and every key the
+  // resolver can actually return across its whole input domain.
+  const ladderKeys = new Set(Object.keys(SIZE_RANK));
+  for (const panelOpen of [false, true]) {
+    for (const menuOpen of [false, true]) {
+      for (const toastCount of [0, 1]) {
+        for (const compactPill of [false, true]) {
+          for (const dictationErrorActionCount of [0, 1, 2]) {
+            ladderKeys.add(
+              resolveMainWindowSizeKey({
+                panelOpen,
+                menuOpen,
+                toastCount,
+                compactPill,
+                dictationErrorActionCount,
+              })
+            );
+          }
+        }
+      }
+    }
+  }
+
+  for (const key of ladderKeys) {
+    const size = WINDOW_SIZES[key];
+    assert.ok(size, `WINDOW_SIZES is missing ladder key ${key}`);
+    assert.equal(typeof size.width, "number");
+    assert.equal(typeof size.height, "number");
+  }
 });
 
 test("size ranks order every key", async () => {

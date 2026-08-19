@@ -18,9 +18,17 @@ function isDictationRecording(state) {
   return normalizeDictationLifecycle(state) === DICTATION_LIFECYCLE.RECORDING;
 }
 
+// While the assistant panel owns the shared pill window, plain dictation must
+// not start underneath it — only a voice-assistant request may record an
+// in-panel follow-up.
+function shouldBlockDictationWhilePanelOpen({ assistantPanelOpen, voiceAgentRequested = false }) {
+  return Boolean(assistantPanelOpen && !voiceAgentRequested);
+}
+
 module.exports = {
   DICTATION_LIFECYCLE,
   normalizeDictationLifecycle,
   shouldIgnoreDictationHotkey,
   isDictationRecording,
+  shouldBlockDictationWhilePanelOpen,
 };

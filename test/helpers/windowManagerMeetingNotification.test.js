@@ -99,13 +99,10 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       MAIN_WINDOW_CONFIG: {},
       CONTROL_PANEL_CONFIG: {},
-      AGENT_OVERLAY_CONFIG: {},
       NOTIFICATION_WINDOW_CONFIG: { ...detectionSize, acceptFirstMouse: true },
       AUTO_END_NOTIFICATION_WINDOW_SIZE: autoEndSize,
       getMeetingNotificationWindowSize: (data) =>
         data?.kind === "auto-end" ? autoEndSize : detectionSize,
-      TRANSCRIPTION_PREVIEW_CONFIG: {},
-      TRANSCRIPTION_PREVIEW_SIZE_LIMITS: {},
       WINDOW_SIZES: {},
       WindowPositionUtil: {
         getNotificationPosition: (_display, size = detectionSize) => ({

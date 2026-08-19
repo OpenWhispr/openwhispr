@@ -1,7 +1,7 @@
 const path = require("path");
 const { getLinuxSessionInfo } = require("./linuxSession");
 
-const FOCUSLESS_OVERLAY_ROLES = new Set(["main", "notification", "transcription-preview"]);
+const FOCUSLESS_OVERLAY_ROLES = new Set(["main", "notification"]);
 
 function usesGnomeOverlayPolicy(linuxSession) {
   return (
@@ -38,12 +38,6 @@ const OVERLAY_WINDOW_TYPES = {
     platform: process.platform,
     linuxSession,
   }),
-  transcriptionPreview: resolveOverlayWindowType({
-    role: "transcription-preview",
-    platform: process.platform,
-    linuxSession,
-  }),
-  agent: resolveOverlayWindowType({ role: "agent", platform: process.platform, linuxSession }),
 };
 
 const ASSISTANT_PANEL_SIZE_LIMITS = {
@@ -93,27 +87,10 @@ function fitAssistantWindowToWorkArea(requestedSize, workArea) {
   };
 }
 
-function fitAssistantContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
-  const limits = ASSISTANT_PANEL_SIZE_LIMITS;
-  const maximumWindow = fitAssistantWindowToWorkArea(ASSISTANT_WINDOW_SIZE, workArea);
-  const maximumSurfaceHeight = maximumWindow.height - limits.gutter;
-  const minimumSurfaceHeight = Math.min(limits.minSurfaceHeight, maximumSurfaceHeight);
-  const numericHeight = Number(requestedSurfaceHeight);
-  const safeHeight = Number.isFinite(numericHeight)
-    ? Math.round(numericHeight)
-    : minimumSurfaceHeight;
-  const surfaceHeight = Math.max(minimumSurfaceHeight, Math.min(safeHeight, maximumSurfaceHeight));
-
-  return {
-    width: maximumWindow.width,
-    height: surfaceHeight + limits.gutter,
-  };
-}
-
-function fitDictationErrorContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
-  const limits = DICTATION_ERROR_WINDOW_LIMITS;
-  const width = fitAssistantWindowToWorkArea(ASSISTANT_WINDOW_SIZE, workArea).width;
-  const maximumSurfaceHeight = Math.max(1, workArea.height - limits.gutter);
+// Shared shape of both content-height fits: clamp a renderer-measured surface
+// height between the limits' floor and the caller's ceiling, then add the
+// gutter frame back around the surface.
+function fitContentWindowToWorkArea(limits, requestedSurfaceHeight, { width, maximumSurfaceHeight }) {
   const minimumSurfaceHeight = Math.min(limits.minSurfaceHeight, maximumSurfaceHeight);
   const numericHeight = Number(requestedSurfaceHeight);
   const safeHeight = Number.isFinite(numericHeight)
@@ -123,8 +100,26 @@ function fitDictationErrorContentWindowToWorkArea(requestedSurfaceHeight, workAr
 
   return {
     width,
-    height: Math.min(workArea.height, surfaceHeight + limits.gutter),
+    height: surfaceHeight + limits.gutter,
   };
+}
+
+function fitAssistantContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
+  const limits = ASSISTANT_PANEL_SIZE_LIMITS;
+  const maximumWindow = fitAssistantWindowToWorkArea(ASSISTANT_WINDOW_SIZE, workArea);
+  return fitContentWindowToWorkArea(limits, requestedSurfaceHeight, {
+    width: maximumWindow.width,
+    maximumSurfaceHeight: maximumWindow.height - limits.gutter,
+  });
+}
+
+function fitDictationErrorContentWindowToWorkArea(requestedSurfaceHeight, workArea) {
+  const limits = DICTATION_ERROR_WINDOW_LIMITS;
+  const fitted = fitContentWindowToWorkArea(limits, requestedSurfaceHeight, {
+    width: fitAssistantWindowToWorkArea(ASSISTANT_WINDOW_SIZE, workArea).width,
+    maximumSurfaceHeight: Math.max(1, workArea.height - limits.gutter),
+  });
+  return { ...fitted, height: Math.min(workArea.height, fitted.height) };
 }
 
 function fitDictationErrorWindowToWorkArea(requestedSize, workArea) {
@@ -273,37 +268,6 @@ function getMeetingNotificationWindowSize(promptData) {
   };
 }
 
-const TRANSCRIPTION_PREVIEW_SIZE_LIMITS = {
-  minWidth: 400,
-  defaultWidth: 460,
-  maxWidth: 640,
-  minHeight: 96,
-  defaultHeight: 132,
-  maxHeight: 520,
-};
-
-const TRANSCRIPTION_PREVIEW_CONFIG = {
-  width: TRANSCRIPTION_PREVIEW_SIZE_LIMITS.defaultWidth,
-  height: TRANSCRIPTION_PREVIEW_SIZE_LIMITS.defaultHeight,
-  frame: false,
-  transparent: true,
-  alwaysOnTop: true,
-  skipTaskbar: true,
-  resizable: false,
-  focusable: false,
-  hasShadow: false,
-  show: false,
-  acceptsFirstMouse: true,
-  webPreferences: {
-    preload: path.join(__dirname, "..", "..", "preload.js"),
-    nodeIntegration: false,
-    contextIsolation: true,
-    sandbox: true,
-  },
-  visibleOnAllWorkspaces: process.platform !== "win32",
-  type: OVERLAY_WINDOW_TYPES.transcriptionPreview,
-};
-
 class WindowPositionUtil {
   static getMainWindowPosition(display, customSize = null, position = "bottom-right") {
     const { width, height } = customSize || WINDOW_SIZES.BASE;
@@ -384,40 +348,9 @@ class WindowPositionUtil {
   }
 }
 
-const AGENT_OVERLAY_CONFIG = {
-  width: 420,
-  height: 300,
-  minWidth: 360,
-  minHeight: 200,
-  maxWidth: 800,
-  maxHeight: 10000,
-  frame: false,
-  alwaysOnTop: true,
-  transparent: true,
-  show: false,
-  skipTaskbar: true,
-  hasShadow: false,
-  focusable: true,
-  resizable: false,
-  fullScreenable: false,
-  acceptsFirstMouse: true,
-  type: OVERLAY_WINDOW_TYPES.agent,
-  visibleOnAllWorkspaces: process.platform !== "win32",
-  webPreferences: {
-    preload: path.join(__dirname, "..", "..", "preload.js"),
-    nodeIntegration: false,
-    contextIsolation: true,
-    sandbox: false,
-    webSecurity: false,
-    spellcheck: false,
-    backgroundThrottling: false,
-  },
-};
-
 module.exports = {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
-  AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
   ASSISTANT_PANEL_SIZE_LIMITS,
   fitAssistantContentWindowToWorkArea,
@@ -427,8 +360,6 @@ module.exports = {
   resolveHorizontalWindowDirection,
   AUTO_END_NOTIFICATION_WINDOW_SIZE,
   getMeetingNotificationWindowSize,
-  TRANSCRIPTION_PREVIEW_CONFIG,
-  TRANSCRIPTION_PREVIEW_SIZE_LIMITS,
   WINDOW_SIZES,
   WindowPositionUtil,
   resolveOverlayWindowType,

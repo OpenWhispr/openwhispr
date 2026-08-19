@@ -7,6 +7,20 @@ const { renderToStaticMarkup } = require("react-dom/server");
 
 globalThis.React = React;
 
+const sourceRoot = path.resolve(__dirname, "../..");
+// The dictation-window feature styles are split out of index.css; selectors
+// under test may live in either file.
+const readDictationStyles = () =>
+  fs.readFileSync(path.join(sourceRoot, "src/index.css"), "utf8") +
+  fs.readFileSync(path.join(sourceRoot, "src/styles/dictation-panel.css"), "utf8");
+
+// The pill renders the resting silhouette and the live waveform as two
+// stacked bar sets, both sized from the shared bar count.
+const totalWaveBars = async () => {
+  const { WAVEFORM_BAR_COUNT } = await import("../../src/components/dictation/waveformMath.ts");
+  return WAVEFORM_BAR_COUNT * 2;
+};
+
 const renderPill = async (state, expanded, horizontalDirection = "right", overrides = {}) => {
   const { VoicePill } = await import("../../src/components/dictation/VoicePill.tsx");
   const markup = renderToStaticMarkup(
@@ -30,13 +44,13 @@ test("thinking and recording keep the same persistent Beam and pill roots", asyn
   assert.match(thinking, /plain-dictation-processing-glow/);
   assert.match(recording, /^<div data-beam="[^"]+" class="agent-thinking-beam/);
   assert.doesNotMatch(recording, /plain-dictation-processing-glow/);
-  assert.equal((thinking.match(/rounded-full bg-current/g) || []).length, 22);
-  assert.equal((recording.match(/rounded-full bg-current/g) || []).length, 22);
+  const expectedBars = await totalWaveBars();
+  assert.equal((thinking.match(/rounded-full bg-current/g) || []).length, expectedBars);
+  assert.equal((recording.match(/rounded-full bg-current/g) || []).length, expectedBars);
 });
 
 test("plain dictation processing strengthens only the light-theme radial bloom", async () => {
-  const sourceRoot = path.resolve(__dirname, "../..");
-  const styles = fs.readFileSync(path.join(sourceRoot, "src/index.css"), "utf8");
+  const styles = readDictationStyles();
   const agentThinking = await renderPill("thinking", false, "right", { agentMode: true });
 
   assert.match(
@@ -220,7 +234,7 @@ test("dictation error visibility cannot deadlock on native content sizing", () =
   );
   assert.ok(
     errorResizeHandler.indexOf("if (this._assistantPanelOpen)") <
-      errorResizeHandler.indexOf("fitDictationErrorContentWindowToWorkArea")
+      errorResizeHandler.indexOf("_performMainWindowResize")
   );
 });
 
@@ -251,7 +265,10 @@ test("the waveform uses foreground contrast, rounded caps, and a pronounced heig
     await import("../../src/components/dictation/waveformMath.ts");
 
   assert.match(recording, /relative shrink-0 overflow-hidden text-foreground/);
-  assert.equal((recording.match(/w-0\.5 rounded-full bg-current/g) || []).length, 22);
+  assert.equal(
+    (recording.match(/w-0\.5 rounded-full bg-current/g) || []).length,
+    await totalWaveBars()
+  );
   assert.equal(WAVEFORM_BAR_MIN_PX, 4);
   assert.equal(WAVEFORM_BAR_MAX_PX, 22);
   assert.equal(resolveWaveformBarHeight(0), WAVEFORM_BAR_MIN_PX);
@@ -276,11 +293,11 @@ test("Agent Mode uses the supplied mark, a purple perimeter beam, and a neutral 
     agentMode: true,
   });
   const normalRecording = await renderPill("recording", true);
-  const sourceRoot = path.resolve(__dirname, "../..");
-  const asset = fs.readFileSync(path.join(sourceRoot, "src/assets/icons/agent-mode.svg"), "utf8");
-  const styles = fs.readFileSync(path.join(sourceRoot, "src/index.css"), "utf8");
+  const { AGENT_MODE_PATH } =
+    await import("../../src/components/dictation/voiceIdentityMorph.ts");
+  const styles = readDictationStyles();
 
-  assert.match(asset, /fill="#8787FF"/);
+  assert.match(AGENT_MODE_PATH, /^M6\.14226 /);
   assert.match(styles, /--color-agent-brand: #8787ff/);
   assert.doesNotMatch(styles, /\.voice-pill-control\[data-agent-mode="true"\]\s*\{/);
   assert.match(styles, /--beam-hue-base: 18deg/);
@@ -291,9 +308,13 @@ test("Agent Mode uses the supplied mark, a purple perimeter beam, and a neutral 
   assert.match(agentRecording, /^<div [^>]*data-beam="[^"]+"/);
   assert.match(agentRecording, /^<div [^>]*data-active=""/);
   assert.match(agentRecording, /data-agent-mode="true"/);
-  assert.match(agentRecording, /voice-identity-final-agent agent-mode-mark/);
+  assert.match(agentRecording, /voice-identity-final-agent/);
+  assert.ok(agentRecording.includes(`d="${AGENT_MODE_PATH}"`));
   assert.doesNotMatch(agentRecording, /agent-waveform-background|text-agent-brand/);
-  assert.equal((agentRecording.match(/w-0\.5 rounded-full bg-current/g) || []).length, 22);
+  assert.equal(
+    (agentRecording.match(/w-0\.5 rounded-full bg-current/g) || []).length,
+    await totalWaveBars()
+  );
   assert.doesNotMatch(normalRecording, /agent-waveform-background/);
 });
 
@@ -321,7 +342,7 @@ test("the stable identity box stages the sound-bars into the Agent mark", async 
   assert.match(idle, /voice-identity-morph-bar-center/);
   assert.match(idle, /voice-identity-morph-bar-right/);
   assert.match(agentThinking, /data-agent-mode="true"/);
-  assert.match(agentThinking, /agent-mode-mark/);
+  assert.match(agentThinking, /voice-identity-final-agent/);
 });
 
 test("the voice identity performs an actual SVG geometry morph", async () => {

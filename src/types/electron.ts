@@ -2678,13 +2678,6 @@ declare global {
       updateDictationPreview?: (text: string) => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
       hideDictationPreview?: () => Promise<{ success: boolean }>;
-      resizeTranscriptionPreviewWindow?: (
-        width: number,
-        height: number
-      ) => Promise<{
-        success: boolean;
-        bounds?: { x: number; y: number; width: number; height: number };
-      }>;
       sendDictationPreviewAudio?: (data: ArrayBuffer) => void;
 
       // Sync operations

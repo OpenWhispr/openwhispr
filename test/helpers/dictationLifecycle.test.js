@@ -6,6 +6,7 @@ const {
   normalizeDictationLifecycle,
   shouldIgnoreDictationHotkey,
   isDictationRecording,
+  shouldBlockDictationWhilePanelOpen,
 } = require("../../src/helpers/dictationLifecycle");
 
 test("processing is the only lifecycle that suppresses a dictation hotkey", () => {
@@ -24,4 +25,25 @@ test("unknown lifecycle input fails closed to idle", () => {
   assert.equal(normalizeDictationLifecycle("starting-a-new-recording"), DICTATION_LIFECYCLE.IDLE);
   assert.equal(shouldIgnoreDictationHotkey(undefined), false);
   assert.equal(isDictationRecording({}), false);
+});
+
+test("regular dictation is blocked while the assistant panel is open", () => {
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, voiceAgentRequested: false }),
+    true
+  );
+});
+
+test("the assistant hotkey can still record an in-panel follow-up", () => {
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, voiceAgentRequested: true }),
+    false
+  );
+});
+
+test("regular dictation resumes after the assistant panel closes", () => {
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: false, voiceAgentRequested: false }),
+    false
+  );
 });
