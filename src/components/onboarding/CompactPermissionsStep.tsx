@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { CircleCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
@@ -11,6 +12,7 @@ import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import { getPlatform } from "../../utils/platform";
+import { areRequiredPermissionsMet } from "../../utils/permissions";
 import { CompactOnboardingFrame } from "./OnboardingShell";
 
 interface CompactPermissionsStepProps {
@@ -19,13 +21,11 @@ interface CompactPermissionsStepProps {
     request: () => Promise<boolean>;
   };
   onContinue: () => void;
-  onSkip: () => void;
 }
 
 type PermissionRowId = "microphone" | "accessibility" | "system-audio";
 
 interface PermissionRowProps {
-  id: PermissionRowId;
   title: string;
   description: string;
   granted: boolean;
@@ -33,11 +33,9 @@ interface PermissionRowProps {
   disabled?: boolean;
   iconSrc: string;
   onRequest: () => Promise<void>;
-  onContinue?: () => void;
 }
 
 function PermissionRow({
-  id,
   title,
   description,
   granted,
@@ -45,11 +43,8 @@ function PermissionRow({
   disabled = false,
   iconSrc,
   onRequest,
-  onContinue,
 }: PermissionRowProps) {
   const { t } = useTranslation();
-  const isPrimaryGate = id === "microphone";
-  const canContinue = isPrimaryGate && granted && onContinue;
 
   return (
     <div className="flex h-[5.25rem] items-center gap-3.5">
@@ -78,28 +73,22 @@ function PermissionRow({
 
       <button
         type="button"
-        disabled={busy || disabled || (granted && !canContinue)}
-        onClick={() => (canContinue ? onContinue() : void onRequest())}
+        disabled={busy || disabled || granted}
+        onClick={() => void onRequest()}
         className={`onboarding-pressable inline-flex h-9 min-w-24 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default ${
-          canContinue
-            ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)] hover:bg-[var(--onboarding-accent-hover)]"
-            : granted
-              ? // Granted rows are disabled, so the disabled: variants have to
-                // restate the tint or it falls back to the neutral grey below.
-                "bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] text-[var(--onboarding-accent)] disabled:bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] disabled:text-[var(--onboarding-accent)]"
-              : "bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary-hover)] disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-secondary)]"
+          granted
+            ? // Granted rows are disabled, so the disabled: variants have to
+              // restate the tint or it falls back to the neutral grey below.
+              "bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] text-[var(--onboarding-accent)] disabled:bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] disabled:text-[var(--onboarding-accent)]"
+            : "bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary-hover)] disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-secondary)]"
         }`}
       >
-        {granted && !canContinue && !busy && (
-          <CircleCheck className="size-4 shrink-0" aria-hidden="true" />
-        )}
+        {granted && !busy && <CircleCheck className="size-4 shrink-0" aria-hidden="true" />}
         {busy
           ? t("common.loading")
-          : canContinue
-            ? t("common.continue")
-            : granted
-              ? t("onboarding.rehaul.permissions.enabled")
-              : t("onboarding.rehaul.permissions.enable")}
+          : granted
+            ? t("onboarding.rehaul.permissions.enabled")
+            : t("onboarding.rehaul.permissions.enable")}
       </button>
     </div>
   );
@@ -109,11 +98,11 @@ export default function CompactPermissionsStep({
   permissions,
   systemAudio,
   onContinue,
-  onSkip,
 }: CompactPermissionsStepProps) {
   const { t } = useTranslation();
   const [busyPermission, setBusyPermission] = useState<PermissionRowId | null>(null);
   const canRequestSystemAudio = canManageSystemAudioInApp(systemAudio);
+  const requiredGranted = areRequiredPermissionsMet(permissions.micPermissionGranted);
   // Only macOS has grantable Accessibility (auto-paste) and System Audio
   // permissions. Windows auto-grants both (SendKeys needs nothing, WASAPI
   // loopback is permissionless) and Linux has no in-app grant for either, so
@@ -132,17 +121,24 @@ export default function CompactPermissionsStep({
 
   return (
     <CompactOnboardingFrame showLegalNotice={false}>
-      <button
-        type="button"
-        onClick={onSkip}
-        // Literal whites, not tokens: this sits on the indigo hero, which stays
-        // indigo in both themes, so it is white-on-translucent either way.
-        // z-60 + no-drag: it lives inside the shell's 48px title-bar drag band.
-        style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
-        className="absolute right-5 top-5 z-[60] h-8 rounded-full bg-white/20 px-3 text-sm font-medium text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-      >
-        {t("common.skip")}
-      </button>
+      {/* Continue appears once the required permission (microphone) is granted.
+          Portalled to body: inside the step wrapper it can never out-stack the
+          shell's z-50 drag band (see OnboardingShell), so clicks would be
+          swallowed as window drags. */}
+      {requiredGranted &&
+        createPortal(
+          <button
+            type="button"
+            onClick={onContinue}
+            // Literal white, not tokens: this sits on the indigo hero, which
+            // stays indigo in both themes.
+            style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+            className="onboarding-pressable fixed right-5 top-5 z-[60] h-8 rounded-full bg-white px-4 text-sm font-medium text-neutral-950 transition-colors hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          >
+            {t("common.continue")}
+          </button>,
+          document.body
+        )}
 
       <div className="px-6 pt-48 text-center">
         {/* text-balance evens the two lines out ("Set up OpenWhispr" / "in 3
@@ -158,20 +154,17 @@ export default function CompactPermissionsStep({
 
         <div className="mt-[3.125rem] rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-4 py-1.5">
           <PermissionRow
-            id="microphone"
             title={t("onboarding.permissions.microphoneTitle")}
             description={t("onboarding.rehaul.permissions.microphoneDescription")}
             granted={permissions.micPermissionGranted}
             busy={busyPermission === "microphone"}
             iconSrc={microphoneIcon}
             onRequest={() => request("microphone", permissions.requestMicPermission)}
-            onContinue={onContinue}
           />
           {showAccessibility && (
             <>
               <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
               <PermissionRow
-                id="accessibility"
                 title={t("onboarding.permissions.accessibilityTitle")}
                 description={t("onboarding.rehaul.permissions.accessibilityDescription")}
                 granted={permissions.accessibilityPermissionGranted}
@@ -187,7 +180,6 @@ export default function CompactPermissionsStep({
             <>
               <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
               <PermissionRow
-                id="system-audio"
                 title={t("onboarding.rehaul.permissions.systemAudioTitle")}
                 description={t("onboarding.rehaul.permissions.systemAudioDescription")}
                 granted={systemAudio.granted}

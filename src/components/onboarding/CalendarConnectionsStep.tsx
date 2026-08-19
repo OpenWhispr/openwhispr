@@ -126,28 +126,30 @@ export default function CalendarConnectionsStep() {
   ];
 
   return (
-    // Figma: Onboarding / Frame 2147203458 — column, gap 16, hugging its content.
-    <div className="flex w-full flex-col items-center gap-4">
-      {/* Frame 2147258979 — 499x245, 198px of artwork on the left and a white
-          301px panel on the right. radius 13.33, 1px stroke. */}
-      <section className="flex h-[245px] w-[499px] overflow-hidden rounded-[13.33px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
-        {/* Frame 2147258992 — 198x245. Exported from Figma with the notification
-            already composited. NOTE: that export was composited for the right-hand
-            slot, so its bleed runs off the artwork's right edge — now the card's
-            inner edge. It needs re-exporting with the bleed on the left. */}
+    // Figma: Onboarding / Frame 2147203458 — column, hugging its content. Sizes
+    // tightened from the spec so all three provider rows fit without scrolling.
+    <div className="flex w-full flex-col items-center gap-3">
+      {/* Frame 2147258979 — 499x245 in the spec, rendered at 220 tall: 198px of
+          artwork on the left and a white 301px panel on the right. radius 13.33,
+          1px stroke. */}
+      <section className="flex h-[220px] w-[499px] overflow-hidden rounded-[13.33px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
+        {/* Frame 2147258992 — 198x245 export, cropped by object-cover. NOTE: it
+            was composited for the right-hand slot, so its bleed runs off the
+            artwork's right edge — now the card's inner edge. It needs
+            re-exporting with the bleed on the left. */}
         <img
           src={meetingDetectedPanel}
           alt=""
           aria-hidden="true"
           width={198}
-          height={245}
+          height={220}
           decoding="async"
           draggable={false}
-          className="h-[245px] w-[198px] shrink-0 select-none object-cover"
+          className="h-[220px] w-[198px] shrink-0 select-none object-cover"
         />
 
-        {/* Frame 2147258994 — 301x245 white panel, col gap 24, pad 24 16. */}
-        <div className="flex w-[301px] shrink-0 flex-col gap-6 bg-[var(--onboarding-surface)] px-4 py-6 text-left">
+        {/* Frame 2147258994 — 301-wide white panel. */}
+        <div className="flex w-[301px] shrink-0 flex-col gap-5 bg-[var(--onboarding-surface)] px-4 py-5 text-left">
           <p className="text-base font-medium leading-[1.4] text-[var(--onboarding-text-primary)]">
             {t("onboarding.rehaul.notes.hero.description")}
           </p>
@@ -172,19 +174,19 @@ export default function CalendarConnectionsStep() {
         </div>
       </section>
 
-      {/* Frame 16 — 498 wide, pad 24 16, radius 17. The spec's #F7F7F7 comes from
-          the token, not a literal: hardcoded, the card stayed near-white in dark
-          mode while the text tokens flipped light and the provider names vanished.
-          Rows follow the shared list rhythm: no padding above the first, none
-          below the last, hairline dividers between. */}
-      <div className="w-[498px] rounded-[17px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-4 py-6">
+      {/* Frame 16 — 498 wide, radius 17. The spec's #F7F7F7 comes from the
+          token, not a literal: hardcoded, the card stayed near-white in dark
+          mode while the text tokens flipped light and the provider names
+          vanished. Rows: no padding above the first, none below the last,
+          hairline dividers between. */}
+      <div className="w-[498px] rounded-[17px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-4 py-5">
         {providers.map((provider, index) => (
           <div
             key={provider.id}
             className={`flex items-center gap-[14px] ${
               index === 0
-                ? "pb-4"
-                : "border-t border-[var(--onboarding-control-border)] py-4 last:pb-0"
+                ? "pb-3"
+                : "border-t border-[var(--onboarding-control-border)] py-3 last:pb-0"
             }`}
           >
             {/* Frame 2147258981 — 44x44 tile, 1px surface stroke, rx 9.5, with a 24px

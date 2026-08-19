@@ -550,7 +550,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             permissions={permissions}
             systemAudio={systemAudio}
             onContinue={() => void continueFromCurrentStep()}
-            onSkip={() => void continueFromCurrentStep()}
           />
         );
 
@@ -719,9 +718,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       case "notes":
         return (
-          // Figma: Onboarding / Frame 50 — column, gap 40, centred; the header
-          // block (Frame 29) is its own column at gap 18.
-          <div className="flex h-full min-h-0 w-full flex-col items-center gap-10 pt-2">
+          // Figma: Onboarding / Frame 50 — column, centred; header (Frame 29) at
+          // gap 18. Gap tightened from the spec's 40 so the column fits without
+          // scrolling.
+          <div className="flex h-full min-h-0 w-full flex-col items-center gap-8 pt-2">
             <header className="flex w-full shrink-0 flex-col items-center gap-[18px] text-center">
               <h1 className="onboarding-display-title text-[var(--onboarding-text-primary)]">
                 <span className="block">{t("onboarding.rehaul.notes.titleLineOne")}</span>

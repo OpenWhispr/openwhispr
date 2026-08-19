@@ -188,8 +188,10 @@ export default function OnboardingShell({
     >
       {/* 48px, not a sliver: this is the frameless window's only title bar, so
           it has to be a target someone can actually grab. Interactive overlays
-          in this band (window controls, the compact Skip) sit above it at z-60
-          with app-region: no-drag. */}
+          in this band need z-60 + app-region: no-drag and must live outside the
+          step wrapper (a sibling here, or portalled to body) — the wrapper's
+          entry animation retains a transform, capping its descendants below
+          z-50. */}
       <div
         className="absolute inset-x-0 top-0 z-50 h-12"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
