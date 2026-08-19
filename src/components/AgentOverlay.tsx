@@ -10,9 +10,16 @@ import { usePolicyStore } from "../stores/policyStore";
 import { useChatPersistence } from "./chat/useChatPersistence";
 import { useChatStreaming } from "./chat/useChatStreaming";
 import { useChatMessageSender } from "./chat/useChatMessageSender";
+import type { OnboardingDemoEvent } from "../types/electron";
 
 const MIN_HEIGHT = 200;
 const MIN_WIDTH = 360;
+
+// Demo sessions only exist while onboarding is incomplete — skip the IPC otherwise.
+function publishDemoEvent(event: Omit<OnboardingDemoEvent, "demoId">) {
+  if (localStorage.getItem("onboardingCompleted") === "true") return;
+  void window.electronAPI?.publishOnboardingDemoEvent?.(event);
+}
 
 export default function AgentOverlay() {
   const { t } = useTranslation();
@@ -28,7 +35,7 @@ export default function AgentOverlay() {
     setMessages,
     onStreamComplete: (_assistantId, content, toolCalls) => {
       persistence.saveAssistantMessage(content, toolCalls);
-      void window.electronAPI?.publishOnboardingDemoEvent?.({
+      publishDemoEvent({
         kind: "assistant",
         status: "success",
         text: content,
@@ -99,24 +106,14 @@ export default function AgentOverlay() {
         isProcessing: boolean;
       }) => {
         if (isRecording) {
-          void window.electronAPI?.publishOnboardingDemoEvent?.({
-            kind: "assistant",
-            status: "listening",
-          });
+          publishDemoEvent({ kind: "assistant", status: "listening" });
         } else if (isProcessing) {
-          void window.electronAPI?.publishOnboardingDemoEvent?.({
-            kind: "assistant",
-            status: "processing",
-          });
+          publishDemoEvent({ kind: "assistant", status: "processing" });
         }
       },
       onError: (error: { message?: string }) => {
         const msg = error?.message || (typeof error === "string" ? error : "Transcription failed");
-        void window.electronAPI?.publishOnboardingDemoEvent?.({
-          kind: "assistant",
-          status: "error",
-          message: msg,
-        });
+        publishDemoEvent({ kind: "assistant", status: "error", message: msg });
         addSystemMessage(`${t("agentMode.chat.errorPrefix")}: ${msg}`);
       },
       onTranscriptionComplete: (result: { text: string }) => {
@@ -124,11 +121,7 @@ export default function AgentOverlay() {
       },
       onPartialTranscript: (text: string) => {
         setPartialTranscript(text);
-        void window.electronAPI?.publishOnboardingDemoEvent?.({
-          kind: "assistant",
-          status: "partial",
-          text,
-        });
+        publishDemoEvent({ kind: "assistant", status: "partial", text });
       },
       onStreamingCommit: undefined,
       onTranslationFallback: undefined,

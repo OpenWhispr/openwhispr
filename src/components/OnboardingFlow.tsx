@@ -30,6 +30,7 @@ import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
+import { formatHotkeyInstruction } from "./onboarding/hotkeyPresentation";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform } from "../utils/platform";
@@ -70,6 +71,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const [dictationHotkeyConfirmed, setDictationHotkeyConfirmed] = useState(false);
   const [assistantHotkeyConfirmed, setAssistantHotkeyConfirmed] = useState(false);
+  // Seeded from main rather than getDefaultHotkey(): main already knows when the
+  // platform default can't bind (GNOME/X11 reject modifier-only combos) and
+  // registered a fallback instead — recommending the unregistrable default would
+  // make every confirm of it fail.
+  const [recommendedDictationHotkey, setRecommendedDictationHotkey] = useState(getDefaultHotkey);
   const [dictationDemoSuccess, setDictationDemoSuccess] = useState(false);
   const [assistantDemoSuccess, setAssistantDemoSuccess] = useState(false);
   const [stageReady, setStageReady] = useState(false);
@@ -125,6 +131,33 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useEffect(() => {
     setStageReady(false);
   }, [currentStepId]);
+
+  // Track main's actual registration: the platform default may be unregistrable
+  // (GNOME gsettings and X11 reject modifier-only combos like Control+Super), in
+  // which case main silently registered FALLBACK_HOTKEYS instead. Recommend and
+  // teach the key that really works, not the one that always errors.
+  useEffect(() => {
+    let cancelled = false;
+    void window.electronAPI?.getEffectiveDefaultHotkey?.().then((key) => {
+      const effective = key && parseHotkeyList(key)[0];
+      if (cancelled || !effective) return;
+      setRecommendedDictationHotkey(effective);
+      // finalizeOnboarding registers dictationHotkey without further input on
+      // routes that never show the hotkey step, so an unregistrable renderer
+      // default has to be replaced here, not just in the recommendation.
+      setDictationHotkey((current) => (current === getDefaultHotkey() ? effective : current));
+    });
+    const unsubscribe = window.electronAPI?.onHotkeyFallbackUsed?.((data) => {
+      const fallback = parseHotkeyList(data?.fallback)[0];
+      if (!fallback) return;
+      setDictationHotkey(fallback);
+      setRecommendedDictationHotkey(fallback);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, []);
 
   const withExtraDictationHotkeys = useCallback(
     (primary: string) =>
@@ -321,12 +354,31 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         useLocalWhisper: false,
         cloudTranscriptionMode: "byok",
       });
+      // When policy disallows the agent, the byok-assistant step is off-route and
+      // no LLM ever gets configured — turn cleanup off so dictations don't route
+      // to a default provider with no credential behind it.
+      if (!route.includes("byok-assistant")) {
+        settingsStore.updateCleanupSettings({ useCleanupModel: false });
+      }
     } else if (currentStepId === "byok-assistant") {
       applyReasoningSelectionToAllScopes("byok");
     } else if (currentStepId === "local-dictation") {
       settingsStore.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
+      // Same policy-shortened-route case as byok: no local LLM was downloaded, so
+      // cleanup must not silently fall back to a cloud default.
+      if (!route.includes("local-assistant")) {
+        settingsStore.updateCleanupSettings({ useCleanupModel: false });
+      }
     } else if (currentStepId === "local-assistant") {
       applyReasoningSelectionToAllScopes("local");
+    } else if (currentStepId === "enterprise-dictation") {
+      // With the agent disallowed the enterprise-assistant step never runs, yet
+      // the managed policy still expects the LLM scopes on the enterprise
+      // provider (getManagedScopeResolution rescues managed configs at resolve
+      // time, but manual setups are used as-is) — apply it from here instead.
+      if (!route.includes("enterprise-assistant")) {
+        applyReasoningSelectionToAllScopes("enterprise");
+      }
     } else if (currentStepId === "enterprise-assistant") {
       // Transcription is deliberately untouched: "enterprise" is not one of
       // TRANSCRIPTION_POLICY_CATALOG.modes, so enterprise governs the LLM scopes
@@ -362,7 +414,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   ]);
 
   const skipLocalSetup = useCallback(async () => {
-    localStorage.setItem("localSetupPending", "true");
     await finalizeOnboarding("local", { localPending: true });
   }, [finalizeOnboarding]);
 
@@ -393,10 +444,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return true;
     }
   })();
-
-  const onDictationDemoSuccess = useCallback(setDictationDemoSuccess, [setDictationDemoSuccess]);
-  const onAssistantDemoSuccess = useCallback(setAssistantDemoSuccess, [setAssistantDemoSuccess]);
-  const onStageReady = useCallback(setStageReady, [setStageReady]);
 
   const renderStep = () => {
     switch (currentStepId) {
@@ -529,7 +576,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   setDictationHotkeyConfirmed(false);
                 }
               }}
-              recommended={assistant ? "CommandOrControl+Shift+Space" : getDefaultHotkey()}
+              recommended={assistant ? "CommandOrControl+Shift+Space" : recommendedDictationHotkey}
               captureLabel={t("onboarding.rehaul.hotkey.capture")}
               recommendedLabel={t("common.recommended")}
               chooseAnotherLabel={t("onboarding.rehaul.hotkey.chooseAnother")}
@@ -568,7 +615,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 assistant
                   ? "onboarding.rehaul.assistantDemo.description"
                   : "onboarding.rehaul.dictationDemo.description",
-                { hotkey: assistant ? assistantHotkey : dictationHotkey }
+                // Formatted for reading: the raw accelerator would show internal
+                // syntax like "GLOBE" or "CommandOrControl+Shift+Space".
+                { hotkey: formatHotkeyInstruction(assistant ? assistantHotkey : dictationHotkey) }
               )}
             />
             <DemoStep
@@ -597,7 +646,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               assistantSenderName={t("onboarding.rehaul.assistantDemo.senderName")}
               assistantSenderEmail={t("onboarding.rehaul.assistantDemo.senderEmail")}
               assistantRecipientLabel={t("onboarding.rehaul.assistantDemo.recipientLabel")}
-              onSuccessChange={assistant ? onAssistantDemoSuccess : onDictationDemoSuccess}
+              onSuccessChange={assistant ? setAssistantDemoSuccess : setDictationDemoSuccess}
             />
           </div>
         );
@@ -674,7 +723,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <ByokProviderStep
               stepId={currentStepId}
               selfHostedRequested={selfHostedRequested}
-              onConnectionChange={onStageReady}
+              onConnectionChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
             />
           </div>
@@ -697,7 +746,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <LocalModelSetupStep
               stepId={currentStepId}
-              onReadinessChange={onStageReady}
+              onReadinessChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
               onSkip={() => void skipLocalSetup()}
             />
@@ -719,7 +768,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <EnterpriseSetupStep
               stepId={currentStepId}
-              onConnectionChange={onStageReady}
+              onConnectionChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
             />
           </div>
@@ -739,7 +788,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     currentStepId === "local-assistant" ||
     currentStepId === "enterprise-dictation" ||
     currentStepId === "enterprise-assistant";
-  const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
 
   return (
     <>
@@ -747,10 +795,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         compact={compact}
         stepKey={currentStepId}
         onBack={
+          // Provider steps keep Back deliberately: their own footers only offer
+          // Proceed, and a user with no working key (or an enterprise policy
+          // error) would otherwise be trapped in a non-closable window.
           hasShellNavigation &&
           currentStepId !== "languages" &&
           !choiceStep &&
-          !inlineProviderStep &&
           session.history.length > 0
             ? goBack
             : undefined
@@ -763,15 +813,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             ? () => void continueFromCurrentStep()
             : undefined
         }
-        onSkip={localSetup && !inlineProviderStep ? () => void skipLocalSetup() : undefined}
+        // The demos are practice, not configuration — a mic problem or an
+        // unreachable transcription backend must never dead-end setup, so they
+        // stay skippable until they succeed.
+        onSkip={demoStep && !canContinue ? () => void continueFromCurrentStep() : undefined}
         continueLabel={
           currentStepId === "use-cases"
             ? t("onboarding.useCase.proceedToSetup")
             : t("common.continue")
         }
-        skipLabel={
-          localSetup ? t("onboarding.rehaul.local.downloadInBackground") : t("common.skip")
-        }
+        skipLabel={t("common.skip")}
         continueDisabled={!canContinue}
         continueLoading={isFinishing || isRegistering}
         progress={getOnboardingProgress(currentStepId, route)}

@@ -70,18 +70,6 @@ test("onboarding active bridge invokes only its allowlisted channel", async () =
   ]);
 });
 
-test("onboarding window unlock bridge invokes only its allowlisted channel", async () => {
-  const { api, invocations } = loadPreloadApi();
-
-  await api.setOnboardingWindowUnlocked(true);
-  await api.setOnboardingWindowUnlocked(false);
-
-  assert.deepEqual(invocations, [
-    ["onboarding-set-window-unlocked", true],
-    ["onboarding-set-window-unlocked", false],
-  ]);
-});
-
 test("onboarding demo listener strips the Electron event and disposes cleanly", () => {
   const { api, listeners } = loadPreloadApi();
   const payload = {

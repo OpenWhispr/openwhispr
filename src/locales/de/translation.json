@@ -390,7 +390,18 @@
         "runTest": "Test starten",
         "testing": "Test läuft…",
         "connected": "Verbunden",
-        "connectionFailed": "Die Verbindung konnte nicht überprüft werden."
+        "connectionFailed": "Die Verbindung konnte nicht überprüft werden.",
+        "errors": {
+          "endpointRequired": "Gib vor dem Test eine Endpoint-URL ein.",
+          "invalidUrl": "Der Endpoint muss eine gültige HTTP- oder HTTPS-URL sein.",
+          "unsupportedProvider": "Der Verbindungstest ist für diesen Anbieter nicht verfügbar.",
+          "apiKeyRequired": "Füge vor dem Test einen API-Schlüssel hinzu.",
+          "credentialsRejected": "Der Anbieter hat diese Zugangsdaten abgelehnt.",
+          "endpointNotFound": "Der Endpoint stellt keine OpenAI-kompatible Modellliste bereit.",
+          "providerStatus": "Der Anbieter hat den Status {{status}} zurückgegeben.",
+          "timeout": "Der Verbindungstest hat das Zeitlimit überschritten.",
+          "network": "Der Anbieter ist nicht erreichbar."
+        }
       },
       "local": {
         "title": "Lokale Modelle einrichten",

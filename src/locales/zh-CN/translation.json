@@ -390,7 +390,18 @@
         "runTest": "运行测试",
         "testing": "测试中…",
         "connected": "已连接",
-        "connectionFailed": "无法验证此连接。"
+        "connectionFailed": "无法验证此连接。",
+        "errors": {
+          "endpointRequired": "测试前请先输入端点 URL。",
+          "invalidUrl": "端点必须是有效的 HTTP 或 HTTPS URL。",
+          "unsupportedProvider": "此服务商不支持连接测试。",
+          "apiKeyRequired": "测试前请先添加 API Key。",
+          "credentialsRejected": "服务商拒绝了这些凭据。",
+          "endpointNotFound": "该端点未提供兼容 OpenAI 的模型列表。",
+          "providerStatus": "服务商返回了状态码 {{status}}。",
+          "timeout": "连接测试超时。",
+          "network": "无法连接到服务商。"
+        }
       },
       "local": {
         "title": "设置本地模型",

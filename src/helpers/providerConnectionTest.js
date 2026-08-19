@@ -10,23 +10,133 @@ const ENDPOINTS = {
   tinfoil: "https://inference.tinfoil.sh/v1/models",
 };
 
+// Renderers translate errorCode via onboarding.rehaul.provider.errors.*; the
+// English `error` string stays for logs and older callers.
+class ConnectionTestError extends Error {
+  constructor(errorCode, message) {
+    super(message);
+    this.errorCode = errorCode;
+  }
+}
+
+// --- CommonJS mirror of the URL helpers in src/config/constants.ts ---
+// This file runs in the main process, which cannot import that Vite/TS
+// module (it reads import.meta.env). Keep these in sync with
+// normalizeBaseUrl / getModelListBaseCandidates over there.
+
+function splitUrlDecorators(value) {
+  let path = value;
+  let hash = "";
+  const hashIndex = path.indexOf("#");
+  if (hashIndex >= 0) {
+    hash = path.slice(hashIndex);
+    path = path.slice(0, hashIndex);
+  }
+  let query = "";
+  const queryIndex = path.indexOf("?");
+  if (queryIndex >= 0) {
+    query = path.slice(queryIndex);
+    path = path.slice(0, queryIndex);
+  }
+  return { path, query, hash };
+}
+
+function joinUrlDecorators(path, query, hash) {
+  return `${path}${query}${hash}`;
+}
+
+function normalizeBaseUrl(value) {
+  if (!value) return "";
+
+  const trimmed = String(value).trim();
+  if (!trimmed) return "";
+
+  const { path: rawPath, query, hash } = splitUrlDecorators(trimmed);
+  let normalized = rawPath;
+
+  const suffixReplacements = [
+    [/\/v1\/chat\/completions$/i, "/v1"],
+    [/\/chat\/completions$/i, ""],
+    [/\/v1\/responses$/i, "/v1"],
+    [/\/responses$/i, ""],
+    [/\/v1\/models$/i, "/v1"],
+    [/\/models$/i, ""],
+    [/\/v1\/audio\/transcriptions$/i, "/v1"],
+    [/\/audio\/transcriptions$/i, ""],
+    [/\/v1\/audio\/translations$/i, "/v1"],
+    [/\/audio\/translations$/i, ""],
+  ];
+
+  for (const [pattern, replacement] of suffixReplacements) {
+    if (pattern.test(normalized)) {
+      normalized = normalized.replace(pattern, replacement).replace(/\/+$/, "");
+    }
+  }
+
+  return joinUrlDecorators(normalized.replace(/\/+$/, ""), query, hash);
+}
+
+// Reference: getModelListBaseCandidates in src/config/constants.ts.
+// Self-hosted servers (LM Studio, Ollama, vLLM) serve the API under /v1 even
+// when users enter the bare origin, and LM Studio's native REST base
+// (/api/v1 or /api/v0) has its OpenAI-compatible sibling at /v1.
+function getModelListBaseCandidates(base) {
+  const normalized = normalizeBaseUrl(base);
+  if (!normalized) return [];
+  const { path, query, hash } = splitUrlDecorators(normalized);
+  const nativeApiMatch = path.match(/^(.+?)\/api\/v[01]$/i);
+  if (nativeApiMatch) {
+    return [normalized, joinUrlDecorators(`${nativeApiMatch[1]}/v1`, query, hash)];
+  }
+  if (path.endsWith("/v1")) return [normalized];
+  return [normalized, joinUrlDecorators(`${path}/v1`, query, hash)];
+}
+
+function buildModelEndpoints(base) {
+  return getModelListBaseCandidates(base).map((candidate) => {
+    const { path, query, hash } = splitUrlDecorators(candidate);
+    return joinUrlDecorators(`${path}/models`, query, hash);
+  });
+}
+
 function resolveProviderRequest(config) {
   const provider = String(config?.provider || "").toLowerCase();
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
-  let endpoint = ENDPOINTS[provider];
+  let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
+
+  if (provider === "openai") {
+    const override = normalizeBaseUrl(
+      process.env.OPENWHISPR_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL
+    );
+    if (override) endpoints = buildModelEndpoints(override);
+  }
 
   if (provider === "custom") {
     const raw = String(config?.baseUrl || "").trim();
-    if (!raw) throw new Error("Enter an endpoint URL before testing.");
-    const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    if (!new Set(["http:", "https:"]).has(parsed.protocol)) {
-      throw new Error("The endpoint must use HTTP or HTTPS.");
+    if (!raw) {
+      throw new ConnectionTestError("endpointRequired", "Enter an endpoint URL before testing.");
     }
-    endpoint = `${parsed.toString().replace(/\/$/, "")}/models`;
+    let parsed;
+    try {
+      parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    } catch {
+      throw new ConnectionTestError("invalidUrl", "The endpoint must be a valid URL.");
+    }
+    if (!new Set(["http:", "https:"]).has(parsed.protocol)) {
+      throw new ConnectionTestError("invalidUrl", "The endpoint must use HTTP or HTTPS.");
+    }
+    endpoints = buildModelEndpoints(parsed.toString());
   }
 
-  if (!endpoint) throw new Error("Connection testing is not available for this provider.");
-  if (!apiKey && provider !== "custom") throw new Error("Add an API key before testing.");
+  if (endpoints.length === 0) {
+    throw new ConnectionTestError(
+      "unsupportedProvider",
+      "Connection testing is not available for this provider."
+    );
+  }
+  if (!apiKey && provider !== "custom") {
+    throw new ConnectionTestError("apiKeyRequired", "Add an API key before testing.");
+  }
 
   const headers = { Accept: "application/json" };
   if (apiKey) {
@@ -40,7 +150,39 @@ function resolveProviderRequest(config) {
     }
   }
 
-  return { endpoint, headers };
+  return { endpoint: endpoints[0], endpoints, headers };
+}
+
+// When several candidate endpoints fail, report the most actionable failure.
+const FAILURE_PRIORITY = {
+  credentialsRejected: 4,
+  providerStatus: 3,
+  endpointNotFound: 2,
+  timeout: 1,
+  network: 0,
+};
+
+function pickFailure(current, next) {
+  if (!current) return next;
+  return FAILURE_PRIORITY[next.errorCode] > FAILURE_PRIORITY[current.errorCode] ? next : current;
+}
+
+function describeStatusFailure(status, provider) {
+  if (status === 401 || status === 403) {
+    return {
+      errorCode: "credentialsRejected",
+      error: "The provider rejected these credentials.",
+      status,
+    };
+  }
+  if (status === 404 && provider === "custom") {
+    return {
+      errorCode: "endpointNotFound",
+      error: "The endpoint does not expose an OpenAI-compatible model list.",
+      status,
+    };
+  }
+  return { errorCode: "providerStatus", error: `The provider returned status ${status}.`, status };
 }
 
 async function testProviderConnection(config, fetchImpl = fetch) {
@@ -48,36 +190,43 @@ async function testProviderConnection(config, fetchImpl = fetch) {
   try {
     request = resolveProviderRequest(config);
   } catch (error) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      errorCode: error.errorCode || "invalidUrl",
+      error: error.message,
+    };
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-  try {
-    const response = await fetchImpl(request.endpoint, {
-      method: "GET",
-      headers: request.headers,
-      signal: controller.signal,
-    });
-    if (response.ok) return { success: true };
-    if (response.status === 401 || response.status === 403) {
-      return { success: false, error: "The provider rejected these credentials." };
+  const provider = String(config?.provider || "").toLowerCase();
+  let failure = null;
+  for (const endpoint of request.endpoints) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetchImpl(endpoint, {
+        method: "GET",
+        headers: request.headers,
+        signal: controller.signal,
+      });
+      if (response.ok) return { success: true };
+      failure = pickFailure(failure, describeStatusFailure(response.status, provider));
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        failure = pickFailure(failure, {
+          errorCode: "timeout",
+          error: "The connection test timed out.",
+        });
+      } else {
+        failure = pickFailure(failure, {
+          errorCode: "network",
+          error: "The provider could not be reached.",
+        });
+      }
+    } finally {
+      clearTimeout(timeout);
     }
-    if (response.status === 404 && config?.provider === "custom") {
-      return {
-        success: false,
-        error: "The endpoint does not expose an OpenAI-compatible model list.",
-      };
-    }
-    return { success: false, error: `The provider returned status ${response.status}.` };
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      return { success: false, error: "The connection test timed out." };
-    }
-    return { success: false, error: "The provider could not be reached." };
-  } finally {
-    clearTimeout(timeout);
   }
+  return { success: false, ...failure };
 }
 
 module.exports = { resolveProviderRequest, testProviderConnection };

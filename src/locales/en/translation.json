@@ -390,7 +390,18 @@
         "runTest": "Run Test",
         "testing": "Testing…",
         "connected": "Connected",
-        "connectionFailed": "The connection could not be verified."
+        "connectionFailed": "The connection could not be verified.",
+        "errors": {
+          "endpointRequired": "Enter an endpoint URL before testing.",
+          "invalidUrl": "The endpoint must be a valid HTTP or HTTPS URL.",
+          "unsupportedProvider": "Connection testing is not available for this provider.",
+          "apiKeyRequired": "Add an API key before testing.",
+          "credentialsRejected": "The provider rejected these credentials.",
+          "endpointNotFound": "The endpoint does not expose an OpenAI-compatible model list.",
+          "providerStatus": "The provider returned status {{status}}.",
+          "timeout": "The connection test timed out.",
+          "network": "The provider could not be reached."
+        }
       },
       "local": {
         "title": "Set up local models",

@@ -11,6 +11,16 @@ test("builds provider tests without placing credentials in the URL", () => {
   assert.equal(request.headers.Authorization, "Bearer secret");
 });
 
+test("honors OpenAI base URL overrides from the environment", () => {
+  process.env.OPENAI_BASE_URL = "https://proxy.example.com/v1/";
+  try {
+    const request = resolveProviderRequest({ provider: "openai", apiKey: "secret" });
+    assert.deepEqual(request.endpoints, ["https://proxy.example.com/v1/models"]);
+  } finally {
+    delete process.env.OPENAI_BASE_URL;
+  }
+});
+
 test("normalizes custom compatible endpoints", () => {
   assert.equal(
     resolveProviderRequest({ provider: "custom", baseUrl: "localhost:11434/v1", apiKey: "" })
@@ -19,19 +29,122 @@ test("normalizes custom compatible endpoints", () => {
   );
 });
 
+test("probes the /v1 sibling for bare custom origins", () => {
+  assert.deepEqual(
+    resolveProviderRequest({ provider: "custom", baseUrl: "http://localhost:1234", apiKey: "" })
+      .endpoints,
+    ["http://localhost:1234/models", "http://localhost:1234/v1/models"]
+  );
+  // LM Studio's native REST base maps to its OpenAI-compatible /v1 sibling.
+  assert.deepEqual(
+    resolveProviderRequest({ provider: "custom", baseUrl: "http://localhost:1234/api/v0" })
+      .endpoints,
+    ["http://localhost:1234/api/v0/models", "http://localhost:1234/v1/models"]
+  );
+});
+
+test("rejects invalid custom endpoints with error codes", async () => {
+  assert.deepEqual(await testProviderConnection({ provider: "custom", baseUrl: "" }), {
+    success: false,
+    errorCode: "endpointRequired",
+    error: "Enter an endpoint URL before testing.",
+  });
+
+  assert.deepEqual(await testProviderConnection({ provider: "custom", baseUrl: "ftp://x" }), {
+    success: false,
+    errorCode: "invalidUrl",
+    error: "The endpoint must use HTTP or HTTPS.",
+  });
+
+  assert.deepEqual(await testProviderConnection({ provider: "unknown", apiKey: "k" }), {
+    success: false,
+    errorCode: "unsupportedProvider",
+    error: "Connection testing is not available for this provider.",
+  });
+
+  assert.deepEqual(await testProviderConnection({ provider: "openai", apiKey: "" }), {
+    success: false,
+    errorCode: "apiKeyRequired",
+    error: "Add an API key before testing.",
+  });
+});
+
 test("maps authentication and transport failures to safe messages", async () => {
   assert.deepEqual(
     await testProviderConnection({ provider: "openai", apiKey: "bad" }, async () => ({
       ok: false,
       status: 401,
     })),
-    { success: false, error: "The provider rejected these credentials." }
+    {
+      success: false,
+      errorCode: "credentialsRejected",
+      error: "The provider rejected these credentials.",
+      status: 401,
+    }
   );
 
   assert.deepEqual(
     await testProviderConnection({ provider: "openai", apiKey: "bad" }, async () => {
       throw new Error("secret upstream detail");
     }),
-    { success: false, error: "The provider could not be reached." }
+    { success: false, errorCode: "network", error: "The provider could not be reached." }
+  );
+
+  assert.deepEqual(
+    await testProviderConnection({ provider: "openai", apiKey: "k" }, async () => ({
+      ok: false,
+      status: 500,
+    })),
+    {
+      success: false,
+      errorCode: "providerStatus",
+      error: "The provider returned status 500.",
+      status: 500,
+    }
+  );
+});
+
+test("succeeds when only the /v1 candidate responds", async () => {
+  const attempted = [];
+  const result = await testProviderConnection(
+    { provider: "custom", baseUrl: "http://localhost:1234" },
+    async (url) => {
+      attempted.push(url);
+      return url.includes("/v1/models") ? { ok: true, status: 200 } : { ok: false, status: 404 };
+    }
+  );
+  assert.deepEqual(result, { success: true });
+  assert.deepEqual(attempted, ["http://localhost:1234/models", "http://localhost:1234/v1/models"]);
+});
+
+test("reports endpointNotFound only after every candidate 404s", async () => {
+  assert.deepEqual(
+    await testProviderConnection(
+      { provider: "custom", baseUrl: "http://localhost:1234" },
+      async () => ({
+        ok: false,
+        status: 404,
+      })
+    ),
+    {
+      success: false,
+      errorCode: "endpointNotFound",
+      error: "The endpoint does not expose an OpenAI-compatible model list.",
+      status: 404,
+    }
+  );
+
+  // A credentials failure on any candidate outranks a 404 on another.
+  assert.deepEqual(
+    await testProviderConnection(
+      { provider: "custom", baseUrl: "http://localhost:1234", apiKey: "bad" },
+      async (url) => ({ ok: false, status: url.includes("/v1/models") ? 401 : 404 })
+    ),
+    {
+      success: false,
+      errorCode: "credentialsRejected",
+      error: "The provider rejected these credentials.",
+      status: 401,
+    }
   );
 });

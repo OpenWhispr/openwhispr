@@ -390,7 +390,18 @@
         "runTest": "Запустить тест",
         "testing": "Проверка…",
         "connected": "Подключено",
-        "connectionFailed": "Не удалось проверить подключение."
+        "connectionFailed": "Не удалось проверить подключение.",
+        "errors": {
+          "endpointRequired": "Перед тестом введите URL endpoint.",
+          "invalidUrl": "Endpoint должен быть корректным HTTP- или HTTPS-URL.",
+          "unsupportedProvider": "Проверка подключения недоступна для этого провайдера.",
+          "apiKeyRequired": "Перед тестом добавьте API-ключ.",
+          "credentialsRejected": "Провайдер отклонил эти учётные данные.",
+          "endpointNotFound": "Endpoint не предоставляет список моделей, совместимый с OpenAI.",
+          "providerStatus": "Провайдер вернул статус {{status}}.",
+          "timeout": "Время ожидания проверки подключения истекло.",
+          "network": "Не удалось связаться с провайдером."
+        }
       },
       "local": {
         "title": "Настройка локальных моделей",

@@ -85,20 +85,22 @@ function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string)
 // The X on each row (Figma "Frame 25"), inlined rather than drawn with lucide so
 // the 8px glyph inside the 24px circle and the 1.333 stroke come out exactly as
 // exported instead of needing to be back-scaled out of lucide's 24 viewBox.
+// Colours come from the app theme tokens (see the note on the <aside> below), so
+// the glyph tracks light/dark on the control panel instead of Figma's literals.
 function CancelGlyph() {
   return (
     <svg width={24} height={24} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect width={24} height={24} rx={12} fill="var(--onboarding-surface-secondary,#f7f7f7)" />
+      <rect width={24} height={24} rx={12} fill="var(--color-muted)" />
       <path
         d="M16 8L8 16"
-        stroke="#8C7575"
+        stroke="var(--color-muted-foreground)"
         strokeWidth={1.33333}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M8 8L16 16"
-        stroke="#8C7575"
+        stroke="var(--color-muted-foreground)"
         strokeWidth={1.33333}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -118,6 +120,17 @@ export default function BackgroundModelDownloadTray() {
   const cancelledKeys = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    // Hydration only exists to re-surface downloads the onboarding flow kicked
+    // off before this mount, and those always travel with the local-setup
+    // bookkeeping below. When neither marker is set there is nothing to recover,
+    // so skip the three disk-scanning IPC calls — this is safe because any
+    // download started after mount reaches us through the progress listeners in
+    // the next effect regardless.
+    if (localStorage.getItem("localSetupPending") !== "true" && !hasPendingLocalModels()) {
+      setHydrated(true);
+      return;
+    }
+
     let cancelled = false;
 
     const hydrate = async () => {
@@ -166,63 +179,70 @@ export default function BackgroundModelDownloadTray() {
   }, []);
 
   useEffect(() => {
-    const updateTranscription = (
+    // The three progress channels carry the same lifecycle in different field
+    // names, so each is normalized to this shape and fed through one apply
+    // function — cancel suppression, pending-model activation, and the upsert /
+    // delete-on-complete logic then only exist once.
+    const applyProgress = (event: {
+      kind: DownloadKind;
+      id: string;
+      type: "progress" | "installing" | "complete" | "error";
+      percentage: number | undefined;
+      error?: string;
+    }) => {
+      const key = downloadKey(event.kind, event.id);
+      if (event.type === "error" && cancelledKeys.current.delete(key)) return;
+      if (event.type !== "error") cancelledKeys.current.delete(key);
+      if (event.type === "complete") {
+        activatePendingLocalModel(event.kind === "llm" ? "assistant" : "dictation", event.id);
+      }
+      setDownloads((current) => {
+        if (event.type === "complete") {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        }
+        return {
+          ...current,
+          [key]: {
+            id: event.id,
+            kind: event.kind,
+            percentage: clampPercentage(event.percentage),
+            installing: event.type === "installing",
+            error: event.type === "error" ? event.error : undefined,
+          },
+        };
+      });
+    };
+
+    const normalizeTranscription = (
       kind: Exclude<DownloadKind, "llm">,
       data: WhisperDownloadProgressData | ParakeetDownloadProgressData
-    ) => {
-      const key = downloadKey(kind, data.model);
-      if (data.type === "error" && cancelledKeys.current.delete(key)) return;
-      if (data.type !== "error") cancelledKeys.current.delete(key);
-      if (data.type === "complete") activatePendingLocalModel("dictation", data.model);
-      setDownloads((current) => {
-        if (data.type === "complete") {
-          const next = { ...current };
-          delete next[key];
-          return next;
-        }
-        return {
-          ...current,
-          [key]: {
-            id: data.model,
-            kind,
-            percentage: clampPercentage(data.percentage),
-            installing: data.type === "installing",
-            error: data.type === "error" ? data.error : undefined,
-          },
-        };
+    ) =>
+      applyProgress({
+        kind,
+        id: data.model,
+        type: data.type,
+        percentage: data.percentage,
+        error: data.error,
       });
-    };
 
-    const updateLlm = (_event: unknown, data: LocalLLMDownloadProgressEvent) => {
-      const key = downloadKey("llm", data.modelId);
-      if (data.type === "error" && cancelledKeys.current.delete(key)) return;
-      if (data.type !== "error") cancelledKeys.current.delete(key);
-      if (data.type === "complete") activatePendingLocalModel("assistant", data.modelId);
-      setDownloads((current) => {
-        if (data.type === "complete") {
-          const next = { ...current };
-          delete next[key];
-          return next;
-        }
-        return {
-          ...current,
-          [key]: {
-            id: data.modelId,
-            kind: "llm",
-            percentage: clampPercentage(data.type === "error" ? 0 : data.progress),
-            error: data.type === "error" ? data.error : undefined,
-          },
-        };
+    const normalizeLlm = (_event: unknown, data: LocalLLMDownloadProgressEvent) =>
+      applyProgress({
+        kind: "llm",
+        id: data.modelId,
+        type: data.type ?? "progress",
+        percentage: data.type === "error" ? 0 : data.progress,
+        error: data.type === "error" ? data.error : undefined,
       });
-    };
 
     const disposeWhisper = window.electronAPI?.onWhisperDownloadProgress?.((_event, data) =>
-      updateTranscription("whisper", data)
+      normalizeTranscription("whisper", data)
     );
     const disposeParakeet = window.electronAPI?.onParakeetDownloadProgress?.((_event, data) =>
-      updateTranscription("parakeet", data)
+      normalizeTranscription("parakeet", data)
     );
-    const disposeLlm = window.electronAPI?.onModelDownloadProgress?.(updateLlm);
+    const disposeLlm = window.electronAPI?.onModelDownloadProgress?.(normalizeLlm);
 
     return () => {
       disposeWhisper?.();
@@ -275,18 +295,21 @@ export default function BackgroundModelDownloadTray() {
 
   return (
     // Figma "Onboarding / Frame 2147259036": 341 wide, radius 12, #E3E3E3
-    // stroke, no shadow. Colours are var(token, literal) because the tray also
-    // shows over the control panel: index.css hands the --onboarding-* tokens to
-    // body:has(.onboarding-canvas), so they resolve during onboarding and the
-    // literals cover the panel, where the tokens are not defined.
+    // stroke, no shadow. Colours bind to the app's standard theme tokens
+    // (bg-card & co.) rather than --onboarding-*: the tray is mounted as a
+    // sibling of the onboarding canvas / control panel in AppRouter, so the
+    // onboarding tokens are out of scope post-onboarding and their light-mode
+    // literals would break on a dark control panel. The app tokens resolve in
+    // both contexts and match the Figma light values within a couple of hex
+    // steps.
     <aside
-      className="fixed right-7 top-5 z-50 w-[341px] overflow-hidden rounded-[12px] border border-[var(--onboarding-control-border,#e3e3e3)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
+      className="fixed right-7 top-5 z-50 w-[341px] overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground"
       aria-label={t("onboarding.rehaul.local.downloads")}
       aria-live="polite"
     >
       {/* Frame 2147259037: #F7F7F7 strip, 7/8 padding, gap 5, 12/140% label. */}
-      <div className="flex items-center gap-[5px] bg-[var(--onboarding-surface-secondary,#f7f7f7)] px-2 py-[7px] text-xs leading-[1.4] text-[var(--onboarding-text-secondary,#656565)]">
-        <BrandMark className="size-[11.2px] shrink-0 text-[var(--onboarding-accent,#4079ed)]" />
+      <div className="flex items-center gap-[5px] bg-muted px-2 py-[7px] text-xs leading-[1.4] text-muted-foreground">
+        <BrandMark className="size-[11.2px] shrink-0 text-primary" />
         {t("onboarding.rehaul.local.downloadInProgress")}
       </div>
       {activeDownloads.map((download, index) => (
@@ -296,7 +319,7 @@ export default function BackgroundModelDownloadTray() {
         <div
           key={downloadKey(download.kind, download.id)}
           className={`flex items-center gap-2.5 px-2.5 py-2 ${
-            index === 0 ? "" : "border-t border-[var(--onboarding-control-border,#e3e3e3)]"
+            index === 0 ? "" : "border-t border-border"
           }`}
         >
           {/* Frame 17: fills the row, col gap 8. */}
@@ -312,7 +335,7 @@ export default function BackgroundModelDownloadTray() {
                   {downloadDisplay(download).name}
                 </span>
               </span>
-              <span className="shrink-0 font-medium text-[var(--onboarding-text-tertiary,#969393)]">
+              <span className="shrink-0 font-medium text-muted-foreground">
                 {Math.round(download.percentage)}%
               </span>
             </div>
@@ -321,9 +344,9 @@ export default function BackgroundModelDownloadTray() {
             ) : (
               // Frame 2147259038: 12 tall track on #F7F7F7 at radius 9, brand fill
               // at radius 11.
-              <div className="h-3 overflow-hidden rounded-[9px] bg-[var(--onboarding-surface-secondary,#f7f7f7)]">
+              <div className="h-3 overflow-hidden rounded-[9px] bg-muted">
                 <div
-                  className="h-full rounded-[11px] bg-[var(--onboarding-accent,#4079ed)] transition-[width] motion-reduce:transition-none"
+                  className="h-full rounded-[11px] bg-primary transition-[width] motion-reduce:transition-none"
                   style={{ width: `${download.percentage}%` }}
                 />
               </div>
@@ -339,7 +362,7 @@ export default function BackgroundModelDownloadTray() {
             aria-label={t("onboarding.rehaul.local.cancelDownload", {
               model: downloadDisplay(download).name,
             })}
-            className="shrink-0 rounded-full transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent,#4079ed)_30%,transparent)] disabled:cursor-default disabled:opacity-40 disabled:hover:opacity-40"
+            className="shrink-0 rounded-full transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-default disabled:opacity-40 disabled:hover:opacity-40"
           >
             <CancelGlyph />
           </button>

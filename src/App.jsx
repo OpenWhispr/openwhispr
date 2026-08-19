@@ -215,7 +215,11 @@ export default function App() {
     cancelProcessing,
   } = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
-    onDemoEvent: (event) => window.electronAPI?.publishOnboardingDemoEvent?.(event),
+    onDemoEvent: (event) => {
+      // Demo sessions only exist while onboarding is incomplete — skip the IPC otherwise.
+      if (localStorage.getItem("onboardingCompleted") === "true") return;
+      window.electronAPI?.publishOnboardingDemoEvent?.(event);
+    },
   });
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo

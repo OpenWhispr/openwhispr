@@ -702,8 +702,8 @@ body.dark:has(.onboarding-canvas) {
    inline from an imported asset (see CompactOnboardingFrame) so Vite
    fingerprints it and it resolves under the packaged file:// origin — which is
    also why the theme swap reads two inline custom properties instead of naming
-   the files here. Regenerate both strips with
-   `node scripts/generate-onboarding-dither.js`. */
+   the files here. The strips are 32px-wide Bayer-dither gradients, one per
+   theme, baked into src/assets/onboarding-hero-dither{,-dark}.webp. */
 .onboarding-compact-hero {
   background-image: var(--onboarding-hero-dither-light);
   background-repeat: repeat-x;
@@ -869,19 +869,23 @@ h1 {
   font-size: 2rem; /* 32px */
 }
 
-.onboarding-light-input,
-.onboarding-light-input:hover,
-.onboarding-light-input:focus-visible {
+/* Scoped to .onboarding-canvas because AuthenticationStep also renders outside
+   onboarding (SignInDialog, AppRouter's re-auth card), where the --onboarding-*
+   tokens are undefined and these !important rules would paint invisible inputs.
+   Outside the canvas the Input component's default skin wins instead. */
+.onboarding-canvas .onboarding-light-input,
+.onboarding-canvas .onboarding-light-input:hover,
+.onboarding-canvas .onboarding-light-input:focus-visible {
   border-color: transparent !important;
   background-color: var(--onboarding-surface-secondary) !important;
   color: var(--onboarding-text-primary) !important;
 }
 
-.onboarding-light-input::placeholder {
+.onboarding-canvas .onboarding-light-input::placeholder {
   color: var(--onboarding-text-tertiary);
 }
 
-.onboarding-light-input.onboarding-light-input-bordered {
+.onboarding-canvas .onboarding-light-input.onboarding-light-input-bordered {
   /* Design-system surface stroke. This rule is !important and more specific
      than a utility class, so a Tailwind border-* on the element cannot win —
      the token has to be bound here. All four call sites are onboarding. */

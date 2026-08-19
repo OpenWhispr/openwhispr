@@ -75,8 +75,10 @@ const ONBOARDING_WINDOW_SIZES = {
 const CONTROL_PANEL_CONFIG = {
   width: ONBOARDING_WINDOW_SIZES.EXPANDED.width,
   height: ONBOARDING_WINDOW_SIZES.EXPANDED.height,
-  // Fully transparent: any opaque value here paints into the rounded corners.
-  backgroundColor: "#00000000",
+  // macOS: fully transparent, so nothing paints into the compact onboarding
+  // frame's rounded corners. Windows/Linux keep an opaque backing (the renderer
+  // paints its own background on top) — see the transparent flag below.
+  backgroundColor: process.platform === "darwin" ? "#00000000" : "#1c1c2e",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
@@ -100,12 +102,16 @@ const CONTROL_PANEL_CONFIG = {
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 20, y: 20 },
   }),
-  // Transparent so a renderer that insets or rounds itself shows the desktop
-  // rather than a square page backing bleeding out behind it. Safe for the other
-  // control panel screens because each paints its own opaque background
-  // (ControlPanel's root is `bg-background`); only the compact onboarding steps
-  // clear body/#root — see index.css.
-  transparent: true,
+  // macOS only: transparent so a renderer that insets or rounds itself shows
+  // the desktop rather than a square page backing bleeding out behind it. Safe
+  // for the other control panel screens because each paints its own opaque
+  // background (ControlPanel's root is `bg-background`); only the compact
+  // onboarding steps clear body/#root — see index.css. Not on Windows/Linux:
+  // transparency is creation-time-only and this window outlives onboarding, and
+  // on Windows `transparent` forces thickFrame:false (no maximize/Aero-snap)
+  // and renders black when compositing is off. The compact onboarding frame
+  // falls back to square corners there by design.
+  transparent: process.platform === "darwin",
   minimizable: true,
   maximizable: true,
   closable: true,

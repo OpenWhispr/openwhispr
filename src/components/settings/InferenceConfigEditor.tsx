@@ -29,6 +29,7 @@ import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore"
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
+import { resetOnboardingProgress } from "../onboarding/flow";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -41,8 +42,7 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
 
 function startCloudOnboarding() {
   localStorage.setItem("pendingCloudMigration", "true");
-  localStorage.setItem("onboardingCurrentStep", "0");
-  localStorage.removeItem("onboardingCompleted");
+  resetOnboardingProgress(localStorage);
   window.location.reload();
 }
 

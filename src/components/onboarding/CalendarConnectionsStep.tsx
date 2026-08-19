@@ -17,6 +17,7 @@ export default function CalendarConnectionsStep() {
   const systemAudio = useSystemAudioPermission();
   const [connecting, setConnecting] = useState<ProviderId | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [appleDenied, setAppleDenied] = useState(false);
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
 
   const ensureSystemAudio = useCallback(async () => {
@@ -28,6 +29,7 @@ export default function CalendarConnectionsStep() {
     async (provider: ProviderId) => {
       setConnecting(provider);
       setError(null);
+      setAppleDenied(false);
       try {
         // Recording a meeting needs system audio; connecting a calendar does not.
         // Awaited so the permission dialog doesn't race the OAuth browser window,
@@ -59,8 +61,17 @@ export default function CalendarConnectionsStep() {
           }
         } else {
           const result = await window.electronAPI?.acalConnect?.();
-          if (result?.success) store.setAppleCalendarConnected(true);
-          else setError(t("integrations.appleCalendar.connectFailedDescription"));
+          if (result?.success) {
+            store.setAppleCalendarConnected(true);
+          } else if (result?.reason === "denied") {
+            // Same distinction IntegrationsView draws: only a real permission
+            // denial sends the user to Privacy settings; helper-missing /
+            // snapshot-failed are not permission problems.
+            setAppleDenied(true);
+            setError(t("integrations.appleCalendar.permissionDeniedDescription"));
+          } else {
+            setError(t("integrations.appleCalendar.connectFailedDescription"));
+          }
         }
       } finally {
         setConnecting(null);
@@ -232,6 +243,18 @@ export default function CalendarConnectionsStep() {
       {error && (
         <p role="alert" className="text-center text-xs text-[var(--onboarding-danger)]">
           {error}
+          {appleDenied && (
+            <>
+              {" "}
+              <button
+                type="button"
+                onClick={() => void window.electronAPI?.openCalendarPrivacySettings?.()}
+                className="font-medium underline underline-offset-2 hover:opacity-70"
+              >
+                {t("integrations.appleCalendar.openSettings")}
+              </button>
+            </>
+          )}
         </p>
       )}
     </div>

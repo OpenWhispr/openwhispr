@@ -390,7 +390,18 @@
         "runTest": "Lancer le test",
         "testing": "Test en cours…",
         "connected": "Connecté",
-        "connectionFailed": "La connexion n’a pas pu être vérifiée."
+        "connectionFailed": "La connexion n’a pas pu être vérifiée.",
+        "errors": {
+          "endpointRequired": "Saisissez l’URL de l’endpoint avant de lancer le test.",
+          "invalidUrl": "L’endpoint doit être une URL HTTP ou HTTPS valide.",
+          "unsupportedProvider": "Le test de connexion n’est pas disponible pour ce fournisseur.",
+          "apiKeyRequired": "Ajoutez une clé API avant de lancer le test.",
+          "credentialsRejected": "Le fournisseur a rejeté ces identifiants.",
+          "endpointNotFound": "L’endpoint n’expose pas de liste de modèles compatible OpenAI.",
+          "providerStatus": "Le fournisseur a renvoyé le statut {{status}}.",
+          "timeout": "Le test de connexion a expiré.",
+          "network": "Le fournisseur est injoignable."
+        }
       },
       "local": {
         "title": "Configurer les modèles locaux",

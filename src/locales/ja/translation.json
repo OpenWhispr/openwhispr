@@ -390,7 +390,18 @@
         "runTest": "テストを実行",
         "testing": "テスト中…",
         "connected": "接続済み",
-        "connectionFailed": "接続を確認できませんでした。"
+        "connectionFailed": "接続を確認できませんでした。",
+        "errors": {
+          "endpointRequired": "テストの前にエンドポイント URL を入力してください。",
+          "invalidUrl": "エンドポイントは有効な HTTP または HTTPS の URL である必要があります。",
+          "unsupportedProvider": "このプロバイダーでは接続テストを利用できません。",
+          "apiKeyRequired": "テストの前に API キーを追加してください。",
+          "credentialsRejected": "プロバイダーがこの認証情報を拒否しました。",
+          "endpointNotFound": "このエンドポイントは OpenAI 互換のモデル一覧を公開していません。",
+          "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
+          "timeout": "接続テストがタイムアウトしました。",
+          "network": "プロバイダーに接続できませんでした。"
+        }
       },
       "local": {
         "title": "ローカルモデルを設定",

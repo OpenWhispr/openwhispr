@@ -1125,12 +1125,13 @@ class IPCHandlers {
       this.windowManager.setOnboardingWindowMode(mode)
     );
 
-    // Dev-only: see WindowManager.setOnboardingWindowUnlocked. Refused in a
-    // packaged build so a real user can never unlock their way out of setup.
-    ipcMain.handle("onboarding-set-window-unlocked", (_event, unlocked) => {
-      if (app.isPackaged) return false;
-      return this.windowManager.setOnboardingWindowUnlocked(unlocked);
-    });
+    // WindowManager owns every teardown path for a demo (id-matched end,
+    // onboarding-set-active(false), control panel closed); without this hook a
+    // renderer crash mid-demo would leave the session set and broadcast every
+    // later dictation's transcripts on onboarding-demo-event forever.
+    this.windowManager.onOnboardingDemoTeardown = () => {
+      this._onboardingDemoSession = null;
+    };
 
     ipcMain.handle("onboarding-set-active", (_event, active) => {
       if (typeof active !== "boolean") return false;
@@ -1156,7 +1157,7 @@ class IPCHandlers {
 
     ipcMain.handle("onboarding-demo-end", (_event, id) => {
       if (this._onboardingDemoSession?.id === id) {
-        this._onboardingDemoSession = null;
+        // Session cleanup rides on the teardown hook above.
         this.windowManager.endOnboardingDemo();
       }
       return true;
@@ -1205,7 +1206,13 @@ class IPCHandlers {
           }
           return { success: true };
         } catch {
-          return { success: false, error: "Corti rejected these credentials." };
+          // errorCode is the machine-readable field the renderer maps to i18n;
+          // the English string stays for logs/back-compat.
+          return {
+            success: false,
+            errorCode: "credentialsRejected",
+            error: "Corti rejected these credentials.",
+          };
         }
       }
       return testProviderConnection(config);

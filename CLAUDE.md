@@ -163,7 +163,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 - **App.jsx**: Main dictation interface with recording states
 - **ControlPanel.tsx**: Settings, history, model management UI
-- **OnboardingFlow.tsx**: 8-step first-time setup wizard
+- **OnboardingFlow.tsx**: First-time setup wizard over a versioned, route-based step machine (`src/components/onboarding/flow.ts`; session persisted in `onboardingSessionV2`). Routes vary by auth path (account vs guest), policy (agent allowed), and setup mode (cloud / BYOK / local / enterprise); step components live in `src/components/onboarding/`
 - **PostMigrationOnboarding.tsx**: One-time modal for users returning from the pre-Gizmo bundle ID; reuses `PermissionsSection` to walk through re-granting Microphone, Accessibility, and System Audio. Triggered by `postMigrationDetector.js` (see Helper Modules)
 - **SettingsPage.tsx**: Comprehensive settings interface
 - **WhisperModelPicker.tsx**: Model selection and download UI

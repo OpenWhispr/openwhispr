@@ -209,10 +209,6 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
 
 type HostedProvider = CloudProviderData | TranscriptionProviderData;
 
-function providerDisplayName(provider: HostedProvider) {
-  return provider.id === "xai" ? "SpaceXAI" : provider.name;
-}
-
 function FieldLabel({ children }: { children: ReactNode }) {
   return (
     <span className="mb-1.5 block text-xs text-[var(--onboarding-text-tertiary)]">{children}</span>
@@ -434,7 +430,7 @@ export function ByokProviderStep({
                   {currentProvider ? (
                     <div className="flex items-center gap-2">
                       <ProviderIcon provider={currentProvider.id} className="size-4" />
-                      {providerDisplayName(currentProvider)}
+                      {currentProvider.name}
                     </div>
                   ) : (
                     <span className="text-[var(--onboarding-text-secondary)]">
@@ -447,7 +443,7 @@ export function ByokProviderStep({
                     <SelectItem key={provider.id} value={provider.id} className={SELECT_ITEM_CLASS}>
                       <span className="flex items-center gap-2.5">
                         <ProviderIcon provider={provider.id} className="size-5" />
-                        <span>{providerDisplayName(provider)}</span>
+                        <span>{provider.name}</span>
                         {provider.id === "corti" && (
                           <span className="ml-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
                             {t("onboarding.rehaul.provider.clinical")}
@@ -528,13 +524,17 @@ export function ByokProviderStep({
           </>
         )}
 
+        {/* Keyed per step+provider only; baseUrl/model changes reset through the
+            component's config effect instead of a remount, which used to run on
+            every keystroke in the self-hosted URL and model inputs. */}
         <ProviderConnectionTest
-          key={`${stepId}:${testingProvider}:${testingBaseUrl ?? ""}:${selfHosted ? draftCustomModel : selectedModel}`}
+          key={`${stepId}:${testingProvider}`}
           config={{
             scope: assistant ? "reasoning" : "transcription",
             provider: testingProvider,
             apiKey: testingKey,
             baseUrl: testingBaseUrl,
+            model: selfHosted ? draftCustomModel : selectedModel,
             clientId: isCortiTranscription ? draftCortiClientId : undefined,
             clientSecret: isCortiTranscription ? draftCortiClientSecret : undefined,
             environment: store.cortiEnvironment,

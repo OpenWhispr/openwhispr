@@ -1,10 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 
+type ProviderConnectionConfig = Parameters<
+  NonNullable<Window["electronAPI"]["testProviderConnection"]>
+>[0] & { model?: string };
+
+interface ConnectionTestResult {
+  success?: boolean;
+  error?: string;
+  errorCode?: string;
+  status?: number;
+}
+
 interface ProviderConnectionTestProps {
-  config: Parameters<NonNullable<Window["electronAPI"]["testProviderConnection"]>>[0];
+  config: ProviderConnectionConfig;
   onSuccessChange: (connected: boolean) => void;
   variant?: "default" | "inline";
 }
@@ -17,37 +28,57 @@ export default function ProviderConnectionTest({
   const { t } = useTranslation();
   const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    requestIdRef.current += 1;
     setStatus("idle");
     setError(null);
     onSuccessChange(false);
+    return () => {
+      requestIdRef.current += 1;
+    };
   }, [
     config.apiKey,
     config.baseUrl,
     config.clientId,
     config.clientSecret,
     config.environment,
+    config.model,
     config.provider,
     config.scope,
     config.tenant,
     onSuccessChange,
   ]);
 
+  const describeError = (result: ConnectionTestResult | undefined) => {
+    if (result?.errorCode) {
+      return t(`onboarding.rehaul.provider.errors.${result.errorCode}`, {
+        status: result.status,
+        defaultValue: result.error ?? t("onboarding.rehaul.provider.connectionFailed"),
+      });
+    }
+    return result?.error ?? t("onboarding.rehaul.provider.connectionFailed");
+  };
+
   const testConnection = async () => {
+    const requestId = ++requestIdRef.current;
     setStatus("testing");
     setError(null);
     onSuccessChange(false);
     try {
-      const result = await window.electronAPI?.testProviderConnection?.(config);
+      const result: ConnectionTestResult | undefined =
+        await window.electronAPI?.testProviderConnection?.(config);
+      if (requestId !== requestIdRef.current) return;
       if (result?.success) {
         setStatus("success");
         onSuccessChange(true);
       } else {
         setStatus("error");
-        setError(result?.error ?? t("onboarding.rehaul.provider.connectionFailed"));
+        setError(describeError(result));
       }
     } catch {
+      if (requestId !== requestIdRef.current) return;
       setStatus("error");
       setError(t("onboarding.rehaul.provider.connectionFailed"));
     }

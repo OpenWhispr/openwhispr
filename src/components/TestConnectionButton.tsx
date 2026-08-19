@@ -48,7 +48,16 @@ export default function TestConnectionButton({
     onStatusChange?.(false);
     setErrorInfo(null);
     try {
-      const result = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
+      const result:
+        | {
+            success?: boolean;
+            error?: string;
+            errorCode?: string;
+            status?: number;
+            action?: string;
+            copyCommand?: string;
+          }
+        | undefined = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
       if (requestId !== requestIdRef.current) return;
       if (result?.success) {
         setStatus("success");
@@ -60,7 +69,12 @@ export default function TestConnectionButton({
         setStatus("error");
         onStatusChange?.(false);
         setErrorInfo({
-          message: result?.error || "Connection failed",
+          message: result?.errorCode
+            ? t(`onboarding.rehaul.provider.errors.${result.errorCode}`, {
+                status: result.status,
+                defaultValue: result.error || "Connection failed",
+              })
+            : result?.error || "Connection failed",
           action: result?.action,
           copyCommand: result?.copyCommand,
         });

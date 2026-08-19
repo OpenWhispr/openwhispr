@@ -126,7 +126,11 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
 
   const route =
     context.authPath === "guest"
-      ? (["auth", "setup-choice"] as OnboardingStepId[])
+      ? // Guests still need the permission grants and a hotkey they have seen:
+        // finalizeOnboarding registers dictationHotkey either way, and skipping
+        // these steps shipped users who neither granted the mic nor knew their
+        // trigger key.
+        (["auth", "permissions", "dictation-hotkey", "setup-choice"] as OnboardingStepId[])
       : [
           ...ACCOUNT_ROUTE,
           ...(context.agentAllowed

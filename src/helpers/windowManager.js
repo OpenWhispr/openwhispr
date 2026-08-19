@@ -31,11 +31,11 @@ class WindowManager {
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
-    // Dev-only escape hatch (see setOnboardingWindowUnlocked). Never set in a
-    // packaged build: the IPC that flips it is gated on !app.isPackaged.
-    this._onboardingWindowUnlocked = false;
     this._onboardingActive = false;
     this._onboardingDemoKind = null;
+    // Set by IPCHandlers so its demo session dies with the demo kind on every
+    // teardown path (id-matched end, onboarding exit, control panel closed).
+    this.onOnboardingDemoTeardown = null;
     this.agentWindow = null;
     this.notificationWindow = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
@@ -486,6 +486,13 @@ class WindowManager {
     return isOnboardingInputAllowed(this._onboardingActive, this._onboardingDemoKind, inputKind);
   }
 
+  // Public gate for main.js's meeting hotkey call sites, which invoke the
+  // detection engine directly rather than routing through a send method here.
+  // "meeting" is never a demo kind, so this is simply "not during onboarding".
+  isMeetingInputAllowed() {
+    return this._isOnboardingInputAllowed("meeting");
+  }
+
   _sendDictationToggle(channel, inputKind) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
     if (this.hotkeyManager.isInListeningMode()) {
@@ -505,8 +512,10 @@ class WindowManager {
       this.showDictationPanel();
       // About-to-start guess: open the mic one IPC message ahead of the toggle.
       // A wrong guess (renderer declines) is bounded by the prepared capture's
-      // max-age expiry, and the renderer dedups its own prepare call.
-      if (!this._isDictatingToggle) this.sendPrepareDictation();
+      // max-age expiry, and the renderer dedups its own prepare call. Pass the
+      // toggle's own kind so the pre-warm survives the assistant demo, whose
+      // gate rejects "dictation".
+      if (!this._isDictatingToggle) this.sendPrepareDictation(inputKind);
       this.mainWindow.webContents.send(channel);
       this._isDictatingToggle = !this._isDictatingToggle;
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
@@ -554,8 +563,8 @@ class WindowManager {
     }
   }
 
-  sendPrepareDictation() {
-    if (!this._isOnboardingInputAllowed("dictation")) return;
+  sendPrepareDictation(inputKind = "dictation") {
+    if (!this._isOnboardingInputAllowed(inputKind)) return;
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -1232,6 +1241,10 @@ class WindowManager {
   }
 
   endOnboardingDemo() {
+    // Before the early return on purpose: IPCHandlers' demo session must die
+    // on every teardown path even if the demo kind is already gone — a stale
+    // session broadcasts every later dictation on onboarding-demo-event.
+    this.onOnboardingDemoTeardown?.();
     if (!this._onboardingDemoKind) return false;
     // Leaving/retrying is cancellation, not a transcription request. The
     // overlay owns AudioManager, so route cleanup must be delivered there.
@@ -1259,53 +1272,16 @@ class WindowManager {
   }
 
   // Onboarding runs in a fixed-size window with no traffic lights so a user
-  // can't resize, minimise or close their way out of setup. Split out so the
-  // dev unlock can invert it without duplicating the affordance list.
+  // can't resize, minimise or close their way out of setup.
   _applyOnboardingWindowChrome(win) {
-    const locked = !this._onboardingWindowUnlocked;
-    win.setResizable(!locked);
-    win.setMinimizable(!locked);
-    win.setMaximizable(!locked);
-    win.setClosable(!locked);
-    win.setFullScreenable(!locked);
+    win.setResizable(false);
+    win.setMinimizable(false);
+    win.setMaximizable(false);
+    win.setClosable(false);
+    win.setFullScreenable(false);
     if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
-      win.setWindowButtonVisibility(!locked);
+      win.setWindowButtonVisibility(false);
     }
-  }
-
-  /**
-   * Dev-only: hand the onboarding window back its native macOS chrome (traffic
-   * lights, drag-to-resize, minimise, zoom, fullscreen) so layouts can be tested
-   * at sizes other than the two canonical ones.
-   *
-   * Gated at the IPC boundary on !app.isPackaged — shipping this would let a user
-   * close the window mid-setup and land in a half-configured app.
-   */
-  setOnboardingWindowUnlocked(unlocked) {
-    if (typeof unlocked !== "boolean") return false;
-    this._onboardingWindowUnlocked = unlocked;
-
-    const win = this.controlPanelWindow;
-    if (!win || win.isDestroyed()) return false;
-    // Outside onboarding the control panel already owns its own chrome; touching
-    // it here would fight setOnboardingWindowMode("restore").
-    if (!this._onboardingWindowMode) return true;
-
-    this._applyOnboardingWindowChrome(win);
-
-    // Re-locking from an arbitrary user-dragged size has to put the window back
-    // on the canonical bounds for the mode, or onboarding renders at a size its
-    // steps were never laid out for.
-    if (!unlocked) {
-      // setOnboardingWindowMode refuses to resize a fullscreen/maximized window,
-      // so leave those states first or the re-lock silently keeps the dev size.
-      if (win.isFullScreen()) win.setFullScreen(false);
-      if (win.isMaximized()) win.unmaximize();
-      const mode = this._onboardingWindowMode;
-      this._onboardingWindowMode = null;
-      this.setOnboardingWindowMode(mode);
-    }
-    return true;
   }
 
   setOnboardingWindowMode(mode) {
@@ -1351,15 +1327,6 @@ class WindowManager {
     }
 
     this._applyOnboardingWindowChrome(win);
-
-    // Unlocked, the window is yours to size: snapping it back to the canonical
-    // compact/expanded bounds on every step change would undo the drag you just
-    // made. The mode is still recorded so re-locking picks the right size.
-    if (this._onboardingWindowUnlocked) {
-      this._onboardingWindowMode = mode;
-      this._showControlPanel();
-      return true;
-    }
 
     if (this._onboardingWindowMode === mode) {
       this._showControlPanel();

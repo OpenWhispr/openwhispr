@@ -8,6 +8,7 @@ import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.ts
 import WindowControls from "./components/WindowControls.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
+import { ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
 import { usePolicyStore } from "./stores/policyStore";
@@ -85,7 +86,11 @@ function MainApp() {
     const authSkipped =
       localStorage.getItem("authenticationSkipped") === "true" ||
       localStorage.getItem("skipAuth") === "true";
-    const onboardingInProgress = localStorage.getItem("onboardingCurrentStep") !== null;
+    // Either marker means the flow is mid-way: the legacy step key is kept for
+    // back-compat, the v2 session is what the rebuilt flow actually persists.
+    const onboardingInProgress =
+      localStorage.getItem("onboardingCurrentStep") !== null ||
+      localStorage.getItem(ONBOARDING_SESSION_KEY) !== null;
     const isReturningUser =
       !onboardingCompleted && isSignedIn && !isGracePeriodOnly && !onboardingInProgress;
 
@@ -111,6 +116,22 @@ function MainApp() {
 
     setIsLoading(false);
   }, [authLoaded, isControlPanel, isDictationPanel, isGracePeriodOnly, isSignedIn]);
+
+  useEffect(() => {
+    if (!isControlPanel) return;
+    // Fast path: a user who already finished onboarding can never enter the
+    // compact flow, so show the control panel immediately instead of holding
+    // it hidden behind auth/policy resolution. Fresh installs and mid-flow
+    // restarts fall through to the effect below, preserving the no-flash
+    // guarantee for windows that will enter compact onboarding mode.
+    const completed = localStorage.getItem("onboardingCompleted") === "true";
+    const inProgress =
+      localStorage.getItem("onboardingCurrentStep") !== null ||
+      localStorage.getItem(ONBOARDING_SESSION_KEY) !== null;
+    if (completed && !inProgress) {
+      void window.electronAPI?.setOnboardingWindowMode?.("restore");
+    }
+  }, [isControlPanel]);
 
   useEffect(() => {
     if (!isControlPanel || isLoading || isWaitingForPolicyStart || showOnboarding) return;

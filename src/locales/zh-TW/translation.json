@@ -390,7 +390,18 @@
         "runTest": "執行測試",
         "testing": "測試中…",
         "connected": "已連接",
-        "connectionFailed": "無法驗證這個連線。"
+        "connectionFailed": "無法驗證這個連線。",
+        "errors": {
+          "endpointRequired": "測試前請先輸入端點 URL。",
+          "invalidUrl": "端點必須是有效的 HTTP 或 HTTPS URL。",
+          "unsupportedProvider": "這個服務商不支援連線測試。",
+          "apiKeyRequired": "測試前請先新增 API Key。",
+          "credentialsRejected": "服務商拒絕了這些憑證。",
+          "endpointNotFound": "這個端點未提供相容 OpenAI 的模型清單。",
+          "providerStatus": "服務商回傳了狀態碼 {{status}}。",
+          "timeout": "連線測試逾時。",
+          "network": "無法連上服務商。"
+        }
       },
       "local": {
         "title": "設定本機模型",

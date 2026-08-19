@@ -22,10 +22,14 @@ test("account flow includes the complete guided setup", async () => {
   );
 });
 
-test("guest flow jumps directly to setup choice", async () => {
+test("guest flow keeps permissions and the hotkey before setup choice", async () => {
   const { getOnboardingRoute } = await load();
+  // finalizeOnboarding registers the dictation hotkey on every path, so guests
+  // must still grant the mic and see the key they are getting.
   assert.deepEqual(getOnboardingRoute({ authPath: "guest", setupMode: null, agentAllowed: true }), [
     "auth",
+    "permissions",
+    "dictation-hotkey",
     "setup-choice",
   ]);
 });
@@ -42,7 +46,7 @@ test("setup choice appends the selected two-stage route", async () => {
   const { getOnboardingRoute } = await load();
   assert.deepEqual(
     getOnboardingRoute({ authPath: "guest", setupMode: "byok", agentAllowed: true }),
-    ["auth", "setup-choice", "byok-dictation", "byok-assistant"]
+    ["auth", "permissions", "dictation-hotkey", "setup-choice", "byok-dictation", "byok-assistant"]
   );
   assert.deepEqual(
     getOnboardingRoute({ authPath: "account", setupMode: "local", agentAllowed: false }).slice(-2),
@@ -118,7 +122,7 @@ test("route helpers recover from ineligible steps", async () => {
   const { getNextOnboardingStep, getOnboardingRoute, reconcileStepWithRoute } = await load();
   const route = getOnboardingRoute({ authPath: "guest", setupMode: null, agentAllowed: true });
   assert.equal(reconcileStepWithRoute("assistant-demo", route), "setup-choice");
-  assert.equal(getNextOnboardingStep("auth", route), "setup-choice");
+  assert.equal(getNextOnboardingStep("auth", route), "permissions");
   assert.equal(getNextOnboardingStep("setup-choice", route), null);
 });
 
@@ -157,19 +161,19 @@ test("progress total tracks the conditional parts of the route", async () => {
   assert.deepEqual(getOnboardingProgress("byok-assistant", byok), { index: 9, total: 10 });
 });
 
-test("progress hides itself rather than drawing a one-dot row", async () => {
+test("progress counts only the guest steps that draw a footer", async () => {
   const { getOnboardingProgress, getOnboardingRoute } = await load();
-  // The guest route before a plan is picked is auth + setup-choice: one counted
-  // step, and a single dot reads as decoration rather than progress.
+  // auth and permissions are compact, so the pre-plan guest route counts
+  // dictation-hotkey and setup-choice: a two-dot row.
   const guest = getOnboardingRoute({ authPath: "guest", setupMode: null, agentAllowed: true });
-  assert.equal(getOnboardingProgress("setup-choice", guest), null);
+  assert.deepEqual(getOnboardingProgress("setup-choice", guest), { index: 1, total: 2 });
 
   const guestByok = getOnboardingRoute({
     authPath: "guest",
     setupMode: "byok",
     agentAllowed: true,
   });
-  assert.deepEqual(getOnboardingProgress("setup-choice", guestByok), { index: 0, total: 3 });
+  assert.deepEqual(getOnboardingProgress("setup-choice", guestByok), { index: 1, total: 4 });
 
   // An off-route step has no position to report.
   assert.equal(getOnboardingProgress("notes", guestByok), null);

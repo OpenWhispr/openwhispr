@@ -31,6 +31,9 @@ import apiSetupHero from "../../assets/onboarding-api-setup-hero.webp";
 
 type SetupMode = Exclude<OnboardingSetupMode, null>;
 type AdvancedSetupMode = Exclude<SetupMode, "cloud">;
+// Only these two open the warning dialog; BYOK is selected directly from the
+// more-options modal, so a "byok" pending state is unreachable.
+type WarningSetupMode = Exclude<AdvancedSetupMode, "byok">;
 
 const REFERENCE_LOCAL_MODEL_ID = "nemotron-3.5-asr-streaming-0.6b";
 
@@ -112,7 +115,7 @@ export default function SetupChoiceStep({
 }: SetupChoiceStepProps) {
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
-  const [pending, setPending] = useState<AdvancedSetupMode | null>(null);
+  const [pending, setPending] = useState<WarningSetupMode | null>(null);
   const [showMore, setShowMore] = useState(false);
 
   const localReferenceModel = getParakeetModelInfo(REFERENCE_LOCAL_MODEL_ID);
@@ -144,8 +147,7 @@ export default function SetupChoiceStep({
         })
       )
     : [];
-  const WarningPrimaryIcon =
-    pending === "byok" ? KeyRound : pending === "enterprise" ? Building2 : Laptop;
+  const WarningPrimaryIcon = pending === "enterprise" ? Building2 : Laptop;
 
   const localAllowed =
     isModeAllowedByPolicy(policy, "transcription", "local") &&
@@ -169,7 +171,16 @@ export default function SetupChoiceStep({
                     1.33px white ring so the stack reads front-to-back. */}
                 <span className="flex -space-x-2">
                   <span className="flex size-10 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]">
-                    <img src={openAIIcon} alt="" aria-hidden="true" className="size-5 invert" />
+                    <img
+                      src={openAIIcon}
+                      alt=""
+                      aria-hidden="true"
+                      width={20}
+                      height={20}
+                      decoding="async"
+                      draggable={false}
+                      className="size-5 invert"
+                    />
                   </span>
                   {/* The tile is its own green field, so it fills the chip and gets
                       clipped to the circle — the old lime-500 circle sat behind a

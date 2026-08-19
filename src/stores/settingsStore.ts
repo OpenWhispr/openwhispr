@@ -2287,19 +2287,30 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // one provider so PHI never reaches a second LLM (e.g. Corti for medical providers).
   setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => {
     const s = useSettingsStore.getState();
+    // Onboarding routes every scope to the local runtime or the enterprise
+    // provider by passing "local"/"enterprise" as cleanupCloudMode. Those are
+    // InferenceModes of their own, not cloud routings — deriveReasoningMode
+    // collapses everything non-byok to "openwhispr", which would misroute
+    // privacy-local and manual-enterprise setups to the managed cloud. Map them
+    // straight through and keep them out of the *CloudMode fields, which only
+    // ever hold real cloud routings ("openwhispr"/"byok").
+    const requestedCloudMode = settings.cleanupCloudMode ?? s.cleanupCloudMode;
+    const isDirectMode = requestedCloudMode === "local" || requestedCloudMode === "enterprise";
     // Derive the mode from the incoming patch (falling back to current state) so
     // the helper patches are the single source of truth for every scope's mode.
-    const mode = deriveReasoningMode(
-      settings.cleanupCloudMode ?? s.cleanupCloudMode,
-      settings.cleanupProvider ?? s.cleanupProvider
-    );
+    const mode = isDirectMode
+      ? requestedCloudMode
+      : deriveReasoningMode(requestedCloudMode, settings.cleanupProvider ?? s.cleanupProvider);
     const {
       dictationCleanup,
       noteFormatting,
       dictationAgent,
       chatIntelligence,
       dictationTranslation,
-    } = buildReasoningScopePatches(settings, mode);
+    } = buildReasoningScopePatches(
+      isDirectMode ? { ...settings, cleanupCloudMode: undefined } : settings,
+      mode
+    );
     s.updateCleanupSettings(dictationCleanup);
     s.setCleanupMode(dictationCleanup.cleanupMode);
     // Each Settings tab selects on its own mode field, so set the mode for every
