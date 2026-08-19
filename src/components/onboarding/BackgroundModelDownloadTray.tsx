@@ -324,7 +324,7 @@ export default function BackgroundModelDownloadTray() {
     // both contexts and match the Figma light values within a couple of hex
     // steps.
     <aside
-      className="fixed right-7 top-5 z-50 w-[341px] overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground"
+      className="fixed right-7 bottom-5 z-50 w-[341px] overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground"
       aria-label={t("onboarding.rehaul.local.downloads")}
       aria-live="polite"
     >
