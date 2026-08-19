@@ -461,6 +461,7 @@ export default function App() {
     liveTranscriptMounted: liveTranscript.mounted,
     isRecording,
     isProcessing,
+    isHovered,
   });
   const pillIsInteractive = voicePillInteraction.pillInteractive;
   const activateVoicePill = () => {
@@ -553,8 +554,8 @@ export default function App() {
             setWindowInteractivity(true);
           }}
           onMouseLeave={() => {
-            if (!pillIsInteractive) return;
             setIsHovered(false);
+            if (!pillIsInteractive) return;
             if (!isCommandMenuOpen && !assistant.mounted) {
               setWindowInteractivity(false);
             }

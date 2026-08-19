@@ -181,6 +181,27 @@ test("Live Transcript restores stop and cancel interactions without unlocking As
     }),
     { pillInteractive: false, cancelVisible: false }
   );
+  // The bare pill (no Live Transcript) exposes discard on hover, as before the panel.
+  assert.deepEqual(
+    resolveVoicePillInteraction({
+      assistantMounted: false,
+      liveTranscriptMounted: false,
+      isRecording: false,
+      isProcessing: true,
+      isHovered: true,
+    }),
+    { pillInteractive: true, cancelVisible: true }
+  );
+  assert.deepEqual(
+    resolveVoicePillInteraction({
+      assistantMounted: false,
+      liveTranscriptMounted: false,
+      isRecording: false,
+      isProcessing: true,
+      isHovered: false,
+    }),
+    { pillInteractive: true, cancelVisible: false }
+  );
 });
 
 test("a mounted Live Transcript can stop after the floating pill was previously dragged", async () => {
