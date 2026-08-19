@@ -1,34 +1,20 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { loadAudioManager } = require("./harness/audioManager");
 
-async function loadAudioManager(t) {
-  installBrowserGlobals(t);
-  const vite = await createRendererServer(t, {
+async function loadManagerClass(t) {
+  const { AudioManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-no-audio-lifecycle-test-",
-    mockModules: {
-      "/utils/logger":
-        "export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };",
-      "/stores/settingsStore": `
-        export const getSettings = () => ({
-          useLocalWhisper: true,
-          localTranscriptionProvider: "whisper",
-          whisperModel: "base",
-          cloudTranscriptionMode: "byok",
-          isSignedIn: false,
-        });
-        export const getEffectiveCleanupModel = () => null;
-        export const isCloudCleanupMode = () => false;
-        export const isCloudDictationAgentMode = () => false;
-        export const isCloudTranslationMode = () => false;
-      `,
-      "/services/ReasoningService": "export default class ReasoningService {};",
-      "/services/SyncService.js": "export const syncService = {};",
-      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
-      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
+    settingsKey: "__noAudioLifecycleSettings",
+    settings: {
+      useLocalWhisper: true,
+      localTranscriptionProvider: "whisper",
+      whisperModel: "base",
+      cloudTranscriptionMode: "byok",
+      isSignedIn: false,
     },
   });
-  return (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+  return AudioManager;
 }
 
 function createManager(AudioManager, failure) {
@@ -52,7 +38,7 @@ function createManager(AudioManager, failure) {
 }
 
 test("local silence becomes one no-audio outcome after processing is idle", async (t) => {
-  const AudioManager = await loadAudioManager(t);
+  const AudioManager = await loadManagerClass(t);
   const { manager, order, saved } = createManager(AudioManager, new Error("No audio detected"));
 
   await manager.processAudio({ size: 256, type: "audio/webm" });
@@ -63,7 +49,7 @@ test("local silence becomes one no-audio outcome after processing is idle", asyn
 });
 
 test("dictionary-echo silence keeps the recording but shares the settled outcome", async (t) => {
-  const AudioManager = await loadAudioManager(t);
+  const AudioManager = await loadManagerClass(t);
   const { DICTIONARY_ECHO_CODE } = await import("../../src/utils/dictionaryEchoFilter.js");
   const failure = new Error("No audio detected");
   failure.code = DICTIONARY_ECHO_CODE;

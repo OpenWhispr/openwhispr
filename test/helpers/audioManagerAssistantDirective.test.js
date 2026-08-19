@@ -1,41 +1,22 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { loadAudioManager: loadAudioManagerHarness } = require("./harness/audioManager");
 
 // Standalone voice-assistant commands never run the dictation-agent model:
 // processAgentCommand banks a pendingAssistantConversation directive (the
 // side-channel the emission sites attach to the result) and returns the raw
 // transcript. Selection edits keep the in-place path.
 async function loadAudioManager(t, { cachePrefix, settingsKey }) {
-  installBrowserGlobals(t);
-  const vite = await createRendererServer(t, {
+  const { createManager } = await loadAudioManagerHarness(t, {
     cachePrefix,
+    settingsKey,
     mockModules: {
-      "/utils/logger":
-        "export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };",
-      "/stores/settingsStore": `
-        export const getSettings = () => globalThis.${settingsKey};
-        export const getEffectiveCleanupModel = () => null;
-        export const isCloudCleanupMode = () => false;
-        export const isCloudDictationAgentMode = () => false;
-        export const isCloudTranslationMode = () => false;
-      `,
+      // This suite exercises paths that call the ReasoningService default
+      // export directly, so it stubs the object form rather than the class.
       "/services/ReasoningService": 'export default { processText: async () => "" };',
-      "/services/SyncService.js": "export const syncService = {};",
-      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
-      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
     },
   });
-  t.after(() => {
-    delete globalThis[settingsKey];
-  });
-  globalThis[settingsKey] = {};
-
-  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
-  return {
-    createManager: (overrides = {}) =>
-      Object.assign(Object.create(AudioManager.prototype), overrides),
-  };
+  return { createManager };
 }
 
 function managerWithCapture(createManager, capture) {

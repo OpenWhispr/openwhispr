@@ -1,32 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { loadAudioManager } = require("./harness/audioManager");
 
-async function loadAudioManager(t) {
-  installBrowserGlobals(t);
-  const vite = await createRendererServer(t, {
+async function loadManager(t) {
+  const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-streaming-routing-test-",
-    mockModules: {
-      "/utils/logger":
-        "export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };",
-      "/stores/settingsStore": `
-        export const getSettings = () => globalThis.__streamingRoutingSettings;
-        export const getEffectiveCleanupModel = () => null;
-        export const isCloudCleanupMode = () => false;
-        export const isCloudDictationAgentMode = () => false;
-        export const isCloudTranslationMode = () => false;
-      `,
-      "/services/ReasoningService": "export default class ReasoningService {};",
-      "/services/SyncService.js": "export const syncService = {};",
-      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
-      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
-    },
+    settingsKey: "__streamingRoutingSettings",
   });
-  t.after(() => {
-    delete globalThis.__streamingRoutingSettings;
-  });
-  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
-  return Object.create(AudioManager.prototype);
+  return createManager();
 }
 
 function setSettings(overrides = {}) {
@@ -44,7 +25,7 @@ function setSettings(overrides = {}) {
 }
 
 test("managed batch config does not disable BYOK OpenAI realtime transcription", async (t) => {
-  const manager = await loadAudioManager(t);
+  const manager = await loadManager(t);
   manager.sttConfig = { dictation: { mode: "batch" } };
   setSettings();
 
@@ -52,7 +33,7 @@ test("managed batch config does not disable BYOK OpenAI realtime transcription",
 });
 
 test("OpenAI dictation realtime requests identify the token provider", async (t) => {
-  const manager = await loadAudioManager(t);
+  const manager = await loadManager(t);
   setSettings();
   const calls = [];
   globalThis.window.electronAPI.dictationRealtimeWarmup = async (options) => {
@@ -79,7 +60,7 @@ test("OpenAI dictation realtime requests identify the token provider", async (t)
 });
 
 test("managed OpenWhispr Cloud still respects its batch configuration", async (t) => {
-  const manager = await loadAudioManager(t);
+  const manager = await loadManager(t);
   manager.sttConfig = { dictation: { mode: "batch" } };
   setSettings({
     transcriptionMode: "openwhispr",

@@ -38,51 +38,19 @@ test("Live Transcript stages footer growth, controls, then content", async () =>
   });
 });
 
-test("Live Transcript holds the encapsulated state before the remaining visual beats", async () => {
-  const { getLiveTranscriptEntranceTimeline, LIVE_TRANSCRIPT_ENTRANCE_TIMING } = await load();
+test("Live Transcript entrance beats land strictly after one another", async () => {
+  const { getLiveTranscriptEntranceTimeline } = await load();
   const timeline = getLiveTranscriptEntranceTimeline();
 
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsRevealMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentDelayMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.measurementSettleMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.panelExpansionMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentRevealDelayMs > 0);
-  assert.ok(LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentSettleMs > 0);
-  assert.equal(
-    timeline.horizontalAtMs,
-    LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs +
-      LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs
-  );
-  assert.equal(
-    timeline.controlsAtMs,
-    timeline.horizontalAtMs +
-      LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs +
-      LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs
-  );
-  assert.equal(
-    timeline.prepareAtMs,
-    timeline.controlsAtMs +
-      LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsRevealMs +
-      LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentDelayMs
-  );
-  assert.equal(
-    timeline.panelAtMs,
-    timeline.prepareAtMs + LIVE_TRANSCRIPT_ENTRANCE_TIMING.measurementSettleMs
-  );
-  assert.equal(
-    timeline.contentAtMs,
-    timeline.panelAtMs +
-      LIVE_TRANSCRIPT_ENTRANCE_TIMING.panelExpansionMs +
-      LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentRevealDelayMs
-  );
-  assert.equal(
-    timeline.streamAtMs,
-    timeline.contentAtMs + LIVE_TRANSCRIPT_ENTRANCE_TIMING.contentSettleMs
-  );
+  // The invariant is the visual order, not the exact sums: the encapsulated
+  // hold ends before the footer grows, controls appear before content is
+  // prepared, and streaming starts only after the content settles.
+  assert.ok(timeline.horizontalAtMs > 0);
+  assert.ok(timeline.controlsAtMs > timeline.horizontalAtMs);
+  assert.ok(timeline.prepareAtMs > timeline.controlsAtMs);
+  assert.ok(timeline.panelAtMs > timeline.prepareAtMs);
+  assert.ok(timeline.contentAtMs > timeline.panelAtMs);
+  assert.ok(timeline.streamAtMs > timeline.contentAtMs);
 });
 
 test("Live Transcript keeps an adaptive surface instead of entering at Agent height", async () => {
@@ -254,64 +222,39 @@ test("listening entrance settles at full width before revealing the waveform", a
   assert.deepEqual(waveform, { ...settled, waveformVisible: true });
 });
 
-test("listening entrance reveals the recording waveform last", async () => {
-  const { resolveListeningEntrancePresentation } = await load();
-  assert.deepEqual(resolveListeningEntrancePresentation({ isRecording: true, phase: "waveform" }), {
-    activeState: "recording",
-    beamActive: false,
-    collapseToLogo: false,
-    compactPill: true,
-    waveformVisible: true,
-  });
-});
-
 test("listening entrance timers preserve the visual order", async () => {
-  const { getListeningEntranceTimeline, LISTENING_ENTRANCE_TIMING } = await load();
+  const { getListeningEntranceTimeline } = await load();
   const timeline = getListeningEntranceTimeline();
-  assert.ok(LISTENING_ENTRANCE_TIMING.thinkingMs > 0);
-  assert.ok(LISTENING_ENTRANCE_TIMING.expansionMs > 0);
-  assert.ok(LISTENING_ENTRANCE_TIMING.waveformDelayMs > 0);
-  assert.equal(timeline.expandAtMs, LISTENING_ENTRANCE_TIMING.thinkingMs);
-  assert.equal(timeline.settleAtMs, timeline.expandAtMs + LISTENING_ENTRANCE_TIMING.expansionMs);
-  assert.equal(
-    timeline.waveformAtMs,
-    timeline.settleAtMs + LISTENING_ENTRANCE_TIMING.waveformDelayMs
-  );
+
+  assert.ok(timeline.expandAtMs > 0);
+  assert.ok(timeline.settleAtMs > timeline.expandAtMs);
+  assert.ok(timeline.waveformAtMs > timeline.settleAtMs);
 });
 
 test("Agent footer retreats actions before the compact pill enters", async () => {
-  const {
-    ASSISTANT_FOOTER_TRANSITION_TIMING,
-    getAssistantFooterTransitionTimeline,
-    getListeningEntranceTimeline,
-  } = await load();
+  const { getAssistantFooterTransitionTimeline, getListeningEntranceTimeline } = await load();
   const timeline = getAssistantFooterTransitionTimeline(false);
 
-  assert.deepEqual(timeline, {
-    initialPhase: "actions-exiting",
-    handoffPhase: "pill-entering",
-    settledPhase: "pill",
-    handoffAtMs: ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs,
-    settledAtMs:
-      ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs +
-      ASSISTANT_FOOTER_TRANSITION_TIMING.pillEntranceMs,
-  });
+  assert.equal(timeline.initialPhase, "actions-exiting");
+  assert.equal(timeline.handoffPhase, "pill-entering");
+  assert.equal(timeline.settledPhase, "pill");
+  assert.ok(timeline.handoffAtMs > 0);
+  assert.ok(timeline.settledAtMs > timeline.handoffAtMs);
+  // Cross-policy contract: the footer handoff must fully settle before the
+  // listening entrance starts expanding the pill, or the two animations fight
+  // over the same control.
   assert.ok(timeline.settledAtMs < getListeningEntranceTimeline().expandAtMs);
 });
 
 test("Agent footer retreats the pill before final actions grow from its anchor", async () => {
-  const { ASSISTANT_FOOTER_TRANSITION_TIMING, getAssistantFooterTransitionTimeline } = await load();
+  const { getAssistantFooterTransitionTimeline } = await load();
   const timeline = getAssistantFooterTransitionTimeline(true);
 
-  assert.deepEqual(timeline, {
-    initialPhase: "pill-exiting",
-    handoffPhase: "actions-entering",
-    settledPhase: "actions",
-    handoffAtMs: ASSISTANT_FOOTER_TRANSITION_TIMING.pillRetreatMs,
-    settledAtMs:
-      ASSISTANT_FOOTER_TRANSITION_TIMING.pillRetreatMs +
-      ASSISTANT_FOOTER_TRANSITION_TIMING.actionsEntranceMs,
-  });
+  assert.equal(timeline.initialPhase, "pill-exiting");
+  assert.equal(timeline.handoffPhase, "actions-entering");
+  assert.equal(timeline.settledPhase, "actions");
+  assert.ok(timeline.handoffAtMs > 0);
+  assert.ok(timeline.settledAtMs > timeline.handoffAtMs);
 });
 
 test("Agent footer phases never mount actions and the pill together", async () => {

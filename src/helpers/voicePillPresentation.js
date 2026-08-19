@@ -1,3 +1,12 @@
+// The pill's two rendered footprints (px). This is a real cross-process
+// contract: WINDOW_SIZES.RECORDING in src/helpers/windowConfig.js sizes the
+// native overlay window around the compact recording pill, so these values
+// and that window size may only change together.
+export const VOICE_PILL_FOOTPRINT = Object.freeze({
+  idle: Object.freeze({ width: 40, height: 40 }),
+  recording: Object.freeze({ width: 92, height: 36 }),
+});
+
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // Give the Beam enough time to read as an intentional thinking state before
   // the persistent control begins changing shape.
@@ -185,17 +194,10 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
     };
   }
 
-  if (effectivePhase === "expanding") {
-    return {
-      activeState: "recording",
-      beamActive: false,
-      collapseToLogo: false,
-      compactPill: true,
-      waveformVisible: false,
-    };
-  }
-
-  if (effectivePhase === "settled") {
+  if (effectivePhase === "expanding" || effectivePhase === "settled") {
+    // Both phases render identically on purpose: "settled" exists only as a
+    // timing beat that holds the finished footprint before the waveform
+    // reveal, so the presentation must not change between them.
     return {
       activeState: "recording",
       beamActive: false,

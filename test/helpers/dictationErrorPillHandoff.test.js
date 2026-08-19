@@ -1,13 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-
-const deferred = () => {
-  let resolve;
-  const promise = new Promise((next) => {
-    resolve = next;
-  });
-  return { promise, resolve };
-};
+const { deferred } = require("./harness/deferred");
 
 test("the resting pill stays suppressed until bounds and compositor frames settle", async () => {
   const { createDictationErrorPillHandoff } =

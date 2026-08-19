@@ -2,14 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const load = () => import("../../src/utils/mainWindowResizeCoordinator.ts");
-
-const deferred = () => {
-  let resolve;
-  const promise = new Promise((next) => {
-    resolve = next;
-  });
-  return { promise, resolve };
-};
+const { deferred } = require("./harness/deferred");
 
 test("voice window resizes are serialized and obsolete pending heights are dropped", async () => {
   const { createMainWindowResizeCoordinator } = await load();
@@ -55,6 +48,58 @@ test("anchor compensation masks split native move and resize frames", async () =
     x: 0,
     y: 0,
   });
+});
+
+test("anchor compensation pins the configured edge for bottom-left and center anchors", async () => {
+  const { calculateWindowAnchorCompensation } = await load();
+  const target = { x: 100, y: 900, width: 466, height: 176 };
+  const current = { x: 130, y: 880, width: 400, height: 240 };
+
+  // bottom-left keeps the left edge and the bottom edge fixed in screen space.
+  assert.deepEqual(calculateWindowAnchorCompensation(target, current, "bottom-left"), {
+    x: -30,
+    y: -44,
+  });
+  // center keeps the horizontal midpoint fixed while the bottom edge anchors:
+  // target center 333 vs current center 330.
+  assert.deepEqual(calculateWindowAnchorCompensation(target, current, "center"), {
+    x: 3,
+    y: -44,
+  });
+  for (const anchor of ["bottom-left", "center"]) {
+    assert.deepEqual(calculateWindowAnchorCompensation(target, target, anchor), { x: 0, y: 0 });
+  }
+});
+
+test("dispose flushes the queued resize and refuses later requests without invoking", async () => {
+  const { createMainWindowResizeCoordinator } = await load();
+  const first = deferred();
+  const invoked = [];
+  const coordinator = createMainWindowResizeCoordinator({
+    resizeMainWindow: async (key) => {
+      invoked.push(key);
+      if (key === "BASE") await first.promise;
+      return { success: true, bounds: { x: 0, y: 0, width: 96, height: 96 } };
+    },
+    resizeAssistantWindowToContent: async () => ({ success: true }),
+    waitForBounds: async () => {},
+  });
+
+  const active = coordinator.resizeMainWindow("BASE");
+  const queued = coordinator.resizeMainWindow("RECORDING");
+  coordinator.dispose();
+
+  const queuedResult = await queued;
+  assert.equal(queuedResult.success, false);
+  assert.equal(queuedResult.superseded, true);
+
+  first.resolve();
+  assert.equal((await active).success, true, "the in-flight resize still completes");
+
+  const late = await coordinator.resizeMainWindow("ASSISTANT");
+  assert.equal(late.success, false);
+  assert.equal(late.superseded, true);
+  assert.deepEqual(invoked, ["BASE"], "no new native resize may run after dispose");
 });
 
 test("a duplicate settled footprint does not ask Electron to resize again", async () => {

@@ -5,7 +5,10 @@ import { cn } from "../lib/utils";
 import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
 import { WAVEFORM_BAR_COUNT } from "./waveformMath";
-import { LISTENING_ENTRANCE_TIMING } from "../../helpers/voicePillPresentation";
+import {
+  LISTENING_ENTRANCE_TIMING,
+  VOICE_PILL_FOOTPRINT,
+} from "../../helpers/voicePillPresentation";
 
 export type VoicePillState =
   "idle" | "hover" | "recording" | "processing" | "thinking" | "unavailable";
@@ -89,6 +92,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const dividerMargin = showCompactPill ? (showDivider ? 4 : 3) : 0;
   const identitySize = 22;
   const floatingHover = !isPanel && state === "hover";
+  const footprint = showCompactPill ? VOICE_PILL_FOOTPRINT.recording : VOICE_PILL_FOOTPRINT.idle;
 
   const pill = (
     <div
@@ -104,8 +108,8 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         // Listening uses the same compact pill as the assistant panel. The
         // previous wide recording bar made the control feel like a different
         // surface and forced an unnecessary large window resize.
-        width: showCompactPill ? 92 : 40,
-        height: showCompactPill ? 36 : 40,
+        width: footprint.width,
+        height: footprint.height,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
         boxShadow: floatingHover ? "var(--shadow-card-hover-subtle)" : undefined,
         transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, padding-left ${GROW_TRANSITION}, padding-right ${GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,

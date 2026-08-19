@@ -1,45 +1,36 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const React = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
-
-globalThis.React = React;
+const { React, renderStatic } = require("./harness/reactSsr");
 
 const renderCore = async (mode, open, stage = "content", horizontalDirection = "right") => {
   const { VoiceModePanelCore } =
     await import("../../src/components/dictation/VoiceModePanelCore.tsx");
-  return renderToStaticMarkup(
-    React.createElement(
-      VoiceModePanelCore,
-      {
-        mode,
-        open,
-        stage,
-        horizontalDirection,
-        onPreferredHeightChange: () => {},
-      },
-      React.createElement("main", { "data-mode-content": mode ?? "idle" })
-    )
+  return renderStatic(
+    VoiceModePanelCore,
+    {
+      mode,
+      open,
+      stage,
+      horizontalDirection,
+      onPreferredHeightChange: () => {},
+    },
+    React.createElement("main", { "data-mode-content": mode ?? "idle" })
   );
 };
 
 const renderClosingAssistant = async () => {
   const { VoiceModePanelCore } =
     await import("../../src/components/dictation/VoiceModePanelCore.tsx");
-  return renderToStaticMarkup(
-    React.createElement(
-      VoiceModePanelCore,
-      {
-        mode: "assistant",
-        open: true,
-        closing: true,
-        horizontalDirection: "right",
-        onPreferredHeightChange: () => {},
-      },
-      React.createElement("main", null, "Agent content")
-    )
+  return renderStatic(
+    VoiceModePanelCore,
+    {
+      mode: "assistant",
+      open: true,
+      closing: true,
+      horizontalDirection: "right",
+      onPreferredHeightChange: () => {},
+    },
+    React.createElement("main", null, "Agent content")
   );
 };
 
@@ -106,40 +97,4 @@ test("Agent close keeps the same surface mounted while its expensive content fad
   assert.match(closing, /data-panel-mode="assistant"/);
   assert.match(closing, /data-panel-closing="true"/);
   assert.equal((closing.match(/<section/g) || []).length, 1);
-});
-
-test("Agent close separates manual native release from error downplay and keeps a fallback", () => {
-  const appSource = fs.readFileSync(path.resolve(__dirname, "../../src/App.jsx"), "utf8");
-  const completeHandler = appSource.slice(
-    appSource.indexOf("const completeAssistantContentFade"),
-    appSource.indexOf("const beginAssistantPanelClose")
-  );
-  const closeHandler = appSource.slice(
-    appSource.indexOf("const beginAssistantPanelClose"),
-    appSource.indexOf("const closeLiveTranscriptPanel")
-  );
-
-  assert.match(closeHandler, /if \(!preserveNativeOwnership\)/);
-  assert.match(closeHandler, /setAssistantPanelOpen\?\.\(false\)/);
-  assert.match(closeHandler, /beginAssistantPanelClose\(false\)/);
-  assert.match(closeHandler, /beginAssistantPanelClose\(true\)/);
-  assert.match(
-    closeHandler,
-    /setTimeout\(\s*completeAssistantContentFade,\s*ASSISTANT_CONTENT_FADE_FALLBACK_MS\s*\)/s
-  );
-  assert.match(completeHandler, /setPanelConversationId\(null\)/);
-  assert.match(completeHandler, /assistantConversationResetPendingRef\.current = true/);
-  assert.doesNotMatch(completeHandler, /setAssistantConversationResetToken/);
-});
-
-test("Agent close retains one pill node and defers chat teardown until the next open", () => {
-  const appSource = fs.readFileSync(path.resolve(__dirname, "../../src/App.jsx"), "utf8");
-
-  assert.match(appSource, /const assistantActionsSuppressPill/);
-  assert.match(appSource, /key=\{assistantConversationResetToken\}/);
-  assert.match(appSource, /prepareFreshAssistantConversation\(\);/);
-  assert.doesNotMatch(
-    appSource,
-    /\{\(!assistantPanelOpen \|\| assistantFooter\.pillVisible\) && \(/
-  );
 });

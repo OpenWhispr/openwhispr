@@ -1,37 +1,19 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { loadAudioManager } = require("./harness/audioManager");
 
-async function loadAudioManager(t) {
-  installBrowserGlobals(t);
-  const vite = await createRendererServer(t, {
+async function loadManagerClass(t) {
+  const { AudioManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-streaming-finalization-test-",
-    mockModules: {
-      "/utils/logger":
-        "export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };",
-      "/stores/settingsStore": `
-        export const getSettings = () => globalThis.__streamingFinalizationSettings;
-        export const getEffectiveCleanupModel = () => null;
-        export const isCloudCleanupMode = () => false;
-        export const isCloudDictationAgentMode = () => false;
-        export const isCloudTranslationMode = () => false;
-      `,
-      "/services/ReasoningService": "export default class ReasoningService {};",
-      "/services/SyncService.js": "export const syncService = {};",
-      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
-      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
+    settingsKey: "__streamingFinalizationSettings",
+    settings: {
+      useLocalWhisper: false,
+      transcriptionMode: "providers",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "openai",
     },
   });
-  globalThis.__streamingFinalizationSettings = {
-    useLocalWhisper: false,
-    transcriptionMode: "providers",
-    cloudTranscriptionMode: "byok",
-    cloudTranscriptionProvider: "openai",
-  };
-  t.after(() => {
-    delete globalThis.__streamingFinalizationSettings;
-  });
-  return (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+  return AudioManager;
 }
 
 function createFinalizingManager(AudioManager) {
@@ -87,7 +69,7 @@ function createFinalizingManager(AudioManager) {
 }
 
 test("streaming finalization is immediately processing and cannot start another session", async (t) => {
-  const AudioManager = await loadAudioManager(t);
+  const AudioManager = await loadManagerClass(t);
   const { manager, states, getProviderStopCalls } = createFinalizingManager(AudioManager);
 
   const firstStop = manager.stopStreamingRecording();
@@ -116,7 +98,7 @@ test("streaming finalization is immediately processing and cannot start another 
 });
 
 test("streaming silence publishes its empty outcome only after processing settles", async (t) => {
-  const AudioManager = await loadAudioManager(t);
+  const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
   const order = [];
   manager.onStateChange = (state) => {
@@ -132,7 +114,7 @@ test("streaming silence publishes its empty outcome only after processing settle
 });
 
 test("an older streaming session cannot clean up the active session listeners", async (t) => {
-  const AudioManager = await loadAudioManager(t);
+  const AudioManager = await loadManagerClass(t);
   const manager = Object.assign(Object.create(AudioManager.prototype), {
     _activeStreamingSessionId: 12,
     streamingCleanupFns: [() => assert.fail("stale cleanup ran")],

@@ -2,14 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const MainWindowPlacementCoordinator = require("../../src/helpers/mainWindowPlacementCoordinator");
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((next) => {
-    resolve = next;
-  });
-  return { promise, resolve };
-}
+const { deferred } = require("./harness/deferred");
 
 test("a stale display lookup cannot apply after a newer request", async () => {
   const coordinator = new MainWindowPlacementCoordinator();

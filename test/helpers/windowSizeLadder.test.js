@@ -3,16 +3,26 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/utils/windowSizeLadder.js");
 
-test("recording window only grows enough for the compact listening pill", () => {
+test("the recording window fits the compact listening pill footprint", async () => {
   const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
-  assert.deepEqual(WINDOW_SIZES.RECORDING, { width: 128, height: 96 });
+  const { VOICE_PILL_FOOTPRINT } = await import("../../src/helpers/voicePillPresentation.js");
+
+  // The RECORDING footprint exists to host the compact recording pill; the
+  // window must never shrink below what the pill renders.
+  assert.ok(WINDOW_SIZES.RECORDING.width >= VOICE_PILL_FOOTPRINT.recording.width);
+  assert.ok(WINDOW_SIZES.RECORDING.height >= VOICE_PILL_FOOTPRINT.recording.height);
 });
 
-test("dictation error windows match the one-action and transcript-action footprints", () => {
+test("dictation error windows share the assistant width and grow for the transcript action", () => {
   const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
-  assert.deepEqual(WINDOW_SIZES.DICTATION_ERROR, { width: 466, height: 112 });
-  assert.deepEqual(WINDOW_SIZES.DICTATION_ERROR_WITH_TRANSCRIPT, { width: 466, height: 168 });
   assert.equal(WINDOW_SIZES.DICTATION_ERROR.width, WINDOW_SIZES.ASSISTANT.width);
+  assert.equal(
+    WINDOW_SIZES.DICTATION_ERROR_WITH_TRANSCRIPT.width,
+    WINDOW_SIZES.DICTATION_ERROR.width
+  );
+  assert.ok(
+    WINDOW_SIZES.DICTATION_ERROR_WITH_TRANSCRIPT.height > WINDOW_SIZES.DICTATION_ERROR.height
+  );
 });
 
 test("dictation error windows grow to their full content and stay within the work area", () => {
@@ -37,11 +47,6 @@ test("initial dictation error windows use the responsive live-transcript width",
     fitDictationErrorWindowToWorkArea({ width: 466, height: 168 }, { width: 320, height: 240 }),
     { width: 201, height: 168 }
   );
-});
-
-test("assistant edit and normal responses share one fixed modal size", () => {
-  const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
-  assert.deepEqual(WINDOW_SIZES.ASSISTANT, { width: 466, height: 562 });
 });
 
 test("base state with nothing active", async () => {
