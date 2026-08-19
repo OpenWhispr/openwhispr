@@ -16,11 +16,7 @@ function resolveOverlayWindowType({ role, platform, linuxSession }) {
 
   // Sway asks wlroots whether an unmanaged XWayland surface wants focus.
   // "toolbar" opts in; "notification" keeps the existing text field focused.
-  if (
-    linuxSession.isSway &&
-    linuxSession.xwaylandAvailable &&
-    FOCUSLESS_OVERLAY_ROLES.has(role)
-  ) {
+  if (linuxSession.isSway && linuxSession.xwaylandAvailable && FOCUSLESS_OVERLAY_ROLES.has(role)) {
     return "notification";
   }
 
