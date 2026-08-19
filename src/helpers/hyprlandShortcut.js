@@ -432,14 +432,14 @@ class HyprlandShortcutManager {
         timeout: 5000,
       });
       if (isPushToTalk) {
-        execFileSync("hyprctl", [
-          "keyword",
-          "bindrt",
-          `${converted.bindKey}, exec, ${releaseCommand}`,
-        ], {
-          stdio: "pipe",
-          timeout: 5000,
-        });
+        execFileSync(
+          "hyprctl",
+          ["keyword", "bindrt", `${converted.bindKey}, exec, ${releaseCommand}`],
+          {
+            stdio: "pipe",
+            timeout: 5000,
+          }
+        );
       }
 
       this.currentBinding = converted.bindKey;
@@ -452,14 +452,13 @@ class HyprlandShortcutManager {
                 pressCommand
               )})${isPushToTalk ? ", { transparent = true }" : ""})`
             : `${isPushToTalk ? "bindt" : "bind"} = ${bindValue}`;
-        const persistedReleaseBind =
-          !isPushToTalk
-            ? null
-            : this.config.format === "lua"
-              ? `hl.bind(${JSON.stringify(converted.luaKeys)}, hl.dsp.exec_cmd(${JSON.stringify(
-                  releaseCommand
-                )}), { release = true, transparent = true })`
-              : `bindrt = ${converted.bindKey}, exec, ${releaseCommand}`;
+        const persistedReleaseBind = !isPushToTalk
+          ? null
+          : this.config.format === "lua"
+            ? `hl.bind(${JSON.stringify(converted.luaKeys)}, hl.dsp.exec_cmd(${JSON.stringify(
+                releaseCommand
+              )}), { release = true, transparent = true })`
+            : `bindrt = ${converted.bindKey}, exec, ${releaseCommand}`;
         this._writeBindToConfig(
           this.config,
           [persistedBind, persistedReleaseBind].filter(Boolean).join("\n")
