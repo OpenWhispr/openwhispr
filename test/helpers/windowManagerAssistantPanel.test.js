@@ -73,6 +73,7 @@ function makeManager(windowState) {
   const fake = fakeWindow(windowState);
   manager.mainWindow = fake.window;
   manager.enforceMainWindowOnTop = () => undefined;
+  manager._notifyMainWindowHorizontalDirection = () => undefined;
   return { manager, calls: fake.calls };
 }
 
@@ -104,4 +105,21 @@ test("hideDictationPanel refuses while an assistant command is busy or the panel
   calls.length = 0;
   manager.hideDictationPanel();
   assert.deepEqual(calls, ["hide"]);
+});
+
+test("a zero-movement click does not mark the pill as manually positioned", async () => {
+  const { manager } = makeManager({ visible: true });
+  await manager.startWindowDrag();
+  await manager.stopWindowDrag();
+  assert.equal(manager._mainWindowPlacementCoordinator._hasManualPosition, false);
+});
+
+test("a real drag marks the pill as manually positioned", async () => {
+  const { manager } = makeManager({ visible: true });
+  let bounds = { x: 0, y: 0, width: 96, height: 96 };
+  manager.mainWindow.getBounds = () => bounds;
+  await manager.startWindowDrag();
+  bounds = { x: 120, y: 40, width: 96, height: 96 };
+  await manager.stopWindowDrag();
+  assert.equal(manager._mainWindowPlacementCoordinator._hasManualPosition, true);
 });

@@ -18,6 +18,7 @@ const {
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
 const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
+const DRAG_MOVE_TOLERANCE_PX = 2;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -959,6 +960,8 @@ class WindowManager {
     // A lookup started by a prior hotkey must never land while the user is
     // taking ownership of the panel position.
     this._mainWindowPlacementCoordinator.cancelPending();
+    this._dragStartBounds =
+      this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : null;
     return await this.dragManager.startWindowDrag();
   }
 
@@ -966,10 +969,20 @@ class WindowManager {
     const result = await this.dragManager.stopWindowDrag();
     if (result.success && this.mainWindow && !this.mainWindow.isDestroyed()) {
       const draggedBounds = this.mainWindow.getBounds();
-      this._mainWindowPlacementCoordinator.markManuallyPositioned();
-      this._baseBoundsBeforeResize = null;
-      this._lastResizeBounds = { ...draggedBounds };
+      const start = this._dragStartBounds;
+      // Every pill click goes through start/stopWindowDrag; only an actual
+      // move hands position ownership to the user.
+      const moved =
+        !start ||
+        Math.abs(draggedBounds.x - start.x) > DRAG_MOVE_TOLERANCE_PX ||
+        Math.abs(draggedBounds.y - start.y) > DRAG_MOVE_TOLERANCE_PX;
+      if (moved) {
+        this._mainWindowPlacementCoordinator.markManuallyPositioned();
+        this._baseBoundsBeforeResize = null;
+        this._lastResizeBounds = { ...draggedBounds };
+      }
     }
+    this._dragStartBounds = null;
     this._activeHorizontalDirection = null;
     this._notifyMainWindowHorizontalDirection();
     return result;
