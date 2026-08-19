@@ -590,6 +590,10 @@
         "title": "Aucun audio détecté",
         "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."
       },
+      "pasteLastEmpty": {
+        "title": "Rien à coller",
+        "description": "Votre historique de transcriptions est vide. Dictez d'abord quelque chose."
+      },
       "micDisconnected": {
         "title": "Microphone déconnecté",
         "description": "L'enregistrement est toujours actif et reprendra dès qu'un microphone sera disponible.",
@@ -2044,6 +2048,10 @@
       "translationHotkey": {
         "title": "Raccourci de Traduction",
         "description": "Dictez dans n'importe quelle langue : le texte collé ressort traduit"
+      },
+      "pasteLastHotkey": {
+        "title": "Raccourci Coller la Dernière Transcription",
+        "description": "Collez à nouveau votre dernière transcription là où se trouve le curseur"
       }
     },
     "permissions": {

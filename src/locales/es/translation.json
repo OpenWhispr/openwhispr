@@ -590,6 +590,10 @@
         "title": "No se detectó audio",
         "description": "La grabación no contiene audio detectable. Inténtalo de nuevo."
       },
+      "pasteLastEmpty": {
+        "title": "Nada que pegar",
+        "description": "Tu historial de transcripciones está vacío. Dicta algo primero."
+      },
       "micDisconnected": {
         "title": "Micrófono desconectado",
         "description": "La grabación sigue activa y se reanudará cuando haya un micrófono disponible.",
@@ -1809,6 +1813,10 @@
       "translationHotkey": {
         "title": "Atajo de Traducción",
         "description": "Dicta en cualquier idioma: el texto pegado sale traducido"
+      },
+      "pasteLastHotkey": {
+        "title": "Atajo para Pegar la Última Transcripción",
+        "description": "Pega de nuevo tu última transcripción donde esté el cursor"
       }
     },
     "permissions": {

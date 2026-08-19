@@ -590,6 +590,10 @@
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"
       },
+      "pasteLastEmpty": {
+        "title": "没有可粘贴的内容",
+        "description": "转录历史为空，请先进行听写。"
+      },
       "micDisconnected": {
         "title": "麦克风已断开",
         "description": "录音仍在进行中，麦克风可用后将自动恢复。",
@@ -1761,6 +1765,10 @@
       "translationHotkey": {
         "title": "翻译快捷键",
         "description": "用任何语言听写——粘贴的文本会自动翻译"
+      },
+      "pasteLastHotkey": {
+        "title": "粘贴上次转录快捷键",
+        "description": "在光标位置再次粘贴最近一次转录的文本"
       }
     },
     "permissions": {

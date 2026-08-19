@@ -590,6 +590,10 @@
         "title": "Nessun audio rilevato",
         "description": "La registrazione non contiene audio rilevabile. Riprova."
       },
+      "pasteLastEmpty": {
+        "title": "Niente da incollare",
+        "description": "La cronologia delle trascrizioni è vuota. Detta prima qualcosa."
+      },
       "micDisconnected": {
         "title": "Microfono disconnesso",
         "description": "La registrazione è ancora attiva e riprenderà quando sarà disponibile un microfono.",
@@ -1761,6 +1765,10 @@
       "translationHotkey": {
         "title": "Hotkey Traduzione",
         "description": "Detta in qualsiasi lingua: il testo incollato esce tradotto"
+      },
+      "pasteLastHotkey": {
+        "title": "Hotkey Incolla Ultima Trascrizione",
+        "description": "Incolla di nuovo l'ultima trascrizione dove si trova il cursore"
       }
     },
     "permissions": {

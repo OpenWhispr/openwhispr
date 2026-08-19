@@ -27,6 +27,10 @@ const SLOT_CONFIG = {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-translation/",
     name: "OpenWhispr Translation",
   },
+  pasteLast: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-paste-last/",
+    name: "OpenWhispr Paste Last Transcription",
+  },
 };
 
 const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
@@ -133,6 +137,7 @@ class GnomeShortcutManager {
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
     this.translationCallback = null;
+    this.pasteLastCallback = null;
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -173,6 +178,11 @@ class GnomeShortcutManager {
   setTranslationCallback(callback) {
     this.translationCallback = callback;
     debugLogger.log("[GnomeShortcut] Translation callback registered");
+  }
+
+  setPasteLastCallback(callback) {
+    this.pasteLastCallback = callback;
+    debugLogger.log("[GnomeShortcut] Paste last transcription callback registered");
   }
 
   async initDBusService(dictationCallback) {
@@ -219,6 +229,11 @@ class GnomeShortcutManager {
               this.translationCallback();
             }
           },
+          PasteLastTranscription: () => {
+            if (this.pasteLastCallback) {
+              this.pasteLastCallback();
+            }
+          },
         },
         DBUS_OBJECT_PATH,
         {
@@ -229,6 +244,7 @@ class GnomeShortcutManager {
             ToggleMeeting: ["", ""],
             ToggleVoiceAgent: ["", ""],
             ToggleTranslation: ["", ""],
+            PasteLastTranscription: ["", ""],
           },
         }
       );
@@ -273,6 +289,7 @@ class GnomeShortcutManager {
       meeting: "ToggleMeeting",
       voiceAgent: "ToggleVoiceAgent",
       translation: "ToggleTranslation",
+      pasteLast: "PasteLastTranscription",
     };
     const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
     const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;

@@ -512,6 +512,18 @@ class WindowManager {
     this._sendDictationToggle("toggle-translation");
   }
 
+  sendPasteLastTranscription() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      // Refresh the paste target at press time so the paste path activates the
+      // app under the hotkey, not a stale PID from an earlier dictation.
+      if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+      this.mainWindow.webContents.send("paste-last-transcription");
+    }
+  }
+
   sendStartDictation() {
     if (this.hotkeyManager.isInListeningMode()) {
       return;

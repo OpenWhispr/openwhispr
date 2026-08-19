@@ -9444,6 +9444,41 @@ class IPCHandlers {
       return this.environmentManager.getTranslationKey?.() || "";
     });
 
+    ipcMain.handle("update-paste-last-hotkey", async (_event, hotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const pasteLastCallback = this.windowManager._pasteLastHotkeyCallback;
+      if (!pasteLastCallback) {
+        return { success: false, message: "Paste last hotkey callback not initialized" };
+      }
+
+      if (!hotkey) {
+        hotkeyManager.unregisterSlot("pasteLast");
+        this.environmentManager.savePasteLastKey?.("");
+        this.windowManager.reconcileNativeKeyListeners();
+        this._notifyHotkeyChanged("");
+        return { success: true, message: "Paste last hotkey cleared" };
+      }
+
+      const result = await hotkeyManager.registerSlot("pasteLast", hotkey, pasteLastCallback, {
+        atomic: true,
+      });
+      this.windowManager.reconcileNativeKeyListeners();
+      if (result.success) {
+        this.environmentManager.savePasteLastKey?.(hotkey);
+        this._notifyHotkeyChanged(hotkey);
+        return { success: true, message: `Paste last hotkey updated to: ${hotkey}` };
+      }
+
+      return {
+        success: false,
+        message: result.error || `Failed to update paste last hotkey to: ${hotkey}`,
+      };
+    });
+
+    ipcMain.handle("get-paste-last-key", async () => {
+      return this.environmentManager.getPasteLastKey?.() || "";
+    });
+
     ipcMain.handle("get-agent-key", async () => {
       return this.environmentManager.getAgentKey?.() || "";
     });

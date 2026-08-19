@@ -590,6 +590,10 @@
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
       },
+      "pasteLastEmpty": {
+        "title": "貼り付けるものがありません",
+        "description": "文字起こし履歴が空です。まず何かを口述してください。"
+      },
       "micDisconnected": {
         "title": "マイクが切断されました",
         "description": "録音は継続中です。マイクが利用可能になると自動的に再開されます。",
@@ -1761,6 +1765,10 @@
       "translationHotkey": {
         "title": "翻訳ホットキー",
         "description": "どの言語で話しても、貼り付けられるテキストは翻訳済みになります"
+      },
+      "pasteLastHotkey": {
+        "title": "最後の文字起こしを貼り付けるホットキー",
+        "description": "最新の文字起こしをカーソル位置にもう一度貼り付けます"
       }
     },
     "permissions": {
