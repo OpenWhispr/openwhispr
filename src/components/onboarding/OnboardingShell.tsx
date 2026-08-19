@@ -33,22 +33,19 @@ interface CompactOnboardingFrameProps {
 
 /**
  * Minimise/close for the frameless window on Windows and Linux — macOS shows
- * its native traffic lights instead (the window manager keeps them visible
- * during onboarding). Close hides to the tray; the persisted session resumes
- * the flow on reopen, so this is never a way to lose progress.
+ * its native traffic lights instead (the window manager keeps them visible on
+ * the expanded scaffold). Close hides to the tray; the persisted session
+ * resumes the flow on reopen, so this is never a way to lose progress.
  *
- * `onHero` swaps the token-based tint for literal whites: the compact frame's
- * indigo hero stays indigo in both themes, exactly like its Skip button.
+ * Expanded scaffold only: the compact card (auth, permissions) is a fixed
+ * chromeless design and the window manager locks its chrome to match.
  */
-function OnboardingWindowControls({ onHero = false }: { onHero?: boolean }) {
+function OnboardingWindowControls() {
   const { t } = useTranslation();
   if (getPlatform() === "darwin") return null;
 
-  const buttonClass = `inline-flex size-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 ${
-    onHero
-      ? "text-white hover:bg-white/20 focus-visible:ring-white/70"
-      : "text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary)] focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
-  }`;
+  const buttonClass =
+    "inline-flex size-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary)] focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]";
 
   return (
     <div
@@ -190,7 +187,7 @@ export default function OnboardingShell({
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         aria-hidden="true"
       />
-      <OnboardingWindowControls onHero={compact} />
+      {!compact && <OnboardingWindowControls />}
 
       <div
         // Normally nothing scrolls here: each step sizes itself to the window and

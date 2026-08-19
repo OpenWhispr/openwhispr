@@ -1274,25 +1274,33 @@ class WindowManager {
   // Onboarding runs in a fixed-size window: no resize/zoom, so every step
   // renders at the bounds it was laid out for, but minimise and close stay
   // available (close goes to the tray and the flow resumes where it left off).
-  _applyOnboardingWindowChrome(win) {
-    // The window opens at the canonical compact/expanded bounds but stays a
-    // normal window: resizable (with the compact size as the floor — the
-    // smallest layout any step was designed for; the shell scrolls beyond
-    // that), maximizable, minimizable, closable (close hides to the tray, the
-    // persisted session resumes). Fullscreen stays off so the macOS zoom
-    // button maximizes instead of moving setup to its own Space.
-    win.setResizable(true);
-    win.setMinimizable(true);
-    win.setMaximizable(true);
-    win.setClosable(true);
+  _applyOnboardingWindowChrome(win, mode) {
+    // Two scaffolds. Compact (auth, permissions) is a small fixed card: no
+    // resize, no window buttons — the original chromeless design. Expanded
+    // (languages onward) behaves like a normal window: resizable with the
+    // expanded size as the floor, maximizable, minimizable, closable (close
+    // hides to the tray; the persisted session resumes). Fullscreen stays off
+    // in both so the macOS zoom button maximizes instead of moving setup to
+    // its own Space. OnboardingShell mirrors this split for the frameless
+    // Windows/Linux window: it draws its minimise/close controls on the
+    // expanded scaffold only.
+    const expanded = mode === "expanded";
+    win.setResizable(expanded);
+    win.setMinimizable(expanded);
+    win.setMaximizable(expanded);
+    win.setClosable(expanded);
     win.setFullScreenable(false);
+    // Floor at the mode's canonical size so no step renders below the bounds
+    // it was designed for — clamped to the work area, or a 1366x768-class
+    // display could never fit (and setContentBounds would fight the minimum).
+    const floor = expanded ? ONBOARDING_WINDOW_SIZES.EXPANDED : ONBOARDING_WINDOW_SIZES.COMPACT;
+    const { workArea } = screen.getDisplayMatching(win.getBounds());
     win.setMinimumSize(
-      ONBOARDING_WINDOW_SIZES.COMPACT.width,
-      ONBOARDING_WINDOW_SIZES.COMPACT.height
+      Math.min(floor.width, workArea.width),
+      Math.min(floor.height, workArea.height)
     );
     if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
-      // Windows/Linux are frameless; OnboardingShell draws its own controls.
-      win.setWindowButtonVisibility(true);
+      win.setWindowButtonVisibility(expanded);
     }
   }
 
@@ -1349,7 +1357,7 @@ class WindowManager {
       };
     }
 
-    this._applyOnboardingWindowChrome(win);
+    this._applyOnboardingWindowChrome(win, mode);
 
     if (this._onboardingWindowMode === mode) {
       this._showControlPanel();
