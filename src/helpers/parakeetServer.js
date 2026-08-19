@@ -11,6 +11,7 @@ const {
   computeFloat32RMS,
 } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
+const { createAbortError } = require("./abortError");
 const ParakeetWsServer = require("./parakeetWsServer");
 const { getModelRuntime, REQUIRED_MODEL_FILES } = require("./parakeetModelInfo");
 
@@ -88,7 +89,12 @@ class ParakeetServerManager {
   }
 
   async transcribe(audioBuffer, options = {}) {
-    const { modelName = "parakeet-tdt-0.6b-v3" } = options;
+    // signal is optional; only cancellable uploads pass one. Aborting stops
+    // scheduling further segments — the in-flight one finishes server-side.
+    const { modelName = "parakeet-tdt-0.6b-v3", signal } = options;
+    const throwIfAborted = () => {
+      if (signal?.aborted) throw createAbortError("Parakeet transcription cancelled");
+    };
 
     const modelDir = path.join(this.getModelsDir(), modelName);
     if (!this.isModelDownloaded(modelName)) {
@@ -101,8 +107,12 @@ class ParakeetServerManager {
       isWavFormat: isWavFormat(audioBuffer),
     });
 
+    // An already-cancelled upload skips the ffmpeg conversion entirely.
+    throwIfAborted();
+
     const { wavBuffer, filesToCleanup } = await this._ensureWav(audioBuffer);
     try {
+      throwIfAborted();
       const runtime = getModelRuntime(modelName);
       // Awaiting unconditionally also covers a startup's warm-up completion.
       await this.wsServer.start(modelName, modelDir, runtime);
@@ -121,8 +131,9 @@ class ParakeetServerManager {
       const maxSegmentBytes = maxSegmentSeconds * SAMPLE_RATE * BYTES_PER_SAMPLE;
 
       if (samples.length <= maxSegmentBytes) {
-        const result = await this.wsServer.transcribe(samples, SAMPLE_RATE);
+        const result = await this.wsServer.transcribe(samples, SAMPLE_RATE, { signal });
         if (result.text?.trim()) return result;
+        throwIfAborted();
         // The RMS gate above already established audible audio, so an empty
         // decode here loses the whole dictation — retry once before giving up.
         debugLogger.warn("Parakeet returned empty text for non-silent audio, retrying", {
@@ -130,7 +141,7 @@ class ParakeetServerManager {
           rms,
           samplesBytes: samples.length,
         });
-        const retry = await this.wsServer.transcribe(samples, SAMPLE_RATE);
+        const retry = await this.wsServer.transcribe(samples, SAMPLE_RATE, { signal });
         return { ...retry, elapsed: (result.elapsed || 0) + (retry.elapsed || 0) };
       }
 
@@ -144,18 +155,20 @@ class ParakeetServerManager {
       let truncated = false;
 
       for (let offset = 0; offset < samples.length; offset += maxSegmentBytes) {
+        throwIfAborted();
         const end = Math.min(offset + maxSegmentBytes, samples.length);
         const segment = samples.subarray(offset, end);
-        let result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
+        let result = await this.wsServer.transcribe(segment, SAMPLE_RATE, { signal });
         totalElapsed += result.elapsed || 0;
         if (!result.text && computeFloat32RMS(segment) >= SILENCE_RMS_THRESHOLD) {
+          throwIfAborted();
           // An empty decode of audible audio silently amputates the transcript
           // (#1435: dictation openings dropped); retry once before conceding.
           debugLogger.warn("Parakeet segment returned empty text, retrying", {
             segmentIndex: offset / maxSegmentBytes,
             segmentDuration: segment.length / BYTES_PER_SAMPLE / SAMPLE_RATE,
           });
-          result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
+          result = await this.wsServer.transcribe(segment, SAMPLE_RATE, { signal });
           totalElapsed += result.elapsed || 0;
           if (!result.text) {
             truncated = true;

@@ -548,7 +548,9 @@
     },
     "parakeet": {
       "multilingual": "25 языков",
-      "english": "Английский"
+      "english": "Английский",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "Недоступно"
     },
     "apiKeyOptional": "API-ключ (необязательно)",
     "getKey": "Получить ключ ->",
@@ -1847,6 +1849,10 @@
         "noteFormatting": "Форматирование заметок",
         "chatIntelligence": "Чат",
         "dictationTranslation": "Перевод"
+      },
+      "requestTimeout": {
+        "label": "Тайм-аут запроса (секунды)",
+        "description": "Как долго ждать ответа, прежде чем отменить запрос. Локальным или self-hosted моделям может потребоваться больше стандартных 30 секунд, особенно для длинных заметок."
       }
     },
     "noteFormatting": {

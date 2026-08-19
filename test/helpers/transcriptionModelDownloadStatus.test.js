@@ -23,6 +23,153 @@ function activeDownload(model, overrides = {}) {
   };
 }
 
+function stubMacosVersion(t, version) {
+  const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  const systemVersionDescriptor = Object.getOwnPropertyDescriptor(process, "getSystemVersion");
+
+  Object.defineProperty(process, "platform", { configurable: true, value: "darwin" });
+  Object.defineProperty(process, "getSystemVersion", {
+    configurable: true,
+    value: () => version,
+  });
+
+  t.after(() => {
+    Object.defineProperty(process, "platform", platformDescriptor);
+    if (systemVersionDescriptor) {
+      Object.defineProperty(process, "getSystemVersion", systemVersionDescriptor);
+    } else {
+      delete process.getSystemVersion;
+    }
+  });
+}
+
+test("Parakeet reports its packaged runtime as unsupported on macOS below 15.5", async (t) => {
+  stubMacosVersion(t, "12.7.6");
+  const manager = new ParakeetManager();
+  manager.serverManager.getBinaryPath = () => "/Applications/OpenWhispr.app/parakeet";
+
+  const result = await manager.checkInstallation();
+
+  assert.deepEqual(result, {
+    installed: true,
+    working: false,
+    supported: false,
+    code: "PARAKEET_UNSUPPORTED_OS",
+    message:
+      "Parakeet requires macOS 15.5 or later. Use cloud transcription (or Whisper where supported) on this Mac.",
+    minimumMacOSVersion: "15.5",
+  });
+});
+
+test("Parakeet refuses explicit server startup on unsupported macOS", async (t) => {
+  stubMacosVersion(t, "12.7.6");
+  const manager = new ParakeetManager();
+  const model = Object.keys(modelRegistryData.parakeetModels)[0];
+  let startCalls = 0;
+  manager.serverManager.startServer = async () => {
+    startCalls += 1;
+    return { success: true };
+  };
+
+  const result = await manager.startServer(model);
+
+  assert.deepEqual(result, {
+    success: false,
+    code: "PARAKEET_UNSUPPORTED_OS",
+    reason:
+      "Parakeet requires macOS 15.5 or later. Use cloud transcription (or Whisper where supported) on this Mac.",
+  });
+  assert.equal(startCalls, 0);
+});
+
+test("Parakeet refuses a missing-model download before filesystem or download setup", async (t) => {
+  stubMacosVersion(t, "12.7.6");
+  const manager = new ParakeetManager();
+  const model = Object.keys(modelRegistryData.parakeetModels)[0];
+  let modelStatusChecks = 0;
+  let modelDirectoryChecks = 0;
+  manager.serverManager.isModelDownloaded = () => {
+    modelStatusChecks += 1;
+    return false;
+  };
+  manager.getModelsDir = () => {
+    modelDirectoryChecks += 1;
+    throw new Error("unexpected model-directory access");
+  };
+
+  await assert.rejects(
+    manager.downloadParakeetModel(model),
+    (error) =>
+      error.code === "PARAKEET_UNSUPPORTED_OS" &&
+      error.message ===
+        "Parakeet requires macOS 15.5 or later. Use cloud transcription (or Whisper where supported) on this Mac."
+  );
+  assert.equal(modelStatusChecks, 0);
+  assert.equal(modelDirectoryChecks, 0);
+});
+
+test("Parakeet refuses streaming startup on unsupported macOS", async (t) => {
+  stubMacosVersion(t, "12.7.6");
+  const manager = new ParakeetManager();
+  const model = Object.keys(modelRegistryData.parakeetModels).find((candidate) =>
+    manager.supportsOnlineStreaming(candidate)
+  );
+  let startCalls = 0;
+  manager.serverManager.startServer = async () => {
+    startCalls += 1;
+    return { success: true };
+  };
+
+  await assert.rejects(
+    manager.createOnlineStream(model),
+    (error) => error.code === "PARAKEET_UNSUPPORTED_OS"
+  );
+  assert.equal(startCalls, 0);
+});
+
+test("Parakeet refuses transcription before touching the sidecar on unsupported macOS", async (t) => {
+  stubMacosVersion(t, "12.7.6");
+  const manager = new ParakeetManager();
+  const model = Object.keys(modelRegistryData.parakeetModels)[0];
+  let transcribeCalls = 0;
+  manager.serverManager.isAvailable = () => true;
+  manager.serverManager.isModelDownloaded = () => true;
+  manager.serverManager.transcribe = async () => {
+    transcribeCalls += 1;
+    return { text: "unexpected" };
+  };
+
+  await assert.rejects(
+    manager.transcribeLocalParakeet(Buffer.from("audio"), { model }),
+    (error) => error.code === "PARAKEET_UNSUPPORTED_OS"
+  );
+  assert.equal(transcribeCalls, 0);
+});
+
+test("Parakeet skips startup prewarming on unsupported macOS", async (t) => {
+  stubMacosVersion(t, "12.7.6");
+  const modelsDir = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-parakeet-capability-"));
+  t.after(() => fs.rm(modelsDir, { recursive: true, force: true }));
+  const manager = new ParakeetManager();
+  const model = Object.keys(modelRegistryData.parakeetModels)[0];
+  let startCalls = 0;
+  manager.getModelsDir = () => modelsDir;
+  manager.logDependencyStatus = async () => {};
+  manager.serverManager.isAvailable = () => true;
+  manager.serverManager.isModelDownloaded = () => true;
+  manager.serverManager.startServer = async () => {
+    startCalls += 1;
+    return { success: true };
+  };
+
+  await manager.initializeAtStartup({
+    localTranscriptionProvider: "nvidia",
+    parakeetModel: model,
+  });
+
+  assert.equal(startCalls, 0);
+});
+
 test("listParakeetModels surfaces active installation state", async () => {
   const manager = new ParakeetManager();
   const model = Object.keys(modelRegistryData.parakeetModels)[0];

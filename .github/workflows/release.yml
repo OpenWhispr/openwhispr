@@ -382,6 +382,7 @@ jobs:
           for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-text-monitor macos-media-remote; do
             test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
           done
+          node scripts/verify-macos-parakeet.js "$APP_PATH"
 
       - name: Upload arch-specific update metadata
         env:

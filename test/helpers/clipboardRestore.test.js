@@ -247,6 +247,47 @@ test("pasteText waits for prior clipboard restoration before starting the next p
   assert.deepEqual(events, ["start:first", "end:first", "start:second", "end:second"]);
 });
 
+test("pasteWithFastPaste passes --restore-window <hwnd> when targetWindow is set (#859)", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager._restoreClipboardAfterDelay = () => Promise.resolve();
+
+  const result = await manager.pasteWithFastPaste(
+    "/tmp/windows-fast-paste.exe",
+    { type: "text", data: "previous clipboard" },
+    // Hex id: the binary prints "TARGET %p" (hex) from --detect-only and parses
+    // --restore-window with strtoull base 16, so the handle stays hex end to end.
+    { expectedClipboardText: "dictated text", targetWindow: "1A2B3C" }
+  );
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "/tmp/windows-fast-paste.exe");
+  assert.deepEqual(spawnCalls[0].args, ["--restore-window", "1A2B3C"]);
+});
+
+test("pasteWithFastPaste sends no args when nothing was captured", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager._restoreClipboardAfterDelay = () => Promise.resolve();
+
+  const result = await manager.pasteWithFastPaste(
+    "/tmp/windows-fast-paste.exe",
+    { type: "text", data: "previous clipboard" },
+    { expectedClipboardText: "dictated text" }
+  );
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.deepEqual(spawnCalls[0].args, []);
+});
+
 test("Hyprland paste uses the current symbolic shortcut dispatcher", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({

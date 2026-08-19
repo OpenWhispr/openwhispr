@@ -548,7 +548,9 @@
     },
     "parakeet": {
       "multilingual": "25 languages",
-      "english": "English"
+      "english": "English",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "Unavailable"
     },
     "apiKeyOptional": "API Key (Optional)",
     "getKey": "Get key ->",
@@ -2124,6 +2126,10 @@
         "noteFormatting": "Note Formatting",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Translation"
+      },
+      "requestTimeout": {
+        "label": "Request timeout (seconds)",
+        "description": "How long to wait for a response before giving up. Self-hosted or local models may need more than the default 30s, especially for long notes."
       }
     },
     "noteFormatting": {

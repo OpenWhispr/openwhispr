@@ -943,7 +943,10 @@ class ClipboardManager {
           const nircmdPath = this.getNircmdPath();
           method = nircmdPath ? "nircmd" : "powershell";
         }
-        pasteResult = await this.pasteWindows(originalClipboard, { expectedClipboardText: text });
+        pasteResult = await this.pasteWindows(originalClipboard, {
+          expectedClipboardText: text,
+          targetWindow: options.targetWindow,
+        });
       } else {
         pasteResult = await this.pasteLinux(originalClipboard, {
           ...options,
@@ -1125,9 +1128,17 @@ class ClipboardManager {
         let hasTimedOut = false;
         const startTime = Date.now();
 
-        this.safeLog("⚡ Windows fast-paste starting");
+        // Restore the window captured at record start (#859) so the paste lands
+        // where the user was dictating even if focus drifted during
+        // transcription. The hex handle comes from --detect-only's TARGET line
+        // via selectionManager. An older cached binary ignores the unknown flag
+        // and pastes into the current foreground — the pre-fix behavior.
+        const args =
+          options.targetWindow != null ? ["--restore-window", String(options.targetWindow)] : [];
 
-        const pasteProcess = spawn(fastPastePath, [], {
+        this.safeLog("⚡ Windows fast-paste starting", { targetWindow: options.targetWindow });
+
+        const pasteProcess = spawn(fastPastePath, args, {
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,
         });

@@ -548,7 +548,9 @@
     },
     "parakeet": {
       "multilingual": "25 idiomas",
-      "english": "Inglés"
+      "english": "Inglés",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "No disponible"
     },
     "apiKeyOptional": "Clave API (opcional)",
     "getKey": "Obtener clave ->",
@@ -1889,6 +1891,10 @@
         "noteFormatting": "Formato de notas",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Traducción"
+      },
+      "requestTimeout": {
+        "label": "Tiempo de espera de la solicitud (segundos)",
+        "description": "Cuánto tiempo esperar una respuesta antes de desistir. Los modelos autoalojados o locales pueden necesitar más de los 30 s predeterminados, sobre todo con notas largas."
       }
     },
     "noteFormatting": {

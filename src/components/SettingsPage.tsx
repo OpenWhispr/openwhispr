@@ -110,6 +110,11 @@ import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
+import {
+  LLM_REQUEST_TIMEOUT_SECONDS_MIN,
+  LLM_REQUEST_TIMEOUT_SECONDS_MAX,
+  resolveLlmRequestTimeoutSeconds,
+} from "../helpers/llmRequestTimeout.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
@@ -355,8 +360,8 @@ function TranscriptionSection({
   };
 
   const handleLocalModelSelect = useCallback(
-    (modelId: string) => {
-      if (localTranscriptionProvider === "nvidia") {
+    (modelId: string, providerId?: string) => {
+      if (providerId === "nvidia" || (!providerId && localTranscriptionProvider === "nvidia")) {
         setParakeetModel(modelId);
       } else {
         setWhisperModel(modelId);
@@ -669,6 +674,8 @@ function LlmsTabs({
 }) {
   const { t } = useTranslation();
   const agentAllowed = usePolicyStore(isAgentAllowed);
+  const llmRequestTimeoutSeconds = useSettingsStore((s) => s.llmRequestTimeoutSeconds);
+  const setLlmRequestTimeoutSeconds = useSettingsStore((s) => s.setLlmRequestTimeoutSeconds);
   const visibleTabIds = agentAllowed
     ? LLM_TABS
     : LLM_TABS.filter((tabId) => !AGENT_LLM_TABS.has(tabId));
@@ -709,6 +716,35 @@ function LlmsTabs({
       {agentAllowed && (
         <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
       )}
+
+      {/* Applies to every scope above — the timeout setting is global, not per-scope. */}
+      <div className="border-t border-border/40 pt-4 mt-4">
+        <SettingsPanel>
+          <SettingsPanelRow>
+            <SettingsRow
+              label={t("settingsPage.llms.requestTimeout.label")}
+              description={t("settingsPage.llms.requestTimeout.description")}
+            >
+              <Input
+                type="number"
+                min={LLM_REQUEST_TIMEOUT_SECONDS_MIN}
+                max={LLM_REQUEST_TIMEOUT_SECONDS_MAX}
+                step={5}
+                value={llmRequestTimeoutSeconds}
+                onChange={(e) => setLlmRequestTimeoutSeconds(Number(e.target.value))}
+                // Clamp on blur so the stored value always matches the effective
+                // one (point of use clamps to 10-600s; a cleared field stores 0).
+                onBlur={() =>
+                  setLlmRequestTimeoutSeconds(
+                    resolveLlmRequestTimeoutSeconds(llmRequestTimeoutSeconds)
+                  )
+                }
+                className="w-20"
+              />
+            </SettingsRow>
+          </SettingsPanelRow>
+        </SettingsPanel>
+      </div>
     </div>
   );
 }

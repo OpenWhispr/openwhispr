@@ -9,6 +9,10 @@ const {
   parseArgs,
   setExecutable,
 } = require("./lib/download-utils");
+const {
+  PARAKEET_MINIMUM_MACOS_VERSION,
+  compareVersions,
+} = require("../src/helpers/parakeetCapability");
 
 const SHERPA_ONNX_VERSION = "1.13.4";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
@@ -62,6 +66,7 @@ const BINARIES = {
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
 const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/;
+const REQUIRED_MACOS_ARCHITECTURES = ["x86_64", "arm64"];
 
 // Upstream 1.13.4 ships an invalid arm64 signature on libonnxruntime; dyld SIGKILLs unsigned loads.
 function adhocSign(filePath, platformArch) {
@@ -71,6 +76,80 @@ function adhocSign(filePath, platformArch) {
 
 function getDownloadUrl(archiveName) {
   return `${GITHUB_RELEASE_URL}/${archiveName}`;
+}
+
+function parseMacosDeploymentTargets(vtoolOutput) {
+  const targets = [];
+  let architecture = null;
+  let isMacosBuildVersion = false;
+
+  for (const line of String(vtoolOutput).split("\n")) {
+    const architectureMatch = line.match(/\(architecture ([^)]+)\):\s*$/);
+    if (architectureMatch) {
+      architecture = architectureMatch[1];
+      isMacosBuildVersion = false;
+      continue;
+    }
+
+    if (/^\s*platform MACOS\s*$/.test(line)) {
+      isMacosBuildVersion = true;
+      continue;
+    }
+
+    const minimumMatch = line.match(/^\s*minos (\S+)\s*$/);
+    if (architecture && isMacosBuildVersion && minimumMatch) {
+      targets.push({ architecture, minimumVersion: minimumMatch[1] });
+      isMacosBuildVersion = false;
+    }
+  }
+
+  return targets;
+}
+
+function validateMacosDeploymentTargets(targets) {
+  const architectures = new Set(targets.map((target) => target.architecture));
+  for (const architecture of REQUIRED_MACOS_ARCHITECTURES) {
+    if (!architectures.has(architecture)) {
+      throw new Error(`ONNX Runtime is missing required architecture: ${architecture}`);
+    }
+  }
+
+  for (const target of targets) {
+    if (compareVersions(target.minimumVersion, PARAKEET_MINIMUM_MACOS_VERSION) !== 0) {
+      throw new Error(
+        `${target.architecture} requires macOS ${target.minimumVersion}, but the Parakeet capability gate is ${PARAKEET_MINIMUM_MACOS_VERSION}`
+      );
+    }
+  }
+
+  return {
+    architectures: [...architectures],
+    minimumVersion: PARAKEET_MINIMUM_MACOS_VERSION,
+  };
+}
+
+function verifyPackagedMacosParakeet(
+  appPath,
+  {
+    readDirectory = fs.readdirSync,
+    runVtool = (libraryPath) =>
+      execFileSync("xcrun", ["vtool", "-show-build", libraryPath], { encoding: "utf8" }),
+  } = {}
+) {
+  const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
+  const libraries = readDirectory(binDirectory).filter((fileName) =>
+    /^libonnxruntime\.\d+(?:\.\d+)*\.dylib$/.test(fileName)
+  );
+
+  if (libraries.length !== 1) {
+    throw new Error(
+      `Expected one versioned ONNX Runtime library in ${binDirectory}, found ${libraries.length}`
+    );
+  }
+
+  const libraryPath = path.join(binDirectory, libraries[0]);
+  const targets = parseMacosDeploymentTargets(runVtool(libraryPath));
+  return { ...validateMacosDeploymentTargets(targets), libraryPath };
 }
 
 function extractTarBz2(archivePath, destDir) {
@@ -160,7 +239,10 @@ async function downloadBinary(platformArch, config, isForce = false) {
   const diarizeOutputPath = path.join(BIN_DIR, config.diarizeOutputName);
   const installMarkerPath = path.join(BIN_DIR, `.sherpa-onnx-${platformArch}.json`);
 
-  if (!isForce && isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath])) {
+  if (
+    !isForce &&
+    isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath])
+  ) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
@@ -316,6 +398,9 @@ module.exports = {
   BINARIES,
   BIN_DIR,
   getDownloadUrl,
+  parseMacosDeploymentTargets,
+  validateMacosDeploymentTargets,
+  verifyPackagedMacosParakeet,
 };
 
 // Only run main() when executed directly
