@@ -30,7 +30,6 @@ export function shouldShowByokStreamingPreview(
   voiceAgentRequested = false
 ): boolean {
   return (
-    shouldDisplayDictationPreview(enabled, voiceAgentRequested) &&
-    cloudTranscriptionMode === "byok"
+    shouldDisplayDictationPreview(enabled, voiceAgentRequested) && cloudTranscriptionMode === "byok"
   );
 }

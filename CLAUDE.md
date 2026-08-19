@@ -172,6 +172,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 ### React Hooks (src/hooks/)
 
 - **useAudioRecording.js**: MediaRecorder API wrapper with error handling
+- **useAssistantPanel.js**: Assistant panel lifecycle (open/close choreography, thinking flourish, footer phases, pending voice commands, conversation session boundaries)
+- **useLiveTranscriptPanel.js**: Live transcript panel lifecycle (entrance choreography, buffered text scheduler, measure-then-reveal resize pipeline, preview IPC wiring)
+- **useMainWindowSizeOwner.js**: Single owner of the main window size ladder (panel > menu > toast > pill > base) and the dictation-error pill handoff
+- **useWindowResizeCompensation.js**: Masks split native setBounds frames via CSS-variable counter-translation
+- **useMainProcessNotifications.jsx**: Main-process notifications (hotkey fallback, GPU fallback, learned corrections) as toasts
 - **useClipboard.ts**: Clipboard operations hook
 - **useDialogs.ts**: Electron dialog integration
 - **useHotkey.js**: Hotkey state management
