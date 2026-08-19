@@ -13,6 +13,7 @@ import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../con
 import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
+import { resolveCleanupText } from "../helpers/cleanupAnswerGuard.js";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
@@ -491,6 +492,20 @@ class ReasoningService extends BaseReasoningService {
         processingTimeMs: Date.now() - startTime,
         resultLength: result.length,
       });
+
+      // Length comparison needs think-blocks stripped, so only guard when they are.
+      const cleanupGuardEligible = !config.systemPrompt && config.disableThinking !== false;
+      if (cleanupGuardEligible) {
+        return resolveCleanupText(text, result, {
+          hasCustomPrompt: !!getSettings().customPrompts.cleanup,
+          onSuspect: (metrics: { inputLength: number; responseLength: number }) =>
+            logger.logReasoning("CLEANUP_ANSWER_GUARD", {
+              provider: providerId,
+              model: trimmedModel,
+              ...metrics,
+            }),
+        });
+      }
 
       return result;
     } catch (error) {
