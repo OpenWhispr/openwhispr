@@ -811,9 +811,11 @@ export default function SettingsPage({
     selectedMicDeviceId,
     selectedMicDeviceLabel,
     micWarmHoldSeconds,
+    maxRecordingDurationSec,
     setPreferBuiltInMic,
     setSelectedMicDevice,
     setMicWarmHoldSeconds,
+    setMaxRecordingDurationSec,
     setUseLocalWhisper,
     setUiLanguage,
     setWhisperModel,
@@ -2912,9 +2914,11 @@ export default function SettingsPage({
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
                     micWarmHoldSeconds={micWarmHoldSeconds}
+                    maxRecordingDurationSec={maxRecordingDurationSec}
                     onPreferBuiltInChange={setPreferBuiltInMic}
                     onDeviceSelect={setSelectedMicDevice}
                     onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
+                    onMaxRecordingDurationChange={setMaxRecordingDurationSec}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>

@@ -299,6 +299,7 @@ const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
   "audioRetentionDays",
   "transcriptRetentionDays",
+  "maxRecordingDurationSec",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -888,6 +889,7 @@ export interface SettingsState
   setPreferBuiltInMic: (value: boolean) => void;
   setSelectedMicDevice: (deviceId: string, label: string) => void;
   setMicWarmHoldSeconds: (seconds: number) => void;
+  setMaxRecordingDurationSec: (value: number) => void;
 
   setTheme: (value: "light" | "dark" | "auto") => void;
   setCloudBackupEnabled: (value: boolean) => void;
@@ -1285,6 +1287,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
   selectedMicDeviceLabel: readString("selectedMicDeviceLabel", ""),
   micWarmHoldSeconds: snapMicWarmHold(readNumber("micWarmHoldSeconds", 0)),
+  maxRecordingDurationSec: (() => {
+    if (!isBrowser) return 0;
+    const stored = localStorage.getItem("maxRecordingDurationSec");
+    if (stored === null) return 0;
+    const parsed = parseInt(stored, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  })(),
 
   theme: (() => {
     const v = readString("theme", "auto");
@@ -2015,6 +2024,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       localStorage.setItem("selectedMicDeviceId", deviceId);
     }
     set({ selectedMicDeviceId: deviceId, selectedMicDeviceLabel: label });
+  },
+  setMaxRecordingDurationSec: (value: number) => {
+    const next = Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+    if (isBrowser) localStorage.setItem("maxRecordingDurationSec", String(next));
+    set({ maxRecordingDurationSec: next });
   },
 
   setTheme: (value: "light" | "dark" | "auto") => {
