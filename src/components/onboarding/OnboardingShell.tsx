@@ -52,7 +52,7 @@ function OnboardingWindowControls({ onHero = false }: { onHero?: boolean }) {
 
   return (
     <div
-      className="absolute right-3 top-3 z-50 flex items-center gap-1"
+      className="absolute right-3 top-3 z-[60] flex items-center gap-1"
       style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
     >
       <button
@@ -181,8 +181,12 @@ export default function OnboardingShell({
     <main
       className={`onboarding-canvas relative flex h-screen flex-col overflow-hidden ${compact ? "compact" : ""}`}
     >
+      {/* 48px, not a sliver: this is the frameless window's only title bar, so
+          it has to be a target someone can actually grab. Interactive overlays
+          in this band (window controls, the compact Skip) sit above it at z-60
+          with app-region: no-drag. */}
       <div
-        className="absolute inset-x-0 top-0 z-50 h-4"
+        className="absolute inset-x-0 top-0 z-50 h-12"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         aria-hidden="true"
       />

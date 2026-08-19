@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { CircleCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
@@ -139,7 +139,9 @@ export default function CompactPermissionsStep({
         // indigo in both themes, so it is white-on-translucent either way.
         // Windows/Linux shift left to clear the shell's minimise/close controls,
         // which macOS doesn't draw (native traffic lights sit top-left).
-        className={`absolute top-5 z-20 h-8 rounded-full bg-white/20 px-3 text-sm font-medium text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+        // z-60 + no-drag: it lives inside the shell's 48px title-bar drag band.
+        style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+        className={`absolute top-5 z-[60] h-8 rounded-full bg-white/20 px-3 text-sm font-medium text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
           getPlatform() === "darwin" ? "right-5" : "right-24"
         }`}
       >
