@@ -63,6 +63,8 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
+const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
+const { registerMeetingAutoEndKeepHandler } = require("./meetingAutoEndKeep");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
@@ -7079,7 +7081,7 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("meeting-transcription-start", async (event, options = {}) => {
+    const startMeetingTranscription = async (event, options = {}) => {
       // Wait for any in-flight prepare to finish before starting
       if (meetingTranscriptionPreparePromise) {
         debugLogger.debug("Meeting transcription start: waiting for in-flight prepare");
@@ -7091,13 +7093,35 @@ class IPCHandlers {
         return { success: false, error: "Operation in progress" };
       }
 
+      if (!ALLOWED_MEETING_PROVIDERS.has(options.provider)) {
+        return { success: false, error: `Unsupported provider: ${options.provider}` };
+      }
+
       meetingTranscriptionStartInProgress = true;
+      // The lifecycle wrapper is the only caller and always injects the same
+      // sessionId it registered; re-deriving one here would silently break
+      // scoped stop/auto-end matching.
+      const recordingSessionId = options.sessionId;
       meetingStartedAt = Date.now();
       meetingConnectionOptions = options;
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
       meetingFatalErrorSent = false;
+      this.meetingDetectionEngine?.endRecordingSession();
       this.meetingDetectionEngine?.setUserRecording(true);
+
+      const completeStart = async (result) => {
+        await this.meetingDetectionEngine?.beginRecordingSession({
+          sessionId: recordingSessionId,
+          autoEndEligible: options.autoEndEligible === true,
+          ownerWebContents: event.sender,
+          // Renderer loopback may still fail after main chooses its strategy.
+          // Auto-end stays fail-safe until the renderer confirms a real source.
+          systemAudioAvailable: false,
+        });
+        return { ...result, sessionId: recordingSessionId };
+      };
+
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan({ refreshWindowsCapability: true });
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
@@ -7139,12 +7163,12 @@ class IPCHandlers {
             systemAudioStrategy,
             "during warm-start reuse"
           ));
-          return {
+          return await completeStart({
             success: true,
             systemAudioMode,
             systemAudioStrategy,
             oneOnOneAttendee: meetingOneOnOneAttendee,
-          };
+          });
         }
 
         if (options.provider === "local") {
@@ -7176,16 +7200,12 @@ class IPCHandlers {
             systemAudioStrategy,
           });
 
-          return {
+          return await completeStart({
             success: true,
             systemAudioMode,
             systemAudioStrategy,
             oneOnOneAttendee: meetingOneOnOneAttendee,
-          };
-        }
-
-        if (!ALLOWED_MEETING_PROVIDERS.has(options.provider)) {
-          return { success: false, error: `Unsupported provider: ${options.provider}` };
+          });
         }
 
         await connectRealtimeStreaming(event, options);
@@ -7198,24 +7218,28 @@ class IPCHandlers {
           systemAudioStrategy,
           "in realtime mode"
         ));
-        return {
+        return await completeStart({
           success: true,
           systemAudioMode,
           systemAudioStrategy,
           oneOnOneAttendee: meetingOneOnOneAttendee,
-        };
+        });
       } catch (error) {
         await rollbackMeetingTranscriptionStart();
+        this.meetingDetectionEngine?.endRecordingSession(recordingSessionId);
         this.meetingDetectionEngine?.setUserRecording(false);
         debugLogger.error("Meeting transcription start error", { error: error.message });
         return toPolicyFailure(error);
       } finally {
         meetingTranscriptionStartInProgress = false;
       }
-    });
+    };
 
     const sendMeetingAudio = (audioBuffer, source) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      // Auto-end judges "is anyone audible" from the raw chunk of either
+      // channel, before AEC/holdback/muting can swallow it.
+      this.meetingDetectionEngine?.recordMeetingAudioChunk(source, outboundBuffer);
 
       if (source === "system") {
         const receivedAt = Date.now();
@@ -7380,7 +7404,13 @@ class IPCHandlers {
       sendMeetingAudio(audioBuffer, source);
     });
 
-    ipcMain.handle("meeting-transcription-stop", async () => {
+    const stopMeetingTranscription = async (expectedSessionId) => {
+      // Only a *different* live session blocks teardown — it owns the shared
+      // capture now. With no engine session (e.g. after quit-path engine stop)
+      // the streams below must still be torn down.
+      if (this.meetingDetectionEngine?.endRecordingSession(expectedSessionId) === false) {
+        return { success: false, reason: "stale-session" };
+      }
       this.meetingDetectionEngine?.setUserRecording(false);
       try {
         if (this.audioTapManager) {
@@ -7464,7 +7494,48 @@ class IPCHandlers {
         debugLogger.error("Meeting transcription stop error", { error: error.message });
         return { success: false, error: error.message };
       }
+    };
+
+    const meetingTranscriptionLifecycle = createMeetingTranscriptionLifecycle({
+      start: ({ sessionId, ownerWebContents, options }) =>
+        startMeetingTranscription({ sender: ownerWebContents }, { ...options, sessionId }),
+      stop: (sessionId) => stopMeetingTranscription(sessionId),
+      onError: (error, sessionId) => {
+        debugLogger.error(
+          "Meeting transcription owner-loss teardown failed",
+          { error: error?.message, sessionId },
+          "meeting"
+        );
+      },
     });
+
+    ipcMain.handle("meeting-transcription-start", (event, options = {}) => {
+      const sessionId =
+        typeof options.sessionId === "string" && options.sessionId.length > 0
+          ? options.sessionId
+          : crypto.randomUUID();
+      return meetingTranscriptionLifecycle.startSession({
+        sessionId,
+        ownerWebContents: event.sender,
+        options,
+      });
+    });
+
+    ipcMain.handle("meeting-transcription-stop", (_event, expectedSessionId) =>
+      meetingTranscriptionLifecycle.stopSession(expectedSessionId)
+    );
+
+    ipcMain.handle(
+      "meeting-transcription-set-system-audio-available",
+      async (event, sessionId, available) => {
+        const updated = await this.meetingDetectionEngine?.setRecordingSystemAudioAvailable(
+          sessionId,
+          available === true,
+          event.sender
+        );
+        return updated === true ? { success: true } : { success: false, reason: "stale-session" };
+      }
+    );
 
     const streamingStartFailure = (err) => {
       const result = toPolicyFailure(err);
@@ -9720,6 +9791,8 @@ class IPCHandlers {
       }
     });
 
+    registerMeetingAutoEndKeepHandler(ipcMain, () => this.meetingDetectionEngine);
+
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {
         await this.meetingDetectionEngine.joinCalendarMeeting(eventId);
@@ -9741,8 +9814,8 @@ class IPCHandlers {
       return this.windowManager?.consumePendingNoteNavigation() ?? null;
     });
 
-    ipcMain.handle("meeting-notification-ready", async () => {
-      this.windowManager?.showNotificationWindow();
+    ipcMain.handle("meeting-notification-ready", async (event) => {
+      this.windowManager?.showNotificationWindow(event.sender);
     });
 
     ipcMain.handle("get-update-notification-data", async () => {

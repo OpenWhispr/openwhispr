@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
+      },
+      "autoEnd": {
+        "title": "自动结束遗忘的录音",
+        "description": "当通话似乎已结束时，在可取消的倒计时后自动停止会议录音"
       }
     }
   },
@@ -2188,16 +2192,15 @@
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
         "gemini_gemini_3_5_flash": "最新、快速且高能力的 Gemini 模型",
+        "gemini_gemini_3_5_flash_lite": "最快、最经济的 3.5 模型",
         "gemini_gemini_3_1_pro_preview": "新一代旗舰模型，擅长复杂推理",
+        "gemini_gemini_3_1_flash_lite": "前沿级性能，成本更低",
         "gemini_gemini_3_flash_preview": "超快速、高能力的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延迟和成本",
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活跃参数，256K 上下文",
-        "groq_qwen_qwen3_32b": "强大的推理模型，131K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 开源旗舰，500 T/秒",
         "groq_openai_gpt_oss_20b": "快速开源模型，1000 T/秒",
-        "groq_llama_3_3_70b_versatile": "Meta 多功能模型，280 T/秒",
-        "groq_llama_3_1_8b_instant": "超快 560 T/秒，131K 上下文",
         "groq_compound": "Groq Compound 系统，450 T/秒",
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
         "openai_gpt_5_6_sol": "旗舰 GPT-5.6，适用于复杂编码与研究",
@@ -2211,7 +2214,6 @@
         "anthropic_claude_opus_4_5": "更早的 Opus 模型",
         "tinfoil_deepseek_v4_pro": "安全飞地中的私密长上下文推理，800K 上下文",
         "tinfoil_glm_5_2": "安全飞地中的私密智能体工程模型，384K 上下文",
-        "tinfoil_kimi_k2_6": "私密长程编码与多模态模型，256K 上下文",
         "tinfoil_gemma4_31b": "支持工具调用的私密多语言推理模型，256K 上下文",
         "tinfoil_gpt_oss_120b": "支持工具使用的私密开源权重推理模型，131K 上下文",
         "tinfoil_llama3_3_70b": "支持工具调用的私密对话模型，128K 上下文",
@@ -2625,7 +2627,8 @@
       "title": "会议笔记",
       "description": "转录与结构化摘要",
       "back": "返回",
-      "restrictedByOrg": "会议转录已被您的组织限制。"
+      "restrictedByOrg": "会议转录已被您的组织限制。",
+      "autoEnded": "会议结束后，录音已自动停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -3517,6 +3520,15 @@
       "underway": "你的会议似乎已在进行中。要开始记录吗？"
     },
     "start": "开始记录",
-    "join": "加入并转录"
+    "join": "加入并转录",
+    "autoEnd": {
+      "title": "会议可能已结束",
+      "body": {
+        "micReleased": "没有其他应用在使用麦克风。录音将在 {{seconds}} 秒后停止。",
+        "silence": "未检测到音频。录音将在 {{seconds}} 秒后停止。",
+        "processExit": "会议应用已关闭。录音将在 {{seconds}} 秒后停止。"
+      },
+      "keep": "继续录音"
+    }
   }
 }

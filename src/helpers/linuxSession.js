@@ -1,31 +1,43 @@
 const WLROOTS_DESKTOPS = ["sway", "hyprland", "wayfire", "river", "dwl", "labwc", "cage"];
 
-function getLinuxSessionInfo() {
+function getLinuxSessionInfo(environment = process.env) {
   const isWayland =
-    (process.env.XDG_SESSION_TYPE || "").toLowerCase() === "wayland" ||
-    !!process.env.WAYLAND_DISPLAY;
+    (environment.XDG_SESSION_TYPE || "").toLowerCase() === "wayland" ||
+    !!environment.WAYLAND_DISPLAY;
   const desktopEnv = [
-    process.env.XDG_CURRENT_DESKTOP,
-    process.env.XDG_SESSION_DESKTOP,
-    process.env.DESKTOP_SESSION,
+    environment.XDG_CURRENT_DESKTOP,
+    environment.XDG_SESSION_DESKTOP,
+    environment.DESKTOP_SESSION,
   ]
     .filter(Boolean)
     .join(":")
     .toLowerCase();
+  const isGnome = isWayland && desktopEnv.includes("gnome");
+  const isKde = isWayland && desktopEnv.includes("kde");
+  const isHyprland = isWayland && !!environment.HYPRLAND_INSTANCE_SIGNATURE;
+  // SWAYSOCK can survive a compositor switch, so trust it only when no desktop
+  // metadata identifies the current session.
+  const isSway =
+    isWayland &&
+    !isGnome &&
+    !isKde &&
+    !isHyprland &&
+    (desktopEnv.includes("sway") || (!desktopEnv && !!environment.SWAYSOCK));
   const isWlroots =
     isWayland &&
     (WLROOTS_DESKTOPS.some((desktop) => desktopEnv.includes(desktop)) ||
-      !!process.env.SWAYSOCK ||
-      !!process.env.HYPRLAND_INSTANCE_SIGNATURE);
+      !!environment.SWAYSOCK ||
+      !!environment.HYPRLAND_INSTANCE_SIGNATURE);
 
   return {
     isWayland,
-    xwaylandAvailable: isWayland && !!process.env.DISPLAY,
+    xwaylandAvailable: isWayland && !!environment.DISPLAY,
     desktopEnv,
-    isGnome: isWayland && desktopEnv.includes("gnome"),
-    isKde: isWayland && desktopEnv.includes("kde"),
+    isGnome,
+    isKde,
     isWlroots,
-    isHyprland: isWayland && !!process.env.HYPRLAND_INSTANCE_SIGNATURE,
+    isHyprland,
+    isSway,
   };
 }
 

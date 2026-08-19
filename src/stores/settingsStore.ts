@@ -260,6 +260,7 @@ const BOOLEAN_SETTINGS = new Set([
   "floatingIconAutoHide",
   "startMinimized",
   "meetingProcessDetection",
+  "meetingAutoEndEnabled",
   "speakerDiarizationEnabled",
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
@@ -379,13 +380,7 @@ function migrateProviderSettings() {
       reasoningProvider === "vertex"
     ) {
       newReasoningMode = "enterprise";
-    } else if (
-      reasoningProvider === "qwen" ||
-      reasoningProvider === "llama" ||
-      reasoningProvider === "mistral" ||
-      reasoningProvider === "openai-oss" ||
-      reasoningProvider === "gemma"
-    ) {
+    } else if (reasoningProvider && localLlmProviderIds.has(reasoningProvider)) {
       newReasoningMode = "local";
     } else {
       newReasoningMode = "providers";
@@ -442,7 +437,6 @@ function migrateAgentMode() {
 
   let agentInferenceMode: InferenceMode = "openwhispr";
   if (cloudAgentMode === "byok") {
-    const localProviders = ["qwen", "llama", "mistral", "openai-oss", "gemma"];
     if (agentProvider === "custom") {
       agentInferenceMode = "self-hosted";
     } else if (
@@ -451,7 +445,7 @@ function migrateAgentMode() {
       agentProvider === "vertex"
     ) {
       agentInferenceMode = "enterprise";
-    } else if (agentProvider && localProviders.includes(agentProvider)) {
+    } else if (agentProvider && localLlmProviderIds.has(agentProvider)) {
       agentInferenceMode = "local";
     } else {
       agentInferenceMode = "providers";
@@ -564,6 +558,30 @@ function migrateLLMScopeKeys() {
 
 migrateLLMScopeKeys();
 
+// Groq retired these models on 2026-08-16, so a scope still pointing at one
+// 404s on every request. Remap to the closest replacement Groq still serves.
+// Runs after migrateLLMScopeKeys so scope values live under their final keys.
+const RETIRED_GROQ_MODELS: Record<string, string> = {
+  "qwen/qwen3-32b": "openai/gpt-oss-120b",
+  "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+  "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+};
+
+function migrateRetiredGroqModels() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("_retiredGroqModelsMigrated") === "1") return;
+
+  for (const { storeKeys } of Object.values(INFERENCE_SCOPES)) {
+    if (localStorage.getItem(storeKeys.provider) !== "groq") continue;
+    const replacement = RETIRED_GROQ_MODELS[localStorage.getItem(storeKeys.model) ?? ""];
+    if (replacement) localStorage.setItem(storeKeys.model, replacement);
+  }
+
+  localStorage.setItem("_retiredGroqModelsMigrated", "1");
+}
+
+migrateRetiredGroqModels();
+
 export interface SettingsState
   extends
     TranscriptionSettings,
@@ -593,6 +611,7 @@ export interface SettingsState
   mcalPrimaryOnly: boolean;
   appleCalendarConnected: boolean;
   meetingProcessDetection: boolean;
+  meetingAutoEndEnabled: boolean;
   speakerDiarizationEnabled: boolean;
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
@@ -891,6 +910,7 @@ export interface SettingsState
   setMcalPrimaryOnly: (value: boolean) => void;
   setAppleCalendarConnected: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
+  setMeetingAutoEndEnabled: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
@@ -1316,6 +1336,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   mcalPrimaryOnly: readBoolean("mcalPrimaryOnly", true),
   appleCalendarConnected: readBoolean("appleCalendarConnected", false),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
+  meetingAutoEndEnabled: readBoolean("meetingAutoEndEnabled", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
   // Off by default: VAD on pause-heavy dictations can strip the speech and make
   // Whisper hallucinate the dictionary prompt as the transcript (#1454).
@@ -2074,6 +2095,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setAppleCalendarConnected: createBooleanSetter("appleCalendarConnected"),
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
+  setMeetingAutoEndEnabled: (value: boolean) => {
+    if (isBrowser) localStorage.setItem("meetingAutoEndEnabled", String(value));
+    useSettingsStore.setState({ meetingAutoEndEnabled: value });
+    // Takes effect immediately — a live countdown is dismissed when turned off.
+    if (isBrowser) {
+      window.electronAPI?.meetingDetectionSetPreferences?.({ autoEnd: value });
+    }
+  },
   setSpeakerDiarizationEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("speakerDiarizationEnabled", String(value));
     useSettingsStore.setState({ speakerDiarizationEnabled: value });
@@ -3134,11 +3163,12 @@ export async function initializeSettings(): Promise<void> {
     }
 
     // Audio detection is derived from the meeting-notification toggle in
-    // sync-notification-preferences, so only process detection is sent here.
+    // sync-notification-preferences, so it is not sent here.
     try {
       const currentState = useSettingsStore.getState();
       await window.electronAPI.meetingDetectionSetPreferences?.({
         processDetection: currentState.meetingProcessDetection,
+        autoEnd: currentState.meetingAutoEndEnabled,
       });
     } catch (err) {
       logger.warn(

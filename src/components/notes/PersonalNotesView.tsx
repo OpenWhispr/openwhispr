@@ -22,7 +22,6 @@ import {
 import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
-import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   useNotes,
@@ -59,6 +58,7 @@ import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/u
 import NotesOnboarding from "./NotesOnboarding";
 import { notesEmptyTitleKey } from "./shared";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
+import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
 import {
@@ -344,6 +344,7 @@ export default function PersonalNotesView({
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
       expectedCount: resolveExpectedSpeakerCount(note),
       expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
+      autoEndEligible: isMeetingAutoEndEligible(note),
     });
   }, [activeNote]);
 
@@ -639,6 +640,9 @@ export default function PersonalNotesView({
           note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
         expectedCount: resolveExpectedSpeakerCount(note),
         expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
+        // Requests come from meeting detection, so a note that hasn't loaded
+        // yet is still a meeting note.
+        autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
       },
       startRecording: storeStartRecording,
       restoreFromMeetingMode: async () => {
@@ -654,39 +658,8 @@ export default function PersonalNotesView({
     });
   }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
 
-  const prevTranscribingRef = useRef(false);
-
-  useEffect(() => {
-    if (prevTranscribingRef.current && !isTranscribing) {
-      const { transcript: realtimeTranscript, segments: realtimeSegments } =
-        useMeetingRecordingStore.getState();
-      const transcript =
-        realtimeSegments.length > 0
-          ? serializeTranscriptSegments(realtimeSegments)
-          : realtimeTranscript;
-
-      if (recordingNoteId && transcript) {
-        window.electronAPI.updateNote(recordingNoteId, { transcript });
-      }
-    }
-    prevTranscribingRef.current = isTranscribing;
-  }, [isTranscribing, recordingNoteId]);
-
-  useEffect(() => {
-    if (!isTranscribing) return;
-
-    const interval = setInterval(() => {
-      const { recordingNoteId: currentRecordingNoteId, segments: realtimeSegments } =
-        useMeetingRecordingStore.getState();
-      if (!currentRecordingNoteId || realtimeSegments.length === 0) return;
-      window.electronAPI.updateNote(currentRecordingNoteId, {
-        transcript: serializeTranscriptSegments(realtimeSegments),
-      });
-    }, 30_000);
-
-    return () => clearInterval(interval);
-  }, [isTranscribing]);
-
+  // Final and periodic transcript persistence live in MeetingRecordingMount /
+  // the store — this view can be unmounted when an auto-end stop fires.
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
   if (!isOnboardingComplete) {

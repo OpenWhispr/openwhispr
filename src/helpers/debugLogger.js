@@ -31,6 +31,8 @@ const readArgLogLevel = () => {
   return null;
 };
 
+const hasConsoleLogOptIn = () => (process.argv || []).includes("--console-logs");
+
 class DebugLogger {
   constructor() {
     this.logLevel = this.resolveLogLevel();
@@ -40,6 +42,7 @@ class DebugLogger {
     this.logStream = null;
     this.fileLoggingEnabled = false;
     this.fileLoggingPending = this.debugMode; // Track if we need to initialize file logging later
+    this.consoleLoggingEnabled = this.resolveConsoleLogging();
 
     // IMPORTANT: Do NOT call initializeFileLogging() here!
     // It uses app.getPath() which is unsafe before app.whenReady().
@@ -108,6 +111,11 @@ class DebugLogger {
     }
 
     return "info";
+  }
+
+  resolveConsoleLogging() {
+    // Packaged Windows apps can inherit the launching shell's standard handles.
+    return process.platform !== "win32" || !app.isPackaged || hasConsoleLogOptIn();
   }
 
   refreshLogLevel() {
@@ -191,18 +199,20 @@ class DebugLogger {
     const metaText = this.formatMeta(meta);
     const logLine = metaText ? `${baseLine} ${metaText}\n` : `${baseLine}\n`;
 
-    const consoleFn =
-      normalized === "error" || normalized === "fatal"
-        ? console.error
-        : normalized === "warn"
-          ? console.warn
-          : console.log;
+    if (this.consoleLoggingEnabled) {
+      const consoleFn =
+        normalized === "error" || normalized === "fatal"
+          ? console.error
+          : normalized === "warn"
+            ? console.warn
+            : console.log;
 
-    if (meta !== undefined) {
-      // Pass the prefix as a %s arg, not as a format string. See CodeQL js/tainted-format-string.
-      consoleFn("%s", `${levelTag}${scopeTag}${sourceTag} ${message}`, meta);
-    } else {
-      consoleFn(`${levelTag}${scopeTag}${sourceTag} ${message}`);
+      if (meta !== undefined) {
+        // Pass the prefix as a %s arg, not as a format string. See CodeQL js/tainted-format-string.
+        consoleFn("%s", `${levelTag}${scopeTag}${sourceTag} ${message}`, meta);
+      } else {
+        consoleFn(`${levelTag}${scopeTag}${sourceTag} ${message}`);
+      }
     }
 
     if (this.logStream) {

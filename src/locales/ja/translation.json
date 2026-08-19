@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
+      },
+      "autoEnd": {
+        "title": "停止し忘れた録音を自動終了",
+        "description": "通話が終わったと判断されると、キャンセル可能なカウントダウンの後に会議の録音を自動的に停止します"
       }
     }
   },
@@ -2188,16 +2192,15 @@
         "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
         "gemini_gemini_3_5_flash": "最新の高速で高性能な Gemini モデル",
+        "gemini_gemini_3_5_flash_lite": "最速かつ最も低コストの 3.5 モデル",
         "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
+        "gemini_gemini_3_1_flash_lite": "フロンティア級の性能を低コストで",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
         "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
         "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
-        "groq_qwen_qwen3_32b": "強力な推論モデル、131K コンテキスト",
         "groq_openai_gpt_oss_120b": "OpenAI のオープンソースフラッグシップ、500 T/秒",
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
-        "groq_llama_3_3_70b_versatile": "Meta の汎用モデル、280 T/秒",
-        "groq_llama_3_1_8b_instant": "超高速 560 T/秒、131K コンテキスト",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
         "openai_gpt_5_6_sol": "複雑なコーディングと研究のためのフラッグシップ GPT-5.6",
@@ -2211,7 +2214,6 @@
         "anthropic_claude_opus_4_5": "旧世代の Opus モデル",
         "tinfoil_deepseek_v4_pro": "セキュアエンクレーブ内のプライベート長文脈推論、800K コンテキスト",
         "tinfoil_glm_5_2": "セキュアエンクレーブ内のプライベート・エージェント型エンジニアリングモデル、384K コンテキスト",
-        "tinfoil_kimi_k2_6": "プライベートな長期コーディング・マルチモーダルモデル、256K コンテキスト",
         "tinfoil_gemma4_31b": "ツール呼び出し対応のプライベート多言語推論モデル、256K コンテキスト",
         "tinfoil_gpt_oss_120b": "ツール使用対応のプライベート・オープンウェイト推論モデル、131K コンテキスト",
         "tinfoil_llama3_3_70b": "ツール呼び出し対応のプライベート会話モデル、128K コンテキスト",
@@ -2609,7 +2611,8 @@
       "title": "議事録",
       "description": "文字起こしと構造化されたサマリー",
       "back": "戻る",
-      "restrictedByOrg": "会議の文字起こしは組織によって制限されています。"
+      "restrictedByOrg": "会議の文字起こしは組織によって制限されています。",
+      "autoEnded": "会議の終了後、録音は自動的に停止しました。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -3517,6 +3520,15 @@
       "underway": "会議はすでに進行中のようです。メモを取りますか？"
     },
     "start": "メモを取る",
-    "join": "参加して文字起こし"
+    "join": "参加して文字起こし",
+    "autoEnd": {
+      "title": "会議が終了した可能性があります",
+      "body": {
+        "micReleased": "ほかのアプリはマイクを使用していません。録音は{{seconds}}秒後に停止します。",
+        "silence": "音声が検出されません。録音は{{seconds}}秒後に停止します。",
+        "processExit": "会議アプリが終了しました。録音は{{seconds}}秒後に停止します。"
+      },
+      "keep": "録音を続ける"
+    }
   }
 }

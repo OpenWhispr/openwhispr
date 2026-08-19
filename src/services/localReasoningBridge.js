@@ -32,13 +32,14 @@ class LocalReasoningService {
 
     try {
       const inferenceConfig = {
-        maxTokens: config.maxTokens || this.calculateMaxTokens(text.length),
-        temperature: config.temperature || 0.7,
-        topK: config.topK || 40,
-        topP: config.topP || 0.9,
-        repeatPenalty: config.repeatPenalty || 1.1,
+        maxTokens: config.maxTokens ?? this.calculateMaxTokens(text.length),
+        temperature: config.temperature ?? 0.7,
+        topK: config.topK ?? 40,
+        topP: config.topP ?? 0.9,
+        repeatPenalty: config.repeatPenalty ?? 1.1,
         systemPrompt: config.systemPrompt || "",
         disableThinking: config.disableThinking !== false,
+        requireCompleteOutput: config.requireCompleteOutput,
       };
 
       debugLogger.logReasoning("LOCAL_BRIDGE_INFERENCE", {

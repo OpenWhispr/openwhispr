@@ -1,32 +1,50 @@
 const path = require("path");
+const { getLinuxSessionInfo } = require("./linuxSession");
 
-const isGnomeWayland =
-  process.platform === "linux" &&
-  process.env.XDG_SESSION_TYPE === "wayland" &&
-  /gnome|ubuntu|unity/i.test(process.env.XDG_CURRENT_DESKTOP || "");
+const FOCUSLESS_OVERLAY_ROLES = new Set(["main", "notification", "transcription-preview"]);
 
-const isKDEWayland =
-  process.platform === "linux" &&
-  process.env.XDG_SESSION_TYPE === "wayland" &&
-  /kde/i.test(process.env.XDG_CURRENT_DESKTOP || "");
+function usesGnomeOverlayPolicy(linuxSession) {
+  return (
+    linuxSession.isWayland &&
+    (linuxSession.isGnome || /ubuntu|unity/.test(linuxSession.desktopEnv || ""))
+  );
+}
 
-const MAIN_OVERLAY_TYPE =
-  process.platform === "darwin"
-    ? "panel"
-    : process.platform === "linux"
-      ? isGnomeWayland || isKDEWayland
-        ? "normal"
-        : "toolbar"
-      : "normal";
+function resolveOverlayWindowType({ role, platform, linuxSession }) {
+  if (platform === "darwin") return "panel";
+  if (platform !== "linux") return "normal";
 
-const FLOATING_OVERLAY_TYPE =
-  process.platform === "darwin"
-    ? "panel"
-    : process.platform === "linux"
-      ? isKDEWayland
-        ? "normal"
-        : "toolbar"
-      : "normal";
+  // Sway asks wlroots whether an unmanaged XWayland surface wants focus.
+  // "toolbar" opts in; "notification" keeps the existing text field focused.
+  if (
+    linuxSession.isSway &&
+    linuxSession.xwaylandAvailable &&
+    FOCUSLESS_OVERLAY_ROLES.has(role)
+  ) {
+    return "notification";
+  }
+
+  if (linuxSession.isKde || (role === "main" && usesGnomeOverlayPolicy(linuxSession))) {
+    return "normal";
+  }
+  return "toolbar";
+}
+
+const linuxSession = getLinuxSessionInfo();
+const OVERLAY_WINDOW_TYPES = {
+  main: resolveOverlayWindowType({ role: "main", platform: process.platform, linuxSession }),
+  notification: resolveOverlayWindowType({
+    role: "notification",
+    platform: process.platform,
+    linuxSession,
+  }),
+  transcriptionPreview: resolveOverlayWindowType({
+    role: "transcription-preview",
+    platform: process.platform,
+    linuxSession,
+  }),
+  agent: resolveOverlayWindowType({ role: "agent", platform: process.platform, linuxSession }),
+};
 
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
@@ -57,7 +75,7 @@ const MAIN_WINDOW_CONFIG = {
   fullScreenable: false,
   hasShadow: false,
   acceptsFirstMouse: true,
-  type: MAIN_OVERLAY_TYPE,
+  type: OVERLAY_WINDOW_TYPES.main,
 };
 
 // Control panel window configuration
@@ -110,6 +128,7 @@ const NOTIFICATION_WINDOW_CONFIG = {
   focusable: false,
   hasShadow: false,
   show: false,
+  acceptFirstMouse: true,
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
@@ -117,8 +136,23 @@ const NOTIFICATION_WINDOW_CONFIG = {
     sandbox: true,
   },
   visibleOnAllWorkspaces: process.platform !== "win32",
-  type: FLOATING_OVERLAY_TYPE,
+  type: OVERLAY_WINDOW_TYPES.notification,
 };
+
+const AUTO_END_NOTIFICATION_WINDOW_SIZE = {
+  width: 620,
+  height: 116,
+};
+
+function getMeetingNotificationWindowSize(promptData) {
+  if (promptData?.kind === "auto-end") {
+    return AUTO_END_NOTIFICATION_WINDOW_SIZE;
+  }
+  return {
+    width: NOTIFICATION_WINDOW_CONFIG.width,
+    height: NOTIFICATION_WINDOW_CONFIG.height,
+  };
+}
 
 const TRANSCRIPTION_PREVIEW_SIZE_LIMITS = {
   minWidth: 400,
@@ -148,7 +182,7 @@ const TRANSCRIPTION_PREVIEW_CONFIG = {
     sandbox: true,
   },
   visibleOnAllWorkspaces: process.platform !== "win32",
-  type: FLOATING_OVERLAY_TYPE,
+  type: OVERLAY_WINDOW_TYPES.transcriptionPreview,
 };
 
 class WindowPositionUtil {
@@ -191,8 +225,8 @@ class WindowPositionUtil {
     };
   }
 
-  static getNotificationPosition(display) {
-    const { width, height } = NOTIFICATION_WINDOW_CONFIG;
+  static getNotificationPosition(display, customSize = null) {
+    const { width, height } = customSize || NOTIFICATION_WINDOW_CONFIG;
     const MARGIN = 16;
     const workArea = display.workArea || display.bounds;
     // Same negative-origin trap as getMainWindowPosition: clamp to the display,
@@ -243,7 +277,7 @@ class WindowPositionUtil {
       }
     } else if (process.platform === "win32") {
       window.setAlwaysOnTop(true, "pop-up-menu");
-    } else if (isGnomeWayland) {
+    } else if (usesGnomeOverlayPolicy(linuxSession)) {
       window.setAlwaysOnTop(true, "floating");
     } else {
       // KDE XWayland and other Linux — "screen-saver" is the strongest z-level
@@ -269,7 +303,7 @@ const AGENT_OVERLAY_CONFIG = {
   resizable: false,
   fullScreenable: false,
   acceptsFirstMouse: true,
-  type: FLOATING_OVERLAY_TYPE,
+  type: OVERLAY_WINDOW_TYPES.agent,
   visibleOnAllWorkspaces: process.platform !== "win32",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
@@ -287,8 +321,11 @@ module.exports = {
   CONTROL_PANEL_CONFIG,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
+  AUTO_END_NOTIFICATION_WINDOW_SIZE,
+  getMeetingNotificationWindowSize,
   TRANSCRIPTION_PREVIEW_CONFIG,
   TRANSCRIPTION_PREVIEW_SIZE_LIMITS,
   WINDOW_SIZES,
   WindowPositionUtil,
+  resolveOverlayWindowType,
 };

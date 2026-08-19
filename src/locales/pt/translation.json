@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identificar e rotular participantes",
         "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
+      },
+      "autoEnd": {
+        "title": "Encerrar gravações esquecidas",
+        "description": "Para as gravações de reunião automaticamente quando a chamada parece ter terminado, após uma contagem regressiva que você pode cancelar"
       }
     }
   },
@@ -2167,16 +2171,15 @@
         "anthropic_claude_sonnet_4_5": "Geração anterior do Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido com inteligência quase de ponta",
         "gemini_gemini_3_5_flash": "Modelo Gemini mais recente, rápido e de alta capacidade",
+        "gemini_gemini_3_5_flash_lite": "O modelo 3.5 mais rápido e econômico",
         "gemini_gemini_3_1_pro_preview": "Modelo principal de nova geração para raciocínio complexo",
+        "gemini_gemini_3_1_flash_lite": "Desempenho de ponta a baixo custo",
         "gemini_gemini_3_flash_preview": "Modelo de nova geração ultrarápido e de alta capacidade",
         "gemini_gemini_2_5_flash_lite": "Menor latência e custo",
         "gemini_gemma_4_31b_it": "O maior Gemma 4 do Google, 31B denso, contexto 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE do Google, 4B parâmetros ativos, contexto 256K",
-        "groq_qwen_qwen3_32b": "Modelo de raciocínio poderoso, contexto de 131K",
         "groq_openai_gpt_oss_120b": "Modelo principal open source da OpenAI, 500 T/seg",
         "groq_openai_gpt_oss_20b": "Modelo open source rápido, 1000 T/seg",
-        "groq_llama_3_3_70b_versatile": "Modelo versátil da Meta, 280 T/seg",
-        "groq_llama_3_1_8b_instant": "Ultrarápido 560 T/seg, contexto de 131K",
         "groq_compound": "Sistema compound da Groq, 450 T/seg",
         "groq_compound_mini": "Sistema compound rápido, 3x menor latência",
         "openai_gpt_5_6_sol": "GPT-5.6 principal para programação e pesquisa complexas",
@@ -2190,7 +2193,6 @@
         "anthropic_claude_opus_4_5": "Modelo Opus mais antigo",
         "tinfoil_deepseek_v4_pro": "Raciocínio privado de contexto longo em enclaves seguros, contexto de 800K",
         "tinfoil_glm_5_2": "Modelo privado de engenharia agêntica em enclaves seguros, contexto de 384K",
-        "tinfoil_kimi_k2_6": "Modelo privado de codificação de longo prazo e multimodal, contexto de 256K",
         "tinfoil_gemma4_31b": "Modelo privado de raciocínio multilíngue com chamada de ferramentas, contexto de 256K",
         "tinfoil_gpt_oss_120b": "Modelo privado de raciocínio de pesos abertos com uso de ferramentas, contexto de 131K",
         "tinfoil_llama3_3_70b": "Modelo privado conversacional com chamada de ferramentas, contexto de 128K",
@@ -2625,7 +2627,8 @@
       "title": "Notas de reunião",
       "description": "Transcrições e resumos estruturados",
       "back": "Voltar",
-      "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização."
+      "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização.",
+      "autoEnded": "A gravação parou automaticamente após o fim da reunião."
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",
@@ -3517,6 +3520,15 @@
       "underway": "Parece que sua reunião já está em andamento. Quer fazer anotações?"
     },
     "start": "Fazer anotações",
-    "join": "Entrar e transcrever"
+    "join": "Entrar e transcrever",
+    "autoEnd": {
+      "title": "A reunião pode ter terminado",
+      "body": {
+        "micReleased": "Nenhum outro app está usando o microfone. A gravação vai parar em {{seconds}}s.",
+        "silence": "Nenhum áudio detectado. A gravação vai parar em {{seconds}}s.",
+        "processExit": "Seu app de reunião foi fechado. A gravação vai parar em {{seconds}}s."
+      },
+      "keep": "Continuar gravando"
+    }
   }
 }
