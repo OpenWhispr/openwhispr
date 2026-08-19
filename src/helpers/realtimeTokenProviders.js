@@ -74,6 +74,17 @@ const REALTIME_TOKEN_PROVIDERS = {
 
   "openai-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
+      // Custom/OpenAI-compatible realtime uses the same shared IPC channel as
+      // OpenAI, but carries a structured connection credential so the socket
+      // endpoint and Custom key cannot get separated. Empty Custom keys are
+      // valid because the batch Custom path already supports unauthenticated
+      // self-hosted endpoints.
+      if (options.baseUrl) {
+        return duplicate(streams, {
+          key: environmentManager.getCustomTranscriptionKey?.() || "",
+          baseUrl: options.baseUrl,
+        });
+      }
       const apiKey = environmentManager.getOpenAIKey();
       if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
       return duplicate(streams, apiKey);
