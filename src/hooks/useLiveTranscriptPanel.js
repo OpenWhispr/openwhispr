@@ -211,7 +211,7 @@ export function useLiveTranscriptPanel({
     // issue a recording/assistant resize while this entrance is awaiting the
     // native compositor.
     openRef.current = true;
-    openPromiseRef.current = (async () => {
+    const openPromise = (async () => {
       // Live Transcript owns an adaptive footprint. Enter at its footer-sized
       // surface instead of flashing the full Agent window before measurement.
       await requestHeight(LIVE_TRANSCRIPT_SURFACE_LIMITS.minHeight);
@@ -271,8 +271,12 @@ export function useLiveTranscriptPanel({
         }, timeline.panelAtMs);
         entranceTimersRef.current.push(finishEntrance);
       });
-    })().finally(() => {
-      openPromiseRef.current = null;
+    })();
+    openPromiseRef.current = openPromise;
+    void openPromise.finally(() => {
+      if (openPromiseRef.current === openPromise) {
+        openPromiseRef.current = null;
+      }
     });
   }, [
     assistantOpenRef,
@@ -293,7 +297,7 @@ export function useLiveTranscriptPanel({
     clearFinalHide();
     finalHideTimerRef.current = setTimeout(() => {
       finalHideTimerRef.current = null;
-      if (finalHoldRef.current) return;
+      if (finalHoldRef.current || phaseRef.current !== "final" || !openRef.current) return;
       close({ clear: true });
     }, LIVE_TRANSCRIPT_FINAL_HIDE_MS);
   }, [clearFinalHide, close]);
@@ -333,6 +337,7 @@ export function useLiveTranscriptPanel({
     clearFinalHide();
     suppressedRef.current = true;
     openGenerationRef.current += 1;
+    openPromiseRef.current = null;
     setManuallyCollapsed(false);
     cancelAnimationFrame(openFrameRef.current);
     clearTimeout(closeTimerRef.current);
@@ -408,6 +413,7 @@ export function useLiveTranscriptPanel({
   useEffect(() => {
     const normalRecording = isRecording && !isAssistantVoice;
     if (normalRecording && !previousNormalRecordingRef.current) {
+      clearFinalHide();
       suppressedRef.current = false;
       setManuallyCollapsed(false);
       resetText();
@@ -418,7 +424,7 @@ export function useLiveTranscriptPanel({
     if (isRecording && isAssistantVoice && mounted) {
       close({ clear: true });
     }
-  }, [isAssistantVoice, isRecording, mounted, close, resetText]);
+  }, [isAssistantVoice, isRecording, mounted, clearFinalHide, close, resetText]);
 
   useEffect(() => {
     if (!isAssistantVoice && (isRecording || isProcessing)) return;
