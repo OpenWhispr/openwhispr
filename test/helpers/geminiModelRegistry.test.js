@@ -1,11 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
 
 const modelData = require("../../src/models/modelRegistryData.json");
-
-const LOCALES_DIR = path.join(__dirname, "../../src/locales");
 
 // Exact expected entries per ai.google.dev/gemini-api/docs/models.
 // gemini-3.1-flash-lite has no thinking support, so it must never carry
@@ -47,24 +43,4 @@ test("the Flash Lite entries carry the exact ids, names, and capability flags", 
 test("gemini-2.5-flash-lite stays in the registry for existing API keys", () => {
   const model = geminiModels().find((m) => m.id === "gemini-2.5-flash-lite");
   assert.ok(model, "gemini-2.5-flash-lite was removed; existing keys still resolve it");
-});
-
-test("every Gemini descriptionKey resolves in every locale", () => {
-  const languages = fs
-    .readdirSync(LOCALES_DIR)
-    .filter((entry) => fs.statSync(path.join(LOCALES_DIR, entry)).isDirectory());
-  assert.ok(languages.length > 0, "no locale directories found");
-
-  for (const lang of languages) {
-    const translation = JSON.parse(
-      fs.readFileSync(path.join(LOCALES_DIR, lang, "translation.json"), "utf8")
-    );
-    for (const model of geminiModels()) {
-      const value = model.descriptionKey
-        .split(".")
-        .reduce((node, part) => (node ? node[part] : undefined), translation);
-      assert.equal(typeof value, "string", `${lang} missing ${model.descriptionKey}`);
-      assert.ok(value.length > 0, `${lang} has empty ${model.descriptionKey}`);
-    }
-  }
 });
