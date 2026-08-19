@@ -5,8 +5,8 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 
 // Force a key-up if the native listener never reports one (e.g. a missed release
-// while another window had focus), so a held key can't get stuck recording.
-const WATCHDOG_MS = 30000;
+// while another window had focus); 5 min matches macOS MAX_PUSH_DURATION_MS.
+const WATCHDOG_MS = 300000;
 
 class LinuxKeyManager extends EventEmitter {
   constructor() {
@@ -135,9 +135,10 @@ class LinuxKeyManager extends EventEmitter {
       if (entry) {
         if (entry.watchdog) clearTimeout(entry.watchdog);
         entry.watchdog = setTimeout(() => {
-          debugLogger.warn("[LinuxKeyManager] Watchdog: no KEY_UP within 30s, forcing release", {
-            key,
-          });
+          debugLogger.warn(
+            `[LinuxKeyManager] Watchdog: no KEY_UP within ${WATCHDOG_MS / 1000}s, forcing release`,
+            { key }
+          );
           entry.watchdog = null;
           this.emit("key-up", key);
         }, WATCHDOG_MS);
@@ -230,5 +231,7 @@ class LinuxKeyManager extends EventEmitter {
     return null;
   }
 }
+
+LinuxKeyManager.WATCHDOG_MS = WATCHDOG_MS;
 
 module.exports = LinuxKeyManager;
