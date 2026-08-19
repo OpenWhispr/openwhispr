@@ -370,9 +370,13 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation
     - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
   - **Google Gemini** (Direct API integration):
+    - Gemini 3.5 Flash (`gemini-3.5-flash`) - Latest fast, high-capability Gemini model
+    - Gemini 3.5 Flash Lite (`gemini-3.5-flash-lite`) - Fastest, most cost-effective 3.5 model
     - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`) - Frontier-class performance at low cost (no thinking support, so no `supportsThinking` flag)
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
-    - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost
+    - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost (retired for new API keys; kept for existing ones)
+    - Gemma 4 (`gemma-4-31b-it`, `gemma-4-26b-a4b-it`) - Google's open Gemma 4 models served through the Gemini API
   - **Local**: GGUF models via llama.cpp (Qwen, Llama, Mistral, GPT-OSS)
 
 ### 8. Model Registry Architecture
@@ -397,7 +401,7 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 **Local model features:**
 
 - Each model has `hfRepo` for direct HuggingFace download URLs
-- `promptTemplate` defines the chat format (ChatML, Llama, Mistral)
+- Chat formatting comes from the GGUF's embedded template (llama-server runs with `--jinja`); the registry carries no prompt templates
 - Download URLs constructed as: `{baseUrl}/{hfRepo}/resolve/main/{fileName}`
 
 ### 9. API Integrations and Updates
@@ -464,6 +468,11 @@ Enable with `--log-level=debug` or `OPENWHISPR_LOG_LEVEL=debug` (can be set in `
 - FFmpeg path resolution details
 - Audio level analysis
 - Complete reasoning pipeline debugging with stage-by-stage logging
+
+Packaged Windows builds keep logger output off stdout/stderr by default. Launch with
+`--console-logs` to opt into terminal output independently of the configured log level.
+Default INFO entries are not persisted in this mode; enabling debug logging retains them
+in the existing log file without enabling terminal output.
 
 ### 12. Windows Push-to-Talk
 

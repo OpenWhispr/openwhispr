@@ -11,11 +11,11 @@ import {
   isTruncatedFinishReason,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
+import { resolveLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
-const REQUEST_TIMEOUT_MS = 30_000;
 const PROBE_TIMEOUT_MS = 2_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
@@ -215,7 +215,10 @@ export const openaiProvider: InferenceProvider = {
 
       for (const { url: endpoint, type } of endpointCandidates) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeoutSeconds = resolveLlmRequestTimeoutSeconds(
+          getSettings().llmRequestTimeoutSeconds
+        );
+        const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         try {
           const maxTokens =
             config.maxTokens ||
@@ -293,7 +296,7 @@ export const openaiProvider: InferenceProvider = {
           return res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
-            throw new Error("Request timed out after 30s");
+            throw new Error(`Request timed out after ${timeoutSeconds}s`);
           }
           lastError = error as Error;
           if (type === "responses") {

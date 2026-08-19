@@ -8,7 +8,9 @@
  *
  * Run: node scripts/stt-canary.mjs
  * Keys come from STT_CANARY_<PROVIDER>_KEY env vars; providers without a key
- * are skipped and listed. Exit 1 when any probe on a keyed provider fails.
+ * are skipped and listed. Exit 1 when any probe on a keyed provider fails, or
+ * when no key is configured at all — an all-skip run probed nothing and must
+ * not report green.
  * Corti is not probed (needs tenant/environment credentials beyond a key).
  */
 import WebSocket from "ws";
@@ -20,22 +22,44 @@ const HANDSHAKE_TIMEOUT_MS = 15000;
 
 // Mirrors the app's dial: openaiRealtimeStreaming.js connects with a bare
 // Bearer header; deepgramStreaming.js passes the key as the bearer token.
-function probeWebSocket(url, token) {
+// `awaitServerEvent` is for providers that authenticate AFTER the upgrade:
+// OpenAI opens the socket for any key and only then sends an `error` event
+// for a bad one, so resolving on `open` validates nothing (#1624 class).
+function probeWebSocket(url, token, { awaitServerEvent = false } = {}) {
   return new Promise((resolve) => {
     const ws = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
     const timer = setTimeout(() => {
       ws.terminate();
       resolve({ ok: false, detail: `no handshake within ${HANDSHAKE_TIMEOUT_MS}ms` });
     }, HANDSHAKE_TIMEOUT_MS);
-    ws.on("open", () => {
-      clearTimeout(timer);
-      ws.close();
-      resolve({ ok: true });
-    });
-    ws.on("unexpected-response", (_req, res) => {
+    const finish = (result) => {
       clearTimeout(timer);
       ws.terminate();
-      resolve({ ok: false, detail: `handshake rejected: HTTP ${res.statusCode}` });
+      resolve(result);
+    };
+    ws.on("open", () => {
+      if (!awaitServerEvent) finish({ ok: true });
+    });
+    ws.on("message", (data) => {
+      if (!awaitServerEvent) return;
+      let event;
+      try {
+        event = JSON.parse(data);
+      } catch {
+        event = {};
+      }
+      if (event.type === "error") {
+        finish({ ok: false, detail: `server error event: ${event.error?.code ?? "unknown"}` });
+      } else {
+        finish({ ok: true });
+      }
+    });
+    ws.on("close", (code) => {
+      if (awaitServerEvent)
+        finish({ ok: false, detail: `closed before a server event (code ${code})` });
+    });
+    ws.on("unexpected-response", (_req, res) => {
+      finish({ ok: false, detail: `handshake rejected: HTTP ${res.statusCode}` });
     });
     ws.on("error", (err) => {
       clearTimeout(timer);
@@ -62,7 +86,9 @@ const PROBES = [
       const token = await fetchRealtimeTokenForProvider("openai-realtime", tokenDeps(key), {
         mode: "byok",
       });
-      return probeWebSocket("wss://api.openai.com/v1/realtime?intent=transcription", token);
+      return probeWebSocket("wss://api.openai.com/v1/realtime?intent=transcription", token, {
+        awaitServerEvent: true,
+      });
     },
   },
   {
@@ -94,12 +120,15 @@ const PROBES = [
     id: "tinfoil-realtime",
     keyEnv: "STT_CANARY_TINFOIL_KEY",
     // The attested socket needs the Tinfoil SDK's enclave verification; the
-    // canary stops at credential resolution through the registry.
+    // canary stops at credential resolution, so this row only proves the
+    // secret exists.
     run: async (key) => {
       const token = await fetchRealtimeTokenForProvider("tinfoil-realtime", tokenDeps(key), {
         mode: "byok",
       });
-      return token ? { ok: true } : { ok: false, detail: "empty token" };
+      return token
+        ? { ok: true, note: "key present (transport not probed)" }
+        : { ok: false, detail: "empty token" };
     },
   },
 ];
@@ -115,8 +144,13 @@ for (const probe of PROBES) {
     continue;
   }
   const result = await probe.run(key).catch((err) => ({ ok: false, detail: err.message }));
-  report.push(`| ${probe.id} | ${result.ok ? "✅" : `❌ ${result.detail}`} |`);
+  const cell = result.ok ? `✅${result.note ? ` ${result.note}` : ""}` : `❌ ${result.detail}`;
+  report.push(`| ${probe.id} | ${cell} |`);
   if (!result.ok) failures.push(`${probe.id}: ${result.detail}`);
+}
+
+if (skipped.length === PROBES.length) {
+  failures.push("no canary secrets configured — every provider was skipped, nothing was probed");
 }
 
 console.log("## Realtime STT canary\n");

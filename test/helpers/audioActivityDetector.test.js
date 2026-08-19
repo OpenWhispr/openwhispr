@@ -4,6 +4,9 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 const detectorModulePath = require.resolve("../../src/helpers/audioActivityDetector");
 const originalLoad = Module._load;
@@ -17,7 +20,7 @@ function setPlatform(platform) {
 
 afterEach(() => setPlatform(originalPlatform));
 
-function loadDetector(platform, spawn, ownPids) {
+function loadDetector(platform, spawn, exec) {
   delete require.cache[detectorModulePath];
   setPlatform(platform);
 
@@ -26,18 +29,13 @@ function loadDetector(platform, spawn, ownPids) {
       return { info() {}, warn() {}, debug() {}, error() {} };
     }
     if (request === "child_process") {
-      return { ...childProcess, spawn };
+      return { ...childProcess, exec, spawn };
     }
     // Binary resolution hits the real filesystem, so without this the platform
     // under test would be decided by which listener binaries happen to be built
     // on the host rather than by setPlatform().
     if (request === "./binaryResolver") {
       return { resolveBundledBinary: (name) => `/fake/bin/${name}` };
-    }
-    // Outside Electron the real module can only see the main pid, so the
-    // child-process PIDs that matter for #1392 have to be injected.
-    if (request === "./ownProcessPids" && ownPids) {
-      return { getOwnProcessPids: () => new Set(ownPids) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -68,9 +66,30 @@ function createFakeChild(spawnError) {
   return child;
 }
 
-function createDetector(platform, { spawnError, ownPids } = {}) {
+// `ownPids` is the #1392 spelling of the same injection: outside Electron the
+// real provider can only see the main pid, so child-process PIDs are supplied
+// here. Both spellings feed the detector's excluded-pid provider.
+function createDetector(
+  platform,
+  { excludedProcessIds, ownPids, execResponses = [], spawnError } = {}
+) {
+  const getExcludedProcessIds =
+    excludedProcessIds ?? (ownPids ? () => [...ownPids] : () => [process.pid]);
   const children = [];
   const calls = [];
+  const execCalls = [];
+  const fakeExec = () => {};
+  fakeExec[Symbol.for("nodejs.util.promisify.custom")] = async (command, options) => {
+    execCalls.push({ command, options });
+    const response = execResponses.shift();
+    if (!response || response.error) {
+      throw response?.error || new Error("exec unavailable in test");
+    }
+    if (response.promise) {
+      return response.promise;
+    }
+    return { stdout: response.stdout, stderr: response.stderr || "" };
+  };
   const AudioActivityDetector = loadDetector(
     platform,
     (command, args, options) => {
@@ -79,15 +98,24 @@ function createDetector(platform, { spawnError, ownPids } = {}) {
       children.push(child);
       return child;
     },
-    ownPids
+    fakeExec
   );
 
-  const detector = new AudioActivityDetector();
+  const detector = new AudioActivityDetector(getExcludedProcessIds);
   detector._isMicActive = async () => false;
-  return { detector, children, calls };
+  return { detector, children, calls, execCalls };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const createDeferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+};
 const PLATFORMS = ["darwin", "win32", "linux"];
 
 for (const platform of PLATFORMS) {
@@ -169,12 +197,12 @@ test("darwin: MIC_ACTIVE then MIC_INACTIVE drives the sustained timer", async ()
   detector.stop();
 });
 
-test("win32: mic-listener spawns hidden, keeps stdin piped, and excludes its own pid", async () => {
+test("win32: mic-listener spawns hidden, keeps stdin piped, and emits every pid", async () => {
   const { detector, calls } = createDetector("win32");
 
   await detector.start();
 
-  assert.deepEqual(calls[0].args, ["--exclude-pid", String(process.pid)]);
+  assert.deepEqual(calls[0].args, []);
   assert.equal(calls[0].options.windowsHide, true, "no console window may flash");
   assert.deepEqual(
     calls[0].options.stdio,
@@ -237,6 +265,444 @@ test("unsupported platforms poll without spawning a listener", async () => {
   assert.equal(calls.length, 0);
   assert.notEqual(detector.checkInterval, null);
   detector.stop();
+});
+
+test("darwin: PID events exclude current OpenWhispr processes and continue during recording", async () => {
+  let excludedProcessIds = [101, 102];
+  const { detector, children } = createDetector("darwin", {
+    excludedProcessIds: () => excludedProcessIds,
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  detector.setUserRecording(true);
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 101\nMIC_START 201\n");
+  children[0].stdout.emit("data", "MIC_START 202\nMIC_STOP 201\n");
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+  assert.deepEqual(externalStates, [
+    { reliable: true, externalMicActive: false },
+    { reliable: true, externalMicActive: true },
+  ]);
+  assert.equal(detector._sustainedTimer, null, "recording must still suppress meeting prompts");
+  assert.deepEqual([...detector._activeMicPids], [202], "own pids never enter the set");
+
+  // The exclusion list is read live: a helper that spawned after start() is
+  // excluded from its first MIC_START.
+  excludedProcessIds = [101, 102, 103];
+  children[0].stdout.emit("data", "MIC_START 103\nMIC_STOP 202\n");
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: false,
+  });
+  assert.deepEqual([...detector._activeMicPids], []);
+  assert.deepEqual(externalStates, [
+    { reliable: true, externalMicActive: false },
+    { reliable: true, externalMicActive: true },
+    { reliable: true, externalMicActive: false },
+  ]);
+  detector.stop();
+});
+
+test("darwin: aggregate fallback remains prompt-only and unreliable", async () => {
+  const { detector, children } = createDetector("darwin");
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY AGGREGATE\nMIC_ACTIVE\n");
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: false,
+    externalMicActive: false,
+  });
+  assert.deepEqual(externalStates, []);
+  assert.notEqual(detector._sustainedTimer, null, "aggregate activity must still drive prompts");
+  detector.stop();
+});
+
+test("darwin: losing PID capability emits an unreliable external-mic snapshot", async () => {
+  const { detector, children } = createDetector("darwin");
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\nCAPABILITY AGGREGATE\n");
+
+  assert.deepEqual(externalStates.at(-1), {
+    reliable: false,
+    externalMicActive: false,
+  });
+  detector.stop();
+});
+
+test("darwin: listener exit emits reliability loss before polling fallback", async () => {
+  const { detector, children } = createDetector("darwin");
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  children[0].emit("exit", 1);
+
+  assert.deepEqual(externalStates.at(-1), {
+    reliable: false,
+    externalMicActive: false,
+  });
+  assert.notEqual(detector.checkInterval, null);
+  detector.stop();
+});
+
+test("darwin: exclusion-provider failure emits reliability loss", async () => {
+  let providerFails = false;
+  const { detector, children } = createDetector("darwin", {
+    excludedProcessIds: () => {
+      if (providerFails) throw new Error("metrics unavailable");
+      return [process.pid];
+    },
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  providerFails = true;
+  children[0].stdout.emit("data", "MIC_START 901\n");
+
+  assert.deepEqual(externalStates.at(-1), {
+    reliable: false,
+    externalMicActive: false,
+  });
+  detector.stop();
+});
+
+test("win32: current OpenWhispr PIDs are filtered dynamically in JavaScript", async () => {
+  let excludedProcessIds = [process.pid, 404];
+  const { detector, children, calls } = createDetector("win32", {
+    excludedProcessIds: () => excludedProcessIds,
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  assert.deepEqual(calls[0].args, [], "the native listener must report excluded pids too");
+
+  children[0].stdout.emit("data", "READY\nCAPABILITY PID\nMIC_START 404\n");
+  assert.deepEqual(externalStates, [{ reliable: true, externalMicActive: false }]);
+
+  excludedProcessIds = [process.pid];
+  children[0].stdout.emit("data", "MIC_START 501\n");
+  children[0].stdout.emit("data", "MIC_STOP 501\nMIC_STOP 404\n");
+
+  assert.deepEqual(externalStates, [
+    { reliable: true, externalMicActive: false },
+    { reliable: true, externalMicActive: true },
+    { reliable: true, externalMicActive: false },
+  ]);
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: false,
+  });
+  detector.stop();
+});
+
+test("win32: own microphone activity never starts or sustains the legacy prompt", async () => {
+  const { detector, children } = createDetector("win32", {
+    excludedProcessIds: () => [process.pid],
+  });
+
+  await detector.start();
+  children[0].stdout.emit("data", `READY\nCAPABILITY PID\nMIC_START ${process.pid}\n`);
+  assert.equal(detector._sustainedTimer, null, "an excluded pid must not start a prompt");
+
+  children[0].stdout.emit("data", "MIC_START 900\n");
+  assert.notEqual(detector._sustainedTimer, null, "an external pid must start a prompt");
+
+  children[0].stdout.emit("data", "MIC_STOP 900\n");
+  assert.equal(
+    detector._sustainedTimer,
+    null,
+    "an excluded pid must not keep the external prompt active"
+  );
+  detector.stop();
+});
+
+test("win32: a legacy binary without CAPABILITY PID stays unreliable but still prompts", async () => {
+  const { detector, children } = createDetector("win32", {
+    excludedProcessIds: () => [process.pid],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  // Pre-refcounting builds print READY and un-refcounted MIC events; trusting
+  // them for auto-end could stop a live meeting recording.
+  children[0].stdout.emit("data", "READY\nMIC_START 900\n");
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: false,
+    externalMicActive: false,
+  });
+  assert.deepEqual(externalStates, []);
+  assert.notEqual(detector._sustainedTimer, null, "legacy events must still drive prompts");
+  detector.stop();
+});
+
+test("win32: a mid-run coverage downgrade emits an unreliable snapshot but keeps prompting", async () => {
+  const { detector, children } = createDetector("win32", {
+    excludedProcessIds: () => [process.pid],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "READY\nCAPABILITY PID\nMIC_START 900\n");
+  assert.deepEqual(externalStates.at(-1), { reliable: true, externalMicActive: true });
+
+  // The helper announces CAPABILITY AGGREGATE instead of exiting when it can
+  // no longer guarantee per-PID coverage.
+  children[0].stdout.emit("data", "CAPABILITY AGGREGATE\n");
+  assert.deepEqual(externalStates.at(-1), {
+    reliable: false,
+    externalMicActive: false,
+  });
+
+  children[0].stdout.emit("data", "MIC_START 901\n");
+  assert.notEqual(detector._sustainedTimer, null, "degraded events must still drive prompts");
+  assert.equal(detector.getExternalMicState().reliable, false);
+  detector.stop();
+});
+
+test("win32: unattributable sessions (pid 0) count as external capture", async () => {
+  const { detector, children } = createDetector("win32", {
+    excludedProcessIds: () => [process.pid],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "READY\nCAPABILITY PID\nMIC_START 0\n");
+  assert.deepEqual(externalStates.at(-1), { reliable: true, externalMicActive: true });
+
+  children[0].stdout.emit("data", "MIC_STOP 0\n");
+  assert.deepEqual(externalStates.at(-1), { reliable: true, externalMicActive: false });
+  detector.stop();
+});
+
+test("linux: reconciles source-output ownership at startup and on events", async () => {
+  const { detector, children, execCalls } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          { index: 1, properties: { "application.process.id": "700" } },
+          { index: 2, properties: { "application.process.id": "800" } },
+          { index: 3, properties: { "application.process.id": "800" } },
+        ]),
+      },
+      {
+        stdout: JSON.stringify([{ index: 1, properties: { "application.process.id": "700" } }]),
+      },
+    ],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+
+  children[0].stdout.emit("data", "Event 'change' on source-output #1\n");
+  await flush();
+
+  assert.deepEqual(
+    execCalls.map(({ command }) => command),
+    ["pactl --format=json list source-outputs", "pactl --format=json list source-outputs"]
+  );
+  assert.deepEqual(externalStates, [
+    { reliable: true, externalMicActive: true },
+    { reliable: true, externalMicActive: false },
+  ]);
+  detector.stop();
+});
+
+test("linux: a burst of subscribe events coalesces into at most two reconciles", async () => {
+  const { detector, children, execCalls } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: JSON.stringify([{ index: 1, properties: { "application.process.id": "800" } }]) },
+      { stdout: JSON.stringify([{ index: 1, properties: { "application.process.id": "800" } }]) },
+    ],
+  });
+
+  await detector.start();
+  children[0].stdout.emit(
+    "data",
+    [
+      "Event 'new' on source-output #1",
+      "Event 'new' on source-output #2",
+      "Event 'change' on source-output #1",
+      "Event 'remove' on source-output #2",
+      "",
+    ].join("\n")
+  );
+  await flush();
+
+  assert.equal(
+    execCalls.filter(({ command }) => command === "pactl --format=json list source-outputs").length,
+    3,
+    "startup reconcile plus one running and one trailing reconcile"
+  );
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+  detector.stop();
+});
+
+test("linux: module streams without a process id stay excluded without costing reliability", async () => {
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: "[]" },
+      {
+        // module-echo-cancel/loopback streams carry no application.process.id.
+        stdout: JSON.stringify([
+          { index: 1, properties: { "media.name": "Echo-Cancel Source Stream" } },
+          { index: 2, properties: { "application.process.id": "900" } },
+        ]),
+      },
+      {
+        stdout: JSON.stringify([
+          { index: 1, properties: { "media.name": "Echo-Cancel Source Stream" } },
+        ]),
+      },
+    ],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  await flush();
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+
+  children[0].stdout.emit("data", "Event 'remove' on source-output #2\n");
+  await flush();
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: false,
+  });
+  detector.stop();
+});
+
+test("linux: ownership query failure is unreliable while aggregate events still prompt", async () => {
+  const { detector, children } = createDetector("linux", {
+    execResponses: [{ stdout: "[]" }, { stdout: "not-json" }],
+  });
+  const externalStates = [];
+  detector.on("external-mic-state-changed", (state) => externalStates.push(state));
+
+  await detector.start();
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: false,
+  });
+
+  children[0].stdout.emit("data", "Event 'new' on source-output #7\n");
+  await flush();
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: false,
+    externalMicActive: false,
+  });
+  assert.deepEqual(externalStates, [
+    { reliable: true, externalMicActive: false },
+    { reliable: false, externalMicActive: false },
+  ]);
+  assert.notEqual(detector._sustainedTimer, null, "aggregate activity must still drive prompts");
+  detector.stop();
+});
+
+test("linux: a stale startup reconciliation cannot restore reliability after listener exit", async () => {
+  const ownershipQuery = createDeferred();
+  const { detector, children } = createDetector("linux", {
+    execResponses: [{ promise: ownershipQuery.promise }],
+  });
+
+  const starting = detector.start();
+  await flush();
+  children[0].emit("exit", 1);
+  ownershipQuery.resolve({
+    stdout: JSON.stringify([{ index: 7, properties: { "application.process.id": "900" } }]),
+    stderr: "",
+  });
+  await starting;
+  await flush();
+
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: false,
+    externalMicActive: false,
+  });
+  assert.deepEqual([...detector._activeMicPids], []);
+  assert.notEqual(detector.checkInterval, null, "polling must take over after listener exit");
+  detector.stop();
+});
+
+test("win32: portable native state seam handles reference counts and failures", (t) => {
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-mic-listener-"));
+  const executablePath = path.join(temporaryDirectory, "mic-listener-state-test");
+  t.after(() => fs.rmSync(temporaryDirectory, { force: true, recursive: true }));
+
+  const compileResult = childProcess.spawnSync(
+    process.env.CC || "cc",
+    [
+      "-DMIC_LISTENER_STATE_TEST",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      path.resolve(__dirname, "../../resources/windows-mic-listener.c"),
+      "-o",
+      executablePath,
+    ],
+    { encoding: "utf8" }
+  );
+
+  if (compileResult.error?.code === "ENOENT") {
+    t.skip("no C compiler is available for the portable native-state seam");
+    return;
+  }
+
+  assert.equal(compileResult.status, 0, compileResult.stderr);
+  const scenarios = [
+    { argument: "state", output: /native state tests passed/ },
+    { argument: "ownership", output: /invalid process ownership rejected/ },
+    { argument: "lifecycle", output: /session lifecycle fully released/ },
+    { argument: "expired-state", output: /expired state queued cleanup once/ },
+    { argument: "coverage", output: /unhealthy setup rejected/ },
+  ];
+
+  for (const scenario of scenarios) {
+    const runResult = childProcess.spawnSync(executablePath, [scenario.argument], {
+      encoding: "utf8",
+    });
+    assert.equal(runResult.status, 0, runResult.stderr);
+    assert.match(runResult.stdout, scenario.output);
+  }
 });
 
 // The native listeners are edge-triggered: they emit only on state transitions,

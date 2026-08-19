@@ -285,6 +285,10 @@ const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
 const CalendarReminderScheduler = require("./src/helpers/calendarReminderScheduler");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
+const {
+  collectAudioCaptureHelperPids,
+  createExcludedProcessIdProvider,
+} = require("./src/helpers/electronProcessIds");
 const AudioTapManager = require("./src/helpers/audioTapManager");
 const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager");
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
@@ -457,7 +461,17 @@ function initializeCoreManagers() {
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     new MeetingProcessDetector(),
-    new AudioActivityDetector(),
+    new AudioActivityDetector(
+      // The capture-helper managers are created a few lines below; the provider
+      // is only invoked on mic events, long after initialization completes.
+      createExcludedProcessIdProvider(() =>
+        collectAudioCaptureHelperPids([
+          audioTapManager,
+          linuxPortalAudioManager,
+          windowsLoopbackAudioManager,
+        ])
+      )
+    ),
     windowManager,
     databaseManager
   );

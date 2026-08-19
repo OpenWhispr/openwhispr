@@ -14,6 +14,10 @@ import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
+import {
+  resolveLlmRequestTimeoutSeconds,
+  LLM_STREAMING_TIMEOUT_FLOOR_SECONDS,
+} from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
@@ -311,7 +315,10 @@ class ReasoningService extends BaseReasoningService {
 
     const response = await withRetry(async () => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutSeconds = resolveLlmRequestTimeoutSeconds(
+        getSettings().llmRequestTimeoutSeconds
+      );
+      const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -370,7 +377,7 @@ class ReasoningService extends BaseReasoningService {
         return jsonResponse;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          throw new Error("Request timed out after 30s");
+          throw new Error(`Request timed out after ${timeoutSeconds}s`);
         }
         throw error;
       } finally {
@@ -588,7 +595,11 @@ class ReasoningService extends BaseReasoningService {
 
     this.streamAbortController = new AbortController();
     const controller = this.streamAbortController;
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutSeconds = Math.max(
+      resolveLlmRequestTimeoutSeconds(getSettings().llmRequestTimeoutSeconds),
+      LLM_STREAMING_TIMEOUT_FLOOR_SECONDS
+    );
+    const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
 
     let response: Response;
     try {
@@ -612,6 +623,7 @@ class ReasoningService extends BaseReasoningService {
     }
 
     if (!response.ok) {
+      clearTimeout(timeoutId);
       const errorText = await response.text();
       let errorMessage: string;
       try {
@@ -625,7 +637,10 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const reader = response.body?.getReader();
-    if (!reader) throw new Error("No response body");
+    if (!reader) {
+      clearTimeout(timeoutId);
+      throw new Error("No response body");
+    }
 
     const decoder = new TextDecoder();
     let buffer = "";

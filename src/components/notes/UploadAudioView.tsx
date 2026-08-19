@@ -590,8 +590,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const cancelTranscription = () => {
-    // True backend abort for cloud uploads; the run-id bump still discards any
-    // late result from providers that can't be aborted.
+    // True backend abort for cloud and local uploads; the run-id bump still
+    // discards any late result from providers that can't be aborted (BYOK).
     if (activeRequestIdRef.current) {
       window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
       activeRequestIdRef.current = null;
@@ -651,7 +651,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         buildTranscriptionConfig(),
         diarization,
         currentFile.durationSeconds,
-        { requestId }
+        { requestId, timestamps: true }
       ).finally(() => {
         if (activeRequestIdRef.current === requestId) activeRequestIdRef.current = null;
       });
@@ -687,6 +687,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           folderId: selectedFolderId ? Number(selectedFolderId) : null,
           diarization,
           durationSeconds: res.durationSeconds,
+          segments: res.segments,
         });
         if (runId !== runIdRef.current) return;
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);

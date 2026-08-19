@@ -157,19 +157,12 @@ export default function InferenceConfigEditor({
   const setProvider = setField("provider");
   const setModel = setField("model");
 
-  const switchCloudProvider = useCallback(
-    (provider: string, fallbackModel: string) =>
-      useSettingsStore.getState().switchReasoningProvider(scope, provider, fallbackModel),
-    [scope]
-  );
-
   const renderModelSelector = (mode?: "cloud" | "local") => (
     <ReasoningModelSelector
       reasoningModel={config.model}
       setReasoningModel={setModel}
       localReasoningProvider={config.provider}
       setLocalReasoningProvider={setProvider}
-      onCloudProviderSelect={switchCloudProvider}
       cloudReasoningBaseUrl={config.cloudBaseUrl ?? ""}
       setCloudReasoningBaseUrl={setField("cloudBaseUrl")}
       customReasoningApiKey={config.customApiKey ?? ""}

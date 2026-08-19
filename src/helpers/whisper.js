@@ -11,6 +11,7 @@ const {
   checkDiskSpace,
 } = require("./downloadUtils");
 const WhisperServerManager = require("./whisperServer");
+const { createAbortError } = require("./abortError");
 const { getModelsDirForService } = require("./modelDirUtils");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
@@ -77,20 +78,24 @@ class WhisperManager {
 
   // The GPU backend for every server start is resolved fresh from the current
   // env + installed packs, so enabling or removing a pack applies immediately
-  // instead of after an app restart. WHISPER_GPU_FAILED lists backends that
-  // crashed on this machine (persisted by ipcHandlers when the server falls
-  // back to CPU); they stay off until the user retries or re-downloads, so a
-  // doomed backend isn't re-attempted — and its model reload re-paid — on
-  // every launch.
+  // instead of after an app restart. A pack on disk implies intent: the user
+  // downloaded it, so it engages unless WHISPER_*_ENABLED is explicitly set to
+  // "false" (case-insensitive; an opt-out that survives without deleting the
+  // pack). Requiring the flag to be present stranded downloaded packs on
+  // silent CPU whenever the .env line was lost (#1340). WHISPER_GPU_FAILED
+  // lists backends that crashed on this machine (persisted by ipcHandlers
+  // when the server falls back to CPU); they stay off until the user retries
+  // or re-downloads, so a doomed backend isn't re-attempted — and its model
+  // reload re-paid — on every launch.
   resolveGpuStartOptions() {
     const failed = resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
     const useCuda =
-      process.env.WHISPER_CUDA_ENABLED === "true" &&
+      (process.env.WHISPER_CUDA_ENABLED || "").toLowerCase() !== "false" &&
       !failed.includes("cuda") &&
       !!this._cudaBinaryManager?.isDownloaded();
     const useVulkan =
       !useCuda &&
-      process.env.WHISPER_VULKAN_ENABLED === "true" &&
+      (process.env.WHISPER_VULKAN_ENABLED || "").toLowerCase() !== "false" &&
       !failed.includes("vulkan") &&
       !!this._vulkanBinaryManager?.isDownloaded();
     return { useCuda, useVulkan };
@@ -388,6 +393,7 @@ class WhisperManager {
     return await this.transcribeViaServer(audioBlob, model, language, initialPrompt, {
       vadEnabled,
       vadConfig,
+      signal: options.signal,
     });
   }
 
@@ -402,6 +408,11 @@ class WhisperManager {
   }
 
   async _runServerTranscription(audioBlob, model, language, initialPrompt = null, options = {}) {
+    // An already-cancelled upload skips the server boot entirely.
+    if (options.signal?.aborted) {
+      throw createAbortError("whisper-server transcription cancelled");
+    }
+
     debugLogger.info("Transcription mode: SERVER", { model, language: language || "auto" });
     const modelPath = this.getModelPath(model);
 
@@ -447,7 +458,11 @@ class WhisperManager {
     });
 
     const startTime = Date.now();
-    const result = await this.serverManager.transcribe(audioBuffer, { language, initialPrompt });
+    const result = await this.serverManager.transcribe(audioBuffer, {
+      language,
+      initialPrompt,
+      signal: options.signal,
+    });
     const elapsed = Date.now() - startTime;
 
     debugLogger.logWhisperPipeline("transcribeViaServer - completed", {
