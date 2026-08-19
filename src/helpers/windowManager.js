@@ -1275,14 +1275,21 @@ class WindowManager {
   // renders at the bounds it was laid out for, but minimise and close stay
   // available (close goes to the tray and the flow resumes where it left off).
   _applyOnboardingWindowChrome(win) {
-    // Size stays locked to the canonical compact/expanded bounds, but the user
-    // can always minimise or close: close hides to the tray (the session
-    // persists and resumes), so onboarding is never a window you can't leave.
-    win.setResizable(false);
+    // The window opens at the canonical compact/expanded bounds but stays a
+    // normal window: resizable (with the compact size as the floor — the
+    // smallest layout any step was designed for; the shell scrolls beyond
+    // that), maximizable, minimizable, closable (close hides to the tray, the
+    // persisted session resumes). Fullscreen stays off so the macOS zoom
+    // button maximizes instead of moving setup to its own Space.
+    win.setResizable(true);
     win.setMinimizable(true);
-    win.setMaximizable(false);
+    win.setMaximizable(true);
     win.setClosable(true);
     win.setFullScreenable(false);
+    win.setMinimumSize(
+      ONBOARDING_WINDOW_SIZES.COMPACT.width,
+      ONBOARDING_WINDOW_SIZES.COMPACT.height
+    );
     if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
       // Windows/Linux are frameless; OnboardingShell draws its own controls.
       win.setWindowButtonVisibility(true);
@@ -1318,6 +1325,7 @@ class WindowManager {
         win.setMaximizable(state.maximizable);
         win.setClosable(state.closable);
         win.setFullScreenable(state.fullscreenable);
+        if (state.minimumSize) win.setMinimumSize(...state.minimumSize);
       }
       if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
         win.setWindowButtonVisibility(true);
@@ -1337,6 +1345,7 @@ class WindowManager {
         maximizable: win.isMaximizable(),
         closable: win.isClosable(),
         fullscreenable: win.isFullScreenable(),
+        minimumSize: win.getMinimumSize(),
       };
     }
 
