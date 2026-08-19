@@ -1986,6 +1986,8 @@
         }
       },
       "updates": {
+        "autoInstall": "Installer les mises à jour automatiquement",
+        "autoInstallDescription": "Les mises à jour téléchargées s'installent à la fermeture de l'application. Désactivez pour les installer uniquement quand vous le décidez.",
         "badges": {
           "dev": "Dev",
           "latest": "À jour",
