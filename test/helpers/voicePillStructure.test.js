@@ -71,7 +71,9 @@ test("an idle Agent panel starts with the normal pill and expands only while lis
 
   assert.match(idleAgent, /style="width:40px;height:40px/);
   assert.doesNotMatch(idleAgent, /style="width:92px;height:36px/);
+  assert.doesNotMatch(idleAgent, /data-active=""/);
   assert.match(listeningAgent, /style="width:92px;height:36px/);
+  assert.match(listeningAgent, /data-active=""/);
 });
 
 test("the waveform stays to the right of the identity across docks and voice modes", async () => {
@@ -142,7 +144,7 @@ test("dictation errors preserve the pill root until compact bounds settle", () =
   const sourceRoot = path.resolve(__dirname, "../..");
   const appSource = fs.readFileSync(path.join(sourceRoot, "src/App.jsx"), "utf8");
   const pillMarkup = appSource.slice(
-    appSource.indexOf("{/* The panel footer owns this pill"),
+    appSource.indexOf("{/* The panel footer can hide this pill"),
     appSource.indexOf("<VoiceModePanelCore")
   );
   const errorExit = appSource.slice(
@@ -156,15 +158,69 @@ test("dictation errors preserve the pill root until compact bounds settle", () =
   assert.ok(errorExit.indexOf("await requestMainWindowSize") >= 0);
 });
 
+test("Agent errors restore content or downplay an empty panel without stealing the warning", () => {
+  const sourceRoot = path.resolve(__dirname, "../..");
+  const appSource = fs.readFileSync(path.join(sourceRoot, "src/App.jsx"), "utf8");
+  const recordingSource = fs.readFileSync(
+    path.join(sourceRoot, "src/hooks/useAudioRecording.js"),
+    "utf8"
+  );
+
+  assert.match(
+    recordingSource,
+    /const showDictationError = \([\s\S]*const recoverAssistant = Boolean\(audioManagerRef\.current\?\.voiceAgentRequested\);[\s\S]*onDictationError\?\.\(\{ recoverAssistant \}\)/
+  );
+  assert.match(
+    recordingSource,
+    /onError: \(error\) => \{[\s\S]*showDictationError\(\{[\s\S]*title,[\s\S]*description,[\s\S]*\}\);[\s\S]*onNoAudio:/
+  );
+  assert.match(appSource, /handleAssistantResponseContent[\s\S]*assistantHasContentRef\.current = true/);
+  const contentRecovery = appSource.slice(
+    appSource.indexOf("const handleDictationError"),
+    appSource.indexOf("// Errors replace the live transcript surface")
+  );
+  assert.match(contentRecovery, /restoreAssistantContent[\s\S]*setAssistantThinking\(false\)/);
+  assert.doesNotMatch(
+    contentRecovery,
+    /setAssistantPanelOpen|setAssistantPanelMounted|setPendingCommand|setPanelConversationId/
+  );
+  assert.match(
+    appSource,
+    /dictationErrorActionCount > 0[\s\S]*assistantErrorDownplayRequestedRef\.current = false;[\s\S]*beginAssistantPanelClose\(true\)/
+  );
+  assert.match(
+    appSource,
+    /assistantPanelOpen \|\| \(assistantErrorDownplayActive && dictationErrorActionCount > 0\)/
+  );
+  assert.match(appSource, /if \(!preserveNativeOwnership\) \{[\s\S]*setAssistantPanelOpen/);
+  assert.doesNotMatch(appSource, /closeAfterDictationErrorRef|collapseAssistantAfterDictationErrorRef/);
+});
+
 test("dictation error visibility cannot deadlock on native content sizing", () => {
   const sourceRoot = path.resolve(__dirname, "../..");
   const toastSource = fs.readFileSync(path.join(sourceRoot, "src/components/ui/Toast.tsx"), "utf8");
+  const windowManagerSource = fs.readFileSync(
+    path.join(sourceRoot, "src/helpers/windowManager.js"),
+    "utf8"
+  );
 
   assert.match(toastSource, /presentation !== "dictation-error" \|\| errorSurfaceReady/);
   assert.match(toastSource, /setTimeout\(\(\) => \{[\s\S]*setErrorSurfaceReady\(true\)[\s\S]*240/);
   assert.match(
     toastSource,
     /resizeDictationErrorWindowToContent[\s\S]*finally[\s\S]*setErrorSurfaceReady\(true\)/
+  );
+  const errorResizeHandler = windowManagerSource.slice(
+    windowManagerSource.indexOf("resizeDictationErrorWindowToContent(surfaceHeight)"),
+    windowManagerSource.indexOf("async _prepareRendererForMainWindowResize")
+  );
+  assert.match(
+    errorResizeHandler,
+    /if \(this\._assistantPanelOpen\) \{[\s\S]*getBounds\(\)[\s\S]*changed: false/
+  );
+  assert.ok(
+    errorResizeHandler.indexOf("if (this._assistantPanelOpen)") <
+      errorResizeHandler.indexOf("fitDictationErrorContentWindowToWorkArea")
   );
 });
 

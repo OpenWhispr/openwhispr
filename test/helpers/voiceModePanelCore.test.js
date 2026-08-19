@@ -108,18 +108,21 @@ test("Agent close keeps the same surface mounted while its expensive content fad
   assert.equal((closing.match(/<section/g) || []).length, 1);
 });
 
-test("Agent close releases native ownership immediately and has a parent fallback", () => {
+test("Agent close separates manual native release from error downplay and keeps a fallback", () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, "../../src/App.jsx"), "utf8");
   const completeHandler = appSource.slice(
     appSource.indexOf("const completeAssistantContentFade"),
-    appSource.indexOf("const handleAssistantPanelClose")
+    appSource.indexOf("const beginAssistantPanelClose")
   );
   const closeHandler = appSource.slice(
-    appSource.indexOf("const handleAssistantPanelClose"),
+    appSource.indexOf("const beginAssistantPanelClose"),
     appSource.indexOf("const closeLiveTranscriptPanel")
   );
 
+  assert.match(closeHandler, /if \(!preserveNativeOwnership\)/);
   assert.match(closeHandler, /setAssistantPanelOpen\?\.\(false\)/);
+  assert.match(closeHandler, /beginAssistantPanelClose\(false\)/);
+  assert.match(closeHandler, /beginAssistantPanelClose\(true\)/);
   assert.match(
     closeHandler,
     /setTimeout\(\s*completeAssistantContentFade,\s*ASSISTANT_CONTENT_FADE_FALLBACK_MS\s*\)/s

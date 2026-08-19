@@ -263,7 +263,8 @@ export const useAudioRecording = (toast, options = {}) => {
       ).trim() || fallback.trim();
 
     const showDictationError = ({ title, description, transcript = "" }) => {
-      onDictationError?.();
+      const recoverAssistant = Boolean(audioManagerRef.current?.voiceAgentRequested);
+      onDictationError?.({ recoverAssistant });
       const recoverableTranscript = getRecoverableTranscript(transcript);
       const actions = [
         {

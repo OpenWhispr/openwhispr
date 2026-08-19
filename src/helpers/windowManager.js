@@ -30,6 +30,11 @@ const {
   WindowPositionUtil,
 } = require("./windowConfig");
 
+// Temporary screen-recording mode: keep every OpenWhispr window visible to
+// screenshots and screen shares. Restore this to true when content protection
+// should be enforced again.
+const CONTENT_PROTECTION_ENABLED = false;
+
 class WindowManager {
   constructor() {
     this.mainWindow = null;
@@ -125,13 +130,13 @@ class WindowManager {
     MenuManager.setupMainMenu(() => this.openSettings());
   }
 
-  // Content protection keeps the overlay out of screenshots and screen shares.
-  // Two independent reasons demand it: the screen-context capture setting and
-  // an open assistant panel (which renders AI responses over anything).
+  // Keep this update path intact so content protection can be restored with the
+  // shared switch after the temporary screen-recording period.
   _updateMainContentProtection() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.setContentProtection(
-      Boolean(this._screenContextProtection || this._assistantPanelOpen)
+      CONTENT_PROTECTION_ENABLED &&
+        Boolean(this._screenContextProtection || this._assistantPanelOpen)
     );
   }
 
@@ -255,6 +260,16 @@ class WindowManager {
   resizeDictationErrorWindowToContent(surfaceHeight) {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return { success: false, message: "Window not available" };
+    }
+
+    // A dictation error is an overlay when Agent Mode already owns the shared
+    // window. Its card may measure itself, but that measurement must not
+    // replace the Agent surface geometry underneath it. Otherwise the native
+    // window contracts to the error card's height and remains there after the
+    // overlay dismisses because the Agent panel never actually closed.
+    if (this._assistantPanelOpen) {
+      const bounds = this.mainWindow.getBounds();
+      return { success: true, bounds, changed: false };
     }
 
     const currentBounds = this.mainWindow.getBounds();
@@ -1314,8 +1329,8 @@ class WindowManager {
     });
     this.notificationWindow = win;
 
-    // Keep the prompt visible to the user but out of screen shares and recordings.
-    win.setContentProtection(true);
+    // Follow the same temporary app-wide screen-recording policy as the main window.
+    win.setContentProtection(CONTENT_PROTECTION_ENABLED);
 
     if (process.platform === "darwin") {
       win.setIgnoreMouseEvents(true, { forward: true });

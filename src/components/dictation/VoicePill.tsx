@@ -69,7 +69,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isThinking = state === "thinking";
   const showThinkingBeam = beamActive ?? isThinking;
   const isUnavailable = state === "unavailable";
-  const showBorderBeam = agentMode ? !isUnavailable : showThinkingBeam;
+  // An idle Agent pill is a resting control, not a progress indicator. Keep
+  // its Beam for the active listening/thinking lifecycle only so reopening an
+  // Agent surface never looks like work is already in flight.
+  const showBorderBeam =
+    !isUnavailable && (showThinkingBeam || (agentMode && isRecording));
   const isPanel = variant === "panel";
   const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =

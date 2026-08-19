@@ -95,6 +95,7 @@ export default function App() {
   const [hasDragged, setHasDragged] = useState(false);
   const [dictationErrorPillHandoffActive, setDictationErrorPillHandoffActive] = useState(false);
   const dictationErrorActionCountRef = useRef(dictationErrorActionCount);
+  const assistantErrorDownplayRequestedRef = useRef(false);
   const dictationErrorPillHandoffRef = useRef(null);
 
   if (dictationErrorPillHandoffRef.current === null) {
@@ -317,6 +318,7 @@ export default function App() {
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
   const [assistantPanelMounted, setAssistantPanelMounted] = useState(false);
   const [assistantPanelClosing, setAssistantPanelClosing] = useState(false);
+  const [assistantErrorDownplayActive, setAssistantErrorDownplayActive] = useState(false);
   const [assistantResponseReady, setAssistantResponseReady] = useState(false);
   const [assistantThinking, setAssistantThinking] = useState(false);
   const [assistantBusy, setAssistantBusy] = useState(false);
@@ -360,6 +362,7 @@ export default function App() {
   const mainWindowResizeCoordinatorRef = useRef(null);
   const commandIdRef = useRef(0);
   const assistantSelectionContextRef = useRef(null);
+  const assistantHasContentRef = useRef(false);
 
   if (mainWindowResizeCoordinatorRef.current === null) {
     mainWindowResizeCoordinatorRef.current = createMainWindowResizeCoordinator({
@@ -475,6 +478,7 @@ export default function App() {
   const prepareFreshAssistantConversation = React.useCallback(() => {
     if (!assistantConversationResetPendingRef.current) return;
     assistantConversationResetPendingRef.current = false;
+    assistantHasContentRef.current = false;
     setAssistantConversationResetToken((current) => current + 1);
   }, []);
 
@@ -524,6 +528,7 @@ export default function App() {
     assistantPanelOpenRef.current = true;
     assistantPanelClosingRef.current = false;
     assistantContentFadeCompletedRef.current = false;
+    setAssistantErrorDownplayActive(false);
     setAssistantPanelClosing(false);
     setAssistantResponseReady(false);
     clearTimeout(assistantCloseTimerRef.current);
@@ -588,6 +593,7 @@ export default function App() {
   );
 
   const handleAssistantResponseContent = React.useCallback(() => {
+    assistantHasContentRef.current = true;
     setAssistantThinking(false);
     void openAssistantPanel();
   }, [openAssistantPanel]);
@@ -605,10 +611,13 @@ export default function App() {
     []
   );
 
+  const assistantOwnsNativeWindow =
+    assistantPanelOpen || (assistantErrorDownplayActive && dictationErrorActionCount > 0);
+
   useEffect(() => {
-    window.electronAPI?.setAssistantPanelOpen?.(assistantPanelOpen);
+    window.electronAPI?.setAssistantPanelOpen?.(assistantOwnsNativeWindow);
     if (assistantPanelOpen) setIsHovered(false);
-  }, [assistantPanelOpen]);
+  }, [assistantOwnsNativeWindow, assistantPanelOpen]);
 
   useEffect(() => {
     if (
@@ -642,7 +651,21 @@ export default function App() {
     [requestLiveTranscriptHeight]
   );
 
-  const handleDictationError = React.useCallback(() => {
+  const handleDictationError = React.useCallback((options = {}) => {
+    if (typeof options.recoverAssistant === "boolean") {
+      const restoreAssistantContent = options.recoverAssistant && assistantHasContentRef.current;
+      assistantErrorDownplayRequestedRef.current =
+        options.recoverAssistant && !assistantHasContentRef.current;
+
+      if (restoreAssistantContent) {
+        // The failed follow-up never reaches chat streaming, so no later event
+        // would clear the temporary thinking flourish. The error is an overlay,
+        // not replacement content: end only that transient presentation and
+        // leave the response, conversation, geometry, and controls untouched.
+        setAssistantThinking(false);
+      }
+    }
+
     // Errors replace the live transcript surface, so unmount it immediately
     // and suppress late preview events until the next recording begins.
     liveTranscriptSuppressedRef.current = true;
@@ -723,6 +746,7 @@ export default function App() {
     // the next instance as fresh, but leave the current content untouched
     // until the compositor has finished contracting the surface.
     assistantSelectionContextRef.current = null;
+    assistantHasContentRef.current = false;
     assistantConversationResetPendingRef.current = true;
     setPanelConversationId(null);
     clearTimeout(assistantCloseTimerRef.current);
@@ -733,7 +757,7 @@ export default function App() {
     }, ASSISTANT_TRANSITION_MS);
   }, []);
 
-  const handleAssistantPanelClose = React.useCallback(() => {
+  const beginAssistantPanelClose = React.useCallback((preserveNativeOwnership = false) => {
     // Dismissing the panel mid-command must also abandon the command, or its
     // completion reopens the panel and answers a question the user withdrew.
     if (isAssistantVoice) {
@@ -745,13 +769,16 @@ export default function App() {
     clearTimeout(assistantCloseTimerRef.current);
     assistantPanelClosingRef.current = true;
     assistantContentFadeCompletedRef.current = false;
+    setAssistantErrorDownplayActive(preserveNativeOwnership);
     setAssistantPanelClosing(true);
 
     // Native interaction ownership must be released at close intent, not after
     // the renderer's opacity transition. If the transition event is delayed or
     // dropped, keeping this flag true makes the compact pill look closed while
     // the main process still rejects hide and ordinary dictation requests.
-    void window.electronAPI?.setAssistantPanelOpen?.(false);
+    if (!preserveNativeOwnership) {
+      void window.electronAPI?.setAssistantPanelOpen?.(false);
+    }
 
     // VoiceModePanelCore reports the actual content fade when it can. Keep the
     // lifecycle owner here as a final guarantee so a missed child transition
@@ -769,6 +796,23 @@ export default function App() {
     cancelProcessing,
     completeAssistantContentFade,
   ]);
+
+  const handleAssistantPanelClose = React.useCallback(() => {
+    beginAssistantPanelClose(false);
+  }, [beginAssistantPanelClose]);
+
+  useEffect(() => {
+    if (dictationErrorActionCount > 0) {
+      if (!assistantErrorDownplayRequestedRef.current) return;
+      assistantErrorDownplayRequestedRef.current = false;
+      beginAssistantPanelClose(true);
+      return;
+    }
+
+    if (assistantErrorDownplayActive) {
+      setAssistantErrorDownplayActive(false);
+    }
+  }, [assistantErrorDownplayActive, beginAssistantPanelClose, dictationErrorActionCount]);
 
   const closeLiveTranscriptPanel = React.useCallback(
     ({ suppress = false, clear = false } = {}) => {

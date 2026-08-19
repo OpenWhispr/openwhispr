@@ -4627,14 +4627,14 @@ class IPCHandlers {
       return screenContextCapture.getAccessResult();
     });
 
-    // Keeps the dictation overlay out of its own screenshots (and screen
-    // shares) while the screen-context feature is enabled.
+    // Preserve the renderer setting while app-wide content protection is
+    // temporarily disabled for screen recording.
     ipcMain.handle("screen-context-set-enabled", (event, enabled) => {
       this.windowManager?.setScreenContextProtection(enabled);
       return { success: true };
     });
 
-    // Panel open: window becomes focusable (follow-up input) and content-protected.
+    // Panel open: window becomes focusable so follow-up keyboard input works.
     ipcMain.handle("set-assistant-panel-open", (event, open) => {
       this.windowManager?.setAssistantPanelOpen(open);
       return { success: true };
