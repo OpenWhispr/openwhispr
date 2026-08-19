@@ -3213,6 +3213,8 @@
   "assistant": {
     "panel": {
       "selectionHint": "Select text to edit with",
+      "selectedContext": "Selected text added",
+      "removeSelectedContext": "Remove selected text",
       "copyToClipboard": "Copy to clipboard"
     }
   },

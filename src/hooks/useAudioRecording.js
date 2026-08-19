@@ -51,13 +51,23 @@ export const useAudioRecording = (toast, options = {}) => {
     voiceAgentRequested: false,
     translationRequested: false,
   });
-  const { onToggle, onAssistantCommand, dismissDictationError, onDictationError } = options;
+  const {
+    onToggle,
+    onAssistantCommand,
+    dismissDictationError,
+    onDictationError,
+    getAssistantSelectionContext,
+  } = options;
 
   // Read through a ref so a re-render never tears down the AudioManager
   // (the mount effect below must not depend on this callback).
   const onAssistantCommandRef = useRef(onAssistantCommand);
   useEffect(() => {
     onAssistantCommandRef.current = onAssistantCommand;
+  });
+  const getAssistantSelectionContextRef = useRef(getAssistantSelectionContext);
+  useEffect(() => {
+    getAssistantSelectionContextRef.current = getAssistantSelectionContext;
   });
 
   const performStartRecording = useCallback(
@@ -89,6 +99,10 @@ export const useAudioRecording = (toast, options = {}) => {
           return false;
         }
 
+        const assistantSelectionContext = voiceAgentRequested
+          ? (getAssistantSelectionContextRef.current?.() ?? null)
+          : null;
+
         const preparationGeneration = ++preparationGenerationRef.current;
         preparationStarted = true;
         setIsStopping(false);
@@ -115,6 +129,7 @@ export const useAudioRecording = (toast, options = {}) => {
         }
 
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+        audioManagerRef.current.setAssistantSelectionContext(assistantSelectionContext);
         audioManagerRef.current.setTranslationRequested(translationRequested);
         if (voiceAgentRequested) {
           logger.info(
@@ -137,7 +152,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // The selection to edit is whatever was highlighted at press time, so
         // read it now: it resolves while the user speaks instead of adding a
         // round trip after transcription.
-        if (voiceAgentRequested) {
+        if (voiceAgentRequested && !assistantSelectionContext) {
           audioManagerRef.current.beginSelectionCapture();
         }
 
@@ -401,12 +416,13 @@ export const useAudioRecording = (toast, options = {}) => {
             // the quoted selection when the selection-without-editor fallback
             // routed a highlighted passage here.
             window.electronAPI?.hideDictationPreview?.();
-            const { screenContext, transcript } = result.assistantConversation;
+            const { screenContext, transcript, selectedContext } = result.assistantConversation;
             onAssistantCommandRef.current?.({
               text: expandSnippets(transcript, getSettings().snippets),
               attachment: screenContext
                 ? { image: screenContext.data, mediaType: screenContext.mediaType }
                 : null,
+              selectedContext: selectedContext ?? null,
             });
           } else {
             window.electronAPI?.completeDictationPreview?.({ text: result.text });

@@ -3076,6 +3076,8 @@
   "assistant": {
     "panel": {
       "selectionHint": "Выберите текст для редактирования с помощью",
+      "selectedContext": "Выбранный текст добавлен",
+      "removeSelectedContext": "Удалить выбранный текст",
       "copyToClipboard": "Копировать в буфер обмена"
     }
   },

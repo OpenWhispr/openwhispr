@@ -20,6 +20,10 @@ import type { ToolRegistry } from "../../services/tools/ToolRegistry";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
 import type { ContainerScope } from "../../types/chat";
+import {
+  buildAgentRequestText,
+  type AgentSelectionContext,
+} from "../../utils/agentSelectionContext";
 
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
@@ -72,6 +76,8 @@ interface UseChatStreamingOptions {
 export interface SendToAIOptions {
   /** Screenshot for this message; attached only when the resolved model can see it. */
   attachment?: ChatImageAttachment;
+  /** Agent-response selection attached to this request without changing chat history. */
+  selectedContext?: AgentSelectionContext;
 }
 
 export interface ChatStreaming {
@@ -269,6 +275,19 @@ export function useChatStreaming({
         role: string;
         content: string | Array<Record<string, unknown>>;
       }> = allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
+
+      if (options?.selectedContext) {
+        for (let i = history.length - 1; i >= 0; i--) {
+          const message = history[i];
+          if (message.role === "user" && typeof message.content === "string") {
+            history[i] = {
+              ...message,
+              content: buildAgentRequestText(message.content, options.selectedContext),
+            };
+            break;
+          }
+        }
+      }
 
       // Attach the screenshot to the command it came with, but only where a
       // model can actually see it; otherwise drop it silently — an image

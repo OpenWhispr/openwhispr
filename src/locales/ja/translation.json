@@ -3048,6 +3048,8 @@
   "assistant": {
     "panel": {
       "selectionHint": "編集するテキストを選択",
+      "selectedContext": "選択したテキストを追加",
+      "removeSelectedContext": "選択したテキストを削除",
       "copyToClipboard": "クリップボードにコピー"
     }
   },

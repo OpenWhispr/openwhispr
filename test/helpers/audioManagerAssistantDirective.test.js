@@ -104,6 +104,41 @@ test("an attached screenshot is preferred over the raw carry", async (t) => {
   assert.equal(manager.pendingAssistantConversation.screenContext, attached);
 });
 
+test("an Agent-panel selection stays on the panel route without touching external selection editing", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-internal-selection-",
+    settingsKey: "__assistantInternalSelectionSettings",
+  });
+  let externalCaptureCalls = 0;
+  const manager = createManager({
+    consumeSelectionCapture: async () => {
+      externalCaptureCalls += 1;
+      throw new Error("external selection should not be read");
+    },
+  });
+  manager.setAssistantSelectionContext({
+    text: "the selected Agent response",
+    sourceMessageId: "assistant-1",
+  });
+
+  const result = await manager.processAgentCommand("make this friendlier", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.equal(result, "make this friendlier");
+  assert.deepEqual(manager.pendingAssistantConversation, {
+    transcript: "make this friendlier",
+    screenContext: null,
+    selectedContext: {
+      text: "the selected Agent response",
+      sourceMessageId: "assistant-1",
+    },
+  });
+  assert.equal(externalCaptureCalls, 0);
+  assert.equal(manager.assistantSelectionContext, null, "the context must be one-shot");
+  assert.ok(!manager.pendingSelectionEdit, "no in-place replacement session may be armed");
+});
+
 test("a selection without a reachable dictation agent routes to the panel with the selection quoted", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-sel-unreachable-",

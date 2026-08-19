@@ -3048,6 +3048,8 @@
   "assistant": {
     "panel": {
       "selectionHint": "Seleziona il testo da modificare con",
+      "selectedContext": "Testo selezionato aggiunto",
+      "removeSelectedContext": "Rimuovi testo selezionato",
       "copyToClipboard": "Copia negli appunti"
     }
   },

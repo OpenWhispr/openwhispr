@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, X } from "lucide-react";
 import { BrandMarkIcon } from "./BrandMarkIcon";
@@ -21,11 +21,16 @@ import {
   formatAgentToolName,
 } from "../../helpers/agentToolPresentation";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
+import {
+  normalizeAgentSelectionContext,
+  type AgentSelectionContext,
+} from "../../utils/agentSelectionContext";
 
 export interface AssistantCommand {
   id: number;
   text: string;
   attachment: ChatImageAttachment | null;
+  selectedContext: AgentSelectionContext | null;
 }
 
 type AssistantFooterPhase =
@@ -49,9 +54,15 @@ interface AssistantPanelProps {
   onBusyChange: (busy: boolean) => void;
   onResponseReadyChange: (ready: boolean) => void;
   onResponseContent: () => void;
+  onSelectionContextChange: (context: AgentSelectionContext | null) => void;
 }
 
 const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
+// Updating the selection indicator must not rerender react-markdown: its
+// component map is recreated on render, which remounts the text nodes and
+// collapses the browser's live selection. Streaming content still rerenders
+// normally because the content prop changes.
+const StableAssistantMarkdown = memo(MarkdownRenderer);
 
 export function AssistantPanel({
   pendingCommand,
@@ -67,6 +78,7 @@ export function AssistantPanel({
   onBusyChange,
   onResponseReadyChange,
   onResponseContent,
+  onSelectionContextChange,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
@@ -124,8 +136,15 @@ export function AssistantPanel({
     }
     consumedCommandIdRef.current = pendingCommand.id;
     onCommandConsumed(pendingCommand.id);
-    sendMessage(pendingCommand.text, { attachment: pendingCommand.attachment ?? undefined });
-  }, [historyReady, pendingCommand, onCommandConsumed, sendMessage]);
+    if (pendingCommand.selectedContext) {
+      setSelectedContext(null);
+      onSelectionContextChange(null);
+    }
+    sendMessage(pendingCommand.text, {
+      attachment: pendingCommand.attachment ?? undefined,
+      selectedContext: pendingCommand.selectedContext ?? undefined,
+    });
+  }, [historyReady, pendingCommand, onCommandConsumed, onSelectionContextChange, sendMessage]);
 
   const isToolExecuting = Boolean(streaming.activeToolName);
   const isBusy = BUSY_STATES.includes(streaming.agentState) || isToolExecuting;
@@ -168,6 +187,50 @@ export function AssistantPanel({
   });
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const responseSelectionRootRef = useRef<HTMLDivElement | null>(null);
+  const [selectedContext, setSelectedContext] = useState<AgentSelectionContext | null>(null);
+
+  const clearSelectedContext = useCallback(() => {
+    setSelectedContext(null);
+    onSelectionContextChange(null);
+    window.getSelection()?.removeAllRanges();
+  }, [onSelectionContextChange]);
+
+  useEffect(() => {
+    if (!open && selectedContext) clearSelectedContext();
+  }, [clearSelectedContext, open, selectedContext]);
+
+  useEffect(() => {
+    if (!open || !isResponseReady || !latestAssistantMessage) return undefined;
+
+    const captureSelection = () => {
+      const selection = window.getSelection();
+      const root = responseSelectionRootRef.current;
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !root) return;
+
+      const range = selection.getRangeAt(0);
+      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
+
+      const context = normalizeAgentSelectionContext({
+        text: selection.toString(),
+        sourceMessageId: latestAssistantMessage.id,
+      });
+      if (!context) return;
+
+      setSelectedContext(context);
+      onSelectionContextChange(context);
+    };
+
+    document.addEventListener("selectionchange", captureSelection);
+    return () => document.removeEventListener("selectionchange", captureSelection);
+  }, [isResponseReady, latestAssistantMessage, onSelectionContextChange, open]);
+
+  useEffect(
+    () => () => {
+      onSelectionContextChange(null);
+    },
+    [onSelectionContextChange]
+  );
 
   useEffect(() => {
     onResponseReadyChange(isResponseReady);
@@ -250,12 +313,35 @@ export function AssistantPanel({
       >
         <BrandMarkIcon size={20} className="shrink-0 text-muted-foreground" />
 
-        <div className="min-w-0 flex-1 text-right text-xs text-muted-foreground/70">
-          <span className="truncate">{t("assistant.panel.selectionHint")}</span>
-          {readableVoiceHotkey && (
-            <kbd className="ml-2 inline-flex rounded-md border border-border/40 bg-foreground/5 px-2 py-1 font-mono text-[11px] tracking-normal text-foreground/65 shadow-sm">
-              {readableVoiceHotkey}
-            </kbd>
+        <div className="flex min-w-0 flex-1 items-center justify-end text-right text-xs text-muted-foreground/70">
+          {selectedContext ? (
+            <div className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border/55 bg-foreground/[0.06] py-1 pl-2.5 pr-1.5 text-foreground/75">
+              <span className="truncate">{t("assistant.panel.selectedContext")}</span>
+              <button
+                type="button"
+                className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                aria-label={t("assistant.panel.removeSelectedContext")}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  clearSelectedContext();
+                }}
+              >
+                <X size={11} strokeWidth={2} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <span className="truncate">{t("assistant.panel.selectionHint")}</span>
+              {readableVoiceHotkey && (
+                <kbd className="ml-2 inline-flex rounded-md border border-border/40 bg-foreground/5 px-2 py-1 font-mono text-[11px] tracking-normal text-foreground/65 shadow-sm">
+                  {readableVoiceHotkey}
+                </kbd>
+              )}
+            </>
           )}
         </div>
       </header>
@@ -273,10 +359,13 @@ export function AssistantPanel({
             }`}
           >
             {displayedResponse ? (
-              <div style={{ animation: "agent-message-in 160ms ease-out both" }}>
-                <MarkdownRenderer
+              <div
+                ref={responseSelectionRootRef}
+                style={{ animation: "agent-message-in 160ms ease-out both" }}
+              >
+                <StableAssistantMarkdown
                   content={displayedResponse}
-                  className="text-[15px] leading-relaxed text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
+                  className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
                 />
                 {latestAssistantMessage?.isStreaming && (
                   <span

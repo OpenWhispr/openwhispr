@@ -3096,6 +3096,8 @@
   "assistant": {
     "panel": {
       "selectionHint": "Selecciona texto para editarlo con",
+      "selectedContext": "Texto seleccionado añadido",
+      "removeSelectedContext": "Quitar texto seleccionado",
       "copyToClipboard": "Copiar al portapapeles"
     }
   },

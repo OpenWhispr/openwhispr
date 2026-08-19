@@ -3048,6 +3048,8 @@
   "assistant": {
     "panel": {
       "selectionHint": "選取要編輯的文字，然後按",
+      "selectedContext": "已加入所選文字",
+      "removeSelectedContext": "移除所選文字",
       "copyToClipboard": "複製到剪貼簿"
     }
   },

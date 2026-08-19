@@ -357,6 +357,7 @@ export default function App() {
   const assistantOpenGenerationRef = useRef(0);
   const mainWindowResizeCoordinatorRef = useRef(null);
   const commandIdRef = useRef(0);
+  const assistantSelectionContextRef = useRef(null);
 
   if (mainWindowResizeCoordinatorRef.current === null) {
     mainWindowResizeCoordinatorRef.current = createMainWindowResizeCoordinator({
@@ -567,6 +568,7 @@ export default function App() {
         id: commandIdRef.current,
         text: command.text,
         attachment: command.attachment ?? null,
+        selectedContext: command.selectedContext ?? null,
       });
     },
     [beginAssistantThinking]
@@ -580,6 +582,15 @@ export default function App() {
   const handleCommandConsumed = React.useCallback((id) => {
     setPendingCommand((current) => (current?.id === id ? null : current));
   }, []);
+
+  const handleAssistantSelectionContextChange = React.useCallback((context) => {
+    assistantSelectionContextRef.current = context;
+  }, []);
+
+  const getAssistantSelectionContext = React.useCallback(
+    () => assistantSelectionContextRef.current,
+    []
+  );
 
   useEffect(() => {
     window.electronAPI?.setAssistantPanelOpen?.(assistantPanelOpen);
@@ -655,6 +666,7 @@ export default function App() {
     onAssistantCommand: handleAssistantCommand,
     dismissDictationError,
     onDictationError: handleDictationError,
+    getAssistantSelectionContext,
   });
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
@@ -1468,6 +1480,7 @@ export default function App() {
             onBusyChange={setAssistantBusy}
             onResponseReadyChange={setAssistantResponseReady}
             onResponseContent={handleAssistantResponseContent}
+            onSelectionContextChange={handleAssistantSelectionContextChange}
           />
         )}
 

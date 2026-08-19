@@ -3213,6 +3213,8 @@
   "assistant": {
     "panel": {
       "selectionHint": "Sélectionnez du texte à modifier avec",
+      "selectedContext": "Texte sélectionné ajouté",
+      "removeSelectedContext": "Supprimer le texte sélectionné",
       "copyToClipboard": "Copier dans le presse-papiers"
     }
   },

@@ -84,6 +84,7 @@ import {
   matchesDictionaryPrompt,
 } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
+import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import {
   buildSelectionEditSystemPrompt,
   buildSelectionEditUserPrompt,
@@ -493,6 +494,7 @@ class AudioManager {
     this.translationApplied = false;
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
+    this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
@@ -715,6 +717,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.voiceAgentRequested = requested;
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
+    this.assistantSelectionContext = null;
     // No recording must ever see a stale capture (e.g. left over from a
     // cancelled voice-agent recording, even after the setting was turned
     // off). A live voice-agent start re-captures right after this call.
@@ -722,6 +725,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Same for a prefetched selection: bounded to one recording, so a read taken
     // in an earlier app can never be edited in place by this command.
     this.selectionCapturePromise = null;
+  }
+
+  setAssistantSelectionContext(context) {
+    this.assistantSelectionContext = normalizeAgentSelectionContext(context);
+    if (this.assistantSelectionContext) this.selectionCapturePromise = null;
+  }
+
+  consumeAssistantSelectionContext() {
+    const context = this.assistantSelectionContext;
+    this.assistantSelectionContext = null;
+    return context;
   }
 
   setTranslationRequested(requested) {
@@ -2299,6 +2313,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async processAgentCommand(text, model, agentName, config) {
+    const assistantSelectionContext = this.consumeAssistantSelectionContext();
+    if (assistantSelectionContext) {
+      // An in-panel selection is conversational context, not an editable OS
+      // target. Keep it on the existing panel-first route and leave the
+      // external selection replacement path completely untouched.
+      this.selectionCapturePromise = null;
+      this.pendingAssistantConversation = {
+        transcript: text,
+        screenContext: config?.screenContext ?? config?.rawScreenContext ?? null,
+        selectedContext: assistantSelectionContext,
+      };
+      return text;
+    }
+
     let capture;
     try {
       capture = await this.consumeSelectionCapture();
