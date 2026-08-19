@@ -437,12 +437,20 @@ class GnomeShortcutManager {
       this.execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "name"], {
         stdio: "pipe",
       });
-      this.execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding"], {
-        stdio: "pipe",
-      });
-      this.execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command"], {
-        stdio: "pipe",
-      });
+      this.execFileSync(
+        "gsettings",
+        ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding"],
+        {
+          stdio: "pipe",
+        }
+      );
+      this.execFileSync(
+        "gsettings",
+        ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command"],
+        {
+          stdio: "pipe",
+        }
+      );
 
       this.registeredSlots.delete(slotName);
       debugLogger.log(

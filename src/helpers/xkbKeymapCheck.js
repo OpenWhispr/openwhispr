@@ -39,7 +39,10 @@ function parseXmodmapKeysyms(output) {
     if (!line.startsWith("keycode")) continue;
     const eq = line.indexOf("=");
     if (eq === -1) continue;
-    for (const token of line.slice(eq + 1).trim().split(/\s+/)) {
+    for (const token of line
+      .slice(eq + 1)
+      .trim()
+      .split(/\s+/)) {
       if (token && token !== "NoSymbol") keysyms.add(token);
     }
   }
