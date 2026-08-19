@@ -13,6 +13,7 @@ const {
 } = require("./downloadUtils");
 const ParakeetServerManager = require("./parakeetServer");
 const { getModelsDirForService } = require("./modelDirUtils");
+const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 const { getModelRuntime, REQUIRED_MODEL_FILES } = require("./parakeetModelInfo");
@@ -70,8 +71,10 @@ class ParakeetManager {
       await this.logDependencyStatus();
 
       const { localTranscriptionProvider, parakeetModel } = settings;
+      const capability = getParakeetCapability();
 
       if (
+        capability.supported &&
         localTranscriptionProvider === "nvidia" &&
         parakeetModel &&
         this.serverManager.isAvailable(getModelRuntime(parakeetModel))
@@ -99,8 +102,9 @@ class ParakeetManager {
         }
       } else {
         debugLogger.debug("Skipping parakeet server pre-warm", {
-          reason:
-            localTranscriptionProvider !== "nvidia"
+          reason: !capability.supported
+            ? capability.message
+            : localTranscriptionProvider !== "nvidia"
               ? "provider not nvidia"
               : !parakeetModel
                 ? "no model selected"
@@ -159,15 +163,29 @@ class ParakeetManager {
   async checkInstallation() {
     const binaryPath =
       this.serverManager.getBinaryPath("offline") || this.serverManager.getBinaryPath("online");
-    if (!binaryPath) {
-      return { installed: false, working: false };
+    const capability = getParakeetCapability();
+
+    if (!capability.supported) {
+      return {
+        installed: !!binaryPath,
+        working: false,
+        ...capability,
+      };
     }
 
-    return { installed: true, working: true, path: binaryPath };
+    if (!binaryPath) {
+      return { installed: false, working: false, supported: true };
+    }
+
+    return { installed: true, working: true, supported: true, path: binaryPath };
   }
 
   async startServer(modelName) {
     this.validateModelName(modelName);
+    const capability = getParakeetCapability();
+    if (!capability.supported) {
+      return { success: false, code: capability.code, reason: capability.message };
+    }
     return this.serverManager.startServer(modelName);
   }
 
@@ -185,6 +203,7 @@ class ParakeetManager {
 
   async createOnlineStream(modelName, options = {}) {
     this.validateModelName(modelName);
+    assertParakeetSupported();
     const started = await this.serverManager.startServer(modelName);
     if (!started.success) {
       throw new Error(started.reason || "Failed to start parakeet streaming server");
@@ -194,6 +213,7 @@ class ParakeetManager {
 
   async transcribeLocalParakeet(audioBlob, options = {}) {
     const model = options.model || "parakeet-tdt-0.6b-v3";
+    assertParakeetSupported();
     const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
 
     debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
@@ -240,7 +260,10 @@ class ParakeetManager {
     });
 
     const startTime = Date.now();
-    const result = await this.serverManager.transcribe(audioBuffer, { modelName: model });
+    const result = await this.serverManager.transcribe(audioBuffer, {
+      modelName: model,
+      signal: options.signal,
+    });
     const elapsed = Date.now() - startTime;
 
     debugLogger.logSTTPipeline("transcribeLocalParakeet - completed", {
@@ -282,6 +305,7 @@ class ParakeetManager {
 
   async downloadParakeetModel(modelName, progressCallback = null) {
     this.validateModelName(modelName);
+    assertParakeetSupported();
     const modelConfig = getParakeetModelConfig(modelName);
 
     const modelPath = this.getModelPath(modelName);

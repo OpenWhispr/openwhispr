@@ -547,7 +547,9 @@
     },
     "parakeet": {
       "multilingual": "25 言語対応",
-      "english": "英語"
+      "english": "英語",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "利用不可"
     },
     "apiKeyOptional": "API キー（任意）",
     "getKey": "キーを取得 ->",
@@ -1843,6 +1845,10 @@
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャット",
         "dictationTranslation": "翻訳"
+      },
+      "requestTimeout": {
+        "label": "リクエストのタイムアウト(秒)",
+        "description": "応答を待つ時間の上限です。セルフホストやローカルモデルでは、特に長いノートの場合、デフォルトの30秒より長い時間が必要になることがあります。"
       }
     },
     "noteFormatting": {

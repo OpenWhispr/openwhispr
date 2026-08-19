@@ -547,7 +547,9 @@
     },
     "parakeet": {
       "multilingual": "25 Sprachen",
-      "english": "Englisch"
+      "english": "Englisch",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "Nicht verfügbar"
     },
     "apiKeyOptional": "API-Schlüssel (optional)",
     "getKey": "Schlüssel holen ->",
@@ -2126,6 +2128,10 @@
         "noteFormatting": "Notizformatierung",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Übersetzung"
+      },
+      "requestTimeout": {
+        "label": "Zeitlimit für Anfragen (Sekunden)",
+        "description": "Wie lange auf eine Antwort gewartet wird, bevor abgebrochen wird. Selbst gehostete oder lokale Modelle benötigen oft mehr als die Standardeinstellung von 30 s, besonders bei langen Notizen."
       }
     },
     "noteFormatting": {

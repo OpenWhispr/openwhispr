@@ -10,6 +10,7 @@ const { killProcess } = require("../utils/process");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
+const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
 const { BIN_SUBDIR: VULKAN_BIN_SUBDIR } = require("./whisperVulkanManager");
@@ -32,6 +33,15 @@ const DEFAULT_WHISPER_THREADS = 4;
 const MAX_AUTO_WHISPER_THREADS = 12;
 const MAX_MANUAL_WHISPER_THREADS = 64;
 const AUTO_THREAD_RATIO = 0.75;
+// Decoder anti-hallucination thresholds sent with every /inference request. whisper.cpp's
+// defaults (entropy 2.4, logprob -1.0) let a mostly-silent 30s decode window pass the
+// repetition check and emit training-data outro boilerplate ("Thank you for watching",
+// "Продолжение следует..."). These values cut the hallucinated-tail rate from 2.25% to
+// 0.06% over 4,814 real dictations. See #1458.
+const INFERENCE_DECODER_FIELDS = Object.freeze({
+  entropy_thold: "2.8",
+  logprob_thold: "-1.25",
+});
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -826,7 +836,9 @@ class WhisperServerManager extends EventEmitter {
           : "too short",
     });
 
-    const { language, initialPrompt } = options;
+    // signal is optional; only cancellable uploads pass one.
+    const { language, initialPrompt, signal } = options;
+    if (signal?.aborted) throw createAbortError("whisper-server transcription cancelled");
 
     // Always convert to 16kHz mono WAV - whisper.cpp requires this exact format
     let finalBuffer = audioBuffer;
@@ -854,6 +866,14 @@ class WhisperServerManager extends EventEmitter {
         `${language || "auto"}\r\n`
     );
 
+    for (const [name, value] of Object.entries(INFERENCE_DECODER_FIELDS)) {
+      parts.push(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="${name}"\r\n\r\n` +
+          `${value}\r\n`
+      );
+    }
+
     // Add initial prompt for custom dictionary words
     if (initialPrompt) {
       parts.push(
@@ -878,17 +898,25 @@ class WhisperServerManager extends EventEmitter {
     const modelPath = this.modelPath;
 
     try {
-      return await this._postInference(body, boundary);
+      return await this._postInference(body, boundary, signal);
     } catch (err) {
+      // A cancel is not a server failure: rethrow before the retry/CPU-fallback
+      // logic so it never triggers a server restart.
+      if (err?.name === "AbortError") throw err;
       return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
     }
   }
 
-  _postInference(body, boundary) {
+  _postInference(body, boundary, signal) {
     // Multipart boilerplate adds under a kilobyte, so body length tracks audio length.
     const timeoutMs = computeTranscriptionTimeoutMs(body.length / PCM16_MONO_16K_BYTES_PER_SECOND);
 
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(createAbortError("whisper-server request cancelled"));
+        return;
+      }
+
       const startTime = Date.now();
 
       const req = http.request(
@@ -909,6 +937,7 @@ class WhisperServerManager extends EventEmitter {
             data += chunk;
           });
           res.on("end", () => {
+            removeAbortListener();
             debugLogger.debug("whisper-server transcription completed", {
               statusCode: res.statusCode,
               elapsed: Date.now() - startTime,
@@ -930,13 +959,25 @@ class WhisperServerManager extends EventEmitter {
         }
       );
 
+      // whisper-server has no mid-inference cancellation: destroying the
+      // request frees this pipeline immediately, but the server finishes its
+      // in-flight decode on its own.
+      const onAbort = () => {
+        req.destroy();
+        reject(createAbortError("whisper-server request cancelled"));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      const removeAbortListener = () => signal?.removeEventListener("abort", onAbort);
+
       req.on("error", (error) => {
+        removeAbortListener();
         const err = new Error(`whisper-server request failed: ${error.message}`);
         err.isConnectionError = true;
         err.code = error.code;
         reject(err);
       });
       req.on("timeout", () => {
+        removeAbortListener();
         req.destroy();
         reject(new Error("whisper-server request timed out"));
       });
@@ -1118,6 +1159,7 @@ class WhisperServerManager extends EventEmitter {
 
 module.exports = WhisperServerManager;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
+module.exports.INFERENCE_DECODER_FIELDS = INFERENCE_DECODER_FIELDS;
 module.exports.parseVulkanDevices = parseVulkanDevices;
 module.exports.resolveVulkanPinAction = resolveVulkanPinAction;
 module.exports.getVadSignature = getVadSignature;

@@ -381,6 +381,7 @@ jobs:
           done
           test -x "$APP_PATH/Contents/Resources/bin/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter" || { echo "Missing in bundle: MediaRemoteAdapter.framework"; exit 1; }
           test -f "$APP_PATH/Contents/Resources/bin/mediaremote-adapter.pl" || { echo "Missing in bundle: mediaremote-adapter.pl"; exit 1; }
+          node scripts/verify-macos-parakeet.js "$APP_PATH"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

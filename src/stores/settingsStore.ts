@@ -299,6 +299,7 @@ const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
   "audioRetentionDays",
   "transcriptRetentionDays",
+  "llmRequestTimeoutSeconds",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -634,6 +635,10 @@ export interface SettingsState
   remoteTranscriptionModel: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
+  // Abort timeout for LLM requests (cleanup, note formatting, agent tool calls,
+  // self-hosted LAN calls), in seconds. Clamped to a sane range at the point of
+  // use, and floored at 60s for streaming — see src/helpers/llmRequestTimeout.js.
+  llmRequestTimeoutSeconds: number;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -736,6 +741,7 @@ export interface SettingsState
   setRemoteTranscriptionModel: (model: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
+  setLlmRequestTimeoutSeconds: (seconds: number) => void;
 
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
   setMeetingUseLocalWhisper: (value: boolean) => void;
@@ -1395,6 +1401,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "openwhispr" as InferenceMode;
   })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
+  llmRequestTimeoutSeconds: readNumber("llmRequestTimeoutSeconds", 30),
 
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
@@ -1492,6 +1499,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
+  setLlmRequestTimeoutSeconds: createNumberSetter("llmRequestTimeoutSeconds"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode

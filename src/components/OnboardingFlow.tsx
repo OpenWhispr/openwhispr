@@ -630,8 +630,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               selectedLocalModel={
                 localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel
               }
-              onLocalModelSelect={(modelId) => {
-                if (localTranscriptionProvider === "nvidia") {
+              onLocalModelSelect={(modelId, providerId) => {
+                if (
+                  providerId === "nvidia" ||
+                  (!providerId && localTranscriptionProvider === "nvidia")
+                ) {
                   updateTranscriptionSettings({ parakeetModel: modelId });
                 } else {
                   updateTranscriptionSettings({ whisperModel: modelId });
