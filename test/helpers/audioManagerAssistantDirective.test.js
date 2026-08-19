@@ -23,7 +23,10 @@ function managerWithCapture(createManager, capture) {
   const modelCalls = [];
   return {
     modelCalls,
+    // _bankAssistantDirective only ever runs mid-pipeline, so it guards on
+    // isProcessing — set it true here to match that real precondition.
     manager: createManager({
+      isProcessing: true,
       consumeSelectionCapture: async () => capture,
       processWithReasoningModel: async (...args) => {
         modelCalls.push(args);
@@ -95,6 +98,7 @@ test("an Agent-panel selection stays on the panel route without touching externa
   });
   let externalCaptureCalls = 0;
   const manager = createManager({
+    isProcessing: true,
     consumeSelectionCapture: async () => {
       externalCaptureCalls += 1;
       throw new Error("external selection should not be read");

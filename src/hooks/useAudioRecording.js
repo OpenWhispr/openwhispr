@@ -346,6 +346,7 @@ export const useAudioRecording = (toast, options = {}) => {
       onError: (error) => {
         setIsPreparing(false);
         setIsStopping(false);
+        if (error?.code === "TRANSCRIPTION_CANCELLED" || error?.code === "REASON_CANCELLED") return;
         if (error?.title !== "Paste Error") {
           window.electronAPI?.hideDictationPreview?.();
         }

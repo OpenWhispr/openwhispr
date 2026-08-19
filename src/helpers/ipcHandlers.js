@@ -8085,6 +8085,9 @@ class IPCHandlers {
           screenContextApplied: data.screenContextApplied,
         };
       } catch (error) {
+        if (controller.signal.aborted) {
+          return { success: false, error: "Cancelled", code: "REASON_CANCELLED" };
+        }
         debugLogger.error("Cloud reasoning error:", error);
         return toPolicyFailure(error);
       } finally {

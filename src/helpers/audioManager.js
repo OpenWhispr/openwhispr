@@ -495,6 +495,7 @@ class AudioManager {
     this.translationApplied = false;
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
+    this._processingCancelled = false;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
@@ -1724,6 +1725,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   cancelProcessing() {
     if (this.isProcessing) {
+      this._processingCancelled = true;
       this._requestStreamingCancellation();
       // Streaming finalization can be inside a provider or model await that
       // cannot be aborted. Keep the lifecycle truthfully busy until that await
@@ -1739,6 +1741,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async processAudio(audioBlob, metadata = {}) {
+    this._processingCancelled = false;
     const pipelineStart = performance.now();
     const settings = getSettings();
     let noAudioDetected = false;
@@ -1858,6 +1861,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.info("Pipeline timing", timingData, "performance");
     } catch (error) {
       const errorAtMs = Math.round(performance.now() - pipelineStart);
+
+      if (this._processingCancelled) {
+        // The user cancelled mid-pipeline; the aborted request's rejection is
+        // the expected outcome, not a failure to report or persist.
+        logger.info("Transcription cancelled by user", { errorAtMs }, "performance");
+        return;
+      }
 
       logger.error(
         "Pipeline failed",
@@ -2327,6 +2337,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // at the cursor. The transcript flows back as the result text so history
   // and previews stay truthful.
   _bankAssistantDirective(transcript, config, selectedContext) {
+    // A capture that resolved after the user cancelled (or after the next
+    // recording started) must not redirect a later result into the panel.
+    if (!this.isProcessing || this._processingCancelled) return;
     this.pendingAssistantConversation = {
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
@@ -2749,6 +2762,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return hasTextContent(result) ? result : normalizedText;
       } catch (error) {
         if (error.selectionEditFatal) throw error;
+        if (this._processingCancelled) return normalizedText;
         logger.logReasoning("REASONING_FAILED", {
           error: error.message,
           stack: error.stack,
@@ -3071,12 +3085,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       } catch (reasonError) {
         if (reasonError.selectionEditFatal) throw reasonError;
-        logger.error(
-          "Cloud reasoning failed, using raw transcription",
-          { error: reasonError.message },
-          "transcription"
-        );
-        if (route.kind === "cleanup") recordCleanupFailure(reasonError.message);
+        if (!this._processingCancelled) {
+          logger.error(
+            "Cloud reasoning failed, using raw transcription",
+            { error: reasonError.message },
+            "transcription"
+          );
+          if (route.kind === "cleanup") recordCleanupFailure(reasonError.message);
+        }
         if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
       timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
