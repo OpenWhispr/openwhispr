@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Uploaded and URL-ingested notes remember their speaker detection.** A note created through Upload ran speaker detection but stored none of it — the note now records that diarization ran, the speaker count you chose, and the audio duration, so it behaves like a meeting note when you record into it or resolve participants. An upload with speaker detection off writes nothing, preserving your global speaker setting. Present since upload speaker detection shipped in 1.7.6. (#1610)
+
 ## [1.8.3] - 2026-08-12
 
 GPU acceleration for local transcription gets an overhaul: the status you see is now the truth, enabling it works without a restart, older NVIDIA cards are routed to a backend that actually works on them, and a GPU failure can never cost you a dictation. LLM routing gains the same fail-closed treatment speech-to-text received in 1.8.2. Launch at login arrives on Linux, and transcription errors stop blaming your microphone.
@@ -47,6 +49,7 @@ GPU acceleration for local transcription gets an overhaul: the status you see is
 ### Voice agent
 
 - **Screen context, selection edits, and calendar answers are more reliable.** Screenshot capture failures retry text-only without losing the command, selection edits recover from a rejected screenshot, and the agent's calendar tool and accessibility reads are fixed. (#1566)
+- **Selection edits work in apps with dormant accessibility trees.** Commands dictated into Dia, Arc, Chrome, Claude Desktop, Slack, or VS Code no longer die before reaching the model when the selected text can't be read natively. (#1593)
 
 ### Meetings & speakers
 
@@ -78,6 +81,7 @@ GPU acceleration for local transcription gets an overhaul: the status you see is
 - **Meeting transcript timestamps export correctly to Markdown.** (#1560)
 - **Retired default prompts are cleared from persisted settings.** (#1561)
 - **Empty states close their layout gaps.** (#1565)
+- **The "Coming Soon" badge translates again.** A wrong-prefix key rendered raw text in every language; a new lint-style test guards all referenced keys. (#1592)
 - **Hotkey parsing handles left/right modifiers and trailing `+` correctly.** (#1437, #1433)
 - **Retention cleanup waits for the first renderer sync.** A fresh install can no longer sweep history before settings arrive. (#1558)
 

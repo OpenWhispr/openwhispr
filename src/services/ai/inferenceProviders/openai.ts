@@ -5,7 +5,11 @@ import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
-import { applyThinkingSuppression } from "../thinkingSuppression";
+import {
+  applyChatCompletionsParams,
+  fetchWithParamFallback,
+  isTruncatedFinishReason,
+} from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
@@ -225,36 +229,42 @@ export const openaiProvider: InferenceProvider = {
               )
             );
 
-          // A known endpoint host knows its own request shape better than the model id does.
-          const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
           const requestBody: Record<string, unknown> = { model };
 
           if (type === "responses") {
             requestBody.input = buildMessages(type);
             requestBody.store = false;
             requestBody.max_output_tokens = maxTokens;
+            // A known endpoint host knows its own request shape better than the model id does.
+            const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
+            if (apiConfig.supportsTemperature) {
+              requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
+            }
           } else {
             requestBody.messages = buildMessages(type);
-            requestBody[apiConfig.tokenParam] = maxTokens;
-            if (!config.systemPrompt && model.includes("gpt-oss")) {
-              requestBody.reasoning_effort = "low";
-            }
-            applyThinkingSuppression(requestBody, model, resolvedProvider, config, openAiBase);
+            applyChatCompletionsParams(requestBody, {
+              model,
+              provider: resolvedProvider,
+              endpoint: openAiBase,
+              config,
+              maxTokens,
+            });
           }
 
-          if (apiConfig.supportsTemperature) {
-            requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
-          }
-
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal,
-          });
+          const res = await fetchWithParamFallback(
+            () =>
+              fetch(endpoint, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+              }),
+            requestBody,
+            (details) => logger.logReasoning("OPENAI_PARAM_FALLBACK", { endpoint, ...details })
+          );
 
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({ error: res.statusText }));
@@ -309,9 +319,7 @@ export const openaiProvider: InferenceProvider = {
       const responseIncomplete =
         response?.status === "incomplete" ||
         !!response?.incomplete_details ||
-        response?.choices?.some((choice: any) =>
-          ["length", "max_tokens"].includes(choice?.finish_reason)
-        );
+        response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
       if (responseIncomplete) {
         throw new Error("Model output was truncated before the selection edit completed");
       }

@@ -2,10 +2,15 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
 import {
+  getActiveRecordingSessionId,
   getMicAnalyser,
   primeMeetingWorklet,
+  stopRecording,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
+import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
+import { serializeTranscriptSegments } from "../utils/transcriptSpeakerState";
+import logger from "../utils/logger";
 
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
@@ -19,6 +24,7 @@ export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
   const { toast } = useToast();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
+  const isTranscribing = useMeetingRecordingStore((s) => s.isTranscribing);
   const error = useMeetingRecordingStore((s) => s.error);
   const errorNonce = useMeetingRecordingStore((s) => s.errorNonce);
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
@@ -27,6 +33,52 @@ export default function MeetingRecordingMount(): null {
   useEffect(() => {
     primeMeetingWorklet();
   }, []);
+
+  useEffect(() => {
+    return window.electronAPI?.onMeetingAutoEndRequested?.((request) => {
+      requestMeetingRecordingAutoEnd(
+        request,
+        (sessionId) => {
+          // Toast only when this request actually ends the live session — and
+          // even if the user's Keep click lost the race with the countdown, so
+          // they learn the recording ended rather than assuming it was kept.
+          const endsActiveSession = getActiveRecordingSessionId() === sessionId;
+          return stopRecording(sessionId).then((result) => {
+            if (endsActiveSession) {
+              toast({
+                title: t("notes.meeting.title"),
+                description: t("notes.meeting.autoEnded"),
+              });
+            }
+            return result;
+          });
+        },
+        (error, sessionId) => {
+          logger.error(
+            "Meeting auto-end stop failed; recording is still running",
+            { error: error instanceof Error ? error.message : String(error), sessionId },
+            "meeting"
+          );
+        }
+      );
+    });
+  }, [toast, t]);
+
+  // Crash-safety net moved out of the notes view: it must keep running when
+  // the user switches views mid-recording.
+  useEffect(() => {
+    if (!isTranscribing) return;
+
+    const interval = setInterval(() => {
+      const { recordingNoteId, segments } = useMeetingRecordingStore.getState();
+      if (!recordingNoteId || segments.length === 0) return;
+      window.electronAPI.updateNote(recordingNoteId, {
+        transcript: serializeTranscriptSegments(segments),
+      });
+    }, 30_000);
+
+    return () => clearInterval(interval);
+  }, [isTranscribing]);
 
   useEffect(() => {
     if (!error) return;

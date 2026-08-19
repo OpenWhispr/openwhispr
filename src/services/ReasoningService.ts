@@ -25,8 +25,14 @@ import {
   resolveConfiguredOpenAIBase,
   resolveSelfHostedOpenAIBase,
 } from "./ai/openaiBase";
-import { applyThinkingSuppression } from "./ai/thinkingSuppression";
-import { detectEndpointDialect, getGroqReasoningEffort } from "./ai/thinkingSuppressionDialects";
+import {
+  applyChatCompletionsParams,
+  fetchWithParamFallback,
+  isTruncatedFinishReason,
+} from "./ai/chatRequestBody";
+import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
+import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
+import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
@@ -89,20 +95,9 @@ function assertAgentSessionAllowedByPolicy(provider: string, mode: InferenceMode
   assertReasoningAllowedByPolicy(provider, mode);
 }
 
-// Old Ollama/strict proxies reject the `reasoning` object; drop it and retry once.
-async function fetchWithReasoningFieldFallback(
-  doFetch: () => Promise<Response>,
-  requestBody: Record<string, unknown>,
-  logEvent: string
-): Promise<Response> {
-  let res = await doFetch();
-  if (!res.ok && (res.status === 400 || res.status === 422) && requestBody.reasoning) {
-    logger.logReasoning(logEvent, { status: res.status });
-    delete requestBody.reasoning;
-    void res.body?.cancel();
-    res = await doFetch();
-  }
-  return res;
+function logParamFallback(logEvent: string) {
+  return (details: { status: number; stripped: string[] }) =>
+    logger.logReasoning(logEvent, details);
 }
 
 class ReasoningService extends BaseReasoningService {
@@ -288,11 +283,13 @@ class ReasoningService extends BaseReasoningService {
       { role: "user", content: userPrompt },
     ];
 
-    const requestBody: any = {
+    const requestBody: any = { model, messages };
+    applyChatCompletionsParams(requestBody, {
       model,
-      messages,
-      temperature: config.temperature ?? (isCleanup ? 0 : 0.3),
-      max_tokens:
+      provider: providerName,
+      endpoint,
+      config,
+      maxTokens:
         config.maxTokens ||
         Math.max(
           4096,
@@ -303,19 +300,7 @@ class ReasoningService extends BaseReasoningService {
             TOKEN_LIMITS.TOKEN_MULTIPLIER
           )
         ),
-    };
-
-    // gpt-oss defaults to medium reasoning effort; low cuts hidden reasoning
-    // tokens (latency) and the tendency to answer the transcript instead of
-    // cleaning it. Selection edits need it too: at higher efforts Groq's
-    // gpt-oss can leave the whole reply in the reasoning channel and return
-    // whitespace content, failing the edit. applyThinkingSuppression still
-    // wins when thinking is disabled by the user.
-    if ((isCleanup || config.requireCompleteOutput) && model.includes("gpt-oss")) {
-      requestBody.reasoning_effort = "low";
-    }
-
-    applyThinkingSuppression(requestBody, model, providerName, config, endpoint);
+    });
 
     logger.logReasoning(`${providerName.toUpperCase()}_REQUEST`, {
       endpoint,
@@ -335,7 +320,7 @@ class ReasoningService extends BaseReasoningService {
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetchWithReasoningFieldFallback(
+        const res = await fetchWithParamFallback(
           () =>
             fetch(endpoint, {
               method: "POST",
@@ -344,7 +329,7 @@ class ReasoningService extends BaseReasoningService {
               signal: controller.signal,
             }),
           requestBody,
-          `${providerName.toUpperCase()}_REASONING_FIELD_RETRY`
+          logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`)
         );
 
         if (!res.ok) {
@@ -404,7 +389,7 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const choice = response.choices[0];
-    if (config.requireCompleteOutput && ["length", "max_tokens"].includes(choice?.finish_reason)) {
+    if (config.requireCompleteOutput && isTruncatedFinishReason(choice?.finish_reason)) {
       throw new Error("Model output was truncated before the selection edit completed");
     }
     // Reasoning models leak <think> blocks into non-streamed output; strip them
@@ -571,29 +556,19 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
-    // A known endpoint host knows its own request shape better than the model id does.
-    const apiConfig = detectEndpointDialect(endpoint) ?? getOpenAiApiConfig(model, provider);
-    const useOldTokenParam = isLocalProvider || isLanChat || provider === "groq";
-
     const requestBody: Record<string, unknown> = {
       model,
       messages,
       stream: true,
     };
 
-    const maxTokens = config.maxTokens || Math.max(4096, TOKEN_LIMITS.MAX_TOKENS);
-
-    if (useOldTokenParam) {
-      requestBody.temperature = config.temperature ?? 0.3;
-      requestBody.max_tokens = maxTokens;
-    } else {
-      requestBody[apiConfig.tokenParam] = maxTokens;
-      if (apiConfig.supportsTemperature) {
-        requestBody.temperature = config.temperature ?? 0.3;
-      }
-    }
-
-    applyThinkingSuppression(requestBody, model, isLanChat ? "lan" : provider, config, endpoint);
+    applyChatCompletionsParams(requestBody, {
+      model,
+      provider: isLanChat ? "lan" : isLocalProvider ? "local" : provider,
+      endpoint,
+      config,
+      maxTokens: config.maxTokens || Math.max(4096, TOKEN_LIMITS.MAX_TOKENS),
+    });
 
     logger.logReasoning("AGENT_STREAM_REQUEST", {
       endpoint,
@@ -617,7 +592,7 @@ class ReasoningService extends BaseReasoningService {
 
     let response: Response;
     try {
-      response = await fetchWithReasoningFieldFallback(
+      response = await fetchWithParamFallback(
         () =>
           fetch(endpoint, {
             method: "POST",
@@ -626,7 +601,7 @@ class ReasoningService extends BaseReasoningService {
             signal: controller.signal,
           }),
         requestBody,
-        "AGENT_STREAM_REASONING_FIELD_RETRY"
+        logParamFallback("AGENT_STREAM_PARAM_FALLBACK")
       );
     } catch (error) {
       clearTimeout(timeoutId);
@@ -654,7 +629,8 @@ class ReasoningService extends BaseReasoningService {
 
     const decoder = new TextDecoder();
     let buffer = "";
-    let insideThinkBlock = false;
+    const stripThinking = (isLocalProvider || isLanChat) && config.disableThinking !== false;
+    const filterThinkTags = stripThinking ? createStreamingThinkFilter() : null;
 
     try {
       while (true) {
@@ -670,37 +646,19 @@ class ReasoningService extends BaseReasoningService {
           if (!trimmed || !trimmed.startsWith("data: ")) continue;
 
           const data = trimmed.slice(6);
-          if (data === "[DONE]") return;
+          if (data === "[DONE]") {
+            const trailing = filterThinkTags?.finish();
+            if (trailing) yield trailing;
+            return;
+          }
 
           try {
             const parsed = JSON.parse(data);
             let content = parsed.choices?.[0]?.delta?.content;
             if (!content) continue;
 
-            const stripThinking =
-              (isLocalProvider || isLanChat) && config.disableThinking !== false;
-            if (stripThinking) {
-              if (insideThinkBlock) {
-                const endIdx = content.indexOf("</think>");
-                if (endIdx !== -1) {
-                  insideThinkBlock = false;
-                  content = content.slice(endIdx + 8);
-                } else {
-                  continue;
-                }
-              }
-              const startIdx = content.indexOf("<think>");
-              if (startIdx !== -1) {
-                const before = content.slice(0, startIdx);
-                const after = content.slice(startIdx + 7);
-                const endIdx = after.indexOf("</think>");
-                if (endIdx !== -1) {
-                  content = before + after.slice(endIdx + 8);
-                } else {
-                  insideThinkBlock = true;
-                  content = before;
-                }
-              }
+            if (filterThinkTags) {
+              content = filterThinkTags(content);
               if (!content) continue;
             }
 
@@ -710,6 +668,9 @@ class ReasoningService extends BaseReasoningService {
           }
         }
       }
+
+      const trailing = filterThinkTags?.finish();
+      if (trailing) yield trailing;
     } finally {
       clearTimeout(timeoutId);
       this.streamAbortController = null;
@@ -766,6 +727,10 @@ class ReasoningService extends BaseReasoningService {
       return;
     }
 
+    const filterThinkTags =
+      (isLocalProvider || isLanChat) && config.disableThinking !== false
+        ? createStreamingThinkFilter()
+        : null;
     let apiKey = "";
     let baseURL: string | undefined;
 
@@ -800,10 +765,17 @@ class ReasoningService extends BaseReasoningService {
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
-    const groqReasoningEffort = needsGroqDisableThinking ? getGroqReasoningEffort(model) : null;
     const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
     const providerOptions = {
-      ...(groqReasoningEffort ? { groq: { reasoningEffort: groqReasoningEffort } } : {}),
+      // The effort value is a family fact: gpt-oss has no "none" (#1611).
+      ...(needsGroqDisableThinking
+        ? {
+            groq: {
+              reasoningEffort:
+                getModelFamilyConstraints(model)?.reasoningEffort?.suppressValue ?? "none",
+            },
+          }
+        : {}),
       ...(needsGeminiMinimalThinking
         ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
         : {}),
@@ -839,10 +811,20 @@ class ReasoningService extends BaseReasoningService {
       ...(hasProviderOptions ? { providerOptions } : {}),
     });
 
+    let canFlushFilteredText = true;
+    const finishFilteredText = (): string => {
+      const trailing = filterThinkTags?.finish() ?? "";
+      return canFlushFilteredText ? trailing : "";
+    };
+
     try {
       for await (const chunk of result.fullStream) {
         if (chunk.type === "text-delta") {
-          yield { type: "content", text: chunk.text };
+          const text = filterThinkTags ? filterThinkTags(chunk.text) : chunk.text;
+          if (text) yield { type: "content", text };
+        } else if (chunk.type === "text-end" || chunk.type === "finish-step") {
+          const trailing = finishFilteredText();
+          if (trailing) yield { type: "content", text: trailing };
         } else if (chunk.type === "tool-call") {
           yield {
             type: "tool_calls",
@@ -864,11 +846,18 @@ class ReasoningService extends BaseReasoningService {
             toolName: chunk.toolName,
             displayText,
           };
+        } else if (chunk.type === "abort" || chunk.type === "error") {
+          canFlushFilteredText = false;
+          finishFilteredText();
         } else if (chunk.type === "finish") {
+          const trailing = finishFilteredText();
+          if (trailing) yield { type: "content", text: trailing };
           yield { type: "done", finishReason: chunk.finishReason };
         }
       }
     } catch (error) {
+      canFlushFilteredText = false;
+      finishFilteredText();
       if (abortController.signal.aborted) {
         yield { type: "done", finishReason: "stop" };
         return;

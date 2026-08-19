@@ -1,7 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { parseNvidiaSmiGpuInfo, MIN_CUDA_COMPUTE_CAP } = require("../../src/utils/gpuDetection.js");
+const {
+  parseNvidiaSmiGpuInfo,
+  parseWmiVideoControllers,
+  isCudaCapableGpuName,
+  MIN_CUDA_COMPUTE_CAP,
+} = require("../../src/utils/gpuDetection.js");
 
 // The CUDA pack must only be offered to cards its build actually carries
 // kernels for. A Pascal card passing this gate cost two days of debugging
@@ -61,4 +66,46 @@ test("multi-GPU output uses the primary card", () => {
 
 test("garbage output is not an NVIDIA GPU", () => {
   assert.deepEqual(parseNvidiaSmiGpuInfo("command not found"), { hasNvidiaGpu: false });
+});
+
+test("parseWmiVideoControllers picks the NVIDIA adapter out of a multi-GPU list", () => {
+  // The #1606 reporter's three adapters, as PowerShell prints them
+  const stdout = "AMD Radeon RX 7900 XTX\r\nNVIDIA GeForce RTX 4060 Ti\r\nIntel(R) UHD Graphics 770\r\n";
+  assert.equal(parseWmiVideoControllers(stdout), "NVIDIA GeForce RTX 4060 Ti");
+});
+
+test("parseWmiVideoControllers returns null when no NVIDIA adapter is present", () => {
+  assert.equal(parseWmiVideoControllers("AMD Radeon RX 7900 XTX\r\nIntel(R) UHD Graphics 770\r\n"), null);
+  assert.equal(parseWmiVideoControllers(""), null);
+});
+
+// The WMI rung has no compute capability to gate on, so only names that
+// provably sit at or above the kernel floor may pass.
+test("isCudaCapableGpuName accepts families provably at or above the floor", () => {
+  for (const name of [
+    "NVIDIA GeForce RTX 4060 Ti",
+    "Quadro RTX 4000",
+    "NVIDIA TITAN RTX",
+    "NVIDIA GeForce GTX 1080 Ti",
+    "NVIDIA GeForce GTX 1660 SUPER",
+    "NVIDIA TITAN Xp",
+    "NVIDIA TITAN V",
+  ]) {
+    assert.equal(isCudaCapableGpuName(name), true, name);
+  }
+});
+
+test("isCudaCapableGpuName rejects unproven and non-NVIDIA names", () => {
+  for (const name of [
+    "NVIDIA GeForce GTX 970",
+    "NVIDIA GeForce GTX 980 Ti",
+    "NVIDIA TITAN X", // Maxwell — not the Pascal "TITAN Xp"
+    "Quadro M4000",
+    "AMD Radeon RX 7900 XTX",
+    "Intel(R) UHD Graphics 770",
+    "",
+    null,
+  ]) {
+    assert.equal(isCudaCapableGpuName(name), false, String(name));
+  }
 });

@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identifier et étiqueter les intervenants",
         "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
+      },
+      "autoEnd": {
+        "title": "Terminer les enregistrements oubliés",
+        "description": "Arrête automatiquement les enregistrements de réunion quand l'appel semble terminé, après un compte à rebours annulable"
       }
     }
   },
@@ -1118,8 +1122,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Pour le collage automatique de texte, installez",
     "methodReady": "pour le collage automatique de texte",
@@ -1135,6 +1141,7 @@
     "waylandClipboardTitle": "Mode presse-papiers sur Wayland",
     "windowsReady": "Windows prend en charge le collage automatique nativement. Aucune configuration requise !",
     "withoutToolPrefix": "Sans cet outil, OpenWhispr copiera le texte dans le presse-papiers. Vous pourrez ensuite coller manuellement avec Ctrl+V.",
+    "wtypeFallbackDescription": "wtype est la méthode de collage automatique recommandée pour ce compositeur wlroots. Une solution de repli est disponible, mais elle peut être moins fiable.",
     "xwaylandAppsOnly": "le collage automatique fonctionne uniquement pour les apps XWayland"
   },
   "promptStudio": {
@@ -1213,7 +1220,7 @@
     "sections": {
       "account": {
         "description": "Profil & connexion",
-        "label": "Compte"
+        "label": "Profil"
       },
       "plansBilling": {
         "description": "Forfaits, utilisation & facturation",
@@ -1277,9 +1284,6 @@
       },
       "general": {
         "nameLabel": "Nom",
-        "slugLabel": "Nom court",
-        "slugHint": "Utilisé dans les URL. Minuscules, chiffres et tirets uniquement.",
-        "slugInvalid": "Minuscules, chiffres et tirets uniquement.",
         "saved": "Espace mis à jour",
         "dangerTitle": "Supprimer l'espace",
         "dangerDescription": "Toutes les notes, dossiers et intégrations partagés seront supprimés. Cette action est irréversible.",
@@ -1554,7 +1558,7 @@
             "Partagez des notes via des liens publics",
             "Accès personnel à l'API",
             "Intégration MCP dans toutes vos apps",
-            "Application mobile (iOS bientôt disponible)",
+            "Application mobile",
             "Support par e-mail"
           ],
           "cta": "Commencer",
@@ -1570,9 +1574,8 @@
           "includesPrefix": "Toutes les fonctionnalités Pro +",
           "badge": "Le plus populaire",
           "features": [
-            "Espaces d'équipe pour des notes partagées",
-            "Rôles et gestion des membres de l'espace de travail",
             "Enregistrements de réunions illimités",
+            "Rôles et gestion des membres de l'espace de travail",
             "Mode agent",
             "Discutez avec vos données",
             "Support prioritaire"
@@ -1621,7 +1624,6 @@
         "signOut": "Se déconnecter",
         "signingOut": "Déconnexion..."
       },
-      "signedIn": "Connecté",
       "title": "Compte",
       "toasts": {
         "approachingLimit": {
@@ -1916,6 +1918,7 @@
         "recheck": "Revérifier",
         "copy": "Copier",
         "ydotoolDesc": "Outil d'automatisation de saisie pour Wayland",
+        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots",
         "ydotooldDesc": "Daemon pour ydotool (paquet séparé sur Ubuntu/Pop!_OS)",
         "uinputDesc": "Accès au périphérique d'entrée du noyau",
         "uinputRuleFound": "Règle présente mais inactive. Un redémarrage devrait résoudre le problème.",
@@ -1933,6 +1936,11 @@
             "step1Desc": "Utilisez le gestionnaire de paquets de votre distribution pour installer ydotool.",
             "step2Title": "Vérifier l'installation",
             "step2Desc": "Vérifiez que ydotool est disponible dans votre PATH."
+          },
+          "wtype": {
+            "step1Title": "Installer wtype",
+            "step1Desc": "wtype est la méthode principale de collage automatique sur Hyprland, Sway et les autres compositeurs wlroots.",
+            "step2Title": "Vérifier l'installation"
           },
           "ydotoold": {
             "step1Title": "Installer ydotoold",
@@ -2073,7 +2081,7 @@
       "usageAnalytics": "Analyse d'utilisation",
       "usageAnalyticsDescription": "Aidez-nous à améliorer OpenWhispr en partageant des métriques de performance anonymes. Nous n'envoyons jamais le contenu de vos transcriptions — uniquement des données de performance et d'erreurs.",
       "audioRetention": "Conservation de l'audio",
-      "audioRetentionDescription": "Stocke les enregistrements audio localement pour la retranscription et le téléchargement. Les fichiers sont automatiquement supprimés après la période de conservation.",
+      "audioRetentionDescription": "Stocke l'audio de dictée localement pour la retranscription et le téléchargement. Les fichiers sont automatiquement supprimés après la période de conservation. L'audio des réunions n'est jamais stocké.",
       "audioRetentionDisabled": "Désactivé",
       "retentionDays_one": "{{count}} jour",
       "retentionDays_other": "{{count}} jours",
@@ -2278,16 +2286,15 @@
         "anthropic_claude_sonnet_4_5": "Génération Sonnet précédente",
         "anthropic_claude_haiku_4_5": "Rapide avec une intelligence de pointe",
         "gemini_gemini_3_5_flash": "Dernier modèle Gemini rapide et très performant",
+        "gemini_gemini_3_5_flash_lite": "Le modèle 3.5 le plus rapide et économique",
         "gemini_gemini_3_1_pro_preview": "Modèle phare nouvelle génération pour le raisonnement complexe",
+        "gemini_gemini_3_1_flash_lite": "Performances de pointe à faible coût",
         "gemini_gemini_3_flash_preview": "Modèle nouvelle génération ultra-rapide et très performant",
         "gemini_gemini_2_5_flash_lite": "Latence et coût les plus faibles",
         "gemini_gemma_4_31b_it": "Le plus grand Gemma 4 de Google, 31B dense, contexte 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE de Google, 4B paramètres actifs, contexte 256K",
-        "groq_qwen_qwen3_32b": "Modèle de raisonnement puissant, contexte 131K",
         "groq_openai_gpt_oss_120b": "Modèle phare open source d'OpenAI, 500 T/s",
         "groq_openai_gpt_oss_20b": "Modèle open source rapide, 1000 T/s",
-        "groq_llama_3_3_70b_versatile": "Modèle polyvalent de Meta, 280 T/s",
-        "groq_llama_3_1_8b_instant": "Ultra-rapide 560 T/s, contexte 131K",
         "groq_compound": "Système compound de Groq, 450 T/s",
         "groq_compound_mini": "Système compound rapide, 3x latence réduite",
         "openai_gpt_5_6_sol": "GPT-5.6 phare pour le codage et la recherche complexes",
@@ -2301,7 +2308,6 @@
         "anthropic_claude_opus_4_5": "Modèle Opus antérieur",
         "tinfoil_deepseek_v4_pro": "Raisonnement privé à long contexte dans des enclaves sécurisées, contexte 800K",
         "tinfoil_glm_5_2": "Modèle privé d'ingénierie agentique dans des enclaves sécurisées, contexte 384K",
-        "tinfoil_kimi_k2_6": "Modèle privé de codage longue durée et multimodal, contexte 256K",
         "tinfoil_gemma4_31b": "Modèle privé de raisonnement multilingue avec appel d'outils, contexte 256K",
         "tinfoil_gpt_oss_120b": "Modèle privé de raisonnement à poids ouverts avec usage d'outils, contexte 131K",
         "tinfoil_llama3_3_70b": "Modèle privé conversationnel avec appel d'outils, contexte 128K",
@@ -2391,7 +2397,6 @@
       "description": "Un espace de travail réunit les membres et la facturation de votre organisation. Créez-y des espaces d'équipe pour les notes partagées.",
       "nameLabel": "Nom de l'espace de travail",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Les nouveaux espaces de travail démarrent sur le forfait Free. Les espaces d'équipe nécessitent un forfait d'espace de travail.",
       "submit": "Créer l'espace",
       "submitting": "Création…",
       "errorTitle": "Impossible de créer l'espace"
@@ -2569,8 +2574,8 @@
       "actions": "Actions"
     },
     "spaces": {
-      "privateSpaces": "Espaces privés",
-      "teamSpaces": "Espaces d'équipe",
+      "privateSpaces": "Notes privées",
+      "teamSpaces": "Teamspaces",
       "personal": "Personnel",
       "privateTooltip": "Vous seul pouvez voir votre espace personnel",
       "newSpace": "Nouvel espace d'équipe",
@@ -2831,7 +2836,8 @@
       "title": "Notes de réunion",
       "description": "Transcriptions et résumés structurés",
       "back": "Retour",
-      "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation."
+      "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation.",
+      "autoEnded": "L'enregistrement s'est arrêté automatiquement à la fin de votre réunion."
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",
@@ -2956,14 +2962,15 @@
         "identifying": "Identification des intervenants",
         "notLabeled": "Intervenants non étiquetés",
         "finalizing": "Finalisation des intervenants…",
-        "justYou": "juste vous",
-        "defaultingHint": "par défaut 1 autre",
+        "justYou": "Juste vous",
+        "assumedHint": "2 par défaut — ajustez si plus",
+        "speakersLabel": "Intervenants",
+        "labelToggle": "Étiqueter les intervenants",
         "toggleAria": "Activer l'identification des intervenants pour cet enregistrement",
         "incAria": "Augmenter le nombre d'intervenants attendus",
-        "decAria": "Diminuer le nombre d'intervenants attendus",
-        "othersInCall_one": "{{count}} autre dans l'appel",
-        "othersInCall_other": "{{count}} autres dans l'appel"
-      }
+        "decAria": "Diminuer le nombre d'intervenants attendus"
+      },
+      "consentNotice": "Obtenez toujours le consentement avant d'enregistrer d'autres personnes"
     },
     "overview": {
       "subtitle": {
@@ -3114,6 +3121,10 @@
         "title": "Accélération GPU indisponible",
         "description": "La transcription utilise le CPU à la place. Vous pouvez désactiver l'accélération GPU dans les paramètres."
       },
+      "gpuPackMigration": {
+        "title": "Le pack GPU doit être retéléchargé",
+        "description": "Une mise à jour a supprimé une installation obsolète du pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour rétablir l'accélération GPU."
+      },
       "cleanupFailed": {
         "title": "Échec du nettoyage",
         "description": "Votre dictée a été collée sans nettoyage par IA."
@@ -3194,7 +3205,8 @@
       "listening": "Écoute...",
       "transcribing": "Transcription...",
       "thinking": "Réflexion...",
-      "typeMessage": "Écrivez un message..."
+      "typeMessage": "Écrivez un message...",
+      "send": "Envoyer"
     },
     "tools": {
       "search_notesStatus": "Recherche de notes...",
@@ -3489,6 +3501,15 @@
       "underway": "On dirait que votre réunion est déjà en cours. Vous voulez prendre des notes ?"
     },
     "start": "Prendre des notes",
-    "join": "Rejoindre et transcrire"
+    "join": "Rejoindre et transcrire",
+    "autoEnd": {
+      "title": "La réunion est peut-être terminée",
+      "body": {
+        "micReleased": "Aucune autre app n'utilise votre micro. L'enregistrement s'arrêtera dans {{seconds}}s.",
+        "silence": "Aucun son détecté. L'enregistrement s'arrêtera dans {{seconds}}s.",
+        "processExit": "Votre app de réunion s'est fermée. L'enregistrement s'arrêtera dans {{seconds}}s."
+      },
+      "keep": "Continuer l’enregistrement"
+    }
   }
 }

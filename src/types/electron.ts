@@ -34,6 +34,23 @@ export interface NoteRecordingProvider {
   models: NoteRecordingProviderModel[];
 }
 
+// Session options for the shared dictation-realtime-* channels. `provider` is
+// what fetchRealtimeToken's allowlist keys on — the renderer must always send
+// it (built by dictationStreamingRouting.buildStreamingSessionOptions); the
+// main process defaults a missing value to "openai-realtime" for pre-1.8.4
+// renderers (#1624).
+export interface DictationRealtimeSessionOptions {
+  provider: string;
+  model?: string;
+  mode?: "byok" | "openwhispr";
+  language?: string;
+  sampleRate?: number;
+  keyterms?: string[];
+  environment?: string;
+  tenant?: string;
+  preview?: boolean;
+}
+
 export type NoteRecordingConfigFailure = { success: false } & PolicyFailureMetadata;
 
 export type NoteRecordingConfigResult =
@@ -53,6 +70,36 @@ export type TranscriptionErrorCode =
   | "MODEL_NOT_AVAILABLE"
   | "CUSTOM_ENDPOINT_INVALID"
   | null;
+
+export type MeetingPromptVariant = "detected" | "starting" | "underway";
+
+export interface MeetingDetectionNotificationData {
+  kind: "detection";
+  detectionId: string;
+  source: string;
+  key: string;
+  event: { summary?: string | null } | null;
+  variant: MeetingPromptVariant;
+  joinUrl: string | null;
+}
+
+/** Why auto-end concluded the meeting is over. */
+export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
+
+export interface MeetingAutoEndNotificationData {
+  kind: "auto-end";
+  sessionId: string;
+  expiresAt: number;
+  reason?: MeetingAutoEndReason;
+}
+
+export type MeetingNotificationData =
+  MeetingDetectionNotificationData | MeetingAutoEndNotificationData;
+
+export interface MeetingAutoEndRequest {
+  sessionId: string;
+  reason?: MeetingAutoEndReason;
+}
 
 /**
  * Proxied-transcription IPC results. `ipcMain.handle` drops custom error props on
@@ -721,6 +768,8 @@ export interface PasteToolsResult {
   terminalAware?: boolean;
   hasNativeBinary?: boolean;
   hasUinput?: boolean;
+  hasWtype?: boolean;
+  isWlroots?: boolean;
   tools?: string[];
   recommendedInstall?: string;
 }
@@ -1181,6 +1230,8 @@ declare global {
       onActionDeleted?: (callback: (payload: { id: number }) => void) => () => void;
 
       // Audio file operations
+      saveTempAudio: (buffer: ArrayBuffer) => Promise<{ success: boolean; path: string }>;
+      deleteTempAudio: (tempPath: string) => Promise<{ success: boolean; error?: string }>;
       selectAudioFile: (options?: { multiple?: boolean }) => Promise<{
         canceled: boolean;
         filePath?: string;
@@ -1340,6 +1391,10 @@ declare global {
         }) => void
       ) => () => void;
       onGpuFallbackNotification: (callback: () => void) => () => void;
+
+      // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
+      getGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
+      dismissGpuPackMigrationNotice: () => Promise<{ success: boolean }>;
 
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
@@ -1558,13 +1613,17 @@ declare global {
         isWayland: boolean;
         hasYdotool: boolean;
         hasYdotoold: boolean;
+        hasWtype: boolean;
         daemonRunning: boolean;
         hasService: boolean;
         hasUinput: boolean;
         hasUdevRule: boolean;
         hasGroup: boolean;
         isNixOS: boolean;
-        allGood: boolean;
+        isKde: boolean;
+        isWlroots: boolean;
+        hasXclip: boolean;
+        hasXsel: boolean;
       }>;
 
       // Globe key listener for hotkey capture (macOS only)
@@ -1768,6 +1827,7 @@ declare global {
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
       resumeMediaPlayback?: () => Promise<boolean>;
+      getModelCacheRoot?: () => Promise<string>;
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 
       // Windows Push-to-Talk notifications
@@ -2328,20 +2388,29 @@ declare global {
         model?: string;
         language?: string;
         noteId?: number | null;
+        sessionId: string;
+        autoEndEligible: boolean;
       }) => Promise<
         {
           success: boolean;
+          sessionId?: string;
+          error?: string;
           systemAudioMode?: SystemAudioMode;
           systemAudioStrategy?: SystemAudioStrategy;
           oneOnOneAttendee?: { displayName: string; email: string | null } | null;
         } & PolicyFailureMetadata
       >;
       meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
-      meetingTranscriptionStop?: () => Promise<{
+      meetingTranscriptionSetSystemAudioAvailable?: (
+        sessionId: string,
+        available: boolean
+      ) => Promise<{ success: boolean; reason?: "stale-session" }>;
+      meetingTranscriptionStop?: (expectedSessionId?: string) => Promise<{
         success: boolean;
         transcript?: string;
         diarizationSessionId?: string;
         error?: string;
+        reason?: "stale-session";
       }>;
       meetingTranscriptionCancel?: () => Promise<{
         success: boolean;
@@ -2402,6 +2471,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         segments?: Array<{ start: number; end: number; speaker: string }>;
+        durationSeconds?: number;
         error?: string;
       }>;
       onDiarizationDownloadProgress?: (callback: (data: any) => void) => () => void;
@@ -2473,16 +2543,12 @@ declare global {
       ) => Promise<{ success: boolean }>;
 
       // Dictation realtime streaming
-      dictationRealtimeWarmup?: (options: {
-        provider: "openai-realtime" | "tinfoil-realtime";
-        model?: string;
-        mode?: "byok" | "openwhispr";
-      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      dictationRealtimeStart?: (options: {
-        provider: "openai-realtime" | "tinfoil-realtime";
-        model?: string;
-        mode?: "byok" | "openwhispr";
-      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
+      dictationRealtimeWarmup?: (
+        options: DictationRealtimeSessionOptions
+      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
+      dictationRealtimeStart?: (
+        options: DictationRealtimeSessionOptions
+      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
@@ -2556,8 +2622,16 @@ declare global {
         speechPadMs?: number;
         samplesOverlap?: number;
       }) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
-      onMeetingNotificationData?: (callback: (data: any) => void) => () => void;
-      getMeetingNotificationData?: () => Promise<any>;
+      onMeetingNotificationData?: (callback: (data: MeetingNotificationData) => void) => () => void;
+      onMeetingAutoEndRequested?: (
+        callback: (request: MeetingAutoEndRequest) => void
+      ) => () => void;
+      meetingAutoEndKeep?: (sessionId: string) => Promise<{
+        success: boolean;
+        reason?: "invalid-session" | "stale-session";
+        error?: string;
+      }>;
+      getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
         detectionId: string,

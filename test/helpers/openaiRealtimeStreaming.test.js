@@ -518,3 +518,126 @@ test("completedSegments accumulate across turns", async () => {
   assert.equal(streaming.completedSegments.length, 2);
   assert.equal(lastFull, "Hello world How are you");
 });
+
+test("BYOK session.update is byte-for-byte today's payload when no VAD/language/noise options are passed", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+
+  const connected = streaming.connect({
+    apiKey: "sk-test",
+    model: "gpt-4o-mini-transcribe",
+    // Phase 1 will add these; today connect() must ignore them entirely.
+    language: "en",
+    keyterms: ["OpenWhispr"],
+    sampleRate: 24000,
+    createSocket: async () => socket,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+
+  const updates = socket.sent
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "session.update");
+  assert.equal(updates.length, 1, "exactly one session.update after session.created");
+  assert.deepEqual(updates[0], {
+    type: "session.update",
+    session: {
+      type: "transcription",
+      audio: {
+        input: {
+          format: { type: "audio/pcm", rate: 24000 },
+          transcription: { model: "gpt-4o-mini-transcribe" },
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.6,
+            silence_duration_ms: 600,
+            prefix_padding_ms: 500,
+          },
+        },
+      },
+    },
+  });
+
+  socket.emit("message", JSON.stringify({ type: "session.updated" }));
+  await connected;
+  streaming.cleanup();
+});
+
+test("dictation-style connect (inputRate 16000, custom socket factory) declares the 16kHz format and the same VAD", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const factoryCalls = [];
+
+  const connected = streaming.connect({
+    apiKey: "tk-secret",
+    model: "voxtral-mini-4b-realtime",
+    inputRate: 16000,
+    createSocket: () => {
+      factoryCalls.push("called");
+      return Promise.resolve(socket);
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+
+  const [update] = socket.sent
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "session.update");
+  assert.equal(factoryCalls.length, 1);
+  assert.deepEqual(update.session.audio.input.format, { type: "audio/pcm", rate: 16000 });
+  assert.equal(update.session.audio.input.transcription.model, "voxtral-mini-4b-realtime");
+  assert.deepEqual(update.session.audio.input.turn_detection, {
+    type: "server_vad",
+    threshold: 0.6,
+    silence_duration_ms: 600,
+    prefix_padding_ms: 500,
+  });
+  assert.equal("noise_reduction" in update.session.audio.input, false);
+  assert.equal("language" in update.session.audio.input.transcription, false);
+
+  socket.emit("message", JSON.stringify({ type: "session.updated" }));
+  await connected;
+  streaming.cleanup();
+});
+
+test("characterization: a final that lands during disconnect()'s commit window reaches onFinalTranscript WITHOUT its timestamp (Phase 1 forwards it)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectPreconfigured(streaming, socket);
+
+  const calls = [];
+  streaming.onFinalTranscript = (text, timestamp) => calls.push({ text, timestamp });
+  streaming.sendAudio(Buffer.alloc(1600, 1)); // audioBytesSent > 0 so disconnect() commits
+
+  const disconnecting = streaming.disconnect();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const commits = socket.sent
+    .filter((raw) => typeof raw === "string")
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "input_audio_buffer.commit");
+  assert.equal(commits.length, 1, "disconnect() commits the trailing buffer");
+
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "tail words",
+    })
+  );
+  const result = await disconnecting;
+
+  assert.equal(result.text, "tail words", "the tail is returned to the caller");
+  assert.equal(calls.length, 1, "the tail also reaches the live onFinalTranscript handler");
+  assert.equal(calls[0].text, "tail words");
+  // TODAY the temporary onFinalTranscript wrapper that disconnect() installs while
+  // awaiting the commit forwards only `text` to the previous handler.
+  // Phase 1 changes this line to `typeof calls[0].timestamp === "number"`.
+  assert.equal(calls[0].timestamp, undefined);
+});

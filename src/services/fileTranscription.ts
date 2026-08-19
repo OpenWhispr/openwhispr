@@ -12,6 +12,9 @@ export interface FileTranscriptionResult {
   // Set alongside `warning` by the chunked cloud path: how much audio was lost.
   failedChunks?: number;
   totalChunks?: number;
+  // Measured duration of the source audio, for persisting as
+  // audio_duration_seconds. Only transcribeFileWithSpeakers sets it.
+  durationSeconds?: number | null;
 }
 
 export interface DiarizationSettings {
@@ -37,6 +40,34 @@ export interface FileTranscriptionConfig {
   transcriptionMode?: string;
   remoteTranscriptionUrl?: string;
   remoteTranscriptionModel?: string;
+}
+
+export interface TranscriptionApiKeys {
+  openaiApiKey: string;
+  groqApiKey: string;
+  xaiApiKey: string;
+  mistralApiKey: string;
+  tinfoilApiKey: string;
+  customTranscriptionApiKey?: string;
+}
+
+export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiKeys): string {
+  switch (provider) {
+    case "openai":
+      return keys.openaiApiKey;
+    case "groq":
+      return keys.groqApiKey;
+    case "xai":
+      return keys.xaiApiKey;
+    case "mistral":
+      return keys.mistralApiKey;
+    case "tinfoil":
+      return keys.tinfoilApiKey;
+    case "custom":
+      return keys.customTranscriptionApiKey || "";
+    default:
+      return "";
+  }
 }
 
 // Single provider dispatch shared by the single-file flow and the batch queue,
@@ -142,10 +173,15 @@ export async function transcribeFileWithSpeakers(
           .catch(() => null) ?? Promise.resolve(null))
       : Promise.resolve(null);
 
-  const [result, diar] = await Promise.all([
+  const [transcribed, diar] = await Promise.all([
     transcribeFile(filePath, cfg, byokDiarize, opts),
     diarizePromise,
   ]);
+
+  // The diarizer measures the converted audio, so it covers picked files whose
+  // duration the caller never knew. 0/NaN mean "unknown", hence ||.
+  const measuredDuration = durationSeconds || (diar?.success && diar.durationSeconds) || null;
+  const result = { ...transcribed, durationSeconds: measuredDuration };
 
   if (!result.success || !result.text || result.diarized) return result;
   if (!diar?.success || !diar.segments?.length) return result;

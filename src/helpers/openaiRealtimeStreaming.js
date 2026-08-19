@@ -48,6 +48,9 @@ class OpenAIRealtimeStreaming {
     this.connectionTimeout = null;
     this.isDisconnecting = false;
     this.audioBytesSent = 0;
+    // Subclasses (Tinfoil) override this so logs name the provider actually
+    // carrying the audio — a Tinfoil session must never log as OpenAI.
+    this.providerLabel = "OpenAI Realtime";
     this.model = "gpt-4o-mini-transcribe";
     this.inputRate = SAMPLE_RATE;
     this.captureRate = SAMPLE_RATE;
@@ -73,10 +76,10 @@ class OpenAIRealtimeStreaming {
 
   async connect(options = {}) {
     const { apiKey, model, preconfigured, inputRate, captureRate, createSocket } = options;
-    if (!apiKey) throw new Error("OpenAI API key is required");
+    if (!apiKey) throw new Error(`${this.providerLabel} API key is required`);
 
     if (this.isConnected || this.isConnecting) {
-      debugLogger.debug("OpenAI Realtime already connected/connecting");
+      debugLogger.debug(`${this.providerLabel} already connected/connecting`);
       return;
     }
 
@@ -97,7 +100,7 @@ class OpenAIRealtimeStreaming {
     this._connectionLossNotified = false;
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
-    debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
+    debugLogger.debug(`${this.providerLabel} connecting`, { model: this.model });
 
     // Attested providers (Tinfoil) supply their socket via an async factory.
     let ws;
@@ -118,13 +121,13 @@ class OpenAIRealtimeStreaming {
       this.connectionTimeout = setTimeout(() => {
         this.isConnecting = false;
         this.cleanup();
-        reject(new Error("OpenAI Realtime connection timeout"));
+        reject(new Error(`${this.providerLabel} connection timeout`));
       }, WEBSOCKET_TIMEOUT_MS);
 
       this.ws = ws;
 
       this.ws.on("open", () => {
-        debugLogger.debug("OpenAI Realtime WebSocket opened");
+        debugLogger.debug(`${this.providerLabel} WebSocket opened`);
       });
 
       this.ws.on("message", (data) => {
@@ -133,7 +136,7 @@ class OpenAIRealtimeStreaming {
 
       this.ws.on("error", (error) => {
         const wasActive = this.isConnected;
-        debugLogger.error("OpenAI Realtime WebSocket error", { error: error.message });
+        debugLogger.error(`${this.providerLabel} WebSocket error`, { error: error.message });
         this.isConnecting = false;
         this.cleanup();
         if (this.pendingReject) {
@@ -151,7 +154,7 @@ class OpenAIRealtimeStreaming {
       this.ws.on("close", (code, reason) => {
         const wasActive = this.isConnected;
         this.isConnecting = false;
-        debugLogger.debug("OpenAI Realtime WebSocket closed", {
+        debugLogger.debug(`${this.providerLabel} WebSocket closed`, {
           code,
           reason: reason?.toString(),
           wasActive,
@@ -179,12 +182,12 @@ class OpenAIRealtimeStreaming {
           if (this.preconfigured) {
             // Server-side ephemeral token already configured the session;
             // sending an update would strip language and noise-reduction.
-            debugLogger.debug("OpenAI Realtime session created (preconfigured)", {
+            debugLogger.debug(`${this.providerLabel} session created (preconfigured)`, {
               model: this.model,
             });
             this._markConnected();
           } else {
-            debugLogger.debug("OpenAI Realtime session created, sending configuration", {
+            debugLogger.debug(`${this.providerLabel} session created, sending configuration`, {
               model: this.model,
             });
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) break;
@@ -214,7 +217,7 @@ class OpenAIRealtimeStreaming {
 
         case "session.updated": {
           if (this.pendingResolve) {
-            debugLogger.debug("OpenAI Realtime session configured", {
+            debugLogger.debug(`${this.providerLabel} session configured`, {
               model: this.model,
             });
             this._markConnected();
@@ -242,7 +245,7 @@ class OpenAIRealtimeStreaming {
           if (transcript) {
             const fullText = this.getFullTranscript();
             this.onFinalTranscript?.(fullText, speechTimestamp);
-            debugLogger.debug("OpenAI Realtime turn completed", {
+            debugLogger.debug(`${this.providerLabel} turn completed`, {
               turnText: transcript.slice(0, 100),
               totalLength: fullText.length,
               segments: this.completedSegments.length,
@@ -260,11 +263,11 @@ class OpenAIRealtimeStreaming {
 
         case "error": {
           const errCode = event.error?.code;
-          const errMsg = event.error?.message || "OpenAI Realtime error";
+          const errMsg = event.error?.message || `${this.providerLabel} error`;
           // Only consumers that attach onSessionExpired (meetings) get the
           // reconnect path; others (dictation) keep the onError/onSessionEnd flow.
           if (errCode === "session_expired" && this.onSessionExpired) {
-            debugLogger.warn("OpenAI Realtime session expired", { message: errMsg });
+            debugLogger.warn(`${this.providerLabel} session expired`, { message: errMsg });
             this._sessionExpired = true;
             this.onSessionExpired({ proactive: false });
             break;
@@ -274,11 +277,11 @@ class OpenAIRealtimeStreaming {
             errMsg.includes("buffer too small") ||
             errMsg.includes("commit_empty");
           if (isEmptyBuffer) {
-            debugLogger.debug("OpenAI Realtime empty buffer (server VAD already committed)", {
+            debugLogger.debug(`${this.providerLabel} empty buffer (server VAD already committed)`, {
               code: errCode,
             });
           } else {
-            debugLogger.error("OpenAI Realtime error event", {
+            debugLogger.error(`${this.providerLabel} error event`, {
               code: errCode,
               message: errMsg,
             });
@@ -291,7 +294,7 @@ class OpenAIRealtimeStreaming {
           break;
       }
     } catch (err) {
-      debugLogger.error("OpenAI Realtime message parse error", { error: err.message });
+      debugLogger.error(`${this.providerLabel} message parse error`, { error: err.message });
     }
   }
 
@@ -322,7 +325,9 @@ class OpenAIRealtimeStreaming {
     clearTimeout(this._sessionTimer);
     this._sessionTimer = setTimeout(() => {
       if (!this.isConnected) return;
-      debugLogger.debug("OpenAI Realtime session approaching 60min limit, requesting reconnect");
+      debugLogger.debug(
+        `${this.providerLabel} session approaching 60min limit, requesting reconnect`
+      );
       this.onSessionExpired?.({ proactive: true });
     }, SESSION_PREEMPT_MS);
   }
@@ -347,7 +352,9 @@ class OpenAIRealtimeStreaming {
         return;
       }
       if (socket.isAlive === false) {
-        debugLogger.debug("OpenAI Realtime keep-alive missed pong, terminating stale connection");
+        debugLogger.debug(
+          `${this.providerLabel} keep-alive missed pong, terminating stale connection`
+        );
         socket.terminate();
         return;
       }
@@ -355,7 +362,7 @@ class OpenAIRealtimeStreaming {
       try {
         socket.ping();
       } catch (err) {
-        debugLogger.debug("OpenAI Realtime keep-alive ping failed", { error: err.message });
+        debugLogger.debug(`${this.providerLabel} keep-alive ping failed`, { error: err.message });
         socket.terminate();
       }
     }, KEEPALIVE_INTERVAL_MS);
@@ -397,7 +404,7 @@ class OpenAIRealtimeStreaming {
     }
 
     if (this.coldStartBuffer.length > 0) {
-      debugLogger.debug("OpenAI Realtime flushing cold-start buffer", {
+      debugLogger.debug(`${this.providerLabel} flushing cold-start buffer`, {
         chunks: this.coldStartBuffer.length,
         bytes: this.coldStartBufferSize,
       });
@@ -421,7 +428,7 @@ class OpenAIRealtimeStreaming {
   }
 
   async disconnect({ commit = true } = {}) {
-    debugLogger.debug("OpenAI Realtime disconnect", {
+    debugLogger.debug(`${this.providerLabel} disconnect`, {
       audioBytesSent: this.audioBytesSent,
       segments: this.completedSegments.length,
       textLength: this.getFullTranscript().length,
@@ -446,7 +453,7 @@ class OpenAIRealtimeStreaming {
 
         await new Promise((resolve) => {
           const tid = setTimeout(() => {
-            debugLogger.debug("OpenAI Realtime commit timeout, using accumulated text");
+            debugLogger.debug(`${this.providerLabel} commit timeout, using accumulated text`);
             resolve();
           }, DISCONNECT_TIMEOUT_MS);
 

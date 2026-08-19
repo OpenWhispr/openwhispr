@@ -63,10 +63,19 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
+const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
+const { registerMeetingAutoEndKeepHandler } = require("./meetingAutoEndKeep");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
-const { partitionPendingMicFinals, isWithinRetractWindow } = require("./meetingMicHoldback");
+const {
+  partitionPendingMicFinals,
+  isRiskyMicDuplicateProfile,
+  isDuplicateMicSegment,
+  selectRacingMicEntryIndices,
+  partitionOverlappingPendingMicFinals,
+} = require("./meetingMicHoldback");
+const { computeChunkStats, resolveMicChunkAction } = require("./meetingMicGate");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const {
@@ -103,6 +112,7 @@ const {
   getMeetingStreamingClient,
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
+const { fetchRealtimeTokenForProvider } = require("./realtimeTokenProviders");
 
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
 // streaming providers must be told the true PCM rate or they misread the audio.
@@ -606,6 +616,14 @@ class IPCHandlers {
       this.whisperManager.serverManager.on("gpu-fallback", () => {
         this._recordWhisperGpuFailure("vulkan");
         broadcastToWindows("gpu-fallback-notification", {});
+      });
+      // Persist the discrete-GPU pin so later launches spawn pinned directly
+      // instead of paying a second Vulkan cold start. See #1606.
+      this.whisperManager.serverManager.on("vulkan-device-pinned", ({ index }) => {
+        this._syncStartupEnv({ WHISPER_VULKAN_DEVICE: String(index) });
+      });
+      this.whisperManager.serverManager.on("vulkan-device-pin-cleared", () => {
+        this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
       });
     }
   }
@@ -2521,6 +2539,32 @@ class IPCHandlers {
       return this.clipboardManager.checkPasteTools();
     });
 
+    // Voice drafts (chat input): persist a recorded buffer so the file-based
+    // transcription pipeline (all providers) can consume it, then delete it.
+    ipcMain.handle("save-temp-audio", async (_event, buffer) => {
+      const tempPath = path.join(
+        os.tmpdir(),
+        `ow-voice-draft-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.webm`
+      );
+      fs.writeFileSync(tempPath, Buffer.from(buffer));
+      return { success: true, path: tempPath };
+    });
+
+    ipcMain.handle("delete-temp-audio", async (_event, tempPath) => {
+      // Only files this handler family created are deletable.
+      const resolved = path.resolve(tempPath);
+      const validPrefix = path.join(os.tmpdir(), "ow-voice-draft-");
+      if (!resolved.startsWith(validPrefix)) {
+        return { success: false, error: "Invalid temp path" };
+      }
+      try {
+        fs.unlinkSync(resolved);
+      } catch {
+        // Already gone — fine.
+      }
+      return { success: true };
+    });
+
     ipcMain.handle("transcribe-local-whisper", async (_event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-whisper called", {
         audioBlobType: typeof audioBlob,
@@ -2861,10 +2905,21 @@ class IPCHandlers {
       // Stop the server first so the running binary can be deleted on Windows
       await this.whisperManager.stopServer().catch(() => {});
       const { deletedCount } = await this.whisperVulkanManager.delete();
-      this._syncStartupEnv({}, ["WHISPER_VULKAN_ENABLED"]);
+      this._syncStartupEnv({}, ["WHISPER_VULKAN_ENABLED", "WHISPER_VULKAN_DEVICE"]);
       this._clearWhisperGpuFailure("vulkan");
       this._applyWhisperGpuPreference(reloadModel);
       return { success: true, deletedCount };
+    });
+
+    // One-time "GPU pack needs re-downloading" notice recorded by the
+    // legacy-layout migration before any window existed. See #1606.
+    ipcMain.handle("get-gpu-pack-migration-notice", () => {
+      return require("./gpuPackMigrationNotice").read();
+    });
+
+    ipcMain.handle("dismiss-gpu-pack-migration-notice", () => {
+      require("./gpuPackMigrationNotice").clear();
+      return { success: true };
     });
 
     // Clears the remembered GPU failure and reloads the server with the GPU
@@ -3093,7 +3148,9 @@ class IPCHandlers {
             segments,
             numSpeakers > 0 ? numSpeakers : MAX_SPEAKER_COUNT
           );
-          return { success: true, segments };
+          // Callers persist this as audio_duration_seconds: for picked files
+          // the renderer has no other duration source.
+          return { success: true, segments, durationSeconds };
         } finally {
           try {
             fs.unlinkSync(wavPath);
@@ -3191,7 +3248,8 @@ class IPCHandlers {
 
       // Delete downloaded models
       try {
-        const whisperDir = path.join(os.homedir(), ".cache", "openwhispr", "whisper-models");
+        const { getModelsDirForService } = require("./modelDirUtils");
+        const whisperDir = getModelsDirForService("whisper");
         if (fs.existsSync(whisperDir)) fs.rmSync(whisperDir, { recursive: true, force: true });
       } catch (e) {
         errors.push(`Whisper models: ${e.message}`);
@@ -4734,10 +4792,12 @@ class IPCHandlers {
     // System audio is always capturable on Windows: via the native WASAPI
     // process-loopback helper when available (hears every output device),
     // otherwise via Chromium's default-device loopback in the renderer.
-    const getWindowsSystemAudioAccess = async () => {
-      const capability = await this.windowsLoopbackAudioManager?.getCapability().catch(() => ({
-        available: false,
-      }));
+    const getWindowsSystemAudioAccess = async ({ refreshCapability = false } = {}) => {
+      const capability = await this.windowsLoopbackAudioManager
+        ?.getCapability({ force: refreshCapability })
+        .catch(() => ({
+          available: false,
+        }));
       const helperAvailable = !!capability?.available;
 
       return buildSystemAudioAccess({
@@ -5445,73 +5505,32 @@ class IPCHandlers {
       return false;
     };
 
-    const shouldSkipDuplicateMicSegment = (text, timestamp, suppression = null) => {
-      if (suppression?.likelyRenderBleed || suppression?.hasBleedEvidence) {
-        if (hasNearbyTranscriptMatch("system", text, timestamp)) {
-          return true;
-        }
-      }
-
-      if (suppression?.reason === "double_talk") {
-        return hasNearbyTranscriptMatch("system", text, timestamp, { relaxed: true });
-      }
-
-      return false;
-    };
+    const shouldSkipDuplicateMicSegment = (text, timestamp, suppression = null) =>
+      isDuplicateMicSegment({ text, timestamp, suppression, hasNearbyTranscriptMatch });
 
     const isWithinMeetingStartupWarmup = () =>
       meetingStartedAt != null && Date.now() - meetingStartedAt < MEETING_STARTUP_WARMUP_MS;
 
-    const hasRiskyMicDuplicateProfile = (suppression = null) => {
-      if (isWithinMeetingStartupWarmup()) {
-        return true;
-      }
-      if (suppression?.systemSpeaking) {
-        return true;
-      }
-      return (
-        !!suppression &&
-        (suppression.reason === "double_talk" ||
-          suppression.hasBleedEvidence ||
-          suppression.likelyRenderBleed)
-      );
-    };
+    const hasRiskyMicDuplicateProfile = (suppression = null) =>
+      isRiskyMicDuplicateProfile({
+        suppression,
+        inStartupWarmup: isWithinMeetingStartupWarmup(),
+      });
 
     const removeRacingMicEntriesFor = (systemText, systemTimestamp) => {
+      const indices = selectRacingMicEntryIndices({
+        segments: meetingDiarizationSegments,
+        systemText,
+        systemTimestamp,
+        hasNearbyTranscriptMatch,
+        duplicateWindowMs: DUPLICATE_TRANSCRIPT_WINDOW_MS,
+        retractWindowMs: RACING_MIC_RETRACT_WINDOW_MS,
+      });
       const removed = [];
-      for (let i = meetingDiarizationSegments.length - 1; i >= 0; i -= 1) {
-        const candidate = meetingDiarizationSegments[i];
-        if (candidate.source !== "mic" || candidate.timestamp == null) continue;
-        if (systemTimestamp != null) {
-          const windowMs =
-            candidate.hasBleedEvidence || candidate.likelyRenderBleed
-              ? DUPLICATE_TRANSCRIPT_WINDOW_MS
-              : RACING_MIC_RETRACT_WINDOW_MS;
-          if (!isWithinRetractWindow({ candidate, systemTimestamp, windowMs })) {
-            if (candidate.timestamp < systemTimestamp - DUPLICATE_TRANSCRIPT_WINDOW_MS) break;
-            continue;
-          }
-        }
-        const hasMicDuplicateRisk =
-          candidate.likelyRenderBleed ||
-          candidate.hasBleedEvidence ||
-          candidate.suppressionReason === "double_talk";
-        const overlapsSystem = hasNearbyTranscriptMatch(
-          "system",
-          candidate.text,
-          candidate.timestamp,
-          {
-            extraSegment: {
-              text: systemText,
-              timestamp: systemTimestamp,
-            },
-            relaxed: candidate.suppressionReason === "double_talk",
-          }
-        );
-        if (hasMicDuplicateRisk && overlapsSystem) {
-          meetingDiarizationSegments.splice(i, 1);
-          removed.push(candidate);
-        }
+      // Indices are descending, so splicing in order never shifts a later index.
+      for (const index of indices) {
+        removed.push(meetingDiarizationSegments[index]);
+        meetingDiarizationSegments.splice(index, 1);
       }
       return removed;
     };
@@ -5641,26 +5660,13 @@ class IPCHandlers {
     };
 
     const removePendingMicFinalsFor = (systemText, systemTimestamp) => {
-      const removed = [];
-      meetingPendingMicFinals = meetingPendingMicFinals.filter((candidate) => {
-        const overlapsSystem = hasNearbyTranscriptMatch(
-          "system",
-          candidate.text,
-          candidate.timestamp,
-          {
-            extraSegment: {
-              text: systemText,
-              timestamp: systemTimestamp,
-            },
-            relaxed: candidate.micSuppression?.reason === "double_talk",
-          }
-        );
-        if (!overlapsSystem) {
-          return true;
-        }
-        removed.push(candidate);
-        return false;
+      const { kept, removed } = partitionOverlappingPendingMicFinals({
+        pending: meetingPendingMicFinals,
+        systemText,
+        systemTimestamp,
+        hasNearbyTranscriptMatch,
       });
+      meetingPendingMicFinals = kept;
       schedulePendingMicFinalFlush();
       return removed;
     };
@@ -6040,88 +6046,17 @@ class IPCHandlers {
         return response.json();
       };
 
-      const dual = (factory) => (streams === 2 ? Promise.all([factory(), factory()]) : factory());
-
-      if (options.provider === "assemblyai-realtime") {
-        if (options.mode === "byok") {
-          const apiKey = this.environmentManager.getAssemblyAIKey();
-          if (!apiKey) {
-            throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
-          }
-          return dual(async () => {
-            const response = await proxyFetch(
-              "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
-              { headers: { Authorization: apiKey } }
-            );
-            if (!response.ok) {
-              const err = await response.json().catch(() => ({}));
-              throw new Error(err.error || `AssemblyAI token request failed: ${response.status}`);
-            }
-            const data = await response.json();
-            if (!data.token) throw new Error("No AssemblyAI token received");
-            return data.token;
-          });
-        }
-        return dual(async () => {
-          const data = await postServerToken("/api/streaming-token");
-          if (!data.token) throw new Error("No AssemblyAI token received");
-          return data.token;
-        });
-      }
-
-      if (options.provider === "deepgram-realtime") {
-        if (options.mode === "byok") {
-          const apiKey = this.environmentManager.getDeepgramKey();
-          if (!apiKey) {
-            throw new Error("No Deepgram API key configured. Add your key in Settings.");
-          }
-          return streams === 2 ? [apiKey, apiKey] : apiKey;
-        }
-        return dual(async () => {
-          const data = await postServerToken("/api/deepgram-streaming-token");
-          if (!data.token) throw new Error("No Deepgram token received");
-          return data.token;
-        });
-      }
-
-      if (options.provider === "corti-realtime") {
-        // One token covers both meeting streams; it's only used at the WSS handshake.
-        const { token } = await this._mintStoredCortiToken(options);
-        return streams === 2 ? [token, token] : token;
-      }
-      if (options.provider === "tinfoil-realtime") {
-        const apiKey = this.environmentManager.getTinfoilKey();
-        if (!apiKey) {
-          const err = new Error("No Tinfoil API key configured. Add your key in Settings.");
-          err.code = "NO_API";
-          throw err;
-        }
-        return streams === 2 ? [apiKey, apiKey] : apiKey;
-      }
-
-      if (options.provider !== "openai-realtime") {
-        throw new Error(`Unsupported realtime token provider: ${options.provider}`);
-      }
-
-      if (options.mode === "byok") {
-        const apiKey = this.environmentManager.getOpenAIKey();
-        if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
-        return streams === 2 ? [apiKey, apiKey] : apiKey;
-      }
-
-      const data = await postServerToken("/api/openai-realtime-token", {
-        model: options.model,
-        language: options.language,
-        streams: streams || 1,
-      });
-      if (streams === 2) {
-        if (!data.clientSecrets || data.clientSecrets.length < 2) {
-          throw new Error("Expected two client secrets for dual-stream");
-        }
-        return data.clientSecrets;
-      }
-      if (!data.clientSecret) throw new Error("No client secret received");
-      return data.clientSecret;
+      return fetchRealtimeTokenForProvider(
+        options.provider,
+        {
+          environmentManager: this.environmentManager,
+          proxyFetch,
+          postServerToken,
+          mintCortiToken: (tokenOptions) => this._mintStoredCortiToken(tokenOptions),
+        },
+        options,
+        { streams }
+      );
     };
 
     const getMeetingSystemAudioCapabilityMode = () => {
@@ -6133,7 +6068,7 @@ class IPCHandlers {
 
     const getMeetingSystemAudioMode = () => getMeetingSystemAudioCapabilityMode();
 
-    const getMeetingSystemAudioPlan = async () => {
+    const getMeetingSystemAudioPlan = async ({ refreshWindowsCapability = false } = {}) => {
       const mode = getMeetingSystemAudioMode();
       if (mode === "unsupported") {
         return { mode, strategy: "unsupported" };
@@ -6152,7 +6087,9 @@ class IPCHandlers {
       }
 
       if (process.platform === "win32") {
-        const windowsAccess = await getWindowsSystemAudioAccess();
+        const windowsAccess = await getWindowsSystemAudioAccess({
+          refreshCapability: refreshWindowsCapability,
+        });
         return { mode: windowsAccess.mode, strategy: windowsAccess.strategy };
       }
 
@@ -6237,8 +6174,6 @@ class IPCHandlers {
 
     const MEETING_MIC_REFERENCE_ALIGNMENT_MS = 320;
     const MEETING_STARTUP_WARMUP_MS = 1500;
-    const MEETING_MIC_BLEED_RMS_CEILING = 0.018;
-    const MEETING_MIC_BLEED_PEAK_CEILING = 0.07;
     const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
     const MEETING_MIC_STATS_LOG_LIMIT = 200;
     let meetingMicStatsLogCount = 0;
@@ -6361,26 +6296,20 @@ class IPCHandlers {
 
       let outbound = buffer;
       if (source === "mic" && buffer.length >= 2) {
-        const samples = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length >> 1);
-        let sumSq = 0;
-        let peak = 0;
-        for (let i = 0; i < samples.length; i++) {
-          const n = samples[i] / 0x7fff;
-          sumSq += n * n;
-          const abs = n < 0 ? -n : n;
-          if (abs > peak) peak = abs;
-        }
-        const rms = Math.sqrt(sumSq / samples.length);
+        const { rms, peak, sampleCount } = computeChunkStats(buffer);
+        // Evaluated eagerly (as before) because the stats log reports it.
         const systemSpeaking = meetingEchoLeakDetector.isSystemSpeaking(
           Date.now() - MEETING_MIC_BLEED_LOOKBACK_MS
         );
-        if (rms < 0.0015 && peak < 0.05) {
-          outbound = Buffer.alloc(buffer.length);
-        } else if (
-          rms < MEETING_MIC_BLEED_RMS_CEILING &&
-          peak < MEETING_MIC_BLEED_PEAK_CEILING &&
-          systemSpeaking
-        ) {
+        const verdict = resolveMicChunkAction({
+          mode: "streaming",
+          source,
+          rms,
+          peak,
+          sampleCount,
+          isSystemSpeaking: () => systemSpeaking,
+        });
+        if (verdict.action === "zero") {
           outbound = Buffer.alloc(buffer.length);
         }
         if (
@@ -6631,36 +6560,27 @@ class IPCHandlers {
 
       const pcm16k = downsample24kTo16k(pcm24k);
 
-      const samples = new Int16Array(pcm16k.buffer, pcm16k.byteOffset, pcm16k.length / 2);
-      let sumSq = 0;
-      let peak = 0;
-      for (let i = 0; i < samples.length; i++) {
-        const n = samples[i] / 0x7fff;
-        sumSq += n * n;
-        const abs = n < 0 ? -n : n;
-        if (abs > peak) peak = abs;
-      }
-      const rms = Math.sqrt(sumSq / samples.length);
-      if (rms < 0.0015 && peak < 0.05) {
-        debugLogger.debug("Skipping silent meeting chunk", {
-          source,
-          rms: rms.toFixed(4),
-          peak: peak.toFixed(4),
-        });
-        return;
-      }
-
-      if (
-        source === "mic" &&
-        rms < MEETING_MIC_BLEED_RMS_CEILING &&
-        peak < MEETING_MIC_BLEED_PEAK_CEILING &&
-        meetingEchoLeakDetector.isSystemSpeaking(Date.now() - LOCAL_MEETING_CHUNK_INTERVAL_MS)
-      ) {
-        debugLogger.debug("Skipping system-dominant mic chunk", {
-          source,
-          rms: rms.toFixed(4),
-          peak: peak.toFixed(4),
-        });
+      const { rms, peak, sampleCount } = computeChunkStats(pcm16k);
+      const verdict = resolveMicChunkAction({
+        mode: "local",
+        source,
+        rms,
+        peak,
+        sampleCount,
+        isSystemSpeaking: () =>
+          meetingEchoLeakDetector.isSystemSpeaking(Date.now() - LOCAL_MEETING_CHUNK_INTERVAL_MS),
+      });
+      if (verdict.action === "skip") {
+        debugLogger.debug(
+          verdict.reason === "silence"
+            ? "Skipping silent meeting chunk"
+            : "Skipping system-dominant mic chunk",
+          {
+            source,
+            rms: rms.toFixed(4),
+            peak: peak.toFixed(4),
+          }
+        );
         return;
       }
 
@@ -7088,6 +7008,10 @@ class IPCHandlers {
 
       const connectInner = async () => {
         const isCloud = options.mode !== "byok";
+        // Dictation renderers before 1.8.4 omit `provider` and mean OpenAI; the
+        // default lives here, at the boundary, so the token allowlist stays
+        // fail-closed for genuinely unknown providers (#1624).
+        const provider = options.provider ?? "openai-realtime";
         const streaming = new OpenAIRealtimeStreaming();
         setupDictationCallbacks(streaming, event);
         // Assign before the token fetch (a real network round trip) so
@@ -7098,9 +7022,9 @@ class IPCHandlers {
         try {
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
-            provider: options.provider,
+            provider,
           });
-          if (options.provider === "tinfoil-realtime") {
+          if (provider === "tinfoil-realtime") {
             const model = options.model || TINFOIL_REALTIME_MODEL;
             await streaming.connect({
               apiKey,
@@ -7193,7 +7117,7 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("meeting-transcription-start", async (event, options = {}) => {
+    const startMeetingTranscription = async (event, options = {}) => {
       // Wait for any in-flight prepare to finish before starting
       if (meetingTranscriptionPreparePromise) {
         debugLogger.debug("Meeting transcription start: waiting for in-flight prepare");
@@ -7205,15 +7129,37 @@ class IPCHandlers {
         return { success: false, error: "Operation in progress" };
       }
 
+      if (!ALLOWED_MEETING_PROVIDERS.has(options.provider)) {
+        return { success: false, error: `Unsupported provider: ${options.provider}` };
+      }
+
       meetingTranscriptionStartInProgress = true;
+      // The lifecycle wrapper is the only caller and always injects the same
+      // sessionId it registered; re-deriving one here would silently break
+      // scoped stop/auto-end matching.
+      const recordingSessionId = options.sessionId;
       meetingStartedAt = Date.now();
       meetingConnectionOptions = options;
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
       meetingFatalErrorSent = false;
+      this.meetingDetectionEngine?.endRecordingSession();
       this.meetingDetectionEngine?.setUserRecording(true);
+
+      const completeStart = async (result) => {
+        await this.meetingDetectionEngine?.beginRecordingSession({
+          sessionId: recordingSessionId,
+          autoEndEligible: options.autoEndEligible === true,
+          ownerWebContents: event.sender,
+          // Renderer loopback may still fail after main chooses its strategy.
+          // Auto-end stays fail-safe until the renderer confirms a real source.
+          systemAudioAvailable: false,
+        });
+        return { ...result, sessionId: recordingSessionId };
+      };
+
       try {
-        const systemAudioPlan = await getMeetingSystemAudioPlan();
+        const systemAudioPlan = await getMeetingSystemAudioPlan({ refreshWindowsCapability: true });
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         const requestedConnectionKey = getMeetingConnectionKey(options);
         meetingEchoLeakDetector.reset();
@@ -7253,12 +7199,12 @@ class IPCHandlers {
             systemAudioStrategy,
             "during warm-start reuse"
           ));
-          return {
+          return await completeStart({
             success: true,
             systemAudioMode,
             systemAudioStrategy,
             oneOnOneAttendee: meetingOneOnOneAttendee,
-          };
+          });
         }
 
         if (options.provider === "local") {
@@ -7290,16 +7236,12 @@ class IPCHandlers {
             systemAudioStrategy,
           });
 
-          return {
+          return await completeStart({
             success: true,
             systemAudioMode,
             systemAudioStrategy,
             oneOnOneAttendee: meetingOneOnOneAttendee,
-          };
-        }
-
-        if (!ALLOWED_MEETING_PROVIDERS.has(options.provider)) {
-          return { success: false, error: `Unsupported provider: ${options.provider}` };
+          });
         }
 
         await connectRealtimeStreaming(event, options);
@@ -7312,24 +7254,28 @@ class IPCHandlers {
           systemAudioStrategy,
           "in realtime mode"
         ));
-        return {
+        return await completeStart({
           success: true,
           systemAudioMode,
           systemAudioStrategy,
           oneOnOneAttendee: meetingOneOnOneAttendee,
-        };
+        });
       } catch (error) {
         await rollbackMeetingTranscriptionStart();
+        this.meetingDetectionEngine?.endRecordingSession(recordingSessionId);
         this.meetingDetectionEngine?.setUserRecording(false);
         debugLogger.error("Meeting transcription start error", { error: error.message });
         return toPolicyFailure(error);
       } finally {
         meetingTranscriptionStartInProgress = false;
       }
-    });
+    };
 
     const sendMeetingAudio = (audioBuffer, source) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      // Auto-end judges "is anyone audible" from the raw chunk of either
+      // channel, before AEC/holdback/muting can swallow it.
+      this.meetingDetectionEngine?.recordMeetingAudioChunk(source, outboundBuffer);
 
       if (source === "system") {
         const receivedAt = Date.now();
@@ -7494,7 +7440,13 @@ class IPCHandlers {
       sendMeetingAudio(audioBuffer, source);
     });
 
-    ipcMain.handle("meeting-transcription-stop", async () => {
+    const stopMeetingTranscription = async (expectedSessionId) => {
+      // Only a *different* live session blocks teardown — it owns the shared
+      // capture now. With no engine session (e.g. after quit-path engine stop)
+      // the streams below must still be torn down.
+      if (this.meetingDetectionEngine?.endRecordingSession(expectedSessionId) === false) {
+        return { success: false, reason: "stale-session" };
+      }
       this.meetingDetectionEngine?.setUserRecording(false);
       try {
         if (this.audioTapManager) {
@@ -7578,7 +7530,48 @@ class IPCHandlers {
         debugLogger.error("Meeting transcription stop error", { error: error.message });
         return { success: false, error: error.message };
       }
+    };
+
+    const meetingTranscriptionLifecycle = createMeetingTranscriptionLifecycle({
+      start: ({ sessionId, ownerWebContents, options }) =>
+        startMeetingTranscription({ sender: ownerWebContents }, { ...options, sessionId }),
+      stop: (sessionId) => stopMeetingTranscription(sessionId),
+      onError: (error, sessionId) => {
+        debugLogger.error(
+          "Meeting transcription owner-loss teardown failed",
+          { error: error?.message, sessionId },
+          "meeting"
+        );
+      },
     });
+
+    ipcMain.handle("meeting-transcription-start", (event, options = {}) => {
+      const sessionId =
+        typeof options.sessionId === "string" && options.sessionId.length > 0
+          ? options.sessionId
+          : crypto.randomUUID();
+      return meetingTranscriptionLifecycle.startSession({
+        sessionId,
+        ownerWebContents: event.sender,
+        options,
+      });
+    });
+
+    ipcMain.handle("meeting-transcription-stop", (_event, expectedSessionId) =>
+      meetingTranscriptionLifecycle.stopSession(expectedSessionId)
+    );
+
+    ipcMain.handle(
+      "meeting-transcription-set-system-audio-available",
+      async (event, sessionId, available) => {
+        const updated = await this.meetingDetectionEngine?.setRecordingSystemAudioAvailable(
+          sessionId,
+          available === true,
+          event.sender
+        );
+        return updated === true ? { success: true } : { success: false, reason: "stale-session" };
+      }
+    );
 
     const streamingStartFailure = (err) => {
       const result = toPolicyFailure(err);
@@ -8683,6 +8676,11 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("get-model-cache-root", () => {
+      const { getCacheRoot } = require("./modelDirUtils");
+      return getCacheRoot();
+    });
+
     ipcMain.handle("open-whisper-models-folder", async () => {
       try {
         const { getCacheRoot } = require("./modelDirUtils");
@@ -8699,9 +8697,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-ydotool-status", () => {
       const { getYdotoolStatus } = require("./ensureYdotool");
+      const { getLinuxSessionInfo } = require("./linuxSession");
       const { execFileSync } = require("child_process");
       const status = getYdotoolStatus();
-      const isKde = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase().includes("kde");
+      const { isKde } = getLinuxSessionInfo();
       let hasXclip = false;
       let hasXsel = false;
       if (isKde) {
@@ -8714,7 +8713,7 @@ class IPCHandlers {
           hasXsel = true;
         } catch {}
       }
-      return { ...status, isKde, hasXclip, hasXsel };
+      return { ...status, hasXclip, hasXsel };
     });
 
     ipcMain.handle("get-debug-state", async () => {
@@ -9787,6 +9786,8 @@ class IPCHandlers {
       }
     });
 
+    registerMeetingAutoEndKeepHandler(ipcMain, () => this.meetingDetectionEngine);
+
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {
         await this.meetingDetectionEngine.joinCalendarMeeting(eventId);
@@ -9808,8 +9809,8 @@ class IPCHandlers {
       return this.windowManager?.consumePendingNoteNavigation() ?? null;
     });
 
-    ipcMain.handle("meeting-notification-ready", async () => {
-      this.windowManager?.showNotificationWindow();
+    ipcMain.handle("meeting-notification-ready", async (event) => {
+      this.windowManager?.showNotificationWindow(event.sender);
     });
 
     ipcMain.handle("get-update-notification-data", async () => {

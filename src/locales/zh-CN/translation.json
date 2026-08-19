@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
+      },
+      "autoEnd": {
+        "title": "自动结束遗忘的录音",
+        "description": "当通话似乎已结束时，在可取消的倒计时后自动停止会议录音"
       }
     }
   },
@@ -1030,8 +1034,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "如需自动粘贴文本，请安装",
     "methodReady": "用于自动粘贴文本",
@@ -1047,6 +1053,7 @@
     "waylandClipboardTitle": "Wayland 上的剪贴板模式",
     "windowsReady": "Windows 原生支持自动粘贴，无需额外设置！",
     "withoutToolPrefix": "如果不安装此工具，OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
+    "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首选自动粘贴方式。有备用方案可用，但可能不太可靠。",
     "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用"
   },
   "promptStudio": {
@@ -1125,7 +1132,7 @@
     "sections": {
       "account": {
         "description": "个人资料与登录",
-        "label": "账户"
+        "label": "个人资料"
       },
       "plansBilling": {
         "description": "套餐、用量与账单",
@@ -1240,7 +1247,6 @@
         "signOut": "退出登录",
         "signingOut": "正在退出..."
       },
-      "signedIn": "已登录",
       "title": "账户",
       "toasts": {
         "approachingLimit": {
@@ -1288,7 +1294,7 @@
             "通过公开链接分享笔记",
             "个人 API 访问",
             "在所有应用中集成 MCP",
-            "移动应用（iOS 即将推出）",
+            "移动应用",
             "邮件支持"
           ],
           "cta": "开始使用",
@@ -1304,9 +1310,8 @@
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
           "features": [
-            "用于共享笔记的团队空间",
-            "工作区角色与成员管理",
             "无限会议录制",
+            "工作区角色与成员管理",
             "代理模式",
             "与您的数据对话",
             "优先支持"
@@ -1630,6 +1635,7 @@
         "recheck": "重新检查",
         "copy": "复制",
         "ydotoolDesc": "Wayland 输入自动化工具",
+        "wtypeDesc": "wlroots 合成器上的首选输入自动化工具",
         "ydotooldDesc": "ydotool 守护进程（Ubuntu/Pop!_OS 上为独立包）",
         "uinputDesc": "内核输入设备访问",
         "uinputRuleFound": "规则已存在但未生效，重启应可解决。",
@@ -1647,6 +1653,11 @@
             "step1Desc": "使用你的发行版包管理器安装 ydotool。",
             "step2Title": "验证安装",
             "step2Desc": "检查 ydotool 是否在你的 PATH 中可用。"
+          },
+          "wtype": {
+            "step1Title": "安装 wtype",
+            "step1Desc": "wtype 是 Hyprland、Sway 及其他 wlroots 合成器上的主要自动粘贴方式。",
+            "step2Title": "验证安装"
           },
           "ydotoold": {
             "step1Title": "安装 ydotoold",
@@ -1796,7 +1807,7 @@
       "lastSynced": "上次同步 {{time}}",
       "minutesAgo": "{{count}}分钟前",
       "audioRetention": "音频保留",
-      "audioRetentionDescription": "在本地存储音频录制文件以便重新转录和下载。文件会在保留期过后自动删除。",
+      "audioRetentionDescription": "在本地存储听写音频以便重新转录和下载。文件会在保留期过后自动删除。会议音频绝不会被存储。",
       "audioRetentionDisabled": "已禁用",
       "retentionDays_one": "{{count}} 天",
       "retentionDays_other": "{{count}} 天",
@@ -1971,9 +1982,6 @@
       },
       "general": {
         "nameLabel": "工作区名称",
-        "slugLabel": "简短名称",
-        "slugHint": "用于 URL 和邀请链接。仅限小写字母、数字和连字符。",
-        "slugInvalid": "仅限小写字母、数字和连字符。",
         "saved": "工作区已更新",
         "dangerTitle": "删除工作区",
         "dangerDescription": "所有共享笔记、文件夹和集成都将被删除。此操作无法撤销。",
@@ -2186,16 +2194,15 @@
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
         "gemini_gemini_3_5_flash": "最新、快速且高能力的 Gemini 模型",
+        "gemini_gemini_3_5_flash_lite": "最快、最经济的 3.5 模型",
         "gemini_gemini_3_1_pro_preview": "新一代旗舰模型，擅长复杂推理",
+        "gemini_gemini_3_1_flash_lite": "前沿级性能，成本更低",
         "gemini_gemini_3_flash_preview": "超快速、高能力的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延迟和成本",
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活跃参数，256K 上下文",
-        "groq_qwen_qwen3_32b": "强大的推理模型，131K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 开源旗舰，500 T/秒",
         "groq_openai_gpt_oss_20b": "快速开源模型，1000 T/秒",
-        "groq_llama_3_3_70b_versatile": "Meta 多功能模型，280 T/秒",
-        "groq_llama_3_1_8b_instant": "超快 560 T/秒，131K 上下文",
         "groq_compound": "Groq Compound 系统，450 T/秒",
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
         "openai_gpt_5_6_sol": "旗舰 GPT-5.6，适用于复杂编码与研究",
@@ -2209,7 +2216,6 @@
         "anthropic_claude_opus_4_5": "更早的 Opus 模型",
         "tinfoil_deepseek_v4_pro": "安全飞地中的私密长上下文推理，800K 上下文",
         "tinfoil_glm_5_2": "安全飞地中的私密智能体工程模型，384K 上下文",
-        "tinfoil_kimi_k2_6": "私密长程编码与多模态模型，256K 上下文",
         "tinfoil_gemma4_31b": "支持工具调用的私密多语言推理模型，256K 上下文",
         "tinfoil_gpt_oss_120b": "支持工具使用的私密开源权重推理模型，131K 上下文",
         "tinfoil_llama3_3_70b": "支持工具调用的私密对话模型，128K 上下文",
@@ -2361,8 +2367,8 @@
       "actions": "操作"
     },
     "spaces": {
-      "privateSpaces": "私人空间",
-      "teamSpaces": "团队空间",
+      "privateSpaces": "私人笔记",
+      "teamSpaces": "Teamspaces",
       "personal": "个人",
       "privateTooltip": "只有你可以看到你的个人空间",
       "newSpace": "新建团队空间",
@@ -2623,7 +2629,8 @@
       "title": "会议笔记",
       "description": "转录与结构化摘要",
       "back": "返回",
-      "restrictedByOrg": "会议转录已被您的组织限制。"
+      "restrictedByOrg": "会议转录已被您的组织限制。",
+      "autoEnded": "会议结束后，录音已自动停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -2749,13 +2756,14 @@
         "notLabeled": "发言者未标记",
         "finalizing": "正在完成发言者识别…",
         "justYou": "只有你",
-        "defaultingHint": "默认 1 位其他人",
+        "assumedHint": "默认 2 人——如有更多请调整",
+        "speakersLabel": "发言人数",
+        "labelToggle": "标记发言者",
         "toggleAria": "切换本次录音的发言者识别",
         "incAria": "增加预计发言人数",
-        "decAria": "减少预计发言人数",
-        "othersInCall_one": "通话中还有 {{count}} 人",
-        "othersInCall_other": "通话中还有 {{count}} 人"
-      }
+        "decAria": "减少预计发言人数"
+      },
+      "consentNotice": "录制他人时请务必征得同意"
     },
     "overview": {
       "subtitle": {
@@ -2949,6 +2957,10 @@
         "title": "GPU 加速不可用",
         "description": "转录正在使用 CPU。你可以在设置中关闭 GPU 加速。"
       },
+      "gpuPackMigration": {
+        "title": "需要重新下载 GPU 加速包",
+        "description": "更新移除了过时的 GPU 加速包安装（{{packs}}）。请在设置中重新下载以恢复 GPU 加速。"
+      },
       "cleanupFailed": {
         "title": "清理失败",
         "description": "你的听写已直接粘贴，未经 AI 清理。"
@@ -3029,7 +3041,8 @@
       "listening": "正在聆听...",
       "transcribing": "正在转录...",
       "thinking": "正在思考...",
-      "typeMessage": "输入消息..."
+      "typeMessage": "输入消息...",
+      "send": "发送"
     },
     "tools": {
       "search_notesStatus": "正在搜索笔记...",
@@ -3392,7 +3405,6 @@
       "description": "工作区集中管理组织的成员和账单。你可以在其中创建团队空间来共享笔记。",
       "nameLabel": "工作区名称",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "新工作区默认使用 Free 方案。团队空间需要工作区方案。",
       "submit": "创建工作区",
       "submitting": "创建中…",
       "errorTitle": "无法创建工作区"
@@ -3489,6 +3501,15 @@
       "underway": "你的会议似乎已在进行中。要开始记录吗？"
     },
     "start": "开始记录",
-    "join": "加入并转录"
+    "join": "加入并转录",
+    "autoEnd": {
+      "title": "会议可能已结束",
+      "body": {
+        "micReleased": "没有其他应用在使用麦克风。录音将在 {{seconds}} 秒后停止。",
+        "silence": "未检测到音频。录音将在 {{seconds}} 秒后停止。",
+        "processExit": "会议应用已关闭。录音将在 {{seconds}} 秒后停止。"
+      },
+      "keep": "继续录音"
+    }
   }
 }

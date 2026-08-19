@@ -285,6 +285,10 @@ const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
 const CalendarReminderScheduler = require("./src/helpers/calendarReminderScheduler");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
+const {
+  collectAudioCaptureHelperPids,
+  createExcludedProcessIdProvider,
+} = require("./src/helpers/electronProcessIds");
 const AudioTapManager = require("./src/helpers/audioTapManager");
 const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager");
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
@@ -413,8 +417,7 @@ function initializeCoreManagers() {
   debugLogger.ensureFileLogging();
 
   environmentManager = new EnvironmentManager();
-  const uiLanguage = environmentManager.getUiLanguage();
-  process.env.UI_LANGUAGE = uiLanguage;
+  const uiLanguage = environmentManager.getUiLanguage(app.getLocale());
   changeLanguage(uiLanguage);
   debugLogger.refreshLogLevel();
 
@@ -429,7 +432,16 @@ function initializeCoreManagers() {
     // Heal installs from before GPU packs got per-pack directories; must run
     // before startup pre-warm resolves any GPU binary path.
     const LlamaVulkanManager = require("./src/helpers/llamaVulkanManager");
-    migrateLegacyBinDir([whisperCudaManager, whisperVulkanManager, new LlamaVulkanManager()]);
+    const clearedPacks = migrateLegacyBinDir([
+      whisperCudaManager,
+      whisperVulkanManager,
+      new LlamaVulkanManager(),
+    ]);
+    if (clearedPacks.length > 0) {
+      // No window exists yet — persist the notice; a control panel window
+      // shows it as a toast and clears it. See #1606.
+      require("./src/helpers/gpuPackMigrationNotice").record(clearedPacks);
+    }
     // Lets every server start resolve its GPU backend from installed packs
     whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
   }
@@ -449,7 +461,17 @@ function initializeCoreManagers() {
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     new MeetingProcessDetector(),
-    new AudioActivityDetector(),
+    new AudioActivityDetector(
+      // The capture-helper managers are created a few lines below; the provider
+      // is only invoked on mic events, long after initialization completes.
+      createExcludedProcessIdProvider(() =>
+        collectAudioCaptureHelperPids([
+          audioTapManager,
+          linuxPortalAudioManager,
+          windowsLoopbackAudioManager,
+        ])
+      )
+    ),
     windowManager,
     databaseManager
   );
@@ -926,7 +948,9 @@ function startAuthBridgeServer() {
 
 // Main application startup
 async function startApp() {
-  reapStaleSidecars();
+  // Await so a stale sidecar is confirmed dead before new ones can spawn and
+  // contend for its port or storage lock.
+  await reapStaleSidecars();
 
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();

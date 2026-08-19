@@ -1,5 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
 import {
   Download,
@@ -32,8 +33,13 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import { getSettings, useSettingsStore } from "../stores/settingsStore";
+import {
+  getSettings,
+  selectPolicyEffectiveSettings,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 import {
   isAgentAllowed,
   isControlPanelViewAllowed,
@@ -53,6 +59,7 @@ import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { eligibleGpuOffers, type GpuOffers } from "../utils/gpuBannerPolicy";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -61,7 +68,11 @@ import {
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
-import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
+import {
+  executeTranslationChain,
+  hasTextContent,
+  shouldRunTranslateStep,
+} from "../helpers/translationChain";
 import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
@@ -145,12 +156,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number;
     event: any;
   } | null>(null);
-  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{
-    transcription: boolean;
-    intelligence: boolean;
-  }>({
+  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<GpuOffers>({
     transcription: false,
-    intelligence: false,
+    intelligence: null,
   });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
@@ -160,13 +168,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const updateErrorToastShown = useRef<Error | null>(null);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
-  const {
-    useLocalWhisper,
-    localTranscriptionProvider,
-    useCleanupModel,
-    setUseLocalWhisper,
-    setCloudTranscriptionMode,
-  } = useSettings();
+  const { useCleanupModel, setUseLocalWhisper, setCloudTranscriptionMode } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   // Suppressed while a deep-linked invitation is open so the two never stack.
   const {
@@ -201,6 +203,23 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [activeView, agentAllowedByPolicy, policyActionsAllowed]);
   const updateRequiredByOrg = usePolicyStore(isUpdateRequiredByOrg);
   const policyMinAppVersion = usePolicyStore((s) => s.policy?.minAppVersion ?? null);
+
+  // Policy-effective, because the settings pane the GPU banner links to renders
+  // the clamped mode — see eligibleGpuOffers.
+  const policySnapshot = usePolicySnapshot();
+  const gpuBannerSettings = useSettingsStore(
+    useShallow((settings) => {
+      const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
+      return {
+        useLocalWhisper: effective.useLocalWhisper,
+        localTranscriptionProvider: effective.localTranscriptionProvider,
+        useCleanupModel: effective.useCleanupModel,
+        cleanupMode: effective.cleanupMode,
+        useDictationAgent: effective.useDictationAgent,
+        dictationAgentMode: effective.dictationAgentMode,
+      };
+    })
+  );
 
   const {
     confirmDialog,
@@ -389,9 +408,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   useEffect(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
+    const offers = eligibleGpuOffers({ ...gpuBannerSettings, agentAllowedByPolicy });
+    // A run that loses its settings mid-probe must not publish: switching to a
+    // cloud mode resolves with no IPC at all, so an older local-mode run would
+    // otherwise land last and re-raise the banner for the rest of the session.
+    let cancelled = false;
     const detect = async () => {
-      const results = { transcription: false, intelligence: false };
-      if (useLocalWhisper && localTranscriptionProvider === "whisper") {
+      const results: GpuOffers = { transcription: false, intelligence: null };
+      if (offers.transcription) {
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
           if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
@@ -402,19 +426,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           }
         } catch {}
       }
-      if (useCleanupModel) {
+      if (offers.intelligence) {
         try {
           const [gpu, vulkan] = await Promise.all([
             window.electronAPI?.detectVulkanGpu?.(),
             window.electronAPI?.getLlamaVulkanStatus?.(),
           ]);
-          if (gpu?.available && !vulkan?.downloaded) results.intelligence = true;
+          if (gpu?.available && !vulkan?.downloaded) results.intelligence = offers.intelligence;
         } catch {}
       }
-      setGpuAccelAvailable(results);
+      if (!cancelled) setGpuAccelAvailable(results);
     };
     detect();
-  }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, gpuBannerDismissed]);
+    return () => {
+      cancelled = true;
+    };
+  }, [gpuBannerSettings, agentAllowedByPolicy, gpuBannerDismissed]);
 
   useEffect(() => {
     const drain = async () => {
@@ -717,7 +744,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
                 });
-                if (reasonedText && reasonedText !== rawText) {
+                if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
                     reasonedText,
@@ -1127,7 +1154,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                             className="h-7 text-xs"
                             onClick={() => {
                               setSettingsSection(
-                                gpuAccelAvailable.transcription ? "transcription" : "intelligence"
+                                gpuAccelAvailable.transcription
+                                  ? "transcription"
+                                  : gpuAccelAvailable.intelligence === "dictationAgent"
+                                    ? "dictationAgent"
+                                    : "intelligence"
                               );
                               setShowSettings(true);
                             }}
@@ -1184,7 +1215,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     setSettingsSection(section);
                     setShowSettings(true);
                   }}
-                  onOpenSearch={() => setShowSearch(true)}
                   meetingRecordingRequest={meetingRecordingRequest}
                   onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                   invitationEntry={invitationNotesEntry}

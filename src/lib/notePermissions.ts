@@ -59,18 +59,23 @@ export function resolveNotePermission({
   cachedPermission,
   aclState,
   isTeamNote,
+  locallyOwned = false,
 }: {
   cachedPermission?: NotePermission;
   aclState: NoteAclState;
   isTeamNote: boolean;
+  locallyOwned?: boolean;
 }): NotePermission | null {
   if (cachedPermission) return cachedPermission;
   // A personal cloud note may belong to this user or may be a view-only grant.
   // Fail closed only while an authenticated ACL request is active, rather
   // than making the local editor permanently read-only while signed out or
-  // offline. Loaded legacy responses and unavailable ACLs retain the old
-  // ownership fallback for compatibility and offline editing.
-  if (!isTeamNote && aclState === "loading") return null;
+  // offline. When the local row already proves ownership (owner_user_id
+  // matches the signed-in user), resolve immediately instead of holding the
+  // editor read-only for a network round trip. Loaded legacy responses and
+  // unavailable ACLs retain the old ownership fallback for compatibility and
+  // offline editing.
+  if (!isTeamNote && aclState === "loading") return locallyOwned ? "owner" : null;
   return isTeamNote ? "editor" : "owner";
 }
 

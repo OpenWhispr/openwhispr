@@ -268,15 +268,18 @@ class GpuBinaryManager {
 // A pack with libs can't tell which of the surviving DLLs are its own (the
 // clobbering destroyed that), so its files are removed and the pack shows as
 // not installed until re-downloaded from Settings. Synchronous so it completes
-// before startup pre-warm reads any binary path.
+// before startup pre-warm reads any binary path. Returns the names of the
+// packs that were cleared so the caller can tell the user to re-download
+// them instead of leaving a silent CPU fallback (#1606).
 function migrateLegacyBinDir(managers) {
+  const clearedPacks = [];
   const packs = managers
     .map((m) => ({ manager: m, assetConfig: m._getAssetConfig() }))
     .filter((p) => p.assetConfig);
-  if (packs.length === 0) return;
+  if (packs.length === 0) return clearedPacks;
 
   const binRoot = packs[0].manager.binRoot;
-  if (!fs.existsSync(binRoot)) return;
+  if (!fs.existsSync(binRoot)) return clearedPacks;
 
   for (const { manager, assetConfig } of packs) {
     const legacyBinary = path.join(binRoot, assetConfig.outputName);
@@ -284,6 +287,7 @@ function migrateLegacyBinDir(managers) {
       if (!fs.existsSync(legacyBinary)) continue;
       if (assetConfig.libPattern) {
         fs.unlinkSync(legacyBinary);
+        clearedPacks.push(manager.config.name);
         debugLogger.info(`${manager.config.name} legacy install removed (needs re-download)`);
       } else if (manager.isDownloaded()) {
         fs.unlinkSync(legacyBinary);
@@ -299,7 +303,7 @@ function migrateLegacyBinDir(managers) {
 
   // The lib-carrying packs' orphaned companion libs (ownership is unknowable)
   const libPatterns = packs.map((p) => p.assetConfig.libPattern).filter(Boolean);
-  if (libPatterns.length === 0) return;
+  if (libPatterns.length === 0) return clearedPacks;
   try {
     for (const entry of fs.readdirSync(binRoot, { withFileTypes: true })) {
       if (!entry.isFile() || !libPatterns.some((pattern) => pattern.test(entry.name))) continue;
@@ -308,6 +312,7 @@ function migrateLegacyBinDir(managers) {
       } catch {}
     }
   } catch {}
+  return clearedPacks;
 }
 
 module.exports = GpuBinaryManager;

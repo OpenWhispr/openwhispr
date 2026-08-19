@@ -64,11 +64,16 @@ import {
 import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
 import {
   executeTranslationChain,
+  hasTextContent,
   resolveTranslatedText,
   shouldRunTranslateStep,
 } from "./translationChain";
 import { detectAgentName } from "../config/agentDetection";
-import { resolveDictationRouteKind, resolveAgentImageTarget } from "./dictationRouting";
+import {
+  resolveDictationRouteKind,
+  resolveAgentImageTarget,
+  resolveWakeWordLanguage,
+} from "./dictationRouting";
 import {
   resolveDictationAgentInference,
   resolveDictationAgentVisionInference,
@@ -91,12 +96,17 @@ import {
   extractSelectionEditReplacement,
   getSelectionCaptureDisposition,
 } from "./selectionEditing";
+import {
+  REALTIME_MODELS,
+  defaultStreamingProviderName,
+  resolveStreamingProviderName,
+  buildStreamingSessionOptions,
+} from "./dictationStreamingRouting";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
-const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
 const micDeviceKey = (settings) => `${settings.preferBuiltInMic}|${settings.selectedMicDeviceId}`;
 
@@ -140,7 +150,8 @@ function resolveReasoningRoute(
   agentName,
   voiceAgentRequested,
   translationRequested,
-  screenContext
+  screenContext,
+  detectedLanguage
 ) {
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
   const cleanupReachable =
@@ -156,7 +167,11 @@ function resolveReasoningRoute(
   const kind = resolveDictationRouteKind({
     cleanupReachable,
     agentReachable: agent.reachable,
-    agentInvoked: !!agentName && detectAgentName(text, agentName),
+    // A translation recording never routes to the agent, so skip the scan.
+    agentInvoked:
+      !translationRequested &&
+      !!agentName &&
+      detectAgentName(text, agentName, resolveWakeWordLanguage(settings, detectedLanguage)),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
@@ -497,7 +512,9 @@ class AudioManager {
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
+    this.context = "dictation";
     this.sttConfig = null;
+    this.warmupFailureStreak = 0;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
     this._localSpeechGateState = null;
@@ -812,10 +829,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
+  setContext(context) {
+    this.context = context;
+  }
+
   isRecordingAllowedByPolicy() {
     const policyState = usePolicyStore.getState();
     return (
       isTranscriptionContextAllowed(policyState, getSettings(), "dictation") &&
+      (this.context !== "agent" || isAgentAllowed(policyState)) &&
       (!this.voiceAgentRequested || isAgentAllowed(policyState))
     );
   }
@@ -833,23 +855,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProvider() {
-    return (
-      STREAMING_PROVIDERS[this.getStreamingProviderName()] || STREAMING_PROVIDERS["openai-realtime"]
-    );
+    return STREAMING_PROVIDERS[this.getStreamingProviderName()];
   }
 
   getStreamingProviderName() {
-    const s = getSettings();
-    if (s.cloudTranscriptionProvider === "tinfoil") {
-      return "tinfoil-realtime";
-    }
-    if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
-      return "corti";
-    }
-    if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
-      return "openai-realtime";
-    }
-    return this.sttConfig?.streamingProvider || "openai-realtime";
+    const name = resolveStreamingProviderName({
+      settings: getSettings(),
+      context: this.context,
+      sttConfig: this.sttConfig,
+    });
+    // A server-driven sttConfig.streamingProvider we don't recognize must fall
+    // back to a provider we can run — and the reported name must match the
+    // channel bindings actually used, so the main process is never handed a
+    // provider id it would fail closed on.
+    return STREAMING_PROVIDERS[name] ? name : defaultStreamingProviderName(this.context);
   }
 
   async getAudioConstraints(forceDefaultMic = false) {
@@ -2706,7 +2725,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           processingTime: new Date().toISOString(),
         });
 
-        return result;
+        // A blank reply must not wipe the dictation — keep the transcript (#1616).
+        return hasTextContent(result) ? result : normalizedText;
       } catch (error) {
         if (error.selectionEditFatal) throw error;
         logger.logReasoning("REASONING_FAILED", {
@@ -2943,7 +2963,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext
+        screenContext,
+        result.sttLanguage
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -2956,7 +2977,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             ...route.config,
             requiresAgent: true,
           });
-          if (reasoned) processedText = reasoned;
+          if (hasTextContent(reasoned)) processedText = reasoned;
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
@@ -2984,7 +3005,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           });
 
           // Cloud cleanup can return success with empty text; keep the raw transcription instead of wiping it.
-          if (reasonResult.success && reasonResult.text) {
+          if (reasonResult.success && hasTextContent(reasonResult.text)) {
             processedText = reasonResult.text;
           }
         } else if (route.kind === "cleanup") {
@@ -2996,7 +3017,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               agentName,
               route.config
             );
-            if (reasoned) processedText = reasoned;
+            if (hasTextContent(reasoned)) processedText = reasoned;
           }
         } else if (route.kind === "translation") {
           const chainResult = await this.runTranslationChain({
@@ -3698,26 +3719,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
-      const provider = this.getStreamingProvider();
+      const providerName = this.getStreamingProviderName();
+      const provider = STREAMING_PROVIDERS[providerName];
       const [, wsResult] = await Promise.all([
         this.cacheMicrophoneDeviceId(),
         withSessionRefresh(async () => {
-          const {
-            preferredLanguage: warmupLang,
-            cloudTranscriptionModel,
-            cloudTranscriptionMode,
-            cortiEnvironment,
-            cortiTenant,
-          } = getSettings();
-          const res = await provider.warmup({
-            sampleRate: 16000,
-            language: warmupLang && warmupLang !== "auto" ? warmupLang : undefined,
-            keyterms: this.getKeyterms(),
-            model: cloudTranscriptionModel,
-            mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
-            environment: cortiEnvironment,
-            tenant: cortiTenant,
-          });
+          const settings = getSettings();
+          const res = await provider.warmup(
+            buildStreamingSessionOptions({
+              providerName,
+              settings,
+              language: settings.preferredLanguage,
+              keyterms: this.getKeyterms(),
+            })
+          );
           // Throw error to trigger retry if AUTH_EXPIRED
           if (!res.success && res.code) {
             const err = new Error(res.error || "Warmup failed");
@@ -3750,6 +3765,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // re-fire once the warm window lapses (#845).
         await this._warmMicDriverIfCold("streaming");
 
+        this.warmupFailureStreak = 0;
         logger.info(
           "Streaming connection warmed up",
           { alreadyWarm: wsResult.alreadyWarm, micCached: !!this.cachedMicDeviceId },
@@ -3760,13 +3776,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         logger.debug("Streaming warmup skipped - API not configured", {}, "streaming");
         return false;
       } else {
-        logger.warn("Streaming warmup failed", { error: wsResult.error }, "streaming");
+        this._reportWarmupFailure(providerName, wsResult.error, wsResult.code);
         return false;
       }
     } catch (error) {
-      logger.error("Streaming warmup error", { error: error.message }, "streaming");
+      this._reportWarmupFailure(this.getStreamingProviderName(), error.message, error.code);
       return false;
     }
+  }
+
+  // Warmup exercises the same connect that recording start will make, so a
+  // failing warmup predicts a guaranteed user-facing failure at the next
+  // keypress — #1624 logged exactly this on every idle cycle for days at warn
+  // level and nobody saw it. Error level, provider named, streak counted.
+  _reportWarmupFailure(provider, error, code) {
+    this.warmupFailureStreak += 1;
+    logger.error(
+      "Streaming warmup failed",
+      { provider, error, code, consecutiveFailures: this.warmupFailureStreak },
+      "streaming"
+    );
   }
 
   async getOrCreateAudioContext() {
@@ -4013,23 +4042,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       //    so Deepgram receives data immediately (no idle timeout).
       const result = await withSessionRefresh(async () => {
         const streamingSettings = getSettings();
-        const {
-          cloudTranscriptionModel,
-          cloudTranscriptionMode,
-          cortiEnvironment,
-          cortiTenant,
-          useLocalWhisper,
-        } = streamingSettings;
-        const sttLanguage = this.getEffectiveSttLanguage(streamingSettings);
-        const res = await provider.start({
-          sampleRate: 16000,
-          language: sttLanguage && sttLanguage !== "auto" ? sttLanguage : undefined,
-          keyterms: this.getKeyterms(),
-          model: cloudTranscriptionModel,
-          mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
-          environment: cortiEnvironment,
-          tenant: cortiTenant,
-        });
+        const { useLocalWhisper } = streamingSettings;
+        const res = await provider.start(
+          buildStreamingSessionOptions({
+            providerName: this.getStreamingProviderName(),
+            settings: streamingSettings,
+            language: this.getEffectiveSttLanguage(streamingSettings),
+            keyterms: this.getKeyterms(),
+          })
+        );
 
         if (!res.success) {
           if (res.code === "NO_API") {
@@ -4122,7 +4143,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return this.startStreamingRecording(true);
       }
 
-      logger.error("Failed to start streaming recording", { error: error.message }, "streaming");
+      logger.error(
+        "Failed to start streaming recording",
+        { provider: this.getStreamingProviderName(), error: error.message, code: error.code },
+        "streaming"
+      );
 
       let errorTitle = "Streaming Error";
       let errorDescription = `Failed to start streaming: ${error.message}`;
@@ -4393,7 +4418,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             ...route.config,
             requiresAgent: true,
           });
-          if (reasoned) finalText = reasoned;
+          if (hasTextContent(reasoned)) finalText = reasoned;
           logger.info(
             "Streaming dictation-agent complete",
             { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
@@ -4425,7 +4450,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             return res;
           });
 
-          if (reasonResult.success && reasonResult.text) {
+          if (reasonResult.success && hasTextContent(reasonResult.text)) {
             finalText = reasonResult.text;
           }
           usedCloudReasoning = true;
@@ -4447,7 +4472,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               agentName,
               route.config
             );
-            if (reasoned) finalText = reasoned;
+            if (hasTextContent(reasoned)) finalText = reasoned;
             logger.info(
               "Streaming BYOK reasoning complete",
               { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },

@@ -46,11 +46,11 @@ export function getSelectionCaptureDisposition(capture) {
 }
 
 export function extractSelectionEditReplacement(result, completionMarker) {
-  if (typeof result !== "string" || !completionMarker || !result.endsWith(completionMarker)) {
+  if (typeof result !== "string" || (completionMarker && !result.endsWith(completionMarker))) {
     throw new Error("Model output was incomplete before the selection edit completed");
   }
 
-  const replacement = result.slice(0, -completionMarker.length);
+  const replacement = completionMarker ? result.slice(0, -completionMarker.length) : result;
   if (replacement.trim().length === 0) {
     throw new Error("Model returned an empty selection edit");
   }

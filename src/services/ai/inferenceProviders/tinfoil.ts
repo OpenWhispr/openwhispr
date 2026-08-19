@@ -2,7 +2,7 @@ import type { InferenceProvider } from "./types";
 import { TOKEN_LIMITS } from "../../../config/constants";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
-import { applyThinkingSuppression } from "../thinkingSuppression";
+import { applyChatCompletionsParams, isTruncatedFinishReason } from "../chatRequestBody";
 import { getTinfoilChatClient } from "../tinfoilClient";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 
@@ -37,14 +37,8 @@ export const tinfoilProvider: InferenceProvider = {
         )
       );
 
-    const requestBody: Record<string, unknown> = {
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature: config.temperature ?? (config.systemPrompt ? 0.3 : 0),
-    };
-
-    applyThinkingSuppression(requestBody, model, "tinfoil", config);
+    const requestBody: Record<string, unknown> = { model, messages };
+    applyChatCompletionsParams(requestBody, { model, provider: "tinfoil", config, maxTokens });
 
     // 30s per attempt like sibling providers; SDK-internal retries off so
     // withRetry stays the single retry layer.
@@ -65,9 +59,7 @@ export const tinfoilProvider: InferenceProvider = {
 
     if (
       config.requireCompleteOutput &&
-      response.choices?.some((choice: any) =>
-        ["length", "max_tokens"].includes(choice?.finish_reason)
-      )
+      response.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason))
     ) {
       throw new Error("Model output was truncated before the selection edit completed");
     }
