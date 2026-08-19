@@ -1735,6 +1735,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       this.isProcessing = false;
       this.onStateChange?.({ isRecording: false, isProcessing: false });
+      // finalizeBatchRecording's earlier cleanupPreview() call (without
+      // dismiss:true) already put the live-transcript panel in a "hold"
+      // state — meant to keep showing the final/cleanup text, not close it.
+      // onError used to be what actually closed the panel on a failure; the
+      // processAudio cancel guard means onError never fires for a cancel, so
+      // the close has to happen here instead, independent of onError. Only
+      // reached when _streamingStopPromise was falsy above, i.e. never for a
+      // streaming session (recording or finalizing) — its own preview
+      // lifecycle is untouched by this call.
+      window.electronAPI?.dismissDictationPreview?.();
       return true;
     }
     return false;

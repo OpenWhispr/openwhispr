@@ -4,7 +4,7 @@ const { loadAudioManager } = require("./harness/audioManager");
 const { deferred } = require("./harness/deferred");
 
 async function loadManagerClass(t) {
-  const { AudioManager } = await loadAudioManager(t, {
+  const { AudioManager, window } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-cancel-lifecycle-test-",
     settingsKey: "__cancelLifecycleSettings",
     settings: {
@@ -15,7 +15,7 @@ async function loadManagerClass(t) {
       isSignedIn: false,
     },
   });
-  return AudioManager;
+  return { AudioManager, window };
 }
 
 function createManager(AudioManager, transcription) {
@@ -45,7 +45,7 @@ function createManager(AudioManager, transcription) {
 }
 
 test("a user cancel during batch transcription is not an error and saves nothing", async (t) => {
-  const AudioManager = await loadManagerClass(t);
+  const { AudioManager } = await loadManagerClass(t);
   const transcription = deferred();
   const { manager, calls } = createManager(AudioManager, transcription);
 
@@ -66,11 +66,63 @@ test("a user cancel during batch transcription is not an error and saves nothing
 });
 
 test("a directive banked after the pipeline was cancelled is dropped", async (t) => {
-  const AudioManager = await loadManagerClass(t);
+  const { AudioManager } = await loadManagerClass(t);
   const { manager } = createManager(AudioManager, deferred());
   manager.cancelProcessing();
   manager._bankAssistantDirective("late command", {}, null);
   assert.equal(manager.pendingAssistantConversation, null);
+});
+
+// Round-2 review finding: finalizeBatchRecording's earlier cleanupPreview()
+// call (without dismiss:true) routes through the main process's
+// stop-dictation-preview handler, which — whenever the live-preview toggle
+// left a session active — calls windowManager.holdTranscriptionPreview(),
+// NOT hideTranscriptionPreview(). That sends "preview-hold", which
+// useLiveTranscriptPanel.js handles by deliberately keeping the panel open
+// (phase "cleanup"/"final") so the user can see the settled text. Before this
+// task, onError's unconditional hideDictationPreview() call was what closed
+// that held panel on a failure. The cancel guard in processAudio's catch
+// means onError never fires for a cancel, so without a dedicated teardown on
+// the cancel path itself, a cancel during batch processing leaves the held
+// panel on screen indefinitely. cancelProcessing() must dismiss it directly.
+test("a cancel during batch processing dismisses the held live-transcript panel", async (t) => {
+  const { AudioManager, window } = await loadManagerClass(t);
+  const { manager } = createManager(AudioManager, deferred());
+  const dismissCalls = [];
+  window.electronAPI.dismissDictationPreview = () => {
+    dismissCalls.push(true);
+    return Promise.resolve({ success: true });
+  };
+  // hideDictationPreview must NOT be what this fix relies on — onError,
+  // which used to own that call, no longer runs for a cancel at all.
+  const hideCalls = [];
+  window.electronAPI.hideDictationPreview = () => {
+    hideCalls.push(true);
+    return Promise.resolve({ success: true });
+  };
+
+  assert.equal(manager.cancelProcessing(), true);
+
+  assert.equal(
+    dismissCalls.length,
+    1,
+    "a cancel must dismiss the held preview panel, not leave it open"
+  );
+  assert.equal(hideCalls.length, 0, "the fix must not depend on onError's hideDictationPreview");
+});
+
+test("cancelling when nothing is processing dismisses nothing", async (t) => {
+  const { AudioManager, window } = await loadManagerClass(t);
+  const { manager } = createManager(AudioManager, deferred());
+  manager.isProcessing = false;
+  const dismissCalls = [];
+  window.electronAPI.dismissDictationPreview = () => {
+    dismissCalls.push(true);
+    return Promise.resolve({ success: true });
+  };
+
+  assert.equal(manager.cancelProcessing(), false);
+  assert.equal(dismissCalls.length, 0);
 });
 
 // Regression for a leak the reset above must close: _processingCancelled is a
