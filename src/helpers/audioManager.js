@@ -4344,7 +4344,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   _requestStreamingCancellation() {
     this._streamingCancellationGeneration += 1;
-    ReasoningService.cancelActiveStream();
+    ReasoningService.cancelAllRequests();
     window.electronAPI?.cancelCloudTranscription?.();
     this._activeTranscriptionAbortController?.abort();
     this._activeTranscriptionAbortController = null;

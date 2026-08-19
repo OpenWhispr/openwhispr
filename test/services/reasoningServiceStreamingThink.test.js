@@ -399,7 +399,7 @@ test("non-local streaming remains unfiltered", async (t) => {
   assert.equal(await collectAgentText(stream), "<think>visible</think>Answer");
 });
 
-test("cancelling reasoning aborts an in-flight non-streaming provider request", async (t) => {
+test("chat cancellation leaves single-shot reasoning alive until all requests are cancelled", async (t) => {
   const { reasoningService } = await loadReasoningService(
     t,
     "openwhispr-non-streaming-reason-cancel-test-",
@@ -410,10 +410,12 @@ test("cancelling reasoning aborts an in-flight non-streaming provider request", 
     globalThis.fetch = originalFetch;
   });
   let requestStarted = false;
+  let requestSignal;
   let fetchCalls = 0;
   globalThis.fetch = async (_input, init) => {
     fetchCalls += 1;
     requestStarted = true;
+    requestSignal = init?.signal;
     return await new Promise((_resolve, reject) => {
       init?.signal?.addEventListener(
         "abort",
@@ -430,10 +432,14 @@ test("cancelling reasoning aborts an in-flight non-streaming provider request", 
     { provider: "groq" }
   );
   while (!requestStarted) await waitForMicrotasks();
+  const cancelled = assert.rejects(reasoning, /cancelled/i);
 
   reasoningService.cancelActiveStream();
+  assert.equal(requestSignal?.aborted, false);
 
-  await assert.rejects(reasoning, /cancelled/i);
+  reasoningService.cancelAllRequests();
+
+  await cancelled;
   assert.equal(fetchCalls, 1);
 });
 

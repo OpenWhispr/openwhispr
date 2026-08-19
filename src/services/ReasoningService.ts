@@ -908,17 +908,28 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
+  /** Aborts the chat/agent stream only (panel Esc, chat surface unmount). */
   cancelActiveStream(): void {
     this.cloudOperationGeneration += 1;
-    this.requestCancellationGeneration += 1;
     this.streamAbortController?.abort();
     this.streamAbortController = null;
-    for (const controller of this.activeRequestControllers) controller.abort();
-    this.activeRequestControllers.clear();
-    if (typeof window !== "undefined") window.electronAPI?.cancelCloudReason?.();
     const activeCloudStream = this.activeCloudStream;
     this.activeCloudStream = null;
     activeCloudStream?.cancel();
+  }
+
+  /**
+   * Aborts everything in flight in this renderer: the chat stream plus every
+   * single-shot request (cleanup, selection edit, titles) and the cloud-reason
+   * IPC jobs. Used by the dictation cancel path, never by chat lifecycle —
+   * a note or tab switch must not kill unrelated reasoning work.
+   */
+  cancelAllRequests(): void {
+    this.requestCancellationGeneration += 1;
+    for (const controller of this.activeRequestControllers) controller.abort();
+    this.activeRequestControllers.clear();
+    if (typeof window !== "undefined") window.electronAPI?.cancelCloudReason?.();
+    this.cancelActiveStream();
   }
 
   private streamFromIPC(
@@ -1241,7 +1252,7 @@ class ReasoningService extends BaseReasoningService {
   }
 
   destroy(): void {
-    this.cancelActiveStream();
+    this.cancelAllRequests();
     if (this.cacheCleanupStop) {
       this.cacheCleanupStop();
     }

@@ -20,7 +20,7 @@ const defaultMockModules = (settingsKey) => ({
     export const isCloudTranslationMode = () => false;
   `,
   "/services/ReasoningService":
-    "export default class ReasoningService { static cancelActiveStream() {} }",
+    "export default class ReasoningService { static cancelAllRequests() {} }",
   "/services/SyncService.js": "export const syncService = {};",
   "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
   "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
