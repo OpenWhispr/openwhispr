@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { cn } from "../lib/utils";
-import { AGENT_MODE_PATH } from "./AgentModeIcon";
 import {
+  AGENT_MODE_PATH,
   resolveVoiceIdentityMorphPaths,
   VOICE_IDENTITY_MORPH_DURATION_MS,
 } from "./voiceIdentityMorph";
@@ -136,7 +136,7 @@ export function VoiceIdentityIcon({
         </g>
         <path
           ref={agentRef}
-          className="voice-identity-final-agent agent-mode-mark"
+          className="voice-identity-final-agent"
           d={AGENT_MODE_PATH}
           fill="currentColor"
           transform="scale(1.2)"

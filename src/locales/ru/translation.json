@@ -3090,6 +3090,14 @@
       "selectedContext": "Выбранный текст добавлен",
       "removeSelectedContext": "Удалить выбранный текст",
       "copyToClipboard": "Копировать в буфер обмена"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Вызов",
+        "calling": "Запуск",
+        "using": "Работа"
+      },
+      "toolFallback": "Инструмент"
     }
   },
   "integrations": {

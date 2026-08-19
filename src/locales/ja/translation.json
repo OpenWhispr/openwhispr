@@ -3064,6 +3064,14 @@
       "selectedContext": "選択したテキストを追加",
       "removeSelectedContext": "選択したテキストを削除",
       "copyToClipboard": "クリップボードにコピー"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "呼び出し中",
+        "calling": "実行中",
+        "using": "使用中"
+      },
+      "toolFallback": "ツール"
     }
   },
   "integrations": {

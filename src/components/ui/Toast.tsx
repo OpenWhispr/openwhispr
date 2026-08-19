@@ -8,9 +8,9 @@ import {
   type ToastProps,
 } from "./useToast";
 import { isDictationPanelWindow } from "../../utils/windowContext";
-import { getDictationErrorDuration } from "../../helpers/dictationErrorDuration";
 import {
   getDictationErrorActionCount,
+  getDictationErrorDuration,
   resolveToastPresentation,
 } from "../../helpers/toastPresentation";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";

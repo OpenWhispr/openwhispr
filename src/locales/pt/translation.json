@@ -3064,6 +3064,14 @@
       "selectedContext": "Texto selecionado adicionado",
       "removeSelectedContext": "Remover texto selecionado",
       "copyToClipboard": "Copiar para a área de transferência"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Invocando",
+        "calling": "Chamando",
+        "using": "Usando"
+      },
+      "toolFallback": "Ferramenta"
     }
   },
   "integrations": {

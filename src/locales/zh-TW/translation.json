@@ -3064,6 +3064,14 @@
       "selectedContext": "已加入所選文字",
       "removeSelectedContext": "移除所選文字",
       "copyToClipboard": "複製到剪貼簿"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "呼叫中",
+        "calling": "請求中",
+        "using": "使用中"
+      },
+      "toolFallback": "工具"
     }
   },
   "integrations": {

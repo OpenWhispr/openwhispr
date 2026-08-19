@@ -1,4 +1,11 @@
-export const AGENT_TOOL_ACTIVITY_VERBS = Object.freeze(["Invoking", "Calling", "Using"]);
+// i18n keys, not display strings: the panel resolves each through t() so the
+// rotating verbs localize like every other UI string.
+export const AGENT_TOOL_ACTIVITY_VERB_KEYS = Object.freeze([
+  "assistant.toolActivity.verbs.invoking",
+  "assistant.toolActivity.verbs.calling",
+  "assistant.toolActivity.verbs.using",
+]);
+export const AGENT_TOOL_NAME_FALLBACK_KEY = "assistant.toolActivity.toolFallback";
 export const AGENT_TOOL_ACTIVITY_ROTATION_MS = 1400;
 // Fast local tools can finish before the native panel completes its entrance.
 // Keep their presentation around long enough to survive that transition and
@@ -9,14 +16,15 @@ export function getAgentToolActivityRemainingMs(startedAt: number, now = Date.no
   return Math.max(0, AGENT_TOOL_ACTIVITY_MIN_VISIBLE_MS - (now - startedAt));
 }
 
-export function formatAgentToolName(name: string): string {
+/** Humanizes a tool identifier; null when nothing readable remains (callers t() the fallback). */
+export function formatAgentToolName(name: string): string | null {
   const words = name
     .trim()
     .split(/[_\s-]+/)
     .filter(Boolean)
     .map((word) => word.toLowerCase());
 
-  if (words.length === 0) return "Tool";
+  if (words.length === 0) return null;
   words[0] = `${words[0][0].toUpperCase()}${words[0].slice(1)}`;
   return words.join(" ");
 }

@@ -1,5 +1,5 @@
-import { useRef, useEffect } from "react";
 import { cn } from "../lib/utils";
+import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { ChatMessage } from "./ChatMessage";
 import type { Message } from "./types";
 
@@ -9,27 +9,10 @@ interface ChatMessagesProps {
   onOpenNote?: (noteId: number) => void;
 }
 
-const PIN_THRESHOLD_PX = 40;
-
 export function ChatMessages({ messages, emptyState, onOpenNote }: ChatMessagesProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   // Follow the stream only while the user is at the bottom; scrolling up to
   // re-read must not be yanked back down by the next token.
-  const pinnedRef = useRef(true);
-
-  const handleScroll = () => {
-    const el = scrollRef.current;
-    if (el) {
-      pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < PIN_THRESHOLD_PX;
-    }
-  };
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el && pinnedRef.current) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [messages]);
+  const { scrollRef, handleScroll } = useStickToBottom<HTMLDivElement>(messages);
 
   return (
     <div

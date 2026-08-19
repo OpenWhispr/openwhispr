@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { splitTranscriptForShimmer } from "../../utils/liveTranscriptPresentation";
 
 export type LiveTranscriptPhase = "listening" | "live" | "cleanup" | "final";
@@ -16,7 +18,6 @@ interface LiveTranscriptPanelProps {
 }
 
 const COPIED_RESET_MS = 1600;
-const PIN_THRESHOLD_PX = 40;
 
 export function LiveTranscriptPanel({
   text,
@@ -28,68 +29,15 @@ export function LiveTranscriptPanel({
   onCollapse,
 }: LiveTranscriptPanelProps) {
   const { t } = useTranslation();
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const pinnedToBottomRef = useRef(true);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { scrollRef, handleScroll } = useStickToBottom<HTMLDivElement>(text, {
+    resetToTop: !text,
+  });
+  const { copied, copy: handleCopy } = useCopyFeedback(text, { resetMs: COPIED_RESET_MS });
   const shouldShimmer = Boolean(text) && (phase === "live" || phase === "cleanup" || processing);
   const shimmerParts = useMemo(
     () => (shouldShimmer ? splitTranscriptForShimmer(text) : { settled: text, active: "" }),
     [shouldShimmer, text]
   );
-
-  useLayoutEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    if (!text) {
-      pinnedToBottomRef.current = true;
-      node.scrollTop = 0;
-      return;
-    }
-    if (pinnedToBottomRef.current) {
-      const bottom = node.scrollHeight - node.clientHeight;
-      if (bottom > 0 && Math.abs(node.scrollTop - bottom) > 1) node.scrollTop = bottom;
-    }
-  }, [text]);
-
-  const handleScroll = useCallback(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    pinnedToBottomRef.current =
-      node.scrollHeight - node.scrollTop - node.clientHeight < PIN_THRESHOLD_PX;
-  }, []);
-
-  useEffect(() => {
-    setCopied(false);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-  }, [text]);
-
-  useEffect(
-    () => () => {
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    },
-    []
-  );
-
-  const handleCopy = useCallback(async () => {
-    const textToCopy = text.trim();
-    if (!textToCopy) return;
-
-    try {
-      const result = await window.electronAPI?.writeClipboard?.(textToCopy);
-      if (result?.success === false) throw new Error("clipboard-write-failed");
-    } catch {
-      try {
-        await navigator.clipboard.writeText(textToCopy);
-      } catch {
-        return;
-      }
-    }
-
-    setCopied(true);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => setCopied(false), COPIED_RESET_MS);
-  }, [text]);
 
   return (
     <>

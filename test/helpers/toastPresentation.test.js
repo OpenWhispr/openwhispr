@@ -47,3 +47,18 @@ test("actionless shared errors still request the error-window footprint", async 
     2
   );
 });
+
+test("short dictation errors dismiss after three seconds", async () => {
+  const { getDictationErrorDuration } = await load();
+  assert.equal(getDictationErrorDuration("Paste Error", "Please try again."), 3000);
+});
+
+test("medium dictation errors dismiss after four seconds", async () => {
+  const { getDictationErrorDuration } = await load();
+  assert.equal(getDictationErrorDuration("Error", "a".repeat(100)), 4000);
+});
+
+test("long dictation errors dismiss after five seconds", async () => {
+  const { getDictationErrorDuration } = await load();
+  assert.equal(getDictationErrorDuration("Error", "a".repeat(200)), 5000);
+});

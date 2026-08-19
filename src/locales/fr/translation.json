@@ -3228,6 +3228,14 @@
       "selectedContext": "Texte sélectionné ajouté",
       "removeSelectedContext": "Supprimer le texte sélectionné",
       "copyToClipboard": "Copier dans le presse-papiers"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Invocation",
+        "calling": "Appel",
+        "using": "Utilisation"
+      },
+      "toolFallback": "Outil"
     }
   },
   "integrations": {

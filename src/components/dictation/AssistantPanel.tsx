@@ -17,9 +17,11 @@ import {
 } from "../../helpers/voicePillPresentation";
 import {
   AGENT_TOOL_ACTIVITY_ROTATION_MS,
-  AGENT_TOOL_ACTIVITY_VERBS,
+  AGENT_TOOL_ACTIVITY_VERB_KEYS,
+  AGENT_TOOL_NAME_FALLBACK_KEY,
   formatAgentToolName,
 } from "../../helpers/agentToolPresentation";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 import {
   normalizeAgentSelectionContext,
@@ -157,7 +159,7 @@ export function AssistantPanel({
     if (!isToolExecuting) return;
 
     const timer = window.setInterval(() => {
-      setToolVerbIndex((current) => (current + 1) % AGENT_TOOL_ACTIVITY_VERBS.length);
+      setToolVerbIndex((current) => (current + 1) % AGENT_TOOL_ACTIVITY_VERB_KEYS.length);
     }, AGENT_TOOL_ACTIVITY_ROTATION_MS);
     return () => window.clearInterval(timer);
   }, [isToolExecuting, streaming.activeToolName]);
@@ -185,8 +187,7 @@ export function AssistantPanel({
     voiceState,
     requestPending: thinking || pendingCommand != null,
   });
-  const [copied, setCopied] = useState(false);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { copied, copy: handleCopy } = useCopyFeedback(responseContent, { resetMs: 1800 });
   const responseSelectionRootRef = useRef<HTMLDivElement | null>(null);
   const [selectedContext, setSelectedContext] = useState<AgentSelectionContext | null>(null);
 
@@ -235,39 +236,6 @@ export function AssistantPanel({
   useEffect(() => {
     onResponseReadyChange(isResponseReady);
   }, [isResponseReady, onResponseReadyChange]);
-
-  useEffect(() => {
-    setCopied(false);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-  }, [responseContent]);
-
-  useEffect(
-    () => () => {
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    },
-    []
-  );
-
-  const handleCopy = useCallback(async () => {
-    const textToCopy = responseContent.trim();
-    if (!textToCopy) return;
-
-    try {
-      const result = await window.electronAPI?.writeClipboard?.(textToCopy);
-      if (result?.success === false) throw new Error("clipboard-write-failed");
-    } catch {
-      try {
-        await navigator.clipboard.writeText(textToCopy);
-      } catch {
-        setCopied(false);
-        return;
-      }
-    }
-
-    setCopied(true);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => setCopied(false), 1800);
-  }, [responseContent]);
 
   // Esc cancels a running response or closes the panel. The screenshot's
   // compact `C` hint is also a keyboard shortcut once a response is final.
@@ -407,11 +375,11 @@ export function AssistantPanel({
                 key={`${streaming.activeToolName}-${toolVerbIndex}`}
                 className="assistant-tool-invocation-verb w-16 text-right text-sm text-muted-foreground"
               >
-                {AGENT_TOOL_ACTIVITY_VERBS[toolVerbIndex]}
+                {t(AGENT_TOOL_ACTIVITY_VERB_KEYS[toolVerbIndex])}
               </span>
               <span className="h-4 w-px shrink-0 bg-border/70" />
               <span className="truncate text-sm font-medium text-foreground">
-                {formatAgentToolName(streaming.activeToolName)}
+                {formatAgentToolName(streaming.activeToolName) ?? t(AGENT_TOOL_NAME_FALLBACK_KEY)}
               </span>
             </div>
           </div>

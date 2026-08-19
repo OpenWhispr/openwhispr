@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
 import { getCloudModel, isEnterpriseProvider } from "../../models/ModelRegistry";
+import { PROVIDER_REGISTRY } from "../../services/ai/inferenceProviders";
 import { getSettings, selectResolvedLLMConfig } from "../../stores/settingsStore";
 import {
   isAgentAllowed,
@@ -88,13 +89,31 @@ export interface ChatStreaming {
   cancelStream: () => void;
 }
 
-// Providers whose AI-SDK clients accept image content parts on the streaming
-// path AND whose model ids exist in the local registry, so supportsVision is
-// decidable — the same dual gate the single-shot dictation path applies.
-// OpenRouter/custom model ids never appear in the registry (vision would be a
-// guess that errors the whole command on a text-only backend), and the cloud
-// agent drops attachments until the API grows vision routing.
-const IMAGE_CAPABLE_STREAM_PROVIDERS = new Set(["openai", "anthropic", "gemini"]);
+// An image attaches only where the provider's AI-SDK client is image-wired
+// (registry `supportsImages`) AND the model id exists in the local registry,
+// so supportsVision is decidable — the same dual gate the single-shot
+// dictation path applies. OpenRouter/custom alias the OpenAI client here, but
+// their model ids never appear in the registry (vision would be a guess that
+// errors the whole command on a text-only backend), and the cloud agent drops
+// attachments until the API grows vision routing.
+const providerSupportsStreamImages = (providerId: string) =>
+  Boolean(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);
+
+type HistoryMessage = { role: string; content: string | Array<Record<string, unknown>> };
+
+// Walks backward to the newest user message; a null transform keeps walking.
+function transformLastUserMessage(
+  history: HistoryMessage[],
+  transform: (message: HistoryMessage) => HistoryMessage | null
+): void {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role !== "user") continue;
+    const replacement = transform(history[i]);
+    if (replacement === null) continue;
+    history[i] = replacement;
+    break;
+  }
+}
 
 export function useChatStreaming({
   messages,
@@ -271,22 +290,17 @@ export function useChatStreaming({
         settings.uiLanguage
       );
 
-      const history: Array<{
-        role: string;
-        content: string | Array<Record<string, unknown>>;
-      }> = allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
+      const history: HistoryMessage[] = allMessages
+        .slice(-20)
+        .map((m) => ({ role: m.role, content: m.content }));
 
-      if (options?.selectedContext) {
-        for (let i = history.length - 1; i >= 0; i--) {
-          const message = history[i];
-          if (message.role === "user" && typeof message.content === "string") {
-            history[i] = {
-              ...message,
-              content: buildAgentRequestText(message.content, options.selectedContext),
-            };
-            break;
-          }
-        }
+      const selectedContext = options?.selectedContext;
+      if (selectedContext) {
+        transformLastUserMessage(history, (message) =>
+          typeof message.content === "string"
+            ? { ...message, content: buildAgentRequestText(message.content, selectedContext) }
+            : null
+        );
       }
 
       // Attach the screenshot to the command it came with, but only where a
@@ -300,7 +314,7 @@ export function useChatStreaming({
         !isCloudAgent &&
         !isLanAgent &&
         !isLocalProvider &&
-        IMAGE_CAPABLE_STREAM_PROVIDERS.has(chatConfig.provider) &&
+        providerSupportsStreamImages(chatConfig.provider) &&
         getCloudModel(chatConfig.model)?.supportsVision
           ? options.attachment
           : null;
@@ -314,18 +328,13 @@ export function useChatStreaming({
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
       }
       if (attachment) {
-        for (let i = history.length - 1; i >= 0; i--) {
-          if (history[i].role === "user") {
-            history[i] = {
-              role: "user",
-              content: [
-                { type: "text", text: history[i].content as string },
-                { type: "image", image: attachment.image, mediaType: attachment.mediaType },
-              ],
-            };
-            break;
-          }
-        }
+        transformLastUserMessage(history, (message) => ({
+          role: "user",
+          content: [
+            { type: "text", text: message.content as string },
+            { type: "image", image: attachment.image, mediaType: attachment.mediaType },
+          ],
+        }));
       }
 
       const llmMessages = [{ role: "system", content: systemPrompt }, ...history];

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
 import { resolveWaveformBarHeight, WAVEFORM_BAR_COUNT, WAVEFORM_BAR_MIN_PX } from "./waveformMath";
 
-interface LiveWaveformProps {
+interface PillWaveformProps {
   /** Returns the current input level (0..~1) or null when no signal source exists. */
   getLevel: () => number | null;
   /** While true the bars scroll with live levels; false freezes the captured wave. */
@@ -18,7 +18,7 @@ const SAMPLE_INTERVAL_MS = 60;
  * pays React re-render cost. With no signal (getLevel → null) the bars rest at
  * minimum height; when `active` goes false the last captured wave stays frozen.
  */
-export function LiveWaveform({ getLevel, active, className }: LiveWaveformProps) {
+export function PillWaveform({ getLevel, active, className }: PillWaveformProps) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
   const levelsRef = useRef<number[]>([]);
 

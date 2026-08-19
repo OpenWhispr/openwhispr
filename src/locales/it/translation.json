@@ -3064,6 +3064,14 @@
       "selectedContext": "Testo selezionato aggiunto",
       "removeSelectedContext": "Rimuovi testo selezionato",
       "copyToClipboard": "Copia negli appunti"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Invocazione",
+        "calling": "Chiamata",
+        "using": "Utilizzo"
+      },
+      "toolFallback": "Strumento"
     }
   },
   "integrations": {

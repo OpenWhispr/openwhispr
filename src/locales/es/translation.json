@@ -3112,6 +3112,14 @@
       "selectedContext": "Texto seleccionado añadido",
       "removeSelectedContext": "Quitar texto seleccionado",
       "copyToClipboard": "Copiar al portapapeles"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Invocando",
+        "calling": "Llamando",
+        "using": "Usando"
+      },
+      "toolFallback": "Herramienta"
     }
   },
   "integrations": {

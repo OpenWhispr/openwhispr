@@ -2,8 +2,9 @@ import { forwardRef, type HTMLAttributes } from "react";
 import { BorderBeam, type BorderBeamTheme } from "border-beam";
 import { ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
-import { LiveWaveform } from "./LiveWaveform";
+import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
+import { WAVEFORM_BAR_COUNT } from "./waveformMath";
 import { LISTENING_ENTRANCE_TIMING } from "../../helpers/voicePillPresentation";
 
 export type VoicePillState =
@@ -30,7 +31,13 @@ const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier
 // A pronounced eleven-bar rhythm keeps rounded short bars readable while tall
 // peaks use nearly the full lane. The same silhouette and footprint is shared
 // by dictation, Agent Mode, and Live Transcript.
-const RESTING_WAVE_HEIGHTS = [6, 12, 5, 9, 7, 22, 18, 5, 20, 12, 17];
+const RESTING_WAVE_SILHOUETTE = [6, 12, 5, 9, 7, 22, 18, 5, 20, 12, 17];
+// Sized from WAVEFORM_BAR_COUNT so a bar-count change can never silently
+// desync the resting silhouette from the live waveform's footprint.
+const RESTING_WAVE_HEIGHTS = Array.from(
+  { length: WAVEFORM_BAR_COUNT },
+  (_, index) => RESTING_WAVE_SILHOUETTE[index % RESTING_WAVE_SILHOUETTE.length]
+);
 
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
   idle: "border-border-hover bg-surface-1 text-muted-foreground dark:border-border/50",
@@ -179,7 +186,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
             />
           ))}
         </div>
-        <LiveWaveform
+        <PillWaveform
           getLevel={getAudioLevel}
           active={isRecording}
           className={cn(

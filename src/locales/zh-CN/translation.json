@@ -3064,6 +3064,14 @@
       "selectedContext": "已添加所选文本",
       "removeSelectedContext": "移除所选文本",
       "copyToClipboard": "复制到剪贴板"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "调用中",
+        "calling": "请求中",
+        "using": "使用中"
+      },
+      "toolFallback": "工具"
     }
   },
   "integrations": {

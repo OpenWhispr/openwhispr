@@ -3228,6 +3228,14 @@
       "selectedContext": "Ausgewählter Text hinzugefügt",
       "removeSelectedContext": "Ausgewählten Text entfernen",
       "copyToClipboard": "In die Zwischenablage kopieren"
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Aufruf",
+        "calling": "Abruf",
+        "using": "Nutzung"
+      },
+      "toolFallback": "Werkzeug"
     }
   },
   "integrations": {
