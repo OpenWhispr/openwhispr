@@ -21,11 +21,14 @@ function resetCacheForTests() {
   cache = { keysyms: null, expiresAt: 0 };
 }
 
-// "<Control><Shift>F16" -> "F16"
+// "<Control><Shift>F16" -> "F16". Parses the accelerator instead of stripping
+// modifiers, so anything that is not "<Mod>...<Mod>keysym" is rejected outright.
+const GNOME_ACCELERATOR = /^(?:<[^<>]+>)*\s*([^<>\s]+)$/;
+
 function extractKeysym(gnomeShortcut) {
   if (!gnomeShortcut || typeof gnomeShortcut !== "string") return null;
-  const keysym = gnomeShortcut.replace(/<[^>]*>/g, "").trim();
-  return keysym || null;
+  const match = GNOME_ACCELERATOR.exec(gnomeShortcut.trim());
+  return match ? match[1] : null;
 }
 
 // xmodmap -pke lines: `keycode 194 = XF86Launch7 NoSymbol XF86Launch7`
