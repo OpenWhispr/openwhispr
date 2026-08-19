@@ -387,6 +387,9 @@ class HotkeyManager extends EventEmitter {
 
   setActivationMode(mode) {
     this.activationMode = mode === "push" ? "push" : "tap";
+    if (this.useGnome && this.gnomeManager && this.currentHotkey && this.hotkeyCallback) {
+      void this.registerGnomeDictationHotkey(this.currentHotkey, this.hotkeyCallback);
+    }
     if (this.useHyprland && this.hyprlandManager && this.currentHotkey) {
       void this.hyprlandManager.updateKeybinding(
         this.currentHotkey,
@@ -656,8 +659,10 @@ class HotkeyManager extends EventEmitter {
 
       const dbusOk = await this.gnomeManager.initDBusService(callback);
       if (dbusOk) {
+        const portalOk = await this.gnomeManager.initGlobalShortcutsPortal();
         this.useGnome = true;
         this.hotkeyCallback = callback;
+        debugLogger.log("[HotkeyManager] GNOME Global Shortcuts portal:", portalOk);
         return true;
       }
     } catch (err) {
@@ -667,6 +672,16 @@ class HotkeyManager extends EventEmitter {
     }
 
     return false;
+  }
+
+  async registerGnomeDictationHotkey(hotkey, callback) {
+    if (this.activationMode === "push") {
+      return this.gnomeManager.registerPushToTalk(hotkey, callback);
+    }
+
+    await this.gnomeManager.unregisterPushToTalk();
+    const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+    return this.gnomeManager.registerKeybinding(gnomeHotkey);
   }
 
   async initializeKDEShortcuts(callback) {
@@ -755,18 +770,15 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
-            const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
-
-            const success = await this.gnomeManager.registerKeybinding(gnomeHotkey);
+            const success = await this.registerGnomeDictationHotkey(hotkey, callback);
             if (success) {
               this.currentHotkey = hotkey;
               this.notifyActiveHotkey(hotkey);
               debugLogger.log(`[HotkeyManager] GNOME hotkey "${hotkey}" registered successfully`);
             } else {
-              const ok = await this.tryNativeFallbacks(hotkey, "GNOME", async (fb) => {
-                const fbGnome = GnomeShortcutManager.convertToGnomeFormat(fb);
-                return this.gnomeManager.registerKeybinding(fbGnome);
-              });
+              const ok = await this.tryNativeFallbacks(hotkey, "GNOME", (fb) =>
+                this.registerGnomeDictationHotkey(fb, callback)
+              );
               if (!ok) {
                 this.useGnome = false;
                 this.loadSavedHotkeyOrDefault(mainWindow, callback);
@@ -1178,8 +1190,7 @@ class HotkeyManager extends EventEmitter {
 
       if (this.useGnome && this.gnomeManager) {
         debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${primary}"`);
-        const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(primary);
-        const success = await this.gnomeManager.updateKeybinding(gnomeHotkey);
+        const success = await this.registerGnomeDictationHotkey(primary, callback);
         if (!success) {
           return {
             success: false,

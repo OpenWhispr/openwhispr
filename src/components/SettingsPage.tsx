@@ -3497,7 +3497,11 @@ EOF`,
                       <span className="text-xs text-muted-foreground/80">
                         {t("settingsPage.general.hotkey.activationMode")}
                       </span>
-                      <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                      <ActivationModeSelector
+                        value={activationMode}
+                        onChange={setActivationMode}
+                        disabled={isUsingNativeShortcut && !supportsPushToTalk}
+                      />
                     </div>
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />

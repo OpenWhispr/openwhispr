@@ -794,7 +794,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   : t("onboarding.activation.holdDescription")}
               </p>
             </div>
-            <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+            <ActivationModeSelector
+              value={activationMode}
+              onChange={setActivationMode}
+              disabled={isUsingNativeShortcut && !supportsPushToTalk}
+            />
           </div>
         )}
       </div>

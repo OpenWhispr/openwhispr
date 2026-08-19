@@ -1,5 +1,6 @@
 const { execFileSync } = require("child_process");
 const debugLogger = require("./debugLogger");
+const GnomeGlobalShortcutsPortal = require("./gnomeGlobalShortcutsPortal");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
@@ -30,6 +31,15 @@ const SLOT_CONFIG = {
 };
 
 const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
+const PORTAL_MODIFIER_NAMES = new Set([
+  "commandorcontrol",
+  "control",
+  "ctrl",
+  "alt",
+  "shift",
+  "super",
+  "meta",
+]);
 
 // Valid pattern for GNOME shortcut format using X11 keysym names (case-sensitive).
 // Modifiers are case-insensitive (GTK normalizes them), keysyms are exact.
@@ -133,6 +143,7 @@ class GnomeShortcutManager {
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
     this.translationCallback = null;
+    this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -243,6 +254,26 @@ class GnomeShortcutManager {
       }
       return false;
     }
+  }
+
+  async initGlobalShortcutsPortal() {
+    return this.globalShortcutsPortal.init();
+  }
+
+  supportsPushToTalk() {
+    return this.globalShortcutsPortal.isAvailable();
+  }
+
+  async registerPushToTalk(hotkey, callback) {
+    const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
+    if (!preferredTrigger) return false;
+
+    await this.unregisterKeybinding("dictation");
+    return this.globalShortcutsPortal.registerKeybinding(preferredTrigger, callback);
+  }
+
+  async unregisterPushToTalk() {
+    await this.globalShortcutsPortal.unregisterKeybinding();
   }
 
   static isValidShortcut(shortcut) {
@@ -536,7 +567,51 @@ class GnomeShortcutManager {
     return modifiers + gnomeKey;
   }
 
+  static convertToPortalFormat(hotkey) {
+    if (!hotkey || typeof hotkey !== "string") return "";
+
+    const parts = hotkey
+      .split("+")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (
+      parts.length === 0 ||
+      parts.every((part) => PORTAL_MODIFIER_NAMES.has(part.toLowerCase()))
+    ) {
+      return "";
+    }
+
+    const key = parts.pop();
+    const keyLower = key.toLowerCase();
+    const modifiers = parts
+      .map((modifier) => {
+        const name = modifier.toLowerCase();
+        if (name === "commandorcontrol" || name === "control" || name === "ctrl") return "CTRL";
+        if (name === "alt") return "ALT";
+        if (name === "shift") return "SHIFT";
+        if (name === "super" || name === "meta") return "LOGO";
+        return "";
+      })
+      .filter(Boolean);
+
+    let portalKey;
+    if (key === "`" || keyLower === "backquote") {
+      portalKey = "grave";
+    } else if (key === " ") {
+      portalKey = "space";
+    } else if (ELECTRON_TO_GNOME_KEY_MAP[keyLower]) {
+      portalKey = ELECTRON_TO_GNOME_KEY_MAP[keyLower];
+    } else if (/^F\d+$/i.test(key)) {
+      portalKey = key.toUpperCase();
+    } else {
+      portalKey = keyLower;
+    }
+
+    return [...modifiers, portalKey].join("+");
+  }
+
   close() {
+    this.globalShortcutsPortal.close();
     if (this.bus) {
       this.bus.connection.end();
       this.bus = null;

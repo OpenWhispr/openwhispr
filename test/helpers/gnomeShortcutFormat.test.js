@@ -62,3 +62,13 @@ test("raw punctuation strings are rejected by the GNOME validator", () => {
   assert.equal(GnomeShortcutManager.isValidShortcut("<Control>,"), false);
   assert.equal(GnomeShortcutManager.isValidShortcut("<Control>plus"), true);
 });
+
+test("portal shortcuts use the XDG modifier syntax", () => {
+  assert.equal(
+    GnomeShortcutManager.convertToPortalFormat("Control+Shift+Space"),
+    "CTRL+SHIFT+space"
+  );
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("Super+Alt+F8"), "LOGO+ALT+F8");
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("Control+Shift+`"), "CTRL+SHIFT+grave");
+  assert.equal(GnomeShortcutManager.convertToPortalFormat("Control+Super"), "");
+});
