@@ -127,7 +127,10 @@ async function downloadBinary(platformArch, config, isForce = false) {
   const diarizeOutputPath = path.join(BIN_DIR, config.diarizeOutputName);
   const installMarkerPath = path.join(BIN_DIR, `.sherpa-onnx-${platformArch}.json`);
 
-  if (!isForce && isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath])) {
+  if (
+    !isForce &&
+    isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath])
+  ) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
@@ -156,7 +159,9 @@ async function downloadBinary(platformArch, config, isForce = false) {
     // Copy shared libraries
     const copiedLibraries = [];
     if (config.libPattern) {
-      const libraries = findLibrariesInDir(extractDir, config.libPattern);
+      const libraries = findLibrariesInDir(extractDir, config.libPattern, {
+        ignoreReadErrors: true,
+      });
 
       // Separate versioned and unversioned libraries to create symlinks where possible
       // e.g. libonnxruntime.dylib -> libonnxruntime.1.23.2.dylib (saves ~71MB)

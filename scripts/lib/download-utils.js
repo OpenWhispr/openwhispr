@@ -330,24 +330,28 @@ function matchesPattern(filename, pattern) {
   return false;
 }
 
-function findLibrariesInDir(dir, pattern, maxDepth = 5, currentDepth = 0) {
+function findLibrariesInDir(dir, pattern, options = {}, currentDepth = 0) {
+  const normalizedOptions = typeof options === "number" ? { maxDepth: options } : options;
+  const { maxDepth = 5, ignoreReadErrors = false } = normalizedOptions;
   if (currentDepth >= maxDepth) return [];
 
   const results = [];
+  let entries;
   try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    if (ignoreReadErrors) return [];
+    throw error;
+  }
 
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
 
-      if (entry.isDirectory()) {
-        results.push(...findLibrariesInDir(fullPath, pattern, maxDepth, currentDepth + 1));
-      } else if (matchesPattern(entry.name, pattern)) {
-        results.push(fullPath);
-      }
+    if (entry.isDirectory()) {
+      results.push(...findLibrariesInDir(fullPath, pattern, normalizedOptions, currentDepth + 1));
+    } else if (matchesPattern(entry.name, pattern)) {
+      results.push(fullPath);
     }
-  } catch {
-    // Ignore permission errors
   }
 
   return results;
