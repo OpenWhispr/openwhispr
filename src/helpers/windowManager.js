@@ -8,6 +8,13 @@ const DevServerManager = require("./devServerManager");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
+const {
+  linuxNotifier,
+  buildMeetingPromptContent,
+  buildUpdatePromptContent,
+  CLOSE_REASON_EXPIRED,
+  CLOSE_REASON_DISMISSED,
+} = require("./linuxNotifier");
 const { DEV_SERVER_PORT } = DevServerManager;
 const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const {
@@ -37,6 +44,10 @@ class WindowManager {
     });
     this.transcriptionPreviewWindow = null;
     this.updateNotificationWindow = null;
+    this._nativeMeetingNotification = null;
+    this._nativeUpdateNotification = null;
+    this._nativeMeetingShowSeq = 0;
+    this._nativeUpdateShowSeq = 0;
     this._updateNotificationDismissed = false;
     this.notificationPrefs = {
       notificationsEnabled: true,
@@ -1248,6 +1259,58 @@ class WindowManager {
     }
   }
 
+  // Checked before awaiting so the overlay path keeps creating its window in
+  // the same tick as the caller. Only actionable prompts reach the daemon.
+  _canUseNativeMeetingNotification(promptData) {
+    return linuxNotifier.isSupported() && Boolean(promptData?.detectionId);
+  }
+
+  // Deliver the prompt through the desktop notification daemon, falling back
+  // to the overlay when the caller gets false back.
+  async _tryNativeMeetingNotification(promptData, { autoDismiss = true } = {}) {
+    if (!this._canUseNativeMeetingNotification(promptData)) return false;
+    const detectionId = promptData.detectionId;
+
+    const previous = this._nativeMeetingNotification;
+    this._nativeMeetingNotification = null;
+    // Staleness guard across the await, like the overlay's window identity check.
+    const seq = (this._nativeMeetingShowSeq = this._nativeMeetingShowSeq + 1);
+    const timeoutMs = getNotificationTimeoutMs(promptData.source);
+
+    const handle = await linuxNotifier.show({
+      ...buildMeetingPromptContent(promptData, (key, opts) => i18nMain.t(key, opts)),
+      timeoutMs,
+      replacesId: previous?.id ?? 0,
+      onAction: (action) => {
+        this.meetingDetectionEngine?.handleNotificationResponse(detectionId, action);
+      },
+      onClose: (reason) => {
+        if (this._nativeMeetingNotification?.id !== handle?.id) return;
+        if (reason === CLOSE_REASON_DISMISSED) {
+          this.meetingDetectionEngine?.handleNotificationResponse(detectionId, "dismiss");
+        } else if (reason === CLOSE_REASON_EXPIRED) {
+          this._nativeMeetingNotification = null;
+          this._notificationDismissTimer.cancel();
+          this.meetingDetectionEngine?.handleNotificationTimeout();
+        }
+      },
+    });
+    if (this._nativeMeetingShowSeq !== seq) {
+      // A newer prompt superseded this one mid-flight; it owns the surface now.
+      handle?.close();
+      return true;
+    }
+    if (!handle) {
+      previous?.close();
+      return false;
+    }
+
+    this._nativeMeetingNotification = handle;
+    // Backstop expiry for daemons that ignore expire_timeout.
+    if (autoDismiss) this._notificationDismissTimer.start(timeoutMs);
+    return true;
+  }
+
   async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
     if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
       const previousWindow = this.notificationWindow;
@@ -1263,6 +1326,13 @@ class WindowManager {
     if (this._notificationReadyFallback) {
       clearTimeout(this._notificationReadyFallback);
       this._notificationReadyFallback = null;
+    }
+
+    if (
+      this._canUseNativeMeetingNotification(promptData) &&
+      (await this._tryNativeMeetingNotification(promptData, { autoDismiss }))
+    ) {
+      return;
     }
 
     const display = screen.getPrimaryDisplay();
@@ -1392,7 +1462,13 @@ class WindowManager {
   }
 
   dismissMeetingNotification() {
+    // Invalidate a native show that may still be waiting on D-Bus.
+    this._nativeMeetingShowSeq = this._nativeMeetingShowSeq + 1;
     this._pendingNotificationData = null;
+    if (this._nativeMeetingNotification) {
+      this._nativeMeetingNotification.close();
+      this._nativeMeetingNotification = null;
+    }
     if (this._notificationReadyFallback) {
       clearTimeout(this._notificationReadyFallback);
       this._notificationReadyFallback = null;
@@ -1424,7 +1500,44 @@ class WindowManager {
     this.dismissMeetingNotification();
   }
 
-  async showUpdateNotification(info) {
+  async _tryNativeUpdateNotification(info, onUpdate) {
+    if (!linuxNotifier.isSupported()) return false;
+
+    const previous = this._nativeUpdateNotification;
+    this._nativeUpdateNotification = null;
+    const seq = (this._nativeUpdateShowSeq = this._nativeUpdateShowSeq + 1);
+
+    const handle = await linuxNotifier.show({
+      ...buildUpdatePromptContent(info, (key, opts) => i18nMain.t(key, opts)),
+      timeoutMs: 5000,
+      replacesId: previous?.id ?? 0,
+      onAction: () => {
+        this.dismissUpdateNotification();
+        if (typeof onUpdate === "function") onUpdate();
+      },
+      onClose: (reason) => {
+        if (this._nativeUpdateNotification?.id !== handle?.id) return;
+        // User close declines for the session; expiry stays eligible, like the overlay.
+        this.dismissUpdateNotification({ persistent: reason === CLOSE_REASON_DISMISSED });
+      },
+    });
+    if (this._nativeUpdateShowSeq !== seq) {
+      handle?.close();
+      return true;
+    }
+    if (!handle) {
+      previous?.close();
+      return false;
+    }
+
+    this._nativeUpdateNotification = handle;
+    this._updateNotificationAutoDismiss = setTimeout(() => {
+      this.dismissUpdateNotification({ persistent: false });
+    }, 5000);
+    return true;
+  }
+
+  async showUpdateNotification(info, { onUpdate } = {}) {
     if (this._updateNotificationDismissed) return;
     if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
       this.updateNotificationWindow.close();
@@ -1433,6 +1546,10 @@ class WindowManager {
     if (this._updateNotificationAutoDismiss) {
       clearTimeout(this._updateNotificationAutoDismiss);
       this._updateNotificationAutoDismiss = null;
+    }
+
+    if (linuxNotifier.isSupported() && (await this._tryNativeUpdateNotification(info, onUpdate))) {
+      return;
     }
 
     const display = screen.getPrimaryDisplay();
@@ -1499,8 +1616,14 @@ class WindowManager {
   }
 
   dismissUpdateNotification({ persistent = true } = {}) {
+    // Invalidate a native show that may still be waiting on D-Bus.
+    this._nativeUpdateShowSeq = this._nativeUpdateShowSeq + 1;
     this._pendingUpdateNotificationData = null;
     if (persistent) this._updateNotificationDismissed = true;
+    if (this._nativeUpdateNotification) {
+      this._nativeUpdateNotification.close();
+      this._nativeUpdateNotification = null;
+    }
     if (this._updateNotificationReadyFallback) {
       clearTimeout(this._updateNotificationReadyFallback);
       this._updateNotificationReadyFallback = null;

@@ -92,6 +92,16 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     };
   }
   if (request === "./dockManager") return {};
+  // These cases cover the overlay, so the daemon must always report unsupported.
+  if (request === "./linuxNotifier") {
+    return {
+      linuxNotifier: { isSupported: () => false },
+      buildMeetingPromptContent: () => ({}),
+      buildUpdatePromptContent: () => ({}),
+      CLOSE_REASON_EXPIRED: 1,
+      CLOSE_REASON_DISMISSED: 2,
+    };
+  }
   if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
   if (request === "./windowConfig") {
     const detectionSize = { width: 392, height: 92 };

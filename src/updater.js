@@ -89,9 +89,13 @@ class UpdateManager {
         this.notifyRenderers("update-available", info);
         const notifAllowed = appUpdatesEnabled(this.windowManager?.notificationPrefs);
         if (this.windowManager && info && !this._suppressNotification && notifAllowed) {
-          this.windowManager.showUpdateNotification(info).catch((err) => {
-            console.error("Failed to show update notification:", err);
-          });
+          this.windowManager
+            .showUpdateNotification(info, {
+              onUpdate: () => this.downloadUpdateFromNotification(),
+            })
+            .catch((err) => {
+              console.error("Failed to show update notification:", err);
+            });
         }
         this._suppressNotification = false;
       },
@@ -193,6 +197,14 @@ class UpdateManager {
       console.error("❌ Update check error:", error);
       throw error;
     }
+  }
+
+  // Single entry point for the notification Update action, shared by the
+  // overlay's IPC respond handler and the native Linux notification.
+  downloadUpdateFromNotification() {
+    return this.downloadUpdate().catch((error) => {
+      console.error("Failed to start update download from notification:", error);
+    });
   }
 
   async downloadUpdate() {
