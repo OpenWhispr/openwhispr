@@ -484,6 +484,7 @@
           "description": "Next-gen flagship model for complex reasoning",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
           "supportsThinking": true,
+          "minThinkingLevel": "low",
           "supportsVision": true
         },
         {
