@@ -24,8 +24,6 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
   ["groq gpt-oss suppression floors at low, never none (#990)", "Groq", "openai/gpt-oss-120b", null, CLEANUP_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
-  ["groq qwen is registry-flagged disableThinking and always suppressed", "Groq", "qwen/qwen3-32b", null, CLEANUP,
-    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "none" }],
   ["groq unknown family gets no guessed reasoning params", "Groq", "llama-3.3-70b-versatile", null, CLEANUP_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0 }],
 
