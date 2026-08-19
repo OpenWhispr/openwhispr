@@ -1288,7 +1288,16 @@ class WindowManager {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return false;
     if (!new Set(["compact", "expanded", "restore"]).has(mode)) return false;
-    if (win.isFullScreen() || win.isMaximized()) return false;
+    if (mode === "restore") {
+      // Restoring never fights a maximized/fullscreen window the user made.
+      if (win.isFullScreen() || win.isMaximized()) return false;
+    } else if (win.isFullScreen() || win.isMaximized()) {
+      // Entering onboarding from a maximized/fullscreen control panel must not
+      // refuse: refusing leaves the native chrome (traffic lights, resize) on a
+      // window whose flow assumes it is locked to the canonical bounds.
+      if (win.isFullScreen()) win.setFullScreen(false);
+      if (win.isMaximized()) win.unmaximize();
+    }
 
     const current = win.getContentBounds();
     const { workArea } = screen.getDisplayMatching(win.getBounds());

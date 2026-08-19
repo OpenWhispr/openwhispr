@@ -10,6 +10,7 @@ import systemAudioIcon from "@/assets/onboarding-permission-system-audio.webp";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
+import { getPlatform } from "../../utils/platform";
 import { CompactOnboardingFrame } from "./OnboardingShell";
 
 interface CompactPermissionsStepProps {
@@ -113,6 +114,12 @@ export default function CompactPermissionsStep({
   const { t } = useTranslation();
   const [busyPermission, setBusyPermission] = useState<PermissionRowId | null>(null);
   const canRequestSystemAudio = canManageSystemAudioInApp(systemAudio);
+  // Only macOS has grantable Accessibility (auto-paste) and System Audio
+  // permissions. Windows auto-grants both (SendKeys needs nothing, WASAPI
+  // loopback is permissionless) and Linux has no in-app grant for either, so
+  // showing those rows there is either a no-op button or a dead disabled one.
+  const showAccessibility = getPlatform() === "darwin";
+  const showSystemAudio = getPlatform() === "darwin";
 
   const request = async (id: PermissionRowId, action: () => Promise<unknown>) => {
     setBusyPermission(id);
@@ -158,27 +165,37 @@ export default function CompactPermissionsStep({
             onRequest={() => request("microphone", permissions.requestMicPermission)}
             onContinue={onContinue}
           />
-          <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
-          <PermissionRow
-            id="accessibility"
-            title={t("onboarding.permissions.accessibilityTitle")}
-            description={t("onboarding.rehaul.permissions.accessibilityDescription")}
-            granted={permissions.accessibilityPermissionGranted}
-            busy={busyPermission === "accessibility"}
-            iconSrc={accessibilityIcon}
-            onRequest={() => request("accessibility", permissions.requestAccessibilityPermission)}
-          />
-          <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
-          <PermissionRow
-            id="system-audio"
-            title={t("onboarding.rehaul.permissions.systemAudioTitle")}
-            description={t("onboarding.rehaul.permissions.systemAudioDescription")}
-            granted={systemAudio.granted}
-            busy={busyPermission === "system-audio"}
-            disabled={!canRequestSystemAudio}
-            iconSrc={systemAudioIcon}
-            onRequest={() => request("system-audio", systemAudio.request)}
-          />
+          {showAccessibility && (
+            <>
+              <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
+              <PermissionRow
+                id="accessibility"
+                title={t("onboarding.permissions.accessibilityTitle")}
+                description={t("onboarding.rehaul.permissions.accessibilityDescription")}
+                granted={permissions.accessibilityPermissionGranted}
+                busy={busyPermission === "accessibility"}
+                iconSrc={accessibilityIcon}
+                onRequest={() =>
+                  request("accessibility", permissions.requestAccessibilityPermission)
+                }
+              />
+            </>
+          )}
+          {showSystemAudio && (
+            <>
+              <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
+              <PermissionRow
+                id="system-audio"
+                title={t("onboarding.rehaul.permissions.systemAudioTitle")}
+                description={t("onboarding.rehaul.permissions.systemAudioDescription")}
+                granted={systemAudio.granted}
+                busy={busyPermission === "system-audio"}
+                disabled={!canRequestSystemAudio}
+                iconSrc={systemAudioIcon}
+                onRequest={() => request("system-audio", systemAudio.request)}
+              />
+            </>
+          )}
         </div>
       </div>
     </CompactOnboardingFrame>
