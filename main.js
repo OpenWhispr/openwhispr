@@ -422,6 +422,12 @@ function initializeCoreManagers() {
   debugLogger.refreshLogLevel();
 
   windowManager = new WindowManager();
+  // Wired at construction: second-instance and activate can open the panel
+  // before startApp's async phase reaches the other windowManager setters.
+  windowManager.setControlPanelStateStore({
+    get: () => environmentManager.getControlPanelWindowState(),
+    save: (state) => environmentManager.saveControlPanelWindowState(state),
+  });
   hotkeyManager = windowManager.hotkeyManager;
   databaseManager = new DatabaseManager();
   clipboardManager = new ClipboardManager();
