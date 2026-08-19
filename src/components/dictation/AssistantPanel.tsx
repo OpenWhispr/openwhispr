@@ -185,7 +185,7 @@ export function AssistantPanel({
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: `${t("agentMode.chat.errorPrefix")}: ${(error as Error).message}`,
+            content: `${t("agentMode.chat.errorPrefix")}: ${error instanceof Error ? error.message : String(error)}`,
             isStreaming: false,
           },
         ]);

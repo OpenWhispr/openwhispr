@@ -36,6 +36,16 @@ function estimateModelSizeB(modelId: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
+// A send captures the generation counter when it starts; cancelStream() bumps
+// it. If the two no longer match, this send was cancelled out from under
+// itself and must not be treated as a genuine (if empty) completion.
+export function isSendGenerationStale(
+  startedGeneration: number,
+  currentGeneration: number
+): boolean {
+  return startedGeneration !== currentGeneration;
+}
+
 async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
   try {
@@ -192,7 +202,9 @@ export function useChatStreaming({
     };
   }, [clearToolActivityTimer]);
 
+  const sendGenerationRef = useRef(0);
   const cancelStream = useCallback(() => {
+    sendGenerationRef.current += 1;
     ReasoningService.cancelActiveStream();
     setAgentState("idle");
     clearToolActivity();
@@ -200,6 +212,8 @@ export function useChatStreaming({
 
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
+      const sendGeneration = ++sendGenerationRef.current;
+      const cancelled = () => isSendGenerationStale(sendGeneration, sendGenerationRef.current);
       clearToolActivity();
       let responseAnnounced = false;
       const announceResponse = () => {
@@ -474,7 +488,7 @@ export function useChatStreaming({
           }
         }
 
-        if (!responseAnnounced) {
+        if (!responseAnnounced && !cancelled()) {
           // The stream ended without a visible token or tool call (think-only
           // local model, empty completion). Show that as a reply so every
           // listener — the assistant panel's thinking state included — sees a
