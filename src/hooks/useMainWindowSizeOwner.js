@@ -26,19 +26,24 @@ export function useMainWindowSizeOwner({
   const [handoffActive, setHandoffActive] = useState(false);
   const actionCountRef = useRef(dictationErrorActionCount);
   const handoffRef = useRef(null);
-
-  if (handoffRef.current === null) {
-    handoffRef.current = createDictationErrorPillHandoff({
+  useEffect(() => {
+    const handoff = createDictationErrorPillHandoff({
       onSuppressedChange: setHandoffActive,
       shouldAutoHide: () => useSettingsStore.getState().floatingIconAutoHide,
       hideWindow: () => window.electronAPI?.hideWindow?.(),
     });
-  }
+    handoffRef.current = handoff;
+    if (actionCountRef.current > 0) handoff.suppress();
+    return () => {
+      handoff.dispose();
+      if (handoffRef.current === handoff) handoffRef.current = null;
+    };
+  }, []);
 
   useLayoutEffect(() => {
     actionCountRef.current = dictationErrorActionCount;
     if (dictationErrorActionCount > 0) {
-      handoffRef.current.suppress();
+      handoffRef.current?.suppress();
     }
   }, [dictationErrorActionCount]);
 
@@ -77,7 +82,7 @@ export function useMainWindowSizeOwner({
       // Keep the same pill root hidden until Electron has restored the compact
       // bounds. Revealing it in the old error footprint makes it jump once when
       // React mounts it and again when the native resize reaches Chromium.
-      void handoffRef.current.releaseAfter(async () => {
+      void handoffRef.current?.releaseAfter(async () => {
         let settledTarget = target;
         await requestMainWindowSize(settledTarget);
         // A menu/toast edge can supersede BASE while its native resize is
@@ -120,17 +125,8 @@ export function useMainWindowSizeOwner({
 
     // A panel already owns stable native bounds, so an error displayed inside
     // it has no compact resize to await. Release only the visual suppression.
-    void handoffRef.current.releaseAfter(async () => {});
+    void handoffRef.current?.releaseAfter(async () => {});
   }, [assistantMounted, dictationErrorActionCount, handoffActive, liveTranscriptMounted]);
-
-  useEffect(
-    () => () => {
-      // dispose() (not cancel()): the handoff instance is per-mount, and a
-      // release racing the unmount must never call this component's setState.
-      handoffRef.current?.dispose();
-    },
-    []
-  );
 
   return { dictationErrorPillHandoffActive: handoffActive };
 }

@@ -46,6 +46,12 @@ const formatPillHotkeyLabel = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const UNMOUNTED_RESIZE = {
+  success: false,
+  superseded: true,
+  message: "Resize coordinator not mounted",
+};
+
 export default function App() {
   const [isHovered, setIsHovered] = useState(false);
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
@@ -105,23 +111,36 @@ export default function App() {
   const agentAllowed = usePolicyStore(isAgentAllowed);
 
   const mainWindowResizeCoordinatorRef = useRef(null);
-  if (mainWindowResizeCoordinatorRef.current === null) {
-    mainWindowResizeCoordinatorRef.current = createMainWindowResizeCoordinator({
+  useEffect(() => {
+    // Created in the effect, not lazily during render: React StrictMode's
+    // dev-only setup→cleanup→setup cycle then disposes and recreates it
+    // instead of disposing the only instance for the rest of the session.
+    const coordinator = createMainWindowResizeCoordinator({
       resizeMainWindow: (sizeKey) => window.electronAPI?.resizeMainWindow?.(sizeKey),
       resizeAssistantWindowToContent: (height) =>
         window.electronAPI?.resizeAssistantWindowToContent?.(height),
     });
-  }
+    mainWindowResizeCoordinatorRef.current = coordinator;
+    return () => {
+      coordinator.dispose();
+      if (mainWindowResizeCoordinatorRef.current === coordinator) {
+        mainWindowResizeCoordinatorRef.current = null;
+      }
+    };
+  }, []);
 
   const requestMainWindowSize = React.useCallback(
-    (sizeKey) => mainWindowResizeCoordinatorRef.current.resizeMainWindow(sizeKey),
+    (sizeKey) =>
+      mainWindowResizeCoordinatorRef.current?.resizeMainWindow(sizeKey) ??
+      Promise.resolve(UNMOUNTED_RESIZE),
     []
   );
   const resizeLiveTranscriptToContent = React.useCallback(
-    (height) => mainWindowResizeCoordinatorRef.current.resizeAssistantWindowToContent(height),
+    (height) =>
+      mainWindowResizeCoordinatorRef.current?.resizeAssistantWindowToContent(height) ??
+      Promise.resolve(UNMOUNTED_RESIZE),
     []
   );
-  useEffect(() => () => mainWindowResizeCoordinatorRef.current?.dispose(), []);
 
   const onPanelOpened = React.useCallback(() => setIsHovered(false), []);
 
