@@ -21,6 +21,13 @@ const {
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
+const {
+  AUTO_DISPLAY,
+  sanitizePanelDisplayValue,
+  resolveTargetDisplay,
+} = require("./displaySelection");
+const effectiveWorkArea = require("./effectiveWorkArea");
+const { resolveEffectiveDisplay } = effectiveWorkArea;
 
 class WindowManager {
   constructor() {
@@ -55,19 +62,60 @@ class WindowManager {
     this._floatingIconAutoHide = false;
     this._agentAnimationState = null;
     this._panelStartPosition = "bottom-right";
+    this._panelDisplay = AUTO_DISPLAY;
+    this._onDisplayRemoved = null;
     this._isDictatingToggle = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
 
+    // init() first so a display change invalidates the cache before the reposition handler runs.
+    effectiveWorkArea.init();
+    this._registerDisplayListeners();
+
+    // Re-apply placement when panel corrections arrive after the window was first positioned.
+    effectiveWorkArea.setOnCorrectionsChanged(() => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+      // Never fight an in-progress user drag.
+      if (this.dragManager.isDragActive()) return;
+      void this._repositionToActiveDisplay({ force: true });
+      const preview = this.transcriptionPreviewWindow;
+      if (preview && !preview.isDestroyed() && preview.isVisible()) {
+        const { width, height } = preview.getBounds();
+        this.resizeTranscriptionPreview(width, height);
+      }
+    });
+
     app.on("before-quit", () => {
       this.isQuitting = true;
       this.hotkeyManager.unregisterAll();
+      this._unregisterDisplayListeners();
     });
+  }
+
+  // Reposition a pinned widget back to its target when the display it sits on is unplugged.
+  _registerDisplayListeners() {
+    if (this._onDisplayRemoved) return;
+    this._onDisplayRemoved = () => {
+      if (this._panelDisplay === AUTO_DISPLAY) return;
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+      void this._repositionToActiveDisplay();
+    };
+    screen.on("display-removed", this._onDisplayRemoved);
+  }
+
+  _unregisterDisplayListeners() {
+    if (this._onDisplayRemoved) {
+      screen.removeListener("display-removed", this._onDisplayRemoved);
+      this._onDisplayRemoved = null;
+    }
   }
 
   async createMainWindow() {
     const cursorPos = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(cursorPos);
+    const cursorDisplay = screen.getDisplayNearestPoint(cursorPos);
+    const display = resolveEffectiveDisplay(
+      resolveTargetDisplay(this._panelDisplay, screen.getAllDisplays(), cursorDisplay)
+    );
     const position = WindowPositionUtil.getMainWindowPosition(
       display,
       null,
@@ -170,10 +218,12 @@ class WindowManager {
     const currentBounds = this.mainWindow.getBounds();
     const position = this._panelStartPosition;
 
-    const display = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height,
-    });
+    const display = resolveEffectiveDisplay(
+      screen.getDisplayNearestPoint({
+        x: currentBounds.x + currentBounds.width / 2,
+        y: currentBounds.y + currentBounds.height,
+      })
+    );
 
     let newX, newY;
 
@@ -600,10 +650,12 @@ class WindowManager {
     // Reposition the window immediately
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       const currentBounds = this.mainWindow.getBounds();
-      const display = screen.getDisplayNearestPoint({
-        x: currentBounds.x + currentBounds.width / 2,
-        y: currentBounds.y + currentBounds.height / 2,
-      });
+      const display = resolveEffectiveDisplay(
+        screen.getDisplayNearestPoint({
+          x: currentBounds.x + currentBounds.width / 2,
+          y: currentBounds.y + currentBounds.height / 2,
+        })
+      );
       const newPos = WindowPositionUtil.getMainWindowPosition(
         display,
         { width: currentBounds.width, height: currentBounds.height },
@@ -611,6 +663,59 @@ class WindowManager {
       );
       this.mainWindow.setBounds(newPos);
     }
+  }
+
+  setPanelDisplay(value) {
+    this._panelDisplay = sanitizePanelDisplayValue(value);
+    // Reposition the live widget onto the pinned (or auto-resolved) display immediately.
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      void this._repositionToActiveDisplay();
+    }
+  }
+
+  // Move the widget to `targetDisplay` if it isn't already there; `force` re-applies the
+  // placement on the same display. Returns true when bounds were set (caller re-asserts on-top).
+  _moveWidgetToDisplay(targetDisplay, { force = false } = {}) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed() || !targetDisplay) return false;
+
+    // Correct the target's work area for KDE panel struts (identity on Windows/macOS).
+    targetDisplay = resolveEffectiveDisplay(targetDisplay);
+
+    const currentBounds = this.mainWindow.getBounds();
+    const currentDisplay = screen.getDisplayNearestPoint({
+      x: currentBounds.x + currentBounds.width / 2,
+      y: currentBounds.y + currentBounds.height / 2,
+    });
+
+    if (!force && currentDisplay.id === targetDisplay.id) {
+      // Nearest-display math can't tell "on this display" from "just past its
+      // edge", so a rearranged monitor or a drag that ended over another
+      // display can leave the panel stranded in dead space, looking like the
+      // overlay vanished. Pull it back before showing it.
+      const clamped = WindowPositionUtil.clampToWorkArea(currentBounds, targetDisplay);
+      if (clamped.x !== currentBounds.x || clamped.y !== currentBounds.y) {
+        this.mainWindow.setBounds({ ...currentBounds, ...clamped });
+      }
+      return false;
+    }
+
+    const newPos = WindowPositionUtil.getMainWindowPosition(
+      targetDisplay,
+      { width: currentBounds.width, height: currentBounds.height },
+      this._panelStartPosition
+    );
+    debugLogger.debug(
+      "[WindowManager] Moving dictation panel to the target display",
+      { from: currentBounds, to: newPos, displayId: targetDisplay.id },
+      "window"
+    );
+    this.mainWindow.setBounds(newPos);
+    // Windows mixed-DPI: the first setBounds after a cross-display move can land wrong.
+    // A second call with the same bounds settles it.
+    if (process.platform === "win32") {
+      this.mainWindow.setBounds(newPos);
+    }
+    return true;
   }
 
   setHotkeyListeningMode(enabled) {
@@ -903,7 +1008,9 @@ class WindowManager {
       this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : null;
 
     if (mainBounds) {
-      const display = screen.getDisplayNearestPoint({ x: mainBounds.x, y: mainBounds.y });
+      const display = resolveEffectiveDisplay(
+        screen.getDisplayNearestPoint({ x: mainBounds.x, y: mainBounds.y })
+      );
       const position = WindowPositionUtil.getTranscriptionPreviewPosition(display, mainBounds, {
         width: TRANSCRIPTION_PREVIEW_CONFIG.width,
         height: TRANSCRIPTION_PREVIEW_CONFIG.height,
@@ -964,7 +1071,9 @@ class WindowManager {
       this.mainWindow && !this.mainWindow.isDestroyed()
         ? this.mainWindow.getBounds()
         : this.transcriptionPreviewWindow.getBounds();
-    const display = screen.getDisplayNearestPoint({ x: anchorBounds.x, y: anchorBounds.y });
+    const display = resolveEffectiveDisplay(
+      screen.getDisplayNearestPoint({ x: anchorBounds.x, y: anchorBounds.y })
+    );
     const bounds = WindowPositionUtil.getTranscriptionPreviewPosition(display, anchorBounds, {
       width: targetWidth,
       height: targetHeight,
@@ -1111,41 +1220,21 @@ class WindowManager {
       : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   }
 
-  async _repositionToActiveDisplay() {
+  async _repositionToActiveDisplay(options = {}) {
+    const { force = false } = options;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
 
     const activeDisplay = await this._resolveActiveDisplay();
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    // A pinned monitor wins over the active display; "auto" follows it.
+    const targetDisplay = resolveTargetDisplay(
+      this._panelDisplay,
+      screen.getAllDisplays(),
+      activeDisplay
+    );
 
-    const currentBounds = this.mainWindow.getBounds();
-    const currentDisplay = screen.getDisplayNearestPoint({
-      x: currentBounds.x + currentBounds.width / 2,
-      y: currentBounds.y + currentBounds.height / 2,
-    });
-
-    if (currentDisplay.id === activeDisplay.id) {
-      // Nearest-display math can't tell "on this display" from "just past its
-      // edge", so a rearranged monitor or a drag that ended over another
-      // display can leave the panel stranded in dead space, looking like the
-      // overlay vanished. Pull it back before showing it.
-      const clamped = WindowPositionUtil.clampToWorkArea(currentBounds, currentDisplay);
-      if (clamped.x !== currentBounds.x || clamped.y !== currentBounds.y) {
-        this.mainWindow.setBounds({ ...currentBounds, ...clamped });
-      }
-      return;
+    if (this._moveWidgetToDisplay(targetDisplay, { force })) {
+      this.enforceMainWindowOnTop();
     }
-
-    const newPos = WindowPositionUtil.getMainWindowPosition(
-      activeDisplay,
-      { width: currentBounds.width, height: currentBounds.height },
-      this._panelStartPosition
-    );
-    debugLogger.debug(
-      "[WindowManager] Moving dictation panel to the active display",
-      { from: currentBounds, to: newPos, displayId: activeDisplay.id },
-      "window"
-    );
-    this.mainWindow.setBounds(newPos);
   }
 
   showDictationPanel(options = {}) {
