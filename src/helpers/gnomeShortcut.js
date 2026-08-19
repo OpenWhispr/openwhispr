@@ -1,5 +1,6 @@
 const { execFileSync } = require("child_process");
 const debugLogger = require("./debugLogger");
+const { checkKeysymAvailability } = require("./xkbKeymapCheck");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
@@ -126,7 +127,9 @@ function getSlotConfig(slotName) {
 }
 
 class GnomeShortcutManager {
-  constructor() {
+  constructor(deps = {}) {
+    this.execFileSync = deps.execFileSync || execFileSync;
+    this.checkKeysymAvailability = deps.checkKeysymAvailability || checkKeysymAvailability;
     this.bus = null;
     this.dictationCallback = null;
     this.agentCallback = null;
@@ -252,6 +255,7 @@ class GnomeShortcutManager {
     return VALID_SHORTCUT_PATTERN.test(shortcut);
   }
 
+  /** @returns {Promise<true | "keysym_missing" | false>} true, or a failure reason */
   async registerKeybinding(shortcut = "<Alt>r", slotName = "dictation") {
     if (!GnomeShortcutManager.isGnome()) {
       debugLogger.log("[GnomeShortcut] Not running on GNOME, skipping registration");
@@ -263,6 +267,16 @@ class GnomeShortcutManager {
         `[GnomeShortcut] Invalid shortcut format: "${shortcut}" for slot "${slotName}"`
       );
       return false;
+    }
+
+    // GNOME can't grab a keysym absent from the active keymap (stock xkb maps
+    // F13-F24 to XF86Launch*), so the binding would register and never fire.
+    // Fail honestly instead; "unknown" fails open.
+    if (this.checkKeysymAvailability(shortcut) === "absent") {
+      debugLogger.log(
+        `[GnomeShortcut] Keysym for "${shortcut}" is not in the active keymap, GNOME cannot grab it (slot "${slotName}")`
+      );
+      return "keysym_missing";
     }
 
     const { path: keybindingPath, name: keybindingName } = getSlotConfig(slotName);
@@ -299,17 +313,17 @@ class GnomeShortcutManager {
         return false;
       }
 
-      execFileSync(
+      this.execFileSync(
         "gsettings",
         ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "name", keybindingName],
         { stdio: "pipe" }
       );
-      execFileSync(
+      this.execFileSync(
         "gsettings",
         ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],
         { stdio: "pipe" }
       );
-      execFileSync(
+      this.execFileSync(
         "gsettings",
         ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command", command],
         { stdio: "pipe" }
@@ -318,7 +332,7 @@ class GnomeShortcutManager {
       if (!alreadyRegistered) {
         const newBindings = [...existing, keybindingPath];
         const bindingsStr = "['" + newBindings.join("', '") + "']";
-        execFileSync(
+        this.execFileSync(
           "gsettings",
           [
             "set",
@@ -344,6 +358,7 @@ class GnomeShortcutManager {
     }
   }
 
+  /** @returns {Promise<true | "keysym_missing" | false>} true, or a failure reason */
   async updateKeybinding(shortcut, slotName = "dictation") {
     if (!this.registeredSlots.has(slotName)) {
       return this.registerKeybinding(shortcut, slotName);
@@ -354,6 +369,14 @@ class GnomeShortcutManager {
         `[GnomeShortcut] Invalid shortcut format for update: "${shortcut}" (slot "${slotName}")`
       );
       return false;
+    }
+
+    // Same keymap gate as registerKeybinding.
+    if (this.checkKeysymAvailability(shortcut) === "absent") {
+      debugLogger.log(
+        `[GnomeShortcut] Keysym for "${shortcut}" is not in the active keymap, GNOME cannot grab it (slot "${slotName}")`
+      );
+      return "keysym_missing";
     }
 
     const { path: keybindingPath } = getSlotConfig(slotName);
@@ -368,7 +391,7 @@ class GnomeShortcutManager {
         return false;
       }
 
-      execFileSync(
+      this.execFileSync(
         "gsettings",
         ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],
         { stdio: "pipe" }
@@ -392,14 +415,14 @@ class GnomeShortcutManager {
       const filtered = existing.filter((p) => p !== keybindingPath);
 
       if (filtered.length === 0) {
-        execFileSync(
+        this.execFileSync(
           "gsettings",
           ["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", "[]"],
           { stdio: "pipe" }
         );
       } else {
         const bindingsStr = "['" + filtered.join("', '") + "']";
-        execFileSync(
+        this.execFileSync(
           "gsettings",
           [
             "set",
@@ -411,13 +434,13 @@ class GnomeShortcutManager {
         );
       }
 
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "name"], {
+      this.execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "name"], {
         stdio: "pipe",
       });
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding"], {
+      this.execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding"], {
         stdio: "pipe",
       });
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command"], {
+      this.execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command"], {
         stdio: "pipe",
       });
 
@@ -451,7 +474,7 @@ class GnomeShortcutManager {
     for (const path of existingPaths) {
       if (path === ownPath) continue;
       try {
-        const binding = execFileSync(
+        const binding = this.execFileSync(
           "gsettings",
           ["get", `${KEYBINDING_SCHEMA}:${path}`, "binding"],
           { encoding: "utf-8" }
@@ -466,7 +489,7 @@ class GnomeShortcutManager {
 
   getExistingKeybindings() {
     try {
-      const output = execFileSync(
+      const output = this.execFileSync(
         "gsettings",
         ["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"],
         { encoding: "utf-8" }

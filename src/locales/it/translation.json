@@ -101,6 +101,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
+      "keysymNotInLayout": "Il layout di tastiera attivo non mappa \"{{hotkey}}\", quindi GNOME non può rilevarne la pressione. Scegli un altro tasto.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
       "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}."

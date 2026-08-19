@@ -101,6 +101,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
+      "keysymNotInLayout": "Die aktive Tastaturbelegung enthält keine Zuordnung für \"{{hotkey}}\", daher kann GNOME den Tastendruck nicht erkennen. Wähle eine andere Taste.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
       "trySuggestions": "Versuchen Sie: {{suggestions}}",
       "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet."

@@ -26,6 +26,10 @@ const KDE_FAILURE_REASONS = {
   "modifier-only": (hotkey) => i18nMain.t("hotkey.errors.osReserved", { hotkey }),
 };
 
+const GNOME_FAILURE_REASONS = {
+  keysym_missing: (hotkey) => i18nMain.t("hotkey.errors.keysymNotInLayout", { hotkey }),
+};
+
 // Right-side single modifiers are handled by native listeners, not globalShortcut
 const RIGHT_SIDE_MODIFIER_PATTERN =
   /^Right(Control|Ctrl|Alt|Option|Shift|Command|Cmd|Super|Meta|Win)$/i;
@@ -230,14 +234,17 @@ class HotkeyManager extends EventEmitter {
         this.gnomeManager.setTranslationCallback(callback);
       }
 
-      const success = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
-      if (!success) {
+      const result = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
+      if (result !== true) {
         debugLogger.log(
-          `[HotkeyManager] GNOME keybinding registration failed for slot "${slotName}" ("${hotkey}")`
+          `[HotkeyManager] GNOME keybinding registration failed for slot "${slotName}" ("${hotkey}")`,
+          { reason: result }
         );
         return {
           success: false,
-          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+          error:
+            GNOME_FAILURE_REASONS[result]?.(hotkey) ||
+            i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
         };
       }
 
@@ -747,15 +754,15 @@ class HotkeyManager extends EventEmitter {
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
             const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
 
-            const success = await this.gnomeManager.registerKeybinding(gnomeHotkey);
-            if (success) {
+            const result = await this.gnomeManager.registerKeybinding(gnomeHotkey);
+            if (result === true) {
               this.currentHotkey = hotkey;
               this.notifyActiveHotkey(hotkey);
               debugLogger.log(`[HotkeyManager] GNOME hotkey "${hotkey}" registered successfully`);
             } else {
               const ok = await this.tryNativeFallbacks(hotkey, "GNOME", async (fb) => {
                 const fbGnome = GnomeShortcutManager.convertToGnomeFormat(fb);
-                return this.gnomeManager.registerKeybinding(fbGnome);
+                return (await this.gnomeManager.registerKeybinding(fbGnome)) === true;
               });
               if (!ok) {
                 this.useGnome = false;
@@ -1166,11 +1173,13 @@ class HotkeyManager extends EventEmitter {
       if (this.useGnome && this.gnomeManager) {
         debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${primary}"`);
         const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(primary);
-        const success = await this.gnomeManager.updateKeybinding(gnomeHotkey);
-        if (!success) {
+        const result = await this.gnomeManager.updateKeybinding(gnomeHotkey);
+        if (result !== true) {
           return {
             success: false,
-            message: i18nMain.t("hotkey.errors.updateFailedCheckFormat", { hotkey: primary }),
+            message:
+              GNOME_FAILURE_REASONS[result]?.(primary) ||
+              i18nMain.t("hotkey.errors.updateFailedCheckFormat", { hotkey: primary }),
           };
         }
         this.currentHotkey = primary;

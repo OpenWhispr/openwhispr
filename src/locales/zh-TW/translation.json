@@ -101,6 +101,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
+      "keysymNotInLayout": "目前的鍵盤配置未對應「{{hotkey}}」，GNOME 無法偵測到該按鍵。請選擇其他按鍵。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
       "trySuggestions": "試試看：{{suggestions}}",
       "slotConflict": "此快捷鍵已用於{{slot}}。"
