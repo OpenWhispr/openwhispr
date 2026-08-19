@@ -323,6 +323,7 @@ export default function App() {
   const [assistantFooterPhase, setAssistantFooterPhase] = useState("pill");
   const [pendingCommand, setPendingCommand] = useState(null);
   const [panelConversationId, setPanelConversationId] = useState(null);
+  const [assistantConversationResetToken, setAssistantConversationResetToken] = useState(0);
   const [liveTranscriptPanelOpen, setLiveTranscriptPanelOpen] = useState(false);
   const [liveTranscriptPanelMounted, setLiveTranscriptPanelMounted] = useState(false);
   const [liveTranscriptText, setLiveTranscriptText] = useState("");
@@ -706,6 +707,12 @@ export default function App() {
     setAssistantThinking(false);
     setAssistantBusy(false);
     setPendingCommand(null);
+    // Closing ends the panel session without deleting its saved history. The
+    // next open starts a new conversation, while this token also resets the
+    // still-mounted child during the closing animation.
+    assistantSelectionContextRef.current = null;
+    setPanelConversationId(null);
+    setAssistantConversationResetToken((current) => current + 1);
     clearTimeout(assistantCloseTimerRef.current);
     assistantCloseTimerRef.current = setTimeout(() => {
       assistantPanelClosingRef.current = false;
@@ -1470,6 +1477,7 @@ export default function App() {
             pendingCommand={pendingCommand}
             onCommandConsumed={handleCommandConsumed}
             initialConversationId={panelConversationId}
+            conversationResetToken={assistantConversationResetToken}
             onConversationIdChange={setPanelConversationId}
             voiceState={assistantVoiceState}
             thinking={assistantThinking && assistantPanelOpen}
