@@ -55,7 +55,8 @@ function probeWebSocket(url, token, { awaitServerEvent = false } = {}) {
       }
     });
     ws.on("close", (code) => {
-      if (awaitServerEvent) finish({ ok: false, detail: `closed before a server event (code ${code})` });
+      if (awaitServerEvent)
+        finish({ ok: false, detail: `closed before a server event (code ${code})` });
     });
     ws.on("unexpected-response", (_req, res) => {
       finish({ ok: false, detail: `handshake rejected: HTTP ${res.statusCode}` });
@@ -119,8 +120,8 @@ const PROBES = [
     id: "tinfoil-realtime",
     keyEnv: "STT_CANARY_TINFOIL_KEY",
     // The attested socket needs the Tinfoil SDK's enclave verification; the
-    // canary stops at credential resolution through the registry, so this row
-    // only proves the secret exists — say so in the report.
+    // canary stops at credential resolution, so this row only proves the
+    // secret exists.
     run: async (key) => {
       const token = await fetchRealtimeTokenForProvider("tinfoil-realtime", tokenDeps(key), {
         mode: "byok",

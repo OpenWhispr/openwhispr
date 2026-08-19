@@ -24,8 +24,8 @@ const PROVIDERS = [
     id: "openai",
     keyEnv: "LLM_CANARY_OPENAI_KEY",
     base: "https://api.openai.com/v1",
-    // Registry models only: a non-registry id skips the suppression gate and
-    // sends params OpenAI's strict parser 400s on — a red no app user ever hits.
+    // Registry models only — a non-registry id skips the suppression gate and
+    // draws a 400 from OpenAI's strict parser that no app user ever hits.
     models: ["gpt-4.1-mini", "gpt-5-mini"],
   },
   {
