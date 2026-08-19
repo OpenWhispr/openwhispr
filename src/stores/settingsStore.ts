@@ -558,6 +558,30 @@ function migrateLLMScopeKeys() {
 
 migrateLLMScopeKeys();
 
+// Groq retired these models on 2026-08-16, so a scope still pointing at one
+// 404s on every request. Remap to the closest replacement Groq still serves.
+// Runs after migrateLLMScopeKeys so scope values live under their final keys.
+const RETIRED_GROQ_MODELS: Record<string, string> = {
+  "qwen/qwen3-32b": "openai/gpt-oss-120b",
+  "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+  "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+};
+
+function migrateRetiredGroqModels() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("_retiredGroqModelsMigrated") === "1") return;
+
+  for (const { storeKeys } of Object.values(INFERENCE_SCOPES)) {
+    if (localStorage.getItem(storeKeys.provider) !== "groq") continue;
+    const replacement = RETIRED_GROQ_MODELS[localStorage.getItem(storeKeys.model) ?? ""];
+    if (replacement) localStorage.setItem(storeKeys.model, replacement);
+  }
+
+  localStorage.setItem("_retiredGroqModelsMigrated", "1");
+}
+
+migrateRetiredGroqModels();
+
 export interface SettingsState
   extends
     TranscriptionSettings,
