@@ -3067,7 +3067,8 @@
       }
     },
     "chat": {
-      "errorPrefix": "Ошибка"
+      "errorPrefix": "Ошибка",
+      "emptyResponse": "Модель не вернула ответ."
     },
     "input": {
       "listening": "Слушаю...",

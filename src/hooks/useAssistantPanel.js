@@ -146,6 +146,24 @@ export function useAssistantPanel({
     setPendingCommand((current) => (current?.id === id ? null : current));
   }, []);
 
+  const mountedRef = useRef(false);
+  useLayoutEffect(() => {
+    mountedRef.current = mounted;
+  }, [mounted]);
+
+  // The chat reports content, an error, or nothing at all; whichever it is,
+  // the thinking flourish must end and the panel must be visible so the
+  // outcome can be seen and the main-process busy gate releases.
+  const handleCommandSettled = useCallback(
+    (id) => {
+      if (id !== commandIdRef.current) return;
+      if (!mountedRef.current || closingRef.current) return;
+      setThinking(false);
+      void openPanel();
+    },
+    [openPanel]
+  );
+
   const handleSelectionContextChange = useCallback((context) => {
     selectionContextRef.current = context;
   }, []);
@@ -280,6 +298,7 @@ export function useAssistantPanel({
     handleCommand,
     handleResponseContent,
     handleCommandConsumed,
+    handleCommandSettled,
     handleSelectionContextChange,
     getSelectionContext,
     handleClose,

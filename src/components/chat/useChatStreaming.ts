@@ -474,6 +474,18 @@ export function useChatStreaming({
           }
         }
 
+        if (!responseAnnounced) {
+          // The stream ended without a visible token or tool call (think-only
+          // local model, empty completion). Show that as a reply so every
+          // listener — the assistant panel's thinking state included — sees a
+          // terminal outcome.
+          fullContent = t("agentMode.chat.emptyResponse");
+          announceResponse();
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+          );
+        }
+
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
         );

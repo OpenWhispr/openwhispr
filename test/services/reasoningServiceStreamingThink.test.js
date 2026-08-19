@@ -238,64 +238,117 @@ test("tool-loop filtering resets after an unterminated reasoning block", async (
   assert.equal(fetchCalls, 2);
 });
 
-for (const terminalType of ["abort", "error"]) {
-  test(`tool-enabled streaming does not flush buffered text after ${terminalType}`, async (t) => {
-    const { reasoningService } = await loadReasoningService(
-      t,
-      `openwhispr-${terminalType}-streaming-think-test-`
-    );
-    const originalFetch = globalThis.fetch;
-    t.after(() => {
-      globalThis.fetch = originalFetch;
-    });
-    let failResponse;
-    globalThis.fetch = async (_input, init) => {
-      const encoder = new TextEncoder();
-      const body = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify(createOpenAiChunk({ content: "Answer<thi" }))}\n\n`
-            )
-          );
-          failResponse = () => {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ error: { message: "stream failed" } })}\n\n`)
-            );
-            controller.close();
-          };
-          init?.signal?.addEventListener(
-            "abort",
-            () => controller.error(new DOMException("aborted", "AbortError")),
-            { once: true }
-          );
-        },
-      });
-      return new Response(body, {
-        status: 200,
-        headers: { "content-type": "text/event-stream" },
-      });
-    };
-
-    const stream = reasoningService.processTextStreamingAI(
-      [{ role: "user", content: "hello" }],
-      "qwen3-4b-q4_k_m",
-      "lan",
-      {
-        systemPrompt: "Answer the user.",
-        lanUrl: "http://127.0.0.1:11434/v1",
-        disableThinking: true,
-      },
-      {}
-    );
-
-    const first = await stream.next();
-    assert.deepEqual(first.value, { type: "content", text: "Answer" });
-    if (terminalType === "abort") reasoningService.cancelActiveStream();
-    else failResponse();
-    assert.equal(await collectAgentText(stream), "");
+test("tool-enabled streaming does not flush buffered text after abort", async (t) => {
+  const { reasoningService } = await loadReasoningService(
+    t,
+    "openwhispr-abort-streaming-think-test-"
+  );
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
   });
-}
+  globalThis.fetch = async (_input, init) => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify(createOpenAiChunk({ content: "Answer<thi" }))}\n\n`
+          )
+        );
+        init?.signal?.addEventListener(
+          "abort",
+          () => controller.error(new DOMException("aborted", "AbortError")),
+          { once: true }
+        );
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hello" }],
+    "qwen3-4b-q4_k_m",
+    "lan",
+    {
+      systemPrompt: "Answer the user.",
+      lanUrl: "http://127.0.0.1:11434/v1",
+      disableThinking: true,
+    },
+    {}
+  );
+
+  const first = await stream.next();
+  assert.deepEqual(first.value, { type: "content", text: "Answer" });
+  reasoningService.cancelActiveStream();
+  assert.equal(await collectAgentText(stream), "");
+});
+
+// Was "does not flush buffered text after error" and asserted the stream
+// silently ended with "". A provider-reported error part must now reject the
+// generator instead; buffered text must still never leak into that rejection.
+test("tool-enabled streaming rejects instead of flushing buffered text after a stream error", async (t) => {
+  const { reasoningService } = await loadReasoningService(
+    t,
+    "openwhispr-error-streaming-think-test-"
+  );
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let failResponse;
+  globalThis.fetch = async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify(createOpenAiChunk({ content: "Answer<thi" }))}\n\n`
+          )
+        );
+        failResponse = () => {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ error: { message: "stream failed" } })}\n\n`)
+          );
+          controller.close();
+        };
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hello" }],
+    "qwen3-4b-q4_k_m",
+    "lan",
+    {
+      systemPrompt: "Answer the user.",
+      lanUrl: "http://127.0.0.1:11434/v1",
+      disableThinking: true,
+    },
+    {}
+  );
+
+  const first = await stream.next();
+  assert.deepEqual(first.value, { type: "content", text: "Answer" });
+  failResponse();
+
+  let received = "";
+  await assert.rejects(
+    (async () => {
+      for await (const chunk of stream) {
+        if (chunk.type === "content") received += chunk.text;
+      }
+    })()
+  );
+  assert.equal(received, "");
+});
 
 test("self-hosted streaming preserves think tags when thinking is enabled", async (t) => {
   const { reasoningService } = await loadReasoningService(
@@ -519,4 +572,42 @@ test("cancelling during a cloud tool execution prevents results and later model 
 
   assert.equal((await pending).done, true);
   assert.equal(bridge.startCalls.length, 1);
+});
+
+test("a provider error part rejects the agent stream instead of ending it silently", async (t) => {
+  const { reasoningService, vite } = await loadReasoningService(
+    t,
+    "openwhispr-stream-error-part-test-"
+  );
+  const { ToolRegistry } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
+  const registry = new ToolRegistry();
+  registry.register({
+    name: "noop",
+    description: "No-op test tool",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    readOnly: true,
+    execute: async () => ({ success: true, data: "ok", displayText: "ok" }),
+  });
+
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  // streamText never throws on an HTTP failure; it emits an `error` part and
+  // closes the stream. The generator must surface that as a rejection.
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({ error: { message: "Incorrect API key provided", type: "invalid_request_error" } }),
+      { status: 401, headers: { "content-type": "application/json" } }
+    );
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hello" }],
+    "qwen3-4b-q4_k_m",
+    "lan",
+    { systemPrompt: "Answer the user.", lanUrl: "http://127.0.0.1:11434/v1", disableThinking: true },
+    registry.toAISDKFormat()
+  );
+
+  await assert.rejects(collectAgentText(stream), /Incorrect API key/);
 });

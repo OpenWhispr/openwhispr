@@ -49,6 +49,7 @@ interface AssistantPanelProps {
   /** Voice command waiting to be sent into the conversation (consumed on mount and on change). */
   pendingCommand: AssistantCommand | null;
   onCommandConsumed: (id: number) => void;
+  onCommandSettled: (id: number) => void;
   /** Conversation to resume when reopening the panel; null starts fresh on first message. */
   initialConversationId: number | null;
   onConversationIdChange: (id: number | null) => void;
@@ -75,6 +76,7 @@ const StableAssistantMarkdown = memo(MarkdownRenderer);
 export function AssistantPanel({
   pendingCommand,
   onCommandConsumed,
+  onCommandSettled,
   initialConversationId,
   onConversationIdChange,
   voiceState,
@@ -165,22 +167,40 @@ export function AssistantPanel({
       return;
     }
     consumedCommandIdRef.current = pendingCommand.id;
-    onCommandConsumed(pendingCommand.id);
+    const commandId = pendingCommand.id;
+    onCommandConsumed(commandId);
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
       onSelectionContextChange(null);
     }
-    sendMessage(pendingCommand.text, {
+    void sendMessage(pendingCommand.text, {
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
-    });
+    })
+      .catch((error: unknown) => {
+        // A failure before the stream starts (conversation create/save) must
+        // land in the conversation like a stream error does.
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `${t("agentMode.chat.errorPrefix")}: ${(error as Error).message}`,
+            isStreaming: false,
+          },
+        ]);
+      })
+      .finally(() => onCommandSettled(commandId));
   }, [
     historyReady,
     submissionInFlight,
     pendingCommand,
     onCommandConsumed,
+    onCommandSettled,
     onSelectionContextChange,
     sendMessage,
+    setMessages,
+    t,
   ]);
 
   const isToolExecuting = Boolean(streaming.activeToolName);

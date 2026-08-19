@@ -874,9 +874,19 @@ class ReasoningService extends BaseReasoningService {
             toolName: chunk.toolName,
             displayText,
           };
-        } else if (chunk.type === "abort" || chunk.type === "error") {
+        } else if (chunk.type === "abort") {
           canFlushFilteredText = false;
           finishFilteredText();
+        } else if (chunk.type === "error") {
+          // streamText reports provider failures as error parts and then ends
+          // the stream; swallowing them leaves callers with an empty reply and
+          // no terminal signal. Re-throw unless we aborted on purpose.
+          canFlushFilteredText = false;
+          finishFilteredText();
+          if (!abortController.signal.aborted) {
+            const cause = (chunk as { error?: unknown }).error;
+            throw cause instanceof Error ? cause : new Error(String(cause ?? "Stream failed"));
+          }
         } else if (chunk.type === "finish") {
           const trailing = finishFilteredText();
           if (trailing) yield { type: "content", text: trailing };

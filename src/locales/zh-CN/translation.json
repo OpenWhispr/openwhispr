@@ -3041,7 +3041,8 @@
       }
     },
     "chat": {
-      "errorPrefix": "错误"
+      "errorPrefix": "错误",
+      "emptyResponse": "模型没有返回任何回复。"
     },
     "input": {
       "listening": "正在聆听...",

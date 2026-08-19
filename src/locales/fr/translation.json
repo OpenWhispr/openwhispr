@@ -3205,7 +3205,8 @@
       }
     },
     "chat": {
-      "errorPrefix": "Erreur"
+      "errorPrefix": "Erreur",
+      "emptyResponse": "Le modèle n'a renvoyé aucune réponse."
     },
     "input": {
       "listening": "Écoute...",

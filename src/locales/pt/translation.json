@@ -3041,7 +3041,8 @@
       }
     },
     "chat": {
-      "errorPrefix": "Erro"
+      "errorPrefix": "Erro",
+      "emptyResponse": "O modelo não retornou nenhuma resposta."
     },
     "input": {
       "listening": "Ouvindo...",

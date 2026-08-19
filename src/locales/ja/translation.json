@@ -3041,7 +3041,8 @@
       }
     },
     "chat": {
-      "errorPrefix": "エラー"
+      "errorPrefix": "エラー",
+      "emptyResponse": "モデルから応答がありませんでした。"
     },
     "input": {
       "listening": "聞いています...",

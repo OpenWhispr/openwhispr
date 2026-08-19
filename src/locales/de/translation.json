@@ -3205,7 +3205,8 @@
       }
     },
     "chat": {
-      "errorPrefix": "Fehler"
+      "errorPrefix": "Fehler",
+      "emptyResponse": "Das Modell hat keine Antwort zurückgegeben."
     },
     "input": {
       "listening": "Hört zu...",

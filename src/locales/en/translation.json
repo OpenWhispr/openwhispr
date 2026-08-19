@@ -3205,7 +3205,8 @@
       }
     },
     "chat": {
-      "errorPrefix": "Error"
+      "errorPrefix": "Error",
+      "emptyResponse": "The model returned no response."
     },
     "input": {
       "listening": "Listening...",
