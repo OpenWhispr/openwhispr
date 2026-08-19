@@ -24,7 +24,7 @@ export default function CleanupFailureToastListener() {
     toast({
       title: t("app.toasts.cleanupFailed.title"),
       description: cause ? `${description} ${cause}` : description,
-      variant: "destructive",
+      duration: 10000,
     });
   }, [pending, toast, t]);
 

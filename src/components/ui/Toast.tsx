@@ -80,6 +80,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           ? [...prev.filter((item) => item.presentation !== "dictation-error"), newToast]
           : [...prev, newToast]
       );
+      // Mirror synchronously: dismissByPresentation can run from a child's
+      // effect in the same commit, before this provider's effect refreshes
+      // toastsRef from state.
+      toastsRef.current =
+        presentation === "dictation-error"
+          ? [...toastsRef.current.filter((item) => item.presentation !== "dictation-error"), newToast]
+          : [...toastsRef.current, newToast];
 
       if (duration > 0) {
         const timer = setTimeout(() => {

@@ -21,7 +21,7 @@ export function useMainProcessNotifications({ toast, dismiss, t }) {
       toast({
         title: t("app.toasts.hotkeyUnavailable.title"),
         description: t("app.toasts.hotkeyUnavailable.description"),
-        variant: "destructive",
+        duration: 10000,
       });
     });
 
@@ -29,7 +29,7 @@ export function useMainProcessNotifications({ toast, dismiss, t }) {
       toast({
         title: t("app.toasts.gpuFallback.title"),
         description: t("app.toasts.gpuFallback.description"),
-        variant: "destructive",
+        duration: 10000,
       });
     };
     const unsubscribeCudaFallback =

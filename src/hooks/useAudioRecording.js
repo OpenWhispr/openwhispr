@@ -266,7 +266,7 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current?.streamingPartialText
       ).trim() || fallback.trim();
 
-    const showDictationError = ({ title, description, transcript = "" }) => {
+    const showDictationError = ({ title, description, transcript = "", duration }) => {
       const recoverAssistant = Boolean(audioManagerRef.current?.voiceAgentRequested);
       onDictationError?.({ recoverAssistant });
       const recoverableTranscript = getRecoverableTranscript(transcript);
@@ -294,6 +294,7 @@ export const useAudioRecording = (toast, options = {}) => {
         description,
         variant: "destructive",
         presentation: "dictation-error",
+        duration,
         actions,
       });
     };
@@ -326,7 +327,7 @@ export const useAudioRecording = (toast, options = {}) => {
             toast({
               title: t("hooks.audioRecording.micDisconnected.title"),
               description: t("hooks.audioRecording.micDisconnected.description"),
-              variant: "destructive",
+              variant: "default",
             });
           } else if (micCaptureStatus === "active" && wasMicUnavailableRef.current) {
             wasMicUnavailableRef.current = false;
@@ -352,10 +353,17 @@ export const useAudioRecording = (toast, options = {}) => {
         }
         const title = getRecordingErrorTitle(error, t);
         const description = getRecordingErrorDescription(error, t);
-        showDictationError({
-          title,
-          description,
-        });
+        if (error?.variant === "default") {
+          // Informational outcomes (SCREEN_CONTEXT_SKIPPED after a successful
+          // text-only retry) are notices, not failures: no card, no Retry.
+          toast({ title, description, variant: "default" });
+        } else {
+          showDictationError({
+            title,
+            description,
+            duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
+          });
+        }
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }

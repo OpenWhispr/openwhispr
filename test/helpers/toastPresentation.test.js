@@ -3,24 +3,22 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/helpers/toastPresentation.js");
 
-test("destructive dictation notifications use the shared error surface", async () => {
+test("destructive notifications stay standard toasts unless they opt into the error surface", async () => {
   const { resolveToastPresentation } = await load();
   assert.equal(
-    resolveToastPresentation({ variant: "destructive", isDictationPanel: true }),
+    resolveToastPresentation({ presentation: undefined, variant: "destructive", isDictationPanel: true }),
+    "standard"
+  );
+  assert.equal(
+    resolveToastPresentation({ presentation: "dictation-error", variant: "destructive", isDictationPanel: true }),
     "dictation-error"
   );
 });
 
 test("non-error and control-panel notifications retain the standard toast", async () => {
   const { resolveToastPresentation } = await load();
-  assert.equal(
-    resolveToastPresentation({ variant: "default", isDictationPanel: true }),
-    "standard"
-  );
-  assert.equal(
-    resolveToastPresentation({ variant: "destructive", isDictationPanel: false }),
-    "standard"
-  );
+  assert.equal(resolveToastPresentation({ variant: "default", isDictationPanel: true }), "standard");
+  assert.equal(resolveToastPresentation({ variant: "destructive", isDictationPanel: false }), "standard");
 });
 
 test("an explicit presentation remains authoritative", async () => {
