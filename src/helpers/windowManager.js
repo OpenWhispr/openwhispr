@@ -151,6 +151,9 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       if (this._assistantPanelOpen) {
+        // The window may have been hidden while the command was in flight
+        // (PTT tap, auto-hide, tray); focus() is a no-op on a hidden window.
+        if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
         this.mainWindow.setFocusable(true);
         this.mainWindow.focus();
       } else {
@@ -1223,25 +1226,29 @@ class WindowManager {
 
   showDictationPanel(options = {}) {
     const { focus = false, reposition = false, targetPidPromise } = options;
-    if (this._assistantPanelOpen) return;
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      if (reposition) {
-        void this._repositionToActiveDisplay(targetPidPromise);
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    if (this._assistantPanelOpen) {
+      // The open panel owns geometry (no reposition), but it must never be
+      // left invisible: surface the window if something hid it.
+      if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+      if (focus) this.mainWindow.focus();
+      return;
+    }
+    if (reposition) {
+      void this._repositionToActiveDisplay(targetPidPromise);
+    }
+    if (this.mainWindow.isMinimized()) {
+      this.mainWindow.restore();
+    }
+    if (!this.mainWindow.isVisible()) {
+      if (typeof this.mainWindow.showInactive === "function") {
+        this.mainWindow.showInactive();
+      } else {
+        this.mainWindow.show();
       }
-
-      if (this.mainWindow.isMinimized()) {
-        this.mainWindow.restore();
-      }
-      if (!this.mainWindow.isVisible()) {
-        if (typeof this.mainWindow.showInactive === "function") {
-          this.mainWindow.showInactive();
-        } else {
-          this.mainWindow.show();
-        }
-      }
-      if (focus) {
-        this.mainWindow.focus();
-      }
+    }
+    if (focus) {
+      this.mainWindow.focus();
     }
   }
 
@@ -1255,11 +1262,12 @@ class WindowManager {
   }
 
   hideDictationPanel() {
-    if (this._assistantPanelOpen) return;
+    // An open panel, or a command still thinking toward one, must not lose
+    // its window (a PTT tap during thinking used to hide it — the panel then
+    // opened invisibly and nothing could show it again).
+    if (this._assistantPanelOpen || this._assistantPanelBusy) return;
     this._mainWindowPlacementCoordinator.cancelPending();
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.hide();
-    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.hide();
   }
 
   isDictationPanelVisible() {

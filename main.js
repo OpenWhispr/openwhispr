@@ -1333,15 +1333,21 @@ async function startApp() {
       if (hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey)) {
         const activationMode = windowManager.getActivationMode();
         if (activationMode === "push") {
-          globeKeyDownTime = 0;
-          globeLastStopTime = Date.now();
-          if (globeKeyIsRecording) {
-            globeKeyIsRecording = false;
-            debugLogger?.debug("[Globe] Stopping dictation (push release)");
-            windowManager.sendStopDictation();
+          if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
+            // The press was ignored (dictation was processing); releasing it
+            // must not cancel preparation or hide the thinking pill.
+            debugLogger?.debug("[Globe] Release without a registered press — ignored");
           } else {
-            windowManager.sendCancelDictationPreparation();
-            windowManager.hideDictationPanel();
+            globeKeyDownTime = 0;
+            globeLastStopTime = Date.now();
+            if (globeKeyIsRecording) {
+              globeKeyIsRecording = false;
+              debugLogger?.debug("[Globe] Stopping dictation (push release)");
+              windowManager.sendStopDictation();
+            } else {
+              windowManager.sendCancelDictationPreparation();
+              windowManager.hideDictationPanel();
+            }
           }
         }
       }
@@ -1426,15 +1432,21 @@ async function startApp() {
 
         const activationMode = windowManager.getActivationMode();
         if (activationMode === "push" && (!rightModActiveKey || rightModActiveKey === modifier)) {
-          rightModActiveKey = null;
-          rightModDownTime = 0;
-          rightModLastStopTime = Date.now();
-          if (rightModIsRecording) {
-            rightModIsRecording = false;
-            windowManager.sendStopDictation();
+          if (rightModDownTime === 0 && !rightModIsRecording) {
+            // The press was ignored (dictation was processing); releasing it
+            // must not cancel preparation or hide the thinking pill.
+            debugLogger?.debug("[RightMod] Release without a registered press — ignored");
           } else {
-            windowManager.sendCancelDictationPreparation();
-            windowManager.hideDictationPanel();
+            rightModActiveKey = null;
+            rightModDownTime = 0;
+            rightModLastStopTime = Date.now();
+            if (rightModIsRecording) {
+              rightModIsRecording = false;
+              windowManager.sendStopDictation();
+            } else {
+              windowManager.sendCancelDictationPreparation();
+              windowManager.hideDictationPanel();
+            }
           }
         }
       }
@@ -1515,15 +1527,21 @@ async function startApp() {
         activationMode === "push" &&
         (!mouseButtonActiveButton || mouseButtonActiveButton === button)
       ) {
-        mouseButtonActiveButton = null;
-        mouseButtonDownTime = 0;
-        mouseButtonLastStopTime = Date.now();
-        if (mouseButtonIsRecording) {
-          mouseButtonIsRecording = false;
-          windowManager.sendStopDictation();
+        if (mouseButtonDownTime === 0 && !mouseButtonIsRecording) {
+          // The press was ignored (dictation was processing); releasing it
+          // must not cancel preparation or hide the thinking pill.
+          debugLogger?.debug("[MouseButton] Release without a registered press — ignored");
         } else {
-          windowManager.sendCancelDictationPreparation();
-          windowManager.hideDictationPanel();
+          mouseButtonActiveButton = null;
+          mouseButtonDownTime = 0;
+          mouseButtonLastStopTime = Date.now();
+          if (mouseButtonIsRecording) {
+            mouseButtonIsRecording = false;
+            windowManager.sendStopDictation();
+          } else {
+            windowManager.sendCancelDictationPreparation();
+            windowManager.hideDictationPanel();
+          }
         }
       }
     });
