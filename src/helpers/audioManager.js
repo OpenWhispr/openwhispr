@@ -3085,6 +3085,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       } catch (reasonError) {
         if (reasonError.selectionEditFatal) throw reasonError;
+        // Deliberate override of the brief's literal two-line enumeration: a
+        // cancelled voice-agent command must notify nothing on this path
+        // either, matching processTranscriptionCore's BYOK catch (which
+        // returns before reaching _notifyAgentReasoningFailed) — otherwise a
+        // cancel here still pops "Agent Unavailable", contradicting this
+        // task's whole point.
         if (!this._processingCancelled) {
           logger.error(
             "Cloud reasoning failed, using raw transcription",
@@ -3092,8 +3098,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "transcription"
           );
           if (route.kind === "cleanup") recordCleanupFailure(reasonError.message);
+          if (route.kind === "agent") this._notifyAgentReasoningFailed();
         }
-        if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
       timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
     }
@@ -4422,9 +4428,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // Enter processing synchronously, before any mic/provider await. This is
     // the authoritative guard that makes a second hotkey a no-op for the full
-    // finalization and reasoning interval.
+    // finalization and reasoning interval. Reset the cancel flag here too — a
+    // prior batch pipeline's cancel must not leak into this streaming
+    // pipeline's own failure bookkeeping (e.g. the no-speech cloud fallback
+    // below shares processWithOpenWhisprCloud's catch with the batch path).
     this.isRecording = false;
     this.isProcessing = true;
+    this._processingCancelled = false;
     this.recordingStartTime = null;
     this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
 
