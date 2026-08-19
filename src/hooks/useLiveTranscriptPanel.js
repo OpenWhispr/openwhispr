@@ -10,6 +10,7 @@ import {
 const LIVE_TRANSCRIPT_RENDER_INTERVAL_MS = 50;
 const LIVE_TRANSCRIPT_SHELL_GROW_MS = 180;
 const LIVE_TRANSCRIPT_CLOSE_UNMOUNT_MS = 320;
+const LIVE_TRANSCRIPT_FINAL_HIDE_MS = 4000;
 
 /**
  * Owns the live transcript panel: its open/close/entrance choreography, the
@@ -38,6 +39,9 @@ export function useLiveTranscriptPanel({
   const suppressedRef = useRef(false);
   const reopenEligibleRef = useRef(false);
   const closeTimerRef = useRef(null);
+  const finalHideTimerRef = useRef(null);
+  const finalHoldRef = useRef(false);
+  const phaseRef = useRef("listening");
   const openFrameRef = useRef(null);
   const openPromiseRef = useRef(null);
   const openGenerationRef = useRef(0);
@@ -62,6 +66,10 @@ export function useLiveTranscriptPanel({
   useLayoutEffect(() => {
     openRef.current = open;
   }, [open]);
+
+  useLayoutEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   const requestHeight = useCallback(
     (height, revision = null) => {
@@ -153,8 +161,14 @@ export function useLiveTranscriptPanel({
     entranceTimersRef.current = [];
   }, []);
 
+  const clearFinalHide = useCallback(() => {
+    clearTimeout(finalHideTimerRef.current);
+    finalHideTimerRef.current = null;
+  }, []);
+
   const close = useCallback(
     ({ suppress = false, clear = false } = {}) => {
+      clearFinalHide();
       if (suppress) {
         suppressedRef.current = true;
         setManuallyCollapsed(reopenEligibleRef.current);
@@ -180,10 +194,11 @@ export function useLiveTranscriptPanel({
         }
       }, LIVE_TRANSCRIPT_CLOSE_UNMOUNT_MS);
     },
-    [clearEntranceTimers, resetText]
+    [clearEntranceTimers, clearFinalHide, resetText]
   );
 
   const openPanel = useCallback(() => {
+    clearFinalHide();
     if (suppressedRef.current || assistantOpenRef.current || openRef.current) {
       return;
     }
@@ -262,6 +277,7 @@ export function useLiveTranscriptPanel({
   }, [
     assistantOpenRef,
     clearEntranceTimers,
+    clearFinalHide,
     onWillOpen,
     prepareBufferedText,
     requestHeight,
@@ -273,9 +289,48 @@ export function useLiveTranscriptPanel({
     openPanel();
   }, [openPanel]);
 
+  const scheduleFinalHide = useCallback(() => {
+    clearFinalHide();
+    finalHideTimerRef.current = setTimeout(() => {
+      finalHideTimerRef.current = null;
+      if (finalHoldRef.current) return;
+      close({ clear: true });
+    }, LIVE_TRANSCRIPT_FINAL_HIDE_MS);
+  }, [clearFinalHide, close]);
+
+  const holdFinal = useCallback(
+    (held) => {
+      finalHoldRef.current = held;
+      if (
+        !held &&
+        phaseRef.current === "final" &&
+        openRef.current &&
+        finalHideTimerRef.current === null
+      ) {
+        scheduleFinalHide();
+      }
+    },
+    [scheduleFinalHide]
+  );
+
+  const showFinalText = useCallback(
+    (value) => {
+      const finalText = typeof value === "string" ? value.trim() : "";
+      if (!finalText) return;
+      suppressedRef.current = false;
+      setManuallyCollapsed(false);
+      updateText(finalText, { immediate: true });
+      setPhase("final");
+      openPanel();
+      scheduleFinalHide();
+    },
+    [openPanel, scheduleFinalHide, updateText]
+  );
+
   // Errors replace the live transcript surface, so unmount it immediately
   // and suppress late preview events until the next recording begins.
   const dismissForError = useCallback(() => {
+    clearFinalHide();
     suppressedRef.current = true;
     openGenerationRef.current += 1;
     setManuallyCollapsed(false);
@@ -288,7 +343,7 @@ export function useLiveTranscriptPanel({
     resetText();
     setPhase("listening");
     setEntrancePhase("idle");
-  }, [clearEntranceTimers, resetText]);
+  }, [clearEntranceTimers, clearFinalHide, resetText]);
 
   useEffect(() => {
     const reveal = () => {
@@ -296,12 +351,14 @@ export function useLiveTranscriptPanel({
     };
 
     const disposeText = window.electronAPI?.onPreviewText?.((incoming) => {
+      clearFinalHide();
       const value = incoming?.trim?.() || "";
       updateText(value);
       setPhase(value ? "live" : "listening");
       reveal();
     });
     const disposeAppend = window.electronAPI?.onPreviewAppend?.((chunk) => {
+      clearFinalHide();
       const value = chunk?.trim?.();
       if (!value) return;
       const current = sourceTextRef.current;
@@ -323,6 +380,7 @@ export function useLiveTranscriptPanel({
       updateText(value, { immediate: true });
       setPhase("final");
       reveal();
+      scheduleFinalHide();
     });
     const disposeHide = window.electronAPI?.onPreviewHide?.(() => {
       close({ clear: true });
@@ -335,7 +393,7 @@ export function useLiveTranscriptPanel({
       disposeResult?.();
       disposeHide?.();
     };
-  }, [close, openPanel, updateText]);
+  }, [clearFinalHide, close, openPanel, scheduleFinalHide, updateText]);
 
   useLayoutEffect(() => {
     reopenEligibleRef.current = shouldOfferLiveTranscriptReopen({
@@ -370,11 +428,12 @@ export function useLiveTranscriptPanel({
   useEffect(
     () => () => {
       clearTimeout(closeTimerRef.current);
+      clearFinalHide();
       cancelAnimationFrame(openFrameRef.current);
       clearEntranceTimers();
       textSchedulerRef.current.cancel();
     },
-    [clearEntranceTimers]
+    [clearEntranceTimers, clearFinalHide]
   );
 
   return {
@@ -389,6 +448,8 @@ export function useLiveTranscriptPanel({
     requestHeight,
     close,
     reopen,
+    holdFinal,
+    showFinalText,
     dismissForError,
   };
 }

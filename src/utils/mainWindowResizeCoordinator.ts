@@ -154,7 +154,8 @@ export function createMainWindowResizeCoordinator({
       });
     }
     if (!active && !queued && request.signature === lastSignature) {
-      return Promise.resolve(lastResult);
+      // Nothing will move: report it so callers skip their post-grow wait.
+      return Promise.resolve({ ...lastResult, changed: false });
     }
 
     return new Promise((resolve, reject) => {

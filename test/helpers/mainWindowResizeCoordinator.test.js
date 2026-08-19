@@ -119,6 +119,29 @@ test("a duplicate settled footprint does not ask Electron to resize again", asyn
   assert.equal(calls, 1);
 });
 
+test("a deduplicated same-footprint request reports changed:false", async () => {
+  const { createMainWindowResizeCoordinator } = await load();
+  const coordinator = createMainWindowResizeCoordinator({
+    resizeMainWindow: async () => ({
+      success: true,
+      changed: true,
+      bounds: { x: 0, y: 0, width: 466, height: 300 },
+    }),
+    resizeAssistantWindowToContent: async () => ({
+      success: true,
+      changed: true,
+      bounds: { x: 0, y: 0, width: 466, height: 300 },
+    }),
+    waitForBounds: async () => {},
+  });
+
+  const first = await coordinator.resizeAssistantWindowToContent(300);
+  const second = await coordinator.resizeAssistantWindowToContent(300);
+
+  assert.equal(first.changed, true);
+  assert.equal(second.changed, false, "nothing moved, so callers must not wait for a grow");
+});
+
 test("the next resize waits for renderer geometry settlement", async () => {
   const { createMainWindowResizeCoordinator } = await load();
   const settle = deferred();

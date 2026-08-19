@@ -191,6 +191,7 @@ export default function App() {
     dismissDictationError,
     onDictationError: handleDictationError,
     getAssistantSelectionContext: assistant.getSelectionContext,
+    onShowTranscript: (text) => liveTranscriptApiRef.current?.showFinalText(text),
   });
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
@@ -729,6 +730,7 @@ export default function App() {
             controlsVisible={liveTranscript.mounted && liveTranscriptEntrance.controlsVisible}
             contentVisible={liveTranscript.mounted && liveTranscriptEntrance.contentVisible}
             onCollapse={() => liveTranscript.close({ suppress: true })}
+            onHoldChange={liveTranscript.holdFinal}
           />
         )}
       </VoiceModePanelCore>

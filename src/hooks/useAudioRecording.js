@@ -58,6 +58,7 @@ export const useAudioRecording = (toast, options = {}) => {
     dismissDictationError,
     onDictationError,
     getAssistantSelectionContext,
+    onShowTranscript,
   } = options;
 
   // Read through a ref so a re-render never tears down the AudioManager
@@ -65,6 +66,10 @@ export const useAudioRecording = (toast, options = {}) => {
   const onAssistantCommandRef = useRef(onAssistantCommand);
   useEffect(() => {
     onAssistantCommandRef.current = onAssistantCommand;
+  });
+  const onShowTranscriptRef = useRef(onShowTranscript);
+  useEffect(() => {
+    onShowTranscriptRef.current = onShowTranscript;
   });
   const getAssistantSelectionContextRef = useRef(getAssistantSelectionContext);
   useEffect(() => {
@@ -284,7 +289,7 @@ export const useAudioRecording = (toast, options = {}) => {
           label: t("hooks.audioRecording.errorActions.viewTranscript"),
           icon: "transcript",
           onClick: () => {
-            window.electronAPI?.completeDictationPreview?.({ text: recoverableTranscript });
+            onShowTranscriptRef.current?.(recoverableTranscript);
           },
         });
       }

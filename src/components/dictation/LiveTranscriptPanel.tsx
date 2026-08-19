@@ -15,6 +15,7 @@ interface LiveTranscriptPanelProps {
   controlsVisible: boolean;
   contentVisible: boolean;
   onCollapse: () => void;
+  onHoldChange?: (held: boolean) => void;
 }
 
 const COPIED_RESET_MS = 1600;
@@ -27,6 +28,7 @@ export function LiveTranscriptPanel({
   controlsVisible,
   contentVisible,
   onCollapse,
+  onHoldChange,
 }: LiveTranscriptPanelProps) {
   const { t } = useTranslation();
   const { scrollRef, handleScroll } = useStickToBottom<HTMLDivElement>(text, {
@@ -44,6 +46,8 @@ export function LiveTranscriptPanel({
       <main
         ref={scrollRef}
         onScroll={handleScroll}
+        onMouseEnter={() => onHoldChange?.(true)}
+        onMouseLeave={() => onHoldChange?.(false)}
         data-panel-scroll-region
         className={`agent-chat-scroll min-h-0 flex-auto overflow-y-auto overscroll-contain px-5 pb-3 pt-8 transition-[opacity,transform] duration-200 ease-out ${
           contentVisible
@@ -71,7 +75,11 @@ export function LiveTranscriptPanel({
         </div>
       </main>
 
-      <footer className="flex h-16 shrink-0 items-center justify-end px-4">
+      <footer
+        className="flex h-16 shrink-0 items-center justify-end px-4"
+        onMouseEnter={() => onHoldChange?.(true)}
+        onMouseLeave={() => onHoldChange?.(false)}
+      >
         <div
           className={`flex items-center gap-2 transition-[opacity,transform] duration-200 ease-out ${
             controlsVisible
