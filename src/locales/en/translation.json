@@ -42,6 +42,8 @@
       "hide": "Hide Dictation Panel"
     },
     "openControlPanel": "Open Control Panel",
+    "pasteLastTranscription": "Paste Last Transcription",
+    "pasteLastTranscriptionEmpty": "Paste Last Transcription (none yet)",
     "hideControlPanel": "Hide Control Panel",
     "quit": "Quit OpenWhispr",
     "tooltip": "OpenWhispr - Voice Dictation"
@@ -1861,6 +1863,13 @@
         "layoutLabel": "When triggered by hotkey, open in:",
         "layoutFullWidth": "Full width",
         "layoutSidePanel": "Side panel"
+      },
+      "pasteLastHotkey": {
+        "title": "Paste Last Transcription",
+        "description": "Press this shortcut to instantly paste your most recent transcription",
+        "resetToDefault": "Reset to {{hotkey}}",
+        "emptyNotificationTitle": "Nothing to paste",
+        "emptyNotificationBody": "Record a transcription first, then press the paste-last hotkey to repeat it."
       },
       "voiceAgentHotkey": {
         "title": "Voice Agent Hotkey",

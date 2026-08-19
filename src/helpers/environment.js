@@ -5,6 +5,10 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
+const {
+  normalizeForStorage: normalizePasteLastForStorage,
+  normalizeForRenderer: normalizePasteLastForRenderer,
+} = require("./pasteLastKey");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
@@ -37,6 +41,7 @@ const PERSISTED_KEYS = [
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
   "CHAT_AGENT_KEY",
+  "PASTE_LAST_KEY",
   "VOICE_AGENT_KEY",
   "TRANSLATION_KEY",
   "MEETING_KEY",
@@ -411,6 +416,23 @@ class EnvironmentManager {
   saveAgentKey(key) {
     delete process.env.AGENT_KEY;
     const result = this._saveKey("CHAT_AGENT_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  // Raw stored value, including the "none" sentinel — for main-process startup
+  // where the caller needs to distinguish explicit-disable from never-set.
+  getPasteLastKey() {
+    return this._getKey("PASTE_LAST_KEY");
+  }
+
+  // Renderer-facing view: the sentinel becomes "" so the UI never sees it.
+  getPasteLastKeyForRenderer() {
+    return normalizePasteLastForRenderer(this._getKey("PASTE_LAST_KEY"));
+  }
+
+  savePasteLastKey(key) {
+    const result = this._saveKey("PASTE_LAST_KEY", normalizePasteLastForStorage(key));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

@@ -42,6 +42,8 @@
       "hide": "Masquer le panneau de dictée"
     },
     "openControlPanel": "Ouvrir le panneau de contrôle",
+    "pasteLastTranscription": "Coller la dernière transcription",
+    "pasteLastTranscriptionEmpty": "Coller la dernière transcription (aucune pour l'instant)",
     "hideControlPanel": "Masquer le panneau de contrôle",
     "quit": "Quitter OpenWhispr",
     "tooltip": "OpenWhispr - Dictée vocale"
@@ -1861,6 +1863,13 @@
         "layoutLabel": "Lors du déclenchement par raccourci, ouvrir en :",
         "layoutFullWidth": "Pleine largeur",
         "layoutSidePanel": "Panneau latéral"
+      },
+      "pasteLastHotkey": {
+        "title": "Coller la dernière transcription",
+        "description": "Appuyez sur ce raccourci pour coller instantanément votre dernière transcription",
+        "resetToDefault": "Réinitialiser à {{hotkey}}",
+        "emptyNotificationTitle": "Rien à coller",
+        "emptyNotificationBody": "Enregistrez d'abord une transcription, puis appuyez sur le raccourci pour la répéter."
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'agent vocal",

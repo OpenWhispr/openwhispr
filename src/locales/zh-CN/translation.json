@@ -42,6 +42,8 @@
       "hide": "隐藏听写面板"
     },
     "openControlPanel": "打开控制面板",
+    "pasteLastTranscription": "粘贴上次转录",
+    "pasteLastTranscriptionEmpty": "粘贴上次转录(暂无)",
     "hideControlPanel": "隐藏控制面板",
     "quit": "退出 OpenWhispr",
     "tooltip": "OpenWhispr - 语音听写"
@@ -1578,6 +1580,13 @@
         "layoutLabel": "通过快捷键触发时,打开方式:",
         "layoutFullWidth": "全宽",
         "layoutSidePanel": "侧边栏"
+      },
+      "pasteLastHotkey": {
+        "title": "粘贴上次转录",
+        "description": "按此快捷键立即粘贴您最近的转录内容",
+        "resetToDefault": "重置为 {{hotkey}}",
+        "emptyNotificationTitle": "无内容可粘贴",
+        "emptyNotificationBody": "请先录制一段转录,然后按粘贴上次转录的快捷键以重复它。"
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
