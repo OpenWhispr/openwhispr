@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
+const fs = require("node:fs");
 
 const fakeClipboard = {
   text: "",
@@ -63,7 +64,7 @@ const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
 const originalLoad = Module._load;
 
-function loadClipboardManager({ spawn, spawnSync } = {}) {
+function loadClipboardManager({ spawn, spawnSync, fsOverrides } = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -77,6 +78,9 @@ function loadClipboardManager({ spawn, spawnSync } = {}) {
     }
     if (request === "child_process" && (spawn || spawnSync)) {
       return { ...childProcess, ...(spawn && { spawn }), ...(spawnSync && { spawnSync }) };
+    }
+    if (request === "fs" && fsOverrides) {
+      return { ...fs, ...fsOverrides };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -489,8 +493,43 @@ test("KDE portal paste does not probe xdotool on XWayland", async () => {
     await manager.pasteLinux(null);
   });
 
-  assert.deepEqual(spawnCalls, [{ command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] }]);
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
   assert.deepEqual(spawnSyncCalls, []);
+});
+
+test("KDE detects Cursor as Electron and uses Shift+Insert for portal paste", async () => {
+  const spawnCalls = [];
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    spawnSync(command, args) {
+      spawnSyncCalls.push({ command, args });
+      if (args[0] === "getactivewindow") return { status: 0, stdout: Buffer.from("cursor-id\n") };
+      if (args[0] === "getwindowclassname") return { status: 0, stdout: Buffer.from("cursor\n") };
+      if (args[0] === "getwindowpid") return { status: 0, stdout: Buffer.from("4242\n") };
+      return { status: 1, stdout: Buffer.from("") };
+    },
+    fsOverrides: {
+      readlinkSync: () => "/opt/Cursor/cursor",
+      existsSync: (filePath) => filePath === "/opt/Cursor/resources/app",
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "kdotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+  assert.deepEqual(spawnSyncCalls, [
+    { command: "kdotool", args: ["getactivewindow"] },
+    { command: "kdotool", args: ["getwindowclassname", "cursor-id"] },
+    { command: "kdotool", args: ["getwindowpid", "cursor-id"] },
+  ]);
 });
 
 test("portal exit zero succeeds with or without a restore token", async () => {
@@ -624,7 +663,10 @@ test("XWayland fallback remains reachable after native Wayland failure", async (
 
   assert.deepEqual(
     spawnCalls.map((call) => call.args),
-    [["--uinput", "--shift-insert"], ["--window", "42", "--shift-insert"]]
+    [
+      ["--uinput", "--shift-insert"],
+      ["--window", "42", "--shift-insert"],
+    ]
   );
   assert.deepEqual(spawnSyncCalls, [{ command: "xdotool", args: ["getactivewindow"] }]);
 });
