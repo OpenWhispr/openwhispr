@@ -1228,6 +1228,7 @@ export default function App() {
     assistantPanelMounted,
   });
   const assistantFooter = resolveAssistantFooterPresentation(assistantFooterPhase);
+  const pillIsInteractive = !liveTranscriptPanelMounted;
   // Prefer a currently open mode over a sibling finishing its exit. The core
   // itself never unmounts; only these inner sections change ownership.
   const activeVoicePanel = resolveVoicePanelCorePresentation({
@@ -1251,7 +1252,7 @@ export default function App() {
       ? "unavailable"
       : listeningEntrance.activeState ||
         voiceActivity.activeState ||
-        (assistantPanelOpen ? "idle" : micState);
+        (assistantPanelOpen ? (isHovered ? "hover" : "idle") : micState);
   const voicePillDock = resolveVoicePillDock({
     liveTranscriptOpen: liveTranscriptPanelOpen,
     liveTranscriptEntrancePhase,
@@ -1289,14 +1290,14 @@ export default function App() {
               "--assistant-pill-entrance-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillEntranceMs}ms`,
             }}
             onMouseEnter={() => {
-              if (anyPanelMounted) return;
+              if (!pillIsInteractive) return;
               setIsHovered(true);
               setWindowInteractivity(true);
             }}
             onMouseLeave={() => {
-              if (anyPanelMounted) return;
+              if (!pillIsInteractive) return;
               setIsHovered(false);
-              if (!isCommandMenuOpen) {
+              if (!isCommandMenuOpen && !assistantPanelMounted) {
                 setWindowInteractivity(false);
               }
             }}
@@ -1316,7 +1317,7 @@ export default function App() {
                 }
                 beamActive={listeningEntrance.beamActive ?? undefined}
                 waveformVisible={listeningEntrance.waveformVisible}
-                waveformOnlyWhileRecording={liveTranscriptPanelMounted}
+                waveformOnlyWhileRecording={anyPanelMounted}
                 integratedWithPanel={liveTranscriptPanelOpen}
                 agentMode={agentModeActive}
                 beamTheme={beamTheme}
@@ -1324,7 +1325,7 @@ export default function App() {
                 getAudioLevel={getAudioLevel}
                 isDragging={isDragging}
                 horizontalDirection={voiceHorizontalDirection}
-                role={anyPanelMounted ? "status" : "button"}
+                role={pillIsInteractive ? "button" : "status"}
                 aria-label={
                   canReopenLiveTranscript
                     ? t("transcriptionPreview.label")
@@ -1360,12 +1361,16 @@ export default function App() {
                   setDragStartPos(null);
                 }}
                 onClick={(e) => {
-                  if (anyPanelMounted) return;
+                  if (!pillIsInteractive) return;
                   if (canReopenLiveTranscript) {
                     reopenLiveTranscriptPanel();
-                  } else if (!hasDragged && micState !== "processing") {
+                  } else if (
+                    !hasDragged &&
+                    micState !== "processing" &&
+                    !voiceActivity.isAgentThinking
+                  ) {
                     setIsCommandMenuOpen(false);
-                    toggleListening();
+                    toggleListening({ voiceAgentRequested: assistantPanelMounted });
                   }
                   e.preventDefault();
                 }}

@@ -661,9 +661,12 @@ export const useAudioRecording = (toast, options = {}) => {
     []
   );
 
-  const toggleListening = async () => {
+  const toggleListening = async ({
+    voiceAgentRequested = false,
+    translationRequested = false,
+  } = {}) => {
     if (!isRecording && !isProcessing) {
-      await performStartRecording();
+      await performStartRecording({ voiceAgentRequested, translationRequested });
     } else if (isRecording) {
       await performStopRecording();
     }

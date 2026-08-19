@@ -57,6 +57,23 @@ test("panel thinking contracts to the identity circle instead of freezing a wave
   assert.doesNotMatch(panelThinking, /style="width:92px;height:36px/);
 });
 
+test("an idle Agent panel starts with the normal pill and expands only while listening", async () => {
+  const idleAgent = await renderPill("idle", false, "right", {
+    variant: "panel",
+    agentMode: true,
+    waveformOnlyWhileRecording: true,
+  });
+  const listeningAgent = await renderPill("recording", false, "right", {
+    variant: "panel",
+    agentMode: true,
+    waveformOnlyWhileRecording: true,
+  });
+
+  assert.match(idleAgent, /style="width:40px;height:40px/);
+  assert.doesNotMatch(idleAgent, /style="width:92px;height:36px/);
+  assert.match(listeningAgent, /style="width:92px;height:36px/);
+});
+
 test("the waveform stays to the right of the identity across docks and voice modes", async () => {
   const right = await renderPill("recording", true, "right");
   const left = await renderPill("recording", true, "left");
@@ -149,6 +166,14 @@ test("dictation error visibility cannot deadlock on native content sizing", () =
     toastSource,
     /resizeDictationErrorWindowToContent[\s\S]*finally[\s\S]*setErrorSurfaceReady\(true\)/
   );
+});
+
+test("the Agent panel pill explicitly starts assistant listening on click", () => {
+  const sourceRoot = path.resolve(__dirname, "../..");
+  const appSource = fs.readFileSync(path.join(sourceRoot, "src/App.jsx"), "utf8");
+
+  assert.match(appSource, /waveformOnlyWhileRecording=\{anyPanelMounted\}/);
+  assert.match(appSource, /toggleListening\(\{ voiceAgentRequested: assistantPanelMounted \}\)/);
 });
 
 test("the waveform pill keeps the normal compact logo footprint", async () => {
