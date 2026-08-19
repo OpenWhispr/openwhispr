@@ -36,16 +36,6 @@ function estimateModelSizeB(modelId: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-// A send captures the generation counter when it starts; cancelStream() bumps
-// it. If the two no longer match, this send was cancelled out from under
-// itself and must not be treated as a genuine (if empty) completion.
-export function isSendGenerationStale(
-  startedGeneration: number,
-  currentGeneration: number
-): boolean {
-  return startedGeneration !== currentGeneration;
-}
-
 async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
   try {
@@ -193,15 +183,6 @@ export function useChatStreaming({
     messagesRef.current = messages;
   }, [messages]);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      clearToolActivityTimer();
-      ReasoningService.cancelActiveStream();
-    };
-  }, [clearToolActivityTimer]);
-
   const sendGenerationRef = useRef(0);
   const cancelStream = useCallback(() => {
     sendGenerationRef.current += 1;
@@ -210,10 +191,24 @@ export function useChatStreaming({
     clearToolActivity();
   }, [clearToolActivity]);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Route through cancelStream so every cancellation path — Esc/Stop and
+      // an unmount mid-stream alike — bumps the same generation counter.
+      // Calling ReasoningService.cancelActiveStream() directly here (as this
+      // used to) left sendToAI's cancelled() check unaware of an unmount
+      // cancel, so its empty-response fallback still fired and persisted a
+      // fabricated reply for a send the user never saw complete.
+      cancelStream();
+    };
+  }, [cancelStream]);
+
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
       const sendGeneration = ++sendGenerationRef.current;
-      const cancelled = () => isSendGenerationStale(sendGeneration, sendGenerationRef.current);
+      const cancelled = () => sendGeneration !== sendGenerationRef.current;
       clearToolActivity();
       let responseAnnounced = false;
       const announceResponse = () => {
