@@ -73,7 +73,11 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   if (request === "electron") {
     return {
       app: { on: () => undefined },
-      screen: { getPrimaryDisplay: () => ({}) },
+      screen: {
+        getPrimaryDisplay: () => ({}),
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
       BrowserWindow: FakeBrowserWindow,
       shell: {},
       dialog: {},
