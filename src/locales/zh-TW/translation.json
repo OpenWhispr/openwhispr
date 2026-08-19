@@ -775,7 +775,7 @@
       "failedUserCheck": "無法檢查使用者帳號",
       "generic": "發生錯誤，請再試一次。",
       "invalidCredentials": "電子郵件或密碼不正確",
-      "plusAliasUnsupported": "不支援含「+」的電子郵件別名"
+      "invalidEmail": "請輸入有效的電子郵件地址"
     },
     "getStarted": "開始使用",
     "legal": {

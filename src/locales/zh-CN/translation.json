@@ -775,7 +775,7 @@
       "failedUserCheck": "检查用户账户失败",
       "generic": "出了点问题，请重试。",
       "invalidCredentials": "邮箱或密码无效",
-      "plusAliasUnsupported": "不支持包含“+”的邮箱别名"
+      "invalidEmail": "请输入有效的电子邮件地址"
     },
     "getStarted": "开始使用",
     "legal": {

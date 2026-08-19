@@ -775,7 +775,7 @@
       "failedUserCheck": "Failed to check user account",
       "generic": "Something went wrong. Please try again.",
       "invalidCredentials": "Invalid email or password",
-      "plusAliasUnsupported": "Email aliases with '+' are not supported"
+      "invalidEmail": "Enter a valid email address"
     },
     "getStarted": "Get Started",
     "legal": {
