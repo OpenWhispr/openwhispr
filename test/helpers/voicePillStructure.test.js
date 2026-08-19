@@ -41,8 +41,14 @@ const renderPill = async (state, expanded, horizontalDirection = "right", overri
     ...overrides,
   });
   // BorderBeam may emit <style> blocks anywhere in its output; strip them all
-  // so assertions target only the rendered DOM structure.
-  return markup.replace(/<style[^>]*>[\s\S]*?<\/style>/g, "");
+  // so assertions target only the rendered DOM structure. Re-run until stable:
+  // a removal can splice the surrounding text into a new <style ...> match.
+  let stripped = markup;
+  for (let previous = ""; previous !== stripped; ) {
+    previous = stripped;
+    stripped = stripped.replace(/<style[^>]*>[\s\S]*?<\/style>/g, "");
+  }
+  return stripped;
 };
 
 test("thinking and recording keep the same persistent Beam and pill roots", async () => {
