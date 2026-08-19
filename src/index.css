@@ -374,28 +374,19 @@ body.dark:has(.onboarding-canvas) {
   --color-primary-foreground: var(--onboarding-accent-foreground);
   --color-ring: var(--onboarding-accent);
   background-color: var(--onboarding-surface);
-  /* The two corner washes are colour-mixed against transparent, so they read as a
-     tint over whatever --onboarding-surface is. Dark overrides the mix below:
-     light's 18–20% of a 300-level hue over near-black reads as a grey haze rather
-     than a tint, so dark runs much lower. */
-  background-image:
-    radial-gradient(
-      circle at 12% 35%,
-      color-mix(in oklch, var(--color-violet-300) var(--onboarding-wash-violet, 18%), transparent),
-      transparent 42%
-    ),
-    radial-gradient(
-      circle at 88% 28%,
-      color-mix(in oklch, var(--color-blue-300) var(--onboarding-wash-blue, 20%), transparent),
-      transparent 40%
-    );
+  /* Supplied full-width artwork replaces the generated corner washes. Keeping
+     its natural aspect ratio preserves the authored violet-to-blue composition
+     while the surface token fills the transparent lower portion of the panel. */
+  background-image: var(--onboarding-background-light);
+  background-position: top center;
+  background-repeat: no-repeat;
+  background-size: 100% auto;
   color: var(--onboarding-text-primary);
 }
 
 .dark .onboarding-canvas,
 .dark.onboarding-canvas {
-  --onboarding-wash-violet: 5%;
-  --onboarding-wash-blue: 5%;
+  background-image: var(--onboarding-background-dark);
 }
 
 /* Nested list surface + rows, per Figma "Onboarding / Frame 37".

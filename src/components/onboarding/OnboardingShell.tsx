@@ -8,6 +8,8 @@ import { getPlatform } from "../../utils/platform";
 // under the packaged app's file:// origin. See .onboarding-compact-hero.
 import heroDither from "@/assets/onboarding-hero-dither.webp";
 import heroDitherDark from "@/assets/onboarding-hero-dither-dark.webp";
+import onboardingBackgroundLight from "@/assets/onboarding-bg-light.svg";
+import onboardingBackgroundDark from "@/assets/onboarding-bg-dark.svg";
 
 interface OnboardingShellProps {
   compact?: boolean;
@@ -178,6 +180,12 @@ export default function OnboardingShell({
   return (
     <main
       className={`onboarding-canvas relative flex h-screen flex-col overflow-hidden ${compact ? "compact" : ""}`}
+      style={
+        {
+          "--onboarding-background-light": `url(${onboardingBackgroundLight})`,
+          "--onboarding-background-dark": `url(${onboardingBackgroundDark})`,
+        } as CSSProperties
+      }
     >
       {/* 48px, not a sliver: this is the frameless window's only title bar, so
           it has to be a target someone can actually grab. Interactive overlays
