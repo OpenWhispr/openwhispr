@@ -125,5 +125,18 @@ test("Agent close releases native ownership immediately and has a parent fallbac
     /setTimeout\(\s*completeAssistantContentFade,\s*ASSISTANT_CONTENT_FADE_FALLBACK_MS\s*\)/s
   );
   assert.match(completeHandler, /setPanelConversationId\(null\)/);
-  assert.match(completeHandler, /setAssistantConversationResetToken/);
+  assert.match(completeHandler, /assistantConversationResetPendingRef\.current = true/);
+  assert.doesNotMatch(completeHandler, /setAssistantConversationResetToken/);
+});
+
+test("Agent close retains one pill node and defers chat teardown until the next open", () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, "../../src/App.jsx"), "utf8");
+
+  assert.match(appSource, /const assistantActionsSuppressPill/);
+  assert.match(appSource, /key=\{assistantConversationResetToken\}/);
+  assert.match(appSource, /prepareFreshAssistantConversation\(\);/);
+  assert.doesNotMatch(
+    appSource,
+    /\{\(!assistantPanelOpen \|\| assistantFooter\.pillVisible\) && \(/
+  );
 });

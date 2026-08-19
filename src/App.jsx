@@ -334,6 +334,7 @@ export default function App() {
   const assistantPanelOpenRef = useRef(assistantPanelOpen);
   const assistantPanelClosingRef = useRef(false);
   const assistantContentFadeCompletedRef = useRef(false);
+  const assistantConversationResetPendingRef = useRef(false);
   const assistantCloseTimerRef = useRef(null);
   const assistantOpenFrameRef = useRef(null);
   const assistantFooterTimersRef = useRef([]);
@@ -471,6 +472,12 @@ export default function App() {
     assistantFooterTimersRef.current = [];
   }, []);
 
+  const prepareFreshAssistantConversation = React.useCallback(() => {
+    if (!assistantConversationResetPendingRef.current) return;
+    assistantConversationResetPendingRef.current = false;
+    setAssistantConversationResetToken((current) => current + 1);
+  }, []);
+
   useLayoutEffect(() => {
     assistantPanelOpenRef.current = assistantPanelOpen;
   }, [assistantPanelOpen]);
@@ -509,6 +516,10 @@ export default function App() {
   const openAssistantPanel = React.useCallback(async () => {
     setAssistantThinking(false);
     if (assistantPanelOpenRef.current) return;
+    // A closed panel starts a new keyed AssistantPanel instance. Do this only
+    // when the next panel is about to open, never while the old surface is
+    // contracting, so chat teardown cannot disturb the close compositor.
+    prepareFreshAssistantConversation();
     const generation = ++assistantOpenGenerationRef.current;
     assistantPanelOpenRef.current = true;
     assistantPanelClosingRef.current = false;
@@ -530,7 +541,7 @@ export default function App() {
         setAssistantPanelOpen(true);
       });
     });
-  }, [requestMainWindowSize]);
+  }, [prepareFreshAssistantConversation, requestMainWindowSize]);
 
   useEffect(
     () => () => {
@@ -563,6 +574,7 @@ export default function App() {
 
   const handleAssistantCommand = React.useCallback(
     (command) => {
+      prepareFreshAssistantConversation();
       commandIdRef.current += 1;
       beginAssistantThinking();
       setPendingCommand({
@@ -572,7 +584,7 @@ export default function App() {
         selectedContext: command.selectedContext ?? null,
       });
     },
-    [beginAssistantThinking]
+    [beginAssistantThinking, prepareFreshAssistantConversation]
   );
 
   const handleAssistantResponseContent = React.useCallback(() => {
@@ -707,12 +719,12 @@ export default function App() {
     setAssistantThinking(false);
     setAssistantBusy(false);
     setPendingCommand(null);
-    // Closing ends the panel session without deleting its saved history. The
-    // next open starts a new conversation, while this token also resets the
-    // still-mounted child during the closing animation.
+    // Closing ends the panel session without deleting its saved history. Mark
+    // the next instance as fresh, but leave the current content untouched
+    // until the compositor has finished contracting the surface.
     assistantSelectionContextRef.current = null;
+    assistantConversationResetPendingRef.current = true;
     setPanelConversationId(null);
-    setAssistantConversationResetToken((current) => current + 1);
     clearTimeout(assistantCloseTimerRef.current);
     assistantCloseTimerRef.current = setTimeout(() => {
       assistantPanelClosingRef.current = false;
@@ -1285,177 +1297,182 @@ export default function App() {
       : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs;
   const dictationErrorSuppressesPill =
     dictationErrorActionCount > 0 || dictationErrorPillHandoffActive;
+  // Keep one pill DOM node alive while final Agent actions own the footer. On
+  // close it can fade and travel from the panel dock instead of mounting at
+  // the resting dock halfway through the surface contraction.
+  const assistantActionsSuppressPill = assistantPanelOpen && !assistantFooter.pillVisible;
+  const pillVisuallySuppressed = dictationErrorSuppressesPill || assistantActionsSuppressPill;
+  const pillInteractionSuppressed = pillVisuallySuppressed || assistantPanelClosing;
 
   return (
     <div className="dictation-window">
-      {/* The panel footer owns this pill until final-response actions replace it. */}
-      {(!assistantPanelOpen || assistantFooter.pillVisible) && (
+      {/* The panel footer can hide this pill, but never unmounts it. */}
+      <div
+        className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${
+          pillInteractionSuppressed ? "pointer-events-none" : ""
+        } ${pillVisuallySuppressed ? "opacity-0" : "opacity-100"}`}
+        style={{
+          "--voice-pill-travel-duration": `${voicePillTravelDuration}ms`,
+        }}
+        data-dictation-error-suppressed={dictationErrorSuppressesPill || undefined}
+        data-assistant-actions-suppressed={assistantActionsSuppressPill || undefined}
+        aria-hidden={pillVisuallySuppressed || undefined}
+      >
         <div
-          className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${
-            dictationErrorSuppressesPill ? "pointer-events-none opacity-0" : "opacity-100"
-          }`}
+          className="assistant-pill-presence relative flex items-center gap-2"
+          data-assistant-footer-phase={assistantPanelOpen ? assistantFooterPhase : undefined}
+          data-horizontal-direction={voiceHorizontalDirection}
           style={{
-            "--voice-pill-travel-duration": `${voicePillTravelDuration}ms`,
+            "--assistant-pill-retreat-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillRetreatMs}ms`,
+            "--assistant-pill-entrance-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillEntranceMs}ms`,
           }}
-          data-dictation-error-suppressed={dictationErrorSuppressesPill || undefined}
-          aria-hidden={dictationErrorSuppressesPill || undefined}
+          onMouseEnter={() => {
+            if (!pillIsInteractive) return;
+            setIsHovered(true);
+            setWindowInteractivity(true);
+          }}
+          onMouseLeave={() => {
+            if (!pillIsInteractive) return;
+            setIsHovered(false);
+            if (!isCommandMenuOpen && !assistantPanelMounted) {
+              setWindowInteractivity(false);
+            }
+          }}
         >
-          <div
-            className="assistant-pill-presence relative flex items-center gap-2"
-            data-assistant-footer-phase={assistantPanelOpen ? assistantFooterPhase : undefined}
-            data-horizontal-direction={voiceHorizontalDirection}
-            style={{
-              "--assistant-pill-retreat-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillRetreatMs}ms`,
-              "--assistant-pill-entrance-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillEntranceMs}ms`,
-            }}
-            onMouseEnter={() => {
-              if (!pillIsInteractive) return;
-              setIsHovered(true);
-              setWindowInteractivity(true);
-            }}
-            onMouseLeave={() => {
-              if (!pillIsInteractive) return;
-              setIsHovered(false);
-              if (!isCommandMenuOpen && !assistantPanelMounted) {
-                setWindowInteractivity(false);
-              }
-            }}
+          <Tooltip
+            content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
+            disabled={anyPanelMounted}
+            align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
           >
-            <Tooltip
-              content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
-              disabled={anyPanelMounted}
-              align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
-            >
-              <VoicePill
-                ref={buttonRef}
-                variant={anyPanelOpen ? "panel" : "floating"}
-                state={commonPillState}
-                expanded={!anyPanelOpen && isCompactPill}
-                collapseToLogo={
-                  listeningEntrance.collapseToLogo || assistantFooter.collapsePillToLogo
+            <VoicePill
+              ref={buttonRef}
+              variant={anyPanelOpen ? "panel" : "floating"}
+              state={commonPillState}
+              expanded={!anyPanelOpen && isCompactPill}
+              collapseToLogo={
+                listeningEntrance.collapseToLogo || assistantFooter.collapsePillToLogo
+              }
+              beamActive={listeningEntrance.beamActive ?? undefined}
+              waveformVisible={listeningEntrance.waveformVisible}
+              waveformOnlyWhileRecording={anyPanelMounted}
+              integratedWithPanel={liveTranscriptPanelOpen}
+              agentMode={agentModeActive}
+              beamTheme={beamTheme}
+              showExpandChevron={canReopenLiveTranscript && isHovered}
+              getAudioLevel={getAudioLevel}
+              isDragging={isDragging}
+              horizontalDirection={voiceHorizontalDirection}
+              role={pillIsInteractive ? "button" : "status"}
+              aria-label={
+                canReopenLiveTranscript
+                  ? t("transcriptionPreview.label")
+                  : assistantPanelMounted
+                    ? t("settingsPage.agentConfig.title")
+                    : liveTranscriptPanelMounted
+                      ? t("transcriptionPreview.label")
+                      : micTooltip
+              }
+              onMouseDown={(e) => {
+                if (anyPanelMounted) return;
+                setIsCommandMenuOpen(false);
+                setDragStartPos({ x: e.clientX, y: e.clientY });
+                setHasDragged(false);
+                handleMouseDown(e);
+              }}
+              onMouseMove={(e) => {
+                if (anyPanelMounted) return;
+                if (dragStartPos && !hasDragged) {
+                  const distance = Math.sqrt(
+                    Math.pow(e.clientX - dragStartPos.x, 2) +
+                      Math.pow(e.clientY - dragStartPos.y, 2)
+                  );
+                  if (distance > 5) {
+                    // 5px threshold for drag
+                    setHasDragged(true);
+                  }
                 }
-                beamActive={listeningEntrance.beamActive ?? undefined}
-                waveformVisible={listeningEntrance.waveformVisible}
-                waveformOnlyWhileRecording={anyPanelMounted}
-                integratedWithPanel={liveTranscriptPanelOpen}
-                agentMode={agentModeActive}
-                beamTheme={beamTheme}
-                showExpandChevron={canReopenLiveTranscript && isHovered}
-                getAudioLevel={getAudioLevel}
-                isDragging={isDragging}
-                horizontalDirection={voiceHorizontalDirection}
-                role={pillIsInteractive ? "button" : "status"}
-                aria-label={
-                  canReopenLiveTranscript
-                    ? t("transcriptionPreview.label")
-                    : assistantPanelMounted
-                      ? t("settingsPage.agentConfig.title")
-                      : liveTranscriptPanelMounted
-                        ? t("transcriptionPreview.label")
-                        : micTooltip
-                }
-                onMouseDown={(e) => {
-                  if (anyPanelMounted) return;
+              }}
+              onMouseUp={(e) => {
+                if (anyPanelMounted) return;
+                handleMouseUp(e);
+                setDragStartPos(null);
+              }}
+              onClick={(e) => {
+                if (!pillIsInteractive) return;
+                if (canReopenLiveTranscript) {
+                  reopenLiveTranscriptPanel();
+                } else if (
+                  !hasDragged &&
+                  micState !== "processing" &&
+                  !voiceActivity.isAgentThinking
+                ) {
                   setIsCommandMenuOpen(false);
-                  setDragStartPos({ x: e.clientX, y: e.clientY });
-                  setHasDragged(false);
-                  handleMouseDown(e);
-                }}
-                onMouseMove={(e) => {
-                  if (anyPanelMounted) return;
-                  if (dragStartPos && !hasDragged) {
-                    const distance = Math.sqrt(
-                      Math.pow(e.clientX - dragStartPos.x, 2) +
-                        Math.pow(e.clientY - dragStartPos.y, 2)
-                    );
-                    if (distance > 5) {
-                      // 5px threshold for drag
-                      setHasDragged(true);
-                    }
-                  }
-                }}
-                onMouseUp={(e) => {
-                  if (anyPanelMounted) return;
-                  handleMouseUp(e);
-                  setDragStartPos(null);
-                }}
-                onClick={(e) => {
-                  if (!pillIsInteractive) return;
-                  if (canReopenLiveTranscript) {
-                    reopenLiveTranscriptPanel();
-                  } else if (
-                    !hasDragged &&
-                    micState !== "processing" &&
-                    !voiceActivity.isAgentThinking
-                  ) {
-                    setIsCommandMenuOpen(false);
-                    toggleListening({ voiceAgentRequested: assistantPanelMounted });
-                  }
-                  e.preventDefault();
-                }}
-                onContextMenu={(e) => {
-                  if (anyPanelMounted) return;
-                  e.preventDefault();
-                  if (!hasDragged) {
-                    setWindowInteractivity(true);
-                    setIsCommandMenuOpen((prev) => !prev);
-                  }
-                }}
-              />
-            </Tooltip>
-            {!anyPanelMounted && isCommandMenuOpen && (
-              <div
-                ref={commandMenuRef}
-                className="absolute bottom-full right-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
-                onMouseEnter={() => {
+                  toggleListening({ voiceAgentRequested: assistantPanelMounted });
+                }
+                e.preventDefault();
+              }}
+              onContextMenu={(e) => {
+                if (anyPanelMounted) return;
+                e.preventDefault();
+                if (!hasDragged) {
                   setWindowInteractivity(true);
-                }}
-                onMouseLeave={() => {
-                  if (!isHovered) {
-                    setWindowInteractivity(false);
-                  }
+                  setIsCommandMenuOpen((prev) => !prev);
+                }
+              }}
+            />
+          </Tooltip>
+          {!anyPanelMounted && isCommandMenuOpen && (
+            <div
+              ref={commandMenuRef}
+              className="absolute bottom-full right-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
+              onMouseEnter={() => {
+                setWindowInteractivity(true);
+              }}
+              onMouseLeave={() => {
+                if (!isHovered) {
+                  setWindowInteractivity(false);
+                }
+              }}
+            >
+              <button
+                className="w-full px-3 py-2 text-left text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
+                onClick={() => {
+                  toggleListening();
                 }}
               >
-                <button
-                  className="w-full px-3 py-2 text-left text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
-                  onClick={() => {
-                    toggleListening();
-                  }}
-                >
-                  {isRecording
-                    ? t("app.commandMenu.stopListening")
-                    : t("app.commandMenu.startListening")}
-                </button>
-                {agentAllowed && (
-                  <>
-                    <div className="h-px bg-border" />
-                    <button
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
-                      onClick={() => {
-                        setIsCommandMenuOpen(false);
-                        openAssistantPanel();
-                      }}
-                    >
-                      {t("app.commandMenu.askAssistant")}
-                    </button>
-                  </>
-                )}
-                <div className="h-px bg-border" />
-                <button
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
-                  onClick={() => {
-                    setIsCommandMenuOpen(false);
-                    setWindowInteractivity(false);
-                    handleClose();
-                  }}
-                >
-                  {t("app.commandMenu.hideForNow")}
-                </button>
-              </div>
-            )}
-          </div>
+                {isRecording
+                  ? t("app.commandMenu.stopListening")
+                  : t("app.commandMenu.startListening")}
+              </button>
+              {agentAllowed && (
+                <>
+                  <div className="h-px bg-border" />
+                  <button
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                    onClick={() => {
+                      setIsCommandMenuOpen(false);
+                      openAssistantPanel();
+                    }}
+                  >
+                    {t("app.commandMenu.askAssistant")}
+                  </button>
+                </>
+              )}
+              <div className="h-px bg-border" />
+              <button
+                className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                onClick={() => {
+                  setIsCommandMenuOpen(false);
+                  setWindowInteractivity(false);
+                  handleClose();
+                }}
+              >
+                {t("app.commandMenu.hideForNow")}
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <VoiceModePanelCore
         mode={activeVoicePanelMode}
@@ -1474,10 +1491,10 @@ export default function App() {
       >
         {activeVoicePanelMode === "assistant" && assistantPanelMounted && (
           <AssistantPanel
+            key={assistantConversationResetToken}
             pendingCommand={pendingCommand}
             onCommandConsumed={handleCommandConsumed}
             initialConversationId={panelConversationId}
-            conversationResetToken={assistantConversationResetToken}
             onConversationIdChange={setPanelConversationId}
             voiceState={assistantVoiceState}
             thinking={assistantThinking && assistantPanelOpen}

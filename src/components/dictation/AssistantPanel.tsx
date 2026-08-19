@@ -42,8 +42,6 @@ interface AssistantPanelProps {
   onCommandConsumed: (id: number) => void;
   /** Conversation to resume when reopening the panel; null starts fresh on first message. */
   initialConversationId: number | null;
-  /** Changes after a completed close so a still-mounted panel also drops its active session. */
-  conversationResetToken: number;
   onConversationIdChange: (id: number | null) => void;
   /** Live voice state while the user records a follow-up with the panel open. */
   voiceState: Extract<AgentState, "idle" | "listening" | "transcribing">;
@@ -70,7 +68,6 @@ export function AssistantPanel({
   pendingCommand,
   onCommandConsumed,
   initialConversationId,
-  conversationResetToken,
   onConversationIdChange,
   voiceState,
   thinking,
@@ -90,7 +87,6 @@ export function AssistantPanel({
 
   const persistence = useChatPersistence({ conversationId: initialConversationId });
   const { messages, setMessages } = persistence;
-  const handleNewChat = persistence.handleNewChat;
 
   const streaming = useChatStreaming({
     messages,
@@ -199,23 +195,6 @@ export function AssistantPanel({
     onSelectionContextChange(null);
     window.getSelection()?.removeAllRanges();
   }, [onSelectionContextChange]);
-
-  const handledConversationResetTokenRef = useRef(conversationResetToken);
-  useEffect(() => {
-    if (handledConversationResetTokenRef.current === conversationResetToken) return;
-    handledConversationResetTokenRef.current = conversationResetToken;
-
-    handleNewChat();
-    displayedResponseRef.current = "";
-    consumedCommandIdRef.current = null;
-    clearSelectedContext();
-    onConversationIdChange(null);
-  }, [
-    clearSelectedContext,
-    conversationResetToken,
-    onConversationIdChange,
-    handleNewChat,
-  ]);
 
   useEffect(() => {
     if (!open && selectedContext) clearSelectedContext();
